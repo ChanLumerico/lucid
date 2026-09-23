@@ -69,15 +69,42 @@ namespace lucid::compile {
 //     two traces with identical structure but different attributes
 //     would collide on the same cache entry and one caller would
 //     silently receive the other's executable.
+// feeds : std::vector<FeedSig>
+//     Shape + dtype of every external feed (user input or parameter),
+//     ordered by the same first-appearance numbering as ``op_inputs``.
+//     The executable's placeholders are typed and shaped by its feeds and
+//     ``run_executable`` refuses a mismatch, so two traces whose ops agree
+//     but whose inputs do not must not share an entry.  Without this,
+//     ``isnan(x) + 1`` traced on float32 and then on int64 — every op
+//     output the same shape and dtype — hit the float executable and
+//     raised "feed slot 0 expects dtype float32, got int64".
+// outputs : std::vector<std::int64_t>
+//     The tensors the caller asked for, in order and in the same numbering.
+//     The graph alone does not say which of its values are returned: two
+//     callables tracing ``(t + 1, t * 2)`` and ``(t * 2, t + 1)`` build the
+//     same ops, and without this the second ran the first's executable and
+//     got its outputs in the first's order — as ``topk(t)[0]`` got the
+//     indices of an earlier ``topk(t)[1]``.
 // device : Device
 //     Device on which the executable was compiled (all ops in a trace
 //     must agree on one device — Phase 1.2 builder enforces this).
+struct LUCID_API FeedSig {
+    std::int64_t canonical_id = 0;
+    Shape shape;
+    Dtype dtype = Dtype::F32;
+    bool operator==(const FeedSig& other) const noexcept {
+        return canonical_id == other.canonical_id && shape == other.shape && dtype == other.dtype;
+    }
+};
+
 struct LUCID_API CacheKey {
     std::vector<std::string> op_names;
     std::vector<std::vector<std::int64_t>> op_inputs;
     std::vector<Shape> output_shapes;
     std::vector<Dtype> output_dtypes;
     std::vector<std::vector<std::pair<std::string, AttributeValue>>> op_attrs;
+    std::vector<FeedSig> feeds;
+    std::vector<std::int64_t> outputs;
     Device device = Device::CPU;
 
     // Structural equality — every field above must match element-wise.
@@ -100,7 +127,15 @@ struct LUCID_API CacheKeyHash {
 // it is the caller's responsibility to ensure the trace is
 // single-device (the MpsBuilder rejects mixed-device traces before
 // hashing).
-LUCID_API CacheKey make_cache_key(const TraceGraph& graph);
+//
+// ``feed_meta`` maps each external-feed id to its shape and dtype; it
+// fills :attr:`CacheKey::feeds`.  A feed no op reads is left out.
+// ``explicit_outputs`` are the trace ids the caller will read back, in
+// order; they fill :attr:`CacheKey::outputs`.
+LUCID_API CacheKey
+make_cache_key(const TraceGraph& graph,
+               const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta = {},
+               const std::vector<TensorId>& explicit_outputs = {});
 
 // Bounded-LRU cache of compiled MPSGraph executables.
 //

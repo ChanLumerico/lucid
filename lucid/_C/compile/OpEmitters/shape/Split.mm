@@ -250,15 +250,20 @@ public:
         if (g == nil || x == nil)
             return false;
 
+        // MPSGraph's topK on a bool source returns all-false values; rank an
+        // int32 copy (false < true, as in eager) and cast the values back.
+        const bool is_bool = x.dataType == MPSDataTypeBool;
+        MPSGraphTensor* src = is_bool ? [g castTensor:x toType:MPSDataTypeInt32 name:nil] : x;
         NSArray<MPSGraphTensor*>* res =
-            [g topKWithSourceTensor:x
+            [g topKWithSourceTensor:src
                                axis:(NSInteger)axis
                                   k:(NSUInteger)k
                                name:@"topk"];
         if (res == nil || res.count != 2)
             return false;
 
-        MPSGraphTensor* values = res[0];
+        MPSGraphTensor* values =
+            is_bool ? [g castTensor:res[0] toType:MPSDataTypeBool name:nil] : res[0];
         MPSGraphTensor* indices = res[1];
 
         // Lucid's topk indices are I32 but MPSGraph returns I32 by

@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
@@ -180,9 +181,155 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// Trig / special.  Without a manual VJP these fell to MPSGraph autodiff,
+// which returned a wrong gradient for arcsin and aborted on erfinv.
+// ────────────────────────────────────────────────────────────────────
+template <class F>
+class UnaryDerivVjp final : public VjpEmitter {
+public:
+    UnaryDerivVjp(const char* name, F deriv) : name_(name), deriv_(deriv) {}
+    std::string_view op_name() const override { return name_; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [this](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                return [g multiplicationWithPrimaryTensor:go
+                                          secondaryTensor:deriv_(g, x, go.dataType)
+                                                     name:nil];
+            });
+    }
+
+private:
+    const char* name_;
+    F deriv_;
+};
+
+template <class F>
+std::unique_ptr<VjpEmitter> unary_deriv(const char* name, F f) {
+    return std::make_unique<UnaryDerivVjp<F>>(name, f);
+}
+
+inline MPSGraphTensor* cst(MPSGraph* g, double v, MPSDataType dt) {
+    return [g constantWithScalar:v dataType:dt];
+}
+
+// 1 / sqrt(1 - x²)
+inline MPSGraphTensor* inv_sqrt_one_minus_sq(MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+    MPSGraphTensor* r = [g subtractionWithPrimaryTensor:cst(g, 1.0, dt)
+                                        secondaryTensor:[g squareWithTensor:x name:nil]
+                                                   name:nil];
+    return [g reciprocalWithTensor:[g squareRootWithTensor:r name:nil] name:nil];
+}
+
+// erfinv'(x) = sqrt(pi)/2 · exp(erfinv(x)²).  It needs the forward value
+// y = erfinv(x), not x; recomputing it would repeat the forward polynomial,
+// so it is read off the context instead.
+class ErfinvVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "erfinv"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 1 || node.outputs.empty() || grad_outs.empty() ||
+            grad_outs[0] == nullptr || node.inputs[0] < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* y = as_tensor(bctx.forward(node.outputs[0].id));
+        if (g == nil || go == nil || y == nil)
+            return false;
+        y = cast_if_needed(g, y, go.dataType);
+        MPSGraphTensor* d = [g multiplicationWithPrimaryTensor:cst(g, 0.886226925452758, go.dataType)
+                                               secondaryTensor:[g exponentWithTensor:
+                                                                      [g squareWithTensor:y name:nil]
+                                                                                name:nil]
+                                                          name:nil];
+        bctx.accumulate_grad(node.inputs[0],
+                             from_tensor([g multiplicationWithPrimaryTensor:go
+                                                            secondaryTensor:d
+                                                                       name:@"erfinv_vjp"]));
+        return true;
+    }
+};
+
+// clip / clamp: the gradient passes where the input was inside the bounds
+// (inclusive) and stops where it was clipped.  Used by both BCE losses.
+class ClipVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "clip"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        auto bound = [&](const char* key) -> const double* {
+            auto it = node.attrs.find(key);
+            return it == node.attrs.end() ? nullptr : std::get_if<double>(&it->second);
+        };
+        const double* lo = bound("min");
+        const double* hi = bound("max");
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [lo, hi](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSGraphTensor* keep = nil;
+                if (lo != nullptr)
+                    keep = [g greaterThanOrEqualToWithPrimaryTensor:x
+                                                    secondaryTensor:cst(g, *lo, go.dataType)
+                                                               name:nil];
+                if (hi != nullptr) {
+                    MPSGraphTensor* under = [g lessThanOrEqualToWithPrimaryTensor:x
+                                                                  secondaryTensor:cst(g, *hi, go.dataType)
+                                                                             name:nil];
+                    keep = keep == nil ? under
+                                       : [g logicalANDWithPrimaryTensor:keep secondaryTensor:under name:nil];
+                }
+                if (keep == nil)
+                    return go;
+                return [g selectWithPredicateTensor:keep
+                                truePredicateTensor:go
+                               falsePredicateTensor:cst(g, 0.0, go.dataType)
+                                               name:@"clip_vjp"];
+            });
+    }
+};
+
 struct MathVjpRegistrar {
     MathVjpRegistrar() {
         register_vjp_emitter(std::make_unique<LogVjp>());
+        register_vjp_emitter(std::make_unique<ErfinvVjp>());
+        register_vjp_emitter(std::make_unique<ClipVjp>());
+        register_vjp_emitter(unary_deriv("arcsin", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            return inv_sqrt_one_minus_sq(g, x, dt);
+        }));
+        register_vjp_emitter(unary_deriv("arccos", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            return [g negativeWithTensor:inv_sqrt_one_minus_sq(g, x, dt) name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("arctan", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            return [g reciprocalWithTensor:[g additionWithPrimaryTensor:cst(g, 1.0, dt)
+                                                        secondaryTensor:[g squareWithTensor:x name:nil]
+                                                                   name:nil]
+                                      name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("tan", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            MPSGraphTensor* c = [g cosWithTensor:x name:nil];
+            return [g reciprocalWithTensor:[g squareWithTensor:c name:nil] name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("sinh", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType) {
+            return [g coshWithTensor:x name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("cosh", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType) {
+            return [g sinhWithTensor:x name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("erf", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            MPSGraphTensor* e = [g exponentWithTensor:[g negativeWithTensor:[g squareWithTensor:x name:nil]
+                                                                       name:nil]
+                                                 name:nil];
+            return [g multiplicationWithPrimaryTensor:cst(g, 1.1283791670955126, dt)
+                                      secondaryTensor:e
+                                                 name:nil];
+        }));
+        register_vjp_emitter(unary_deriv("log2", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
+            return [g reciprocalWithTensor:[g multiplicationWithPrimaryTensor:x
+                                                              secondaryTensor:cst(g, 0.6931471805599453, dt)
+                                                                         name:nil]
+                                      name:nil];
+        }));
         register_vjp_emitter(std::make_unique<ExpVjp>());
         register_vjp_emitter(std::make_unique<SqrtVjp>());
         register_vjp_emitter(std::make_unique<RsqrtVjp>());

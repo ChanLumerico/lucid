@@ -8,7 +8,7 @@
 //   - ``det``            — 2×2 / 3×3 closed-form (eager fallback for N>3)
 //   - ``inv``            — 2×2 closed-form via adjugate / det
 //   - ``tensordot``      — permute + reshape + matmul
-//   - ``inner``          — element-wise multiply + reduce-sum
+//   - ``inner``          — last-axis contraction: reshape + matmul with bᵀ
 //   - ``outer``          — broadcast multiply of two 1-D vectors
 //   - ``dot``            — element-wise multiply + full reduce-sum
 //   - ``trace``          — sum of the main diagonal (2-D only)
@@ -128,6 +128,11 @@ public:
                                                     name:@"matpow_eye"]));
         return true;
         }
+        // Eager computes an integer matrix power; MPSGraph's matmul does not
+        // decline an integer operand, it aborts the process
+        // ("'mps.matmul' op operand #0 must be tensor of floating point").
+        if (p >= 2 && !(x.dataType & MPSDataTypeFloatBit))
+            return false;
         MPSGraphTensor* result = nil;
         MPSGraphTensor* base = x;
         std::int64_t e = p;
@@ -280,6 +285,9 @@ public:
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (g == nil || a == nil || b == nil) return false;
+        // Same reason as ``MatmulEmitter``: an integer operand aborts the
+        // process inside MPSGraph's matmul instead of declining.
+        if (!(a.dataType & MPSDataTypeFloatBit) || !(b.dataType & MPSDataTypeFloatBit)) return false;
         NSInteger na = (NSInteger)a.shape.count;
         NSInteger nb = (NSInteger)b.shape.count;
         std::vector<bool> a_is_c(na, false), b_is_c(nb, false);
@@ -322,6 +330,11 @@ public:
             std::int64_t p = ax_a[i]; if (p < 0) p += na;
             K *= a.shape[p].longLongValue;
         }
+        // A symbolic batch axis (-1) among the flattened ones makes a
+        // product like -64, which the reshape below would take as a size.
+        // Decline so the builder retries with static shapes.
+        for (NSNumber* n in a.shape) if (n.longLongValue < 0) return false;
+        for (NSNumber* n in b.shape) if (n.longLongValue < 0) return false;
         a_p = [g reshapeTensor:a_p
                      withShape:@[[NSNumber numberWithLongLong:M],
                                   [NSNumber numberWithLongLong:K]]
@@ -335,20 +348,26 @@ public:
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (NSNumber* n : a_kept) [out_sh addObject:n];
         for (NSNumber* n : b_kept) [out_sh addObject:n];
-        if (out_sh.count == 0)
-            ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:c withShape:@[] name:nil]));
-        return true;
+        // ``out_sh`` is empty for a full contraction, which reshapes to a
+        // scalar — one call covers both.  This used to bind only that case
+        // and return before the general one, so every non-scalar
+        // tensordot left its output unbound and the consumer declined.
         ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:c withShape:out_sh name:nil]));
         return true;
     }
 };
 
-// ── inner — element-wise multiply + reduce sum on the last axis.
+// ── inner — contract the last axis of each operand:
+//    a[..., K] · b[..., K] → a.shape[:-1] + b.shape[:-1].
+//    Flattened, that is a[M, K] @ b[N, K]ᵀ.  An element-wise product
+//    summed over the last axis is the same thing only for two vectors —
+//    this emitter used to do exactly that, and gave [M] for [M, K] ·
+//    [M, K] where the answer is [M, M].
 class InnerEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "inner"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty()) return false;
+        if (node.inputs.size() != 2 || node.outputs.empty()) return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
         if (a_id < 0 || b_id < 0) return false;
@@ -356,11 +375,25 @@ public:
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (g == nil || a == nil || b == nil) return false;
-        MPSGraphTensor* prod =
-            [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:nil];
-        NSUInteger nd = a.shape.count;
-        NSArray<NSNumber*>* last = @[[NSNumber numberWithLongLong:(long long)(nd - 1)]];
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g reductionSumWithTensor:prod axes:last name:@"inner"]));
+        // MPSGraph's matmul takes floating point only and aborts the
+        // process on anything else; eager ``inner`` rejects integers too.
+        if (!(a.dataType & MPSDataTypeFloatBit) || !(b.dataType & MPSDataTypeFloatBit)) return false;
+        NSArray<NSNumber*>* sa = a.shape;
+        NSArray<NSNumber*>* sb = b.shape;
+        if (sa.count == 0 || sb.count == 0) return false;
+        const long long K = sa.lastObject.longLongValue;
+        if (K < 0 || sb.lastObject.longLongValue != K) return false;
+        long long M = 1, N = 1;
+        for (NSUInteger d = 0; d + 1 < sa.count; ++d) M *= sa[d].longLongValue;
+        for (NSUInteger d = 0; d + 1 < sb.count; ++d) N *= sb[d].longLongValue;
+        if (M < 0 || N < 0) return false;  // symbolic batch — the flatten would pin it
+        MPSGraphTensor* a2 = [g reshapeTensor:a withShape:@[@(M), @(K)] name:nil];
+        MPSGraphTensor* b2 = [g reshapeTensor:b withShape:@[@(N), @(K)] name:nil];
+        MPSGraphTensor* bt = [g transposeTensor:b2 dimension:0 withDimension:1 name:nil];
+        MPSGraphTensor* c = [g matrixMultiplicationWithPrimaryTensor:a2 secondaryTensor:bt name:nil];
+        NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
+        for (std::int64_t d : node.outputs[0].shape) [out_sh addObject:@(d)];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:c withShape:out_sh name:@"inner"]));
         return true;
     }
 };

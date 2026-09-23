@@ -34,6 +34,12 @@ public:
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (graph == nil || a_t == nil || b_t == nil)
             return false;
+        // Eager multiplies integer matrices; MPSGraph's matmul does not decline
+        // them, it aborts the process ("'mps.matmul' op operand #0 must be
+        // tensor of floating point values").  ``matrix_power`` on an integer
+        // matrix traces as exactly this.
+        if (!(a_t.dataType & MPSDataTypeFloatBit) || !(b_t.dataType & MPSDataTypeFloatBit))
+            return false;
 
         // Attention value-projection workaround.  A matmul whose operand is a
         // softmax output is the ``softmax(QKᵀ) @ V`` half of attention, which

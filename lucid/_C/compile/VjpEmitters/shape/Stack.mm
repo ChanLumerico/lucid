@@ -337,6 +337,18 @@ public:
         // re-read it via forward() if it's been bound.
         TensorId idx_id = node.outputs[1].id;
         MPSGraphTensor* indices = as_tensor(bctx.forward(idx_id));
+        // The forward binds the indices only when something reads them, so a
+        // caller that used only the values — the usual case — left this nil
+        // and every such graph fell back.  Rank again for them.
+        if (indices == nil && x != nil) {
+            auto k_it = node.attrs.find("k");
+            const auto* kp = k_it == node.attrs.end() ? nullptr : std::get_if<std::int64_t>(&k_it->second);
+            if (kp == nullptr || *kp <= 0) return false;
+            NSArray<MPSGraphTensor*>* res =
+                [g topKWithSourceTensor:x axis:axis k:(NSUInteger)*kp name:nil];
+            if (res == nil || res.count != 2) return false;
+            indices = res[1];
+        }
         if (g == nil || x == nil || v_grad == nil || indices == nil) return false;
 
         std::vector<std::int64_t> x_shape = shape_of_mps(x);

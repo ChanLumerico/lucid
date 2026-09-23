@@ -20,6 +20,7 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -142,7 +143,14 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
     if (a->device() == Device::GPU && a->dtype() == Dtype::F32) {
         const auto& ga = std::get<GpuStorage>(a->storage());
         const auto& gb = std::get<GpuStorage>(b->storage());
-        return fresh(Storage{nextafter_gpu_f32(ga, gb)}, a->shape(), a->dtype(), Device::GPU);
+        auto result =
+            fresh(Storage{nextafter_gpu_f32(ga, gb)}, a->shape(), a->dtype(), Device::GPU);
+        // No derivative, so no ``wire_autograd`` — and that is also what
+        // records a traced op's operands.  Without this ``lucid.compile``
+        // sees ``nextafter`` with no inputs and refuses the whole graph.
+        if (auto* trc = ::lucid::compile::current_tracer())
+            trc->on_op_io({a, b}, result);
+        return result;
     }
 
     // CPU fallback (and F64 on either device — MLX doesn't support F64).
@@ -162,7 +170,10 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
     }
 
     Storage final_storage = to_device_storage(std::move(out), a->device(), a->shape());
-    return fresh(std::move(final_storage), a->shape(), a->dtype(), a->device());
+    auto result = fresh(std::move(final_storage), a->shape(), a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a, b}, result);
+    return result;
 }
 
 }  // namespace lucid

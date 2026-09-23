@@ -196,8 +196,25 @@ TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // scalar as a same-shape constant tensor so the multiply doesn't depend on
 // any scalar-broadcast support in the binary ops.
 TensorImplPtr isclose_op(const TensorImplPtr& a, const TensorImplPtr& b, double rtol, double atol) {
-    auto diff = abs_op(sub_op(a, b));
-    auto abs_b = abs_op(b);
+    TensorImplPtr diff;
+    TensorImplPtr abs_b;
+    if (!is_floating_point(a->dtype()) && !is_floating_point(b->dtype())) {
+        // The tolerances are fractions.  Built in an integer dtype they
+        // truncate to 0 — ``isclose`` quietly became equality — and in bool
+        // ``full_like(…, 1e-8)`` is True, so every pair of bools was "close".
+        // Take the difference exactly in an integer type, then compare in
+        // float32 the way a floating input would.
+        auto as_int = [](const TensorImplPtr& t) {
+            return t->dtype() == Dtype::Bool ? astype_op(t, Dtype::I32) : t;
+        };
+        const auto ai = as_int(a);
+        const auto bi = as_int(b);
+        diff = astype_op(abs_op(sub_op(ai, bi)), Dtype::F32);
+        abs_b = astype_op(abs_op(bi), Dtype::F32);
+    } else {
+        diff = abs_op(sub_op(a, b));
+        abs_b = abs_op(b);
+    }
     auto rtol_t = full_like_op(abs_b, rtol);
     auto scaled = mul_op(rtol_t, abs_b);
     auto atol_t = full_like_op(scaled, atol);

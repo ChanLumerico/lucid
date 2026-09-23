@@ -77,7 +77,10 @@ public:
         return emit_unary_vjp(bctx, node, grad_outs,
             [&a](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* grad) -> MPSGraphTensor* {
                 std::vector<std::int64_t> in_shape = shape_of_mps(x);
-                if (in_shape.empty()) return nil;
+                // The sum of a 0-d tensor is that tensor; this used to
+                // decline, and any trace summing a scalar — a loss built
+                // from ``det`` or any other scalar — fell back.
+                if (in_shape.empty()) return [g reshapeTensor:grad withShape:@[] name:@"sum_vjp"];
                 MPSGraphTensor* grad_keep =
                     *a.keepdim ? grad : unsqueeze_reduced(g, grad, in_shape, *a.dims);
                 return [g broadcastTensor:grad_keep
@@ -97,7 +100,7 @@ public:
         return emit_unary_vjp(bctx, node, grad_outs,
             [&a](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* grad) -> MPSGraphTensor* {
                 std::vector<std::int64_t> in_shape = shape_of_mps(x);
-                if (in_shape.empty()) return nil;
+                if (in_shape.empty()) return [g reshapeTensor:grad withShape:@[] name:@"mean_vjp"];
                 // N = product of reduced-axis sizes.
                 double N = 1.0;
                 for (std::int64_t d : *a.dims) {
@@ -119,9 +122,99 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// max / min: the gradient goes to every element equal to the result — a
+// tie gets the full gradient at each position, which is what eager does.
+// cumsum: the adjoint of a running sum is the running sum taken backwards.
+// Neither had a VJP, and MPSGraph's autodiff aborts on both, so
+// ``logsumexp``, ``norm`` and any max over a sequence ran eager.
+// ────────────────────────────────────────────────────────────────────
+template <bool IS_MAX>
+class ExtremumVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return IS_MAX ? "max" : "min"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 1 || node.inputs[0] < 0 || node.outputs.empty() ||
+            grad_outs.empty() || grad_outs[0] == nullptr)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* x = as_tensor(bctx.forward(node.inputs[0]));
+        MPSGraphTensor* y = as_tensor(bctx.forward(node.outputs[0].id));
+        if (g == nil || go == nil || x == nil || y == nil)
+            return false;
+        const auto x_shape = shape_of_mps(x);
+        const auto rank = static_cast<std::int64_t>(x_shape.size());
+        // Reduced axes as the forward recorded them; none recorded = all.
+        std::vector<bool> reduced(x_shape.size(), false);
+        auto it = node.attrs.find("dims");
+        const auto* dims = it == node.attrs.end()
+                               ? nullptr
+                               : std::get_if<std::vector<std::int64_t>>(&it->second);
+        if (dims == nullptr || dims->empty()) {
+            reduced.assign(x_shape.size(), true);
+        } else {
+            for (std::int64_t d : *dims) {
+                if (d < 0)
+                    d += rank;
+                if (d < 0 || d >= rank)
+                    return false;
+                reduced[static_cast<std::size_t>(d)] = true;
+            }
+        }
+        // Result and grad in keepdim form, so both broadcast against x.
+        std::vector<std::int64_t> kept(x_shape);
+        for (std::size_t d = 0; d < kept.size(); ++d)
+            if (reduced[d])
+                kept[d] = 1;
+        MPSGraphTensor* y_k = [g reshapeTensor:cast_if_needed(g, y, x.dataType)
+                                     withShape:shape_to_ns(kept)
+                                          name:nil];
+        MPSGraphTensor* go_k = [g reshapeTensor:go withShape:shape_to_ns(kept) name:nil];
+        MPSGraphTensor* hit = [g equalWithPrimaryTensor:x secondaryTensor:y_k name:nil];
+        MPSGraphTensor* dx =
+            [g selectWithPredicateTensor:hit
+                     truePredicateTensor:[g broadcastTensor:go_k toShape:shape_to_ns(x_shape) name:nil]
+                    falsePredicateTensor:[g constantWithScalar:0.0 dataType:go.dataType]
+                                    name:IS_MAX ? @"max_vjp" : @"min_vjp"];
+        bctx.accumulate_grad(node.inputs[0], from_tensor(dx));
+        return true;
+    }
+};
+
+class CumsumVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "cumsum"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 1 || node.inputs[0] < 0 || grad_outs.empty() ||
+            grad_outs[0] == nullptr)
+            return false;
+        auto it = node.attrs.find("axis");
+        if (it == node.attrs.end())
+            return false;
+        const auto* ax = std::get_if<std::int64_t>(&it->second);
+        if (ax == nullptr)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* dx = [g cumulativeSumWithTensor:go
+                                                   axis:(NSInteger)*ax
+                                              exclusive:NO
+                                                reverse:YES
+                                                   name:@"cumsum_vjp"];
+        bctx.accumulate_grad(node.inputs[0], from_tensor(dx));
+        return true;
+    }
+};
+
 struct ReductionVjpRegistrar {
     ReductionVjpRegistrar() {
         register_vjp_emitter(std::make_unique<SumVjp>());
+        register_vjp_emitter(std::make_unique<ExtremumVjp<true>>());
+        register_vjp_emitter(std::make_unique<ExtremumVjp<false>>());
+        register_vjp_emitter(std::make_unique<CumsumVjp>());
         register_vjp_emitter(std::make_unique<MeanVjp>());
     }
 };

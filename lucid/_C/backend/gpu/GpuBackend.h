@@ -1378,7 +1378,7 @@ public:
                                             Dtype dt,
                                             bool descending) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto idx = ::mlx::core::argsort(*ga.arr, axis);
+        auto idx = sort_order(*ga.arr, axis);
         if (descending)
             idx = take_descending_top_indices(idx, axis, output_shape);
         auto values = ::mlx::core::take_along_axis(*ga.arr, idx, axis);
@@ -1390,7 +1390,7 @@ public:
 
     Storage argsort(const Storage& a, const Shape&, int axis, Dtype) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = ::mlx::core::argsort(*ga.arr, axis);
+        auto out = sort_order(*ga.arr, axis);
         return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)};
     }
 
@@ -5743,6 +5743,17 @@ private:
         for (int i = 0; i < N; ++i)
             strides_v.push_back(suffix[i + 1]);
         return ::mlx::core::as_strided(padded, windowed, strides_v, 0);
+    }
+
+    // ``argsort`` that also takes bool.  MLX ships no bool sort kernel —
+    // sorting a bool tensor on Metal died with "Unable to load kernel
+    // carg_block_sort_bool_…" — so the order is taken on uint8, where
+    // false < true exactly as for bool, and the caller gathers the original
+    // values with it.
+    static ::mlx::core::array sort_order(const ::mlx::core::array& a, int axis) {
+        if (a.dtype() == ::mlx::core::bool_)
+            return ::mlx::core::argsort(::mlx::core::astype(a, ::mlx::core::uint8), axis);
+        return ::mlx::core::argsort(a, axis);
     }
 
     ::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,

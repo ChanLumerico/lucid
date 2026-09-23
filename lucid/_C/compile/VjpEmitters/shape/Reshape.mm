@@ -108,9 +108,86 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// flip: the gradient flips back along the same axes.  tril / triu: the
+// gradient keeps exactly the elements the forward kept, so it is the same
+// mask applied to the incoming gradient (built from coordinates so any k
+// works, where the forward uses bandPart at k = 0).
+// ────────────────────────────────────────────────────────────────────
+class FlipVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "flip"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.empty() || node.inputs[0] < 0 || grad_outs.empty() ||
+            grad_outs[0] == nullptr)
+            return false;
+        auto it = node.attrs.find("dims");
+        if (it == node.attrs.end())
+            return false;
+        const auto* dims = std::get_if<std::vector<std::int64_t>>(&it->second);
+        if (dims == nullptr)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        NSMutableArray<NSNumber*>* axes = [NSMutableArray arrayWithCapacity:dims->size()];
+        for (std::int64_t d : *dims)
+            [axes addObject:@(d)];
+        bctx.accumulate_grad(node.inputs[0],
+                             from_tensor([g reverseTensor:go axes:axes name:@"flip_vjp"]));
+        return true;
+    }
+};
+
+class TriVjp final : public VjpEmitter {
+public:
+    explicit TriVjp(std::string name) : name_(std::move(name)) {}
+    std::string_view op_name() const override { return name_; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.empty() || node.inputs[0] < 0 || grad_outs.empty() ||
+            grad_outs[0] == nullptr)
+            return false;
+        std::int64_t k = 0;
+        bool upper = name_ == "triu";
+        if (auto it = node.attrs.find("k"); it != node.attrs.end())
+            if (const auto* p = std::get_if<std::int64_t>(&it->second))
+                k = *p;
+        if (auto it = node.attrs.find("upper"); it != node.attrs.end())
+            if (const auto* p = std::get_if<bool>(&it->second))
+                upper = *p;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        NSArray<NSNumber*>* sh = go.shape;
+        if (sh.count < 2 || sh[sh.count - 2].longLongValue < 0 || sh[sh.count - 1].longLongValue < 0)
+            return false;
+        MPSShape* plane = @[ sh[sh.count - 2], sh[sh.count - 1] ];
+        MPSGraphTensor* i = [g coordinateAlongAxis:0 withShape:plane name:nil];
+        MPSGraphTensor* j = [g coordinateAlongAxis:1 withShape:plane name:nil];
+        MPSGraphTensor* off = [g subtractionWithPrimaryTensor:j secondaryTensor:i name:nil];
+        MPSGraphTensor* kk = [g constantWithScalar:(double)k dataType:off.dataType];
+        MPSGraphTensor* keep =
+            upper ? [g greaterThanOrEqualToWithPrimaryTensor:off secondaryTensor:kk name:nil]
+                  : [g lessThanOrEqualToWithPrimaryTensor:off secondaryTensor:kk name:nil];
+        MPSGraphTensor* d = [g selectWithPredicateTensor:keep
+                                     truePredicateTensor:go
+                                    falsePredicateTensor:[g constantWithScalar:0.0
+                                                                      dataType:go.dataType]
+                                                    name:@"tri_vjp"];
+        bctx.accumulate_grad(node.inputs[0], from_tensor(d));
+        return true;
+    }
+
+private:
+    std::string name_;
+};
+
 struct ReshapeVjpRegistrar {
     ReshapeVjpRegistrar() {
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("view"));
+        register_vjp_emitter(std::make_unique<FlipVjp>());
+        register_vjp_emitter(std::make_unique<TriVjp>("tril"));
+        register_vjp_emitter(std::make_unique<TriVjp>("triu"));
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("reshape"));
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("squeeze"));
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("unsqueeze"));

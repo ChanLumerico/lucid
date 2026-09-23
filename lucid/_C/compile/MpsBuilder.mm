@@ -99,6 +99,118 @@ inline bool result_is_a_host_constant(std::string_view name) {
            name == "triu";
 }
 
+// The op names MPSGraph's automatic differentiation was measured to get
+// right — every case of ``lucid/test/unit/compile/_grad_matrix.py`` that
+// uses them matches eager backward with the manual VJPs switched off.
+// Outside this list ``gradientForPrimaryTensor:`` either aborts the process
+// ("Couldn't get gradient Tensor" — every select on a comparison: where,
+// masked_fill, leaky_relu, elu, softplus, …; max / min, the cumulative ops,
+// sort, prod, tile, det, erfinv), which no caller can catch, or returns a
+// wrong gradient (arcsin, reciprocal, triu / tril off the diagonal).  So the
+// autodiff fallback is taken only for a trace made entirely of these, and
+// anything else fails the compile and runs eager.  ``tril`` and
+// ``broadcast_to`` are left out although their measured cases passed: an
+// off-diagonal ``tril`` and a ``broadcast_to`` of a slice did not.
+inline std::string first_op_unsafe_for_autodiff(const TraceGraph& graph) {
+    static const std::unordered_set<std::string_view> kSafe{
+        "abs",
+        "add",
+        "arange",
+        "arccos",
+        "arctan",
+        "astype",
+        "avg_pool2d",
+        "batch_norm_eval",
+        "bilinear_layer",
+        "clip",
+        "concatenate",
+        "contiguous",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+        "conv_transpose1d",
+        "conv_transpose2d",
+        "conv_transpose3d",
+        "cos",
+        "cosh",
+        "diagonal",
+        "div",
+        "dot",
+        "dropout",
+        "einsum",
+        "erf",
+        "exp",
+        "eye",
+        "flip",
+        "floor",
+        "full",
+        "gather",
+        "gelu",
+        "gelu_exact",
+        "group_norm",
+        "hard_sigmoid",
+        "hard_swish",
+        "inner",
+        "inv",
+        "layer_norm",
+        "linear",
+        "log",
+        "log2",
+        "log_softmax",
+        "lp_normalize",
+        "matmul",
+        "max_pool2d",
+        "maximum",
+        "mean",
+        "minimum",
+        "mish",
+        "mse_loss",
+        "mul",
+        "neg",
+        "not_equal",
+        "outer",
+        "pad",
+        "permute",
+        "pow",
+        "rand",
+        "randn",
+        "relu",
+        "relu6",
+        "reshape",
+        "rms_norm",
+        "roll",
+        "rsqrt",
+        "scaled_dot_product_attention",
+        "scatter_add",
+        "sigmoid",
+        "silu",
+        "sin",
+        "sinh",
+        "softmax",
+        "split",
+        "split_at",
+        "sqrt",
+        "square",
+        "squeeze",
+        "stack",
+        "sub",
+        "sum",
+        "tan",
+        "tanh",
+        "tensordot",
+        "trace",
+        "unbind",
+        "unfold_dim",
+        "unsqueeze",
+        "var",
+        "zeros",
+    };
+    for (const auto& node : graph.ops)
+        if (kSafe.find(node.name) == kSafe.end())
+            return node.name;
+    return {};
+}
+
 inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
     for (std::int64_t d : shape)
@@ -898,9 +1010,9 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         grad_dtypes.reserve(param_ids.size());
 
         bool grads_done = false;
+        std::string vjp_err;
         {
             std::vector<void*> grads_void;
-            std::string vjp_err;
             switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id, param_ids,
                                          grads_void, &vjp_err)) {
             case ManualVjpStatus::Success:
@@ -923,6 +1035,9 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         }
 
         if (!grads_done) {
+            if (const std::string bad = first_op_unsafe_for_autodiff(graph); !bad.empty())
+                return fail("compile_trace_with_backward: " + vjp_err + "; op '" + bad +
+                            "' rules out MPSGraph's autodiff as the fallback");
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
                 [graph_obj gradientForPrimaryTensor:loss_t
                                         withTensors:param_arr
@@ -1337,9 +1452,9 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         // under LUCID_MANUAL_VJP_REQUIRE=1).
         std::vector<MPSGraphTensor*> param_grads(param_ids.size(), nil);
         bool grads_done = false;
+        std::string vjp_err;
         {
             std::vector<void*> grads_void;
-            std::string vjp_err;
             switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id, param_ids,
                                          grads_void, &vjp_err)) {
             case ManualVjpStatus::Success:
@@ -1357,6 +1472,9 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
             }
         }
         if (!grads_done) {
+            if (const std::string bad = first_op_unsafe_for_autodiff(graph); !bad.empty())
+                return fail("compile_fused_training_step: " + vjp_err + "; op '" + bad +
+                            "' rules out MPSGraph's autodiff as the fallback");
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
                 [graph_obj gradientForPrimaryTensor:loss_t
                                         withTensors:param_arr
@@ -1685,9 +1803,9 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
             // and emit per-op backward subgraphs ourselves.  On VJP
             // coverage gap we fall through to MPSGraph autograd, unless
             // LUCID_MANUAL_VJP_REQUIRE=1.
+            std::string vjp_err;
             {
                 std::vector<void*> grads;
-                std::string vjp_err;
                 switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id,
                                              param_ids, grads, &vjp_err)) {
                 case ManualVjpStatus::Success:
@@ -1707,6 +1825,12 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
                 }
             }
 
+            if (const std::string bad = first_op_unsafe_for_autodiff(graph); !bad.empty()) {
+                if (error_msg)
+                    *error_msg = "compile_generic_fused_step: " + vjp_err + "; op '" + bad +
+                                 "' rules out MPSGraph's autodiff as the fallback";
+                return false;
+            }
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
                 [graph_obj gradientForPrimaryTensor:loss_t
                                         withTensors:param_arr
@@ -2091,9 +2215,9 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
 
             // Manual VJP path (LUCID_MANUAL_VJP=1) — mirror of the
             // non-variables fused-step site above.
+            std::string vjp_err;
             {
                 std::vector<void*> grads;
-                std::string vjp_err;
                 switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id,
                                              param_ids, grads, &vjp_err)) {
                 case ManualVjpStatus::Success:

@@ -227,20 +227,72 @@ class NextafterEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "nextafter"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        // MPSGraph doesn't expose nextafter directly; the eager backend
-        // implements it via a 1-ULP step.  Emit a 1-ULP approximation
-        // using the spacing helper: nextafter(a, b) ≈ a + sign(b-a) * eps,
-        // good enough for fp32 / fp16 chain backward but not exact for
-        // edge cases (zero / inf).  Document that this emitter is an
-        // approximation; the eager fallback path handles exact semantics.
+        // The same bit step as the eager Metal kernel (``nextafter_gpu_f32``):
+        // one ULP is one unit of the float's bit pattern, not a fixed
+        // epsilon.  This emitter used to add ``sign(b - a) * 1.19e-7``,
+        // which leaves 100.0 unchanged and jumps 1e-10 by three orders of
+        // magnitude — it was unreachable only because the op never
+        // recorded its trace inputs.  Eager accepts F32 / F64 and F64 never
+        // reaches Metal, so anything but F32 declines.
+        if (node.outputs.empty() || node.outputs[0].dtype != Dtype::F32)
+            return false;
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            MPSDataType dt = a.dataType;
-            MPSGraphTensor* diff = [g subtractionWithPrimaryTensor:b secondaryTensor:a name:nil];
-            MPSGraphTensor* s = [g signWithTensor:diff name:nil];
-            const double eps = (dt == MPSDataTypeFloat16) ? 9.7656e-4 : 1.1921e-7;
-            MPSGraphTensor* e = [g constantWithScalar:eps dataType:dt];
-            MPSGraphTensor* step = [g multiplicationWithPrimaryTensor:s secondaryTensor:e name:nil];
-            return [g additionWithPrimaryTensor:a secondaryTensor:step name:@"nextafter"];
+            auto i32 = [g](double v) { return [g constantWithScalar:v dataType:MPSDataTypeInt32]; };
+            MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:MPSDataTypeFloat32];
+            MPSGraphTensor* a_bits = [g reinterpretCastTensor:a toType:MPSDataTypeInt32 name:nil];
+            MPSGraphTensor* b_bits = [g reinterpretCastTensor:b toType:MPSDataTypeInt32 name:nil];
+
+            // Toward b is +1 in value; a negative float's bits order the
+            // other way, so the bit step flips sign with a.
+            MPSGraphTensor* direction =
+                [g selectWithPredicateTensor:[g greaterThanWithPrimaryTensor:b
+                                                             secondaryTensor:a
+                                                                        name:nil]
+                         truePredicateTensor:i32(1)
+                        falsePredicateTensor:i32(-1)
+                                        name:nil];
+            MPSGraphTensor* delta =
+                [g selectWithPredicateTensor:[g greaterThanWithPrimaryTensor:a
+                                                             secondaryTensor:zero
+                                                                        name:nil]
+                         truePredicateTensor:direction
+                        falsePredicateTensor:[g negativeWithTensor:direction name:nil]
+                                        name:nil];
+            MPSGraphTensor* step = [g additionWithPrimaryTensor:a_bits
+                                                secondaryTensor:delta
+                                                           name:nil];
+
+            // ±0 steps to the smallest subnormal carrying b's sign.
+            MPSGraphTensor* from_zero =
+                [g selectWithPredicateTensor:[g greaterThanWithPrimaryTensor:b
+                                                             secondaryTensor:zero
+                                                                        name:nil]
+                         truePredicateTensor:i32(1)
+                        falsePredicateTensor:i32(static_cast<std::int32_t>(0x80000001u))
+                                        name:nil];
+            step = [g selectWithPredicateTensor:[g equalWithPrimaryTensor:a
+                                                          secondaryTensor:zero
+                                                                     name:nil]
+                            truePredicateTensor:from_zero
+                           falsePredicateTensor:step
+                                           name:nil];
+
+            // a == b returns b itself, which keeps the sign of a zero.
+            step = [g selectWithPredicateTensor:[g equalWithPrimaryTensor:a
+                                                          secondaryTensor:b
+                                                                     name:nil]
+                            truePredicateTensor:b_bits
+                           falsePredicateTensor:step
+                                           name:nil];
+
+            MPSGraphTensor* any_nan = [g logicalORWithPrimaryTensor:[g isNaNWithTensor:a name:nil]
+                                                    secondaryTensor:[g isNaNWithTensor:b name:nil]
+                                                               name:nil];
+            step = [g selectWithPredicateTensor:any_nan
+                            truePredicateTensor:i32(static_cast<std::int32_t>(0x7FC00000u))
+                           falsePredicateTensor:step
+                                           name:nil];
+            return [g reinterpretCastTensor:step toType:MPSDataTypeFloat32 name:@"nextafter"];
         });
     }
 };

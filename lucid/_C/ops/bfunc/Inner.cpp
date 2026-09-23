@@ -12,6 +12,7 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -89,12 +90,22 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         Shape actual_shape;
         for (auto d : gs.arr->shape())
             actual_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(std::move(out_storage), std::move(actual_shape), dt, device);
+        auto result = fresh(std::move(out_storage), std::move(actual_shape), dt, device);
+        // The grad path above goes through ``einsum_op`` and traces
+        // itself; this one bypasses ``wire_autograd``, which is also what
+        // records a traced op's operands.  Without this ``lucid.compile``
+        // sees ``inner`` with no inputs and refuses the whole graph.
+        if (auto* trc = ::lucid::compile::current_tracer())
+            trc->on_op_io({a, b}, result);
+        return result;
     }
 
     auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(), sa,
                                                                      sb, out_shape, dt);
-    return fresh(std::move(out_storage), out_shape, dt, device);
+    auto result = fresh(std::move(out_storage), out_shape, dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a, b}, result);
+    return result;
 }
 
 }  // namespace lucid

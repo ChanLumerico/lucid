@@ -186,9 +186,84 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// where(cond, a, b): da = select(cond, g, 0), db = select(cond, 0, g), each
+// unreduced to its input's shape; cond takes no gradient.  masked_fill(x,
+// mask) is the same with the filled branch a constant.  MPSGraph's autodiff
+// aborts on both — the predicate is a comparison — so without these every
+// attention mask, and every activation composed with ``where``, kept a
+// model from training compiled.
+// ────────────────────────────────────────────────────────────────────
+inline MPSGraphTensor* zeros_like_t(MPSGraph* g, MPSGraphTensor* t) {
+    return [g constantWithScalar:0.0 dataType:t.dataType];
+}
+
+class WhereVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "where"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 3 || grad_outs.empty() || grad_outs[0] == nullptr)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* c = as_tensor(bctx.forward(node.inputs[0]));
+        if (g == nil || go == nil || c == nil)
+            return false;
+        const auto out_shape = shape_of_mps(go);
+        MPSGraphTensor* zero = zeros_like_t(g, go);
+        for (int side = 1; side <= 2; ++side) {
+            const TensorId id = node.inputs[static_cast<std::size_t>(side)];
+            if (id < 0)
+                continue;
+            MPSGraphTensor* fwd = as_tensor(bctx.forward(id));
+            if (fwd == nil)
+                return false;
+            MPSGraphTensor* d = side == 1
+                                    ? [g selectWithPredicateTensor:c
+                                               truePredicateTensor:go
+                                              falsePredicateTensor:zero
+                                                              name:nil]
+                                    : [g selectWithPredicateTensor:c
+                                               truePredicateTensor:zero
+                                              falsePredicateTensor:go
+                                                              name:nil];
+            void* red = bctx.unreduce(from_tensor(d), shape_of_mps(fwd), out_shape);
+            if (red == nullptr)
+                return false;
+            bctx.accumulate_grad(id, red);
+        }
+        return true;
+    }
+};
+
+class MaskedFillVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "masked_fill"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 2 || grad_outs.empty() || grad_outs[0] == nullptr ||
+            node.inputs[0] < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* mask = as_tensor(bctx.forward(node.inputs[1]));
+        if (g == nil || go == nil || mask == nil)
+            return false;
+        MPSGraphTensor* d = [g selectWithPredicateTensor:mask
+                                     truePredicateTensor:zeros_like_t(g, go)
+                                    falsePredicateTensor:go
+                                                    name:@"masked_fill_vjp"];
+        bctx.accumulate_grad(node.inputs[0], from_tensor(d));
+        return true;
+    }
+};
+
 struct ArithVjpRegistrar {
     ArithVjpRegistrar() {
         register_vjp_emitter(std::make_unique<AddVjp>());
+        register_vjp_emitter(std::make_unique<WhereVjp>());
+        register_vjp_emitter(std::make_unique<MaskedFillVjp>());
         register_vjp_emitter(std::make_unique<SubVjp>());
         register_vjp_emitter(std::make_unique<MulVjp>());
         register_vjp_emitter(std::make_unique<DivVjp>());

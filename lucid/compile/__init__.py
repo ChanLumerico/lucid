@@ -550,12 +550,15 @@ class _CallableModule(_Module):
         """
         fn = cast("Callable[..., object]", self._fn)
         out = fn(*args, **kwargs)
+        # A list is as good as a tuple — the return-spec walk repacks either —
+        # and ``split`` / ``chunk`` / ``unbind`` / ``meshgrid`` return lists,
+        # so ``lucid.compile(lambda x: x.split(2))`` used to raise here.
         if not isinstance(out, Tensor) and not (
-            isinstance(out, tuple) and all(isinstance(t, Tensor) for t in out)
+            isinstance(out, (tuple, list)) and all(isinstance(t, Tensor) for t in out)
         ):
             raise TypeError(
-                "lucid.compile: wrapped callable must return a Tensor or "
-                f"tuple of Tensors, got {type(out).__name__}"
+                "lucid.compile: wrapped callable must return a Tensor or a "
+                f"tuple or list of Tensors, got {type(out).__name__}"
             )
         return cast(_ModuleOutput, out)
 

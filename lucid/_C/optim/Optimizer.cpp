@@ -42,7 +42,11 @@ clone_state_storage(const Storage& src, const Shape& shape, Dtype dtype, Device 
         s.arr->eval();
         auto copy = ::mlx::core::array(*s.arr);
         copy.eval();
+        // Carry the storage's own dtype and byte count, as the CPU branch
+        // does — left at their defaults a non-float state reads back as F32.
         GpuStorage gs;
+        gs.dtype = s.dtype;
+        gs.nbytes = s.nbytes;
         gs.arr = std::make_shared<::mlx::core::array>(std::move(copy));
         dst = std::move(gs);
     } else {

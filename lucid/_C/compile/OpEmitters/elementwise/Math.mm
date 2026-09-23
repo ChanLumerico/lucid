@@ -14,12 +14,14 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <string_view>
 #include <variant>
 
 #include "../OpEmitter.h"
+#include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
@@ -36,6 +38,7 @@ inline bool emit_unary_math(BuilderContext& ctx, const OpNode& node, BuilderBloc
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
         return false;
+    x_t = promote_to_float_output(graph, x_t, node);
     ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, x_t)));
         return true;
 }
@@ -94,7 +97,18 @@ class SquareEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "square"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
+        // MPSGraph has no int64 square kernel, and it finds out only on the
+        // first run ("object cannot be nil (key: square_i64)").  ``x * x``
+        // does not escape it — the simplifier turns that back into
+        // ``square`` — so int64 declines here instead of failing there.
+        if (!node.outputs.empty() && node.outputs[0].dtype == Dtype::I64)
+            return false;
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
+            // ``squareWithTensor`` takes floating point only and throws an
+            // Objective-C exception on narrower integers; ``x * x`` is the
+            // same answer and has an int32 kernel.
+            if (!(x.dataType & MPSDataTypeFloatBit))
+                return [g multiplicationWithPrimaryTensor:x secondaryTensor:x name:@"square"];
             return [g squareWithTensor:x name:@"square"];
         });
     }
@@ -328,9 +342,23 @@ public:
                                              truePredicateTensor:central
                                             falsePredicateTensor:tail
                                                             name:nil];
-            return [g multiplicationWithPrimaryTensor:chosen
-                                      secondaryTensor:x
-                                                 name:@"erfinv"];
+            MPSGraphTensor* y = [g multiplicationWithPrimaryTensor:chosen
+                                                   secondaryTensor:x
+                                                              name:nil];
+            // erfinv(±1) = ±inf.  There w is +inf, and the tail polynomial
+            // evaluated at infinity takes its leading coefficient's sign —
+            // which came back as erfinv(1) = -inf, erfinv(-1) = +inf.
+            MPSGraphTensor* edge = [g equalWithPrimaryTensor:[g absoluteWithTensor:x name:nil]
+                                             secondaryTensor:one
+                                                        name:nil];
+            MPSGraphTensor* signed_inf =
+                [g multiplicationWithPrimaryTensor:x
+                                   secondaryTensor:[g constantWithScalar:INFINITY dataType:dt]
+                                              name:nil];
+            return [g selectWithPredicateTensor:edge
+                            truePredicateTensor:signed_inf
+                           falsePredicateTensor:y
+                                           name:@"erfinv"];
         });
     }
 };

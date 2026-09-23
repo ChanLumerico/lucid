@@ -84,7 +84,10 @@ TensorImplPtr TanBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(TanBackward)
 
-const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true};
+// ``real = true``: arcsin of an integer is not an integer.  Without it the
+// op computed in the input dtype — arcsin(1) answered 1, arccos(-1) 3,
+// arctan(1) 0 — while every other trig op promoted to float32.
+const OpSchema AsinBackward::schema_v1{"arcsin", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = dL/dy / sqrt(1 - x^2).
 // Building the radicand as (-x^2 + 1) with mul_scalar(-1) + add_scalar(1)
@@ -112,7 +115,7 @@ TensorImplPtr AsinBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(AsinBackward)
 
-const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true};
+const OpSchema AcosBackward::schema_v1{"arccos", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = -dL/dy / sqrt(1 - x^2).
 // Same radicand construction as arcsin, plus a final negation.
@@ -139,7 +142,7 @@ TensorImplPtr AcosBackward::grad_formula_impl(const TensorImplPtr& g,
 
 LUCID_REGISTER_OP(AcosBackward)
 
-const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true};
+const OpSchema AtanBackward::schema_v1{"arctan", 1, AmpPolicy::Promote, true, "", true};
 
 // dL/dx = dL/dy / (1 + x^2).
 Storage AtanBackward::grad_formula(const Storage& g) {

@@ -4,7 +4,7 @@
 //
 //   - ``flip``     — reverse along listed axes
 //   - ``roll``     — wrap-around shift via slice + concat
-//   - ``tril`` / ``triu`` — lower / upper triangular mask via bandPart (k=0)
+//   - ``tril`` / ``triu`` — lower / upper triangular mask (bandPart at k=0)
 //   - ``diagonal`` — main diagonal extraction (offset=0, 2-D only)
 //
 // These all produce a same-shape (or strictly smaller-rank for
@@ -143,10 +143,9 @@ public:
     }
 };
 
-// ── tril / triu — k=0 only via bandPart(numLower, numUpper).
-// MPSGraph's ``bandPart`` semantics differ subtly across SDKs for
-// non-zero ``k`` offsets; we restrict to ``k=0`` (the main-diagonal
-// split) where both SDKs agree.
+// ── tril / triu — k=0 via bandPart(numLower, numUpper); any other k via
+// an index mask.  MPSGraph's ``bandPart`` semantics differ subtly across
+// SDKs for non-zero ``k`` offsets, so those never go through it.
 class TriEmitter final : public OpEmitter {
 public:
     explicit TriEmitter(std::string name) : name_(std::move(name)) {}
@@ -160,7 +159,31 @@ public:
         if (g == nil || x == nil) return false;
         std::int64_t k = int_attr(node, "k", 0);
         bool upper = bool_attr(node, "upper", name_ == "triu");
-        if (k != 0) return false;  // k != 0 → eager
+        if (k != 0) {
+            // Off-diagonal split without ``bandPart``: keep x[..., i, j]
+            // where j - i >= k (triu) or <= k (tril), zero elsewhere.
+            // ``triu(ones, 1)`` is the usual way to spell a causal mask, and
+            // declining it sent the whole graph to eager.
+            NSArray<NSNumber*>* sh = x.shape;
+            if (sh.count < 2) return false;
+            NSNumber* rows = sh[sh.count - 2];
+            NSNumber* cols = sh[sh.count - 1];
+            if (rows.longLongValue < 0 || cols.longLongValue < 0) return false;  // symbolic
+            MPSShape* plane = @[rows, cols];
+            MPSGraphTensor* i = [g coordinateAlongAxis:0 withShape:plane name:nil];
+            MPSGraphTensor* j = [g coordinateAlongAxis:1 withShape:plane name:nil];
+            MPSGraphTensor* offset = [g subtractionWithPrimaryTensor:j secondaryTensor:i name:nil];
+            MPSGraphTensor* kk = [g constantWithScalar:(double)k dataType:offset.dataType];
+            MPSGraphTensor* keep =
+                upper ? [g greaterThanOrEqualToWithPrimaryTensor:offset secondaryTensor:kk name:nil]
+                      : [g lessThanOrEqualToWithPrimaryTensor:offset secondaryTensor:kk name:nil];
+            MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:x.dataType];
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g selectWithPredicateTensor:keep
+                                                                  truePredicateTensor:x
+                                                                 falsePredicateTensor:zero
+                                                                                 name:@"tri"]));
+            return true;
+        }
         NSInteger nl = upper ? 0 : -1;
         NSInteger nu = upper ? -1 : 0;
         ctx.bind(node.outputs[0].id, (__bridge void*)([g bandPartWithTensor:x

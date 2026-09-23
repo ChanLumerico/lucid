@@ -106,14 +106,22 @@ public:
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
-        MPSGraphTensor* x_bool = [g castTensor:x toType:MPSDataTypeBool name:nil];
         NSArray<NSNumber*>* in_shape = x.shape;
         NSMutableArray<NSNumber*>* all_axes = [NSMutableArray array];
         for (NSUInteger d = 0; d < in_shape.count; ++d)
             [all_axes addObject:[NSNumber numberWithLongLong:(long long)d]];
-        ctx.bind(node.outputs[0].id, (__bridge void*)((IS_AND
-            ? [g reductionAndWithTensor:x_bool axes:all_axes name:@"all"]
-            : [g reductionOrWithTensor:x_bool axes:all_axes name:@"any"])));
+        // Reduce over int32 truth values and cast the scalar to bool last.
+        // A bool-typed ``reductionAnd`` / ``reductionOr`` that is itself the
+        // graph output reaches an MPS reduction kernel that asserts "Source
+        // and destination must have same data type" and aborts the process;
+        // min / max over 0-1 integers are the same AND / OR without it.
+        MPSGraphTensor* truth = [g castTensor:[g castTensor:x toType:MPSDataTypeBool name:nil]
+                                       toType:MPSDataTypeInt32
+                                         name:nil];
+        MPSGraphTensor* r = IS_AND ? [g reductionMinimumWithTensor:truth axes:all_axes name:nil]
+                                   : [g reductionMaximumWithTensor:truth axes:all_axes name:nil];
+        ctx.bind(node.outputs[0].id,
+                 (__bridge void*)([g castTensor:r toType:MPSDataTypeBool name:IS_AND ? @"all" : @"any"]));
         return true;
     }
 

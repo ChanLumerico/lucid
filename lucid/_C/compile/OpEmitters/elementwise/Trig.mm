@@ -16,6 +16,7 @@
 #include <string_view>
 
 #include "../OpEmitter.h"
+#include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
@@ -32,6 +33,7 @@ inline bool emit_unary(BuilderContext& ctx, const OpNode& node, BuilderBlock bui
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
         return false;
+    x_t = promote_to_float_output(graph, x_t, node);
     ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, x_t)));
         return true;
 }

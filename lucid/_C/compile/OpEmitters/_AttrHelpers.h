@@ -73,6 +73,29 @@ inline bool bool_attr(const OpNode& node, const char* key, bool def) {
     return std::get_if<std::vector<std::int64_t>>(&it->second);
 }
 
+// Eager promotes the integer or bool operand of a floating op — ``exp`` of
+// an int32 tensor is float32 — and the trace records that promoted output
+// dtype, but the operand reaches the emitter un-promoted.  Without the cast
+// the graph ran ``exp`` on integers and wrote the result into a float32
+// buffer: ``exp(int32)`` was off by 403, ``mean(int64)`` by 0.83.  Only a
+// floating output over a non-floating input is touched, so ``abs(int)`` and
+// ``sum(int)`` keep their integer arithmetic.
+[[maybe_unused]] inline MPSGraphTensor*
+promote_to_float_output(MPSGraph* g, MPSGraphTensor* x, const OpNode& node) {
+    if (node.outputs.empty() || (x.dataType & MPSDataTypeFloatBit))
+        return x;
+    switch (node.outputs[0].dtype) {
+    case Dtype::F32:
+        return [g castTensor:x toType:MPSDataTypeFloat32 name:nil];
+    case Dtype::F16:
+        return [g castTensor:x toType:MPSDataTypeFloat16 name:nil];
+    case Dtype::BF16:
+        return [g castTensor:x toType:MPSDataTypeBFloat16 name:nil];
+    default:
+        return x;
+    }
+}
+
 // Build ``[0, 1, …, rank-1]`` as an Objective-C array of NSNumber.
 // Used for "reduce over every axis" code paths.
 [[maybe_unused]] inline NSArray<NSNumber*>* shape_to_axes(const Shape& s) {

@@ -529,10 +529,18 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
             [mps_cb commit];
         } else {
             desc.waitUntilCompleted = YES;
-            (void)[exe->executable runWithMTLCommandQueue:queue
-                                              inputsArray:feeds
-                                             resultsArray:results
-                                      executionDescriptor:desc];
+            // MPSGraph reports a failure by throwing an Objective-C
+            // exception, which pybind11 can only call "Caught an unknown
+            // exception!".  Hand Python the reason instead.
+            @try {
+                (void)[exe->executable runWithMTLCommandQueue:queue
+                                                  inputsArray:feeds
+                                                 resultsArray:results
+                                          executionDescriptor:desc];
+            } @catch (NSException* e) {
+                throw std::runtime_error(std::string("run_executable: MPSGraph failed: ") +
+                                         (e.reason ? e.reason.UTF8String : e.name.UTF8String));
+            }
         }
 
         // Wrap each output MTLBuffer back into a GpuStorage-backed
@@ -549,7 +557,15 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
             std::vector<int> mlx_shape(wrap_shape.begin(), wrap_shape.end());
             ::mlx::core::array arr =
                 lucid::gpu::mps::buffer_to_array(raw, std::move(mlx_shape), exe->output_dtypes[j]);
+            // The storage carries its own dtype and byte count, separate
+            // from the tensor's.  Left at their defaults (F32, 0) every
+            // integer or bool output claimed to be float32 to any reader
+            // that asks the storage — ``.numpy()`` returned an int64
+            // ``x * 2 + 1`` as float32 bit patterns — and ``nbytes == 0``
+            // made every compiled output look non-dense.
             GpuStorage gs;
+            gs.dtype = exe->output_dtypes[j];
+            gs.nbytes = detail::shape_nbytes(wrap_shape, exe->output_dtypes[j]);
             gs.arr = std::make_shared<::mlx::core::array>(std::move(arr));
             outputs.push_back(std::make_shared<TensorImpl>(
                 Storage{std::move(gs)}, wrap_shape, exe->output_dtypes[j], Device::GPU, false));

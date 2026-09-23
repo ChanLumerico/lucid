@@ -17,7 +17,7 @@ namespace lucid::compile {
 bool CacheKey::operator==(const CacheKey& other) const noexcept {
     return device == other.device && op_names == other.op_names && op_inputs == other.op_inputs &&
            output_shapes == other.output_shapes && output_dtypes == other.output_dtypes &&
-           op_attrs == other.op_attrs;
+           op_attrs == other.op_attrs && feeds == other.feeds && outputs == other.outputs;
 }
 
 namespace {
@@ -77,10 +77,22 @@ std::size_t CacheKeyHash::operator()(const CacheKey& key) const noexcept {
         }
         hash_combine(h, 0xDEADBEEFULL);
     }
+    for (const auto& f : key.feeds) {
+        hash_combine(h, std::hash<std::int64_t>{}(f.canonical_id));
+        for (auto d : f.shape)
+            hash_combine(h, std::hash<std::int64_t>{}(d));
+        hash_combine(h, std::hash<std::uint8_t>{}(static_cast<std::uint8_t>(f.dtype)));
+        hash_combine(h, 0xFEEDFACEULL);
+    }
+    for (auto o : key.outputs)
+        hash_combine(h, std::hash<std::int64_t>{}(o));
+    hash_combine(h, 0x0B7B075ULL);
     return h;
 }
 
-CacheKey make_cache_key(const TraceGraph& graph) {
+CacheKey make_cache_key(const TraceGraph& graph,
+                        const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta,
+                        const std::vector<TensorId>& explicit_outputs) {
     CacheKey key;
     key.op_names.reserve(graph.ops.size());
     key.op_inputs.reserve(graph.ops.size());
@@ -125,6 +137,23 @@ CacheKey make_cache_key(const TraceGraph& graph) {
         key.op_attrs.push_back(std::move(sorted_attrs));
     }
     key.device = device;
+
+    // Feeds in the walk's own numbering, so the order depends on how the
+    // graph reads them and not on the ids this trace happened to draw.
+    for (const auto& [tid, meta] : feed_meta) {
+        const auto it = canon.find(tid.v);
+        if (it == canon.end())
+            continue;  // no op reads it — it cannot reach a placeholder
+        key.feeds.push_back(FeedSig{it->second, meta.first, meta.second});
+    }
+    std::sort(key.feeds.begin(), key.feeds.end(),
+              [](const FeedSig& a, const FeedSig& b) { return a.canonical_id < b.canonical_id; });
+
+    // Requested outputs in the same numbering; an id the walk never saw
+    // (a feed returned as-is) still gets a stable number from ``canonical``.
+    key.outputs.reserve(explicit_outputs.size());
+    for (const auto& id : explicit_outputs)
+        key.outputs.push_back(canonical(id));
     return key;
 }
 

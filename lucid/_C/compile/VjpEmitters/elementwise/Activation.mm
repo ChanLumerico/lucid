@@ -8,6 +8,8 @@
 
 #include <memory>
 #include <string_view>
+#include <variant>
+#include <vector>
 
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
@@ -272,9 +274,94 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// Piecewise activations.  Each forward is a select on ``x >= 0``, and
+// MPSGraph's autodiff aborts on a select whose predicate is a comparison
+// ("Couldn't get gradient Tensor"), so without these a model using any of
+// them could not be trained compiled.  The backward only needs the same
+// comparison as a mask, which is harmless here.  The attribute defaults
+// match the forward emitters.
+// ────────────────────────────────────────────────────────────────────
+inline double vjp_double_attr(const OpNode& node, const char* key, double def) {
+    auto it = node.attrs.find(key);
+    if (it == node.attrs.end())
+        return def;
+    const auto* p = std::get_if<double>(&it->second);
+    return p ? *p : def;
+}
+
+// select(x >= 0, pos, neg) as the local derivative, times the incoming grad.
+inline MPSGraphTensor* piecewise_grad(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go,
+                                      MPSGraphTensor* pos, MPSGraphTensor* neg) {
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:go.dataType];
+    MPSGraphTensor* mask = [g greaterThanOrEqualToWithPrimaryTensor:x secondaryTensor:zero name:nil];
+    MPSGraphTensor* d = [g selectWithPredicateTensor:mask
+                                 truePredicateTensor:pos
+                                falsePredicateTensor:neg
+                                                name:nil];
+    return [g multiplicationWithPrimaryTensor:go secondaryTensor:d name:nil];
+}
+
+class LeakyReluVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "leaky_relu"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        const double slope = vjp_double_attr(node, "slope", 0.01);
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [slope](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
+                return piecewise_grad(g, x, go, [g constantWithScalar:1.0 dataType:dt],
+                                      [g constantWithScalar:slope dataType:dt]);
+            });
+    }
+};
+
+// elu: d/dx = 1 for x >= 0, alpha * exp(x) below.  selu is lambda times the
+// same with its fixed alpha.
+template <bool SELU>
+class EluFamilyVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return SELU ? "selu" : "elu"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        const double alpha = SELU ? 1.6732632423543772 : vjp_double_attr(node, "alpha", 1.0);
+        const double scale = SELU ? 1.0507009873554805 : 1.0;
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [alpha, scale](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
+                MPSGraphTensor* neg = [g multiplicationWithPrimaryTensor:
+                                              [g constantWithScalar:alpha * scale dataType:dt]
+                                                         secondaryTensor:[g exponentWithTensor:x
+                                                                                          name:nil]
+                                                                    name:nil];
+                return piecewise_grad(g, x, go, [g constantWithScalar:scale dataType:dt], neg);
+            });
+    }
+};
+
+// softplus = log(1 + e^x): d/dx = sigmoid(x).
+class SoftplusVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "softplus"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                return [g multiplicationWithPrimaryTensor:go
+                                          secondaryTensor:[g sigmoidWithTensor:x name:nil]
+                                                     name:@"softplus_vjp"];
+            });
+    }
+};
+
 struct ActivationVjpRegistrar {
     ActivationVjpRegistrar() {
         register_vjp_emitter(std::make_unique<ReluVjp>());
+        register_vjp_emitter(std::make_unique<LeakyReluVjp>());
+        register_vjp_emitter(std::make_unique<EluFamilyVjp<false>>());
+        register_vjp_emitter(std::make_unique<EluFamilyVjp<true>>());
+        register_vjp_emitter(std::make_unique<SoftplusVjp>());
         register_vjp_emitter(std::make_unique<SigmoidVjp>());
         register_vjp_emitter(std::make_unique<TanhVjp>());
         register_vjp_emitter(std::make_unique<SiluVjp>());

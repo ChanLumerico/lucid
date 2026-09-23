@@ -374,7 +374,14 @@ void register_compile(py::module_& m) {
             }
 
             auto& cache = lucid::compile::ExecutableCache::session();
-            lucid::compile::CacheKey key = lucid::compile::make_cache_key(graph);
+            std::unordered_map<lucid::compile::TensorId, std::pair<lucid::Shape, lucid::Dtype>>
+                feed_meta;
+            feed_meta.reserve(feeds.size());
+            for (const auto& [tid, impl] : feeds)
+                if (impl)
+                    feed_meta.emplace(tid, std::make_pair(impl->shape(), impl->dtype()));
+            lucid::compile::CacheKey key =
+                lucid::compile::make_cache_key(graph, feed_meta, explicit_outputs);
 
             if (auto* hit = cache.find(key)) {
                 return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));

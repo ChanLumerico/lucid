@@ -862,7 +862,23 @@ class CompiledModule[**P, R]:
                 # eager-only and route to eager.
                 self._eager_only.add(key)
                 return run_eager(self._model, args, kwargs)
+            # MPSGraph resolves some kernels only on the first run and has
+            # gaps there that compiling does not reveal — an int64
+            # ``x * x`` is simplified into an int64 ``square`` it has no
+            # kernel for.  A first run that fails that way is the same
+            # verdict as a compile that declines: nothing was written yet,
+            # so answer with eager and remember the signature.
+            try:
+                result = self._run(entry, args, kwargs)
+            except RuntimeError as why:
+                if "MPSGraph failed" not in str(why):
+                    raise
+                if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+                    print(f"[compile] eager fallback: {why}", file=sys.stderr)
+                self._eager_only.add(key)
+                return run_eager(self._model, args, kwargs)
             self._cache[key] = entry
+            return result
         return self._run(entry, args, kwargs)
 
     # ── Internals ────────────────────────────────────────────────

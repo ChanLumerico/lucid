@@ -41,12 +41,20 @@ public:
             case Dtype::F16: out_mps = MPSDataTypeFloat16; break;
             case Dtype::I32: out_mps = MPSDataTypeInt32; break;
             case Dtype::I64: out_mps = MPSDataTypeInt64; break;
+            // ``F.one_hot`` builds int8 and casts after, so without these
+            // every compiled one-hot fell back.
+            case Dtype::I8: out_mps = MPSDataTypeInt8; break;
+            case Dtype::I16: out_mps = MPSDataTypeInt16; break;
             case Dtype::Bool: out_mps = MPSDataTypeBool; break;
             default: return false;
         }
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
+        // Eager truncates float indices (2.7 is class 2); MPSGraph's oneHot
+        // matches exact values only, so 2.7 lit nothing.  Cast first.
+        if (x.dataType & MPSDataTypeFloatBit)
+            x = [g castTensor:x toType:MPSDataTypeInt32 name:nil];
         NSUInteger axis = (NSUInteger)x.shape.count;  // append as last
         ctx.bind(node.outputs[0].id, (__bridge void*)([g oneHotWithIndicesTensor:x
                                                     depth:(NSUInteger)depth

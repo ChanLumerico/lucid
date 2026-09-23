@@ -105,8 +105,19 @@ const OpSchema IndexScatterBackward::schema_v1{
 // pass without an extra copy.
 TensorImplPtr
 attach_index_scatter_grad(const TensorImplPtr& a, TensorImplPtr out, Storage indices, int axis) {
-    if (!differentiable_dtype(a->dtype()))
+    if (!differentiable_dtype(a->dtype())) {
+        // ``wire_autograd`` is also what records a traced op's operands, so
+        // skipping it has to record them by hand.  Without this an integer
+        // ``sort`` reaches ``lucid.compile`` with no inputs and the whole
+        // graph falls back to eager.  ``topk`` is worse: its follow-up
+        // ``on_op_io`` for the indices becomes the *first* registration,
+        // so the values tensor is never traced, turns into an external
+        // feed, and every compiled replay returns the values of the call
+        // that was traced.
+        if (auto* trc = ::lucid::compile::current_tracer())
+            trc->on_op_io({a}, out);
         return out;
+    }
     auto bwd = std::make_shared<IndexScatterBackward>();
     bwd->grad_shape_ = out->shape();
     bwd->indices_ = std::move(indices);

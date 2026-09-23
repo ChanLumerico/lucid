@@ -15,6 +15,7 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "../OpEmitter.h"
@@ -118,13 +119,81 @@ public:
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
             return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)([graph bitwiseNOTWithTensor:x_t name:@"invert"]));
+        // ``~`` on bool is logical not.  MPSGraph's bitwise NOT takes integers
+        // only and, handed an ``i1``, aborts the process rather than decline.
+        MPSGraphTensor* y = x_t.dataType == MPSDataTypeBool
+                                ? [graph notWithTensor:x_t name:@"invert"]
+                                : [graph bitwiseNOTWithTensor:x_t name:@"invert"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 };
 
+// ── bitwise_and / or / xor / shifts.  ``Bitwise.cpp`` records the operands
+// by hand (no gradient, so no ``wire_autograd``) but nothing emitted them, so
+// every graph with ``&`` / ``|`` / ``^`` fell back — ``linalg.norm``'s default
+// path among them.  Bool takes the logical forms: MPSGraph's bitwise ops
+// take integers only.  OP: 0=and 1=or 2=xor 3=<< 4=>>.
+template <int OP>
+class BitwiseEmitterT final : public OpEmitter {
+public:
+    explicit BitwiseEmitterT(std::string name) : name_(std::move(name)) {}
+    std::string_view op_name() const override { return name_; }
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 2 || node.outputs.empty())
+            return false;
+        if (node.inputs[0] < 0 || node.inputs[1] < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
+        MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[1]);
+        if (g == nil || a == nil || b == nil || a.dataType != b.dataType)
+            return false;
+        const bool is_bool = a.dataType == MPSDataTypeBool;
+        if (a.dataType & MPSDataTypeFloatBit)
+            return false;
+        MPSGraphTensor* y = nil;
+        switch (OP) {
+        case 0:
+            y = is_bool ? [g logicalANDWithPrimaryTensor:a secondaryTensor:b name:nil]
+                        : [g bitwiseANDWithPrimaryTensor:a secondaryTensor:b name:nil];
+            break;
+        case 1:
+            y = is_bool ? [g logicalORWithPrimaryTensor:a secondaryTensor:b name:nil]
+                        : [g bitwiseORWithPrimaryTensor:a secondaryTensor:b name:nil];
+            break;
+        case 2:
+            y = is_bool ? [g logicalXORWithPrimaryTensor:a secondaryTensor:b name:nil]
+                        : [g bitwiseXORWithPrimaryTensor:a secondaryTensor:b name:nil];
+            break;
+        case 3:
+            if (is_bool)
+                return false;
+            y = [g bitwiseLeftShiftWithPrimaryTensor:a secondaryTensor:b name:nil];
+            break;
+        case 4:
+            if (is_bool)
+                return false;
+            y = [g bitwiseRightShiftWithPrimaryTensor:a secondaryTensor:b name:nil];
+            break;
+        default:
+            return false;
+        }
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
+    }
+
+private:
+    std::string name_;
+};
+
 struct CompareEmitterRegistrar {
     CompareEmitterRegistrar() {
+        register_emitter(std::make_unique<BitwiseEmitterT<0>>("bitwise_and"));
+        register_emitter(std::make_unique<BitwiseEmitterT<1>>("bitwise_or"));
+        register_emitter(std::make_unique<BitwiseEmitterT<2>>("bitwise_xor"));
+        register_emitter(std::make_unique<BitwiseEmitterT<3>>("bitwise_left_shift"));
+        register_emitter(std::make_unique<BitwiseEmitterT<4>>("bitwise_right_shift"));
         register_emitter(std::make_unique<EqualEmitter>());
         register_emitter(std::make_unique<NotEqualEmitter>());
         register_emitter(std::make_unique<GreaterEmitter>());

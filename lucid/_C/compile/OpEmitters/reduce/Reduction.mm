@@ -59,6 +59,7 @@ inline bool emit_reduce(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     for (std::int64_t d : *dims)
         [axes addObject:[NSNumber numberWithLongLong:d]];
 
+    x_t = promote_to_float_output(graph, x_t, node);
     MPSGraphTensor* reduced = builder(graph, x_t, axes);
 
     // Two regimes:

@@ -38,6 +38,11 @@ public:
         MPSGraphTensor* idx = (__bridge MPSGraphTensor*)ctx.resolve(i_id);
         MPSGraphTensor* src = (__bridge MPSGraphTensor*)ctx.resolve(s_id);
         if (g == nil || base == nil || idx == nil || src == nil) return false;
+        // MPSGraph scatters int64 data in 32 bits — -7 came back as
+        // 4294967289 — and bool data as all false.  Neither narrows safely,
+        // so both stay eager; float and int32 compile.
+        for (MPSGraphTensor* t : {base, src})
+            if (t.dataType == MPSDataTypeInt64 || t.dataType == MPSDataTypeBool) return false;
         MPSGraphScatterMode mode;
         switch (MODE) {
             case 0: mode = MPSGraphScatterModeAdd; break;

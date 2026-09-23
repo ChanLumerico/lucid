@@ -28,6 +28,8 @@ Acceptance:
   eager + records the signature as ``eager-only``.
 """
 
+import os
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final, override
@@ -293,10 +295,14 @@ def make_step(
                 use_dynamic,
                 extra_output_ids=bn_stat_out_ids,
             )
-        except RuntimeError:
+        except RuntimeError as why:
             # compile_trace_with_backward surfaces a RuntimeError when
             # an op has no emitter or another invariant fails.  Either
-            # way it's an eager-only signature.
+            # way it's an eager-only signature — and, as on the forward
+            # path, the reason is printed under LUCID_COMPILE_VERBOSE=1
+            # rather than dropped, since a fallback is otherwise silent.
+            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+                print(f"[compile] eager fallback: {why}", file=sys.stderr)
             return None
         if exe is None:
             return None

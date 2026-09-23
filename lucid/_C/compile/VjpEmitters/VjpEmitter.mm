@@ -46,6 +46,9 @@ const std::unordered_set<std::string>& no_grad_ops() {
         "zeros",        "ones",       "full",       "arange",
         "linspace",     "eye",        "empty",      "randn",
         "rand",         "randint",    "uniform",    "normal",
+        // piecewise-constant: their derivative is zero wherever it exists
+        "floor",        "ceil",       "round",      "trunc",
+        "sign",
         // shape-only / integer ops that don't need gradients
         "cast_i8",      "cast_i16",   "cast_i32",   "cast_i64",
         "cast_u8",      "cast_b8",
