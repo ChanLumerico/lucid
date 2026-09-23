@@ -32,6 +32,11 @@ jobs:
   phase-gate:
     name: Phase gate / Python ${{ matrix.python-version }}
     runs-on: macos-26
+    # Measured: 15 min on a push, 125 min when the slow stages are on
+    # (below).  Without a cap a hung run burns GitHub's 6-hour default
+    # before anyone finds out — one sat at 94 minutes here before it was
+    # noticed, and only because someone was watching.
+    timeout-minutes: ${{ github.event_name == 'push' && 45 || 210 }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,6 +135,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: macos-26
+    timeout-minutes: 45          # measured 11-15 min
     # Coverage metrics aren't needed on every main code-push — the phase
     # gate already catches drift there.  Run on PRs, release tags, the
     # nightly schedule, and manual dispatch only (keeps macOS cost down).
@@ -206,6 +212,7 @@ jobs:
     # macOS 15 build — so an engine call newer than 15, or a difference in
     # that MLX build, fails here instead of on a user's machine.
     runs-on: macos-15
+    timeout-minutes: 45          # measured 12-14 min
 
     steps:
       - uses: actions/checkout@v4
@@ -264,6 +271,7 @@ jobs:
     name: Nightly perf placeholder
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: macos-26
+    timeout-minutes: 20          # measured 4 min
 
     steps:
       - uses: actions/checkout@v4
