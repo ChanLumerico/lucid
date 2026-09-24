@@ -11,7 +11,7 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-289212-purple)
+![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-289658-purple)
 
 **[Documentation](https://chanlumerico.github.io/lucid/)** ·
 **[Model Zoo](https://chanlumerico.github.io/lucid/)** ·
@@ -341,12 +341,13 @@ autograd during training, with no branch in your code.
 | | Minimum |
 |---|---|
 | Hardware | Apple Silicon (M1 or later) |
-| OS | macOS 15 Sequoia |
+| OS | macOS 26 Tahoe |
 | Python | 3.14 only — the type annotations rely on PEP 649 lazy evaluation |
-| MLX | ≥ 0.31 (`mlx-metal` ships macOS 14, 15 and 26 builds; pip picks the one for your OS) |
+| MLX | ≥ 0.31 (pip installs `mlx-metal`'s macOS 26 build) |
 | Build | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
 
-Linux, Windows, x86-64, and macOS 14 or earlier are not supported. MLX 0.32's macOS 26 build
+Linux, Windows, x86-64, and macOS 15 or earlier are not supported — 3.15.0 was the last
+release for macOS 15. MLX 0.32's macOS 26 build
 is compiled for macOS 26.2: on an M5-class Mac still running 26.0 or 26.1 it can pick GPU
 kernels that release predates and fail at runtime — update macOS, or install `mlx<0.32`.
 M1–M4 Macs are not affected.

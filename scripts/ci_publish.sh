@@ -5,13 +5,13 @@ cd "$(dirname "$0")/.."
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-# Force the wheel platform tag to macosx_15_0_arm64. python.org's Python
+# Force the wheel platform tag to macosx_26_0_arm64. python.org's Python
 # 3.14 is a universal2 interpreter and would otherwise yield a
-# `macosx_15_0_universal2` tag advertising x86_64 compatibility for an
+# `macosx_26_0_universal2` tag advertising x86_64 compatibility for an
 # arm64-only engine. CI workflows set these too — duplicated here so
 # local `./scripts/ci_publish.sh` invocations produce the same artifact.
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
-export _PYTHON_HOST_PLATFORM="${_PYTHON_HOST_PLATFORM:-macosx-15.0-arm64}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
+export _PYTHON_HOST_PLATFORM="${_PYTHON_HOST_PLATFORM:-macosx-26.0-arm64}"
 export ARCHFLAGS="${ARCHFLAGS:--arch arm64}"
 
 # Reuse an existing wheel if one is already in dist/. This matters for

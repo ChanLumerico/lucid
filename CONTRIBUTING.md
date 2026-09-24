@@ -74,9 +74,9 @@ when changing engine code.
 
 ### Requirements
 
-- macOS 15 Sequoia (arm64) or later, M1 or later
+- macOS 26 Tahoe (arm64) or later, M1 or later
 - Python 3.14 only (PEP 649 lazy annotations — H1/H7 require it)
-- MLX ≥ 0.31 (`mlx-metal` ships macOS 14, 15 and 26 builds of one ABI; the engine targets 15.0)
+- MLX ≥ 0.31 (`mlx-metal`'s macOS 26 build; the engine targets 26.0)
 - CMake ≥ 3.24
 - Ninja ≥ 1.11
 - Xcode Command Line Tools

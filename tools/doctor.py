@@ -63,8 +63,8 @@ def diagnose(timeout: float = 30.0) -> list[Check]:
     record(
         "platform",
         system == "Darwin" and machine == "arm64" and bool(release)
-        and int(release.split(".")[0]) >= 15,
-        f"{system} {release} {machine}; requires macOS 15+ arm64",
+        and int(release.split(".")[0]) >= 26,
+        f"{system} {release} {machine}; requires macOS 26+ arm64",
     )
     venv = ROOT / ".venv"
     record(

@@ -13,8 +13,8 @@ requires = [
     # must be available in the isolated build environment.
     # Every mlx-metal release from 0.31 on ships macOS 14, 15 and 26 builds
     # with one ABI (same headers, same exported symbols).  The engine targets
-    # 15.0 (setup.py), so one macosx_15_0_arm64 wheel links against whichever
-    # build pip picks for the machine.
+    # 26.0 (setup.py), so one macosx_26_0_arm64 wheel links against the macOS
+    # 26 build pip picks for the machine.
     "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"

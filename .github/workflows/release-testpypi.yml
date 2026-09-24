@@ -54,8 +54,8 @@ jobs:
 
       - name: Build wheel only (no smoke yet)
         env:
-          MACOSX_DEPLOYMENT_TARGET: "15.0"
-          _PYTHON_HOST_PLATFORM: "macosx-15.0-arm64"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
           ARCHFLAGS: "-arch arm64"
         run: |
           # Build the wheel — host env has mlx for linkage. Skip the
@@ -98,8 +98,8 @@ jobs:
         # regresses to an absolute build-machine path, this step fails
         # closed because no mlx exists at that path anymore.
         env:
-          MACOSX_DEPLOYMENT_TARGET: "15.0"
-          _PYTHON_HOST_PLATFORM: "macosx-15.0-arm64"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
           ARCHFLAGS: "-arch arm64"
         run: |
           # ci_publish.sh would re-build, but the wheel is already in dist/.
@@ -128,14 +128,13 @@ jobs:
           path: dist/*.whl
 
   # ── The wheel on the oldest macOS it claims ─────────────────────────
-  # The wheel is built on macos-26 with a 15.0 deployment target.
-  # Installing it on macos-15 — where pip resolves MLX's macOS 15 build —
-  # is what makes the macosx_15_0 tag true: an engine call newer than 15,
-  # or a difference in that MLX build, stops the release here.
-  verify-macos-15:
-    name: Verify wheel on macOS 15
+  # The wheel targets macOS 26.0, the floor since 3.16.0.  Installing it
+  # into a fresh environment on macos-26 — where pip resolves MLX's macOS
+  # 26 build — is what makes the macosx_26_0 tag true.
+  verify-macos-26:
+    name: Verify wheel on macOS 26
     needs: build-wheels
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - uses: actions/setup-python@v5
@@ -175,7 +174,7 @@ jobs:
 
   publish-testpypi:
     name: Publish to Test PyPI
-    needs: [build-wheels, verify-macos-15]
+    needs: [build-wheels, verify-macos-26]
     runs-on: ubuntu-latest
     permissions:
       contents: read
