@@ -114,6 +114,42 @@ def _convnext_key_transform(k: str) -> str:
     return k
 
 
+def _mobilenet_v4_branch_gains(model: object) -> None:
+    """MobileNet v4: give every branch gain a trained-like magnitude.
+
+    With the norm buffers randomised, normalisation stops rescaling, and
+    the reference initialisation then fails in both directions.  In the
+    conv variants every UIB branch adds about its input's size again, so
+    Conv-Medium / -Large answered with logits of 3e5 / 4e6 and the
+    comparison skipped.  In the hybrids every layer scale starts at 1e-5 —
+    including on the strided blocks that have no residual, each of which
+    therefore shrinks the main path by 1e-5 — so the logits came out near
+    1e-12 and an ``atol`` of 1e-3 passed anything, attention included.
+
+    Residual branches get a gain from U(0.1, 0.3) (their layer scale when
+    there is one, else the branch's last norm weight); non-residual layer
+    scales get U(0.5, 1).  Every variant then answers with logits between
+    about 0.5 and 20.  Seeded, so the check stays deterministic.
+    """
+    import lucid
+    import lucid.nn as nn
+
+    lucid.manual_seed(0)
+    for stage in getattr(model, "blocks"):
+        for block in stage:
+            residual = bool(getattr(block, "_has_skip", False)) or hasattr(
+                block, "attn"
+            )
+            lo, hi = (0.1, 0.3) if residual else (0.5, 1.0)
+            gamma = getattr(getattr(block, "layer_scale", None), "gamma", None)
+            if gamma is not None:
+                nn.init.uniform_(gamma, lo, hi)
+            elif residual and hasattr(block, "pw_proj"):
+                nn.init.uniform_(block.pw_proj.bn.weight, lo, hi)
+            elif residual and hasattr(block, "bn2"):
+                nn.init.uniform_(block.bn2.weight, lo, hi)
+
+
 def _legacy_seresnet_key_transform(k: str) -> str:
     """Legacy SE-ResNet: Lucid key → timm ``legacy_seresnet*`` key.
 
@@ -179,6 +215,14 @@ class ParitySpec:
     # the parameter *shapes* and *order* are identical).  Positional is less
     # robust but avoids false-negative skips for structurally-correct models.
     use_positional_fallback: bool = False
+
+    # Optional function applied to the freshly built Lucid model *before*
+    # the transfer (so the reference receives the same values).  For
+    # families whose default initialisation leaves the randomised-norm
+    # forward numerically meaningless — logits that explode past the
+    # skip ceiling, or collapse far below ``atol`` — it sets parameters
+    # to trained-like magnitudes so the comparison measures the model.
+    prepare: Callable[[object], None] | None = None
 
     @property
     def id(self) -> str:
@@ -435,6 +479,14 @@ SPECS: list[ParitySpec] = [
         input_shape=(1, 3, 299, 299),
         tier="slow",
     ),
+    # Inception-v4 mirrors timm's ``features.N`` / ``last_linear`` layout
+    # key-for-key (896 tensors), so the named transfer is complete.
+    ParitySpec(
+        M.inception_v4_cls,
+        "inception_v4",
+        input_shape=(1, 3, 299, 299),
+        tier="slow",
+    ),
     # ── Xception ──────────────────────────────────────────────────────────────
     ParitySpec(
         M.xception_cls,
@@ -470,6 +522,41 @@ SPECS: list[ParitySpec] = [
         M.mobilenet_v3_small_cls,
         "mobilenetv3_small_100",
         use_positional_fallback=True,
+    ),
+    # ── MobileNet v4 ──────────────────────────────────────────────────────────
+    # The module tree mirrors timm's ``mobilenetv4_*`` key-for-key (conv_stem,
+    # blocks.S.B.{dw_start,pw_exp,dw_mid,pw_proj,attn,...}, conv_head,
+    # norm_head, classifier), so the named transfer is complete and no
+    # positional fallback is allowed to paper over a mismatch.
+    # ``prepare`` — see ``_mobilenet_v4_branch_gains``.
+    ParitySpec(
+        M.mobilenet_v4_conv_small_cls,
+        "mobilenetv4_conv_small",
+        prepare=_mobilenet_v4_branch_gains,
+    ),
+    ParitySpec(
+        M.mobilenet_v4_conv_medium_cls,
+        "mobilenetv4_conv_medium",
+        tier="slow",
+        prepare=_mobilenet_v4_branch_gains,
+    ),
+    ParitySpec(
+        M.mobilenet_v4_conv_large_cls,
+        "mobilenetv4_conv_large",
+        tier="slow",
+        prepare=_mobilenet_v4_branch_gains,
+    ),
+    ParitySpec(
+        M.mobilenet_v4_hybrid_medium_cls,
+        "mobilenetv4_hybrid_medium",
+        tier="slow",
+        prepare=_mobilenet_v4_branch_gains,
+    ),
+    ParitySpec(
+        M.mobilenet_v4_hybrid_large_cls,
+        "mobilenetv4_hybrid_large",
+        tier="slow",
+        prepare=_mobilenet_v4_branch_gains,
     ),
     # ── EfficientNet — head: classifier.weight (exact match) ─────────────────
     # Lucid uses features.N vs timm's blocks.N.M — positional fallback for body.

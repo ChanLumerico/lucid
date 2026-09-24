@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
 
+### Added
+
+- add MobileNet-v4 and Inception-v4
+
 ---
 
 ## [3.15.0] — 2026-09-24

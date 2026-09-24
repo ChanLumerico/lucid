@@ -156,6 +156,7 @@ CASES: list[Any] = [
         _images(64),
     ),
     ("inception_resnet", "inception_resnet_v2_cls", {}, _images(96)),
+    ("inception_v4", "inception_v4_cls", {}, _images(96)),
     ("lenet", "lenet_5_cls", {}, _images(32, channels=1)),
     (
         "maxvit",
@@ -172,6 +173,8 @@ CASES: list[Any] = [
     ("mobilenet", "mobilenet_025_cls", {}, _images(64)),
     ("mobilenet_v2", "mobilenet_v2_075_cls", {}, _images(64)),
     ("mobilenet_v3", "mobilenet_v3_small_cls", {}, _images(64)),
+    # A hybrid, so the Mobile MQA blocks and layer scales take a step too.
+    ("mobilenet_v4", "mobilenet_v4_hybrid_medium_cls", {}, _images(64)),
     (
         "pvt",
         "pvt_v2_b0_cls",

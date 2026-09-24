@@ -8,7 +8,6 @@ Mirrors the same pattern used by ``lucid/test/unit/models/conftest.py``.
 import importlib
 
 _PENDING_MODULES = {
-    "test_mobilenet_v4.py": ("lucid.models.vision.mobilenet_v4",),
     "test_inception_resnet_v2.py": ("lucid.models.vision.inception_resnet",),
 }
 

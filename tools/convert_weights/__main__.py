@@ -40,10 +40,12 @@ import tools.convert_weights.mask_rcnn  # noqa: F401
 import tools.convert_weights.maskformer  # noqa: F401
 import tools.convert_weights.inception_next  # noqa: F401
 import tools.convert_weights.inception_resnet  # noqa: F401
+import tools.convert_weights.inception_v4  # noqa: F401
 import tools.convert_weights.maxvit  # noqa: F401
 import tools.convert_weights.mobilenet  # noqa: F401
 import tools.convert_weights.mobilenet_v2  # noqa: F401
 import tools.convert_weights.mobilenet_v3  # noqa: F401
+import tools.convert_weights.mobilenet_v4  # noqa: F401
 import tools.convert_weights.pvt  # noqa: F401
 import tools.convert_weights.resnest  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401

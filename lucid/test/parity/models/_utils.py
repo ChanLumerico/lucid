@@ -157,6 +157,9 @@ def _run_parity(spec: ParitySpec) -> None:
 
     lucid_model = spec.lucid_factory()
     lucid_model.eval()
+    if spec.prepare is not None:
+        # Before the transfer, so the reference receives the same values.
+        spec.prepare(lucid_model)
 
     timm_model = timm.create_model(spec.timm_name, pretrained=False, num_classes=1000)
     timm_model.eval()

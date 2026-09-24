@@ -1,24 +1,13 @@
 """InceptionV4 unit tests.
 
-Split out of ``test_models_inception.py``: the v4 family is not implemented
-yet, and ``conftest.py`` skips a test file wholesale when one of its imports is
-missing — which was also taking the InceptionV3 and Inception-ResNet-v2 tests
-down with it.  Keeping v4 in its own module lets the implemented families run.
+Kept apart from ``test_models_inception.py`` (Inception v3 and
+Inception-ResNet-v2): each family's tests live in their own module.
 """
 
-import importlib.util
 import unittest
-
-import pytest
 
 import lucid
 import lucid.models as models
-
-if importlib.util.find_spec("lucid.models.vision.inception_v4") is None:
-    pytest.skip(
-        "Inception-v4 is a pending family, not implemented", allow_module_level=True
-    )
-
 from lucid.models.vision.inception_v4 import (
     InceptionV4Config,
     InceptionV4,
@@ -69,10 +58,6 @@ class TestInceptionV4Registry(unittest.TestCase):
         m = models.create_model("inception_v4")
         self.assertIsInstance(m, InceptionV4)
 
-
-# ---------------------------------------------------------------------------
-# Inception-ResNet v2
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     unittest.main()

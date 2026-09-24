@@ -63,6 +63,8 @@ FAMILIES = [
     ("attention_unet", (1, 1, 64, 64)),
     ("maxvit_tiny", (1, 3, 224, 224)),
     ("mobilenet", (1, 3, 224, 224)),
+    # The hybrid, so Mobile MQA's shared-head attention is translated too.
+    ("mobilenet_v4_hybrid_medium", (1, 3, 224, 224)),
     ("pvt_v2_b0", (1, 3, 224, 224)),
     ("resnest_14", (1, 3, 224, 224)),
     ("resnet_18", (1, 3, 224, 224)),

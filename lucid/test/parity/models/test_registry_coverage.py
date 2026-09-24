@@ -34,10 +34,10 @@ def _collected_spec_ids() -> tuple[set[str], list[str]]:
 
     Some modules are *meant* to be unimportable: the directory conftest
     drops tests whose model family is declared here but not implemented
-    yet, and test_mobilenet_v4 is one.  Those are returned rather than
-    swallowed, and a module that breaks for any other reason surfaces as
-    its specs going missing — a loud failure, which is the right way for
-    this to be wrong.
+    yet (``_PENDING_MODULES`` in ``vision/conftest.py``).  Those are
+    returned rather than swallowed, and a module that breaks for any
+    other reason surfaces as its specs going missing — a loud failure,
+    which is the right way for this to be wrong.
     """
     collected: set[str] = set()
     unimportable: list[str] = []

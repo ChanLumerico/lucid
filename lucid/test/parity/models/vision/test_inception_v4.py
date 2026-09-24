@@ -1,8 +1,7 @@
-"""MobileNet v4 parity tests (Conv-Small / -Medium / -Large, Hybrid-Medium / -Large).
+"""Inception-v4 parity test (299x299 input vs timm inception_v4).
 
-Numeric logit parity against timm's ``mobilenetv4_*`` models, whose module
-tree Lucid mirrors key-for-key.  Conv-Small — default tier; the other four
-— slow tier."""
+Slow tier (~43 M params).  The Lucid state dict matches timm's key-for-key,
+so the named transfer is complete and the logits are compared directly."""
 
 import pytest
 import lucid.models as M
@@ -16,11 +15,7 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.mobilenet_v4_conv_small_cls,
-        M.mobilenet_v4_conv_medium_cls,
-        M.mobilenet_v4_conv_large_cls,
-        M.mobilenet_v4_hybrid_medium_cls,
-        M.mobilenet_v4_hybrid_large_cls,
+        M.inception_v4_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

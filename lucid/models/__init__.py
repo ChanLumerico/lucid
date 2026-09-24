@@ -297,6 +297,11 @@ from lucid.models.vision.inception_resnet import (
     InceptionResNetConfig, InceptionResNetV2, InceptionResNetV2ForImageClassification,
     inception_resnet_v2, inception_resnet_v2_cls,
 )
+# 2016 — Inception-v4 (Szegedy et al.)
+from lucid.models.vision.inception_v4 import (
+    InceptionV4Config, InceptionV4, InceptionV4ForImageClassification,
+    inception_v4, inception_v4_cls,
+)
 # 2017 — ResNeXt (Xie et al.)
 from lucid.models.vision.resnext import (
     ResNeXtConfig, ResNeXt, ResNeXtForImageClassification,
@@ -476,6 +481,15 @@ from lucid.models.vision.vjepa import (
     vjepa_huge_16, vjepa_huge_16_cls,
     vjepa_huge_16_384, vjepa_huge_16_384_cls,
 )
+# 2024 — MobileNet v4 (Qin et al.)
+from lucid.models.vision.mobilenet_v4 import (
+    MobileNetV4Config, MobileNetV4, MobileNetV4ForImageClassification,
+    mobilenet_v4_conv_small, mobilenet_v4_conv_small_cls,
+    mobilenet_v4_conv_medium, mobilenet_v4_conv_medium_cls,
+    mobilenet_v4_conv_large, mobilenet_v4_conv_large_cls,
+    mobilenet_v4_hybrid_medium, mobilenet_v4_hybrid_medium_cls,
+    mobilenet_v4_hybrid_large, mobilenet_v4_hybrid_large_cls,
+)
 # 2025 — V-JEPA 2 (Assran et al.)
 from lucid.models.vision.vjepa2 import (
     VJEPA2Config, VJEPA2Model, VJEPA2ForVideoClassification, VJEPA2Output,
@@ -623,6 +637,9 @@ __all__ = [    # ── Infrastructure ─────────────�
     # ── Vision (2016) Inception-ResNet v2 ────────────────────────────────────
     "InceptionResNetConfig", "InceptionResNetV2", "InceptionResNetV2ForImageClassification",
     "inception_resnet_v2", "inception_resnet_v2_cls",
+    # ── Vision (2016) Inception-v4 ────────────────────────────────────────────
+    "InceptionV4Config", "InceptionV4", "InceptionV4ForImageClassification",
+    "inception_v4", "inception_v4_cls",
     # ── Vision (2017) ResNeXt ─────────────────────────────────────────────────
     "ResNeXtConfig", "ResNeXt", "ResNeXtForImageClassification",
     "resnext_50_32x4d", "resnext_50_32x4d_cls",
@@ -732,6 +749,13 @@ __all__ = [    # ── Infrastructure ─────────────�
     "vjepa_large_16", "vjepa_large_16_cls",
     "vjepa_huge_16", "vjepa_huge_16_cls",
     "vjepa_huge_16_384", "vjepa_huge_16_384_cls",
+    # ── Vision (2024) MobileNet v4 ───────────────────────────────────────────
+    "MobileNetV4Config", "MobileNetV4", "MobileNetV4ForImageClassification",
+    "mobilenet_v4_conv_small", "mobilenet_v4_conv_small_cls",
+    "mobilenet_v4_conv_medium", "mobilenet_v4_conv_medium_cls",
+    "mobilenet_v4_conv_large", "mobilenet_v4_conv_large_cls",
+    "mobilenet_v4_hybrid_medium", "mobilenet_v4_hybrid_medium_cls",
+    "mobilenet_v4_hybrid_large", "mobilenet_v4_hybrid_large_cls",
     # ── Vision (2025) V-JEPA 2 ───────────────────────────────────────────────
     "VJEPA2Config", "VJEPA2Model", "VJEPA2ForVideoClassification", "VJEPA2Output",
     "vjepa2_vit_large", "vjepa2_vit_large_cls",

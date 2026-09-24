@@ -201,6 +201,7 @@ SPECS: dict[str, Spec] = {
     # alone moves the forward.
     "inception": Spec(size=299),
     "inception_resnet": Spec(size=299),
+    "inception_v4": Spec(size=299),
     "xception": Spec(size=299),
     # The smallest factory is the 3-D one: volumes.
     "attention_unet": Spec(inputs=_volume),
