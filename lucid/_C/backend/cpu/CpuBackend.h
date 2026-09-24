@@ -6279,8 +6279,30 @@ public:
         auto run = [&]<typename From, typename To>() {
             const From* src = reinterpret_cast<const From*>(ca.ptr.get());
             To* dst = reinterpret_cast<To*>(out_ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = static_cast<To>(src[i]);
+            if constexpr (std::is_floating_point_v<From> && std::is_integral_v<To> &&
+                          !std::is_same_v<To, bool>) {
+                // Float to integer saturates and sends NaN to 0 — what the
+                // hardware conversion does and what the other device matches
+                // (unit/ops/test_float_to_int_casts.py).  Spelled out because
+                // a ``static_cast`` of NaN, ±inf or anything out of range is
+                // undefined: the UBSan build halted on it.
+                constexpr auto lo = static_cast<From>(std::numeric_limits<To>::lowest());
+                constexpr auto hi = static_cast<From>(std::numeric_limits<To>::max());
+                for (std::size_t i = 0; i < n; ++i) {
+                    const From v = src[i];
+                    if (std::isnan(v))
+                        dst[i] = 0;
+                    else if (v <= lo)
+                        dst[i] = std::numeric_limits<To>::lowest();
+                    else if (v >= hi)
+                        dst[i] = std::numeric_limits<To>::max();
+                    else
+                        dst[i] = static_cast<To>(v);
+                }
+            } else {
+                for (std::size_t i = 0; i < n; ++i)
+                    dst[i] = static_cast<To>(src[i]);
+            }
         };
 
 #define CPU_CAST(F, T) run.template operator()<F, T>()

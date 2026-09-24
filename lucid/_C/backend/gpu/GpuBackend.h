@@ -890,6 +890,13 @@ public:
                        double posinf_val,
                        double neginf_val) override {
         return mlx_unary(a, shape, dt, [dt, nan_val, posinf_val, neginf_val](auto& x) {
+            // An integer or bool tensor holds no NaN or infinity, so this is
+            // the identity — and the replacement values, a float's range by
+            // default, are not representable in it: building them as integer
+            // arrays was undefined (the UBSan build halted here).
+            if (dt == Dtype::Bool || dt == Dtype::I8 || dt == Dtype::I16 || dt == Dtype::I32 ||
+                dt == Dtype::I64)
+                return x;
             auto mdt = gpu::to_mlx_dtype(dt);
             ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
             ::mlx::core::array pi_a(static_cast<float>(posinf_val), mdt);
@@ -4671,7 +4678,26 @@ public:
             right_extra[i] = extra;
             K_total *= K[i];
         }
-        ::mlx::core::array neg_inf(-std::numeric_limits<double>::infinity(), gpu::to_mlx_dtype(dt));
+        // The pad must never win a max: -inf for a float, the type's lowest
+        // value for an integer.  Converting -inf to an integer is undefined —
+        // the UBSan build halted on every integer max-pool here.
+        const auto pad_dt = gpu::to_mlx_dtype(dt);
+        ::mlx::core::array neg_inf = [&]() -> ::mlx::core::array {
+            switch (dt) {
+            case Dtype::Bool:
+                return ::mlx::core::array(false, pad_dt);
+            case Dtype::I8:
+                return ::mlx::core::array(std::numeric_limits<std::int8_t>::lowest(), pad_dt);
+            case Dtype::I16:
+                return ::mlx::core::array(std::numeric_limits<std::int16_t>::lowest(), pad_dt);
+            case Dtype::I32:
+                return ::mlx::core::array(std::numeric_limits<std::int32_t>::lowest(), pad_dt);
+            case Dtype::I64:
+                return ::mlx::core::array(std::numeric_limits<std::int64_t>::lowest(), pad_dt);
+            default:
+                return ::mlx::core::array(-std::numeric_limits<double>::infinity(), pad_dt);
+            }
+        }();
         std::vector<std::pair<int, int>> pad_widths;
         pad_widths.emplace_back(0, 0);
         pad_widths.emplace_back(0, 0);

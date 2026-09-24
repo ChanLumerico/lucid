@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - draw the noise levels on the device, so the training step compiles
 
+- three undefined conversions the UBSan build halted on
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
