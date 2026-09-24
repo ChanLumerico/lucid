@@ -59,5 +59,72 @@ class TestInceptionV4Registry(unittest.TestCase):
         self.assertIsInstance(m, InceptionV4)
 
 
+class TestInceptionV4WeightsEnum(unittest.TestCase):
+    """Static contract of the Weights enum — no network."""
+
+    def _enum(self) -> type:
+        from lucid.models.weights import InceptionV4Weights
+
+        return InceptionV4Weights
+
+    def test_default_alias(self) -> None:
+        cls = self._enum()
+        self.assertIs(cls.DEFAULT, cls.TF_IN1K)
+        self.assertEqual(list(cls.__members__), ["TF_IN1K", "DEFAULT"])
+
+    def test_entry_fields(self) -> None:
+        e = self._enum().TF_IN1K.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertEqual(len(e.sha256), 64)
+        self.assertIn("lucid-dl/inception-v4/", e.url)
+        self.assertIn("/TF_IN1K/", e.url)
+        meta = self._enum().TF_IN1K.meta
+        self.assertEqual(meta["source"], "timm/inception_v4.tf_in1k")
+        self.assertEqual(meta["license"], "apache-2.0")
+        self.assertEqual(meta["num_params"], inception_v4_cls().num_parameters())
+        # timm's results-imagenet.csv row for this exact tag at 299.
+        acc = meta["metrics"]["ImageNet-1k"]
+        self.assertAlmostEqual(acc["acc@1"], 80.144)
+        self.assertAlmostEqual(acc["acc@5"], 94.982)
+
+    def test_transforms_tf_slim_299(self) -> None:
+        tf = self._enum().TF_IN1K.transforms()
+        self.assertEqual(tf.crop_size, 299)
+        # floor(299 / 0.875) — the source pipeline floors, it does not round.
+        self.assertEqual(tf.resize_size, 341)
+        self.assertEqual(tf.interpolation, "bicubic")
+        self.assertEqual(tuple(tf.mean), (0.5, 0.5, 0.5))
+        self.assertEqual(tuple(tf.std), (0.5, 0.5, 0.5))
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        self.assertIn("TF_IN1K", list_pretrained("inception_v4_cls"))
+
+    def test_backbone_pretrained_refused(self) -> None:
+        # The checkpoint carries the classifier head; the headless backbone
+        # must refuse rather than hand back random weights.
+        with self.assertRaises(NotImplementedError):
+            inception_v4(pretrained=True)
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestInceptionV4PretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_default(self) -> None:
+        m = inception_v4_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 299, 299))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_string_tag(self) -> None:
+        m = models.inception_v4_cls(pretrained="TF_IN1K")
+        self.assertIsInstance(m, InceptionV4ForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

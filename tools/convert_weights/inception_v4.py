@@ -11,15 +11,14 @@ buffers), so the converter is a pure identity map.
 
 Source preset: the ``tf_in1k`` checkpoint (the TensorFlow-Slim weights
 ported via Cadene's pretrained-models) evaluates at ``299×299`` with
-``crop_pct=0.875``, bicubic interpolation, and ``(0.5, 0.5, 0.5)``
-mean/std — read straight from timm's ``default_cfg`` below.
-
-No Lucid-hosted weights exist yet: run without ``--upload`` to write and
-inspect the safetensors locally, then add ``_weights.py`` to the family
-once the files are hosted.
+``crop_pct=0.875`` (→ resize 341), bicubic interpolation, and
+``(0.5, 0.5, 0.5)`` mean/std — read straight from timm's ``default_cfg``
+below.  Hosted as ``lucid-dl/inception-v4`` tag ``TF_IN1K``; the
+family's ``_weights.py`` pins its sha256.
 """
 
 import dataclasses
+import math
 
 from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
@@ -87,7 +86,10 @@ class InceptionV4Arch(Architecture):
 
         cfg = self._model.default_cfg
         crop = int(cfg["input_size"][1])
-        resize = int(round(crop / float(cfg.get("crop_pct", 0.875))))
+        # Floored, as the reference's eval transform floors it: 299 / 0.875
+        # is 341.7, and 341 — not the rounded 342 — is the resize the
+        # published accuracy was measured under.
+        resize = int(math.floor(crop / float(cfg.get("crop_pct", 0.875))))
         preset = ImageClassification(
             crop_size=crop,
             resize_size=resize,
@@ -101,10 +103,10 @@ class InceptionV4Arch(Architecture):
         meta = {
             "num_params": n_params,
             "recipe": str(cfg.get("url", "")),
-            # Single-crop ImageNet validation accuracy reported in the
-            # paper's Table 2 (20.0% top-1 / 5.0% top-5 error).  Replace
-            # with a measured figure once the converted weights are evaluated.
-            "metrics": {"ImageNet-1k": {"acc@1": 80.0, "acc@5": 95.0}},
+            # Top-1 / Top-5 from timm's results CSV for inception_v4.tf_in1k
+            # (299 crop, crop_pct 0.875).  The paper's Table 2 figures
+            # (80.0 / 95.0) are its own evaluation, not this checkpoint's.
+            "metrics": {"ImageNet-1k": {"acc@1": 80.144, "acc@5": 94.982}},
         }
 
         return ConversionSpec(

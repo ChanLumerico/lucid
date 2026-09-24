@@ -3,6 +3,7 @@
 from dataclasses import replace
 from typing import Any, cast
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models._utils._common import reject_unavailable_pretrained
 from lucid.models.vision.inception_v4._config import InceptionV4Config
@@ -10,6 +11,7 @@ from lucid.models.vision.inception_v4._model import (
     InceptionV4,
     InceptionV4ForImageClassification,
 )
+from lucid.models.vision.inception_v4._weights import InceptionV4Weights
 
 _CFG = InceptionV4Config()
 
@@ -36,9 +38,10 @@ def inception_v4(pretrained: bool = False, **overrides: object) -> InceptionV4:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        No pretrained weights are published for this factory; ``True``
-        raises :class:`NotImplementedError` rather than returning a
-        randomly initialised model.
+        No pretrained weights are published for the headless backbone;
+        ``True`` raises :class:`NotImplementedError` rather than returning
+        a randomly initialised model.  The ImageNet-1k checkpoint belongs
+        to :func:`inception_v4_cls`, which the error message names.
     **overrides
         Keyword overrides forwarded into :class:`InceptionV4Config`
         (e.g. ``in_channels``).
@@ -65,12 +68,15 @@ def inception_v4(pretrained: bool = False, **overrides: object) -> InceptionV4:
     (1, 1536, 8, 8)
     """
     if pretrained:
-        reject_unavailable_pretrained("inception_v4")
+        reject_unavailable_pretrained("inception_v4", alternative="inception_v4_cls")
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return InceptionV4(cfg)
 
 
-@register_model(
+# reason: inception_v4_cls adds a typed weights= kwarg (per-model
+# WeightsEnum); the ModelFactory protocol predates the weights system and
+# still names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="inception_v4",
     model_type="inception_v4",
@@ -80,7 +86,10 @@ def inception_v4(pretrained: bool = False, **overrides: object) -> InceptionV4:
     summary="auto",
 )
 def inception_v4_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: InceptionV4Weights | None = None,
+    **overrides: object,
 ) -> InceptionV4ForImageClassification:
     r"""Inception-v4 image classifier (trunk + GAP + dropout + linear).
 
@@ -92,20 +101,28 @@ def inception_v4_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        No pretrained weights are published for this factory yet;
-        ``True`` raises :class:`NotImplementedError` rather than
-        returning a randomly initialised model.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`InceptionV4Weights.TF_IN1K`); a tag
+        string (e.g. ``"TF_IN1K"``) → that specific checkpoint.  Mutually
+        exclusive with ``weights`` (which wins if both are given).
+    weights : InceptionV4Weights, optional, keyword-only
+        Explicit weights enum member, e.g. ``InceptionV4Weights.TF_IN1K``.
+        Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`InceptionV4Config`.
         Common picks: ``num_classes=N`` to retarget the head,
-        ``dropout=p`` to change the head regularisation.
+        ``dropout=p`` to change the head regularisation.  Overriding
+        ``num_classes`` away from the checkpoint's 1000 makes pretrained
+        loading fail the strict key/shape check — load with the matching
+        head, then call :meth:`reset_classifier`.
 
     Returns
     -------
     InceptionV4ForImageClassification
         Classifier with the Inception-v4 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
@@ -115,6 +132,14 @@ def inception_v4_cls(
     head is named ``last_linear`` so the TF-Slim checkpoint's keys load
     unchanged.
 
+    Pretrained weights are converted from timm's ``inception_v4.tf_in1k``
+    — the TensorFlow-Slim ImageNet-1k checkpoint — and hosted on the
+    Hugging Face Hub under ``lucid-dl/inception-v4``.  timm reports
+    80.144% top-1 / 94.982% top-5 for it at 299x299 with the preset that
+    :meth:`InceptionV4Weights.TF_IN1K.transforms` reproduces (299 crop,
+    341 resize, bicubic, ``(0.5, 0.5, 0.5)`` mean/std — the TF-Slim
+    :math:`[-1, 1]` scaling, not the ImageNet statistics).
+
     Examples
     --------
     >>> import lucid
@@ -123,8 +148,16 @@ def inception_v4_cls(
     >>> out = model(lucid.randn(2, 3, 299, 299))
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = inception_v4_cls(pretrained=True)  # doctest: +SKIP
+    >>> from lucid.models.weights import InceptionV4Weights
+    >>> model = inception_v4_cls(weights=InceptionV4Weights.TF_IN1K)  # doctest: +SKIP
     """
-    if pretrained:
-        reject_unavailable_pretrained("inception_v4_cls")
+    entry = weights_mod.resolve_weights(InceptionV4Weights, pretrained, weights)
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
-    return InceptionV4ForImageClassification(cfg)
+    model = InceptionV4ForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="inception_v4_cls")
+    return model

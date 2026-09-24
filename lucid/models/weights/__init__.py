@@ -84,6 +84,9 @@ from lucid.models.vision.inception_next._weights import (
 # 2016 — Inception-ResNet v2 (Szegedy et al.)
 from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
 
+# 2016 — Inception-v4 (Szegedy et al.)
+from lucid.models.vision.inception_v4._weights import InceptionV4Weights
+
 # 2017 — Xception (Chollet)
 from lucid.models.vision.xception._weights import XceptionWeights
 
@@ -94,6 +97,15 @@ from lucid.models.vision.mobilenet_v2._weights import MobileNetV2Weights
 from lucid.models.vision.mobilenet_v3._weights import (
     MobileNetV3LargeWeights,
     MobileNetV3SmallWeights,
+)
+
+# 2024 — MobileNetV4 (Qin et al.)
+from lucid.models.vision.mobilenet_v4._weights import (
+    MobileNetV4ConvSmallWeights,
+    MobileNetV4ConvMediumWeights,
+    MobileNetV4ConvLargeWeights,
+    MobileNetV4HybridMediumWeights,
+    MobileNetV4HybridLargeWeights,
 )
 
 # 2018 — SENet (Hu et al.)
@@ -319,6 +331,8 @@ __all__ = [
     "DenseNet201Weights",
     # ── Vision (2016) Inception-ResNet v2 ─────────────────────────────
     "InceptionResNetV2Weights",
+    # ── Vision (2016) Inception-v4 ────────────────────────────────────
+    "InceptionV4Weights",
     # ── Vision (2017) Xception ────────────────────────────────────────
     "XceptionWeights",
     # ── Vision (2018) MobileNetV2 ─────────────────────────────────────
@@ -326,6 +340,12 @@ __all__ = [
     # ── Vision (2019) MobileNetV3 ─────────────────────────────────────
     "MobileNetV3LargeWeights",
     "MobileNetV3SmallWeights",
+    # ── Vision (2024) MobileNetV4 ─────────────────────────────────────
+    "MobileNetV4ConvSmallWeights",
+    "MobileNetV4ConvMediumWeights",
+    "MobileNetV4ConvLargeWeights",
+    "MobileNetV4HybridMediumWeights",
+    "MobileNetV4HybridLargeWeights",
     # ── Vision (2018) SENet ───────────────────────────────────────────
     "SEResNet18Weights",
     "SEResNet34Weights",

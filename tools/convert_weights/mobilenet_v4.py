@@ -19,13 +19,35 @@ timm                                            Lucid
 
 Source checkpoints are timm's ImageNet-1k weights for the five paper
 variants (Qin et al., "MobileNetV4: Universal Models for the Mobile
-Ecosystem", ECCV 2024).  The tag is the timm pretrained tag, upper-cased
-(``E2400_R224_IN1K`` → ``mobilenetv4_conv_small.e2400_r224_in1k``).  Those
-recipes are timm's, not the paper's, so accuracy metadata is left for the
-publisher to measure rather than copied from the paper's Table 6.
+Ecosystem", ECCV 2024), trained by timm with its own recipe — the
+authors have released no weights.  The tag is the timm pretrained tag,
+upper-cased (``E2400_R224_IN1K`` → ``mobilenetv4_conv_small.e2400_r224_in1k``).
+
+Hosted tags — one ImageNet-1k-only checkpoint per variant, each trained
+at the resolution the paper uses for that variant:
+
+=================  ======================  ==================================
+variant            tag                     why this one
+=================  ======================  ==================================
+conv_small         ``E2400_R224_IN1K``     timm's default tag
+conv_medium        ``E500_R256_IN1K``      timm's default tag
+conv_large         ``E600_R384_IN1K``      timm's default tag
+hybrid_medium      ``IX_E550_R256_IN1K``   timm's default is ImageNet-12k
+                                           pre-trained; this is its 1k-only
+                                           checkpoint at the paper's 256
+hybrid_large       ``IX_E600_R384_IN1K``   timm's default tag
+=================  ======================  ==================================
+
+Those recipes are timm's, so the paper's Table 6 accuracies describe
+different training runs.  The metrics written below are the rows of
+timm's ``results/results-imagenet.csv`` for the exact tag at its *train*
+resolution and ``crop_pct`` — the same pipeline as the preset written
+here.  (timm also lists each tag at a larger test resolution, where it
+scores higher; the preset does not use that resolution.)
 """
 
 import dataclasses
+import math
 
 from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
@@ -44,6 +66,18 @@ _MOBILENET_V4_PAPER_URL = (
     "Qin et al., 2024 — *MobileNetV4: Universal Models for the Mobile "
     "Ecosystem* (arXiv:2404.10518)"
 )
+
+# timm pretrained name -> ImageNet-1k (acc@1, acc@5), from timm's
+# ``results/results-imagenet.csv`` at the tag's train resolution and
+# ``crop_pct`` (the pipeline the written preset reproduces).  A tag missing
+# here is written with empty metrics rather than a guessed figure.
+_TIMM_RESULTS: dict[str, tuple[float, float]] = {
+    "mobilenetv4_conv_small.e2400_r224_in1k": (73.756, 91.430),
+    "mobilenetv4_conv_medium.e500_r256_in1k": (79.916, 95.188),
+    "mobilenetv4_conv_large.e600_r384_in1k": (82.974, 96.244),
+    "mobilenetv4_hybrid_medium.ix_e550_r256_in1k": (81.478, 95.692),
+    "mobilenetv4_hybrid_large.ix_e600_r384_in1k": (83.996, 96.714),
+}
 
 # arch -> (lucid_cls_factory, timm_arch, repo_id, title)
 _MOBILENET_V4_VARIANTS: dict[str, tuple[str, str, str, str]] = {
@@ -127,7 +161,9 @@ class MobileNetV4Arch(Architecture):
         from lucid.utils.transforms import ImageClassification
 
         crop = int(cfg["input_size"][1])
-        resize = int(round(crop / float(cfg.get("crop_pct", 0.875))))
+        # Floored, as the reference's eval transform floors it — the resize
+        # the published accuracy was measured under.
+        resize = int(math.floor(crop / float(cfg.get("crop_pct", 0.875))))
         preset = ImageClassification(
             crop_size=crop,
             resize_size=resize,
@@ -136,12 +172,16 @@ class MobileNetV4Arch(Architecture):
             interpolation=str(cfg.get("interpolation", "bicubic")),
         )
 
+        # timm's own results for this exact tag at the preset's resolution;
+        # the paper's Table 6 numbers describe different training runs.
+        result = _TIMM_RESULTS.get(self._timm_name)
+        metrics: dict[str, float] = (
+            {"acc@1": result[0], "acc@5": result[1]} if result is not None else {}
+        )
         meta = {
             "num_params": int(sum(p.numel() for p in self._model.parameters())),
             "recipe": str(cfg.get("url", "")),
-            # Measure before publishing: these are timm's recipes, and the
-            # paper's Table 6 numbers describe different training runs.
-            "metrics": {"ImageNet-1k": {}},
+            "metrics": {"ImageNet-1k": metrics},
         }
 
         return ConversionSpec(

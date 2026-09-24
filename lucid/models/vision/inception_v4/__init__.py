@@ -10,6 +10,7 @@ from lucid.models.vision.inception_v4._pretrained import (
     inception_v4,
     inception_v4_cls,
 )
+from lucid.models.vision.inception_v4._weights import InceptionV4Weights
 
 __all__ = [
     "InceptionV4Config",
@@ -18,4 +19,5 @@ __all__ = [
     "InceptionV4Output",
     "inception_v4",
     "inception_v4_cls",
+    "InceptionV4Weights",
 ]

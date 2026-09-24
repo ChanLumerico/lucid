@@ -128,11 +128,12 @@ class TestMobileNetV4Variants(unittest.TestCase):
         self.assertEqual(feat.shape[1], last.num_channels)
         self.assertEqual(224 // feat.shape[-1], last.reduction)
 
-    def test_pretrained_refused(self) -> None:
-        # No checkpoint is hosted yet: asking for one must fail loudly,
-        # never hand back random weights.
+    def test_backbone_pretrained_refused(self) -> None:
+        # The checkpoints carry the classifier head; the headless backbone
+        # has none of its own and must fail loudly, never hand back
+        # random weights.
         with self.assertRaises(NotImplementedError):
-            mobilenet_v4_conv_small_cls(pretrained=True)
+            mobilenet_v4_conv_small(pretrained=True)
 
 
 class TestMobileNetV4Init(unittest.TestCase):
@@ -172,6 +173,144 @@ class TestMobileNetV4Init(unittest.TestCase):
         bound = 1.0 / math.sqrt(1000)
         self.assertLessEqual(float(w.abs().max().item()), bound)
         self.assertIsInstance(model.classifier, nn.Linear)
+
+
+#: (factory stem, enum name, tag, timm source, crop, resize, acc@1, acc@5).
+#: Accuracies are timm's ``results-imagenet.csv`` rows for each exact tag
+#: at its train resolution — the resolution the preset reproduces.
+_WEIGHTS: tuple[tuple[str, str, str, str, int, int, float, float], ...] = (
+    (
+        "conv_small",
+        "MobileNetV4ConvSmallWeights",
+        "E2400_R224_IN1K",
+        "timm/mobilenetv4_conv_small.e2400_r224_in1k",
+        224,
+        256,
+        73.756,
+        91.430,
+    ),
+    (
+        "conv_medium",
+        "MobileNetV4ConvMediumWeights",
+        "E500_R256_IN1K",
+        "timm/mobilenetv4_conv_medium.e500_r256_in1k",
+        256,
+        269,
+        79.916,
+        95.188,
+    ),
+    (
+        "conv_large",
+        "MobileNetV4ConvLargeWeights",
+        "E600_R384_IN1K",
+        "timm/mobilenetv4_conv_large.e600_r384_in1k",
+        384,
+        404,
+        82.974,
+        96.244,
+    ),
+    (
+        "hybrid_medium",
+        "MobileNetV4HybridMediumWeights",
+        "IX_E550_R256_IN1K",
+        "timm/mobilenetv4_hybrid_medium.ix_e550_r256_in1k",
+        256,
+        269,
+        81.478,
+        95.692,
+    ),
+    (
+        "hybrid_large",
+        "MobileNetV4HybridLargeWeights",
+        "IX_E600_R384_IN1K",
+        "timm/mobilenetv4_hybrid_large.ix_e600_r384_in1k",
+        384,
+        404,
+        83.996,
+        96.714,
+    ),
+)
+
+
+class TestMobileNetV4WeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def test_default_alias(self) -> None:
+        import lucid.models.weights as W
+
+        for _, enum_name, tag, *_ in _WEIGHTS:
+            with self.subTest(enum=enum_name):
+                cls = getattr(W, enum_name)
+                self.assertIs(cls.DEFAULT, getattr(cls, tag))
+                self.assertEqual(list(cls.__members__), [tag, "DEFAULT"])
+
+    def test_entry_fields(self) -> None:
+        import lucid.models.weights as W
+
+        for stem, enum_name, tag, source, _, _, top1, top5 in _WEIGHTS:
+            with self.subTest(enum=enum_name):
+                member = getattr(getattr(W, enum_name), tag)
+                e = member.entry
+                self.assertEqual(e.num_classes, 1000)
+                self.assertEqual(len(e.sha256), 64)
+                self.assertIn(f"lucid-dl/mobilenet-v4-{stem.replace('_', '-')}/", e.url)
+                self.assertIn(f"/{tag}/", e.url)
+                meta = member.meta
+                self.assertEqual(meta["tag"], tag)
+                self.assertEqual(meta["source"], source)
+                self.assertEqual(meta["license"], "apache-2.0")
+                classifier = models.create_model(f"mobilenet_v4_{stem}_cls")
+                self.assertEqual(meta["num_params"], classifier.num_parameters())
+                acc = meta["metrics"]["ImageNet-1k"]
+                self.assertAlmostEqual(acc["acc@1"], top1)
+                self.assertAlmostEqual(acc["acc@5"], top5)
+
+    def test_transforms_match_source_pipeline(self) -> None:
+        import lucid.models.weights as W
+
+        for _, enum_name, tag, _, crop, resize, *_ in _WEIGHTS:
+            with self.subTest(enum=enum_name):
+                tf = getattr(getattr(W, enum_name), tag).transforms()
+                self.assertEqual(tf.crop_size, crop)
+                self.assertEqual(tf.resize_size, resize)
+                self.assertEqual(tf.interpolation, "bicubic")
+                self.assertEqual(tuple(tf.mean), (0.485, 0.456, 0.406))
+                self.assertEqual(tuple(tf.std), (0.229, 0.224, 0.225))
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for stem, _, tag, *_ in _WEIGHTS:
+            with self.subTest(variant=stem):
+                self.assertIn(tag, list_pretrained(f"mobilenet_v4_{stem}_cls"))
+
+    def test_family_package_reexports(self) -> None:
+        import lucid.models.vision.mobilenet_v4 as pkg
+        import lucid.models.weights as W
+
+        for _, enum_name, *_ in _WEIGHTS:
+            with self.subTest(enum=enum_name):
+                self.assertIs(getattr(pkg, enum_name), getattr(W, enum_name))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestMobileNetV4PretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_conv_small_default(self) -> None:
+        m = mobilenet_v4_conv_small_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_hybrid_medium_string_tag(self) -> None:
+        m = models.mobilenet_v4_hybrid_medium_cls(pretrained="IX_E550_R256_IN1K")
+        self.assertIsInstance(m, MobileNetV4ForImageClassification)
+        out = m.eval()(lucid.randn(1, 3, 256, 256))
+        self.assertEqual(out.logits.shape, (1, 1000))
 
 
 if __name__ == "__main__":
