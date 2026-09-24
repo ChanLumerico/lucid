@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - second derivatives through SDPA and grad seeds, one causal rule on every device
+- build anchors on the feature maps' device, so EfficientDet trains compiled
 
 ---
 

@@ -583,11 +583,14 @@ class AnchorGenerator(nn.Module):
         ), "sizes and aspect_ratios must have the same number of levels"
         self.sizes = sizes
         self.aspect_ratios = aspect_ratios
-        self._cell_anchors: list[Tensor] = self._compute_cell_anchors()
+        # Plain numbers, not tensors: each forward builds them on the feature
+        # maps' device.  Held as CPU tensors and moved there, they made every
+        # compiled detector step a mixed-device trace, which runs eager.
+        self._cell_anchors: list[list[list[float]]] = self._compute_cell_anchors()
 
-    def _compute_cell_anchors(self) -> list[Tensor]:
-        """Pre-compute base anchors (centred at origin) for every FPN level."""
-        all_anchors: list[Tensor] = []
+    def _compute_cell_anchors(self) -> list[list[list[float]]]:
+        """Base anchors (centred at origin) for every FPN level, as xyxy rows."""
+        all_anchors: list[list[list[float]]] = []
         for level_sizes, level_ratios in zip(self.sizes, self.aspect_ratios):
             anchors: list[list[float]] = []
             for size in level_sizes:
@@ -596,14 +599,14 @@ class AnchorGenerator(nn.Module):
                     w = math.sqrt(area / ratio)
                     h = w * ratio
                     anchors.append([-w / 2.0, -h / 2.0, w / 2.0, h / 2.0])
-            all_anchors.append(lucid.tensor(anchors))
+            all_anchors.append(anchors)
         return all_anchors
 
     def _grid_anchors(
         self,
         feature_map_size: tuple[int, int],
         stride: tuple[int, int],
-        base_anchors: Tensor,
+        base_anchors: list[list[float]],
         device: str = "cpu",
     ) -> Tensor:
         """Tile base_anchors across a feature map grid.
@@ -611,7 +614,7 @@ class AnchorGenerator(nn.Module):
         Args:
             feature_map_size: (H, W) of the feature map.
             stride:           (stride_h, stride_w) pixels per cell.
-            base_anchors:     (A, 4) base anchors centred at origin.
+            base_anchors:     A rows of xyxy base anchors centred at origin.
             device:           Device for the generated anchor tensor.
 
         Returns:
@@ -627,14 +630,10 @@ class AnchorGenerator(nn.Module):
             for c in range(fW)
         ]
         shifts_t = lucid.tensor(shifts, device=device)  # (G, 4)
-        base_on_dev = (
-            base_anchors.to(device=device)
-            if base_anchors.device.type != device
-            else base_anchors
-        )
+        base_on_dev = lucid.tensor(base_anchors, device=device)  # (A, 4)
 
         G = fH * fW
-        A = int(base_anchors.shape[0])
+        A = len(base_anchors)
 
         # (G, 1, 4) + (1, A, 4) → (G, A, 4) → (G*A, 4)
         grid = shifts_t[:, None, :] + base_on_dev[None, :, :]
