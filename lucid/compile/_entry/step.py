@@ -79,6 +79,10 @@ class _StepEntry:
     bn_stat_buffers: list[Tensor] = field(default_factory=list)
     bn_stat_out_count: int = 0
     bn_counters: list[tuple[Module, int]] = field(default_factory=list)
+    # Tensors from outside the trace that the step writes in place (a
+    # buffer's EMA, a counter), in the order their new values trail the BN
+    # statistics; copied back after each run.  See ``_core/buffer_writes``.
+    written: list[object] = field(default_factory=list)
     # Per parameter, in ``params`` order: did the trace reach it?  A
     # parameter the loss never touches (an auxiliary head unused in eval)
     # has no gradient, exactly as in eager; the executable produces grads
@@ -196,6 +200,7 @@ def make_step(
     from lucid._tensor.tensor import Tensor
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
+    from lucid.compile._core.buffer_writes import outside_writes, write_back
     from lucid.compile._core.bn_runstats import (
         advance_bn_counters,
         bn_counter_targets,
@@ -264,6 +269,16 @@ def make_step(
         maybe_probe_for_graph(graph)
 
         ext = tracer.external_feeds
+        # First, before any early return: the trace-time call already applied
+        # its in-place buffer writes, and whatever runs next — the executable
+        # or an eager fallback — must find the buffers as they were.
+        arguments = {id(_unwrap(t)) for t in leaf_tensors(x_args, {})}
+        writes = outside_writes(tracer, arguments)
+        if isinstance(writes, str):
+            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+                print(f"[compile] eager fallback: {writes}", file=sys.stderr)
+            return None
+        write_ids, written = writes
         # The tensor ``loss_fn`` returned — not whatever op ran last.  A model
         # that computes its loss and then more (Dreamer's reconstructions and
         # metrics) had its last metric differentiated as "the loss": 0.0008
@@ -319,7 +334,7 @@ def make_step(
                 loss_id,
                 param_ids,
                 use_dynamic,
-                extra_output_ids=bn_stat_out_ids,
+                extra_output_ids=bn_stat_out_ids + write_ids,
             )
         except RuntimeError as why:
             # compile_trace_with_backward surfaces a RuntimeError when
@@ -366,6 +381,7 @@ def make_step(
             compile_ms=(time.perf_counter() - t0) * 1000.0,
             bn_stat_buffers=bn_stat_buffers,
             bn_stat_out_count=len(bn_stat_out_ids),
+            written=written,
             bn_counters=bn_counter_targets(model, graph, ext),
         )
 
@@ -396,14 +412,18 @@ def make_step(
         # guards against a C++/Python output-slice drift.
         n_grads = sum(entry.observed) if entry.observed else len(params)
         n_loss_grad = 1 + n_grads
-        if len(outs) != n_loss_grad + entry.bn_stat_out_count:
+        n_writes = len(entry.written)
+        if len(outs) != n_loss_grad + entry.bn_stat_out_count + n_writes:
             raise RuntimeError(
                 f"make_step: run_executable returned {len(outs)} outputs, "
-                f"expected {n_loss_grad + entry.bn_stat_out_count} "
-                f"(1 loss + {n_grads} grads + {entry.bn_stat_out_count} BN stats)"
+                f"expected {n_loss_grad + entry.bn_stat_out_count + n_writes} "
+                f"(1 loss + {n_grads} grads + {entry.bn_stat_out_count} BN stats "
+                f"+ {n_writes} buffer writes)"
             )
         for _i, _buf in enumerate(entry.bn_stat_buffers):
             _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
+        _first = n_loss_grad + entry.bn_stat_out_count
+        write_back(entry.written, list(outs[_first : _first + n_writes]))
         advance_bn_counters(entry.bn_counters)
         # outs = [loss_impl, grad_param_0_impl, …]
         loss_impl = cast(_C_engine.TensorImpl, outs[0])

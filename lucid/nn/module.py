@@ -382,6 +382,26 @@ class Module:
         if name == "":
             raise KeyError("module attribute name cannot be empty")
 
+        # Under a compile trace, assigning a registered buffer writes into it
+        # instead of replacing it.  The executable reads the buffer it was
+        # traced against, so a replacement — spectral_norm's ``u`` / ``v``
+        # every forward, a running average kept by reassignment — left every
+        # compiled call reading the trace-time value.  Written in place, the
+        # trace records the write and the compiled call carries it back
+        # (``lucid/compile/_core/buffer_writes.py``).
+        current = self._buffers.get(name)
+        if (
+            isinstance(value, Tensor)
+            and current is not None
+            and current is not value
+            and _C_engine.compile.current_tracer() is not None
+            and current.shape == value.shape
+            and current.dtype == value.dtype
+            and current.device == value.device
+        ):
+            current.copy_(value)
+            return
+
         # Whether this name is *already* a buffer decides where a plain
         # Tensor goes below, so it has to be read before the de-registration
         # loop wipes the evidence.

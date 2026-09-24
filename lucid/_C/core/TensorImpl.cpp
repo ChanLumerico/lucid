@@ -31,6 +31,7 @@
 #include <mlx/ops.h>
 
 #include "../backend/gpu/MlxBridge.h"
+#include "../compile/Tracer.h"
 #include "Allocator.h"
 #include "Error.h"
 #include "ErrorBuilder.h"
@@ -279,7 +280,25 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                       src.storage());
 }
 
+namespace {
+
+// An in-place op computes its result out of place and splices it into the
+// target; an active compile trace has to learn that the target now holds the
+// result, or every later read of the target resolves to its old value.
+void note_inplace_write(TensorImpl& dst, const TensorImpl& src) {
+    auto* trc = compile::current_tracer();
+    if (trc == nullptr)
+        return;
+    auto d = dst.weak_from_this().lock();
+    auto from = std::const_pointer_cast<TensorImpl>(src.weak_from_this().lock());
+    if (d && from)
+        trc->on_inplace_write(d, from);
+}
+
+}  // namespace
+
 void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
+    note_inplace_write(*this, out);
     // Write through only when ``out`` recorded no graph: a node that saved
     // the pre-op input shares this buffer and would read the new values back
     // — the ``cos(sin(x))`` failure :file:`ops/utils/InplaceGraph.h` records.
@@ -344,6 +363,7 @@ std::vector<std::shared_ptr<TensorImpl>> TensorImpl::live_views() const {
 }
 
 void TensorImpl::write_through(const TensorImpl& src, const char* name) {
+    note_inplace_write(*this, src);
     if (src.shape() != shape())
         throw ShapeMismatch(shape(), src.shape(), std::string(name) + " (in-place: shape changed)");
     if (src.dtype() != dtype())
@@ -1321,6 +1341,7 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
 // Shared←CPU, CPU←Shared.  Any other cross-variant combination throws a
 // DeviceMismatch error.
 void TensorImpl::copy_from(const TensorImpl& other) {
+    note_inplace_write(*this, other);
     if (other.device() != device()) {
         throw DeviceMismatch(std::string(device_name(meta_.device)),
                              std::string(device_name(other.device())), "copy_from");

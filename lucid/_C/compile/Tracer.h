@@ -219,6 +219,33 @@ public:
     // has not seen — a constant made on the spot — is left alone.
     void on_host_read(const TensorImpl* impl);
 
+    // ``target`` now holds what ``value`` holds: an in-place op computed
+    // ``value`` out of place and spliced it into ``target``
+    // (``TensorImpl::take_storage_from`` / ``write_through``).  Later reads
+    // of ``target`` resolve to ``value``'s id — without this, ``a.mul_(b)
+    // .add_(c)`` recorded the add reading ``a`` from before the mul.  A
+    // target from outside the trace keeps its feed id in ``external_feeds``
+    // while its current id moves, which is how a write to a buffer is found
+    // (``lucid/compile/_core/buffer_writes.py``); one the trace has not read
+    // yet becomes a feed first.  A value the trace has not seen becomes a
+    // feed of its own.
+    void on_inplace_write(const TensorImplPtr& target, const TensorImplPtr& value);
+
+    // Puts every tensor from outside the trace that the trace wrote in place
+    // back to its value from before the trace, from the copy
+    // :meth:`on_inplace_write` kept at the first write.  The trace-time call
+    // ran those writes eagerly; whatever runs next — an executable or an
+    // eager fallback — applies them itself, and would otherwise apply them
+    // twice.  Call once the trace has finished.
+    void restore_outside_writes();
+
+    // ``(current id, tensor)`` for every tensor from outside the trace that
+    // the trace wrote in place, in first-write order — what a compiled call
+    // has to carry back.  Batch norm's running statistics are not among
+    // them: its kernel leaves the buffers alone and hands the new values out
+    // itself (:meth:`on_buffer_update`).
+    std::vector<std::pair<TensorId, TensorImplPtr>> outside_writes() const;
+
     // Returns a read-only reference to the recorded graph.
     //
     // Returns
@@ -313,6 +340,9 @@ private:
     // wrong id.  Keeping every TensorImplPtr alive for the trace's
     // lifetime makes raw-pointer keys unambiguous.
     std::vector<TensorImplPtr> live_refs_;
+    // (tensor from outside the trace, a copy of it from before its first
+    // in-place write), in write order — see :meth:`restore_outside_writes`.
+    std::vector<std::pair<TensorImplPtr, TensorImplPtr>> outside_originals_;
     bool redraw_rng_ = true;
 };
 

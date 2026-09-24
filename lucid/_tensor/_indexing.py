@@ -683,6 +683,20 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     if t._impl.is_aliased():
         _C_engine.assign_inplace(t._impl, impl, "__setitem__")
         return
+    # Under a compile trace, write into the tensor rather than rebind it.  An
+    # executable reads the tensor it was traced against — a module's buffer,
+    # say — and a rebinding happens only in Python, where the trace cannot
+    # see it: every compiled call went on reading the old values.
+    if (
+        _C_engine.compile.current_tracer() is not None
+        and not keep
+        and not impl.requires_grad
+        and list(impl.shape) == list(t._impl.shape)
+        and impl.dtype == t._impl.dtype
+        and impl.device == t._impl.device
+    ):
+        t._impl.copy_from(impl)
+        return
     t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
 
 

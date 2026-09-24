@@ -15,6 +15,9 @@
 
 #include "Tracer.h"
 
+#include <algorithm>
+
+#include "../backend/Dispatcher.h"
 #include "../core/TensorImpl.h"
 
 namespace lucid::compile {
@@ -200,6 +203,51 @@ void Tracer::on_rng_feed(std::string_view name, const TensorImplPtr& output) {
     const TensorId fresh = graph_.next_id++;
     impl_to_id_[output.get()] = fresh;
     external_feeds_[fresh] = output;
+}
+
+void Tracer::on_inplace_write(const TensorImplPtr& target, const TensorImplPtr& value) {
+    if (!target || !value || target.get() == value.get())
+        return;
+    // From outside the trace — never seen, or seen only as a feed — and not
+    // written yet in this trace: keep its current value to put back later.
+    const auto seen = impl_to_id_.find(target.get());
+    const bool outside = seen == impl_to_id_.end() || external_feeds_.count(seen->second) != 0;
+    const bool first = std::none_of(outside_originals_.begin(), outside_originals_.end(),
+                                    [&](const auto& kv) { return kv.first.get() == target.get(); });
+    if (outside && first) {
+        Storage copy = backend::Dispatcher::for_device(target->device())
+                           .clone(target->storage(), target->shape(), target->dtype());
+        outside_originals_.emplace_back(
+            target, std::make_shared<TensorImpl>(std::move(copy), target->shape(), target->dtype(),
+                                                 target->device(), false));
+    }
+    auto feed = [this](const TensorImplPtr& impl) {
+        const auto it = impl_to_id_.find(impl.get());
+        if (it != impl_to_id_.end())
+            return it->second;
+        const TensorId fresh = graph_.next_id++;
+        impl_to_id_[impl.get()] = fresh;
+        external_feeds_[fresh] = impl;
+        live_refs_.push_back(impl);
+        return fresh;
+    };
+    feed(target);
+    impl_to_id_[target.get()] = feed(value);
+}
+
+void Tracer::restore_outside_writes() {
+    // Latest first is not needed: each tensor has one entry, its value from
+    // before the trace's first write to it.
+    for (const auto& [target, before] : outside_originals_)
+        target->copy_from(*before);
+}
+
+std::vector<std::pair<TensorId, TensorImplPtr>> Tracer::outside_writes() const {
+    std::vector<std::pair<TensorId, TensorImplPtr>> out;
+    out.reserve(outside_originals_.size());
+    for (const auto& [target, before] : outside_originals_)
+        out.emplace_back(lookup_id(target.get()), target);
+    return out;
 }
 
 void Tracer::on_host_read(const TensorImpl* impl) {

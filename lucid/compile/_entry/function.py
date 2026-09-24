@@ -101,6 +101,7 @@ def compiled_step(
     from lucid._dispatch import _unwrap, _wrap
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
+    from lucid.compile._core.buffer_writes import refuse
     from lucid.compile._core.bn_runstats import (
         advance_bn_counters,
         bn_counter_targets,
@@ -126,6 +127,8 @@ def compiled_step(
 
     g = tracer.graph
     ext = tracer.external_feeds
+    # No write-back on this path: a traced in-place buffer write sends it eager.
+    refuse(tracer)
     if not g.ops:
         raise RuntimeError("compiled_step: empty trace (model produced no ops)")
     # The tensor ``loss_fn`` returned, not the last op traced — see make_step.

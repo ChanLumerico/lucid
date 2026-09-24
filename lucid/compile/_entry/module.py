@@ -29,7 +29,7 @@ Acceptance gate (Plan §1.4):
 import os
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -218,6 +218,10 @@ class _CacheEntry:
     n_hits: int = 0
     compile_ms: float = 0.0
     last_run_ms: float = 0.0
+    # Tensors from outside the trace that the forward writes in place (a
+    # buffer's EMA, a counter).  Their new values trail the returned ones;
+    # each run copies them back.  See ``_core/buffer_writes``.
+    written: list[object] = field(default_factory=list)
 
 
 class CompiledModule[**P, R]:
@@ -978,6 +982,7 @@ class CompiledModule[**P, R]:
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
         from lucid.compile._core.bn_runstats import model_has_tracking_bn
+        from lucid.compile._core.buffer_writes import outside_writes
 
         # 3.5 BatchNorm running-stats: this is the forward-only compile path
         # (no backward, hence no write-back hook).  In training mode a
@@ -1017,6 +1022,15 @@ class CompiledModule[**P, R]:
         maybe_probe_for_graph(graph)
 
         ext = tracer.external_feeds
+        # The trace-time call applied its in-place buffer writes; put the
+        # buffers back so the executable (or an eager fallback) applies them.
+        arguments = {id(_unwrap(t)) for t in leaf_tensors(args, kwargs)}
+        writes = outside_writes(tracer, arguments)
+        if isinstance(writes, str):
+            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+                print(f"[compile] eager fallback: {writes}", file=sys.stderr)
+            return None
+        write_ids, written = writes
 
         # Extract the user's return value structure into:
         #   * return_spec: a tree that mirrors ``return_value`` but
@@ -1027,6 +1041,7 @@ class CompiledModule[**P, R]:
         # contains an un-traceable type, but the helper tolerates
         # arbitrary scalars / strings / Nones via the "scalar" leaf.
         return_spec, explicit_outputs = _extract_return_impls(return_value, tracer)
+        explicit_outputs = explicit_outputs + write_ids
 
         # ── Symbolic-batch resolution (per-instance, decided on first trace) ──
         # ``dynamic=True`` ATTEMPTS symbolic, but only for graphs the gate proves
@@ -1077,6 +1092,7 @@ class CompiledModule[**P, R]:
             return_spec=return_spec,
             graph_json=trace_to_json(graph),
             compile_ms=(time.perf_counter() - t_compile_start) * 1000.0,
+            written=written,
         )
         return entry
 
@@ -1130,6 +1146,12 @@ class CompiledModule[**P, R]:
         outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
         entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
         entry.n_hits += 1
+        if entry.written:
+            from lucid.compile._core.buffer_writes import write_back
+
+            n_writes = len(entry.written)
+            write_back(entry.written, list(outs[-n_writes:]))
+            outs = outs[:-n_writes]
 
         # If the trace recorded the user's return structure, re-pack the
         # flat outs list into that shape (single Tensor, tuple, dict,

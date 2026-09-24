@@ -178,6 +178,19 @@ void register_compile(py::module_& m) {
         .def_property("redraw_rng", &Tracer::redraw_rng, &Tracer::set_redraw_rng,
                       "Whether default-generator draws become feeds drawn again on "
                       "every run (compile) or stay ops in the recording (Core ML).")
+        .def(
+            "outside_writes",
+            [](const Tracer& t) {
+                py::list out;
+                for (const auto& [tid, impl] : t.outside_writes())
+                    out.append(py::make_tuple(tid, impl));
+                return out;
+            },
+            "(current id, TensorImpl) for every tensor from outside the trace "
+            "that the trace wrote in place, in first-write order.")
+        .def("restore_outside_writes", &Tracer::restore_outside_writes,
+             "Put every tensor from outside the trace that it wrote in place "
+             "back to its value from before the trace.")
         .def("mark_unsupported", &Tracer::mark_unsupported, py::arg("why"),
              "Mark the recording as one no executable can stand for; every "
              "compile entry point then refuses it.")

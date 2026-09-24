@@ -209,6 +209,7 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     from lucid._dispatch import _unwrap
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
+    from lucid.compile._core.buffer_writes import refuse
     from lucid.compile._core.attention_probe import maybe_probe_for_graph
 
     param_impls = [_unwrap(p) for p in seg.params]
@@ -223,6 +224,8 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
         return None
     maybe_probe_for_graph(g_fwd)
     ext_fwd = t_fwd.external_feeds
+    # No write-back here: a traced in-place buffer write sends the step eager.
+    refuse(t_fwd)
     # The segment's output, not whatever op it recorded last.
     found = t_fwd.lookup_id(_unwrap(y))
     if found is None:
@@ -272,6 +275,7 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
         return None
     maybe_probe_for_graph(g_bwd)
     ext_bwd = t_bwd.external_feeds
+    refuse(t_bwd)
     loss_id = g_bwd.ops[-1].outputs[0].id
 
     x_id_bwd: int | None = None
