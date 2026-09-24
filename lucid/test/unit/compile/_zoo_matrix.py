@@ -734,12 +734,6 @@ EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
     ("rcnn", "object-detection"): ("fallback", "fallback", "eager fallback"),
     # An image without proposals leaves a zero-length box tensor.
     ("fast_rcnn", "object-detection"): ("fallback", "fallback", "zero-size tensor"),
-    # The pixel decoder's deformable attention samples with grid_sample.
-    ("mask2former", "semantic-segmentation"): (
-        "fallback",
-        "fallback",
-        "no VJP emitter for op 'grid_sample'",
-    ),
     # The loss is built from a JVP, which is a backward pass.
     ("mean_flow", "image-generation"): (
         "fallback",
@@ -752,8 +746,6 @@ EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
         "fallback",
         "backward pass ran inside",
     ),
-    # Annealed sampling picks the noise level from a host-side value.
-    ("ncsn", "image-generation"): ("fallback", "fallback", "read on the host"),
 }
 
 _MODULE = "lucid.test.unit.compile._zoo_matrix"

@@ -332,15 +332,14 @@ class NCSNForImageGeneration(ImageGenerationModel):
         """
         B = int(sample.shape[0])
         dev = sample.device.type
-        # Random noise level per image.
-        idx_list = [
-            int(lucid.randint(0, self._num_levels, (1,)).item()) for _ in range(B)
-        ]
-        sigma_idx = lucid.tensor(idx_list, device=dev).long()
-
-        # Look up per-image σ values, reshape to (B, 1, 1, 1) for broadcast.
-        sigma_vals = [float(self.sigmas[i].item()) for i in idx_list]
-        sigma = lucid.tensor(sigma_vals, device=dev).reshape(B, 1, 1, 1)
+        # A noise level per image, drawn and looked up on the device.  Drawn
+        # one image at a time and read back with ``.item()`` — twice per
+        # image — it stalled every step on a device sync and kept the
+        # training step from compiling: a value read on the host is frozen
+        # into a compiled graph.
+        sigma_idx = lucid.randint(0, self._num_levels, (B,), device=dev).long()
+        # (B, 1, 1, 1) for broadcast.
+        sigma = self.sigmas[sigma_idx].reshape(B, 1, 1, 1)
 
         z = lucid.randn(sample.shape, device=dev)
         x_tilde = sample + sigma * z
