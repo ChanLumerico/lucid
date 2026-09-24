@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -217,6 +218,40 @@ Shape sample_mask_shape(const Shape& in) {
     return m;
 }
 
+// Whether a mask drawn now should become a feed of the active trace: the
+// engine's generator, and a tracer that redraws (Core ML export does not).
+bool traced_mask(Generator* gen) {
+    auto* trc = compile::current_tracer();
+    return trc != nullptr && gen == nullptr && trc->redraw_rng();
+}
+
+// Dropout's traced form for a broadcast mask — channel (DropoutNd) or sample
+// (DropPath): the drawn, scaled mask becomes a feed ``run_executable`` draws
+// again on every call, and the op a broadcasting multiply, whose VJP is the
+// op's backward.  As ops they had no traced form, so every model that used
+// them trained compiled not at all.  See ``DropoutBackward::forward``.
+TensorImplPtr traced_mask_multiply(std::string_view name,
+                                   const TensorImplPtr& a,
+                                   Storage scaled,
+                                   const Shape& mask_shape,
+                                   double keep,
+                                   double scale) {
+    auto* trc = compile::current_tracer();
+    auto mask_t =
+        std::make_shared<TensorImpl>(std::move(scaled), mask_shape, a->dtype(), a->device(), false);
+    compile::RngRecipe r;
+    r.kind = compile::RngRecipe::Kind::DropoutMask;
+    r.engine_default = true;
+    r.a = keep;
+    r.b = scale;
+    r.shape = mask_shape;
+    r.dtype = a->dtype();
+    r.device = a->device();
+    trc->on_rng_feed(name, mask_t);
+    compile::note_rng_feed(mask_t, std::move(r));
+    return mul_op(a, mask_t);
+}
+
 }  // namespace
 
 const OpSchema DropoutNdBackward::schema_v1{
@@ -257,6 +292,9 @@ DropoutNdBackward::forward(const TensorImplPtr& a, double p, bool training, Gene
     const double scale = 1.0 / (1.0 - p);
     Storage scaled_small =
         mul_scalar_storage(small_mask, scale, mask_numel, a->dtype(), a->device());
+    if (traced_mask(gen))
+        return traced_mask_multiply(schema_v1.name, a, std::move(scaled_small), mask_shape, 1.0 - p,
+                                    scale);
     auto& be = backend::Dispatcher::for_device(a->device());
     // expand_and_multiply broadcasts the (N,C) mask to the full input shape
     // and multiplies; returns the full mask and the masked output.
@@ -488,10 +526,13 @@ DropPathBackward::forward(const TensorImplPtr& a, double p, bool scale_by_keep, 
     Shape sshape = sample_mask_shape(a->shape());
     Generator& g = gen ? *gen : default_generator();
     Storage small = bernoulli_mask_storage_shape(keep, sshape, a->dtype(), a->device(), g);
-    if (scale_by_keep && keep > 0.0) {
+    const double scale = (scale_by_keep && keep > 0.0) ? 1.0 / keep : 1.0;
+    if (scale != 1.0) {
         // Scale before broadcast so the full-mask multiply also scales.
-        small = mul_scalar_storage(small, 1.0 / keep, B, a->dtype(), a->device());
+        small = mul_scalar_storage(small, scale, B, a->dtype(), a->device());
     }
+    if (traced_mask(gen))
+        return traced_mask_multiply(schema_v1.name, a, std::move(small), sshape, keep, scale);
     auto& be = backend::Dispatcher::for_device(a->device());
     auto [full_mask, y] =
         be.expand_and_multiply(small, a->storage(), sshape, a->shape(), a->dtype());

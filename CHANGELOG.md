@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - carry in-place writes to outside tensors through every compiled call
 - keep the return scale on the device, so the training step compiles
 - differentiate grid_sample and 3-D interpolation in compiled training
+- trace channel- and sample-wise dropout like element-wise dropout
 
 ---
 

@@ -17,9 +17,11 @@ Contract:
 """
 
 import numpy as np
+import pytest
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 
 from lucid.test.unit.compile._helpers import (
     COMPILE_DEVICE,
@@ -133,3 +135,69 @@ def test_dropout_training_produces_random_outputs() -> None:
         "calls — RNG state is stuck.  Either the eager fallback "
         "regressed or compile took a deterministic RNG path."
     )
+
+
+def _engine_drop_path(t: lucid.Tensor) -> lucid.Tensor:
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    return _wrap(_C_engine.nn.drop_path(_unwrap(t), 0.5, True))
+
+
+#: Masks that broadcast — one draw per channel, or per sample — rather than
+#: one per element.  They had no traced form and ran eager.
+_BROADCAST_MASKS = {
+    "dropout1d": (lambda t: F.dropout1d(t, 0.5, training=True), (4, 6, 5)),
+    "dropout2d": (lambda t: F.dropout2d(t, 0.5, training=True), (4, 6, 3, 3)),
+    "dropout3d": (lambda t: F.dropout3d(t, 0.5, training=True), (2, 6, 2, 3, 3)),
+    "drop_path": (_engine_drop_path, (8, 3, 4)),
+}
+
+
+@pytest.mark.parametrize("name", list(_BROADCAST_MASKS))
+def test_broadcast_mask_dropout_compiles_and_draws_eagers_masks(name: str) -> None:
+    fn, shape = _BROADCAST_MASKS[name]
+    x = metal_tensor(*shape)
+    compiled = lucid.compile(fn)
+    compiled(x)  # trace
+    assert not compiled.cache_info()["eager_only"]
+    for seed in (3, 4):
+        lucid.manual_seed(seed)
+        got = compiled(x).numpy()
+        lucid.manual_seed(seed)
+        want = fn(x).numpy()
+        assert np.allclose(got, want, rtol=1e-5, atol=1e-6)
+        assert np.array_equal(got == 0, want == 0)
+
+
+@pytest.mark.parametrize("name", list(_BROADCAST_MASKS))
+def test_broadcast_mask_dropout_make_step_matches_eager(name: str) -> None:
+    fn, shape = _BROADCAST_MASKS[name]
+
+    class _M(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scale = nn.Parameter(lucid.ones(shape[1]).to(COMPILE_DEVICE))
+
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            view = (1, shape[1]) + (1,) * (len(shape) - 2)
+            return fn(x * self.scale.reshape(*view))
+
+    model = _M().train()
+    x = metal_tensor(*shape)
+    step = lucid.compile.make_step(model, lambda y: (y * y).sum())
+    step(x).backward()  # trace
+    assert not step.eager_only.snapshot()
+    for seed in (5, 6):
+        model.scale.grad = None
+        lucid.manual_seed(seed)
+        loss = step(x)
+        loss.backward()
+        got = (float(loss.item()), model.scale.grad.numpy().copy())
+        model.scale.grad = None
+        lucid.manual_seed(seed)
+        eager = model(x)
+        eager_loss = (eager * eager).sum()
+        eager_loss.backward()
+        assert np.isclose(got[0], float(eager_loss.item()), rtol=1e-5)
+        assert np.allclose(got[1], model.scale.grad.numpy(), rtol=1e-4, atol=1e-5)
