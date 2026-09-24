@@ -657,6 +657,91 @@ public:
     }
 };
 
+// ────────────────────────────────────────────────────────────────────
+// conv_transpose3d VJP.  The forward is the 3-D convolution's data
+// gradient of ``x`` (see the forward emitter), so:
+//   dX = conv3d(grad, W)                       — the forward convolution;
+//   dW = the convolution's weights gradient with the roles swapped: ``x``
+//        as the incoming gradient and ``grad`` as the source, since
+//        ⟨g, convᵀ(x, W)⟩ = ⟨conv(g, W), x⟩;
+//   dB = Σ grad over (N, D, H, W).
+// MPSGraph has no transposed 3-D weights gradient to call instead.
+// Without this the step ran on MPSGraph's autodiff, and eager in any
+// graph with a train-mode batch norm — a 3-D U-Net's decoder.
+// ────────────────────────────────────────────────────────────────────
+class ConvTranspose3dVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "conv_transpose3d"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.size() != 3 || grad_outs.empty() || grad_outs[0] == nullptr)
+            return false;
+        TensorId x_id = node.inputs[0];
+        TensorId w_id = node.inputs[1];
+        TensorId b_id = node.inputs[2];
+        if (x_id < 0 || w_id < 0) return false;
+        const auto* S = iv_attr(node, "stride");
+        const auto* P = iv_attr(node, "padding");
+        const auto* D = iv_attr(node, "dilation");
+        if (S == nullptr || P == nullptr || D == nullptr) return false;
+        if (S->size() != 3 || P->size() != 3 || D->size() != 3) return false;
+        const std::int64_t groups = i_attr(node, "groups", 1);
+
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* grad = as_tensor(grad_outs[0]);
+        MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
+        MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
+        if (g == nil || grad == nil || x == nil || w == nil) return false;
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+
+        MPSGraphConvolution3DOpDescriptor* desc =
+            [MPSGraphConvolution3DOpDescriptor
+                descriptorWithStrideInX:(NSUInteger)(*S)[2]
+                              strideInY:(NSUInteger)(*S)[1]
+                              strideInZ:(NSUInteger)(*S)[0]
+                        dilationRateInX:(NSUInteger)(*D)[2]
+                        dilationRateInY:(NSUInteger)(*D)[1]
+                        dilationRateInZ:(NSUInteger)(*D)[0]
+                                 groups:(NSUInteger)groups
+                            paddingLeft:(NSUInteger)(*P)[2]
+                           paddingRight:(NSUInteger)(*P)[2]
+                             paddingTop:(NSUInteger)(*P)[1]
+                          paddingBottom:(NSUInteger)(*P)[1]
+                           paddingFront:(NSUInteger)(*P)[0]
+                            paddingBack:(NSUInteger)(*P)[0]
+                           paddingStyle:MPSGraphPaddingStyleExplicit
+                             dataLayout:MPSGraphTensorNamedDataLayoutNCDHW
+                          weightsLayout:MPSGraphTensorNamedDataLayoutOIDHW];
+        if (desc == nil) return false;
+
+        MPSGraphTensor* dX = [g convolution3DWithSourceTensor:grad
+                                                weightsTensor:w
+                                                   descriptor:desc
+                                                         name:@"conv_transpose3d_vjp_dx"];
+        bctx.accumulate_grad(x_id, from_tensor(dX));
+        MPSGraphTensor* dW =
+            [g convolution3DWeightsGradientWithIncomingGradientTensor:x
+                                                        sourceTensor:grad
+                                                         outputShape:w.shape
+                                        forwardConvolutionDescriptor:desc
+                                                                name:@"conv_transpose3d_vjp_dw"];
+        bctx.accumulate_grad(w_id, from_tensor(dW));
+        if (b_id >= 0) {
+            MPSGraphTensor* b = as_tensor(bctx.forward(b_id));
+            const auto g_shape = shape_of_mps(grad);
+            if (b != nil && b.shape.count == 1 && g_shape.size() == 5 &&
+                b.shape[0].longLongValue == g_shape[1]) {
+                MPSGraphTensor* db = [g reductionSumWithTensor:grad axes:@[ @0, @2, @3, @4 ] name:nil];
+                db = [g reshapeTensor:db withShape:@[ b.shape[0] ] name:@"conv_transpose3d_vjp_db"];
+                bctx.accumulate_grad(b_id, from_tensor(db));
+            }
+        }
+        return true;
+    }
+};
+
 struct ConvVjpRegistrar {
     ConvVjpRegistrar() {
         register_vjp_emitter(std::make_unique<Conv2dVjp>());
@@ -664,6 +749,7 @@ struct ConvVjpRegistrar {
         register_vjp_emitter(std::make_unique<Conv3dVjp>());
         register_vjp_emitter(std::make_unique<ConvTranspose2dVjp>());
         register_vjp_emitter(std::make_unique<ConvTranspose1dVjp>());
+        register_vjp_emitter(std::make_unique<ConvTranspose3dVjp>());
     }
 };
 

@@ -188,12 +188,13 @@ ManualVjpStatus try_manual_vjp_grads(void* graph_void,
                                      TensorId loss_id,
                                      const std::vector<TensorId>& param_ids,
                                      std::vector<void*>& out_grads,
-                                     std::string* error_msg) {
+                                     std::string* error_msg,
+                                     std::vector<bool>* absent) {
     if (!use_manual_vjp())
         return ManualVjpStatus::Disabled;
     BackwardWalker walker{graph_void, fwd, trace};
     std::string vjp_err;
-    if (walker.compute_grads(loss_id, param_ids, out_grads, &vjp_err))
+    if (walker.compute_grads(loss_id, param_ids, out_grads, &vjp_err, absent))
         return ManualVjpStatus::Success;
     if (error_msg)
         *error_msg = std::move(vjp_err);
@@ -265,7 +266,8 @@ BackwardWalker::BackwardWalker(void* graph_void,
 bool BackwardWalker::compute_grads(TensorId loss_id,
                                    const std::vector<TensorId>& param_ids,
                                    std::vector<void*>& out_grads,
-                                   std::string* error_msg) {
+                                   std::string* error_msg,
+                                   std::vector<bool>* absent) {
     auto set_err = [&](std::string msg) {
         if (error_msg) *error_msg = std::move(msg);
     };
@@ -293,8 +295,33 @@ bool BackwardWalker::compute_grads(TensorId loss_id,
     //    grads via :func:`accumulate_grad`.
     const auto& ops = trace_.ops;
     const auto& sink = no_grad_ops();
+    // Values that depend on a parameter, in dispatch order.  An op none of
+    // whose outputs is among them has no parameter upstream, so no gradient
+    // the caller asked for runs through it — and walking it anyway demanded
+    // a VJP for mask and index arithmetic built from constants, turning a
+    // learnable additive mask (CoaT's relative-position bias) into a gap.
+    std::unordered_set<TensorId> depends(param_ids.begin(), param_ids.end());
+    for (const auto& node : ops) {
+        bool dep = false;
+        for (TensorId in : node.inputs)
+            if (in >= 0 && depends.count(in) != 0) {
+                dep = true;
+                break;
+            }
+        if (dep)
+            for (const auto& om : node.outputs)
+                depends.insert(om.id);
+    }
     for (auto it = ops.rbegin(); it != ops.rend(); ++it) {
         const OpNode& node = *it;
+        bool upstream_param = false;
+        for (const auto& om : node.outputs)
+            if (depends.count(om.id) != 0) {
+                upstream_param = true;
+                break;
+            }
+        if (!upstream_param)
+            continue;
 
         // Collect grad demand on outputs.
         std::vector<void*> grad_outs;
@@ -334,8 +361,21 @@ bool BackwardWalker::compute_grads(TensorId loss_id,
     // 3) Collect output grads for the requested params.
     out_grads.clear();
     out_grads.reserve(param_ids.size());
-    for (TensorId pid : param_ids) {
+    if (absent)
+        absent->assign(param_ids.size(), false);
+    for (std::size_t i = 0; i < param_ids.size(); ++i) {
+        const TensorId pid = param_ids[i];
         void* g = bctx_.resolve_grad(pid);
+        if (g == nullptr && absent) {
+            // Traced but not on the loss path — a pooler a token classifier
+            // never reads.  Zeros hold the slot; the caller reports None.
+            MPSGraphTensor* p = (__bridge MPSGraphTensor*)bctx_.forward(pid);
+            if (p != nil) {
+                MPSGraph* graph = (__bridge MPSGraph*)graph_;
+                g = (__bridge void*)[graph constantWithScalar:0.0 shape:p.shape dataType:p.dataType];
+                (*absent)[i] = true;
+            }
+        }
         if (g == nullptr) {
             set_err("manual_vjp: no gradient produced for param id " +
                     std::to_string(pid) +

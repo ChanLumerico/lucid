@@ -1822,3 +1822,57 @@ class TestYOLOV2MultiScale:
         assert bool(out.loss.isfinite().all().item())
         out.loss.backward()
         assert float(model.pred.weight.grad.abs().max().item()) > 0.0
+
+
+class TestNms:
+    """``nms`` against a plain greedy pass over the same IoU values.
+
+    ``nms`` packs the thresholded IoU matrix into 32-bit words on the device
+    and walks bit sets on the host; before, it fetched each kept box's IoU
+    row one ``item()`` at a time — 25 of 26 seconds of a Faster R-CNN forward.
+    The sizes straddle the word boundaries.
+    """
+
+    @staticmethod
+    def _reference(boxes: Tensor, scores: Tensor, thr: float) -> list[int]:
+        from lucid.models._utils._detection import box_iou
+
+        order = [int(i) for i in lucid.argsort(-scores).tolist()]
+        iou = box_iou(boxes, boxes).tolist()
+        dead: set[int] = set()
+        keep: list[int] = []
+        for a, i in enumerate(order):
+            if i in dead:
+                continue
+            keep.append(i)
+            for j in order[a + 1 :]:
+                if iou[i][j] > thr:
+                    dead.add(j)
+        return keep
+
+    @staticmethod
+    def _boxes(n: int, device: str) -> tuple[Tensor, Tensor]:
+        lucid.manual_seed(n)
+        xy = lucid.rand(n, 2) * 50.0
+        wh = lucid.rand(n, 2) * 30.0 + 1.0
+        boxes = lucid.cat([xy, xy + wh], dim=1).to(device)
+        return boxes, lucid.rand(n).to(device)
+
+    @pytest.mark.parametrize("n", [1, 31, 32, 33, 64, 200, 1000])
+    @pytest.mark.parametrize("thr", [0.3, 0.7])
+    def test_matches_the_plain_greedy_pass(
+        self, device: str, n: int, thr: float
+    ) -> None:
+        from lucid.models._utils._detection import nms
+
+        boxes, scores = self._boxes(n, device)
+        assert nms(boxes, scores, thr).tolist() == self._reference(boxes, scores, thr)
+
+    def test_empty_and_all_overlapping(self, device: str) -> None:
+        from lucid.models._utils._detection import nms
+
+        empty = nms(lucid.zeros(0, 4).to(device), lucid.zeros(0).to(device), 0.5)
+        assert empty.tolist() == []
+        same = lucid.tensor([[0.0, 0.0, 10.0, 10.0]] * 40).to(device)
+        scores = lucid.arange(40).float().to(device)
+        assert nms(same, scores, 0.5).tolist() == [39]

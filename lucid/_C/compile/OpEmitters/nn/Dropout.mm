@@ -7,10 +7,11 @@
 //     input).  This is bit-exact: eager's ``!training || p==0``
 //     branch clones the input verbatim.
 //
-//   * Training-mode dropout (RNG-driven mask) — return nullptr so
-//     the compile-trace path falls back to eager.  Real RNG-emit
-//     coverage is layered in once the RNG family lands; this file's
-//     scope is the structural skeleton + the inference fast path.
+//   * Training-mode dropout from the engine's generator never reaches
+//     this file: the forward records its scaled mask as a feed drawn
+//     again on every run and the op as a multiply (``nn/Dropout.cpp``,
+//     :file:`../../RngFeeds.h`).  What does reach it — a draw from a
+//     caller's own generator — returns false and runs eager.
 //
 // ``drop_block`` and ``drop_path`` are always called from a
 // training-context Python wrapper, so they always need RNG — stubbed

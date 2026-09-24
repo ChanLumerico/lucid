@@ -362,6 +362,25 @@ public:
             }
             if (x_shape.size() < 2) return false;
         }
+        // Rank 5 (BatchNorm3d) folds to rank 4, (N, C, D·H, W): the same
+        // per-channel statistics over axes (0, 2, 3).  MPSGraph fuses these
+        // gradient kernels into a stitched RMS-norm reduction that asserts on
+        // axis 4 — "This class only supports axis = 0, 1, 2 or 3" — and the
+        // assertion killed the process of any compiled training step through
+        // a train-mode BatchNorm3d.
+        const std::vector<std::int64_t> full_shape = x_shape;
+        if (x_shape.size() > 4) {
+            for (std::int64_t d : x_shape)
+                if (d < 0)
+                    return false;
+            std::int64_t mid = 1;
+            for (std::size_t i = 2; i + 1 < x_shape.size(); ++i)
+                mid *= x_shape[i];
+            x_shape = {x_shape[0], x_shape[1], mid, x_shape.back()};
+            NSArray<NSNumber*>* folded = shape_to_ns(x_shape);
+            x = [graph reshapeTensor:x withShape:folded name:nil];
+            grad = [graph reshapeTensor:grad withShape:folded name:nil];
+        }
         const std::size_t rank = x_shape.size();
         const std::int64_t C = x_shape[1];
 
@@ -418,6 +437,8 @@ public:
                                                      reductionAxes:non_C
                                                            epsilon:(float)eps
                                                               name:@"bn_train_vjp_dx"];
+        if (full_shape.size() > 4)
+            dx = [graph reshapeTensor:dx withShape:shape_to_ns(full_shape) name:nil];
         bctx.accumulate_grad(x_id, from_tensor(dx));
 
         // dgamma / dbeta come out per-channel keepdim (1, C, 1, …) → (C,).

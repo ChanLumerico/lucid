@@ -27,6 +27,7 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "CompiledExecutable.h"
+#include "RngFeeds.h"
 
 namespace lucid::compile {
 
@@ -363,7 +364,9 @@ std::vector<std::string> executable_feed_names(const CompiledExecutable* exe) {
 // Defined here rather than in MpsBuilder.mm because all the
 // MPSGraph-side machinery is in this translation unit already.
 LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
-                                                    const std::vector<TensorImplPtr>& input_feeds) {
+                                                    const std::vector<TensorImplPtr>& traced_feeds) {
+    // Draws the trace made are made again — see RngFeeds.h.
+    const std::vector<TensorImplPtr> input_feeds = redraw_rng_feeds(traced_feeds);
     if (exe == nullptr)
         throw std::invalid_argument("run_executable: null executable");
     if (input_feeds.size() != exe->input_ids.size())
@@ -576,8 +579,9 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
 }
 
 LUCID_API void run_executable_inplace(CompiledExecutable* exe,
-                                      const std::vector<TensorImplPtr>& input_feeds,
+                                      const std::vector<TensorImplPtr>& traced_feeds,
                                       const std::vector<TensorImplPtr>& output_targets) {
+    const std::vector<TensorImplPtr> input_feeds = redraw_rng_feeds(traced_feeds);
     // Swap-buffer variant: instead of allocating fresh MTLBuffers per
     // output and returning new TensorImpls, allocate one fresh
     // MTLBuffer per output target and then *replace* the target's

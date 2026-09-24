@@ -182,10 +182,85 @@ private:
     std::string name_;
 };
 
+// unfold_dim(x, dim, size, step): window w along ``dim`` holds x[w·step + j]
+// at position j of the new last axis.  The gradient puts each window
+// position back where it came from, summing where windows overlap — one
+// scatter-add per offset j.  Local response normalisation unfolds, so
+// without this ZFNet could not train compiled.
+class UnfoldDimVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "unfold_dim"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        if (node.inputs.empty() || node.inputs[0] < 0 || grad_outs.empty() ||
+            grad_outs[0] == nullptr)
+            return false;
+        auto get = [&](const char* key) -> std::int64_t {
+            auto it = node.attrs.find(key);
+            if (it == node.attrs.end())
+                return -1;
+            const auto* p = std::get_if<std::int64_t>(&it->second);
+            return p ? *p : -1;
+        };
+        const std::int64_t size = get("size");
+        const std::int64_t step = get("step");
+        std::int64_t dim = get("dim");
+        if (size <= 0 || step <= 0 || dim < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* x = as_tensor(bctx.forward(node.inputs[0]));
+        if (g == nil || go == nil || x == nil)
+            return false;
+        NSArray<NSNumber*>* xs = x.shape;
+        NSArray<NSNumber*>* gs = go.shape;  // x.shape with dim → n_windows, + [size]
+        if (gs.count != xs.count + 1 || dim >= (std::int64_t)xs.count)
+            return false;
+        for (NSNumber* n in gs)
+            if (n.longLongValue < 0)
+                return false;
+        const long long n_win = gs[(NSUInteger)dim].longLongValue;
+        const NSUInteger last = gs.count - 1;
+
+        // Indices along ``dim`` for offset j, shaped to broadcast like one
+        // slice of the gradient: 1 everywhere but ``dim``.
+        NSMutableArray<NSNumber*>* idx_shape = [NSMutableArray array];
+        for (NSUInteger d = 0; d < xs.count; ++d)
+            [idx_shape addObject:(d == (NSUInteger)dim ? @(n_win) : @1)];
+        NSMutableArray<NSNumber*>* slice_shape = [NSMutableArray array];
+        for (NSUInteger d = 0; d < last; ++d)
+            [slice_shape addObject:gs[d]];
+
+        MPSGraphTensor* dx = [g constantWithScalar:0.0 shape:xs dataType:go.dataType];
+        for (std::int64_t j = 0; j < size; ++j) {
+            std::vector<std::int32_t> pos((std::size_t)n_win);
+            for (long long w = 0; w < n_win; ++w)
+                pos[(std::size_t)w] = (std::int32_t)(w * step + j);
+            MPSGraphTensor* idx =
+                [g constantWithData:[NSData dataWithBytes:pos.data()
+                                                   length:pos.size() * sizeof(std::int32_t)]
+                              shape:idx_shape
+                           dataType:MPSDataTypeInt32];
+            idx = [g broadcastTensor:idx toShape:slice_shape name:nil];
+            MPSGraphTensor* piece = [g sliceTensor:go dimension:(NSInteger)last start:j length:1 name:nil];
+            piece = [g reshapeTensor:piece withShape:slice_shape name:nil];
+            dx = [g scatterAlongAxis:(NSInteger)dim
+                      withDataTensor:dx
+                       updatesTensor:piece
+                       indicesTensor:idx
+                                mode:MPSGraphScatterModeAdd
+                                name:nil];
+        }
+        bctx.accumulate_grad(node.inputs[0], from_tensor(dx));
+        return true;
+    }
+};
+
 struct ReshapeVjpRegistrar {
     ReshapeVjpRegistrar() {
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("view"));
         register_vjp_emitter(std::make_unique<FlipVjp>());
+        register_vjp_emitter(std::make_unique<UnfoldDimVjp>());
         register_vjp_emitter(std::make_unique<TriVjp>("tril"));
         register_vjp_emitter(std::make_unique<TriVjp>("triu"));
         register_vjp_emitter(std::make_unique<ReshapeFamilyVjp>("reshape"));

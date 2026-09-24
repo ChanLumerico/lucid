@@ -167,6 +167,42 @@ public:
 };
 
 // ────────────────────────────────────────────────────────────────────
+// maximum / minimum: the gradient goes to the input that was chosen.
+// Eager breaks a tie toward ``a`` — maximum masks (a ≥ b, a < b),
+// minimum (b ≥ a, b < a) — so exactly one side receives each element.
+// CLIP clamps its learnt logit scale with ``minimum``; without this its
+// training step ran eager.
+// ────────────────────────────────────────────────────────────────────
+template <bool IS_MAX>
+class MinMaxVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return IS_MAX ? "maximum" : "minimum"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(bctx, node, grad_outs,
+            [](const BinaryVjpCtx& c) -> BinaryGradPair {
+                MPSGraphTensor* lhs = IS_MAX ? c.a : c.b;
+                MPSGraphTensor* rhs = IS_MAX ? c.b : c.a;
+                const MPSDataType dt = c.go.dataType;
+                MPSGraphTensor* take_a = [c.g castTensor:[c.g greaterThanOrEqualToWithPrimaryTensor:lhs
+                                                                                   secondaryTensor:rhs
+                                                                                              name:nil]
+                                                  toType:dt
+                                                    name:nil];
+                MPSGraphTensor* take_b = [c.g castTensor:[c.g lessThanWithPrimaryTensor:lhs
+                                                                         secondaryTensor:rhs
+                                                                                    name:nil]
+                                                  toType:dt
+                                                    name:nil];
+                return {
+                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_a name:nil],
+                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_b name:nil]
+                };
+            });
+    }
+};
+
+// ────────────────────────────────────────────────────────────────────
 // neg (unary): dA = -grad.
 // ────────────────────────────────────────────────────────────────────
 class NegVjp final : public VjpEmitter {
@@ -269,6 +305,8 @@ struct ArithVjpRegistrar {
         register_vjp_emitter(std::make_unique<DivVjp>());
         register_vjp_emitter(std::make_unique<PowVjp>());
         register_vjp_emitter(std::make_unique<NegVjp>());
+        register_vjp_emitter(std::make_unique<MinMaxVjp<true>>());
+        register_vjp_emitter(std::make_unique<MinMaxVjp<false>>());
     }
 };
 

@@ -11604,6 +11604,11 @@ private:
                                             int channels,
                                             int spatial,
                                             double eps) {
+        // Centred before anything is squared or scaled.  The variance used
+        // to be E[x²] − mean² and the output x·scale + (β − mean·scale):
+        // both subtract two large, nearly equal numbers once the mean
+        // outgrows the spread, and at a mean of 100× the spread the
+        // input gradient was off by 1e-3 while Metal's held 1e-5.
         const std::size_t S = static_cast<std::size_t>(spatial);
         const float inv_M = 1.0f / static_cast<float>(batch * spatial);
         for (int c = 0; c < channels; ++c) {
@@ -11613,22 +11618,22 @@ private:
             const float mean = sum * inv_M;
             mean_per_c[c] = mean;
 
+            // y holds x − mean until the scale is known.
             float sumsq = 0.f;
             for (int b = 0; b < batch; ++b) {
-                const float* xb = x + (static_cast<std::size_t>(b) * channels + c) * S;
-                sumsq += cpu::vdotpr_f32(xb, xb, S);
+                const std::size_t at = (static_cast<std::size_t>(b) * channels + c) * S;
+                cpu::vsadd_f32(x + at, -mean, y + at, S);
+                sumsq += cpu::vdotpr_f32(y + at, y + at, S);
             }
-            const float var = sumsq * inv_M - mean * mean;
+            const float var = sumsq * inv_M;
             const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
             rstd_per_c[c] = rstd;
 
             const float scale = gamma[c] * rstd;
-            const float bias = beta[c] - mean * scale;
             for (int b = 0; b < batch; ++b) {
-                const float* xb = x + (static_cast<std::size_t>(b) * channels + c) * S;
                 float* yb = y + (static_cast<std::size_t>(b) * channels + c) * S;
-                cpu::vsmul_f32(xb, scale, yb, S);
-                cpu::vsadd_f32(yb, bias, yb, S);
+                cpu::vsmul_f32(yb, scale, yb, S);
+                cpu::vsadd_f32(yb, beta[c], yb, S);
             }
         }
     }

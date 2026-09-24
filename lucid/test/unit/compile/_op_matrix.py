@@ -389,6 +389,8 @@ def _cases() -> list[Case]:
         "unfold_dim": lambda t: t.unfold(1, 3, 2) * 1,
         "one_hot": lambda t: F.one_hot(t.abs() % 5, 5),
         "meshgrid": lambda t: lucid.meshgrid(t[0], t[1], indexing="ij"),
+        # Unequal lengths, or the xy axis swap would be invisible.
+        "meshgrid_xy": lambda t: lucid.meshgrid(t[0][:3], t[1], indexing="xy"),
     }.items():
         add(name, f)
 
@@ -448,6 +450,28 @@ def _cases() -> list[Case]:
         shape=(4, 3, 5),
         dtypes=fo,
     )
+    # Batch statistics — the matrix had only the eval form, so the train-mode
+    # VJP was never checked on its own, and a 5-D one aborted the process
+    # (BatchNorm3d: MPSGraph's fused reduction supports axes 0–3 only).
+    add(
+        "batch_norm_train",
+        lambda t: F.batch_norm(t, None, None, _w(3), _w(3, seed=8), True),
+        shape=(4, 3, 5),
+        dtypes=fo,
+    )
+    add(
+        "batch_norm3d_train",
+        lambda t: F.batch_norm(t, None, None, _w(2), _w(2, seed=8), True),
+        shape=(2, 2, 3, 3, 3),
+        dtypes=fo,
+    )
+    # A grid built inside the traced function — a stub until Mask2Former's
+    # point sampling needed it.
+    add(
+        "linspace_scale",
+        lambda t: t * lucid.linspace(-1.0, 2.0, 6, device=t.device),
+        dtypes=fo,
+    )
     add("normalize", lambda t: F.normalize(t, dim=1), dtypes=fo)
     add(
         "conv1d",
@@ -487,6 +511,105 @@ def _cases() -> list[Case]:
     )
     add("avg_pool2d", lambda t: F.avg_pool2d(t, 2), shape=(2, 3, 8, 8), dtypes=fo)
     add("max_pool2d", lambda t: F.max_pool2d(t, 2), shape=(2, 3, 8, 8), dtypes=fo)
+    # A pad MPSGraph folds into the pool: global arg-max indices then counted
+    # in the unpadded tensor — YOLOv3-tiny's backbone came back 87 % off.
+    add(
+        "pad_max_pool2d",
+        lambda t: F.max_pool2d(F.pad(t, (0, 1, 0, 1), value=-1e4), 2, 1),
+        shape=(2, 3, 5, 5),
+        dtypes=fo,
+    )
+    add(
+        "pad_max_pool3d",
+        lambda t: F.max_pool3d(F.pad(t, (1, 0, 0, 1, 1, 0), value=-1e4), 2, 1),
+        shape=(1, 2, 3, 3, 3),
+        dtypes=fo,
+    )
+    # Every pooling rank, padded, strided, with the divisor options — and each
+    # also read transposed, since MPSGraph's max-pool gradient kernel went
+    # wrong exactly there.  None of these had a case, and none of 1-D / 3-D
+    # pooling or interpolation had a VJP.
+    add(
+        "avg_pool2d_ceil_nopad",
+        lambda t: F.avg_pool2d(t, 3, 2, ceil_mode=True, count_include_pad=False),
+        shape=(2, 3, 8, 8),
+        dtypes=fo,
+    )
+    add(
+        "avg_pool2d_t",
+        lambda t: F.avg_pool2d(t, 2).permute(0, 1, 3, 2),
+        shape=(2, 3, 8, 8),
+        dtypes=fo,
+    )
+    add(
+        "max_pool2d_t",
+        lambda t: F.max_pool2d(t, 2).permute(0, 1, 3, 2),
+        shape=(2, 3, 8, 8),
+        dtypes=fo,
+    )
+    add(
+        "max_pool1d",
+        lambda t: F.max_pool1d(t, 3, 2, padding=1),
+        shape=(2, 3, 9),
+        dtypes=fo,
+    )
+    add(
+        "avg_pool1d",
+        lambda t: F.avg_pool1d(t, 3, 2, padding=1),
+        shape=(2, 3, 9),
+        dtypes=fo,
+    )
+    add(
+        "avg_pool1d_nopad",
+        lambda t: F.avg_pool1d(t, 3, 2, padding=1, count_include_pad=False),
+        shape=(2, 3, 9),
+        dtypes=fo,
+    )
+    add("max_pool3d", lambda t: F.max_pool3d(t, 2), shape=(1, 2, 4, 4, 4), dtypes=fo)
+    add(
+        "avg_pool3d",
+        lambda t: F.avg_pool3d(t, 3, 2, padding=1),
+        shape=(1, 2, 5, 5, 5),
+        dtypes=fo,
+    )
+    add(
+        "interp_nearest",
+        lambda t: F.interpolate(t, scale_factor=2, mode="nearest"),
+        shape=(2, 3, 4, 4),
+        dtypes=fo,
+    )
+    add(
+        "interp_nearest_size",
+        lambda t: F.interpolate(t, size=(3, 7), mode="nearest"),
+        shape=(2, 3, 4, 5),
+        dtypes=fo,
+    )
+    add(
+        "interp_bilinear",
+        lambda t: F.interpolate(t, size=(7, 5), mode="bilinear", align_corners=False),
+        shape=(2, 3, 4, 3),
+        dtypes=fo,
+    )
+    add(
+        "interp_bilinear_ac",
+        lambda t: F.interpolate(t, size=(7, 5), mode="bilinear", align_corners=True),
+        shape=(2, 3, 4, 3),
+        dtypes=fo,
+    )
+    add(
+        "interp_trilinear",
+        lambda t: F.interpolate(
+            t, size=(3, 5, 4), mode="trilinear", align_corners=False
+        ),
+        shape=(1, 2, 2, 3, 3),
+        dtypes=fo,
+    )
+    add(
+        "interp_bilinear_t",
+        lambda t: F.interpolate(t, scale_factor=2, mode="bilinear").permute(0, 1, 3, 2),
+        shape=(2, 3, 4, 3),
+        dtypes=fo,
+    )
     add(
         "embedding", lambda t: F.embedding(t.abs() % 5, _w(5, 3)), dtypes=("i64", "i32")
     )
@@ -549,7 +672,6 @@ _NO_I64_SQUARE = "MPSGraph has no int64 square kernel (``x * x`` is folded into 
 _INT_MATMUL = "MPSGraph's matmul aborts on integers, so the emitter declines"
 _SCATTER = "MPSGraph scatters int64 in 32 bits and bool as false, so it declines"
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
-_MESHGRID = "meshgrid is a host-built constant; the emitter is a stub"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("square", "i64"): _NO_I64_SQUARE,
     ("vector_norm", "i64"): _NO_I64_SQUARE,
@@ -560,13 +682,11 @@ EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("scatter_add", "bool"): _SCATTER,
     ("scatter", "i64"): _SCATTER,
     ("scatter", "bool"): _SCATTER,
-    **{("meshgrid", d): _MESHGRID for d in ("f32", "i64", "i32", "bool")},
     ("matmul", "i64"): _INT_MATMUL,
     ("matmul", "i32"): _INT_MATMUL,
     ("matrix_power", "i64"): _INT_MATMUL,
     ("matrix_power", "i32"): _INT_MATMUL,
     ("matrix_power", "bool"): _INT_MATMUL,
-    ("dropout_train", "f32"): "training-mode dropout needs the stateful RNG path",
 }
 
 

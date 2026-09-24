@@ -43,6 +43,85 @@ inline std::int64_t int_attr(const OpNode& node, const char* key, std::int64_t d
     return p ? *p : def;
 }
 
+// A 0/1 flag the forward may record as an int, a bool, or a one-element
+// list.  Pooling records ``ceil_mode`` and ``count_include_pad`` as ``[1]``,
+// which ``int_attr`` does not read — it answered the default, so every
+// compiled ceil-mode pool floored and every ``count_include_pad=False``
+// average counted the padding.
+[[maybe_unused]] inline bool flag_attr(const OpNode& node, const char* key, bool def) {
+    auto it = node.attrs.find(key);
+    if (it == node.attrs.end())
+        return def;
+    if (const auto* p = std::get_if<std::int64_t>(&it->second))
+        return *p != 0;
+    if (const auto* p = std::get_if<bool>(&it->second))
+        return *p;
+    if (const auto* p = std::get_if<std::vector<std::int64_t>>(&it->second))
+        return p->empty() ? def : (*p)[0] != 0;
+    return def;
+}
+
+// Ceil-mode average pooling that counts the padding.  The reference divides
+// a window hanging past the padded input by the part inside it; MPSGraph,
+// counting the padding, by the whole kernel — no option matches.  Without
+// padding there is nothing to count and the reference's divisor is the
+// in-bounds part, which is MPSGraph's divisor when it does not count the
+// padding.  Returns false when the pairing must stay eager, else settles
+// ``include_zero_pad`` (ResNeSt's shortcut pool is the unpadded case).
+[[maybe_unused]] inline bool
+settle_ceil_divisor(const OpNode& node, bool ceil_mode, bool& include_zero_pad) {
+    if (!ceil_mode || !include_zero_pad)
+        return true;
+    auto it = node.attrs.find("padding");
+    if (it != node.attrs.end()) {
+        if (const auto* v = std::get_if<std::vector<std::int64_t>>(&it->second)) {
+            for (std::int64_t p : *v)
+                if (p != 0)
+                    return false;
+        } else if (const auto* p = std::get_if<std::int64_t>(&it->second)) {
+            if (*p != 0)
+                return false;
+        }
+    }
+    include_zero_pad = false;
+    return true;
+}
+
+// ``t`` reshaped to the shape the trace recorded for the node's first
+// output — for an op whose MPSGraph result has no static shape.  nil when
+// the recording has a symbolic axis (the dynamic batch).
+[[maybe_unused]] inline MPSGraphTensor*
+reshape_to_recorded(MPSGraph* g, MPSGraphTensor* t, const OpNode& node) {
+    if (node.outputs.empty())
+        return nil;
+    NSMutableArray<NSNumber*>* shape = [NSMutableArray array];
+    for (const auto d : node.outputs[0].shape) {
+        if (d < 0)
+            return nil;
+        [shape addObject:@(d)];
+    }
+    return [g reshapeTensor:t withShape:shape name:nil];
+}
+
+// True when ``t``'s static shape is the shape the trace recorded for the
+// node's first output.  An emitter whose op is lowered with options MPSGraph
+// may size differently (ceil-mode pooling) declines rather than hand the
+// next op a tensor of another shape.
+[[maybe_unused]] inline bool matches_recorded_shape(MPSGraphTensor* t, const OpNode& node) {
+    if (node.outputs.empty())
+        return false;
+    const auto& want = node.outputs[0].shape;
+    NSArray<NSNumber*>* got = t.shape;
+    if (got.count != want.size())
+        return false;
+    // A symbolic axis (the dynamic batch) is -1 in the graph and concrete
+    // in the recording; it cannot disagree.
+    for (NSUInteger d = 0; d < got.count; ++d)
+        if (got[d].longLongValue >= 0 && got[d].longLongValue != want[d])
+            return false;
+    return true;
+}
+
 // Pull a ``bool`` attribute (e.g. ``keepdim``, ``align_corners``).
 inline bool bool_attr(const OpNode& node, const char* key, bool def) {
     auto it = node.attrs.find(key);

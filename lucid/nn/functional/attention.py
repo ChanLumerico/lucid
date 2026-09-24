@@ -2,12 +2,36 @@
 nn.functional attention operations.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+
+# Depth of the callers that will differentiate this function's backward —
+# see :func:`_differentiable_attention`.
+_MATH_DEPTH: list[int] = [0]
+
+
+@contextmanager
+def _differentiable_attention() -> Iterator[None]:
+    """Compute attention in its explicit form, differentiable twice.
+
+    The fused kernel's backward is not itself differentiable: a second
+    backward through it — what :func:`lucid.func.jvp` takes — dropped the
+    attention's contribution without an error.  Inside this context the
+    matmul-softmax-matmul form is used instead, every step of which has a
+    differentiable backward.
+    """
+    _MATH_DEPTH[0] += 1
+    try:
+        yield
+    finally:
+        _MATH_DEPTH[0] -= 1
 
 
 def scaled_dot_product_attention(
@@ -140,7 +164,7 @@ def scaled_dot_product_attention(
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)
 
-    if dropout_p > 0.0:
+    if dropout_p > 0.0 or _MATH_DEPTH[0] > 0:
         # Dropout applies to the attention *probabilities*.  The fused kernel
         # never materialises them (MLX's fused SDPA takes no dropout argument),
         # and the engine's weights-returning variant emits them as a
@@ -163,7 +187,9 @@ def scaled_dot_product_attention(
             # this form at the top of the function, so there is one
             # meaning of ``True`` in play rather than one per path.
             scores = scores + attn_mask
-        weights = _dropout(softmax(scores, dim=-1), p=dropout_p, training=True)
+        weights = softmax(scores, dim=-1)
+        if dropout_p > 0.0:
+            weights = _dropout(weights, p=dropout_p, training=True)
         return lucid.matmul(weights, value)
 
     return _wrap(

@@ -10,6 +10,7 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -289,11 +290,49 @@ public:
     }
 };
 
+// pow_scalar: x^p → p·x^(p-1).  rpow_scalar: b^x → b^x·ln b.  Neither had a
+// VJP; ``x ** 2`` inside local response normalisation kept ZFNet from
+// training compiled.
+template <bool REVERSE>
+class PowScalarVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return REVERSE ? "rpow_scalar" : "pow_scalar"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        auto it = node.attrs.find(REVERSE ? "base" : "exp");
+        if (it == node.attrs.end())
+            return false;
+        const auto* c = std::get_if<double>(&it->second);
+        if (c == nullptr)
+            return false;
+        const double k = *c;
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [k](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
+                MPSGraphTensor* d =
+                    REVERSE
+                        ? [g multiplicationWithPrimaryTensor:[g powerWithPrimaryTensor:cst(g, k, dt)
+                                                                         secondaryTensor:x
+                                                                                    name:nil]
+                                              secondaryTensor:cst(g, std::log(k), dt)
+                                                         name:nil]
+                        : [g multiplicationWithPrimaryTensor:cst(g, k, dt)
+                                              secondaryTensor:[g powerWithPrimaryTensor:x
+                                                                         secondaryTensor:cst(g, k - 1.0, dt)
+                                                                                    name:nil]
+                                                         name:nil];
+                return [g multiplicationWithPrimaryTensor:go secondaryTensor:d name:nil];
+            });
+    }
+};
+
 struct MathVjpRegistrar {
     MathVjpRegistrar() {
         register_vjp_emitter(std::make_unique<LogVjp>());
         register_vjp_emitter(std::make_unique<ErfinvVjp>());
         register_vjp_emitter(std::make_unique<ClipVjp>());
+        register_vjp_emitter(std::make_unique<PowScalarVjp<false>>());
+        register_vjp_emitter(std::make_unique<PowScalarVjp<true>>());
         register_vjp_emitter(unary_deriv("arcsin", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
             return inv_sqrt_one_minus_sq(g, x, dt);
         }));

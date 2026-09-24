@@ -1192,6 +1192,9 @@ class Tensor:
             # strict about dtype, so a float32 seed on a float64 tensor was
             # rejected even though every other mixed-dtype pair promotes.
             root = (self * gradient.detach()).sum()._impl
+            from lucid.autograd._backward import _refuse_trace
+
+            _refuse_trace()
             _C_engine.engine_backward(
                 root, retain_graph=retain_graph, create_graph=create_graph
             )
@@ -1201,6 +1204,9 @@ class Tensor:
                     "grad can be implicitly created only for scalar outputs; "
                     "call backward(gradient=...) for non-scalar tensors"
                 )
+            from lucid.autograd._backward import _refuse_trace
+
+            _refuse_trace()
             _C_engine.engine_backward(
                 self._impl, retain_graph=retain_graph, create_graph=create_graph
             )

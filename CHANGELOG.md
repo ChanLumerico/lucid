@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - integer // never reached the graph, and would have floored wrong
 - replay every emitter over dtypes, and fix what it found
 - hold eager to numpy, and fix the bool asymmetry CI caught
+- train every zoo family compiled, and fix what it found
 
 ---
 

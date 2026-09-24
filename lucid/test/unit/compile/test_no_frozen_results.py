@@ -84,26 +84,25 @@ def test_the_second_call_answers_the_second_input(name, fn, shape):
     assert float((got_second - want_second).abs().max().item()) / scale < 1e-5
 
 
-def test_a_pure_python_composite_that_reads_values_is_still_frozen():
+def test_a_pure_python_composite_that_reads_values_runs_eager():
     """``lucid.histogram`` (1-D) is a Python composite over ``.item()``.
 
-    Reading an element during tracing takes the trace-time value, so the
-    whole histogram is computed on the host and baked in as constants —
-    nothing in the graph depends on the input. This is not the tracer
-    gap the tests above cover; it is what any composite that reads
-    values does, and no amount of trace wiring changes it.
-
-    The test records the behaviour rather than blessing it, so that a
-    fix registers as a failure here instead of going unnoticed.
+    Reading an element during tracing used to take the trace-time value, so
+    the whole histogram was computed on the host and baked in as constants
+    — nothing in the graph depended on the input, and every call answered
+    the first.  A host read of a traced value now marks the trace
+    unsupported: the call runs eager and tracks its input.
     """
     lucid.manual_seed(0)
     model = _Apply(lambda t: lucid.histogram(t, bins=4)[0]).eval()
     first = lucid.randn(16)
     second = lucid.randn(16) * 7 + 3
-    assert float((model(first) - model(second)).abs().max().item()) > 1e-6
+    want_second = model(second)
+    assert float((model(first) - want_second).abs().max().item()) > 1e-6
 
     _C_engine.compile.session_cache_clear()
     compiled = lucid.compile.compile(model.to("metal"))
-    got_first = compiled(first.to("metal")).to("cpu")
+    compiled(first.to("metal"))
     got_second = compiled(second.to("metal")).to("cpu")
-    assert float((got_first - got_second).abs().max().item()) <= 1e-6
+    assert float((got_second - want_second).abs().max().item()) <= 1e-6
+    assert compiled.cache_info()["eager_only"]

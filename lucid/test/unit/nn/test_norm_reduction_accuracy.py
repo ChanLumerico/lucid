@@ -177,3 +177,61 @@ class TestBatchNorm:
         small = _drift(_batch_norm, _SMALL)
         large = _drift(_batch_norm, _LARGE)
         assert large < max(small, 1e-08) * _FLATNESS
+
+
+# ── where the data sits ───────────────────────────────────────────────────
+#
+# A variance taken as E[x²] − mean² subtracts two numbers that grow with
+# the mean while their difference does not, so once the mean outgrows the
+# spread the result is mostly rounding.  The CPU float32 batch norm did
+# exactly that, and scaled its output as x·scale + (β − mean·scale), which
+# cancels the same way: at a mean a hundred times the spread its input
+# gradient was off by 7e-03 against 1e-05 on Metal.  The inputs above are
+# zero-mean, so the flatness checks could never see it.  What the ReLUs
+# and residual sums of a real network hand a norm is not zero-mean.
+
+_OFFSETS = [(0.0, 1.0), (100.0, 1.0), (10.0, 0.1)]
+_OFFSET_CEILING = 1e-04
+
+_NORMS = {
+    "batch_norm_2d": (lambda: nn.BatchNorm2d(64), (2, 64, 2, 2)),
+    "batch_norm_1d": (lambda: nn.BatchNorm1d(64), (8, 64)),
+    "layer_norm": (lambda: nn.LayerNorm(64), (4, 8, 64)),
+    "group_norm": (lambda: nn.GroupNorm(8, 64), (4, 64, 4, 4)),
+    "instance_norm": (lambda: nn.InstanceNorm2d(64, affine=True), (4, 64, 4, 4)),
+    "rms_norm": (lambda: nn.RMSNorm(64), (4, 8, 64)),
+}
+
+
+def _devices() -> list[str]:
+    out = ["cpu"]
+    try:
+        lucid.zeros(1).to("metal")
+        out.append("metal")
+    except Exception:  # noqa: BLE001 — no Metal on this machine
+        pass
+    return out
+
+
+def _output_and_grad(name, device, dtype, offset, spread):
+    factory, shape = _NORMS[name]
+    lucid.manual_seed(0)
+    layer = factory().to(dtype).to(device).train()
+    rng = np.random.default_rng(3)
+    x = lucid.tensor(rng.standard_normal(shape) * spread + offset).to(dtype).to(device)
+    x.requires_grad = True
+    y = layer(x)
+    probe = lucid.tensor(rng.standard_normal(shape)).to(dtype).to(device)
+    (y * probe).sum().backward()
+    return y.numpy().astype(np.float64), x.grad.numpy().astype(np.float64)
+
+
+@pytest.mark.parametrize("device", _devices())
+@pytest.mark.parametrize("offset,spread", _OFFSETS)
+@pytest.mark.parametrize("name", sorted(_NORMS))
+def test_accuracy_does_not_depend_on_the_mean(name, offset, spread, device) -> None:
+    got_y, got_dx = _output_and_grad(name, device, lucid.float32, offset, spread)
+    want_y, want_dx = _output_and_grad(name, "cpu", lucid.float64, offset, spread)
+    for label, g, w in (("output", got_y, want_y), ("input grad", got_dx, want_dx)):
+        err = float(np.abs(g - w).max() / np.abs(w).max())
+        assert err < _OFFSET_CEILING, f"{label}: {err:.2e}"

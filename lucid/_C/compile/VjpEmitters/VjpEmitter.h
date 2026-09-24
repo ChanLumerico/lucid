@@ -183,10 +183,16 @@ public:
     //     on the gradient path.
     //   * Forward binding missing for a saved-input id.
     //   * VJP emitter itself signalled per-call failure.
+    //
+    // ``absent``, when given, accepts a parameter the loss does not
+    // depend on: its gradient comes back as zeros and its slot is marked
+    // ``true`` — eager leaves such a gradient ``None``, and the caller
+    // does the same.  Without it the parameter is an error.
     bool compute_grads(TensorId loss_id,
                        const std::vector<TensorId>& param_ids,
                        std::vector<void*>& out_grads,
-                       std::string* error_msg);
+                       std::string* error_msg,
+                       std::vector<bool>* absent = nullptr);
 
 private:
     void* graph_;
@@ -258,6 +264,7 @@ LUCID_API ManualVjpStatus try_manual_vjp_grads(void* graph_void,
                                                TensorId loss_id,
                                                const std::vector<TensorId>& param_ids,
                                                std::vector<void*>& out_grads,
-                                               std::string* error_msg);
+                                               std::string* error_msg,
+                                               std::vector<bool>* absent = nullptr);
 
 }  // namespace lucid::compile

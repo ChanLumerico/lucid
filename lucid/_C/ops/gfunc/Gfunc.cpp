@@ -238,6 +238,10 @@ TensorImplPtr linspace_op(
         ErrorBuilder("linspace").fail("num must be >= 0");
     Shape shape{num};
     OpScopeFull scope{"linspace", device, dt, shape};
+    // The compile emitter bakes the same sequence as a constant; the length
+    // is the output dim.
+    scope.set_attr("start", start);
+    scope.set_attr("stop", stop);
     // step is only meaningful when num > 1; defined as 0 otherwise to avoid
     // division by zero when num == 1.
     const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;

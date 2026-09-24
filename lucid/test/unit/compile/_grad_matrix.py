@@ -122,28 +122,23 @@ def run_grad(case: Case) -> GradOutcome:
 
 GRAD_CASES = [c for c in CASES if "f32" in c.dtypes and not c.random]
 
-_NO_VJP = "no manual VJP yet, and MPSGraph's autodiff aborts on it"
-#: Case → why its compiled training step runs eager.  Each of these used to
-#: abort the process (MPSGraph's autodiff has no gradient for them) before
-#: that fallback was gated; a manual VJP for the op removes the entry.
+#: Case → why its compiled training step runs eager.  The manual VJPs for
+#: prod, cumprod, cummax/cummin, sort/kthvalue, repeat_interleave,
+#: scatter/scatter_add and det (2026-09-24) emptied this of all but the one
+#: op that has no forward emitter to differentiate.
 EXPECTED_EAGER_GRAD: dict[str, str] = {
-    **{
-        n: _NO_VJP
-        for n in (
-            "prod",
-            "cumprod",
-            "cummax",
-            "cummin",
-            "sort",
-            "kthvalue",
-            "repeat_interleave",
-            "det",
-        )
-    },
-    "scatter_add": _NO_VJP + " (scatter_add)",
-    "scatter": _NO_VJP + " (scatter_add)",
-    "meshgrid": "meshgrid is a host-built constant; the emitter is a stub",
+    "interp_trilinear": (
+        "no 3-D resize VJP, and the forward's depth gather is off MPSGraph's "
+        "autodiff safe list"
+    ),
 }
+
+#: Case → why it has no manual VJP yet, although MPSGraph's autodiff
+#: differentiates it correctly where nothing else rules autodiff out — so it
+#: trains compiled in :func:`test_compiled_gradient_matches_eager`, and would
+#: run eager in a graph with a train-mode batch norm.  Empty since
+#: ``conv_transpose3d`` got its VJP.
+MANUAL_VJP_GAPS: dict[str, str] = {}
 
 
 def _main() -> None:  # pragma: no cover — manual triage

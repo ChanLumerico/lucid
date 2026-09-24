@@ -3,40 +3,19 @@
 // Stateless real-emit for the RNG family: rand / uniform / randn /
 // normal / randint / bernoulli.
 //
-// Design trade-off
-// ----------------
-// MPSGraph offers two RNG paths:
+// Which draws reach these emitters
+// ----------------------------------
+// Almost none.  A draw from the default generator never becomes a node:
+// the tracer records it as a feed and ``run_executable`` draws it again
+// on every call (:file:`../../RngFeeds.h`).  Lowering it here instead,
+// with the trace-time seed baked into the descriptor, froze it — every
+// call of the executable drew the same values, so a compiled diffusion
+// step trained on one noise sample and one timestep forever.
 //
-//   1. ``randomTensorWithShape:descriptor:`` — seed baked into the
-//      descriptor.  Every call to the compiled executable produces
-//      the same sequence.  Deterministic per executable.
-//
-//   2. ``randomTensorWithShape:descriptor:stateTensor:`` — takes a
-//      Philox state input and returns (tensor, new_state).  Proper
-//      stateful RNG, but the state buffer must be plumbed as an
-//      additional executable input *and* output, with lifecycle
-//      managed Python-side per call.  That requires changes to the
-//      compile pipeline's I/O schema that are cross-cutting.
-//
-// This file uses path (1) — deterministic-per-executable.  The seed
-// is the eager Generator's counter at trace time (see the
-// ``scope.set_attr("seed", ...)`` calls in
-// :file:`lucid/_C/random/Random.cpp`), so distinct RNG calls within
-// a single trace get distinct seeds (the eager Generator advances
-// between draws).  Across executable invocations the same trace
-// produces identical random values — useful for:
-//
-//   * deterministic noise injection (adversarial-robustness probes,
-//     unit-test smoke checks);
-//   * inference-mode dropout with ``p == 0`` (already passthrough,
-//     no RNG needed);
-//   * any pattern where seeded reproducibility is wanted.
-//
-// For training loops where stochasticity is required step-to-step
-// (dropout regularisation, data augmentation, MC sampling) callers
-// should keep using eager — the cache check infrastructure will
-// detect the RNG signature and route to eager automatically.  Future
-// stateful path is tracked in [[engine-rng-stateful-future]].
+// What is left is a draw from a caller's own generator, tagged
+// ``own_generator``: the executable cannot advance that generator, so
+// :func:`open_rng` declines it and the call runs eager.  A trace recorded
+// before draws became feeds, with no tag, still lowers seeded.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -103,6 +82,7 @@ struct RngContext {
 inline bool open_rng(BuilderContext& ctx, const OpNode& node, RngContext& rc) {
     if (!node.inputs.empty()) return false;  // RNG has no traced inputs
     if (node.outputs.empty()) return false;
+    if (node.attrs.count("own_generator") != 0) return false;
     rc.graph = (__bridge MPSGraph*)ctx.graph();
     if (rc.graph == nil) return false;
     const TensorMeta& meta = node.outputs[0];

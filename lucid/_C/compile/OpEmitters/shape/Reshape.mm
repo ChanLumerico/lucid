@@ -64,9 +64,12 @@ private:
     std::string name_;
 };
 
+// ``contiguous`` and ``detach``: the value itself under a new identity.
+// ``detach`` differs only backward, where its VJP passes nothing on.
 class ContiguousEmitter final : public OpEmitter {
 public:
-    std::string_view op_name() const override { return "contiguous"; }
+    explicit ContiguousEmitter(std::string name) : name_(std::move(name)) {}
+    std::string_view op_name() const override { return name_; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         // MPSGraph tensors have no observable stride layout — every
         // intermediate is already "contiguous" from the graph's
@@ -92,6 +95,9 @@ public:
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
+
+private:
+    std::string name_;
 };
 
 // R1 — broadcast_to / pad / tile / repeat.
@@ -285,7 +291,8 @@ struct ReshapeEmitterRegistrar {
         register_emitter(std::make_unique<ReshapeFamilyEmitter>("squeeze"));
         register_emitter(std::make_unique<ReshapeFamilyEmitter>("unsqueeze"));
         register_emitter(std::make_unique<ReshapeFamilyEmitter>("flatten"));
-        register_emitter(std::make_unique<ContiguousEmitter>());
+        register_emitter(std::make_unique<ContiguousEmitter>("contiguous"));
+        register_emitter(std::make_unique<ContiguousEmitter>("detach"));
         // R1 additions.
         register_emitter(std::make_unique<BroadcastToEmitter>());
         register_emitter(std::make_unique<PadEmitter>());

@@ -178,14 +178,26 @@ class _Predictor(nn.Module):
         positions = cast(Tensor, self.predictor_pos_embed)
         tokens = cast(Tensor, self.predictor_embed(context))
         tokens = tokens + _gather_tokens(
-            positions + lucid.zeros(int(context.shape[0]), 1, 1), context_indices
+            positions
+            + lucid.zeros(
+                int(context.shape[0]),
+                1,
+                1,
+                dtype=positions.dtype,
+                device=positions.device,
+            ),
+            context_indices,
         )
 
         batch, count = int(target_indices.shape[0]), int(target_indices.shape[1])
         width = int(tokens.shape[2])
-        queries = cast(Tensor, self.mask_token) + lucid.zeros(batch, count, width)
+        queries = cast(Tensor, self.mask_token) + lucid.zeros(
+            batch, count, width, dtype=tokens.dtype, device=tokens.device
+        )
         queries = queries + _gather_tokens(
-            positions + lucid.zeros(batch, 1, 1), target_indices
+            positions
+            + lucid.zeros(batch, 1, 1, dtype=positions.dtype, device=positions.device),
+            target_indices,
         )
 
         hidden = lucid.cat([tokens, queries], dim=1)

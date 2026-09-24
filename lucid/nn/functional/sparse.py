@@ -60,9 +60,19 @@ def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
     # The CPU reduce kernels do not cover every integer width (int32 min/max
     # raises), and index tensors legitimately arrive as int32 — normalise to
     # the canonical index dtype before reducing.
-    idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
-    lo = int(idx.min().item())
-    hi = int(idx.max().item())
+    # A guard, not a value: it raises or passes, and nothing downstream
+    # depends on what it read.  So it runs outside any active compile trace
+    # — the read would otherwise mark the trace unsupported (a traced value
+    # read on the host) and send every embedding model eager.  A compiled
+    # replay validates at trace time only, as it always has.
+    tracer = _C_engine.compile.current_tracer()
+    _C_engine.compile.set_current_tracer(None)
+    try:
+        idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
+        lo = int(idx.min().item())
+        hi = int(idx.max().item())
+    finally:
+        _C_engine.compile.set_current_tracer(tracer)
     if lo < 0 or hi >= num_embeddings:
         bad = lo if lo < 0 else hi
         raise IndexError(
@@ -409,8 +419,12 @@ def two_hot(values: Tensor, bins: Tensor) -> Tensor:
             f"{tuple(int(s) for s in bins.shape)}"
         )
 
-    lower, upper = float(bins[0].item()), float(bins[count - 1].item())
-    clamped = values.clip(lower, upper).unsqueeze(dim=-1)
+    # The ends of the grid as tensors, not host floats: reading them with
+    # ``.item()`` synced the device on every call, and inside a compile
+    # trace it read a traced value on the host, which sends the whole step
+    # eager — DreamerV3's reward and value heads encode through here.
+    lower, upper = bins[0].to(values.dtype), bins[count - 1].to(values.dtype)
+    clamped = lucid.minimum(lucid.maximum(values, lower), upper).unsqueeze(dim=-1)
 
     # Weight every bin by how close it is, then keep only the two that
     # bracket the value: `below` counts the bins at or under it, so

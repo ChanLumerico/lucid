@@ -10,6 +10,20 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _refuse_trace() -> None:
+    """Mark an active compile trace as one no executable can stand for.
+
+    A backward pass inside a traced function — MeanFlow's ``jvp``, a
+    gradient penalty — computes storage the tracer never records: compiled,
+    it would replay the trace-time values, and ``make_step`` hung building
+    a VJP of the recorded backward.  The trace is marked, every compile
+    entry point refuses it, and the call runs eager.
+    """
+    tracer = _C_engine.compile.current_tracer()
+    if tracer is not None:
+        tracer.mark_unsupported("a backward pass ran inside the traced function")
+
+
 def backward(
     tensors: Tensor | list[Tensor],
     grad_tensors: list[Tensor] | None = None,
@@ -242,6 +256,7 @@ def grad(
 
         # Every output but the last needs the graph kept for the next call.
         keep = _retain or index < len(outputs) - 1
+        _refuse_trace()
         partials = _C_engine.engine_grad(
             root,
             impls,

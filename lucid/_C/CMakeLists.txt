@@ -453,23 +453,29 @@ set(LUCID_VJP_EMITTERS
     compile/VjpEmitters/elementwise/Math.mm
     # linalg
     compile/VjpEmitters/linalg/Linear.mm
+    compile/VjpEmitters/linalg/Products.mm
     # reduce
     compile/VjpEmitters/reduce/Reduction.mm
+    compile/VjpEmitters/reduce/Scan.mm
     # shape
     compile/VjpEmitters/shape/Reshape.mm
     compile/VjpEmitters/shape/Concat.mm
     compile/VjpEmitters/shape/Stack.mm
+    compile/VjpEmitters/shape/Reorder.mm
     # nn
     compile/VjpEmitters/nn/Loss.mm
     compile/VjpEmitters/nn/Embedding.mm
     compile/VjpEmitters/nn/Norm.mm
     compile/VjpEmitters/nn/Conv.mm
     compile/VjpEmitters/nn/Dropout.mm
-    compile/VjpEmitters/nn/Pool.mm)
+    compile/VjpEmitters/nn/Pool.mm
+    compile/VjpEmitters/nn/Attention.mm
+    compile/VjpEmitters/nn/Spatial.mm)
 
 lucid_object_library(
     lucid_compile
     compile/Tracer.cpp
+    compile/RngFeeds.cpp
     compile/ExecutableCache.cpp
     compile/CompiledExecutable.mm
     compile/MpsBuilder.mm

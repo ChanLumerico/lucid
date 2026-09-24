@@ -181,7 +181,9 @@ def nanmedian(
     if x.dtype == lucid.bool_:
         # As the reference does: a median of booleans is not defined here,
         # and the sort underneath accepts bool, so it has to be said.
-        raise NotImplementedError("nanmedian does not accept bool — cast to an integer dtype")
+        raise NotImplementedError(
+            "nanmedian does not accept bool — cast to an integer dtype"
+        )
     big = lucid.full_like(x, math.inf)
     safe = lucid.where(lucid.isnan(x), big, x)
     nan_mask = lucid.isnan(x)

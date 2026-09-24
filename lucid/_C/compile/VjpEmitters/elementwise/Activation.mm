@@ -275,6 +275,120 @@ public:
 };
 
 // ────────────────────────────────────────────────────────────────────
+// relu6 / hard_sigmoid / hard_swish: piecewise-linear, with eager's
+// conventions at the kinks —
+//   relu6'        = 1 on the open (0, 6), else 0;
+//   hard_sigmoid' = 1/6 on the open (-3, 3), else 0;
+//   hard_swish'   = 0 below -3, 1 above 3, (2x + 3)/6 between.
+// MobileNets train through these.  With the batch norm in training mode
+// ruling out MPSGraph's autodiff, a missing VJP here sent their compiled
+// training step eager.
+// ────────────────────────────────────────────────────────────────────
+enum class HardAct { Relu6, HardSigmoid, HardSwish };
+
+template <HardAct KIND>
+class HardActivationVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override {
+        return KIND == HardAct::Relu6 ? "relu6"
+               : KIND == HardAct::HardSigmoid ? "hard_sigmoid"
+                                               : "hard_swish";
+    }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                const MPSDataType dt = go.dataType;
+                x = [g castTensor:x toType:dt name:nil];
+                auto c = [&](double v) { return [g constantWithScalar:v dataType:dt]; };
+                auto as_f = [&](MPSGraphTensor* b) { return [g castTensor:b toType:dt name:nil]; };
+                MPSGraphTensor* slope = nil;
+                if (KIND == HardAct::Relu6 || KIND == HardAct::HardSigmoid) {
+                    const double lo = KIND == HardAct::Relu6 ? 0.0 : -3.0;
+                    const double hi = KIND == HardAct::Relu6 ? 6.0 : 3.0;
+                    MPSGraphTensor* inside = [g logicalANDWithPrimaryTensor:
+                                                    [g greaterThanWithPrimaryTensor:x
+                                                                    secondaryTensor:c(lo)
+                                                                               name:nil]
+                                                            secondaryTensor:
+                                                    [g lessThanWithPrimaryTensor:x
+                                                                 secondaryTensor:c(hi)
+                                                                            name:nil]
+                                                                       name:nil];
+                    slope = as_f(inside);
+                    if (KIND == HardAct::HardSigmoid)
+                        slope = [g multiplicationWithPrimaryTensor:slope
+                                                   secondaryTensor:c(1.0 / 6.0)
+                                                              name:nil];
+                } else {
+                    // (2x + 3)/6 inside; 0 below -3; 1 above 3.
+                    MPSGraphTensor* ramp = [g multiplicationWithPrimaryTensor:
+                                                  [g additionWithPrimaryTensor:
+                                                         [g multiplicationWithPrimaryTensor:x
+                                                                            secondaryTensor:c(2.0)
+                                                                                       name:nil]
+                                                               secondaryTensor:c(3.0)
+                                                                          name:nil]
+                                                              secondaryTensor:c(1.0 / 6.0)
+                                                                         name:nil];
+                    MPSGraphTensor* not_below =
+                        as_f([g greaterThanOrEqualToWithPrimaryTensor:x secondaryTensor:c(-3.0) name:nil]);
+                    MPSGraphTensor* above =
+                        as_f([g greaterThanWithPrimaryTensor:x secondaryTensor:c(3.0) name:nil]);
+                    // not_below * (above + (1 - above) * ramp)
+                    MPSGraphTensor* mid = [g multiplicationWithPrimaryTensor:
+                                                 [g subtractionWithPrimaryTensor:c(1.0)
+                                                                 secondaryTensor:above
+                                                                            name:nil]
+                                                             secondaryTensor:ramp
+                                                                        name:nil];
+                    slope = [g multiplicationWithPrimaryTensor:not_below
+                                               secondaryTensor:[g additionWithPrimaryTensor:above
+                                                                            secondaryTensor:mid
+                                                                                       name:nil]
+                                                          name:nil];
+                }
+                return [g multiplicationWithPrimaryTensor:go secondaryTensor:slope name:nil];
+            });
+    }
+};
+
+// ────────────────────────────────────────────────────────────────────
+// mish(x) = x · tanh(softplus(x)):
+//   mish' = tanh(sp) + x · (1 − tanh(sp)²) · sigmoid(x)   — eager's form.
+// ────────────────────────────────────────────────────────────────────
+class MishVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "mish"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:go.dataType];
+                // Softplus as the forward builds it.
+                MPSGraphTensor* sp = [g logarithmWithTensor:[g additionWithPrimaryTensor:one
+                                                                          secondaryTensor:[g exponentWithTensor:x name:nil]
+                                                                                     name:nil]
+                                                        name:nil];
+                MPSGraphTensor* t = [g tanhWithTensor:sp name:nil];
+                MPSGraphTensor* sech2 = [g subtractionWithPrimaryTensor:one
+                                                        secondaryTensor:[g squareWithTensor:t name:nil]
+                                                                   name:nil];
+                MPSGraphTensor* second = [g multiplicationWithPrimaryTensor:[g multiplicationWithPrimaryTensor:x
+                                                                                             secondaryTensor:sech2
+                                                                                                        name:nil]
+                                                            secondaryTensor:[g sigmoidWithTensor:x name:nil]
+                                                                       name:nil];
+                return [g multiplicationWithPrimaryTensor:go
+                                          secondaryTensor:[g additionWithPrimaryTensor:t
+                                                                       secondaryTensor:second
+                                                                                  name:nil]
+                                                     name:@"mish_vjp"];
+            });
+    }
+};
+
+// ────────────────────────────────────────────────────────────────────
 // Piecewise activations.  Each forward is a select on ``x >= 0``, and
 // MPSGraph's autodiff aborts on a select whose predicate is a comparison
 // ("Couldn't get gradient Tensor"), so without these a model using any of
@@ -362,6 +476,10 @@ struct ActivationVjpRegistrar {
         register_vjp_emitter(std::make_unique<EluFamilyVjp<false>>());
         register_vjp_emitter(std::make_unique<EluFamilyVjp<true>>());
         register_vjp_emitter(std::make_unique<SoftplusVjp>());
+        register_vjp_emitter(std::make_unique<MishVjp>());
+        register_vjp_emitter(std::make_unique<HardActivationVjp<HardAct::Relu6>>());
+        register_vjp_emitter(std::make_unique<HardActivationVjp<HardAct::HardSigmoid>>());
+        register_vjp_emitter(std::make_unique<HardActivationVjp<HardAct::HardSwish>>());
         register_vjp_emitter(std::make_unique<SigmoidVjp>());
         register_vjp_emitter(std::make_unique<TanhVjp>());
         register_vjp_emitter(std::make_unique<SiluVjp>());

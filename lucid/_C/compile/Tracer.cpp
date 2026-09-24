@@ -191,6 +191,28 @@ void Tracer::on_buffer_update(const TensorImplPtr& buffer, const TensorImplPtr& 
     }
 }
 
+void Tracer::on_rng_feed(std::string_view name, const TensorImplPtr& output) {
+    if (!output)
+        return;
+    if (!graph_.ops.empty() && graph_.ops.back().name == name && graph_.ops.back().inputs.empty())
+        graph_.ops.pop_back();
+    live_refs_.push_back(output);
+    const TensorId fresh = graph_.next_id++;
+    impl_to_id_[output.get()] = fresh;
+    external_feeds_[fresh] = output;
+}
+
+void Tracer::on_host_read(const TensorImpl* impl) {
+    if (impl != nullptr && impl_to_id_.count(const_cast<TensorImpl*>(impl)) != 0)
+        mark_unsupported("a traced value was read on the host (item / tolist / numpy), "
+                         "so each call would reuse the first call's value");
+}
+
+void Tracer::mark_unsupported(std::string why) {
+    if (graph_.unsupported.empty())
+        graph_.unsupported = std::move(why);
+}
+
 void Tracer::on_op_attr(std::string_view key, AttributeValue value) {
     if (graph_.ops.empty())
         return;

@@ -25,6 +25,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/RngFeeds.h"
 #include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
@@ -37,6 +38,7 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Mul.h"
 #include "../ops/bfunc/_BinaryOp.h"
 
 namespace lucid {
@@ -81,6 +83,29 @@ DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Genera
     const double scale = 1.0 / (1.0 - p);
 
     Storage scaled_mask = mul_scalar_storage(mask, scale, numel, a->dtype(), a->device());
+
+    // Traced, from the engine's generator: the scaled mask becomes a feed
+    // that ``run_executable`` draws again on every call, and the op an
+    // ordinary multiply — whose VJP is dropout's backward.  A compiled
+    // training step then drops out afresh each call, with exactly the mask
+    // eager would have drawn; as an op it could only run eager, and every
+    // model with dropout trained compiled not at all.  See
+    // :file:`compile/RngFeeds.h`.
+    if (auto* trc = compile::current_tracer(); trc != nullptr && gen == nullptr) {
+        auto mask_t = std::make_shared<TensorImpl>(std::move(scaled_mask), a->shape(), a->dtype(),
+                                                   a->device(), false);
+        compile::RngRecipe r;
+        r.kind = compile::RngRecipe::Kind::DropoutMask;
+        r.engine_default = true;
+        r.a = 1.0 - p;
+        r.b = scale;
+        r.shape = a->shape();
+        r.dtype = a->dtype();
+        r.device = a->device();
+        trc->on_rng_feed(schema_v1.name, mask_t);
+        compile::note_rng_feed(mask_t, std::move(r));
+        return mul_op(a, mask_t);
+    }
     Storage y = multiply_storages(a->storage(), scaled_mask, numel, a->dtype(), a->device());
 
     auto out =

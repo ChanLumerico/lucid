@@ -43,6 +43,7 @@ class _ExecutableLike(Protocol):
 
     input_ids: list[int]
     output_ids: list[int]
+    grad_output_ids: list[int]
     num_inputs: int
 
 
@@ -61,8 +62,8 @@ class _StepEntry:
     exe: object  # _C_engine.compile.PyCompiledExecutable
     external_feeds: dict[int, object]
     # Per ``exe.input_ids[i]`` slot: ``None`` → pinned param/constant in
-    # ``external_feeds``; integer → index into the positional ``args``
-    # tuple of the wrapped ``step`` callable.
+    # ``external_feeds``; integer → index into the ``step`` call's tensors
+    # in ``leaf_tensors`` order (nested ones included).
     input_source: tuple[int | None, ...]
     # JSON-serialised TraceGraph for observability (graph_dump).
     graph_json: str = ""
@@ -78,6 +79,16 @@ class _StepEntry:
     bn_stat_buffers: list[Tensor] = field(default_factory=list)
     bn_stat_out_count: int = 0
     bn_counters: list[tuple[Module, int]] = field(default_factory=list)
+    # Per parameter, in ``params`` order: did the trace reach it?  A
+    # parameter the loss never touches (an auxiliary head unused in eval)
+    # has no gradient, exactly as in eager; the executable produces grads
+    # for the reached ones only.  Empty = every parameter was reached.
+    observed: tuple[bool, ...] = ()
+    # Per reached parameter: reached, but the loss does not depend on it
+    # (a pooler a token classifier never reads).  The executable fills its
+    # slot with zeros and marks its grad id -1; eager leaves such a gradient
+    # None, and so does this.  Empty = every reached parameter has one.
+    absent: tuple[bool, ...] = ()
 
 
 def make_step(
@@ -192,7 +203,7 @@ def make_step(
         model_has_cumulative_bn,
     )
     from lucid.compile._core.fallback import EagerFallbackSet
-    from lucid.compile._core.signature import signature_of
+    from lucid.compile._core.signature import leaf_tensors, signature_of
 
     # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
     # forward-only path (see :class:`CompiledModule`, where conv is the single
@@ -240,7 +251,7 @@ def make_step(
         with no_grad():
             with _tracing() as tracer:
                 x_out = model(*x_args[:1])
-                loss_fn(x_out, *x_args[1:])
+                loss_t = loss_fn(x_out, *x_args[1:])
 
         graph = tracer.graph
         if not graph.ops:
@@ -253,7 +264,16 @@ def make_step(
         maybe_probe_for_graph(graph)
 
         ext = tracer.external_feeds
-        loss_id = graph.ops[-1].outputs[0].id
+        # The tensor ``loss_fn`` returned — not whatever op ran last.  A model
+        # that computes its loss and then more (Dreamer's reconstructions and
+        # metrics) had its last metric differentiated as "the loss": 0.0008
+        # against eager's 2120, with non-finite gradients, and no error.
+        found = (
+            tracer.lookup_id(_unwrap(loss_t)) if isinstance(loss_t, Tensor) else None
+        )
+        if found is None:
+            return None
+        loss_id = int(found)
 
         # 3.5 BatchNorm running-stats. A cumulative-MA BN (track_running_stats=
         # True + momentum=None) can't be lowered into the graph (its update reads
@@ -276,15 +296,21 @@ def make_step(
         # model mutated (e.g. .to() moved params).
         p_impls = [_unwrap(p) for p in params]
         param_ids: list[int] = []
+        observed: list[bool] = []
         for p_impl in p_impls:
             found = None
             for tid, impl in ext.items():
                 if impl is p_impl:
                     found = tid
                     break
-            if found is None:
-                return None
-            param_ids.append(found)
+            # A parameter the trace never reached — GoogLeNet's auxiliary
+            # heads in eval, say — used to send the whole step to eager
+            # without a word.  Eager leaves its gradient None; so does this.
+            observed.append(found is not None)
+            if found is not None:
+                param_ids.append(found)
+        if not param_ids:
+            return None
 
         try:
             exe = _C_engine.compile.compile_trace_with_backward(
@@ -310,10 +336,13 @@ def make_step(
         # Build the positional-feed plan.  ``args`` to ``step`` is the
         # user-supplied input tuple; everything else is a pinned param
         # or a graph constant.
+        # By position among the call's tensors, nested ones included (a
+        # target list, say): bound only at the top level they were pinned
+        # at trace time, and the autograd Function below — which takes
+        # tensors only — failed on the list.
         positional_impls: dict[int, int] = {}
-        for i, a in enumerate(x_args):
-            if isinstance(a, Tensor):
-                positional_impls[id(_unwrap(a))] = i
+        for i, a in enumerate(leaf_tensors(x_args, {})):
+            positional_impls.setdefault(id(_unwrap(a)), i)
 
         input_source: list[int | None] = []
         for tid in exe.input_ids:
@@ -324,10 +353,15 @@ def make_step(
 
         from lucid.compile._debug.trace_dump import trace_to_json
 
+        grad_ids = list(cast(_ExecutableLike, exe).grad_output_ids)[: len(param_ids)]
+        absent = tuple(int(g) == -1 for g in grad_ids)
+
         return _StepEntry(
             exe=exe,
             external_feeds=dict(ext),
             input_source=tuple(input_source),
+            observed=() if all(observed) else tuple(observed),
+            absent=absent if any(absent) else (),
             graph_json=trace_to_json(graph),
             compile_ms=(time.perf_counter() - t0) * 1000.0,
             bn_stat_buffers=bn_stat_buffers,
@@ -337,7 +371,7 @@ def make_step(
 
     def _run(
         entry: _StepEntry, x_args: tuple[Tensor, ...]
-    ) -> tuple[_C_engine.TensorImpl, list[_C_engine.TensorImpl]]:
+    ) -> tuple[_C_engine.TensorImpl, list[_C_engine.TensorImpl | None]]:
         """Execute one cached step entry; return ``(loss_impl, [grad_impls])``.
 
         The executable returns ``len(params) + 1`` storages — the loss
@@ -360,19 +394,27 @@ def make_step(
         # [loss, *grads] (one pair per fused-momentum BN).  copy_ each into its
         # live module buffer so eval() reads fresh stats.  The count assert
         # guards against a C++/Python output-slice drift.
-        n_loss_grad = 1 + len(params)
+        n_grads = sum(entry.observed) if entry.observed else len(params)
+        n_loss_grad = 1 + n_grads
         if len(outs) != n_loss_grad + entry.bn_stat_out_count:
             raise RuntimeError(
                 f"make_step: run_executable returned {len(outs)} outputs, "
                 f"expected {n_loss_grad + entry.bn_stat_out_count} "
-                f"(1 loss + {len(params)} grads + {entry.bn_stat_out_count} BN stats)"
+                f"(1 loss + {n_grads} grads + {entry.bn_stat_out_count} BN stats)"
             )
         for _i, _buf in enumerate(entry.bn_stat_buffers):
             _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
         advance_bn_counters(entry.bn_counters)
         # outs = [loss_impl, grad_param_0_impl, …]
         loss_impl = cast(_C_engine.TensorImpl, outs[0])
-        grad_impls = [cast(_C_engine.TensorImpl, g) for g in outs[1 : 1 + len(params)]]
+        reached: list[_C_engine.TensorImpl | None] = [
+            None if entry.absent and entry.absent[i] else cast(_C_engine.TensorImpl, g)
+            for i, g in enumerate(outs[1:n_loss_grad])
+        ]
+        if not entry.observed:
+            return loss_impl, reached
+        it = iter(reached)
+        grad_impls = [next(it) if seen else None for seen in entry.observed]
         return loss_impl, grad_impls
 
     @final
@@ -441,9 +483,13 @@ def make_step(
             # optimizer ignores).  The ``entry_holder`` non-Tensor
             # input does not appear in ``next_edges`` so no slot is
             # produced for it here.
-            saved_grad_impls = cast(list[_C_engine.TensorImpl], ctx.saved_grad_impls)
+            saved_grad_impls = cast(
+                list[_C_engine.TensorImpl | None], ctx.saved_grad_impls
+            )
             n_user = cast(int, ctx.n_user)
-            scaled = [grad_loss * _wrap(g) for g in saved_grad_impls]
+            scaled = [
+                None if g is None else grad_loss * _wrap(g) for g in saved_grad_impls
+            ]
             return tuple([None] * n_user + scaled)
 
     def step(*x_args: Tensor) -> Tensor:
@@ -492,7 +538,8 @@ def make_step(
             if key is not None:
                 cache[key] = entry
 
-        return cast(Tensor, _CompiledStepFunction.apply([entry], *x_args, *params))
+        leaves = leaf_tensors(x_args, {})
+        return cast(Tensor, _CompiledStepFunction.apply([entry], *leaves, *params))
 
     # Stash the cache / introspection handles on the returned callable
     # so tests + telemetry can poke at them without grabbing them via

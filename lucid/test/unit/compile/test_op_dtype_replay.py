@@ -46,10 +46,14 @@ def test_compiled_matches_eager(name: str, dtype: str) -> None:
     outcome = run(CASE_BY_NAME[name], dtype)
     if outcome.status == "skip":
         pytest.skip(f"eager rejects {dtype}: {outcome.detail}")
+    listed = (name, dtype) in EXPECTED_EAGER
     if outcome.status == "eager":
-        if (name, dtype) in EXPECTED_EAGER:
+        if listed:
             return
         pytest.fail(
             f"fell back to eager, not listed in EXPECTED_EAGER: {outcome.detail}"
         )
+    # A listed case that compiles now is a stale entry — ``meshgrid`` and
+    # training-mode dropout sat here long after they compiled.
+    assert not listed, "compiles now; remove it from EXPECTED_EAGER"
     assert outcome.status == "ok", f"{outcome.status}: {outcome.detail}"

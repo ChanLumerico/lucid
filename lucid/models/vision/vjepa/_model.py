@@ -210,16 +210,20 @@ class _Predictor(nn.Module):
         batch = int(context.shape[0])
         tokens = cast(Tensor, self.predictor_embed(context))
         tokens = tokens + _gather_tokens(
-            positions + lucid.zeros(batch, 1, 1), context_indices
+            positions
+            + lucid.zeros(batch, 1, 1, dtype=positions.dtype, device=positions.device),
+            context_indices,
         )
 
         count = int(target_indices.shape[1])
         width = int(tokens.shape[2])
         queries = cast(Tensor, self.mask_tokens[mask_index]) + lucid.zeros(
-            batch, count, width
+            batch, count, width, dtype=tokens.dtype, device=tokens.device
         )
         queries = queries + _gather_tokens(
-            positions + lucid.zeros(batch, 1, 1), target_indices
+            positions
+            + lucid.zeros(batch, 1, 1, dtype=positions.dtype, device=positions.device),
+            target_indices,
         )
 
         hidden = lucid.cat([tokens, queries], dim=1)
@@ -273,7 +277,9 @@ class _AttentivePooler(nn.Module):
                 0, 2, 1, 3
             )
 
-        query_in = cast(Tensor, self.query_token) + lucid.zeros(batch, 1, width)
+        query_in = cast(Tensor, self.query_token) + lucid.zeros(
+            batch, 1, width, dtype=tokens.dtype, device=tokens.device
+        )
         q = heads(cast(Tensor, self.query(query_in)), 1)
         k = heads(cast(Tensor, self.key(keys_in)), count)
         v = heads(cast(Tensor, self.value(keys_in)), count)

@@ -186,26 +186,65 @@ class CacheKey:
     alias: tuple[int, ...] = field(default_factory=tuple)
 
 
-def _alias_pattern(
-    args: tuple[object, ...], kwargs: dict[str, object]
-) -> tuple[int, ...]:
-    """First-occurrence index of each argument's tensor, ``-1`` for the rest.
+def leaf_tensors(args: Iterable[object], kwargs: dict[str, object]) -> list[Tensor]:
+    """Every tensor in the call, nested ones included, in one fixed order.
 
-    Identity is the ``TensorImpl`` — the test the feed binding in
-    ``CompiledModule._compile_for`` uses to map a trace's external feeds
-    back to argument slots, so two keys differ exactly when the binding
-    would.
+    Positional arguments first, then keyword arguments by name; lists and
+    tuples in order, dicts by key — the order :func:`_arg_sig` normalises
+    them in, so two calls with the same :class:`CacheKey` list their
+    tensors in the same order.  Feeds bind by position in this list: a
+    tensor inside a list used to be bound only at the top level, so it
+    was pinned at its trace-time value and every later call silently
+    reused it.
+
+    Parameters
+    ----------
+    args : iterable of object
+        The call's positional arguments, walked in order.
+    kwargs : dict of str to object
+        The call's keyword arguments, walked by name.
+
+    Returns
+    -------
+    list of Tensor
+        Every tensor found, in the order described above; the same tensor
+        appears once per position it occupies.
     """
     from lucid._tensor.tensor import Tensor
 
-    seen: dict[int, int] = {}
-    pattern: list[int] = []
-    for i, value in enumerate([*args, *(v for _, v in sorted(kwargs.items()))]):
+    out: list[Tensor] = []
+
+    def walk(value: object) -> None:
         if isinstance(value, Tensor):
-            pattern.append(seen.setdefault(id(value._impl), i))
-        else:
-            pattern.append(-1)
-    return tuple(pattern)
+            out.append(value)
+        elif isinstance(value, (list, tuple)):
+            for v in value:
+                walk(v)
+        elif isinstance(value, dict):
+            for k in sorted(value, key=str):
+                walk(value[k])
+
+    for a in args:
+        walk(a)
+    for k in sorted(kwargs):
+        walk(kwargs[k])
+    return out
+
+
+def _alias_pattern(
+    args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[int, ...]:
+    """First-occurrence index of each tensor in :func:`leaf_tensors` order.
+
+    Identity is the ``TensorImpl`` — the test the feed binding uses to
+    map a trace's external feeds back to the call's tensors, so two keys
+    differ exactly when the binding would.
+    """
+    seen: dict[int, int] = {}
+    return tuple(
+        seen.setdefault(id(t._impl), i)
+        for i, t in enumerate(leaf_tensors(args, kwargs))
+    )
 
 
 def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:

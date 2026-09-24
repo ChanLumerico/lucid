@@ -148,13 +148,21 @@ public:
         NSData* size_nsd = [NSData dataWithBytes:size_data length:sizeof(size_data)];
         MPSGraphTensor* size_t =
             [g constantWithData:size_nsd shape:@[@2] dataType:MPSDataTypeInt32];
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g resizeNearestWithTensor:x
-                            sizeTensor:size_t
-                   nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
-                          centerResult:NO
-                          alignCorners:NO
-                                layout:MPSGraphTensorNamedDataLayoutNCHW
-                                  name:@"interp2d_nearest"]));
+        MPSGraphTensor* y = [g resizeNearestWithTensor:x
+                                            sizeTensor:size_t
+                                   nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
+                                          centerResult:NO
+                                          alignCorners:NO
+                                                layout:MPSGraphTensorNamedDataLayoutNCHW
+                                                  name:@"interp2d_nearest"];
+        // A size given as a tensor leaves the result's shape unresolved at
+        // build time; pin it to the recorded one.  Left open, the training
+        // graph built on top — the resize gradient, a reshape — aborted
+        // ("'mps.reshape' op the result shape can not be resolved").
+        MPSGraphTensor* pinned = reshape_to_recorded(g, y, node);
+        if (pinned == nil)
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)pinned);
         return true;
     }
 

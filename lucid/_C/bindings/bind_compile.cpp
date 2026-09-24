@@ -165,6 +165,7 @@ void register_compile(py::module_& m) {
     py::class_<TraceGraph>(m, "TraceGraph")
         .def_readonly("ops", &TraceGraph::ops)
         .def_readonly("next_id", &TraceGraph::next_id)
+        .def_readonly("unsupported", &TraceGraph::unsupported)
         .def("__len__", [](const TraceGraph& g) { return g.ops.size(); });
 
     // Tracer is owned by Python; the engine keeps only a raw pointer
@@ -174,6 +175,9 @@ void register_compile(py::module_& m) {
     py::class_<Tracer>(m, "Tracer")
         .def(py::init<>())
         .def_property_readonly("graph", &Tracer::graph, py::return_value_policy::reference_internal)
+        .def("mark_unsupported", &Tracer::mark_unsupported, py::arg("why"),
+             "Mark the recording as one no executable can stand for; every "
+             "compile entry point then refuses it.")
         .def_property_readonly(
             "external_feeds",
             [](const Tracer& t) {
@@ -257,6 +261,8 @@ void register_compile(py::module_& m) {
         "compile_trace",
         [](const lucid::compile::TraceGraph& graph,
            const py::dict& external_feeds_py) -> py::object {
+            if (!graph.unsupported.empty())
+                return py::none();  // the documented abort signal
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -347,6 +353,8 @@ void register_compile(py::module_& m) {
         [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
            bool dynamic_batch, const std::vector<lucid::compile::TensorId>& param_ids,
            const std::vector<lucid::compile::TensorId>& explicit_outputs) -> py::object {
+            if (!graph.unsupported.empty())
+                throw std::runtime_error("compile_or_cached: " + graph.unsupported);
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -511,6 +519,8 @@ void register_compile(py::module_& m) {
            lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            bool dynamic_batch,
            const std::vector<lucid::compile::TensorId>& extra_output_ids) -> py::object {
+            if (!graph.unsupported.empty())
+                throw std::runtime_error("compile_trace_with_backward: " + graph.unsupported);
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -569,6 +579,8 @@ void register_compile(py::module_& m) {
            const lucid::compile::OptimizerSpec& opt_spec,
            const std::vector<std::vector<lucid::compile::TensorId>>& state_buf_ids_per_param,
            const std::vector<lucid::compile::TensorId>& scalar_input_ids) -> py::object {
+            if (!graph.unsupported.empty())
+                throw std::runtime_error("compile_fused_training_step: " + graph.unsupported);
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -604,6 +616,8 @@ void register_compile(py::module_& m) {
            lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            const std::vector<lucid::compile::TensorId>& ghost_grad_ids,
            const std::vector<lucid::compile::TensorId>& output_target_ids) -> py::object {
+            if (!graph.unsupported.empty())
+                throw std::runtime_error("compile_generic_fused_step: " + graph.unsupported);
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -659,6 +673,9 @@ void register_compile(py::module_& m) {
            const std::vector<lucid::compile::TensorId>& output_target_ids,
            const std::vector<std::pair<lucid::compile::TensorId, lucid::compile::TensorId>>&
                variable_pairs) -> py::object {
+            if (!graph.unsupported.empty())
+                throw std::runtime_error("compile_generic_fused_step_with_vars: " +
+                                         graph.unsupported);
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {

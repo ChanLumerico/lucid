@@ -223,7 +223,11 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
         return None
     maybe_probe_for_graph(g_fwd)
     ext_fwd = t_fwd.external_feeds
-    y_id = g_fwd.ops[-1].outputs[0].id
+    # The segment's output, not whatever op it recorded last.
+    found = t_fwd.lookup_id(_unwrap(y))
+    if found is None:
+        return None
+    y_id = int(found)
 
     x_id_fwd: int | None = None
     for tid, impl in ext_fwd.items():

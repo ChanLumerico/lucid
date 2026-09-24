@@ -1,26 +1,22 @@
 """Dropout policy in compile mode.
 
-Contract (matches the emitter logic in
-``lucid/_C/compile/OpEmitters/nn/Dropout.mm``):
+Contract:
 
   * **eval mode** or **p == 0** — identity passthrough.  Bit-exact with
     eager because both reduce to a clone.
-  * **training mode** with **p > 0** — `lucid.compile` (forward-only
-    cache via :class:`CompiledModule`) still routes through the
-    standard ``dropout`` op which falls back to eager because the
-    forward path has no place to thread an MPSGraph state buffer.
-    The proper compile path for training-mode dropout lives in
-    :func:`fused_step` (Option-A Phase 1) — that surface uses the
-    sibling ``dropout_stateful`` engine op + MPSGraph's stateful
-    Philox RNG via ``compile_generic_fused_step_with_vars``, giving
-    genuinely-per-dispatch varying masks while the executable still
-    runs entirely on the GPU.
-
-Tests pin both halves of the contract — eval-mode dropout compiles
-cleanly, training-mode dropout via :func:`lucid.compile` still falls
-back to eager, and training-mode dropout via :func:`fused_step`
-compiles cleanly + produces randomised outputs across calls.
+  * **training mode** with **p > 0** — under ``lucid.compile`` and
+    ``make_step`` the scaled mask is a feed drawn again on every call,
+    through the same routine and generator eager dropout uses, and the op
+    is an ordinary multiply (``lucid/_C/compile/RngFeeds.h``).  Masks
+    differ call to call, and under the same seed the compiled output is
+    eager's own.  It used to fall back to eager — which left every model
+    with dropout training compiled not at all.
+  * :func:`fused_step` keeps its own route: the ``dropout_stateful`` op
+    threads an MPSGraph Philox state through
+    ``compile_generic_fused_step_with_vars``.
 """
+
+import numpy as np
 
 import lucid
 import lucid.nn as nn
@@ -69,32 +65,52 @@ def test_dropout_zero_prob_compiles_clean() -> None:
     assert_compile_parity(model, x, atol=1e-4, rtol=1e-5)
 
 
-def test_dropout_training_lucid_compile_still_falls_back_to_eager() -> None:
-    """``lucid.compile()`` (forward-only) still falls back for training dropout.
-
-    The forward-only :class:`CompiledModule` path uses
-    ``compile_trace`` which has no variable-promotion hook for RNG
-    state, so training-mode dropout there continues to take the eager
-    fallback to preserve mask randomisation across calls.  The
-    sibling ``dropout_stateful`` op exists for the
-    :func:`fused_step` path which DOES have variable promotion —
-    that case is covered by the dedicated test below.
-
-    The compiled cache should therefore NOT carry a successful
-    executable for this signature; it should be in the eager-only
-    set so future calls skip the recompile attempt.
-    """
+def test_dropout_training_lucid_compile_draws_eagers_masks() -> None:
+    """Training-mode dropout compiles, and draws exactly eager's mask."""
     model = _dropout_model(p=0.5)
     model.train()
     x = metal_tensor(4, 8)
     cm = lucid.compile(model)
-    cm(x)
-    cm(x)  # second call to ensure the fallback set is stable
-    info = cm.cache_info()
-    assert info["entries"] == 0 or len(info["eager_only"]) > 0, (
-        f"expected eager fallback for training-mode dropout via "
-        f"lucid.compile(); cache_info={info}"
-    )
+    cm(x)  # trace
+    assert not cm.cache_info()["eager_only"]
+    for seed in (3, 4):
+        lucid.manual_seed(seed)
+        got = cm(x).numpy()
+        lucid.manual_seed(seed)
+        want = model(x).numpy()
+        assert np.allclose(got, want, rtol=1e-5, atol=1e-6)
+        # Same zeros: the mask itself is eager's, not a statistical twin.
+        assert np.array_equal(got == 0, want == 0)
+
+
+def test_dropout_training_make_step_matches_eager() -> None:
+    """A compiled training step through dropout: eager's loss and gradients."""
+    model = _dropout_model(p=0.3)
+    model.train()
+    x = metal_tensor(16, 8)
+
+    def loss_fn(y: lucid.Tensor) -> lucid.Tensor:
+        return (y * y).sum()
+
+    step = lucid.compile.make_step(model, loss_fn)
+    step(x).backward()  # trace
+    assert not step.eager_only
+    for seed in (5, 6):
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        loss = step(x)
+        loss.backward()
+        got = float(loss.item())
+        step_grads = [p.grad.numpy().copy() for p in model.parameters()]
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        want = loss_fn(model(x))
+        want.backward()
+        assert np.isclose(got, float(want.item()), rtol=1e-5)
+        for g, p in zip(step_grads, model.parameters()):
+            assert np.allclose(g, p.grad.numpy(), rtol=1e-4, atol=1e-5)
 
 
 def test_dropout_training_produces_random_outputs() -> None:

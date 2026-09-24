@@ -122,13 +122,17 @@ def compiled_step(
                     "compiled_step: model must return a Tensor for the loss_fn "
                     f"to consume, got {type(out).__name__}"
                 )
-            loss_fn(out)
+            loss_t = loss_fn(out)
 
     g = tracer.graph
     ext = tracer.external_feeds
     if not g.ops:
         raise RuntimeError("compiled_step: empty trace (model produced no ops)")
-    loss_id = g.ops[-1].outputs[0].id
+    # The tensor ``loss_fn`` returned, not the last op traced — see make_step.
+    found = tracer.lookup_id(_unwrap(loss_t)) if isinstance(loss_t, Tensor) else None
+    if found is None:
+        raise RuntimeError("compiled_step: loss_fn's result is not a traced tensor")
+    loss_id = int(found)
 
     # Match each Parameter (by TensorImpl pointer identity) to its
     # trace feed id.  Using ``impl is target`` (not equality) — every

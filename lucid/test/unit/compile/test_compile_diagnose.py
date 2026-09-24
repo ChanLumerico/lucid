@@ -98,26 +98,36 @@ def test_diagnose_argmax_is_grad_sink_not_uncovered() -> None:
 # ── Coverage gap ────────────────────────────────────────────────────
 
 
-def test_diagnose_var_is_uncovered_with_sample_shape() -> None:
-    """``var`` has no manual VJP; surfaces as uncovered + sample shape."""
-    x = metal_tensor(4, 8)
+# Trilinear interpolation stands in for "an op with no manual VJP" — the
+# one listed in ``_grad_matrix.EXPECTED_EAGER_GRAD``.  These tests used ``var``,
+# then ``conv_transpose3d``, until each got its VJP; when this one does,
+# pick the next gap from those tables.
+_UNCOVERED = "interpolate_trilinear"
 
+
+def _uncovered_fn() -> tuple[object, lucid.Tensor]:
     def fn(inp: lucid.Tensor) -> lucid.Tensor:
-        return lucid.var(inp, dim=0)
+        return F.interpolate(inp, scale_factor=2, mode="trilinear")
 
+    return fn, metal_tensor(1, 2, 3, 3, 3)
+
+
+def test_diagnose_uncovered_op_with_sample_shape() -> None:
+    """An op with no manual VJP surfaces as uncovered + sample shape."""
+    fn, x = _uncovered_fn()
     rpt = diagnose(fn, x)
     uncov_names = {i.name for i in rpt.uncovered}
-    assert "var" in uncov_names, f"var should appear in uncovered; got {uncov_names}"
+    assert _UNCOVERED in uncov_names, f"expected {_UNCOVERED}; got {uncov_names}"
     # Recommendation mentions both the op name and the LUCID_MANUAL_VJP_*
     # env-var pointers the user should try next.
-    assert "var" in rpt.recommendation
+    assert _UNCOVERED in rpt.recommendation
     assert "LUCID_MANUAL_VJP_DEBUG" in rpt.recommendation
     assert "LUCID_MANUAL_VJP_REQUIRE" in rpt.recommendation
 
     # Sample shape / dtype must be populated for the offending op.
-    var_info = next(i for i in rpt.uncovered if i.name == "var")
-    assert var_info.sample_shape is not None
-    assert var_info.sample_dtype is not None
+    info = next(i for i in rpt.uncovered if i.name == _UNCOVERED)
+    assert info.sample_shape is not None
+    assert info.sample_dtype is not None
 
 
 # ── str(report) renders a readable summary ──────────────────────────
@@ -125,16 +135,12 @@ def test_diagnose_var_is_uncovered_with_sample_shape() -> None:
 
 def test_diagnose_str_summary_includes_uncovered_ops() -> None:
     """``str(report)`` lists every uncovered op with count + sample shape."""
-    x = metal_tensor(4, 8)
-
-    def fn(inp: lucid.Tensor) -> lucid.Tensor:
-        return lucid.var(inp, dim=0)
-
+    fn, x = _uncovered_fn()
     rpt = diagnose(fn, x)
     s = str(rpt)
     assert "Diagnosis:" in s
     assert "Uncovered ops:" in s
-    assert "var (x" in s  # "var (x1, sample (...)" line
+    assert f"{_UNCOVERED} (x" in s  # "<op> (x1, sample (...)" line
 
 
 # ── LUCID_MANUAL_VJP_DEBUG=1 stderr capture ─────────────────────────
@@ -158,21 +164,19 @@ import lucid.nn.functional as F
 from lucid.compile import fused_step
 import lucid.optim as optim
 
-# var has no manual VJP → walker hits a gap → REQUIRE=1 raises and
-# DEBUG=1 logs to stderr.
+# trilinear interpolation has no manual VJP → walker hits a gap →
+# REQUIRE=1 raises and DEBUG=1 logs to stderr.
 class M(nn.Module):
     def __init__(self):
         super().__init__()
-        self.lin = nn.Linear(8, 4)
+        self.mix = nn.Conv3d(2, 2, 1)
     def forward(self, x):
-        # var() of the linear output: walker can't differentiate var.
-        y = self.lin(x)
-        return y.var(dim=0).sum()
+        return F.interpolate(self.mix(x), scale_factor=2, mode="trilinear").sum()
 
 model = M().to('metal')
 opt = optim.SGD(model.parameters(), lr=1e-3)
 step = fused_step(model, lambda y, _: y, opt)
-x = lucid.randn(4, 8).to('metal')
+x = lucid.randn(1, 2, 3, 3, 3).to('metal')
 t = lucid.zeros(()).to('metal')
 try:
     step(x, t)
@@ -197,13 +201,11 @@ except Exception as e:
 def test_debug_env_var_emits_structured_stderr_on_gap() -> None:
     """``LUCID_MANUAL_VJP_DEBUG=1`` writes op name + signature to stderr."""
     err = _trigger_gap_stderr()
-    # Either the structured debug line appears, OR the subprocess
-    # raised before the walker ran (model construction issue, env
-    # difference).  Be lenient about the exact format but require the
-    # marker prefix when any manual_vjp message is present.
-    if "manual_vjp" in err:
-        assert "lucid.compile manual_vjp" in err, (
-            f"expected the bracketed marker [lucid.compile manual_vjp] in "
-            f"stderr but got:\n{err}"
-        )
-        assert "verdict:" in err, f"expected fallback verdict line; got:\n{err}"
+    # Unconditional: this was ``if "manual_vjp" in err`` — and once ``var``
+    # got a VJP the script stopped reaching a gap, so the test passed while
+    # checking nothing.
+    assert "lucid.compile manual_vjp" in err, (
+        f"expected the bracketed marker [lucid.compile manual_vjp] in "
+        f"stderr but got:\n{err}"
+    )
+    assert "verdict:" in err, f"expected fallback verdict line; got:\n{err}"

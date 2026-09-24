@@ -91,6 +91,27 @@ inline MPSDataType to_mps_dtype(Dtype dt) {
 // tensor.  Getting that wrong reintroduces the silent freeze, so the
 // default for an unknown name is to refuse the build (eager fallback),
 // which is the recoverable direction.
+
+// MPSGraph aborts — it does not decline — on a constant or a placeholder
+// with a zero-length axis ("shape[0] (0) should be a strictly positive
+// value for constant operation").  A compiled Fast R-CNN step died that
+// way on an image with no proposals.  An empty tensor is nothing to
+// accelerate: name the first one so the trace is left to eager.
+static std::string first_empty_tensor(const TraceGraph& graph,
+                                      const std::unordered_map<TensorId, TensorImplPtr>& feeds) {
+    for (const auto& op : graph.ops)
+        for (const auto& out : op.outputs)
+            for (const auto d : out.shape)
+                if (d == 0)
+                    return "an output of op '" + op.name + "'";
+    for (const auto& [tid, impl] : feeds)
+        if (impl)
+            for (const auto d : impl->shape())
+                if (d == 0)
+                    return "an input";
+    return {};
+}
+
 inline bool result_is_a_host_constant(std::string_view name) {
     return name == "arange" || name == "empty" || name == "eye" || name == "full" ||
            name == "linspace" || name == "logspace" || name == "ones" || name == "zeros" ||
@@ -414,6 +435,8 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
     // external feed*, not an intermediate, and the op header in the
     // trace is dead code.  We skip the emitter check for such
     // ``inputs.empty()`` ops; the emit loop below mirrors the skip.
+    if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
+        return fail("compile_trace: zero-size tensor at " + empty + " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_trace: mixed-device trace (only single-device Phase 1.2)");
@@ -808,6 +831,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
     if (device != Device::GPU)
         return fail("compile_trace_with_backward: only Device::GPU traces are supported");
 
+    if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
+        return fail("compile_trace_with_backward: zero-size tensor at " + empty + " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_trace_with_backward: mixed-device trace");
@@ -1009,12 +1034,16 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         grad_shapes.reserve(param_ids.size());
         grad_dtypes.reserve(param_ids.size());
 
+        // Per parameter: traced, but the loss does not depend on it.  Eager
+        // leaves that gradient None; its grad id below is -1 so the caller
+        // can too, and the executable fills the slot with zeros.
+        std::vector<bool> absent_grads(param_ids.size(), false);
         bool grads_done = false;
         std::string vjp_err;
         {
             std::vector<void*> grads_void;
             switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph, loss_id, param_ids,
-                                         grads_void, &vjp_err)) {
+                                         grads_void, &vjp_err, &absent_grads)) {
             case ManualVjpStatus::Success:
                 for (std::size_t i = 0; i < param_ids.size(); ++i) {
                     grad_tensors.push_back((__bridge MPSGraphTensor*)grads_void[i]);
@@ -1047,9 +1076,12 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
 
             for (std::size_t i = 0; i < param_ids.size(); ++i) {
                 MPSGraphTensor* g_t = grad_map[param_arr[i]];
-                if (g_t == nil)
-                    return fail("compile_trace_with_backward: no gradient produced for param id " +
-                                std::to_string(param_ids[i]));
+                if (g_t == nil) {
+                    // Not on the loss path — as in the manual walk above.
+                    MPSGraphTensor* p_t = param_arr[i];
+                    g_t = [graph_obj constantWithScalar:0.0 shape:p_t.shape dataType:p_t.dataType];
+                    absent_grads[i] = true;
+                }
                 grad_tensors.push_back(g_t);
                 const auto& p_impl = external_feeds.at(param_ids[i]);
                 grad_shapes.push_back(p_impl->shape());
@@ -1120,7 +1152,9 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         grad_output_ids.reserve(param_ids.size() + extra_output_ids.size());
         TensorId next_grad_id = graph.next_id + 1;
         for (std::size_t i = 0; i < param_ids.size(); ++i)
-            grad_output_ids.push_back(next_grad_id + static_cast<TensorId>(i));
+            grad_output_ids.push_back(absent_grads[i]
+                                          ? TensorId{-1}
+                                          : TensorId{next_grad_id + static_cast<TensorId>(i)});
         // 3.5: explicit extra outputs reuse their trace ids and trail the grads
         // in the runtime's target order ([loss, *grads, *extra]).
         for (TensorId tid : extra_output_ids)
@@ -1356,6 +1390,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
     if (device != Device::GPU)
         return fail("compile_fused_training_step: only Device::GPU traces "
                     "are supported");
+    if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
+        return fail("compile_fused_training_step: zero-size tensor at " + empty + " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_fused_training_step: mixed-device trace");
@@ -1690,6 +1726,8 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
     }
     if (device != Device::GPU)
         return fail("compile_generic_fused_step: only Device::GPU traces supported");
+    if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
+        return fail("compile_generic_fused_step: zero-size tensor at " + empty + " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_generic_fused_step: mixed-device trace");
@@ -2071,6 +2109,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         }
     if (device != Device::GPU)
         return fail("compile_generic_fused_step_with_vars: only GPU supported");
+    if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
+        return fail("compile_generic_fused_step_with_vars: zero-size tensor at " + empty + " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_generic_fused_step_with_vars: mixed-device trace");

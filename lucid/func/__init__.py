@@ -40,6 +40,7 @@ from typing import Callable, TYPE_CHECKING
 from lucid._ctx import _RandomnessGuard as _RandGuard
 
 if TYPE_CHECKING:
+    from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import Tensor
 
 __all__ = [
@@ -692,6 +693,55 @@ def vjp(
 # ── jvp ──────────────────────────────────────────────────────────────────────
 
 
+def _jvp_by_double_backward(
+    o: Tensor,
+    alpha: Tensor,
+    out_shape: list[int],
+    dtype: _C_engine.Dtype,
+    dev: _C_engine.Device,
+) -> Tensor | None:
+    """``∂o/∂α`` for a non-scalar ``o`` by differentiating a vector-Jacobian
+    product; ``None`` when a backward on the path is not itself differentiable."""
+    import lucid
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _wrap
+    from lucid.autograd import grad as _grad
+    from lucid.autograd._grad_mode import enable_grad
+
+    try:
+        with enable_grad():
+            # ``u`` enters as a factor of the forward, not as grad_outputs:
+            # a double backward does not follow grad_outputs, and the second
+            # pass then found no dependence on u and answered zero.
+            u = _wrap(_C_engine.zeros(out_shape, dtype, dev)).requires_grad_(True)
+            (first,) = _grad((o * u).sum(), alpha, create_graph=True, retain_graph=True)
+            if first is None:
+                return _wrap(_C_engine.zeros(out_shape, dtype, dev))
+            (jt,) = _grad(first.sum(), u, allow_unused=True)
+    except RuntimeError, NotImplementedError:
+        return None
+    if jt is None:
+        return _wrap(_C_engine.zeros(out_shape, dtype, dev))
+    jt = lucid.reshape(jt.detach(), out_shape)
+    # An op whose backward is not itself differentiable drops out of the
+    # second pass without an error, and J t would come back partial.  So
+    # check it along one direction against a plain backward: rᵀ(J t) must be
+    # ∂(rᵀo)/∂α.  ``r`` is a fixed hash of the index — drawing it from the
+    # generator would move the caller's random stream.
+    n = 1
+    for d in out_shape:
+        n *= d
+    r = lucid.sin(lucid.arange(n, dtype=jt.dtype, device=jt.device) * 12.9898 + 0.5)
+    r = lucid.reshape(r, out_shape)
+    (plain,) = _grad((o * r).sum(), alpha, retain_graph=True, allow_unused=True)
+    want = 0.0 if plain is None else float(plain.sum().item())
+    got = float((jt * r).sum().item())
+    scale = float((jt * r).abs().sum().item()) + abs(want) + 1e-12
+    if abs(got - want) > 1e-3 * scale:
+        return None
+    return jt
+
+
 def jvp(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
     primals: tuple[Tensor, ...],
@@ -751,7 +801,15 @@ def jvp(
 
     # Scalar perturbation variable α (leaf, requires_grad) evaluated at 0.
     # x_pert(α) = primal + α * tangent → d(out)/dα = J(primal) @ tangent
-    alpha = lucid.tensor(0.0).requires_grad_(True)
+    # On the tangents' device and in their dtype: made on the CPU, α could
+    # not multiply a Metal tangent, and every jvp on Metal raised — MeanFlow's
+    # training loss among them.
+    first = next((t for t in tangents if isinstance(t, _T)), None)
+    alpha = (
+        lucid.zeros((), dtype=first.dtype, device=first.device)
+        if first is not None
+        else lucid.tensor(0.0)
+    ).requires_grad_(True)
 
     perturbed: list[Tensor] = []
     for p, t in zip(primals, tangents):
@@ -764,15 +822,25 @@ def jvp(
         else:
             perturbed.append(p)
 
-    with enable_grad():
+    from lucid.nn.functional.attention import _differentiable_attention
+
+    # The backward of this forward is differentiated again below; attention
+    # has to be in its twice-differentiable form for that.
+    with enable_grad(), _differentiable_attention():
         pert_out = func(*perturbed)
 
-    with lucid.no_grad():
-        primals_out = func(*primals)
+    # Under the caller's grad mode, not ``no_grad``: the primal output is
+    # what a loss is built from.  MeanFlow's is ‖u − sg(target)‖² with u this
+    # output, and detached it carried no gradient to a single parameter —
+    # the parameters' gradients came instead from the backward passes below,
+    # which accumulated into every leaf until they were routed through
+    # ``autograd.grad``.
+    primals_out = func(*primals)
 
     out_list: list[Tensor] = (
         list(pert_out) if isinstance(pert_out, (list, tuple)) else [pert_out]
     )
+    from lucid.autograd import grad as _grad_of
 
     jvp_parts: list[Tensor] = []
     for o in out_list:
@@ -785,11 +853,9 @@ def jvp(
         dev = o_impl.device
 
         if out_numel == 1:
-            # Scalar output: d(o) / d(alpha) computed in one backward pass
-            alpha._impl.zero_grad()
-            seed = _wrap(_C_engine.ones(out_shape if out_shape else [], dtype, dev))
-            o.backward(gradient=seed, retain_graph=True)
-            ag = alpha.grad
+            # Scalar output: d(o) / d(alpha) computed in one backward pass —
+            # through ``autograd.grad``, which touches no leaf's ``.grad``.
+            (ag,) = _grad_of(o, alpha, retain_graph=True, allow_unused=True)
             if ag is None:
                 if strict:
                     raise ValueError(
@@ -809,21 +875,34 @@ def jvp(
                     )
                 )
         else:
-            # Vector output: O(out_numel) backward passes — one per element.
-            # d(o[i]) / d(alpha) = JVP[i] for each i.
+            # Vector output: two backward passes, not one per element.  With
+            # ``u`` a dummy cotangent, ∂(uᵀo)/∂α = uᵀ(J t) is linear in u, so
+            # its gradient with respect to u is J t itself.  One pass per
+            # element made MeanFlow's training loss — a jvp through the whole
+            # network — thousands of backward passes long.
+            fast = _jvp_by_double_backward(o, alpha, out_shape, dtype, dev)
+            if fast is not None:
+                jvp_parts.append(fast)
+                continue
+            # Fallback for an op without a differentiable backward: O(out_numel)
+            # backward passes — one per element.  d(o[i]) / d(alpha) = JVP[i].
             from lucid._tensor.tensor import Tensor as _TT
 
             rows: list[Tensor] = []
             for row_i in range(out_numel):
-                alpha._impl.zero_grad()
                 seed_impl = _C_engine.zeros([out_numel], dtype, dev)
                 one = _C_engine.ones([1], dtype, dev)
                 idx = _C_engine.full([1], float(row_i), _C_engine.I32, dev)
                 seed_impl = _C_engine.scatter_add(seed_impl, idx, one, 0)
                 if out_shape:
                     seed_impl = _C_engine.reshape(seed_impl, out_shape)
-                o.backward(gradient=_TT.__new_from_impl__(seed_impl), retain_graph=True)
-                ag = alpha.grad
+                (ag,) = _grad_of(
+                    o,
+                    alpha,
+                    grad_outputs=[_TT.__new_from_impl__(seed_impl)],
+                    retain_graph=True,
+                    allow_unused=True,
+                )
                 if ag is None:
                     if strict:
                         raise ValueError(

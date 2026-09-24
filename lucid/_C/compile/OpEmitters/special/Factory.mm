@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "../OpEmitter.h"
+#include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
@@ -191,12 +192,122 @@ public:
     }
 };
 
+// ── linspace — bake ``start + i·step`` with the last value pinned to
+// ``stop``, exactly as ``ops/gfunc/Gfunc.cpp::linspace_op`` fills it.  It was
+// a stub, so a model that builds a grid in its forward — Mask2Former's point
+// sampling — could not compile at all.
+class LinspaceEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "linspace"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (!node.inputs.empty() || node.outputs.empty())
+            return false;
+        const TensorMeta& meta = node.outputs[0];
+        if (meta.shape.size() != 1 || meta.shape[0] <= 0)
+            return false;
+        auto its = node.attrs.find("start");
+        auto itp = node.attrs.find("stop");
+        if (its == node.attrs.end() || itp == node.attrs.end())
+            return false;
+        const double* startp = std::get_if<double>(&its->second);
+        const double* stopp = std::get_if<double>(&itp->second);
+        if (startp == nullptr || stopp == nullptr)
+            return false;
+        const std::int64_t n = meta.shape[0];
+        const double start = *startp, stop = *stopp;
+        const double step = n > 1 ? (stop - start) / static_cast<double>(n - 1) : 0.0;
+        auto value = [&](std::int64_t i) {
+            if (n >= 2 && i == n - 1)
+                return stop;
+            return n == 1 ? start : start + static_cast<double>(i) * step;
+        };
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        if (graph == nil)
+            return false;
+        NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
+        MPSGraphTensor* y = nil;
+        switch (meta.dtype) {
+        case Dtype::I32: {
+            std::vector<std::int32_t> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(value(i));
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(std::int32_t)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeInt32];
+            break;
+        }
+        case Dtype::I64: {
+            std::vector<std::int64_t> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] = static_cast<std::int64_t>(value(i));
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(std::int64_t)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeInt64];
+            break;
+        }
+        default: {
+            std::vector<float> buf(static_cast<std::size_t>(n));
+            for (std::int64_t i = 0; i < n; ++i)
+                buf[static_cast<std::size_t>(i)] = static_cast<float>(value(i));
+            NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(float)];
+            y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeFloat32];
+            MPSDataType mdt = to_mps_dtype_local(meta.dtype);
+            if (mdt != MPSDataTypeFloat32)
+                y = [graph castTensor:y toType:mdt name:nil];
+            break;
+        }
+        }
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
+    }
+};
+
+// ── meshgrid — output k is input k laid along its own axis and broadcast.
+// ``indexing_xy`` swaps the axes of the first two inputs.  Outputs are
+// recorded in input order.  It was a stub, so Mask2Former's point grids
+// kept its whole step eager.
+class MeshgridEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "meshgrid"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        const std::size_t n = node.inputs.size();
+        if (n == 0 || node.outputs.size() != n)
+            return false;
+        const bool xy = int_attr(node, "indexing_xy", 0) != 0;
+        const auto& out_shape = node.outputs[0].shape;
+        if (out_shape.size() != n)
+            return false;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        if (graph == nil)
+            return false;
+        NSArray<NSNumber*>* full = shape_to_nsarray(out_shape);
+        for (std::size_t k = 0; k < n; ++k) {
+            if (node.inputs[k] < 0)
+                return false;
+            MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[k]);
+            if (x == nil || x.shape.count != 1)
+                return false;
+            const std::size_t axis = (xy && n >= 2 && k < 2) ? 1 - k : k;
+            NSMutableArray<NSNumber*>* lined = [NSMutableArray arrayWithCapacity:n];
+            for (std::size_t d = 0; d < n; ++d)
+                [lined addObject:(d == axis ? x.shape[0] : @1)];
+            MPSGraphTensor* y = [graph broadcastTensor:[graph reshapeTensor:x withShape:lined name:nil]
+                                               toShape:full
+                                                  name:nil];
+            ctx.bind(node.outputs[k].id, (__bridge void*)y);
+        }
+        return true;
+    }
+};
+
 struct FactoryEmitterRegistrar {
     FactoryEmitterRegistrar() {
         register_emitter(std::make_unique<FullEmitter>());
         register_emitter(std::make_unique<FixedFillEmitterT<0>>("zeros"));
         register_emitter(std::make_unique<FixedFillEmitterT<1>>("ones"));
         register_emitter(std::make_unique<ArangeEmitter>());
+        register_emitter(std::make_unique<LinspaceEmitter>());
+        register_emitter(std::make_unique<MeshgridEmitter>());
     }
 };
 

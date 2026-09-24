@@ -59,9 +59,12 @@ public:
         d.paddingRight = (NSUInteger)(*P)[1];
         d.paddingTop = (NSUInteger)(*P)[0];
         d.paddingBottom = (NSUInteger)(*P)[0];
+        d.ceilMode = flag_attr(node, "ceil_mode", false);
 
         MPSGraphTensor* y =
             [graph maxPooling2DWithSourceTensor:x_t descriptor:d name:@"max_pool2d"];
+        if (!matches_recorded_shape(y, node))
+            return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -100,13 +103,21 @@ public:
         d.paddingRight = (NSUInteger)(*P)[1];
         d.paddingTop = (NSUInteger)(*P)[0];
         d.paddingBottom = (NSUInteger)(*P)[0];
-        // Lucid AvgPool2d matches the reference framework's default
-        // ``count_include_pad=True``; MPSGraph defaults to NO, so flip
-        // the divisor flag so padded zeros participate in the mean.
-        d.includeZeroPadToAverage = YES;
+        // The divisor follows the recorded ``count_include_pad`` (default
+        // True, as in the reference); it used to be hard-wired to True, so
+        // ``count_include_pad=False`` averaged the padding in anyway.
+        d.includeZeroPadToAverage = flag_attr(node, "count_include_pad", true);
+        d.ceilMode = flag_attr(node, "ceil_mode", false);
+        // Ceil mode with the padding counted — see settle_ceil_divisor.
+        bool include_pad = d.includeZeroPadToAverage;
+        if (!settle_ceil_divisor(node, d.ceilMode, include_pad))
+            return false;
+        d.includeZeroPadToAverage = include_pad;
 
         MPSGraphTensor* y =
             [graph avgPooling2DWithSourceTensor:x_t descriptor:d name:@"avg_pool2d"];
+        if (!matches_recorded_shape(y, node))
+            return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -144,16 +155,23 @@ public:
         d.paddingRight = (NSUInteger)(*P)[0];
         d.paddingTop = 0;
         d.paddingBottom = 0;
+        d.ceilMode = flag_attr(node, "ceil_mode", false);
         MPSGraphTensor* y4;
         if (IS_MAX) {
             y4 = [g maxPooling2DWithSourceTensor:x_r descriptor:d name:@"max_pool1d_lifted"];
         } else {
-            d.includeZeroPadToAverage = YES;
+            bool include_pad = flag_attr(node, "count_include_pad", true);
+            if (!settle_ceil_divisor(node, d.ceilMode, include_pad))
+                return false;
+            d.includeZeroPadToAverage = include_pad;
             y4 = [g avgPooling2DWithSourceTensor:x_r descriptor:d name:@"avg_pool1d_lifted"];
         }
         // Squeeze H=1.
         NSArray<NSNumber*>* out_sh = @[y4.shape[0], y4.shape[1], y4.shape[3]];
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:y4 withShape:out_sh name:nil]));
+        MPSGraphTensor* y = [g reshapeTensor:y4 withShape:out_sh name:nil];
+        if (!matches_recorded_shape(y, node))
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 
@@ -212,11 +230,15 @@ public:
                          paddingStyle:MPSGraphPaddingStyleExplicit];
         if (d == nil)
             return false;
-        d.ceilMode = int_attr(node, "ceil_mode", 0) != 0;
+        d.ceilMode = flag_attr(node, "ceil_mode", false);
         if (!IsMax) {
             // Lucid's ``count_include_pad`` and MPSGraph's
-            // ``includeZeroPadToAverage`` mean the same thing.
-            d.includeZeroPadToAverage = int_attr(node, "count_include_pad", 1) != 0;
+            // ``includeZeroPadToAverage`` mean the same thing — except at a
+            // ceil-mode overhang (see settle_ceil_divisor).
+            bool include_pad = flag_attr(node, "count_include_pad", true);
+            if (!settle_ceil_divisor(node, d.ceilMode, include_pad))
+                return false;
+            d.includeZeroPadToAverage = include_pad;
         }
 
         MPSGraphTensor* pooled =
@@ -229,12 +251,12 @@ public:
         NSArray<NSNumber*>* out = pooled.shape;
         if (out.count != 6)
             return false;
-        ctx.bind(node.outputs[0].id,
-                 (__bridge void*)([g reshapeTensor:pooled
-                                         withShape:@[
-                                             out[0], out[1], out[3], out[4], out[5]
-                                         ]
-                                              name:@"pool3d"]));
+        MPSGraphTensor* y = [g reshapeTensor:pooled
+                                   withShape:@[ out[0], out[1], out[3], out[4], out[5] ]
+                                        name:@"pool3d"];
+        if (!matches_recorded_shape(y, node))
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 

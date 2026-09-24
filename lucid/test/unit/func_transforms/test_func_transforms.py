@@ -147,6 +147,86 @@ class TestFuncJVP:
         # For f(x)=2x: J = 2I, so Jv = 2v[0]*e_0 = [2, 0, 0] — same as VJP
         assert lucid.allclose(jvp_out, vjp_out, atol=1e-3)
 
+    def test_jvp_on_each_device(self, device: str) -> None:
+        """The perturbation lives with the tangent — on the CPU it could not
+        multiply a Metal tangent, and every jvp on Metal raised."""
+        x = lucid.tensor([1.0, 2.0, 3.0]).to(device)
+        out, tangent = func.jvp(lambda v: v**2, (x,), (lucid.ones_like(x),))
+        assert tangent.device == x.device
+        assert tangent.tolist() == [2.0, 4.0, 6.0]
+
+    def test_jvp_vector_output_through_attention(
+        self, device: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A vector output takes two backward passes, not one per element.
+
+        One per element made MeanFlow's training loss — a jvp through a
+        whole transformer — thousands of passes long.  The two-pass route
+        differentiates a backward, which the fused attention's is not; jvp
+        runs attention in its explicit form, and the route checks itself
+        against one plain backward before trusting the result.
+        """
+        import lucid.nn as nn
+        import lucid.nn.functional as F
+
+        lucid.manual_seed(0)
+        lin = nn.Linear(8, 8).to(device)
+        ln = nn.LayerNorm(8).to(device)
+
+        def f(x: lucid.Tensor) -> lucid.Tensor:
+            h = ln(lin(x)).reshape(2, 2, 4, 4)
+            return F.gelu(F.scaled_dot_product_attention(h, h, h)).reshape(8, 8)
+
+        taken: list[bool] = []
+        fast = func._jvp_by_double_backward
+
+        def spy(*a: object, **k: object) -> object:
+            r = fast(*a, **k)  # type: ignore[arg-type]
+            taken.append(r is not None)
+            return r
+
+        monkeypatch.setattr(func, "_jvp_by_double_backward", spy)
+        x = lucid.randn(8, 8).to(device)
+        t = lucid.randn(8, 8).to(device)
+        _, jt = func.jvp(f, (x,), (t,))
+        eps = 1e-3
+        fd = (f(x + eps * t) - f(x - eps * t)) / (2 * eps)
+        assert taken == [True]
+        assert float((jt - fd).abs().max().item()) < 1e-3
+
+    def test_jvp_leaves_parameter_gradients_alone(self) -> None:
+        """jvp's own backward passes accumulate into no leaf.
+
+        They used ``backward()``, which fills every leaf's ``.grad`` — a
+        model's parameters picked up one junk gradient per output element,
+        and MeanFlow trained on those instead of on its loss.
+        """
+        import lucid.nn as nn
+
+        lucid.manual_seed(0)
+        lin = nn.Linear(3, 3)
+        x = lucid.randn(4, 3)
+        func.jvp(lambda v: lin(v).tanh(), (x,), (lucid.ones_like(x),))
+        func.jvp(lambda v: lin(v).tanh().sum(), (x,), (lucid.ones_like(x),))
+        assert all(p.grad is None for p in lin.parameters())
+
+    def test_jvp_primal_output_is_differentiable(self) -> None:
+        """A loss built from jvp's primal output trains the parameters —
+        it used to be computed under ``no_grad`` and carried nothing."""
+        import lucid.nn as nn
+
+        lucid.manual_seed(0)
+        lin = nn.Linear(3, 3)
+        x = lucid.randn(4, 3)
+        y, _ = func.jvp(lambda v: lin(v).tanh(), (x,), (lucid.ones_like(x),))
+        (y * y).sum().backward()
+        lucid.manual_seed(0)
+        ref = nn.Linear(3, 3)
+        (ref(x).tanh() ** 2).sum().backward()
+        for p, q in zip(lin.parameters(), ref.parameters()):
+            assert p.grad is not None
+            assert lucid.allclose(p.grad, q.grad, atol=1e-6)
+
     def test_jvp_strict_raises(self) -> None:
         x = lucid.tensor([1.0, 2.0])
         v = lucid.ones(2)

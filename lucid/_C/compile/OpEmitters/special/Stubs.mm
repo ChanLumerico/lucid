@@ -107,16 +107,14 @@ struct StubsRegistrar {
                  // ── host-precomputed factory headers ────────────────
                  // (already factory-skipped by the builder when inputs
                  // are empty; stubbed for find_emitter completeness).
-                 // ``zeros`` / ``ones`` / ``arange`` moved to real-emit
+                 // ``zeros`` / ``ones`` / ``arange`` / ``linspace`` / ``meshgrid`` moved to real-emit
                  // (OpEmitters/special/Factory.mm) — ``zeros`` / ``ones``
                  // appear mid-trace in RNN-style code (default ``hx =
                  // zeros``); ``arange`` backs strided slicing (``x[..., ::2]``
                  // lowers to gather over an arange index), so baking it as a
                  // constant unblocks e.g. RoFormer's interleaved RoPE.
                  "eye",
-                 "linspace",
                  "logspace",
-                 "meshgrid",
                  "empty",
                  // ``rand`` / ``uniform`` / ``randn`` / ``normal`` /
                  // ``randint`` / ``bernoulli`` moved to real-emit in

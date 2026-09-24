@@ -25,6 +25,7 @@
 #include "../backend/gpu/MetalAllocator.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../backend/gpu/mps/MpsBridge.h"
+#include "../compile/Tracer.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/GradMode.h"
@@ -33,6 +34,14 @@
 #include "../core/TensorImpl.h"
 
 namespace py = pybind11;
+
+namespace {
+// See ``Tracer::on_host_read``.
+void note_host_read(const std::shared_ptr<lucid::TensorImpl>& t) {
+    if (auto* trc = lucid::compile::current_tracer())
+        trc->on_host_read(t.get());
+}
+}  // namespace
 
 namespace lucid::bindings {
 
@@ -204,7 +213,11 @@ void register_tensor_impl(py::module_& m) {
         // numpy array view without copying; the TensorImpl must outlive the
         // returned array (keep-alive is handled by pybind11's default policy
         // for member functions on shared_ptr holders).
-        .def("data_as_python", &TensorImpl::data_as_python)
+        .def("data_as_python",
+             [](const std::shared_ptr<TensorImpl>& self) {
+                 note_host_read(self);
+                 return self->data_as_python();
+             })
         .def("grad_as_python", &TensorImpl::grad_as_python)
         // NumPy-free interop — used by the Python serialization and repr
         // layers so ``import lucid`` works without numpy installed.
@@ -224,12 +237,17 @@ void register_tensor_impl(py::module_& m) {
              "numpy-free for ``import lucid`` users who didn't install the "
              "``[numpy]`` extra.  SharedStorage tensors should use "
              "``transfer_storage`` instead — that path is zero-copy relabel.")
-        .def("tolist", &TensorImpl::tolist,
-             "Convert the tensor to a nested Python list (or scalar for 0-d), "
-             "covering every supported dtype including F16 and C64.  Mirrors "
-             "``item()``'s dtype dispatch but walks the full shape.  Used by "
-             "``Tensor.tolist()`` so the call stays numpy-free across all "
-             "current Lucid dtypes — no struct.unpack-based fallback.")
+        .def(
+            "tolist",
+            [](const std::shared_ptr<TensorImpl>& self) {
+                note_host_read(self);
+                return self->tolist();
+            },
+            "Convert the tensor to a nested Python list (or scalar for 0-d), "
+            "covering every supported dtype including F16 and C64.  Mirrors "
+            "``item()``'s dtype dispatch but walks the full shape.  Used by "
+            "``Tensor.tolist()`` so the call stays numpy-free across all "
+            "current Lucid dtypes — no struct.unpack-based fallback.")
         .def("to_string", &TensorImpl::to_string, py::arg("precision") = 4,
              py::arg("threshold") = 1000, py::arg("edgeitems") = 3,
              "Render the tensor's data as a human-readable string.  "
@@ -241,9 +259,14 @@ void register_tensor_impl(py::module_& m) {
             "the same Storage.  Returns None when no gradient has been "
             "accumulated.  Replaces the prior numpy round-trip in "
             "``Tensor.grad``.")
-        .def("item", &TensorImpl::item,
-             "Extract a single-element tensor's value as a Python scalar "
-             "(int / float / bool / complex).  Throws when numel() != 1.")
+        .def(
+            "item",
+            [](const std::shared_ptr<TensorImpl>& self) {
+                note_host_read(self);
+                return self->item();
+            },
+            "Extract a single-element tensor's value as a Python scalar "
+            "(int / float / bool / complex).  Throws when numel() != 1.")
         .def(
             "grad_as_impl",
             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> { return t.grad_as_impl(); },
@@ -283,6 +306,15 @@ void register_tensor_impl(py::module_& m) {
                 // tensor a factory returns, which must stay an ordinary member.
                 auto alias = TensorImpl::make_view(self, self->shape(), self->stride(), 0);
                 alias->set_detached_alias(true);
+                // Traced as ``detach``: the value, cut from the gradient.
+                // Untraced, the alias reached the next op as a fresh feed and
+                // was pinned at its trace-time value — every compiled call
+                // replayed the first call's detached tensor, so a straight-
+                // through estimator (VQ-VAE, hard Gumbel) returned stale output.
+                if (auto* trc = lucid::compile::current_tracer()) {
+                    trc->on_op_enter("detach", self->device(), self->dtype(), self->shape());
+                    trc->on_op_io({self}, alias);
+                }
                 return alias;
             },
             "Return the alias ``.data`` hands out: the same storage, no autograd "

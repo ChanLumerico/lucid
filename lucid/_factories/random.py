@@ -88,7 +88,11 @@ def manual_seed(seed: int) -> None:
     0.0
     """
     global _default_generator
-    _default_generator = _C_engine.Generator(seed)
+    g = _C_engine.Generator(seed)
+    # Registered before it replaces the old one, which the engine may
+    # otherwise be left pointing at once it is freed.
+    _C_engine._set_default_override(g)
+    _default_generator = g
     # Keep the C++ singleton in sync — used by engine code paths that don't
     # take an explicit ``generator`` arg.
     _C_engine.default_generator().set_seed(seed)
@@ -308,6 +312,7 @@ def set_rng_state(state: Tensor) -> None:
     # counter-based so this exactly recovers the prior sampling stream.
     g = _C_engine.Generator(s_seed)
     g.counter = s_counter  # type: ignore[misc]
+    _C_engine._set_default_override(g)
     _default_generator = g
     # Mirror to the C++ singleton.
     cg = _C_engine.default_generator()

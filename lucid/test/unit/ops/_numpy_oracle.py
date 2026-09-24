@@ -119,6 +119,84 @@ def _pool2d(x: np.ndarray, k: int, op: Callable[..., np.ndarray]) -> np.ndarray:
     return op(_f(x).reshape(n, c, h // k, k, w // k, k), axis=(3, 5))
 
 
+def _pool(
+    x: np.ndarray,
+    k: int,
+    s: int,
+    p: int,
+    is_max: bool,
+    count_pad: bool = True,
+    ceil: bool = False,
+) -> np.ndarray:
+    """Pool the trailing axes of (N, C, *spatial), the reference's way.
+
+    A ceil-mode window that would start in the right padding is dropped; an
+    average that does not count padding divides by the in-bounds part.
+    """
+    x = _f(x)
+    spatial = x.shape[2:]
+    outs = []
+    for size in spatial:
+        span = size + 2 * p - k
+        o = (-(-span // s) if ceil else span // s) + 1
+        if ceil and (o - 1) * s >= size + p:
+            o -= 1
+        outs.append(o)
+    y = np.empty(x.shape[:2] + tuple(outs))
+    for pos in np.ndindex(*outs):
+        lo = [q * s - p for q in pos]
+        sl = tuple(slice(max(a, 0), min(a + k, n)) for a, n in zip(lo, spatial))
+        win = x[(slice(None), slice(None)) + sl]
+        if is_max:
+            y[(slice(None), slice(None)) + pos] = win.max(axis=tuple(range(2, x.ndim)))
+            continue
+        total = win.sum(axis=tuple(range(2, x.ndim)))
+        if count_pad:
+            # The padded input's part of the window.
+            count = np.prod([min(a + k, n + p) - a for a, n in zip(lo, spatial)])
+        else:
+            count = np.prod([t.stop - t.start for t in sl])
+        y[(slice(None), slice(None)) + pos] = total / count
+    return y
+
+
+def _nearest(x: np.ndarray, size: tuple[int, ...]) -> np.ndarray:
+    """Floor-index nearest resampling of the trailing axes."""
+    y = _f(x)
+    for ax, out in zip(range(2, 2 + len(size)), size):
+        n = y.shape[ax]
+        y = np.take(y, [min(i * n // out, n - 1) for i in range(out)], axis=ax)
+    return y
+
+
+def _bilinear(x: np.ndarray, size: tuple[int, ...], align: bool) -> np.ndarray:
+    """Linear resampling of the trailing axes, one axis at a time."""
+    y = _f(x)
+    for ax, out in zip(range(2, 2 + len(size)), size):
+        n = y.shape[ax]
+        if align:
+            src = np.arange(out) * ((n - 1) / (out - 1) if out > 1 else 0.0)
+        else:
+            src = np.maximum((np.arange(out) + 0.5) * (n / out) - 0.5, 0.0)
+        i0 = np.minimum(np.floor(src).astype(int), n - 1)
+        i1 = np.minimum(i0 + 1, n - 1)
+        lam = (src - i0).reshape((-1,) + (1,) * (y.ndim - ax - 1))
+        y = np.take(y, i0, axis=ax) * (1 - lam) + np.take(y, i1, axis=ax) * lam
+    return y
+
+
+def _batch_norm_train(x: np.ndarray, w: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Per-channel batch statistics, biased variance, eps 1e-5."""
+    x = _f(x)
+    axes = (0,) + tuple(range(2, x.ndim))
+    shape = (1, -1) + (1,) * (x.ndim - 2)
+    mean = x.mean(axis=axes, keepdims=True)
+    var = x.var(axis=axes, keepdims=True)
+    return (x - mean) / np.sqrt(var + 1e-5) * _f(w).reshape(shape) + _f(b).reshape(
+        shape
+    )
+
+
 def _unfold(x: np.ndarray, axis: int, size: int, step: int) -> np.ndarray:
     win = np.lib.stride_tricks.sliding_window_view(x, size, axis=axis)
     return np.take(win, range(0, win.shape[axis], step), axis=axis)
@@ -321,6 +399,7 @@ REFS: dict[str, Ref] = {
     "unfold_dim": lambda x, c: _unfold(x, 1, 3, 2) * 1,
     "one_hot": lambda x, c: np.eye(5, dtype=np.int64)[np.abs(x).astype(np.int64) % 5],
     "meshgrid": lambda x, c: tuple(np.meshgrid(x[0], x[1], indexing="ij")),
+    "meshgrid_xy": lambda x, c: tuple(np.meshgrid(x[0][:3], x[1], indexing="xy")),
     # ── linear algebra
     "matmul": lambda x, c: x @ x.T,
     "matmul_batched": lambda x, c: _f(x) @ np.swapaxes(_f(x), -1, -2),
@@ -364,6 +443,9 @@ REFS: dict[str, Ref] = {
     / np.sqrt(np.abs(_f(c.w(3))).reshape(1, 3, 1) + 1 + 1e-5)
     * _f(c.w(3)).reshape(1, 3, 1)
     + _f(c.w(3)).reshape(1, 3, 1),
+    "batch_norm_train": lambda x, c: _batch_norm_train(x, c.w(3), c.w(3, seed=8)),
+    "batch_norm3d_train": lambda x, c: _batch_norm_train(x, c.w(2), c.w(2, seed=8)),
+    "linspace_scale": lambda x, c: _f(x) * np.linspace(-1.0, 2.0, 6),
     "normalize": lambda x, c: _f(x)
     / np.maximum(np.sqrt((_f(x) ** 2).sum(1, keepdims=True)), 1e-12),
     "conv1d": lambda x, c: _conv(x, c.w(4, 3, 3), c.w(4), 1, 1),
@@ -371,6 +453,34 @@ REFS: dict[str, Ref] = {
     "conv3d": lambda x, c: _conv(x, c.w(2, 3, 2, 2, 2), None, 1, 0),
     "avg_pool2d": lambda x, c: _pool2d(x, 2, np.mean),
     "max_pool2d": lambda x, c: _pool2d(x, 2, np.max),
+    "avg_pool2d_ceil_nopad": lambda x, c: _pool(x, 3, 2, 0, False, False, True),
+    "avg_pool2d_t": lambda x, c: _pool2d(x, 2, np.mean).swapaxes(-1, -2),
+    "max_pool2d_t": lambda x, c: _pool2d(x, 2, np.max).swapaxes(-1, -2),
+    "pad_max_pool2d": lambda x, c: _pool(
+        np.pad(_f(x), ((0, 0), (0, 0), (0, 1), (0, 1)), constant_values=-1e4),
+        2,
+        1,
+        0,
+        True,
+    ),
+    "pad_max_pool3d": lambda x, c: _pool(
+        np.pad(_f(x), ((0, 0), (0, 0), (1, 0), (0, 1), (1, 0)), constant_values=-1e4),
+        2,
+        1,
+        0,
+        True,
+    ),
+    "max_pool1d": lambda x, c: _pool(x, 3, 2, 1, True),
+    "avg_pool1d": lambda x, c: _pool(x, 3, 2, 1, False),
+    "avg_pool1d_nopad": lambda x, c: _pool(x, 3, 2, 1, False, False),
+    "max_pool3d": lambda x, c: _pool(x, 2, 2, 0, True),
+    "avg_pool3d": lambda x, c: _pool(x, 3, 2, 1, False),
+    "interp_nearest": lambda x, c: _nearest(x, (8, 8)),
+    "interp_nearest_size": lambda x, c: _nearest(x, (3, 7)),
+    "interp_bilinear": lambda x, c: _bilinear(x, (7, 5), False),
+    "interp_bilinear_ac": lambda x, c: _bilinear(x, (7, 5), True),
+    "interp_trilinear": lambda x, c: _bilinear(x, (3, 5, 4), False),
+    "interp_bilinear_t": lambda x, c: _bilinear(x, (8, 6), False).swapaxes(-1, -2),
     "embedding": lambda x, c: _f(c.w(5, 3))[np.abs(x) % 5],
     "cross_entropy": lambda x, c: -_log_softmax(x, 1)[
         np.arange(4), c.idx(0, 5, 2, 1)

@@ -60,7 +60,7 @@ class _ExecutableLike(Protocol):
 from lucid._C import engine as _C_engine
 
 from lucid.compile._core.fallback import EagerFallbackSet, run_eager
-from lucid.compile._core.signature import CacheKey, signature_of
+from lucid.compile._core.signature import CacheKey, leaf_tensors, signature_of
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
@@ -198,11 +198,11 @@ class _CacheEntry:
 
     exe: object  # _C_engine.compile.PyCompiledExecutable
     external_feeds: dict[int, object]  # TensorId -> TensorImpl
-    # For each ``exe.input_ids[i]`` slot: an integer index into ``args``
-    # (a positional input tensor), a ``str`` keyword name into ``kwargs``
-    # (a keyword-passed input tensor), OR ``None`` meaning "use the pinned
-    # external_feeds entry" (parameters, constants).
-    input_source: tuple[int | str | None, ...]
+    # For each ``exe.input_ids[i]`` slot: an index into the call's tensors
+    # in :func:`leaf_tensors` order — positional, keyword and nested alike
+    # — OR ``None`` meaning "use the pinned external_feeds entry"
+    # (parameters, constants).
+    input_source: tuple[int | None, ...]
     # Structure descriptor used to re-pack the executable's flat output
     # list back into the shape the user's forward returned.  Each entry
     # is the path (sequence of keys / indices) to insert that output at
@@ -315,11 +315,13 @@ class CompiledModule[**P, R]:
       ``_CacheEntry.input_source``).  Non-tensor kwargs are baked into
       the trace structure and captured by the :class:`CacheKey`, so a
       different scalar kwarg re-keys (and recompiles) correctly.
-    * **Dropout in training mode falls back per signature.**  See
-      :file:`OpEmitters/nn/Dropout.mm` — the emitter returns nullptr
-      when ``training=True and p>0`` to preserve dropout's
-      step-to-step randomness (the stateless RNG path would apply
-      the same mask every call).
+    * **Random draws are drawn again on every call.**  A draw from the
+      default generator inside the traced function — ``randn`` noise, a
+      ``randint`` timestep, a training-mode dropout mask — is a feed the
+      run path makes afresh through the same eager op, so under the same
+      seed a compiled call draws exactly what eager draws
+      (:file:`lucid/_C/compile/RngFeeds.h`).  A draw from a generator the
+      caller passes explicitly runs eager.
 
     Examples
     --------
@@ -1049,15 +1051,14 @@ class CompiledModule[**P, R]:
         # a pinned parameter / constant (None).  Index by ``TensorImpl is``
         # identity.  A tensor passed BOTH positionally and by keyword resolves
         # to the positional slot (args win — they're checked first).
-        feed_source: dict[int, int | str] = {}
-        for i, a in enumerate(args):
-            if isinstance(a, Tensor):
-                feed_source.setdefault(id(_unwrap(a)), i)
-        for name, v in kwargs.items():
-            if isinstance(v, Tensor):
-                feed_source.setdefault(id(_unwrap(v)), name)
+        # Nested tensors too: a tensor inside a list argument used to fall
+        # through to ``None`` — pinned at its trace-time value, so every
+        # later call reused it and returned a wrong answer without a word.
+        feed_source: dict[int, int] = {}
+        for i, t in enumerate(leaf_tensors(args, kwargs)):
+            feed_source.setdefault(id(_unwrap(t)), i)
 
-        input_source: list[int | str | None] = []
+        input_source: list[int | None] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
             if impl is None:
@@ -1106,25 +1107,24 @@ class CompiledModule[**P, R]:
             isn't a Tensor at this call site.
         """
         from lucid._dispatch import _unwrap, _wrap
-        from lucid._tensor.tensor import Tensor
 
-        # Build the feed list in exe.input_ids order.  ``src`` is an int
-        # (positional arg index), a str (keyword arg name), or None (a pinned
+        # Build the feed list in exe.input_ids order.  ``src`` is an index
+        # into the call's tensors (``leaf_tensors`` order) or None (a pinned
         # parameter / constant).
         feed_impls: list[object] = []
         exe = cast(_ExecutableLike, entry.exe)
+        leaves = leaf_tensors(args, kwargs)
         for tid, src in zip(exe.input_ids, entry.input_source):
             if src is None:
                 # Pinned parameter / constant — use the trace-time impl.
                 feed_impls.append(entry.external_feeds[tid])
                 continue
-            # Fresh input tensor at this call site — from args[i] or kwargs[name].
-            arg = args[src] if isinstance(src, int) else kwargs.get(src)
-            if not isinstance(arg, Tensor):
-                # User changed the argument type / dropped a kwarg between
-                # calls.  Treat as a compile failure for this call.
+            # Fresh input tensor at this call site, found where the trace
+            # found it.  The key pins the structure, so a missing one means
+            # the call no longer matches — run it eager.
+            if src >= len(leaves):
                 return run_eager(self._model, args, kwargs)
-            feed_impls.append(_unwrap(arg))
+            feed_impls.append(_unwrap(leaves[src]))
 
         t0 = time.perf_counter()
         outs = _C_engine.compile.run_executable(entry.exe, feed_impls)

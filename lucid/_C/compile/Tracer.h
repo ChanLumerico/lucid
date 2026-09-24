@@ -193,6 +193,25 @@ public:
     // value (matches ``unordered_map`` semantics).
     void on_op_attr(std::string_view key, AttributeValue value);
 
+    // Records ``output`` — just drawn by the RNG op ``name`` — as an
+    // external feed instead of as that op's output, and drops the op's
+    // node: the executable takes the draw as an input, and
+    // :func:`redraw_rng_feeds` draws it again on every run.  See
+    // :file:`RngFeeds.h`.
+    void on_rng_feed(std::string_view name, const TensorImplPtr& output);
+
+    // Marks the recording as one no executable can stand for (see
+    // ``TraceGraph::unsupported``).  The first reason given is kept.
+    void mark_unsupported(std::string why);
+
+    // A value the trace knows — an op's output, an input, a parameter or a
+    // random draw — read on the host (``item`` / ``tolist`` / ``numpy``,
+    // and so ``float(t)`` or ``if t > 0``).  What the host does with it is
+    // invisible to the recording, which would bake this call's value into
+    // every later one: the trace is marked unsupported.  A tensor the trace
+    // has not seen — a constant made on the spot — is left alone.
+    void on_host_read(const TensorImpl* impl);
+
     // Returns a read-only reference to the recorded graph.
     //
     // Returns

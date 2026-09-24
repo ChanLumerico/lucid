@@ -1,6 +1,6 @@
 // lucid/_C/compile/VjpEmitters/nn/Pool.mm
 //
-// Pool VJPs — avg_pool2d / max_pool2d / adaptive_avg_pool2d.
+// Pool VJPs — {max, avg}_pool{1d, 2d, 3d}.
 //
 // Critical for ResNet-class workloads: the manual VJP walker
 // previously fell back to MPSGraph autograd for these ops, which
@@ -8,13 +8,33 @@
 // in F32 regardless of the F16 input chain → MPSGraph type-check
 // failure deep in MLIR pass manager).  Manual VJP keeps the chain
 // in a single dtype.
+//
+// Every descriptor is built the way its forward emitter builds it — ceil
+// mode, and for averages the settled divisor (``settle_ceil_divisor``).
+// The 2-D average VJP used to hard-wire ``includeZeroPadToAverage`` and
+// ignore ceil mode, so once the forward honoured both, a compiled step
+// through ``count_include_pad=False`` took its gradient with the wrong
+// divisor.  1-D pools are 2-D pools of height 1 and 3-D pools 4-D pools of
+// a leading length-1 axis, exactly as the forward lifts them; neither had
+// a VJP, and a U-Net in 3-D or a 1-D audio net trained eager.
+//
+//   avg: MPSGraph's pooling-gradient kernel, same descriptor.
+//   max: the forward-with-indices op and a scatter-add of the gradient to
+//        the arg-max positions.  ``maxPooling2DGradientWithGradientTensor``
+//        placed the gradient wrongly when it arrived transposed — a pooled
+//        map reshaped to a sequence and permuted, as CoAtNet's downsampling
+//        attention does, came back 50–100 % off against both eager and an
+//        independent reference — and the indices-based gradient variant
+//        crashed on the same input.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <memory>
+#include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 #include "../_VjpHelpers.h"
 #include "../../OpEmitters/_AttrHelpers.h"
@@ -31,14 +51,88 @@ inline const std::vector<std::int64_t>* int_vec_attr_local(
     return std::get_if<std::vector<std::int64_t>>(&it->second);
 }
 
-// avg_pool2d backward: MPSGraph provides a dedicated gradient API
-// (``avgPooling2DGradientWithGradientTensor:sourceTensor:descriptor:``)
-// that handles include-pad averaging correctly.  The "source tensor"
-// is the original forward input — we look it up via the saved forward
-// activation.
-class AvgPool2dVjp final : public VjpEmitter {
+bool known(NSArray<NSNumber*>* shape) {
+    for (NSNumber* n in shape)
+        if (n.longLongValue < 0)
+            return false;
+    return true;
+}
+
+// Scatter ``grad`` to the arg-max positions of a zero tensor shaped like
+// ``x``.  ``local`` holds each window's arg-max as a flat index *within the
+// window* (``LocalFlatten``); the position in ``x`` is the window's origin
+// plus that offset.  Global flat indices went wrong once MPSGraph folded a
+// preceding pad into the pooling: they then counted in the unpadded tensor
+// while the scatter counted in the padded one — YOLOv3-tiny's pad-then-pool
+// came back 87 % off.  A window-local index is the same either way.
+MPSGraphTensor* scatter_to_argmax(MPSGraph* g, MPSGraphTensor* grad, MPSGraphTensor* local,
+                                  NSArray<NSNumber*>* xs, NSArray<NSNumber*>* gs,
+                                  const std::vector<std::int64_t>& kernel,
+                                  const std::vector<std::int64_t>& stride,
+                                  const std::vector<std::int64_t>& pad_front) {
+    const NSUInteger nd = xs.count - 2;
+    MPSGraphTensor* rem = [g castTensor:local toType:MPSDataTypeInt32 name:nil];
+    MPSGraphTensor* flat = nil;
+    // Decompose the window-local index, last axis fastest, and accumulate
+    // the global flat position over the spatial axes of ``x``.
+    std::vector<MPSGraphTensor*> pos(nd, nil);
+    for (NSInteger a = (NSInteger)nd - 1; a >= 0; --a) {
+        MPSGraphTensor* k = [g constantWithScalar:(double)kernel[(std::size_t)a]
+                                         dataType:MPSDataTypeInt32];
+        MPSGraphTensor* off = [g moduloWithPrimaryTensor:rem secondaryTensor:k name:nil];
+        // Exact: ``rem - off`` is a multiple of ``k``.
+        rem = [g divisionWithPrimaryTensor:[g subtractionWithPrimaryTensor:rem
+                                                           secondaryTensor:off
+                                                                      name:nil]
+                           secondaryTensor:k
+                                      name:nil];
+        MPSGraphTensor* o = [g coordinateAlongAxis:(NSInteger)(a + 2) withShape:gs name:nil];
+        o = [g castTensor:o toType:MPSDataTypeInt32 name:nil];
+        MPSGraphTensor* origin = [g subtractionWithPrimaryTensor:
+                                        [g multiplicationWithPrimaryTensor:o
+                                                           secondaryTensor:[g constantWithScalar:(double)stride[(std::size_t)a]
+                                                                                        dataType:MPSDataTypeInt32]
+                                                                      name:nil]
+                                                 secondaryTensor:[g constantWithScalar:(double)pad_front[(std::size_t)a]
+                                                                              dataType:MPSDataTypeInt32]
+                                                            name:nil];
+        pos[(std::size_t)a] = [g additionWithPrimaryTensor:origin secondaryTensor:off name:nil];
+    }
+    for (NSUInteger a = 0; a < nd; ++a) {
+        MPSGraphTensor* extent = [g constantWithScalar:(double)xs[a + 2].longLongValue
+                                              dataType:MPSDataTypeInt32];
+        flat = flat == nil ? pos[a]
+                           : [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:flat
+                                                                            secondaryTensor:extent
+                                                                                       name:nil]
+                                         secondaryTensor:pos[a]
+                                                    name:nil];
+    }
+    long long in_sp = 1, out_sp = 1;
+    for (NSUInteger i = 2; i < xs.count; ++i)
+        in_sp *= xs[i].longLongValue;
+    for (NSUInteger i = 2; i < gs.count; ++i)
+        out_sp *= gs[i].longLongValue;
+    MPSGraphTensor* i3 = [g reshapeTensor:flat withShape:@[ gs[0], gs[1], @(out_sp) ] name:nil];
+    MPSGraphTensor* u3 = [g reshapeTensor:grad withShape:@[ gs[0], gs[1], @(out_sp) ] name:nil];
+    MPSGraphTensor* base = [g constantWithScalar:0.0
+                                           shape:@[ xs[0], xs[1], @(in_sp) ]
+                                        dataType:grad.dataType];
+    MPSGraphTensor* out = [g scatterAlongAxis:2
+                               withDataTensor:base
+                                updatesTensor:u3
+                                indicesTensor:i3
+                                         mode:MPSGraphScatterModeAdd
+                                         name:nil];
+    return [g reshapeTensor:out withShape:xs name:nil];
+}
+
+// One pool VJP for every rank: RANK is the number of pooled axes.
+template <int RANK, bool IS_MAX>
+class PoolVjp final : public VjpEmitter {
 public:
-    std::string_view op_name() const override { return "avg_pool2d"; }
+    explicit PoolVjp(std::string name) : name_(std::move(name)) {}
+    std::string_view op_name() const override { return name_; }
     bool emit(BackwardContext& bctx, const OpNode& node,
               const std::vector<void*>& grad_outs) override {
         if (node.inputs.empty() || grad_outs.empty() || grad_outs[0] == nullptr)
@@ -50,96 +144,119 @@ public:
         const auto* S = int_vec_attr_local(node, "stride");
         const auto* P = int_vec_attr_local(node, "padding");
         if (K == nullptr || S == nullptr || P == nullptr) return false;
-        if (K->size() != 2 || S->size() != 2 || P->size() != 2) return false;
+        if (K->size() != RANK || S->size() != RANK || P->size() != RANK) return false;
 
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
         MPSGraphTensor* grad = as_tensor(grad_outs[0]);
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
         if (g == nil || grad == nil || x == nil) return false;
-
-        // Mixed-dtype reconciliation: avg_pool's gradient kernel
-        // needs grad + source tensor in matching dtypes (MPSGraph
-        // rejects otherwise under autocast).
-        const MPSDataType chain_dt = grad.dataType;
-        x = cast_if_needed(g, x, chain_dt);
-
-        MPSGraphPooling2DOpDescriptor* d =
-            [MPSGraphPooling2DOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
-                                                       kernelHeight:(NSUInteger)(*K)[0]
-                                                          strideInX:(NSUInteger)(*S)[1]
-                                                          strideInY:(NSUInteger)(*S)[0]
-                                                     paddingStyle:MPSGraphPaddingStyleExplicit
-                                                       dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-        d.paddingLeft = (NSUInteger)(*P)[1];
-        d.paddingRight = (NSUInteger)(*P)[1];
-        d.paddingTop = (NSUInteger)(*P)[0];
-        d.paddingBottom = (NSUInteger)(*P)[0];
-        d.includeZeroPadToAverage = YES;  // match forward emit
-
-        MPSGraphTensor* dx =
-            [g avgPooling2DGradientWithGradientTensor:grad
-                                          sourceTensor:x
-                                            descriptor:d
-                                                  name:@"avg_pool2d_vjp"];
-        bctx.accumulate_grad(x_id, from_tensor(dx));
-        return true;
-    }
-};
-
-// max_pool2d backward: needs the forward INDICES tensor.  MPSGraph
-// provides ``maxPooling2DGradientWithGradientTensor:sourceTensor:descriptor:``
-// which recomputes the max-positions from the source tensor (no
-// indices feed needed) — same convention as the forward emitter.
-class MaxPool2dVjp final : public VjpEmitter {
-public:
-    std::string_view op_name() const override { return "max_pool2d"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        if (node.inputs.empty() || grad_outs.empty() || grad_outs[0] == nullptr)
+        // Mixed-dtype reconciliation: the gradient kernels need grad and
+        // source in one dtype (MPSGraph rejects otherwise under autocast).
+        x = cast_if_needed(g, x, grad.dataType);
+        NSArray<NSNumber*>* xs = x.shape;
+        NSArray<NSNumber*>* gs = grad.shape;
+        if (xs.count != (NSUInteger)RANK + 2 || gs.count != xs.count || !known(xs) || !known(gs))
             return false;
-        TensorId x_id = node.inputs[0];
-        if (x_id < 0) return false;
 
-        const auto* K = int_vec_attr_local(node, "kernel_size");
-        const auto* S = int_vec_attr_local(node, "stride");
-        const auto* P = int_vec_attr_local(node, "padding");
-        if (K == nullptr || S == nullptr || P == nullptr) return false;
-        if (K->size() != 2 || S->size() != 2 || P->size() != 2) return false;
+        const bool ceil = flag_attr(node, "ceil_mode", false);
+        bool include_pad = true;
+        if (!IS_MAX) {
+            include_pad = flag_attr(node, "count_include_pad", true);
+            if (!settle_ceil_divisor(node, ceil, include_pad))
+                return false;
+        }
 
-        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
-        MPSGraphTensor* grad = as_tensor(grad_outs[0]);
-        MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
-        if (g == nil || grad == nil || x == nil) return false;
-
-        const MPSDataType chain_dt = grad.dataType;
-        x = cast_if_needed(g, x, chain_dt);
-
-        MPSGraphPooling2DOpDescriptor* d =
-            [MPSGraphPooling2DOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
-                                                       kernelHeight:(NSUInteger)(*K)[0]
-                                                          strideInX:(NSUInteger)(*S)[1]
-                                                          strideInY:(NSUInteger)(*S)[0]
-                                                     paddingStyle:MPSGraphPaddingStyleExplicit
-                                                       dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-        d.paddingLeft = (NSUInteger)(*P)[1];
-        d.paddingRight = (NSUInteger)(*P)[1];
-        d.paddingTop = (NSUInteger)(*P)[0];
-        d.paddingBottom = (NSUInteger)(*P)[0];
-
-        MPSGraphTensor* dx =
-            [g maxPooling2DGradientWithGradientTensor:grad
-                                          sourceTensor:x
-                                            descriptor:d
-                                                  name:@"max_pool2d_vjp"];
+        MPSGraphTensor* dx = nil;
+        if (RANK <= 2) {
+            // 1-D: (B, C, L) pooled as (B, C, 1, L).
+            NSArray<NSNumber*>* x4 = RANK == 1 ? @[ xs[0], xs[1], @1, xs[2] ] : xs;
+            NSArray<NSNumber*>* g4 = RANK == 1 ? @[ gs[0], gs[1], @1, gs[2] ] : gs;
+            MPSGraphTensor* xl = [g reshapeTensor:x withShape:x4 name:nil];
+            MPSGraphTensor* gl = [g reshapeTensor:grad withShape:g4 name:nil];
+            const std::int64_t kh = RANK == 1 ? 1 : (*K)[0], kw = (*K)[RANK - 1];
+            const std::int64_t sh = RANK == 1 ? 1 : (*S)[0], sw = (*S)[RANK - 1];
+            const std::int64_t ph = RANK == 1 ? 0 : (*P)[0], pw = (*P)[RANK - 1];
+            MPSGraphPooling2DOpDescriptor* d =
+                [MPSGraphPooling2DOpDescriptor descriptorWithKernelWidth:(NSUInteger)kw
+                                                           kernelHeight:(NSUInteger)kh
+                                                              strideInX:(NSUInteger)sw
+                                                              strideInY:(NSUInteger)sh
+                                                         paddingStyle:MPSGraphPaddingStyleExplicit
+                                                           dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
+            d.paddingLeft = (NSUInteger)pw;
+            d.paddingRight = (NSUInteger)pw;
+            d.paddingTop = (NSUInteger)ph;
+            d.paddingBottom = (NSUInteger)ph;
+            d.ceilMode = ceil;
+            MPSGraphTensor* dx4 = nil;
+            if (IS_MAX) {
+                d.returnIndicesMode = MPSGraphPoolingReturnIndicesLocalFlatten2D;
+                d.returnIndicesDataType = MPSDataTypeInt32;
+                NSArray<MPSGraphTensor*>* fwd =
+                    [g maxPooling2DReturnIndicesWithSourceTensor:xl descriptor:d name:nil];
+                if (fwd == nil || fwd.count != 2) return false;
+                dx4 = scatter_to_argmax(g, gl, fwd[1], x4, g4, {kh, kw}, {sh, sw}, {ph, pw});
+            } else {
+                d.includeZeroPadToAverage = include_pad;
+                dx4 = [g avgPooling2DGradientWithGradientTensor:gl
+                                                   sourceTensor:xl
+                                                     descriptor:d
+                                                           name:nil];
+            }
+            dx = [g reshapeTensor:dx4 withShape:xs name:nil];
+        } else {
+            // 3-D: (B, C, D, H, W) pooled as (B, C, 1, D, H, W) by the 4-D op.
+            NSArray<NSNumber*>* x6 = @[ xs[0], xs[1], @1, xs[2], xs[3], xs[4] ];
+            NSArray<NSNumber*>* g6 = @[ gs[0], gs[1], @1, gs[2], gs[3], gs[4] ];
+            MPSGraphTensor* xl = [g reshapeTensor:x withShape:x6 name:nil];
+            MPSGraphTensor* gl = [g reshapeTensor:grad withShape:g6 name:nil];
+            MPSGraphPooling4DOpDescriptor* d = [MPSGraphPooling4DOpDescriptor
+                descriptorWithKernelSizes:@[ @1, @((*K)[0]), @((*K)[1]), @((*K)[2]) ]
+                                  strides:@[ @1, @((*S)[0]), @((*S)[1]), @((*S)[2]) ]
+                            dilationRates:@[ @1, @1, @1, @1 ]
+                            paddingValues:@[
+                                @0, @0, @((*P)[0]), @((*P)[0]), @((*P)[1]), @((*P)[1]),
+                                @((*P)[2]), @((*P)[2])
+                            ]
+                             paddingStyle:MPSGraphPaddingStyleExplicit];
+            if (d == nil) return false;
+            d.ceilMode = ceil;
+            MPSGraphTensor* dx6 = nil;
+            if (IS_MAX) {
+                d.returnIndicesMode = MPSGraphPoolingReturnIndicesLocalFlatten4D;
+                d.returnIndicesDataType = MPSDataTypeInt32;
+                NSArray<MPSGraphTensor*>* fwd =
+                    [g maxPooling4DReturnIndicesWithSourceTensor:xl descriptor:d name:nil];
+                if (fwd == nil || fwd.count != 2) return false;
+                dx6 = scatter_to_argmax(g, gl, fwd[1], x6, g6, {1, (*K)[0], (*K)[1], (*K)[2]},
+                                        {1, (*S)[0], (*S)[1], (*S)[2]},
+                                        {0, (*P)[0], (*P)[1], (*P)[2]});
+            } else {
+                d.includeZeroPadToAverage = include_pad;
+                dx6 = [g avgPooling4DGradientWithGradientTensor:gl
+                                                   sourceTensor:xl
+                                                     descriptor:d
+                                                           name:nil];
+            }
+            dx = [g reshapeTensor:dx6 withShape:xs name:nil];
+        }
+        if (dx == nil) return false;
         bctx.accumulate_grad(x_id, from_tensor(dx));
         return true;
     }
+
+private:
+    std::string name_;
 };
 
 struct PoolVjpRegistrar {
     PoolVjpRegistrar() {
-        register_vjp_emitter(std::make_unique<AvgPool2dVjp>());
-        register_vjp_emitter(std::make_unique<MaxPool2dVjp>());
+        register_vjp_emitter(std::make_unique<PoolVjp<1, true>>("max_pool1d"));
+        register_vjp_emitter(std::make_unique<PoolVjp<1, false>>("avg_pool1d"));
+        register_vjp_emitter(std::make_unique<PoolVjp<2, true>>("max_pool2d"));
+        register_vjp_emitter(std::make_unique<PoolVjp<2, false>>("avg_pool2d"));
+        register_vjp_emitter(std::make_unique<PoolVjp<3, true>>("max_pool3d"));
+        register_vjp_emitter(std::make_unique<PoolVjp<3, false>>("avg_pool3d"));
     }
 };
 

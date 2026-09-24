@@ -1,24 +1,22 @@
 """RNG behaviour in compile mode.
 
-The MPSGraph RNG path is **stateless** (descriptor-baked seed): every
-invocation of the compiled executable produces the *same* random
-sequence.  This is intentional — the alternative path
-(``randomTensorWithShape:descriptor:stateTensor:``) requires plumbing
-a Philox state buffer through the executable's I/O schema, which
-would be a cross-cutting refactor of the compile-pipeline contract.
+A random draw inside a compiled function is drawn again on every call.
+The RNG ops used to lower into the graph with the trace-time seed baked
+into the descriptor, so every call of the executable drew the same values
+— and a diffusion step compiled with ``make_step`` trained on one noise
+sample and one timestep forever, with nothing failing.
 
-The trade-off is therefore explicit:
-
-  * Deterministic-per-executable RNG: useful for inference-mode
-    smoke tests, adversarial-robustness probes, and any pattern that
-    expects reproducible noise.
-  * Stochastic step-to-step RNG (dropout regularisation, data aug,
-    MC sampling): **users must keep these in eager mode**.
-
-The tests below pin both halves of that contract — compile-mode RNG
-must be reproducible across calls, and the user-facing API must not
-silently degrade dropout in training mode.
+Now a draw from the default generator becomes a feed that the run path
+makes again through the same eager op, in trace order
+(``lucid/_C/compile/RngFeeds.h``).  Under the same seed a compiled call
+draws exactly what eager draws and leaves the generator where eager
+would; the draw is taken from whichever generator ``lucid.manual_seed``
+installed last, not the one the trace saw.  A draw from a caller's own
+generator runs eager — the executable could not advance it.
 """
+
+import numpy as np
+import pytest
 
 import lucid
 import lucid.nn as nn
@@ -26,12 +24,19 @@ import lucid.nn as nn
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 
-class _RandModel(nn.Module):
-    """Wraps an RNG op into an nn.Module so it can be ``lucid.compile``-d.
+def _metal_ok() -> bool:
+    try:
+        lucid.zeros(1).to(COMPILE_DEVICE)
+    except Exception:  # noqa: BLE001 — any failure means no Metal here
+        return False
+    return True
 
-    The op is dispatched in :meth:`forward` so a single Tracer captures
-    it — the resulting executable's RNG seed is baked at compile time.
-    """
+
+pytestmark = pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
+
+
+class _RandModel(nn.Module):
+    """Wraps an RNG op into an nn.Module so it can be ``lucid.compile``-d."""
 
     def __init__(self, mode: str = "randn") -> None:
         super().__init__()
@@ -47,29 +52,18 @@ class _RandModel(nn.Module):
         return x + r
 
 
-def test_compile_randn_deterministic_per_executable() -> None:
-    """Repeated calls to a compiled RNG executable yield the same draw.
-
-    This is the documented behaviour — the descriptor-baked seed makes
-    every invocation reproduce the same Philox stream.  If we ever
-    promote to the stateful path this test should change to
-    ``assert torch_neq(first, second)`` and the user-guide note
-    updated in lock-step.
-    """
+def test_compile_randn_draws_afresh_each_call() -> None:
     lucid.manual_seed(42)
     model = _RandModel("randn").to(COMPILE_DEVICE)
     cm = lucid.compile(model)
 
     x = lucid.zeros(4, 8).to(COMPILE_DEVICE)
-    first = cm(x).detach().clone()
-    second = cm(x).detach().clone()
-
-    diff = float((first - second).abs().max().item())
-    assert diff == 0.0, (
-        f"compile-mode RNG was supposed to be deterministic-per-executable, "
-        f"got diff = {diff:.3e}.  Either the stateless seed path silently "
-        f"became stateful, or a buffer was reused across calls."
-    )
+    first = cm(x).numpy()
+    second = cm(x).numpy()
+    third = cm(x).numpy()
+    assert not cm.cache_info()["eager_only"]
+    assert not np.array_equal(first, second)
+    assert not np.array_equal(second, third)
 
 
 def test_compile_rand_uniform_within_bounds() -> None:
@@ -101,3 +95,102 @@ def test_compile_randn_normal_stats() -> None:
     std = float(((r - mean) ** 2).mean().sqrt().item())
     assert abs(mean) < 0.05, f"randn mean = {mean}"
     assert abs(std - 1.0) < 0.05, f"randn std = {std}"
+
+
+class _Draws(nn.Module):
+    """Every traced RNG kind, each feeding a parameterised computation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: lucid.Tensor) -> tuple[lucid.Tensor, lucid.Tensor]:
+        dev = x.device
+        noise = lucid.randn(*x.shape, device=dev)
+        t = lucid.randint(0, 1000, (x.shape[0], 1), device=dev)
+        u = lucid.rand(x.shape[0], 1, device=dev)
+        g = lucid.normal(2.0, 0.5, size=(1, x.shape[1]), device=dev)
+        keep = lucid.bernoulli(0.7, size=(x.shape[0], 1), device=dev)
+        h = self.lin(x + noise) * (t.float() / 1000.0 + u) + g
+        return h * keep, noise
+
+
+def _model() -> _Draws:
+    lucid.manual_seed(0)
+    return _Draws().to(COMPILE_DEVICE).eval()
+
+
+def _x() -> lucid.Tensor:
+    lucid.manual_seed(1)
+    return lucid.randn(4, 8).to(COMPILE_DEVICE)
+
+
+def test_every_call_draws_afresh() -> None:
+    model, x = _model(), _x()
+    compiled = lucid.compile(model)
+    outs = [compiled(x)[0].numpy() for _ in range(3)]
+    assert not compiled.cache_info()["eager_only"]
+    assert not np.array_equal(outs[1], outs[2])
+    assert not np.array_equal(outs[0], outs[1])
+
+
+def test_compiled_call_is_bit_identical_to_eager() -> None:
+    model, x = _model(), _x()
+    compiled = lucid.compile(model)
+    compiled(x)  # trace
+    for seed in (5, 6):
+        lucid.manual_seed(seed)
+        got_h, got_noise = (t.numpy() for t in compiled(x))
+        after_compiled = lucid.rand(3).numpy()
+        lucid.manual_seed(seed)
+        want_h, want_noise = (t.numpy() for t in model(x))
+        after_eager = lucid.rand(3).numpy()
+        # The draws are eager's own, bit for bit; the returned one is the
+        # fresh draw, not the trace's.  The arithmetic on them is MPSGraph's.
+        assert np.array_equal(got_noise, want_noise)
+        assert np.allclose(got_h, want_h, rtol=1e-5, atol=1e-6)
+        # And the generator was left where eager leaves it.
+        assert np.array_equal(after_compiled, after_eager)
+    assert not compiled.cache_info()["eager_only"]
+
+
+def test_make_step_draws_like_eager() -> None:
+    model, x = _model(), _x()
+
+    def loss_fn(out: tuple[lucid.Tensor, lucid.Tensor]) -> lucid.Tensor:
+        return (out[0] * out[0]).sum()
+
+    step = lucid.compile.make_step(model, loss_fn)
+    step(x).backward()  # trace
+    for seed in (7, 8):
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        got = step(x)
+        got.backward()
+        got_grads = [p.grad.numpy().copy() for p in model.parameters()]
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        want = loss_fn(model(x))
+        want.backward()
+        want_grads = [p.grad.numpy() for p in model.parameters()]
+        assert np.allclose(got.item(), want.item(), rtol=1e-5)
+        for g, w in zip(got_grads, want_grads):
+            assert np.allclose(g, w, rtol=1e-4, atol=1e-5)
+    assert not step.eager_only
+
+
+def test_own_generator_runs_eager() -> None:
+    """The executable cannot advance a caller's generator — it declines."""
+    gen = lucid.Generator(3)
+
+    class _OwnGen(nn.Module):
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            return x + lucid.randn(*x.shape, device=x.device, generator=gen)
+
+    compiled = lucid.compile(_OwnGen())
+    x = _x()
+    a, b = compiled(x).numpy(), compiled(x).numpy()
+    assert not np.array_equal(a, b)
+    assert compiled.cache_info()["eager_only"]

@@ -102,7 +102,27 @@ in the fast tier, about half a minute together.
 Values are read through `Tensor.numpy()` on the tensor as produced — the
 path that once reported compiled integer outputs as float32. A fallback to
 eager is allowed only where the harness lists it with a reason, so a graph
-that stops compiling fails the day it happens.
+that stops compiling fails the day it happens — and a listed case that
+compiles fails too, so the lists cannot go stale.
+
+`test_op_grad_replay.py` runs every case twice: once as training runs, and
+once with `LUCID_MANUAL_VJP_REQUIRE=1`, where MPSGraph's autodiff may not
+stand in for a missing VJP. A train-mode batch norm or an interpolation
+anywhere in a model rules that autodiff out, so an op without a VJP sent
+the whole model's step eager — twenty ops were in that state and nothing
+said so.
+
+Combinations the single-op cases cannot see are covered by a few composite
+cases (pad then pool, pool or resize then transpose) and, per model, by
+`unit/compile/_zoo_matrix.py`: the smallest factory of every zoo family,
+shrunk through its config, compiled with `make_step` and compared with eager
+in eval and in train mode (loss, every gradient, batch-norm buffers). It is
+a harness, not a test — one family per process, since an MPSGraph abort
+kills the interpreter:
+
+```
+python -m lucid.test.unit.compile._zoo_matrix <family> <task>
+```
 
 Adding a case means adding it to `CASES` and giving it a numpy reference in
 `REFS`, or a reason in `NO_REF` — `test_every_case_is_accounted_for` fails

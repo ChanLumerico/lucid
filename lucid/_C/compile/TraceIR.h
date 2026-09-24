@@ -208,6 +208,12 @@ struct LUCID_API OpNode {
 struct LUCID_API TraceGraph {
     std::vector<OpNode> ops;
     TensorId next_id = 0;
+    // Non-empty when something ran during the trace that the recording
+    // cannot stand for — a backward pass inside the traced function
+    // (``autograd.grad`` / ``backward``): its values are storage the
+    // tracer never sees, so a compiled replay would reuse them.  Every
+    // compile entry point refuses such a graph, and the call runs eager.
+    std::string unsupported;
 };
 
 }  // namespace lucid::compile
