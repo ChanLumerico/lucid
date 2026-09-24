@@ -204,6 +204,13 @@ public:
     // ``TraceGraph::unsupported``).  The first reason given is kept.
     void mark_unsupported(std::string why);
 
+    // Whether a draw from the default generator becomes a feed drawn again
+    // on every run (the compile path, :file:`RngFeeds.h`) — on by default —
+    // or stays an op in the recording.  Core ML export turns it off: it
+    // lifts each recorded draw into a model input, which needs the op.
+    bool redraw_rng() const { return redraw_rng_; }
+    void set_redraw_rng(bool on) { redraw_rng_ = on; }
+
     // A value the trace knows — an op's output, an input, a parameter or a
     // random draw — read on the host (``item`` / ``tolist`` / ``numpy``,
     // and so ``float(t)`` or ``if t > 0``).  What the host does with it is
@@ -306,6 +313,7 @@ private:
     // wrong id.  Keeping every TensorImplPtr alive for the trace's
     // lifetime makes raw-pointer keys unambiguous.
     std::vector<TensorImplPtr> live_refs_;
+    bool redraw_rng_ = true;
 };
 
 // Returns the :class:`Tracer` currently installed on the calling

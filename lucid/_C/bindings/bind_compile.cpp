@@ -175,6 +175,9 @@ void register_compile(py::module_& m) {
     py::class_<Tracer>(m, "Tracer")
         .def(py::init<>())
         .def_property_readonly("graph", &Tracer::graph, py::return_value_policy::reference_internal)
+        .def_property("redraw_rng", &Tracer::redraw_rng, &Tracer::set_redraw_rng,
+                      "Whether default-generator draws become feeds drawn again on "
+                      "every run (compile) or stay ops in the recording (Core ML).")
         .def("mark_unsupported", &Tracer::mark_unsupported, py::arg("why"),
              "Mark the recording as one no executable can stand for; every "
              "compile entry point then refuses it.")

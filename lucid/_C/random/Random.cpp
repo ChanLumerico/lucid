@@ -51,7 +51,14 @@ inline void register_rng_output(const char* name,
     auto* trc = ::lucid::compile::current_tracer();
     if (trc == nullptr)
         return;
-    if (gen == nullptr || gen == &default_generator() || gen == &current_default_generator()) {
+    const bool default_gen =
+        gen == nullptr || gen == &default_generator() || gen == &current_default_generator();
+    if (default_gen && !trc->redraw_rng()) {
+        // Kept as an op: the consumer of this trace wants the draw itself.
+        trc->on_op_io({}, out);
+        return;
+    }
+    if (default_gen) {
         recipe.shape = out->shape();
         recipe.dtype = out->dtype();
         recipe.device = out->device();

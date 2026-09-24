@@ -461,6 +461,9 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     with _observers_paused(model):
         before = _buffer_marks(model)
         with _compile._tracing() as tracer:
+            # Draws stay ops in the recording: export lifts each one into a
+            # model input, where the compile path would turn it into a feed.
+            tracer.redraw_rng = False
             if by_keyword:
                 result = model(**dict(examples))
             else:

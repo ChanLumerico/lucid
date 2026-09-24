@@ -91,7 +91,8 @@ DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Genera
     // eager would have drawn; as an op it could only run eager, and every
     // model with dropout trained compiled not at all.  See
     // :file:`compile/RngFeeds.h`.
-    if (auto* trc = compile::current_tracer(); trc != nullptr && gen == nullptr) {
+    if (auto* trc = compile::current_tracer();
+        trc != nullptr && gen == nullptr && trc->redraw_rng()) {
         auto mask_t = std::make_shared<TensorImpl>(std::move(scaled_mask), a->shape(), a->dtype(),
                                                    a->device(), false);
         compile::RngRecipe r;

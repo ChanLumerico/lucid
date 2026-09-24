@@ -19,8 +19,9 @@
 // a VJP, and a U-Net in 3-D or a 1-D audio net trained eager.
 //
 //   avg: MPSGraph's pooling-gradient kernel, same descriptor.
-//   max: the forward-with-indices op and a scatter-add of the gradient to
-//        the arg-max positions.  ``maxPooling2DGradientWithGradientTensor``
+//   max: the arg-max found by comparing strided slices of the padded source
+//        with the pooled value (``local_argmax``), then a scatter-add of the
+//        gradient to those positions.  ``maxPooling2DGradientWithGradientTensor``
 //        placed the gradient wrongly when it arrived transposed — a pooled
 //        map reshaped to a sequence and permuted, as CoAtNet's downsampling
 //        attention does, came back 50–100 % off against both eager and an
@@ -30,6 +31,7 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -127,6 +129,77 @@ MPSGraphTensor* scatter_to_argmax(MPSGraph* g, MPSGraphTensor* grad, MPSGraphTen
     return [g reshapeTensor:out withShape:xs name:nil];
 }
 
+// Each window's arg-max as a flat index within the window (last axis
+// fastest), found without MPSGraph's pooling-with-indices kernel: the
+// source is padded with -inf, and for every kernel offset the strided slice
+// it picks out is compared with the pooled value ``y``; the first offset
+// that matches wins, as eager's first-maximum rule has it.  The kernel is
+// avoided because it aborted on macOS 15 ("Multi destination pooling
+// encode has no non-nil destinations") under a fused, float16 training
+// step — and it had already miscounted once MPSGraph folded a pad into it.
+MPSGraphTensor* local_argmax(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* y,
+                             const std::vector<std::int64_t>& kernel,
+                             const std::vector<std::int64_t>& stride,
+                             const std::vector<std::int64_t>& pad_front) {
+    NSArray<NSNumber*>* xs = x.shape;
+    NSArray<NSNumber*>* ys = y.shape;
+    const std::size_t nd = xs.count - 2;
+    NSMutableArray<NSNumber*>* left = [NSMutableArray arrayWithArray:@[ @0, @0 ]];
+    NSMutableArray<NSNumber*>* right = [NSMutableArray arrayWithArray:@[ @0, @0 ]];
+    for (std::size_t a = 0; a < nd; ++a) {
+        const long long in = xs[a + 2].longLongValue, out = ys[a + 2].longLongValue;
+        const long long need = (out - 1) * stride[a] + kernel[a] - in - pad_front[a];
+        [left addObject:@(pad_front[a])];
+        [right addObject:@(need > 0 ? need : 0)];
+    }
+    MPSGraphTensor* xp = [g padTensor:x
+                      withPaddingMode:MPSGraphPaddingModeConstant
+                          leftPadding:left
+                         rightPadding:right
+                        constantValue:-INFINITY
+                                 name:nil];
+    long long offsets = 1;
+    for (std::size_t a = 0; a < nd; ++a)
+        offsets *= kernel[a];
+    MPSGraphTensor* found = [g constantWithScalar:0.0 shape:ys dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* local = [g constantWithScalar:0.0 shape:ys dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:MPSDataTypeFloat32];
+    for (long long t = 0; t < offsets; ++t) {
+        std::vector<long long> off(nd, 0);
+        long long rem = t;
+        for (std::size_t a = nd; a-- > 0;) {
+            off[a] = rem % kernel[a];
+            rem /= kernel[a];
+        }
+        NSMutableArray<NSNumber*>* starts = [NSMutableArray arrayWithArray:@[ @0, @0 ]];
+        NSMutableArray<NSNumber*>* ends = [NSMutableArray arrayWithArray:@[ xs[0], xs[1] ]];
+        NSMutableArray<NSNumber*>* steps = [NSMutableArray arrayWithArray:@[ @1, @1 ]];
+        for (std::size_t a = 0; a < nd; ++a) {
+            const long long out = ys[a + 2].longLongValue;
+            [starts addObject:@(off[a])];
+            [ends addObject:@(off[a] + (out - 1) * stride[a] + 1)];
+            [steps addObject:@(stride[a])];
+        }
+        MPSGraphTensor* xt = [g sliceTensor:xp starts:starts ends:ends strides:steps name:nil];
+        MPSGraphTensor* eq = [g castTensor:[g equalWithPrimaryTensor:xt secondaryTensor:y name:nil]
+                                    toType:MPSDataTypeFloat32
+                                      name:nil];
+        MPSGraphTensor* hit = [g multiplicationWithPrimaryTensor:eq
+                                                 secondaryTensor:[g subtractionWithPrimaryTensor:one
+                                                                                 secondaryTensor:found
+                                                                                            name:nil]
+                                                            name:nil];
+        found = [g additionWithPrimaryTensor:found secondaryTensor:hit name:nil];
+        local = [g additionWithPrimaryTensor:local
+                             secondaryTensor:[g multiplicationWithPrimaryTensor:hit
+                                                                secondaryTensor:[g constantWithScalar:(double)t
+                                                                                             dataType:MPSDataTypeFloat32]
+                                                                           name:nil]
+                                        name:nil];
+    }
+    return [g castTensor:local toType:MPSDataTypeInt32 name:nil];
+}
+
 // One pool VJP for every rank: RANK is the number of pooled axes.
 template <int RANK, bool IS_MAX>
 class PoolVjp final : public VjpEmitter {
@@ -190,12 +263,10 @@ public:
             d.ceilMode = ceil;
             MPSGraphTensor* dx4 = nil;
             if (IS_MAX) {
-                d.returnIndicesMode = MPSGraphPoolingReturnIndicesLocalFlatten2D;
-                d.returnIndicesDataType = MPSDataTypeInt32;
-                NSArray<MPSGraphTensor*>* fwd =
-                    [g maxPooling2DReturnIndicesWithSourceTensor:xl descriptor:d name:nil];
-                if (fwd == nil || fwd.count != 2) return false;
-                dx4 = scatter_to_argmax(g, gl, fwd[1], x4, g4, {kh, kw}, {sh, sw}, {ph, pw});
+                MPSGraphTensor* y4 = [g maxPooling2DWithSourceTensor:xl descriptor:d name:nil];
+                if (y4 == nil) return false;
+                MPSGraphTensor* local = local_argmax(g, xl, y4, {kh, kw}, {sh, sw}, {ph, pw});
+                dx4 = scatter_to_argmax(g, gl, local, x4, g4, {kh, kw}, {sh, sw}, {ph, pw});
             } else {
                 d.includeZeroPadToAverage = include_pad;
                 dx4 = [g avgPooling2DGradientWithGradientTensor:gl
@@ -223,14 +294,13 @@ public:
             d.ceilMode = ceil;
             MPSGraphTensor* dx6 = nil;
             if (IS_MAX) {
-                d.returnIndicesMode = MPSGraphPoolingReturnIndicesLocalFlatten4D;
-                d.returnIndicesDataType = MPSDataTypeInt32;
-                NSArray<MPSGraphTensor*>* fwd =
-                    [g maxPooling4DReturnIndicesWithSourceTensor:xl descriptor:d name:nil];
-                if (fwd == nil || fwd.count != 2) return false;
-                dx6 = scatter_to_argmax(g, gl, fwd[1], x6, g6, {1, (*K)[0], (*K)[1], (*K)[2]},
-                                        {1, (*S)[0], (*S)[1], (*S)[2]},
-                                        {0, (*P)[0], (*P)[1], (*P)[2]});
+                MPSGraphTensor* y6 = [g maxPooling4DWithSourceTensor:xl descriptor:d name:nil];
+                if (y6 == nil) return false;
+                const std::vector<std::int64_t> k4{1, (*K)[0], (*K)[1], (*K)[2]};
+                const std::vector<std::int64_t> s4{1, (*S)[0], (*S)[1], (*S)[2]};
+                const std::vector<std::int64_t> p4{0, (*P)[0], (*P)[1], (*P)[2]};
+                MPSGraphTensor* local = local_argmax(g, xl, y6, k4, s4, p4);
+                dx6 = scatter_to_argmax(g, gl, local, x6, g6, k4, s4, p4);
             } else {
                 d.includeZeroPadToAverage = include_pad;
                 dx6 = [g avgPooling4DGradientWithGradientTensor:gl

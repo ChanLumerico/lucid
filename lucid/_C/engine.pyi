@@ -1041,9 +1041,12 @@ class _utils_namespace:
 
 utils: _utils_namespace
 
-# ── Fused kernels & Metal runner ─────────────────────────────────────────────
+# ── Default-generator override (``lucid.manual_seed``'s; see Generator.h) ─────
 
 def _set_default_override(generator: Generator | None) -> None: ...
+
+# ── Fused kernels & Metal runner ─────────────────────────────────────────────
+
 def _fused_linear_relu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...
 def _fused_linear_gelu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...
 def _run_metal_kernel(source: str, kernel_name: str, inputs: list[TensorImpl], output_shape: list[int], output_dtype: Dtype, threads_per_grid: list[int], threads_per_group: list[int]) -> TensorImpl: ...

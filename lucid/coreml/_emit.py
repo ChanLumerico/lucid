@@ -947,6 +947,17 @@ def _contiguous(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
     return Bound([ins[0]])
 
 
+@_emitter("detach")
+def _detach(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+    """The value itself: an exported graph has no gradient to stop.
+
+    ``detach`` is traced (a straight-through estimator's ``x + (q - x).detach()``
+    otherwise reached the compile path as a stale constant), so it reaches
+    here too — as nothing, like ``contiguous``.
+    """
+    return Bound([ins[0]])
+
+
 @_emitter("astype")
 def _astype(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """A cast to the type the result is declared as.

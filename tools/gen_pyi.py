@@ -655,6 +655,10 @@ class _utils_namespace:
 
 utils: _utils_namespace
 
+# ── Default-generator override (``lucid.manual_seed``'s; see Generator.h) ─────
+
+def _set_default_override(generator: Generator | None) -> None: ...
+
 # ── Fused kernels & Metal runner ─────────────────────────────────────────────
 
 def _fused_linear_relu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...
