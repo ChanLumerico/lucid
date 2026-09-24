@@ -344,7 +344,7 @@ class TestReturnNormalisation:
         returns = lucid.randn((256,)) * 1000.0
         normaliser = ReturnNormaliser()
         for _ in range(400):
-            divisor = normaliser.update(returns)
+            divisor = float(normaliser.update(returns))
         spread = float((percentile(returns, 95.0) - percentile(returns, 5.0)).item())
         assert abs(divisor - spread) / spread < 0.05
 
@@ -353,7 +353,7 @@ class TestReturnNormalisation:
         lucid.manual_seed(0)
         normaliser = ReturnNormaliser()
         for _ in range(400):
-            divisor = normaliser.update(lucid.randn((256,)) * 0.001)
+            divisor = float(normaliser.update(lucid.randn((256,)) * 0.001))
         assert divisor == 1.0
 
     def test_evaluating_a_model_does_not_move_the_estimate(self) -> None:
@@ -363,18 +363,18 @@ class TestReturnNormalisation:
         observations, actions, rewards = _batch(t=3)
         model.train()
         model(observations, actions, rewards)
-        trained = model.returns.spread
+        trained = float(model.returns.spread)
         assert trained > 0.0
 
         model.eval()
         behavior = model(observations, actions, rewards * 500.0).behavior
         assert behavior is not None
-        assert model.returns.spread == trained
-        assert behavior.return_scale == max(1.0, trained)
+        assert float(model.returns.spread) == trained
+        assert float(behavior.return_scale) == max(1.0, trained)
 
         model.train()
         model(observations, actions, rewards * 500.0)
-        assert model.returns.spread != trained, "training must still update it"
+        assert float(model.returns.spread) != trained, "training must still update it"
 
     def test_the_actor_objective_is_scale_free(self) -> None:
         """The claim the fixed entropy coefficient rests on."""
@@ -750,8 +750,12 @@ class TestGradientRouting:
         )
 
     def test_backward_gives_each_group_its_own_loss(self) -> None:
+        # Free bits off: at initialisation every KL term sits under the
+        # 1-nat floor, so the prior head's only gradient is exactly zero.
+        # This test passed with the floor on only while the CPU ``maximum``
+        # backward read its broadcast operand past the buffer (3.15.0).
         lucid.manual_seed(0)
-        model = DreamerV3ForWorldModeling(_tiny_cfg(pcont=True))
+        model = DreamerV3ForWorldModeling(_tiny_cfg(pcont=True, free_nats=0.0))
         observations, actions, rewards = _batch(t=4)
         output = model(observations, actions, rewards, lucid.ones((2, 4)))
         model.backward(output)

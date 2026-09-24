@@ -754,8 +754,6 @@ EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
     ),
     # Annealed sampling picks the noise level from a host-side value.
     ("ncsn", "image-generation"): ("fallback", "fallback", "read on the host"),
-    # The return normaliser keeps its percentile EMA in Python floats.
-    ("dreamer_v3", "world-modeling"): ("ok", "fallback", "read on the host"),
 }
 
 _MODULE = "lucid.test.unit.compile._zoo_matrix"

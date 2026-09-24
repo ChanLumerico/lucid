@@ -5,9 +5,10 @@ had to supply per domain, and each is written here rather than inline
 because each has a failure mode worth naming in one place.
 """
 
-from typing import cast
+from typing import cast, override
 
 import lucid
+import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models.generative._common._rssm import RSSMState, categorical_kl
 
@@ -150,7 +151,7 @@ def percentile(values: Tensor, fraction: float) -> Tensor:
     return ordered[index]
 
 
-class ReturnNormaliser:
+class ReturnNormaliser(nn.Module):
     r"""A slow estimate of how wide the returns currently are.
 
     Parameters
@@ -161,6 +162,11 @@ class ReturnNormaliser:
         Percentiles whose difference is the spread.
     floor : float, default=1.0
         The divisor is ``max(floor, spread)``.
+
+    Attributes
+    ----------
+    spread : Tensor
+        The running estimate, a 0-d buffer.
 
     Notes
     -----
@@ -182,9 +188,13 @@ class ReturnNormaliser:
     dividing by a genuinely small spread would amplify what is mostly
     noise: below that width the returns are left in their own units.
 
-    Not a module — it holds one float and no parameters, and making it
-    one would put a non-learnable scalar into ``state_dict`` where a
-    reader would reasonably expect weights.
+    The estimate is a tensor updated in place, not a Python float read
+    back from the device each step: that read stalled every step on a
+    device sync and made a compiled training step impossible, since a
+    value read on the host is frozen into the compiled graph.  It is a
+    *non-persistent* buffer — it follows the model across devices, but it
+    is a statistic of the current returns, not a weight, and stays out of
+    ``state_dict``.
 
     Examples
     --------
@@ -196,6 +206,8 @@ class ReturnNormaliser:
     (4, 8)
     """
 
+    spread: Tensor
+
     def __init__(
         self,
         decay: float = 0.99,
@@ -204,6 +216,7 @@ class ReturnNormaliser:
         floor: float = 1.0,
     ) -> None:
         """Initialise the estimate. See the class docstring for parameters."""
+        super().__init__()
         if not 0.0 <= decay < 1.0:
             raise ValueError(f"decay must be in [0, 1), got {decay}")
         if not 0.0 <= low < high <= 100.0:
@@ -216,17 +229,17 @@ class ReturnNormaliser:
         self.low = low
         self.high = high
         self.floor = floor
-        self.spread = 0.0
+        self.register_buffer("spread", lucid.zeros(()), persistent=False)
 
     @property
-    def scale(self) -> float:
+    def scale(self) -> Tensor:
         """The current divisor, without folding anything in.
 
         Returns
         -------
-        float
-            ``max(floor, spread)`` — what :meth:`update` would return if
-            this batch happened to match the running estimate exactly.
+        Tensor
+            ``max(floor, spread)``, 0-d — what :meth:`update` would return
+            if this batch happened to match the running estimate exactly.
 
         Notes
         -----
@@ -236,21 +249,21 @@ class ReturnNormaliser:
         an evaluation pass update the divisor makes a run's numbers
         depend on how often it was measured.
         """
-        return max(self.floor, self.spread)
+        return self.spread.clip(self.floor, None)
 
     @lucid.no_grad()
-    def update(self, returns: Tensor) -> float:
+    def update(self, returns: Tensor) -> Tensor:
         """Fold this batch's spread into the estimate.
 
         Parameters
         ----------
         returns : Tensor
-            Lambda-returns, any shape.
+            Lambda-returns, any shape, on the estimate's device.
 
         Returns
         -------
-        float
-            The divisor after the update — ``max(floor, spread)``.
+        Tensor
+            The divisor after the update — ``max(floor, spread)``, 0-d.
 
         Examples
         --------
@@ -259,27 +272,26 @@ class ReturnNormaliser:
         ...     ReturnNormaliser)
         >>> norm = ReturnNormaliser()
         >>> returns = lucid.tensor([float(i) for i in range(101)])
-        >>> norm.update(returns)
+        >>> float(norm.update(returns))
         1.0
 
         This batch's 5th-to-95th percentile spread is 90, but one update
         moves the estimate only ``1 - decay`` of the way there, and the
         floor holds the divisor at 1 until the estimate passes it:
 
-        >>> round(norm.spread, 4)
+        >>> round(float(norm.spread), 4)
         0.9
         >>> for _ in range(99):
         ...     scale = norm.update(returns)
-        >>> round(scale, 2)
+        >>> round(float(scale), 2)
         57.06
         """
-        observed = float(
-            (percentile(returns, self.high) - percentile(returns, self.low)).item()
-        )
-        self.spread = self.decay * self.spread + (1.0 - self.decay) * observed
-        return max(self.floor, self.spread)
+        observed = percentile(returns, self.high) - percentile(returns, self.low)
+        self.spread.mul_(self.decay).add_(observed * (1.0 - self.decay))
+        return self.scale
 
-    def __call__(self, returns: Tensor) -> Tensor:
+    @override
+    def forward(self, returns: Tensor) -> Tensor:  # type: ignore[override]
         """Update the estimate and return the scaled returns.
 
         Parameters
@@ -290,7 +302,7 @@ class ReturnNormaliser:
         Returns
         -------
         Tensor
-            ``returns / max(floor, spread)`` — the divisor is a plain
-            float, so nothing differentiates through the normalisation.
+            ``returns / max(floor, spread)`` — the divisor is computed under
+            ``no_grad``, so nothing differentiates through the normalisation.
         """
         return cast(Tensor, returns / self.update(returns))

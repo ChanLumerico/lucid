@@ -89,8 +89,8 @@ class DreamerV3BehaviorOutput(ModelOutput):
         carries the replayed-trajectory term when one is configured.
     lambda_return : Tensor
         The targets, ``(N, H)``, bootstrapped from the *live* critic.
-    return_scale : float
-        What the advantage was divided by — ``max(1, S)``.  Exposed
+    return_scale : Tensor
+        What the advantage was divided by — ``max(1, S)``, 0-d.  Exposed
         because it is the number that decides whether the entropy bonus
         is currently doing anything.
     entropy : Tensor
@@ -122,7 +122,7 @@ class DreamerV3BehaviorOutput(ModelOutput):
     actor_loss: Tensor
     value_loss: Tensor
     lambda_return: Tensor
-    return_scale: float
+    return_scale: Tensor
     entropy: Tensor
     imagined_reward: Tensor
     imagined_value: Tensor
@@ -855,7 +855,7 @@ class DreamerV3ForWorldModeling(WorldModelingModel):
         actions: Tensor,
         target: Tensor,
         weight: Tensor,
-        scale: float,
+        scale: Tensor,
     ) -> tuple[Tensor, Tensor]:
         r"""The policy's objective — score function, on a scale-free advantage.
 
@@ -869,8 +869,8 @@ class DreamerV3ForWorldModeling(WorldModelingModel):
             Lambda-returns, ``(N, H)``.
         weight : Tensor
             Cumulative discount, ``(N, H)`` or broadcastable.
-        scale : float
-            ``max(1, S)`` — the divisor that makes the advantage
+        scale : Tensor
+            ``max(1, S)``, 0-d — the divisor that makes the advantage
             dimensionless.
 
         Returns

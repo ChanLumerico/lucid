@@ -93953,6 +93953,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
@@ -94693,6 +94700,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
@@ -95433,6 +95447,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
@@ -96173,6 +96194,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
@@ -96913,6 +96941,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
@@ -97653,6 +97688,13 @@
             ]
           }
         ]
+      },
+      {
+        "name": "returns",
+        "type": "ReturnNormaliser",
+        "params": 0,
+        "own_params": 0,
+        "children": []
       }
     ]
   },
