@@ -81,10 +81,11 @@ else
 fi
 
 # ── 6. UBSan build ────────────────────────────────────────────────────────────
-# LUCID_CI_SLOW_STAGES=0 skips the two stages that cost the most and
-# almost never change with a push: this sanitizer build (7.5 minutes,
-# and warn-only, so it never stopped the gate anyway) and the published
-# checkpoint fit below (every checkpoint downloaded).  CI sets it for
+# LUCID_CI_SLOW_STAGES=0 skips the stages that cost the most and almost
+# never change with a push: this sanitizer build (7.5 minutes, and
+# warn-only, so it never stopped the gate anyway), the published
+# checkpoint fit below (every checkpoint downloaded) and the zoo's
+# compiled-training sweep (a process per family).  CI sets it for
 # pushes; the nightly schedule, manual runs and a local ``ci_full.sh``
 # run everything.
 if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
@@ -214,6 +215,21 @@ if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
     fi
 else
     echo "==> Published checkpoint fit — skipped (LUCID_CI_SLOW_STAGES=0; see the UBSan stage)"
+fi
+
+# Zoo compiled training — one training step of every model-zoo family,
+# compiled (make_step) and compared with eager: the loss, every gradient and
+# every buffer the step updates.  The op matrices prove each op alone; a model
+# is where they meet, and where a missing VJP or a value frozen at trace time
+# shows.  One child process per family, since an MPSGraph abort kills the
+# interpreter.  The pairs that run eager are listed with their reasons in
+# ``_zoo_matrix.EXPECTED``, strict both ways — a pair that starts compiling
+# fails until its entry is deleted.  ~10 minutes on an M1 Pro, so nightly.
+if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
+    echo "==> Zoo compiled training"
+    "$PYTHON_BIN" -m lucid.test.unit.compile._zoo_matrix --sweep
+else
+    echo "==> Zoo compiled training — skipped (LUCID_CI_SLOW_STAGES=0; see the UBSan stage)"
 fi
 
 # Model summaries — the layer tree and parameter count the docs site renders

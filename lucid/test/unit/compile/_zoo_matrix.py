@@ -25,7 +25,8 @@ carries gradient.
 
 Run one family per process (``python -m …_zoo_matrix <family> <task>``):
 an MPSGraph abort kills the interpreter, and it must not take the other
-families with it.
+families with it.  ``--sweep`` runs every family of every task that way and
+holds the result to :data:`EXPECTED` — the nightly CI stage.
 """
 
 import dataclasses
@@ -33,6 +34,7 @@ import inspect
 import io
 import json
 import os
+import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -705,7 +707,135 @@ def run_family(family: str, task: str) -> dict[str, Any]:
     return rec
 
 
+# ── the sweep ─────────────────────────────────────────────────────────────
+
+#: Every task with families to train; together they cover the whole zoo.
+TASKS: tuple[str, ...] = (
+    "image-classification",
+    "image-generation",
+    "language-modeling",
+    "object-detection",
+    "semantic-segmentation",
+    "sequence-classification",
+    "token-classification",
+    "world-modeling",
+)
+
+#: (family, task) → (eval status, train status, a substring of the fallback
+#: reason) for every pair that does not train compiled.  Every other pair must
+#: be ``ok`` in both modes.  Strict both ways, like the op matrices'
+#: ``EXPECTED_EAGER``: a new fallback, or one for a different reason, fails,
+#: and so does a listed pair that now compiles — its entry is stale.
+EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
+    # Proposal sampling and NMS read scores back to the host.
+    ("faster_rcnn", "object-detection"): ("fallback", "fallback", "read on the host"),
+    ("mask_rcnn", "object-detection"): ("fallback", "fallback", "read on the host"),
+    # Selective-search proposals come from outside the graph.
+    ("rcnn", "object-detection"): ("fallback", "fallback", "eager fallback"),
+    # An image without proposals leaves a zero-length box tensor.
+    ("fast_rcnn", "object-detection"): ("fallback", "fallback", "zero-size tensor"),
+    # The pixel decoder's deformable attention samples with grid_sample.
+    ("mask2former", "semantic-segmentation"): (
+        "fallback",
+        "fallback",
+        "no VJP emitter for op 'grid_sample'",
+    ),
+    # The loss is built from a JVP, which is a backward pass.
+    ("mean_flow", "image-generation"): (
+        "fallback",
+        "fallback",
+        "backward pass ran inside",
+    ),
+    # The adaptive solver differentiates the dynamics inside the forward.
+    ("neural_ode", "image-generation"): (
+        "fallback",
+        "fallback",
+        "backward pass ran inside",
+    ),
+    # Annealed sampling picks the noise level from a host-side value.
+    ("ncsn", "image-generation"): ("fallback", "fallback", "read on the host"),
+    # The return normaliser keeps its percentile EMA in Python floats.
+    ("dreamer_v3", "world-modeling"): ("ok", "fallback", "read on the host"),
+}
+
+_MODULE = "lucid.test.unit.compile._zoo_matrix"
+
+
+def run_isolated(family: str, task: str, timeout: float = 900.0) -> dict[str, Any]:
+    """:func:`run_family` in a child interpreter, so an abort is a record."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", _MODULE, family, task],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"family": family, "task": task, "status": "timeout"}
+    lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("RESULT ")]
+    if lines:
+        return dict(json.loads(lines[-1][len("RESULT ") :]))
+    tail = " | ".join((proc.stderr or "").strip().splitlines()[-3:])
+    return {
+        "family": family,
+        "task": task,
+        "status": "abort",
+        "detail": f"exit {proc.returncode}: {tail}"[:400],
+    }
+
+
+def verdict(rec: Mapping[str, Any]) -> str | None:
+    """``None`` when a record is what :data:`EXPECTED` says, else why not."""
+    if rec["status"] == "skip":
+        return None
+    if rec["status"] not in ("ok", "fallback", "wrong"):
+        return f"{rec['status']}: {rec.get('detail')}"
+    got = (rec.get("eval_status"), rec.get("train_status"))
+    want = EXPECTED.get((rec["family"], rec["task"]))
+    if want is None:
+        if got == ("ok", "ok"):
+            return None
+        return f"expected ok/ok, got {got[0]}/{got[1]}: {_details(rec)}"
+    if got == ("ok", "ok"):
+        return "now trains compiled — delete its EXPECTED entry"
+    if got != want[:2]:
+        return f"expected {want[0]}/{want[1]}, got {got[0]}/{got[1]}: {_details(rec)}"
+    for mode, status in zip(("eval", "train"), got):
+        reason = str(rec.get(f"{mode}_detail"))
+        if status == "fallback" and want[2] not in reason:
+            return f"{mode} falls back for another reason: {reason[:200]}"
+    return None
+
+
+def _details(rec: Mapping[str, Any]) -> str:
+    return "; ".join(
+        f"{m}={str(rec.get(f'{m}_detail'))[:160]}" for m in ("eval", "train")
+    )
+
+
+def sweep(tasks: tuple[str, ...] = TASKS) -> int:
+    """Every family of every task, one process each.  Returns the failures."""
+    failures = 0
+    seen: set[tuple[str, str]] = set()
+    for task in tasks:
+        for family in families(task):
+            seen.add((family, task))
+            rec = run_isolated(family, task)
+            why = verdict(rec)
+            failures += why is not None
+            mark = "FAIL" if why else rec["status"]
+            print(f"{mark:8s} {task:24s} {family:18s} {why or ''}", flush=True)
+    for key in sorted(set(EXPECTED) - seen):
+        if key[1] in tasks:
+            failures += 1
+            print(f"FAIL     {key[1]:24s} {key[0]:18s} EXPECTED names no factory")
+    print(f"{len(seen)} pairs, {failures} failing")
+    return failures
+
+
 def main() -> None:  # pragma: no cover — triage driver
+    if sys.argv[1:2] == ["--sweep"]:
+        sys.exit(1 if sweep(tuple(sys.argv[2:]) or TASKS) else 0)
     os.environ["LUCID_COMPILE_VERBOSE"] = "1"
     family, task = sys.argv[1], sys.argv[2]
     rec = run_family(family, task)
