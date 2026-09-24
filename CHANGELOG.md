@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add MobileNet-v4 and Inception-v4
 - publish MobileNet-v4 and Inception-v4 ImageNet-1k weights
 
+### Changed
+
+- require MLX below 0.32.1 — from 0.32.1 Metal BatchNorm training intermittently computes wrong layers
+
 ---
 
 ## [3.15.0] — 2026-09-24
