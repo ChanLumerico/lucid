@@ -98,18 +98,19 @@ def test_diagnose_argmax_is_grad_sink_not_uncovered() -> None:
 # ── Coverage gap ────────────────────────────────────────────────────
 
 
-# Trilinear interpolation stands in for "an op with no manual VJP" — the
-# one listed in ``_grad_matrix.EXPECTED_EAGER_GRAD``.  These tests used ``var``,
-# then ``conv_transpose3d``, until each got its VJP; when this one does,
-# pick the next gap from those tables.
-_UNCOVERED = "interpolate_trilinear"
+# ``F.unfold`` (im2col) stands in for "an op with no manual VJP".  These
+# tests used ``var``, then ``conv_transpose3d``, then trilinear interpolation,
+# until each got its VJP.  The op matrix's gap tables are empty now, so when
+# this one gets its VJP, find the next with ``diagnose`` — ``affine_grid``,
+# ``fold`` and ``nan_to_num`` had none on 2026-09-25.
+_UNCOVERED = "unfold"
 
 
 def _uncovered_fn() -> tuple[object, lucid.Tensor]:
     def fn(inp: lucid.Tensor) -> lucid.Tensor:
-        return F.interpolate(inp, scale_factor=2, mode="trilinear")
+        return F.unfold(inp, 2)
 
-    return fn, metal_tensor(1, 2, 3, 3, 3)
+    return fn, metal_tensor(1, 2, 4, 4)
 
 
 def test_diagnose_uncovered_op_with_sample_shape() -> None:
@@ -164,19 +165,19 @@ import lucid.nn.functional as F
 from lucid.compile import fused_step
 import lucid.optim as optim
 
-# trilinear interpolation has no manual VJP → walker hits a gap →
+# unfold (im2col) has no manual VJP → walker hits a gap →
 # REQUIRE=1 raises and DEBUG=1 logs to stderr.
 class M(nn.Module):
     def __init__(self):
         super().__init__()
-        self.mix = nn.Conv3d(2, 2, 1)
+        self.mix = nn.Conv2d(2, 2, 1)
     def forward(self, x):
-        return F.interpolate(self.mix(x), scale_factor=2, mode="trilinear").sum()
+        return F.unfold(self.mix(x), 2).sum()
 
 model = M().to('metal')
 opt = optim.SGD(model.parameters(), lr=1e-3)
 step = fused_step(model, lambda y, _: y, opt)
-x = lucid.randn(1, 2, 3, 3, 3).to('metal')
+x = lucid.randn(1, 2, 4, 4).to('metal')
 t = lucid.zeros(()).to('metal')
 try:
     step(x, t)
