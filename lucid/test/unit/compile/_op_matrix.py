@@ -604,6 +604,40 @@ def _cases() -> list[Case]:
         shape=(1, 2, 2, 3, 3),
         dtypes=fo,
     )
+    # grid_sample, fed the image (the input gradient) and fed the grid (the
+    # grid gradient), each against a fixed partner.  The grid reaches past
+    # [-1, 1], so zero padding drops corners and border padding clamps.
+    for suffix, gs_kw in (
+        ("", {}),
+        ("_border_ac", {"padding_mode": "border", "align_corners": True}),
+        ("_nearest", {"mode": "nearest"}),
+    ):
+        add(
+            f"grid_sample_x{suffix}",
+            lambda t, kw=gs_kw: F.grid_sample(t, _w(2, 3, 4, 2, seed=11) * 2.5, **kw),
+            shape=(2, 3, 5, 4),
+            dtypes=fo,
+        )
+        add(
+            f"grid_sample_grid{suffix}",
+            lambda t, kw=gs_kw: F.grid_sample(_w(2, 3, 5, 4, seed=13), t * 0.2, **kw),
+            shape=(2, 3, 4, 2),
+            dtypes=fo,
+        )
+    add(
+        "interp_trilinear_ac",
+        lambda t: F.interpolate(
+            t, size=(3, 5, 4), mode="trilinear", align_corners=True
+        ),
+        shape=(1, 2, 2, 3, 3),
+        dtypes=fo,
+    )
+    add(
+        "interp_nearest3d",
+        lambda t: F.interpolate(t, size=(3, 5, 4), mode="nearest"),
+        shape=(1, 2, 2, 3, 3),
+        dtypes=fo,
+    )
     add(
         "interp_bilinear_t",
         lambda t: F.interpolate(t, scale_factor=2, mode="bilinear").permute(0, 1, 3, 2),

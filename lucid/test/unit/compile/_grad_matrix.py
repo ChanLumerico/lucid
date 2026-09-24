@@ -126,12 +126,7 @@ GRAD_CASES = [c for c in CASES if "f32" in c.dtypes and not c.random]
 #: prod, cumprod, cummax/cummin, sort/kthvalue, repeat_interleave,
 #: scatter/scatter_add and det (2026-09-24) emptied this of all but the one
 #: op that has no forward emitter to differentiate.
-EXPECTED_EAGER_GRAD: dict[str, str] = {
-    "interp_trilinear": (
-        "no 3-D resize VJP, and the forward's depth gather is off MPSGraph's "
-        "autodiff safe list"
-    ),
-}
+EXPECTED_EAGER_GRAD: dict[str, str] = {}
 
 #: Case → why it has no manual VJP yet, although MPSGraph's autodiff
 #: differentiates it correctly where nothing else rules autodiff out — so it

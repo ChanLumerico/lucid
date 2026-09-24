@@ -169,6 +169,42 @@ def _nearest(x: np.ndarray, size: tuple[int, ...]) -> np.ndarray:
     return y
 
 
+def _grid_sample(
+    x: np.ndarray, grid: np.ndarray, nearest: bool, border: bool, align: bool
+) -> np.ndarray:
+    """``F.grid_sample`` on (N, C, H, W): zeros drops the corners outside the
+    image, border clamps the coordinate first, nearest rounds half to even."""
+    x, grid = _f(x), _f(grid)
+    n, _, h, w = x.shape
+
+    def denorm(v: np.ndarray, extent: int) -> np.ndarray:
+        if align:
+            return (v + 1.0) * (extent - 1) / 2.0
+        return (v + 1.0) * extent / 2.0 - 0.5
+
+    ix, iy = denorm(grid[..., 0], w), denorm(grid[..., 1], h)
+
+    def read(px: np.ndarray, py: np.ndarray) -> np.ndarray:
+        inside = (px >= 0) & (px <= w - 1) & (py >= 0) & (py <= h - 1)
+        cx = np.clip(px, 0, w - 1).astype(np.int64)
+        cy = np.clip(py, 0, h - 1).astype(np.int64)
+        v = np.moveaxis(x[np.arange(n)[:, None, None], :, cy, cx], -1, 1)
+        return v if border else v * inside[:, None]
+
+    if nearest:
+        return read(np.rint(ix), np.rint(iy))
+    if border:
+        ix, iy = np.clip(ix, 0, w - 1), np.clip(iy, 0, h - 1)
+    x0, y0 = np.floor(ix), np.floor(iy)
+    x1, y1 = x0 + 1.0, y0 + 1.0
+    return (
+        read(x0, y0) * ((x1 - ix) * (y1 - iy))[:, None]
+        + read(x0, y1) * ((x1 - ix) * (iy - y0))[:, None]
+        + read(x1, y0) * ((ix - x0) * (y1 - iy))[:, None]
+        + read(x1, y1) * ((ix - x0) * (iy - y0))[:, None]
+    )
+
+
 def _bilinear(x: np.ndarray, size: tuple[int, ...], align: bool) -> np.ndarray:
     """Linear resampling of the trailing axes, one axis at a time."""
     y = _f(x)
@@ -478,8 +514,28 @@ REFS: dict[str, Ref] = {
     "interp_nearest": lambda x, c: _nearest(x, (8, 8)),
     "interp_nearest_size": lambda x, c: _nearest(x, (3, 7)),
     "interp_bilinear": lambda x, c: _bilinear(x, (7, 5), False),
+    "grid_sample_x": lambda x, c: _grid_sample(
+        x, _f(c.w(2, 3, 4, 2, seed=11)) * 2.5, False, False, False
+    ),
+    "grid_sample_x_border_ac": lambda x, c: _grid_sample(
+        x, _f(c.w(2, 3, 4, 2, seed=11)) * 2.5, False, True, True
+    ),
+    "grid_sample_x_nearest": lambda x, c: _grid_sample(
+        x, _f(c.w(2, 3, 4, 2, seed=11)) * 2.5, True, False, False
+    ),
+    "grid_sample_grid": lambda x, c: _grid_sample(
+        c.w(2, 3, 5, 4, seed=13), _f(x) * 0.2, False, False, False
+    ),
+    "grid_sample_grid_border_ac": lambda x, c: _grid_sample(
+        c.w(2, 3, 5, 4, seed=13), _f(x) * 0.2, False, True, True
+    ),
+    "grid_sample_grid_nearest": lambda x, c: _grid_sample(
+        c.w(2, 3, 5, 4, seed=13), _f(x) * 0.2, True, False, False
+    ),
     "interp_bilinear_ac": lambda x, c: _bilinear(x, (7, 5), True),
     "interp_trilinear": lambda x, c: _bilinear(x, (3, 5, 4), False),
+    "interp_trilinear_ac": lambda x, c: _bilinear(x, (3, 5, 4), True),
+    "interp_nearest3d": lambda x, c: _nearest(x, (3, 5, 4)),
     "interp_bilinear_t": lambda x, c: _bilinear(x, (8, 6), False).swapaxes(-1, -2),
     "embedding": lambda x, c: _f(c.w(5, 3))[np.abs(x) % 5],
     "cross_entropy": lambda x, c: -_log_softmax(x, 1)[
