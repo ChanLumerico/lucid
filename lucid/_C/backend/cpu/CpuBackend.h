@@ -7739,17 +7739,20 @@ public:
             if (attn_mask) {
                 const auto& ms = std::get<CpuStorage>(*attn_mask);
                 if (mask_dtype == Dtype::Bool) {
+                    // A keep-mask: ``true`` attends.  This kernel used to read
+                    // ``true`` as "mask out" while MLX reads it as "keep", so
+                    // the same engine call inverted between devices.
                     const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get());
                     if (mask_numel == pb) {
                         for (std::size_t bb = 0; bb < B; ++bb) {
                             T* sb = Wp_t + bb * pb;
                             for (std::size_t i = 0; i < pb; ++i)
-                                if (mp[i])
+                                if (!mp[i])
                                     sb[i] = neg_inf;
                         }
                     } else {
                         for (std::size_t i = 0; i < B * pb; ++i)
-                            if (mp[i])
+                            if (!mp[i])
                                 Wp_t[i] = neg_inf;
                     }
                 } else {

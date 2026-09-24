@@ -207,6 +207,26 @@ public:
     //     ``orig_mask_shape_``.  ``dM`` is empty when no differentiable mask
     //     was supplied; the engine discards it because that edge is null.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-recording backward for ``create_graph=True``.
+    //
+    // The fused backward returns Storages, so a second derivative through
+    // attention — a gradient penalty, the double-backward form of a JVP —
+    // had nothing to differentiate.  This writes the closed form out in
+    // recording ops, recomputing the weights from the saved ``Q`` and ``K``
+    // under the same mask the forward used.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const TensorImplPtr&
+    //     Upstream gradient, possibly carrying its own ``grad_fn``.
+    //
+    // Returns
+    // -------
+    // std::vector<TensorImplPtr>
+    //     ``{dQ, dK, dV, dM}``; ``dM`` is null unless the additive mask is a
+    //     differentiable input.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Run scaled dot-product attention and return only the output tensor.

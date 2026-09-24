@@ -13,6 +13,7 @@
 
 #include "Attention.h"
 
+#include <cmath>
 #include <vector>
 
 #include "../autograd/Helpers.h"
@@ -26,7 +27,19 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Add.h"
+#include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Matmul.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/Softmax.h"
+#include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/Select.h"
+#include "../ops/utils/Tri.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -109,6 +122,17 @@ ForwardCore run_forward(const TensorImplPtr& q,
         throw ShapeMismatch(q->shape(), k->shape(), "attention: Q.last_dim must equal K.last_dim");
     if (fk.L != fv.L)
         throw ShapeMismatch(k->shape(), v->shape(), "attention: K.L_k must equal V.L_k");
+    // ``is_causal`` has one meaning only where every backend agrees on it: a
+    // square score matrix and no other mask.  With a mask the Accelerate
+    // kernel applied both while the MLX one let the mask win; with
+    // ``L_q != L_k`` the first aligned the triangle top-left and the second
+    // bottom-right — the same call answered differently per device.
+    // ``F.scaled_dot_product_attention`` folds causality into the additive
+    // mask in those cases, so only a direct engine caller reaches this.
+    if (is_causal && (attn_mask || fq.L != fk.L))
+        ErrorBuilder("attention")
+            .fail("is_causal needs a square score matrix and no attn_mask; fold the causal "
+                  "triangle into attn_mask instead (F.scaled_dot_product_attention does)");
 
     OpScopeFull scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device(), q->dtype(),
                       build_output_shape(q->shape(), v->shape())};
@@ -229,6 +253,68 @@ std::vector<Storage> ScaledDotProductAttentionBackward::apply(Storage grad_out) 
         }
     }
     return grads;
+}
+
+std::vector<TensorImplPtr>
+ScaledDotProductAttentionBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& q = saved_impl_inputs_[0];
+    const auto& k = saved_impl_inputs_[1];
+    const auto& v = saved_impl_inputs_[2];
+    if (!q || !k || !v || !grad_out)
+        ErrorBuilder("scaled_dot_product_attention")
+            .fail("graph-mode backward is missing a saved input");
+
+    const int last = static_cast<int>(orig_q_shape_.size()) - 1;
+    auto scaled = [this](const TensorImplPtr& t) { return mul_op(t, full_like_op(t, scale_)); };
+
+    // Scores exactly as the forward formed them.  The mask is the storage
+    // the kernel read, or the live input when its gradient was asked for.
+    auto scores = scaled(matmul_op(q, mT_op(k)));
+    if (has_mask_) {
+        TensorImplPtr mask = mask_differentiable_ ? saved_impl_inputs_[3] : TensorImplPtr{};
+        if (!mask)
+            mask = std::make_shared<TensorImpl>(saved_mask_, orig_mask_shape_, mask_dtype_, device_,
+                                                false);
+        if (mask_dtype_ == Dtype::Bool)
+            scores = where_op(mask, scores, full_like_op(scores, -INFINITY));
+        else
+            scores = add_op(scores, mask);
+    }
+    if (is_causal_) {
+        // Square and mask-free (``run_forward`` refuses anything else), so
+        // the lower triangle is the whole rule.
+        const std::int64_t lq = orig_q_shape_[orig_q_shape_.size() - 2];
+        const std::int64_t lk = orig_k_shape_[orig_k_shape_.size() - 2];
+        auto keep = tril_op(ones_op(Shape{lq, lk}, scores->dtype(), device_), 0);
+        scores = where_op(greater_op(keep, zeros_like_op(keep)), scores,
+                          full_like_op(scores, -INFINITY));
+    }
+    auto p = softmax_op(scores, last);
+
+    // dV = Pᵀ g;  dP = g Vᵀ;  dS = P ∘ (dP − Σ dP∘P);  dQ = s·dS K;  dK = s·dSᵀ Q.
+    auto dv = matmul_op(mT_op(p), grad_out);
+    auto dp = matmul_op(grad_out, mT_op(v));
+    auto ds = mul_op(p, sub_op(dp, sum_op(mul_op(dp, p), std::vector<int>{last}, true)));
+    auto dq = scaled(matmul_op(ds, k));
+    auto dk = scaled(matmul_op(mT_op(ds), q));
+
+    // S = s·QKᵀ + M, so dM is dS summed over whatever the mask broadcast along.
+    TensorImplPtr dm;
+    if (mask_differentiable_) {
+        dm = ds;
+        const Shape& full = ds->shape();
+        if (full != orig_mask_shape_) {
+            const std::size_t lead = full.size() - orig_mask_shape_.size();
+            std::vector<int> axes;
+            for (std::size_t i = 0; i < full.size(); ++i)
+                if (i < lead || (orig_mask_shape_[i - lead] == 1 && full[i] != 1))
+                    axes.push_back(static_cast<int>(i));
+            dm = reshape_op(
+                sum_op(ds, axes, true),
+                std::vector<std::int64_t>(orig_mask_shape_.begin(), orig_mask_shape_.end()));
+        }
+    }
+    return {dq, dk, dv, dm};
 }
 
 TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,

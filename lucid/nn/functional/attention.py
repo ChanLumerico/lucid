@@ -2,36 +2,12 @@
 nn.functional attention operations.
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-
-# Depth of the callers that will differentiate this function's backward —
-# see :func:`_differentiable_attention`.
-_MATH_DEPTH: list[int] = [0]
-
-
-@contextmanager
-def _differentiable_attention() -> Iterator[None]:
-    """Compute attention in its explicit form, differentiable twice.
-
-    The fused kernel's backward is not itself differentiable: a second
-    backward through it — what :func:`lucid.func.jvp` takes — dropped the
-    attention's contribution without an error.  Inside this context the
-    matmul-softmax-matmul form is used instead, every step of which has a
-    differentiable backward.
-    """
-    _MATH_DEPTH[0] += 1
-    try:
-        yield
-    finally:
-        _MATH_DEPTH[0] -= 1
 
 
 def scaled_dot_product_attention(
@@ -75,14 +51,16 @@ def scaled_dot_product_attention(
         mask out.  **Boolean**: a *keep*-mask — ``True`` attends, ``False``
         is masked out — converted internally to the additive form it
         stands for, so the two spellings are exactly equivalent on every
-        path, fused or not.  Mutually exclusive with ``is_causal``.
+        path, fused or not.  Combined with ``is_causal``, both apply.
     dropout_p : float, optional
         Dropout probability applied to attention weights during training.
         Default ``0.0``.
     is_causal : bool, optional
         If ``True``, apply an upper-triangular causal mask so each query
         position only attends to keys at the same or earlier positions
-        (autoregressive decoder self-attention).
+        (autoregressive decoder self-attention).  For a non-square score
+        matrix the triangle is aligned top-left — query ``i`` sees keys
+        ``0..i`` — so decoding against a KV cache wants an explicit mask.
     scale : float, optional
         Override the default :math:`1/\sqrt{d_k}` scale factor.
 
@@ -126,6 +104,31 @@ def scaled_dot_product_attention(
         # mask conventionally means for scaled-dot-product attention.
         attn_mask = (attn_mask.to(query.dtype) - 1.0) * 1e9
 
+    lq, lk = int(query.shape[-2]), int(key.shape[-2])
+    if is_causal and (attn_mask is not None or lq != lk):
+        # The engine gives ``is_causal`` a meaning only for a square score
+        # matrix with no other mask.  Beyond that its backends disagreed: the
+        # Metal kernel let a mask win over causality and aligned a non-square
+        # triangle bottom-right, while the CPU applied both, top-left — so the
+        # same call attended to the future on one device only.  Fold the
+        # top-left triangle into the additive mask so every device, and the
+        # explicit form below, compute one thing.
+        keep = _lucid.tril(
+            _lucid.ones((lq, lk), dtype=query.dtype, device=query.device.type)
+        )
+        causal = (keep - 1.0) * 1e9
+        attn_mask = causal if attn_mask is None else attn_mask + causal
+        is_causal = False
+
+    if attn_mask is not None:
+        # Match the scores' rank.  Given a learnable (L_q, L_k) bias against
+        # (B, H, L_q, L_k) scores, the Metal backward returned a one-element
+        # mask cotangent and the reshape back to the mask's shape raised; a
+        # rank-matched view broadcasts identically and ``unsqueeze`` sums the
+        # gradient back to the caller's shape.
+        while attn_mask.ndim < query.ndim:
+            attn_mask = attn_mask.unsqueeze(0)
+
     if attn_mask is not None and attn_mask.ndim >= 2:
         # The engine SDPA kernels (fused and manual) mishandle a mask that is
         # broadcast over the query dimension (query dim == 1, e.g. a (B,1,1,S)
@@ -164,7 +167,7 @@ def scaled_dot_product_attention(
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)
 
-    if dropout_p > 0.0 or _MATH_DEPTH[0] > 0:
+    if dropout_p > 0.0:
         # Dropout applies to the attention *probabilities*.  The fused kernel
         # never materialises them (MLX's fused SDPA takes no dropout argument),
         # and the engine's weights-returning variant emits them as a

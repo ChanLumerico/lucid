@@ -122,3 +122,30 @@ class TestGradStillCorrect:
         x = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
         (g,) = lucid.autograd.grad(lucid.exp(x).sum(), [x])
         assert g.tolist() == pytest.approx([math.exp(2.0)])
+
+
+class TestSeedUnderCreateGraph:
+    """``grad_outputs`` is part of the graph ``create_graph`` builds.
+
+    The seed used to be detached unconditionally, so ``J^T u`` came back with
+    no path to ``u``: the double-backward form of a JVP, or any seed computed
+    from a parameter, differentiated to ``None`` — and with
+    ``allow_unused=True`` that read as a silent zero.
+    """
+
+    def test_seed_is_differentiable(self, device: str) -> None:
+        x = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+        w = lucid.tensor([0.5, -1.0, 2.0], device=device, requires_grad=True)
+        (g,) = lucid.autograd.grad(x**3, [x], grad_outputs=[w * 2.0], create_graph=True)
+        assert g.tolist() == pytest.approx([3.0, -24.0, 108.0])
+        # d/dw sum(3x² · 2w) = 6x²
+        (gw,) = lucid.autograd.grad(g.sum(), [w])
+        assert gw.tolist() == pytest.approx([6.0, 24.0, 54.0])
+        assert x.grad is None and w.grad is None
+
+    def test_seed_stays_detached_without_create_graph(self, device: str) -> None:
+        x = lucid.tensor([1.0, 2.0], device=device, requires_grad=True)
+        w = lucid.tensor([3.0, 4.0], device=device, requires_grad=True)
+        (g,) = lucid.autograd.grad(x * x, [x], grad_outputs=[w])
+        assert g.tolist() == pytest.approx([6.0, 16.0])
+        assert not g.requires_grad

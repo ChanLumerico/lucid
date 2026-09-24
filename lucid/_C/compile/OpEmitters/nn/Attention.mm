@@ -21,11 +21,10 @@
 // built in-graph with ``select`` / compare / ``bandPart`` — those crash the
 // MPSGraph graph compiler on some Metal drivers.  The masked value is a large
 // *finite* negative (−inf likewise crashes the compiler) whose exp() underflows
-// to 0, so it is softmax-equivalent.  The mask uses the bottom-right alignment
-// ``j ≤ i + (Lk − Lq)`` so the non-square (cached-decode) case matches the
-// eager fused-causal convention.  An explicit additive mask takes precedence
-// over ``is_causal`` (mirrors the eager backend, which ignores ``is_causal``
-// once a float ``attn_mask`` is supplied).
+// to 0, so it is softmax-equivalent.  The engine records ``is_causal`` only
+// for a square score matrix with no other mask — ``F.scaled_dot_product_attention``
+// folds every other causal call into the additive mask, and the engine refuses
+// one that reaches it directly — so the triangle here is always square.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -59,9 +58,7 @@ public:
         // input the tracer does not record in the autograd input set, so it
         // never reaches ``node.inputs`` (only q/k/v do).  Without the mask
         // tensor the executable cannot reproduce the op — fall back to eager
-        // rather than silently dropping the mask (and, since the eager backend
-        // lets an additive mask win over ``is_causal``, this keeps the
-        // causal+mask combination correct too).
+        // rather than silently dropping the mask.
         if (has_mask && node.inputs.size() < 4)
             return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
@@ -99,7 +96,7 @@ public:
                 if (m == nil)
                     return false;  // mask wired but unresolved → can't honor it
                 // Only a floating (additive) mask is reproducible by an add:
-                // the eager backend treats a bool mask as a *set*-mask (−inf
+                // a bool keep-mask selects rather than adds (−inf
                 // where false), so route those to eager instead.
                 if ((m.dataType & MPSDataTypeFloatBit) == 0)
                     return false;
@@ -109,9 +106,8 @@ public:
                 scores = [g additionWithPrimaryTensor:scores secondaryTensor:m name:nil];
             }
         }
-        // Causal masking — applied only when no explicit additive mask is
-        // wired (the eager backend lets a float ``attn_mask`` win over
-        // ``is_causal``).  The (Lq, Lk) additive mask is fully precomputed on
+        // Causal masking — the engine never records ``is_causal`` together
+        // with a mask (see the header).  The (Lq, Lk) additive mask is fully precomputed on
         // the host and baked as a ``constantWithData`` tensor (the same proven
         // path the RoPE table uses) — deliberately NOT built in-graph with
         // ``select`` / compare / ``bandPart``, which crash the MPSGraph graph
@@ -130,8 +126,8 @@ public:
             // so it is softmax-equivalent.  f16 saturates at 65504, so the
             // half-precision score path uses a smaller magnitude.
             const float neg_big = (scores.dataType == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
-            // Keep key j for query i iff  j ≤ i + (Lk − Lq)  (bottom-right
-            // aligned; reduces to lower-triangular when Lq == Lk).
+            // Keep key j for query i iff  j ≤ i + (Lk − Lq): lower-triangular,
+            // since the engine only records a square causal call.
             const long long offset = Lk - Lq;
             std::vector<float> mask_data((std::size_t)(Lq * Lk));
             for (long long i = 0; i < Lq; ++i)

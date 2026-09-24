@@ -822,11 +822,9 @@ def jvp(
         else:
             perturbed.append(p)
 
-    from lucid.nn.functional.attention import _differentiable_attention
-
-    # The backward of this forward is differentiated again below; attention
-    # has to be in its twice-differentiable form for that.
-    with enable_grad(), _differentiable_attention():
+    # The backward of this forward is differentiated again below, so every op
+    # in it needs a graph-mode backward — fused attention included.
+    with enable_grad():
         pert_out = func(*perturbed)
 
     # Under the caller's grad mode, not ``no_grad``: the primal output is

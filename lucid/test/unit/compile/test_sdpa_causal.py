@@ -9,8 +9,10 @@ mask) compile into a single executable.
 Two correctness properties are pinned here:
 
   1. **Causal compiles, parity-exact vs eager** — square self-attention and
-     the non-square (cached-decode-shaped, Lq < Lk) case, which must use the
-     bottom-right alignment ``j <= i + (Lk - Lq)``.
+     the non-square (Lq < Lk) case.  Non-square causality is aligned
+     top-left (query ``i`` sees keys ``0..i``); ``F.scaled_dot_product_attention``
+     folds it into an additive mask before the engine, which only takes
+     ``is_causal`` for a square score matrix.
   2. **Additive float masks compile** — the tracer wires the auxiliary mask
      tensor into the graph (a non-differentiable SDPA input), so masked
      attention (BERT padding masks, cross-attention) compiles and adds the
@@ -79,7 +81,7 @@ def test_causal_square_compiles() -> None:
 
 
 def test_causal_non_square_decode_shape_compiles() -> None:
-    # Lq < Lk (cached-decode-shaped): bottom-right alignment must match eager.
+    # Lq < Lk: the top-left triangle arrives as an additive mask and compiles.
     m = _Causal().to(COMPILE_DEVICE).eval()
     q, k, v = _qkv(1, 2, 4, 64, 16)
     eager = m(q, k, v)
@@ -116,11 +118,9 @@ def test_additive_float_mask_compiles() -> None:
     assert _maxdiff(eager, out) < 1e-5
 
 
-def test_causal_plus_mask_lets_mask_win() -> None:
-    # Eager lets the additive mask win over is_causal (its fused-causal path is
-    # bypassed once a float attn_mask is supplied).  The emitter mirrors that:
-    # the mask is added and the causal block is skipped, so it compiles and
-    # matches eager.
+def test_causal_plus_mask_applies_both() -> None:
+    # Both apply: the causal triangle is folded into the additive mask before
+    # the engine sees it, so the emitter adds one mask and matches eager.
     m = _CausalPlusMask().to(COMPILE_DEVICE).eval()
     q, k, v = _qkv(2, 4, 16, 16, 16)
     mask = metal_tensor(2, 4, 16, 16)

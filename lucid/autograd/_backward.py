@@ -251,8 +251,13 @@ def grad(
                     f"not match output shape {tuple(out.shape)}"
                 )
             # Tensor-level ops so the seed is promoted to the output's dtype,
-            # matching how every other mixed-dtype pair is handled.
-            root = _unwrap((out * seed.detach()).sum())
+            # matching how every other mixed-dtype pair is handled.  Under
+            # ``create_graph`` the seed stays attached: the returned gradient
+            # is ``J^T seed``, and a seed computed from something upstream
+            # (the double-backward form of a JVP, a learned weighting) must be
+            # differentiable through it.  Detached, a second ``grad`` saw no
+            # path to it and answered ``None``.
+            root = _unwrap((out * (seed if create_graph else seed.detach())).sum())
 
         # Every output but the last needs the graph kept for the next call.
         keep = _retain or index < len(outputs) - 1
