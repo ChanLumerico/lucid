@@ -130,6 +130,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._core.buffer_writes"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._debug.diagnose"
     },
     {
@@ -11247,6 +11251,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._objectives"
     },
     {
       "kind": "module",
