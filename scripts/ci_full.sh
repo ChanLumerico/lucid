@@ -14,9 +14,10 @@ echo "==> Release build"
 "$PYTHON_BIN" -m pip install -e . --no-build-isolation
 
 # ── 2. Python fast tier (unit + numerical + stubs, no reference framework) ─
-# Model-zoo tests are excluded — locally a full pass uses 50–60 GB of
-# RAM (paper-faithful architectures + activations), well past any hosted
-# runner. Run them locally before opening a PR; CI covers the rest.
+# Model-zoo tests are excluded here and run nightly instead
+# (ci.yml ``nightly-models``, one process per file: 12.5 minutes on an M4
+# Max, 7.4 GB at the heaviest file).  A single process carrying the whole
+# zoo is what once needed 50–60 GB; per file it does not.
 #
 # Three processes rather than one, so each starts from a clean heap. The
 # Core ML tests export real models — mask2former, detr, clip — and a
@@ -67,32 +68,16 @@ echo "==> Perf tier"
 "$PYTHON_BIN" -m pytest lucid/test/perf/ -m perf --tb=short -q || \
     echo "[WARN] Perf tier failed — continuing."
 
-# ── 5. C++ unit tests (debug build with GoogleTest) ───────────────────────────
-echo "==> C++ unit tests (debug build)"
-BUILD_DIR="build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine"
-if [[ -d "$BUILD_DIR" ]]; then
-    LUCID_BUILD_MODE=debug BUILD_TESTING=ON cmake --build "$BUILD_DIR" --parallel "$(sysctl -n hw.logicalcpu)" 2>&1 | tail -5 || true
-    if command -v ctest &>/dev/null; then
-        ctest --test-dir "$BUILD_DIR" --output-on-failure -j"$(sysctl -n hw.logicalcpu)" || \
-            echo "[WARN] C++ tests failed or not built."
-    fi
-else
-    echo "[WARN] Build directory not found — skipping C++ tests."
-fi
-
-# ── 6. UBSan build ────────────────────────────────────────────────────────────
-# LUCID_CI_SLOW_STAGES=0 skips the stages that cost the most and almost
-# never change with a push: this sanitizer build (7.5 minutes, and
-# warn-only, so it never stopped the gate anyway), the published
-# checkpoint fit below (every checkpoint downloaded) and the zoo's
-# compiled-training sweep (a process per family).  CI sets it for
-# pushes; the nightly schedule, manual runs and a local ``ci_full.sh``
-# run everything.
+# ── 5. C++ unit tests (GoogleTest) ──────────────────────────────────────────
+# Its own build tree — the old step looked for the one setup.py leaves, under
+# a path pip no longer uses, and skipped with a warning on every run: the
+# tests never ran in CI.  A failure fails the gate.  Slow stage: the tree is a
+# second full engine build.
 if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
-    echo "==> UBSan build + fast tests"
-    ./scripts/ci_sanitizer.sh ubsan || echo "[WARN] Sanitizer step failed."
+    echo "==> C++ unit tests"
+    ./scripts/ci_cpp_tests.sh
 else
-    echo "==> UBSan build + fast tests — skipped (LUCID_CI_SLOW_STAGES=0)"
+    echo "==> C++ unit tests — skipped (LUCID_CI_SLOW_STAGES=0; see the UBSan stage)"
 fi
 
 # ── 7. Validator tools ────────────────────────────────────────────────────────
@@ -272,6 +257,24 @@ echo "==> Compile commands"
 
 echo "==> Format + clang-tidy"
 tools/check_format.sh --tidy
+
+# ── 8b. UBSan build ───────────────────────────────────────────────────────────
+# LUCID_CI_SLOW_STAGES=0 skips the stages that cost the most and almost
+# never change with a push: this sanitizer build (a debug engine, then the
+# ops / autograd / nn unit tests under it — a UB report fails the gate), the published
+# checkpoint fit below (every checkpoint downloaded), the zoo's
+# compiled-training sweep (a process per family) and the C++ unit tests
+# above (a second engine build).  CI sets it for
+# pushes; the nightly schedule, manual runs and a local ``ci_full.sh``
+# run everything.
+# Last before the publish gate: it replaces the installed engine with the
+# sanitizer build, and every stage above reads the release one.
+if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
+    echo "==> UBSan build + fast tests"
+    ./scripts/ci_sanitizer.sh ubsan
+else
+    echo "==> UBSan build + fast tests — skipped (LUCID_CI_SLOW_STAGES=0)"
+fi
 
 # ── 9. Publish gate ───────────────────────────────────────────────────────────
 echo "==> Publish gate"

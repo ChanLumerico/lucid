@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # CI gate: build the engine extension with UBSan (and optionally ASan), then
-# run the parity test suite under sanitizers. Catches undefined behavior and,
-# on supported Pythons, memory leaks / use-after-free.
+# run the engine-heavy unit tests under sanitizers. Catches undefined behavior
+# and, on supported Pythons, memory leaks / use-after-free.
+#
+# The target used to be the parity suite, which skips wholesale when the
+# reference framework is absent — as it is on the gate's runner — so the
+# sanitizer build ran and verified nothing.  The ops, autograd and nn unit
+# tests exercise every kernel on both devices and need nothing extra.
 #
 # Usage:
 #   ./scripts/ci_sanitizer.sh                # UBSan only
@@ -25,7 +30,7 @@ cd "$(dirname "$0")/.."
 
 MODE="${1:-ubsan}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-PYTEST_TARGET="${PYTEST_TARGET:-lucid/test/parity/}"
+PYTEST_TARGET="${PYTEST_TARGET:-lucid/test/unit/ops lucid/test/unit/autograd lucid/test/unit/nn}"
 
 case "$MODE" in
     ubsan)
@@ -48,8 +53,8 @@ echo "==> Building engine with LUCID_BUILD_MODE=$BUILD_MODE"
 LUCID_BUILD_MODE="$BUILD_MODE" "$PYTHON_BIN" -m pip install -e . --no-build-isolation \
     2>&1 | tail -5
 
-echo "==> Running parity suite under $MODE"
-env $EXTRA_OPTS "$PYTHON_BIN" -m pytest "$PYTEST_TARGET" -m "not slow" --tb=short -q \
-    --deselect tests/parity/test_parity.py::test_forward_CPU[pad_constant]
+echo "==> Running the engine unit tests under $MODE"
+# shellcheck disable=SC2086 — the target is a list of paths
+env $EXTRA_OPTS "$PYTHON_BIN" -m pytest $PYTEST_TARGET --tb=short -q
 
 echo "==> $MODE: green"

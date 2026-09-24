@@ -69,7 +69,8 @@ echo "==> Configuring CMake compile database"
     -DLUCID_MLX_INCLUDE_DIR="${CMAKE_PATHS[2]}" \
     -DLUCID_MLX_LIBRARY_DIR="${CMAKE_PATHS[3]}" \
     -DLUCID_PYTHON_EXTENSION_SUFFIX="${CMAKE_PATHS[4]}" \
-    -DLUCID_EXTENSION_OUTPUT_DIR="$(pwd)/lucid/_C"
+    -DLUCID_EXTENSION_OUTPUT_DIR="$(pwd)/lucid/_C" \
+    ${EXTRA_CMAKE_ARGS:-}
 
 cp "$BUILD_DIR/compile_commands.json" build/compile_commands.json
 echo "==> Wrote $(pwd)/build/compile_commands.json"
