@@ -28,15 +28,19 @@ const OpSchema MaximumBackward::schema_v1{"maximum", 1, AmpPolicy::Promote, true
 // element-wise sum is always 1.  This avoids double-counting at ties: the
 // gradient flows only to a when a[i] == b[i].
 //
-// saved_inputs_[0] and saved_inputs_[1] are at their original (pre-broadcast)
-// shapes here.  ge_mask_storage and lt_mask_storage operate element-wise at
-// the size given by n = numel(out_shape_), so the caller is responsible for
-// ensuring the shapes match; the BinaryKernel::apply wrapper handles
-// reduction to input shapes.
+// The masks compare the operands at the output's shape
+// (``saved_input_broadcasted``), element-wise over n = numel(out_shape_);
+// the BinaryKernel::apply wrapper reduces each gradient to its input's shape.
 std::pair<Storage, Storage> MaximumBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
-    Storage mask_a = ge_mask_storage(saved_inputs_[0], saved_inputs_[1], n, dtype_, device_);
-    Storage mask_b = lt_mask_storage(saved_inputs_[0], saved_inputs_[1], n, dtype_, device_);
+    // Both operands at the output's shape.  They were read at their own
+    // shapes with n = numel(out), so an operand broadcast from one element
+    // — ``clamp`` against a 0-d bound, ``minimum(x, bins[-1])`` — was read
+    // past its buffer on the CPU and the gradient masked against garbage.
+    const Storage a_b = saved_input_broadcasted(0);
+    const Storage b_b = saved_input_broadcasted(1);
+    Storage mask_a = ge_mask_storage(a_b, b_b, n, dtype_, device_);
+    Storage mask_b = lt_mask_storage(a_b, b_b, n, dtype_, device_);
     Storage dx = multiply_storages(grad_out, mask_a, n, dtype_, device_);
     Storage dy = multiply_storages(grad_out, mask_b, n, dtype_, device_);
     return {std::move(dx), std::move(dy)};

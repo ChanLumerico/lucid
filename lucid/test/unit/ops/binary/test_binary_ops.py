@@ -223,3 +223,28 @@ class TestBinaryBackward:
         (a * b).sum().backward()
         np.testing.assert_array_equal(a.grad.numpy(), [5.0, 7.0])
         np.testing.assert_array_equal(b.grad.numpy(), [2.0, 3.0])
+
+
+@pytest.mark.parametrize("op", ["maximum", "minimum"])
+@pytest.mark.parametrize("bound", ["0-d", "one-element", "view"])
+def test_minmax_gradient_against_a_broadcast_operand(
+    op: str, bound: str, device: str
+) -> None:
+    """The gradient mask compares the operands at the output's shape.
+
+    It read them at their own shapes over the output's length, so a
+    one-element operand — ``clamp`` against a 0-d bound, ``minimum(x,
+    bins[-1])`` — was read past its buffer on the CPU and the mask came from
+    whatever lay there.  ``F.two_hot`` clamps exactly that way.
+    """
+    grid = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0], device=device)
+    b = {"0-d": grid[4].clone(), "one-element": grid[1:2].clone(), "view": grid[4]}[
+        bound
+    ]
+    x = lucid.tensor([-3.0, -1.5, 0.5, 1.5, 3.0], device=device).requires_grad_(True)
+    getattr(lucid, op)(x, b).sum().backward()
+    bv = float(b.reshape(-1)[0].item())
+    xs = np.array([-3.0, -1.5, 0.5, 1.5, 3.0])
+    want = (xs >= bv) if op == "maximum" else (xs <= bv)
+    assert x.grad is not None
+    assert x.grad.tolist() == want.astype(float).tolist()

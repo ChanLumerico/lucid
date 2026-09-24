@@ -37,8 +37,14 @@ std::pair<Storage, Storage> MinimumBackward::grad_formula(const Storage& grad_ou
 
     // Arguments to ge/lt are (b, a), not (a, b) — this is the key difference
     // from MaximumBackward which uses (a, b).
-    Storage mask_a = ge_mask_storage(saved_inputs_[1], saved_inputs_[0], n, dtype_, device_);
-    Storage mask_b = lt_mask_storage(saved_inputs_[1], saved_inputs_[0], n, dtype_, device_);
+    // Both operands at the output's shape.  They were read at their own
+    // shapes with n = numel(out), so an operand broadcast from one element
+    // — ``clamp`` against a 0-d bound, ``minimum(x, bins[-1])`` — was read
+    // past its buffer on the CPU and the gradient masked against garbage.
+    const Storage a_b = saved_input_broadcasted(0);
+    const Storage b_b = saved_input_broadcasted(1);
+    Storage mask_a = ge_mask_storage(b_b, a_b, n, dtype_, device_);
+    Storage mask_b = lt_mask_storage(b_b, a_b, n, dtype_, device_);
     Storage dx = multiply_storages(grad_out, mask_a, n, dtype_, device_);
     Storage dy = multiply_storages(grad_out, mask_b, n, dtype_, device_);
     return {std::move(dx), std::move(dy)};

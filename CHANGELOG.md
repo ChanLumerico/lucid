@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - hold eager to numpy, and fix the bool asymmetry CI caught
 - train every zoo family compiled, and fix what it found
 - find max-pool arg-maxes without the indices kernel, and keep Core ML's draws
+- compare min/max operands at the output's shape in backward
 
 ---
 
