@@ -99,3 +99,56 @@ def test_vit_base_batch8_correct() -> None:
     compiled = unwrap(cm(x))
     compiled.eval()
     assert float((eager - compiled).abs().max().item()) < 1e-4
+
+
+# Run in a child: the defect is an abort inside MPSGraph, which takes the
+# interpreter with it rather than raising.
+_UNEQUAL_WIDTHS = """
+import numpy as np
+import lucid
+import lucid.nn.functional as F
+from lucid._C import engine as _C_engine
+
+# The fast path, as on hardware the capability probe clears — the only path
+# where MPSGraph sees the plain ``attn @ v`` and can fuse it.
+_C_engine.compile.set_attention_workaround_state(0)
+rng = np.random.default_rng(0)
+q, k = (rng.standard_normal((3, 8, 23, 32)).astype(np.float32) for _ in range(2))
+v = rng.standard_normal((3, 8, 23, 128)).astype(np.float32)
+
+
+def attend(q, k, v):
+    return F.scaled_dot_product_attention(q, k, v, scale=1.0)
+
+
+dev = [lucid.tensor(a, device="{device}") for a in (q, k, v)]
+out = lucid.compile(attend)(*dev).numpy()
+s = np.einsum("bhid,bhjd->bhij", q, k)
+w = np.exp(s - s.max(-1, keepdims=True))
+ref = np.einsum("bhij,bhjd->bhid", w / w.sum(-1, keepdims=True), v)
+print(float(np.abs(out - ref).max()))
+"""
+
+
+def test_sdpa_value_width_unlike_key_width_compiles() -> None:
+    """A value head wider than the key (EfficientFormer: 128 against 32).
+
+    On macOS 26 MPSGraph fuses that attention too and then aborts the process
+    in its optimisation passes ("MLIR pass manager failed"), so the emitter
+    takes the transposed form for it whatever the probe decided.
+    """
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-c", _UNEQUAL_WIDTHS.replace("{device}", COMPILE_DEVICE)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert proc.returncode == 0, (
+        f"compiled attention with unequal widths exited {proc.returncode}: "
+        f"{proc.stderr.strip().splitlines()[-1:] or proc.stdout}"
+    )
+    err = float(proc.stdout.strip().splitlines()[-1])
+    assert err < 1e-3, f"attention with unequal widths miscompiled: {err:.3e}"
