@@ -1852,6 +1852,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._config"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._config"
     },
     {
@@ -1881,6 +1885,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._config"
     },
     {
       "kind": "module",
@@ -2138,6 +2146,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._model"
     },
     {
@@ -2155,6 +2167,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
     },
     {
       "kind": "module",
@@ -2272,6 +2288,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._model"
     },
     {
@@ -2289,6 +2309,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
     },
     {
       "kind": "module",
@@ -2511,6 +2535,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
     },
     {
       "kind": "module",
@@ -3066,6 +3094,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._pretrained"
     },
     {
@@ -3095,6 +3127,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
     },
     {
       "kind": "module",
@@ -8293,6 +8329,78 @@
       "module": "lucid.models.weights"
     }
   ],
+  "lucid.models.vision.inception_v4": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.vision.inception_v4._config.InceptionV4Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.inception_v4._model.InceptionV4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.inception_v4._model.InceptionV4ForImageClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.inception_v4._model.InceptionV4Output": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    }
+  ],
+  "lucid.models.vision.inception_v4._pretrained.inception_v4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    }
+  ],
+  "lucid.models.vision.inception_v4._pretrained.inception_v4_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    }
+  ],
+  "lucid.models.vision.inception_v4._weights.InceptionV4Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
   "lucid.models.vision.lenet": [
     {
       "kind": "module",
@@ -9009,6 +9117,176 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._config.MobileNetV4Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._model.MobileNetV4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._model.MobileNetV4ForImageClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_large": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_large_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_medium": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_medium_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_small": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_conv_small_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_hybrid_large": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_hybrid_large_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_hybrid_medium": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._pretrained.mobilenet_v4_hybrid_medium_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._weights.MobileNetV4ConvLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._weights.MobileNetV4ConvMediumWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._weights.MobileNetV4ConvSmallWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._weights.MobileNetV4HybridLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.vision.mobilenet_v4._weights.MobileNetV4HybridMediumWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
     },
     {
       "kind": "module",
@@ -11430,6 +11708,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._model"
     },
     {
@@ -11459,6 +11741,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
     },
     {
       "kind": "module",
@@ -11868,6 +12154,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.lenet._model"
     },
     {
@@ -11897,6 +12187,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._model"
     },
     {
       "kind": "module",
@@ -16736,6 +17030,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.mask2former._weights"
     },
     {
@@ -16761,6 +17059,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._weights"
     },
     {
       "kind": "module",
@@ -17880,6 +18182,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.inception_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.inception_v4._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.mask2former._pretrained"
     },
     {
@@ -17933,6 +18243,14 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet_v3._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.mobilenet_v4._weights"
     },
     {
       "kind": "module",

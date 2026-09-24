@@ -3,7 +3,7 @@
   "name": "vision",
   "path": "lucid.models.vision",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/afe4820/lucid/models/vision/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b6ae532/lucid/models/vision/__init__.py#L1",
   "members": [],
   "summary": "Vision model families — chronological order of publication.",
   "extended": null,
@@ -97,6 +97,10 @@
       "label": "inception_resnet"
     },
     {
+      "slug": "lucid.models.vision.inception_v4",
+      "label": "inception_v4"
+    },
+    {
       "slug": "lucid.models.vision.lenet",
       "label": "lenet"
     },
@@ -127,6 +131,10 @@
     {
       "slug": "lucid.models.vision.mobilenet_v3",
       "label": "mobilenet_v3"
+    },
+    {
+      "slug": "lucid.models.vision.mobilenet_v4",
+      "label": "mobilenet_v4"
     },
     {
       "slug": "lucid.models.vision.pvt",
