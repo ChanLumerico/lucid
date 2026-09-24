@@ -150,6 +150,30 @@ def _mobilenet_v4_branch_gains(model: object) -> None:
                 nn.init.uniform_(block.bn2.weight, lo, hi)
 
 
+def _norm_gains(lo: float, hi: float) -> Callable[[object], None]:
+    """Draw every BatchNorm weight from U(lo, hi) before the transfer.
+
+    With the reference's norm buffers randomised, a deep plain stack
+    amplifies layer after layer: Inception v3 answered with logits of
+    1.25e12 and SE-ResNet-152 with 9.1e3, and the comparison skipped — for
+    as long as nobody looked.  Gains a little below one keep the signal
+    alive without letting it grow; the ranges were measured to land the
+    reference's logits at 108 and 22 (a range lower by 0.1 already
+    collapses them below 0.25).  Seeded, so the check stays deterministic.
+    """
+
+    def prepare(model: object) -> None:
+        import lucid
+        import lucid.nn as nn
+
+        lucid.manual_seed(0)
+        for module in model.modules():  # type: ignore[attr-defined]
+            if isinstance(module, nn.BatchNorm2d) and module.weight is not None:
+                nn.init.uniform_(module.weight, lo, hi)
+
+    return prepare
+
+
 def _legacy_seresnet_key_transform(k: str) -> str:
     """Legacy SE-ResNet: Lucid key → timm ``legacy_seresnet*`` key.
 
@@ -413,6 +437,7 @@ SPECS: list[ParitySpec] = [
         tier="slow",
         key_transform=_legacy_seresnet_key_transform,
         key_remap=_LEGACY_SERESNET_HEAD,
+        prepare=_norm_gains(0.8, 1.0),
     ),
     # ── SK-ResNet / SK-ResNeXt ────────────────────────────────────────────────
     # timm 1.0 only has skresnet18/34/50/50d and skresnext50_32x4d.
@@ -472,6 +497,7 @@ SPECS: list[ParitySpec] = [
         "inception_v3",
         input_shape=(1, 3, 299, 299),
         use_positional_fallback=True,
+        prepare=_norm_gains(0.4, 0.7),
     ),
     ParitySpec(
         M.inception_resnet_v2_cls,
