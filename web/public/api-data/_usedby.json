@@ -392,6 +392,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.func"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._utils._generative"
     },
     {
