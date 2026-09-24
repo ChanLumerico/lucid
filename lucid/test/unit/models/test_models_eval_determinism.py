@@ -120,8 +120,9 @@ def test_eval_is_deterministic(
     make_inputs: Any,
 ) -> None:
     """Two calls, one input, one answer — with dropout turned up."""
-    if family in _SAMPLES_BY_DESIGN:
-        pytest.skip(f"{family}: {_SAMPLES_BY_DESIGN[family]}")
+    # A model whose forward is a reparameterised draw is held to the same
+    # seed on both calls: then the draw is the only randomness allowed.
+    samples = family in _SAMPLES_BY_DESIGN
 
     lucid.manual_seed(0)
     model = models.create_model(factory, **_with_dropout_on(factory, overrides))
@@ -129,7 +130,11 @@ def test_eval_is_deterministic(
     args, kwargs = make_inputs()
 
     with lucid.no_grad():
+        if samples:
+            lucid.manual_seed(1)
         first = model(*args, **kwargs)
+        if samples:
+            lucid.manual_seed(1)
         second = model(*args, **kwargs)
 
     left, right = _tensors_of(first), _tensors_of(second)

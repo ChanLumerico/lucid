@@ -44,17 +44,22 @@ class TestDynamicCacheParity:
         ]
 
         lucid_cache = DynamicCache()
-        try:
-            ref_cache = ref_cache_cls()
-            for c in chunks:
-                lucid_cache.update(lucid.tensor(c), lucid.tensor(c), 0)
-                ref_cache.update(ref.tensor(c), ref.tensor(c), 0)
+        ref_cache = ref_cache_cls()
+        for c in chunks:
+            lucid_cache.update(lucid.tensor(c), lucid.tensor(c), 0)
+            ref_cache.update(ref.tensor(c), ref.tensor(c), 0)
+
+        # The reference moved its per-layer storage from ``key_cache[i]`` to
+        # ``layers[i].keys`` and dropped ``to_legacy_cache`` (5.x).  Read either
+        # form; a third one should fail here, not skip — a skip on "API differs"
+        # left this comparison unrun for as long as nobody looked.
+        if hasattr(ref_cache, "layers"):
+            ref_key = ref_cache.layers[0].keys
+            ref_layers = len(ref_cache.layers)
+        else:
             ref_key = ref_cache.key_cache[0]
-            ref_len = ref_cache.get_seq_length()
-            ref_legacy_len = len(ref_cache.to_legacy_cache())
-        except (TypeError, AttributeError, IndexError) as exc:  # version drift
-            pytest.skip(f"reference DynamicCache API differs: {exc}")
+            ref_layers = len(ref_cache.to_legacy_cache())
 
         assert_close(lucid_cache.key_cache[0], ref_key, atol=0.0)
-        assert lucid_cache.get_seq_length() == ref_len
-        assert len(lucid_cache.to_legacy_cache()) == ref_legacy_len
+        assert lucid_cache.get_seq_length() == ref_cache.get_seq_length()
+        assert len(lucid_cache.to_legacy_cache()) == ref_layers

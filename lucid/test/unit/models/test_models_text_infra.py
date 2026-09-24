@@ -266,10 +266,19 @@ class TestTaskWrapperEmbeddings:
         # target side -- is tied to the table being replaced as well.
         model = _build(wrapper, share_embeddings=True)
         head = _tied_head(model)
-        if head is None:
-            pytest.skip(f"{wrapper.__name__} has no head tied to the table")
         new = nn.Embedding(_V + 10, _H)
         model.set_input_embeddings(new)
+        if head is None:
+            # No head reads the table, so nothing but the table itself may
+            # hold the new weight — a classifier that quietly shared it would
+            # have been checked by nothing when this was a skip.
+            sharing = [
+                n
+                for n, m in model.named_modules()
+                if m is not new and getattr(m, "weight", None) is new.weight
+            ]
+            assert not sharing, f"{wrapper.__name__}: {sharing} share the table"
+            return
         assert head.weight is new.weight
         assert head.out_features == _V + 10
 

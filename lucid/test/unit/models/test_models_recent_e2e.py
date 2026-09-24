@@ -397,13 +397,15 @@ class _DreamerCase:
         assert bool(out.loss.isfinite().item())
 
     def test_the_slow_target_is_the_only_thing_left_untrained(self) -> None:
-        """A generation with an EMA critic must have exactly that ungradiented."""
-        if not self.EMA_ONLY:
-            pytest.skip("this generation has no slow target")
+        """A generation with an EMA critic has exactly that ungradiented; one
+        without has nothing ungradiented."""
         model = getattr(models, self.WORLD)(**self.CONFIG)
         model.backward(model(*self._batch()))
         inner = getattr(model, self.ATTR)
         missing = {n for n, p in inner.named_parameters() if p.grad is None}
+        if not self.EMA_ONLY:
+            assert not missing, f"no slow target, yet no gradient: {sorted(missing)}"
+            return
         assert missing, "the slow target should not receive a gradient"
         assert all(n.startswith(self.EMA_ONLY) for n in missing)
 
