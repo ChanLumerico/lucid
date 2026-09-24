@@ -15,27 +15,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
 
-### Performance
+## [3.15.0] — 2026-09-24
 
-- fingerprint model summaries by content, not mtime
+A minor release about `lucid.compile` telling the truth. Every compile
+emitter is now replayed over float32, int64, int32 and bool against eager,
+eager itself is held to a numpy oracle on both devices, and one training
+step of every model-zoo family is compiled and compared with eager — loss,
+every gradient and every buffer. 65 of the 78 families train compiled and
+match; the other 13 fall back to eager for a stated reason (anchors built
+on the CPU, NMS, zero-length proposals, `grid_sample`, adaptive ODE
+solvers, a Python-float EMA) rather than answering wrong. The engine ABI
+moves to 13: rebuild the extension after upgrading from a source checkout.
+
+- **Compiled training reached every family, and was wrong in places no
+  test looked.** Random draws were baked into the graph at trace time, so
+  every compiled step reused the first step's noise; they are now feeds
+  redrawn on every replay, in trace order, from the default generator.
+  `detach()`, tensors inside lists and dicts, and host reads such as
+  `.item()` had also been frozen at their trace-time values. `make_step`
+  took the last op as the loss — Dreamer trained on a metric computed after
+  it — and now uses the tensor the function returns.
+- **`lucid.func.jvp`** keeps its primal differentiable, differentiates each
+  output once rather than once per element (MeanFlow: 400 s → 0.03 s), and
+  runs on Metal.
+- **Eager bugs the oracle found.** CPU `all` / `any` read wide dtypes byte
+  by byte; CPU `one_hot` reinterpreted float and bool indices; CPU
+  `maximum` / `minimum` backward read a broadcast operand past its buffer;
+  CPU BatchNorm computed float32 variance as E[x²] − mean²; integer
+  `arcsin` / `arccos` / `arctan` returned integers; bool `isclose` was
+  always true; integer `lerp` silently returned its input and now raises,
+  as the reference framework does.
+- **MPSGraph traps avoided.** A pad folded into a max-pool moved the pool's
+  arg-max coordinates (YOLOv3-tiny gradients 87 % wrong); macOS 15 aborts
+  inside the pooling-with-indices kernel, which the max-pool VJP no longer
+  calls. BatchNorm3d training no longer aborts in a five-dimensional
+  reduction, zero-length tensors run eager, and nearest resizes keep a
+  resolved shape.
+- **Compiled training covers over thirty more ops** that used to send the
+  whole step back to eager, among them pooling in one and three dimensions,
+  bilinear and nearest interpolation, `conv_transpose3d`, attention, `sort`,
+  `cummax`, `roll`, `scatter`, `inv`, `det` and train-mode dropout.
 
 ### Added
 
-- three instruments for the axis weight parity cannot see
+- `eval()` determinism, dead-config-field and related instruments for the
+  axis that published-weight parity cannot see.
+
+### Performance
+
+- Model summaries are fingerprinted by content, not mtime.
+- Faster R-CNN's NMS no longer reads half a million scalars back to the
+  host: 23 s → 0.7 s per image batch.
 
 ### Fixed
 
-- VideoClassification stole the neighbouring registration
-- the video crop places an odd margin down, not to nearest
-- the dead-config-field check was wrong about ten of seventeen
-- integer // never reached the graph, and would have floored wrong
-- replay every emitter over dtypes, and fix what it found
-- hold eager to numpy, and fix the bool asymmetry CI caught
-- train every zoo family compiled, and fix what it found
-- find max-pool arg-maxes without the indices kernel, and keep Core ML's draws
-- compare min/max operands at the output's shape in backward
-- refresh the V-JEPA and I-JEPA summary fingerprints
+- `VideoClassification` no longer takes the neighbouring registration, and
+  the video crop places an odd margin down rather than to nearest.
+- Integer `//` reaches the compiled graph, so V-JEPA and V-JEPA 2 compile
+  instead of silently running eager.
+- V-JEPA and I-JEPA run on Metal (a device-less `zeros` raised
+  `DeviceMismatch`).
+- Compiled integer and bool outputs read through `.numpy()` keep their
+  dtype; two callables with the same ops but different returns no longer
+  share an executable; integer `topk` values are no longer frozen.
+- Core ML export keeps its random draws as model inputs and translates
+  `detach`.
 
 ---
 

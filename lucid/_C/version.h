@@ -57,7 +57,7 @@
 // Increments when new public symbols are added but existing ones keep
 // the same signature and semantics; clients built against an older
 // minor revision continue to work without recompilation.
-#define LUCID_VERSION_MINOR 13
+#define LUCID_VERSION_MINOR 14
 
 // Patch component of the engine SemVer; bumped on bug fixes that
 // preserve both the public API and the ABI.
@@ -77,7 +77,7 @@
 // optional pre-release tag (``-dev``, ``-rc1`` …) marks unstable
 // builds; release tarballs strip the tag.  Returned verbatim by
 // :func:`version_string`.
-#define LUCID_VERSION_STRING "0.13.0"
+#define LUCID_VERSION_STRING "0.14.0"
 
 // Monotonically increasing ABI generation counter.  Bump this whenever the
 // C++ binary interface changes in a way that makes old .so / .dylib objects
@@ -107,7 +107,7 @@
 // classes, new enumerators appended to the end of an enum) still
 // require a bump because their absence in an older library breaks
 // the new extension module.
-#define LUCID_ABI_VERSION 12
+#define LUCID_ABI_VERSION 13
 
 namespace lucid {
 
