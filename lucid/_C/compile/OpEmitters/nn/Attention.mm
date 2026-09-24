@@ -158,7 +158,18 @@ public:
         // unaffected hardware ``apply_attention_workaround()`` is false and we
         // emit the plain (fast) matmul.  (Mirrors MatmulEmitter for manual
         // attention.)
-        if (apply_attention_workaround()) {
+        //
+        // A value head width unlike the key's (EfficientFormer: 128 against
+        // 32) takes the transposed form everywhere: on macOS 26 MPSGraph
+        // matches that attention too and then aborts the process in its
+        // optimisation passes (``MLIR pass manager failed``) — an abort the
+        // capability probe, which compares values, cannot observe.
+        const NSUInteger nd_qk = q.shape.count;
+        const NSUInteger nd_vv = v.shape.count;
+        const bool widths_differ =
+            nd_qk >= 1 && nd_vv >= 1 &&
+            q.shape[nd_qk - 1].longLongValue != v.shape[nd_vv - 1].longLongValue;
+        if (apply_attention_workaround() || widths_differ) {
             const NSUInteger nd_a = attn.shape.count;
             const NSUInteger nd_v2 = v.shape.count;
             MPSGraphTensor* attn_tr = [g transposeTensor:attn
