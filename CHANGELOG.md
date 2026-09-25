@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - expm1 keeps its precision near zero
 
+- norm refuses an axis that is out of range or repeated
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

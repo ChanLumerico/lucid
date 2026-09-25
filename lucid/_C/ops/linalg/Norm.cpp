@@ -24,6 +24,7 @@
 #include "Norm.h"
 
 #include <algorithm>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -160,6 +161,24 @@ TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis,
     using namespace linalg_detail;
     Validator::input(a, "norm.a").non_null();
     require_float(a->dtype(), "norm");
+    // Checked here, for both devices: the CPU kernel took an axis the input
+    // lacks without a word — ``dims=[1]`` on a 1-D input returned ``|x|``
+    // unreduced — while Metal raised MLX's own "Invalid axis".
+    {
+        const int ndim = static_cast<int>(a->shape().size());
+        std::vector<int> seen;
+        for (int v : axis) {
+            if (v < -ndim || v >= ndim)
+                ErrorBuilder("norm").index_error("axis " + std::to_string(v) +
+                                                 " is out of range for a tensor of rank " +
+                                                 std::to_string(ndim));
+            const int u = v < 0 ? v + ndim : v;
+            for (int w : seen)
+                if (w == u)
+                    ErrorBuilder("norm").fail("axis " + std::to_string(v) + " is repeated");
+            seen.push_back(u);
+        }
+    }
     Shape out_shape = reduced_shape(a->shape(), axis, keepdims);
     OpScopeFull scope{"norm", a->device(), a->dtype(), out_shape};
     scope.set_attr("ord", ord);
