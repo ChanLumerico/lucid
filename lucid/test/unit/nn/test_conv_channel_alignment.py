@@ -88,8 +88,8 @@ def test_convolution_survives_scalars_written_while_it_is_queued(xshape, wshape,
         y = fn(xm, wm, padding=1)
         _C_engine.eval_tensors_async([y._impl])
         # Scalar multiplies: each writes a fresh non-zero scalar from the host
-        # while the convolution waits.
-        scalars = [small * (1000.0 + i) for i in range(64)]
+        # while the convolution waits.  Held until it is read back below.
+        _scalars = [small * (1000.0 + i) for i in range(64)]
         if not np.allclose(y.numpy(), ref, atol=1e-3):
             wrong += 1
     assert wrong == 0, f"{wrong}/20 convolutions came back wrong"
