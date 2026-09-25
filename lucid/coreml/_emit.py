@@ -21,6 +21,7 @@ correct output ranks, and wrong values everywhere — nothing about it
 fails loudly.
 """
 
+import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
 if TYPE_CHECKING:
@@ -1498,6 +1499,36 @@ def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     shape = b.shape_of(ins[0])
     zeroed = b.emit("sub", [("x", ins[0]), ("y", ins[0])], shape)
     return "equal", [("x", zeroed), ("y", b.const_float(0.0))]
+
+
+@_emitter("nan_to_num")
+def _nan_to_num(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Three selects — MIL has no ``nan_to_num``.
+
+    NaN is the one value unequal to itself; the infinities are found by
+    equality rather than by ``x > FLT_MAX``, because in a float16 package
+    that bound is itself infinite and the comparison is never true. The
+    replacements are the values the trace resolved, so a default
+    ``posinf`` is float32's largest — a float16 package holds it as
+    infinity, as a cast of Lucid's result would.
+    """
+    x = ins[0]
+    shape = b.shape_of(x)
+    is_nan = b.emit("not_equal", [("x", x), ("y", x)], shape, dtype=_MIL_BOOL)
+    is_pos = b.emit(
+        "equal", [("x", x), ("y", b.const_float(math.inf))], shape, dtype=_MIL_BOOL
+    )
+    is_neg = b.emit(
+        "equal", [("x", x), ("y", b.const_float(-math.inf))], shape, dtype=_MIL_BOOL
+    )
+    replaced = x
+    for mask, key in ((is_nan, "nan"), (is_pos, "posinf")):
+        value = b.const_float(_as_float(_attr(op, key)))
+        replaced = b.emit(
+            "select", [("cond", mask), ("a", value), ("b", replaced)], shape
+        )
+    neginf = b.const_float(_as_float(_attr(op, "neginf")))
+    return "select", [("cond", is_neg), ("a", neginf), ("b", replaced)]
 
 
 def _refuse_non_boolean(b: Builder, op: TracedOp, ins: list[str], symbol: str) -> None:

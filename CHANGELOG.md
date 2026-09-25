@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Adam and AdamW run AMSGrad when asked
 
+- export nan_to_num, and name why nextafter cannot be
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

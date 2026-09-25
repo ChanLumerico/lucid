@@ -697,6 +697,11 @@ class TestTheGapAgainstCompileIsAccountedFor:
         "det",
         "inv",
         "solve",
+        # One float32 unit in the last place is the whole result, and MIL
+        # can neither reinterpret a float's bits nor promise the exact
+        # ``exp2`` / ``log2`` an arithmetic ulp needs. A float16 package
+        # rounds the step away entirely: it would load and return ``a``.
+        "nextafter",
     }
 
     #: Only reachable from a model in training mode, which export refuses.
@@ -868,6 +873,28 @@ class TestTheOperationsMilDoesNotHave:
             tmp_path,
             tol=1e-5,
         )
+
+
+class TestNanToNumReplacesEachSpecialValue:
+    """``nan_to_num`` is three selects; each has to see its own value.
+
+    ``randn`` never makes a NaN or an infinity, so the op tables would only
+    ever check the identity half of it. The input here carries all three.
+    """
+
+    _SPECIAL = [[1.5, float("nan"), float("inf"), -float("inf"), -2.0]]
+
+    def test_the_given_replacements(self, tmp_path: object) -> None:
+        _check(
+            lambda x: lucid.nan_to_num(x, nan=0.5, posinf=7.0, neginf=-7.0),
+            lucid.tensor(self._SPECIAL),
+            tmp_path,
+        )
+
+    def test_the_default_replacements_are_float32s_extremes(
+        self, tmp_path: object
+    ) -> None:
+        _check(lucid.nan_to_num, lucid.tensor(self._SPECIAL), tmp_path)
 
 
 class TestMeshgridCarriesAllOfItsOperands:
