@@ -271,10 +271,23 @@ def _leaky_hook_handle() -> "Iterator[None]":
         def remove(self) -> None:
             return None  # ...and the hook stays installed
 
-    with _patched(
-        lucid.nn, "register_module_forward_hook", lambda fn: _Handle(real(fn))
-    ):
-        yield
+    issued: list[_Handle] = []
+
+    def register(fn: Any) -> _Handle:
+        handle = _Handle(real(fn))
+        issued.append(handle)
+        return handle
+
+    with _patched(lucid.nn, "register_module_forward_hook", register):
+        try:
+            yield
+        finally:
+            # The defect belongs to the mutant, not to the process.  Left
+            # installed, the hook kept every later forward's output alive —
+            # the step-cost budget, run after the audit, saw fewer frees and
+            # a higher peak in every workload.
+            for handle in issued:
+                handle._inner.remove()
 
 
 @contextlib.contextmanager
