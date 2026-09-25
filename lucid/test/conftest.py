@@ -11,6 +11,9 @@ What you get for free in any test:
 * ``device_cpu_only`` / ``device_gpu_only`` / ``cross_device_pair``.
 * ``float_dtype`` — parametrize over float32 + float64.
 * ``int_dtype`` — parametrize over int8/16/32/64.
+* ``device`` together with a dtype fixture — swept as pairs, leaving out
+  the ones the device cannot hold (Metal has no float64), so no test has
+  to skip them.  See ``_fixtures/devices.py``.
 * ``ref`` — lazy reference framework module (skips test if missing).
 * ``tensor_factory`` — device-aware ``make_tensor`` shorthand.
 * ``bench`` — ``pytest-benchmark``-compatible benchmark callable
@@ -24,13 +27,15 @@ import lucid
 from lucid.test import _memory
 
 # Re-export every fixture from the per-area modules so test files just
-# need to declare the fixture name in their argument list.
+# need to declare the fixture name in their argument list.  The hook is
+# re-exported for the same reason: pytest only registers hooks it finds
+# in a conftest (or a plugin).
 from lucid.test._fixtures.devices import (  # noqa: F401
     device,
     device_cpu_only,
     device_gpu_only,
     cross_device_pair,
-    skip_if_unsupported,
+    pytest_generate_tests,
 )
 from lucid.test._fixtures.dtypes import (  # noqa: F401
     float_dtype,

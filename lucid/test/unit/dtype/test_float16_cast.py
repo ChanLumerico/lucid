@@ -19,6 +19,7 @@ import pytest
 
 import lucid
 import lucid.nn as nn
+from lucid.test._fixtures.devices import device_dtype_params
 
 DEVICES = ["cpu", "metal"]
 
@@ -51,12 +52,14 @@ def test_float16_to_float32_direction(device):
     assert np.abs(got[finite] - ref[finite]).max() == 0.0
 
 
-@pytest.mark.parametrize("device", DEVICES)
-@pytest.mark.parametrize("other", [lucid.float64, lucid.int32, lucid.int64])
+@pytest.mark.parametrize(
+    ("device", "other"),
+    # Metal holds no float64, so that pair is not generated; its refusal
+    # is asserted in lucid/test/unit/device/test_metal_dtype_support.py.
+    device_dtype_params([lucid.float64, lucid.int32, lucid.int64], devices=DEVICES),
+)
 def test_float16_round_trips_through_other_dtypes(device, other):
     """The bridge recurses on the F16-free leg; make sure that leg is real."""
-    if device == "metal" and other is lucid.float64:
-        pytest.skip("MLX-Metal has no float64")
     values = np.array([0.0, 1.0, -3.0, 7.0], dtype=np.float32)
     half = lucid.tensor(values, device=device).to(lucid.float16)
     converted = half.to(other)

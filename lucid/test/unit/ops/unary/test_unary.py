@@ -2,8 +2,9 @@
 
 Each op gets a single parametrized class that walks a representative
 shape × device × dtype matrix and verifies element-wise agreement with
-a numpy reference.  ``skip_if_unsupported`` filters the (metal, f64)
-cells MLX can't run.
+a numpy reference.  The (metal, float64) cells are never collected —
+``device`` and ``float_dtype`` are swept as supported pairs (see
+``lucid/test/_fixtures/devices.py``).
 """
 
 from collections.abc import Callable
@@ -12,7 +13,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
 from lucid.test._helpers.compare import assert_close
 
 # ── (lucid_fn, numpy_fn, sample_range, atol) tuples ──────────────────────
@@ -86,7 +86,6 @@ def test_unary_value_match(
     float_dtype: lucid.dtype,
 ) -> None:
     """Element-wise agreement with the numpy reference."""
-    skip_if_unsupported(device, float_dtype)
     np.random.seed(0)
     x = np.random.uniform(rng[0], rng[1], size=(4, 5)).astype(np.float32)
     t = lucid.tensor(x.copy(), dtype=float_dtype, device=device)

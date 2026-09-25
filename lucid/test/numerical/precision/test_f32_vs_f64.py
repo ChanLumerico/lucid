@@ -5,37 +5,40 @@ expected float-precision tolerance for a wide span of common ops; if
 it doesn't the f32 path has a real bug (lost mantissa bits in an
 intermediate cast, fast-math reorder, etc.).
 
-f64 only runs on CPU — Metal stack does not support f64.  These tests
-auto-skip when ``device == metal``.
+The f64 baseline always runs on CPU, the only stream that holds f64
+(Metal refuses it — asserted in
+``lucid/test/unit/device/test_metal_dtype_support.py``).  The f32 side
+runs on every device, so Metal's f32 kernels are measured against the
+same CPU double baseline as the CPU's own.
+
+The cancellation watchdogs are about the f64 kernels themselves, so they
+are collected only on devices that hold f64.
 """
 
 import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
+from lucid.test._fixtures.devices import devices_supporting
 
 
 @pytest.mark.f64_only
 class TestPrecisionParity:
     def test_sum(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         np.random.seed(0)
         x = np.random.uniform(-1.0, 1.0, size=(8, 8)).astype(np.float64)
         l32 = lucid.tensor(x.astype(np.float32), device=device).sum().item()
-        l64 = lucid.tensor(x, dtype=lucid.float64, device=device).sum().item()
+        l64 = lucid.tensor(x, dtype=lucid.float64, device="cpu").sum().item()
         assert abs(l32 - l64) < 1e-3
 
     def test_mean(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         np.random.seed(0)
         x = np.random.uniform(-1.0, 1.0, size=(64,)).astype(np.float64)
         l32 = lucid.tensor(x.astype(np.float32), device=device).mean().item()
-        l64 = lucid.tensor(x, dtype=lucid.float64, device=device).mean().item()
+        l64 = lucid.tensor(x, dtype=lucid.float64, device="cpu").mean().item()
         assert abs(l32 - l64) < 1e-4
 
     def test_matmul(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         np.random.seed(0)
         a = np.random.uniform(-1.0, 1.0, size=(4, 4)).astype(np.float64)
         b = np.random.uniform(-1.0, 1.0, size=(4, 4)).astype(np.float64)
@@ -48,13 +51,12 @@ class TestPrecisionParity:
             .astype(np.float64)
         )
         out64 = (
-            lucid.tensor(a, dtype=lucid.float64, device=device)
-            @ lucid.tensor(b, dtype=lucid.float64, device=device)
+            lucid.tensor(a, dtype=lucid.float64, device="cpu")
+            @ lucid.tensor(b, dtype=lucid.float64, device="cpu")
         ).numpy()
         np.testing.assert_allclose(out32, out64, atol=1e-5)
 
     def test_exp(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         x = np.linspace(-2.0, 2.0, 32, dtype=np.float64)
         out32 = (
             lucid.tensor(x.astype(np.float32), device=device)
@@ -62,7 +64,7 @@ class TestPrecisionParity:
             .numpy()
             .astype(np.float64)
         )
-        out64 = lucid.tensor(x, dtype=lucid.float64, device=device).exp().numpy()
+        out64 = lucid.tensor(x, dtype=lucid.float64, device="cpu").exp().numpy()
         np.testing.assert_allclose(out32, out64, atol=1e-5)
 
 
@@ -70,17 +72,16 @@ class TestPrecisionParity:
 
 
 @pytest.mark.f64_only
+@pytest.mark.parametrize("device", devices_supporting(lucid.float64))
 class TestCancellation:
     def test_log1p_vs_log_for_small_x(self, device: str) -> None:
         # log1p(x) is the safe form near zero; log(1 + x) loses precision.
-        skip_if_unsupported(device, lucid.float64)
         x = lucid.tensor([1e-7], dtype=lucid.float64, device=device)
         good = lucid.log1p(x).item()
         # Reference: log1p(1e-7) ≈ 1e-7 - 5e-15.
         assert abs(good - 1e-7) < 1e-12
 
     def test_expm1_vs_exp_for_small_x(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         x = lucid.tensor([1e-7], dtype=lucid.float64, device=device)
         # expm1(1e-7) ≈ 1e-7 + 5e-15.
         assert abs(lucid.expm1(x).item() - 1e-7) < 1e-12

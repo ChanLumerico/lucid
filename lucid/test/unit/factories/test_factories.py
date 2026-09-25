@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
+from lucid.test._fixtures.devices import device_supports, devices_supporting
 from lucid.test._helpers.compare import assert_close, assert_equal_int
 
 # ── deterministic factories ──────────────────────────────────────────────
@@ -16,21 +16,19 @@ class TestZeros:
         assert t.shape == (3, 4)
 
     def test_values(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.zeros(2, 3, dtype=float_dtype, device=device)
         assert_equal_int(t, np.zeros((2, 3)))
 
     def test_dtype_propagates(self, device: str) -> None:
-        for dt in (lucid.float32, lucid.float64, lucid.int32, lucid.int64):
-            if device == "metal" and dt == lucid.float64:
-                continue  # metal can't do f64; covered on CPU.
+        # Metal's refusal of float64 is asserted in test_metal_dtype_support.
+        dtypes = (lucid.float32, lucid.float64, lucid.int32, lucid.int64)
+        for dt in [d for d in dtypes if device_supports(device, d)]:
             t = lucid.zeros(2, dtype=dt, device=device)
             assert t.dtype == dt
 
 
 class TestOnes:
     def test_values(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.ones(2, 3, dtype=float_dtype, device=device)
         assert_close(t, np.ones((2, 3)))
 
@@ -45,15 +43,14 @@ class TestEmpty:
         t = lucid.empty(4, 5, device=device)
         assert t.shape == (4, 5)
 
+    @pytest.mark.parametrize("device", devices_supporting(lucid.float64))
     def test_dtype(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         t = lucid.empty(3, dtype=lucid.float64, device=device)
         assert t.dtype == lucid.float64
 
 
 class TestFull:
     def test_known_value(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.full((2, 3), 7.5, dtype=float_dtype, device=device)
         assert_close(t, np.full((2, 3), 7.5))
 
@@ -64,7 +61,6 @@ class TestFull:
 
 class TestEye:
     def test_square_identity(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.eye(4, dtype=float_dtype, device=device)
         assert_close(t, np.eye(4))
 
@@ -194,7 +190,6 @@ class TestArangeDtype:
 
 class TestLinspace:
     def test_endpoint(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.linspace(0.0, 1.0, 5, dtype=float_dtype, device=device)
         assert_close(t, np.linspace(0.0, 1.0, 5))
 
@@ -205,7 +200,6 @@ class TestLinspace:
 
 class TestLogspace:
     def test_known(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.logspace(0.0, 2.0, 3, dtype=float_dtype, device=device)
         # Default base is 10 — [1, 10, 100].
         assert_close(t, np.logspace(0.0, 2.0, 3), atol=1e-4)
@@ -240,7 +234,6 @@ class TestFullLike:
 
 class TestRand:
     def test_in_unit_interval(self, device: str, float_dtype: lucid.dtype) -> None:
-        skip_if_unsupported(device, float_dtype)
         t = lucid.rand(64, dtype=float_dtype, device=device)
         arr = t.numpy()
         assert (arr >= 0).all() and (arr < 1).all()
@@ -332,8 +325,8 @@ class TestTensorFactory:
         t = lucid.tensor([[1, 2], [3, 4]], dtype=lucid.int32, device=device)
         assert_equal_int(t, np.array([[1, 2], [3, 4]], dtype=np.int32))
 
+    @pytest.mark.parametrize("device", devices_supporting(lucid.float64))
     def test_dtype_override(self, device: str) -> None:
-        skip_if_unsupported(device, lucid.float64)
         t = lucid.tensor([1, 2, 3], dtype=lucid.float64, device=device)
         assert t.dtype == lucid.float64
 

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
 from lucid.test._helpers.compare import assert_close
 
 # (name, lucid_fn, numpy_fn, low, high, atol)
@@ -41,7 +40,6 @@ def test_binary_value_match(
     device: str,
     float_dtype: lucid.dtype,
 ) -> None:
-    skip_if_unsupported(device, float_dtype)
     np.random.seed(0)
     shape = (4, 5)
     a = np.random.uniform(low, high, size=shape).astype(np.float32)
