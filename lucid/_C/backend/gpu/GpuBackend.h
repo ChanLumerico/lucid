@@ -226,6 +226,18 @@ public:
     Storage random_uniform(
         const Shape& shape, double lo, double hi, Dtype dt, std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
+        if (dt == Dtype::C64) {
+            // MLX draws real floats only.  The reference draws each part
+            // uniformly, so draw a trailing pair and read it as one value.
+            auto pairs_shape = gpu::to_mlx_shape(shape);
+            pairs_shape.push_back(2);
+            auto pairs =
+                ::mlx::core::random::uniform(static_cast<float>(lo), static_cast<float>(hi),
+                                             pairs_shape, ::mlx::core::float32, key);
+            auto z = ::mlx::core::reshape(::mlx::core::view(pairs, ::mlx::core::complex64),
+                                          gpu::to_mlx_shape(shape));
+            return Storage{gpu::wrap_mlx_array(std::move(z), dt)};
+        }
         auto arr =
             ::mlx::core::random::uniform(static_cast<float>(lo), static_cast<float>(hi),
                                          gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt), key);
@@ -7839,6 +7851,9 @@ private:
                 // is fast and matches the dtype of ``ones_arr``.
                 return ::mlx::core::astype(::mlx::core::array(static_cast<float>(fill_value)),
                                            ::mlx::core::float16);
+            case Dtype::BF16:
+                return ::mlx::core::astype(::mlx::core::array(static_cast<float>(fill_value)),
+                                           ::mlx::core::bfloat16);
             case Dtype::F32:
                 return ::mlx::core::array(static_cast<float>(fill_value));
             case Dtype::F64:
@@ -7872,8 +7887,10 @@ private:
         // widening is exact — an int64 identity holds nothing an int32
         // one does not.  ``wrap_mlx_array`` does the widening, because it
         // converts whenever the array's dtype and the requested one
-        // differ.
-        const Dtype build = dt == Dtype::I64 ? Dtype::I32 : dt;
+        // differ.  The scatter has no complex kernel either, and the same
+        // holds there: a complex identity is a float32 one with zero
+        // imaginary parts.
+        const Dtype build = dt == Dtype::I64 ? Dtype::I32 : dt == Dtype::C64 ? Dtype::F32 : dt;
         auto out = ::mlx::core::eye(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
                                     gpu::to_mlx_dtype(build));
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};

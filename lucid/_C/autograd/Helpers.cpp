@@ -646,8 +646,21 @@ Storage random_half_via_f32(const Shape& shape,
 
 }  // namespace
 
+namespace {
+
+// Random draws are floating or complex.  Checked before the device split:
+// on Metal an integer dtype reached MLX, whose ValueError came through raw.
+void require_random_dtype(const char* op, Dtype dt) {
+    if (!is_floating_point(dt) && !is_complex(dt))
+        ErrorBuilder(op).not_implemented("not implemented for " + std::string(dtype_name(dt)) +
+                                         "; draw a floating tensor and cast it");
+}
+
+}  // namespace
+
 Storage random_uniform_storage(
     const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
+    require_random_dtype("random_uniform", dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_uniform(shape, lo, hi, dt,
                                                                       gpu_random_key_seed(gen));
@@ -665,6 +678,10 @@ Storage random_uniform_storage(
     case Dtype::F64:
         fill_uniform<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, lo, hi, gen);
         break;
+    case Dtype::C64:
+        // Each part uniform on [lo, hi), as the reference and Metal draw it.
+        fill_uniform<float>(reinterpret_cast<float*>(cpu.ptr.get()), 2 * n, lo, hi, gen);
+        break;
     default:
         ErrorBuilder("random_uniform").not_implemented("dtype not supported (F32/F64)");
     }
@@ -673,6 +690,7 @@ Storage random_uniform_storage(
 
 Storage random_normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
+    require_random_dtype("random_normal", dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_normal(shape, mean, std, dt,
                                                                      gpu_random_key_seed(gen));
@@ -690,6 +708,15 @@ Storage random_normal_storage(
     case Dtype::F64:
         fill_normal<double>(reinterpret_cast<double*>(cpu.ptr.get()), n, mean, std, gen);
         break;
+    case Dtype::C64: {
+        // Each part N(0, std^2 / 2), so |z - mean|^2 averages std^2 — the
+        // reference's convention, and MLX's on Metal.  ``mean`` is real.
+        auto* parts = reinterpret_cast<float*>(cpu.ptr.get());
+        fill_normal<float>(parts, 2 * n, 0.0, std / std::sqrt(2.0), gen);
+        for (std::size_t i = 0; i < n; ++i)
+            parts[2 * i] += static_cast<float>(mean);
+        break;
+    }
     default:
         ErrorBuilder("random_normal").not_implemented("dtype not supported (F32/F64)");
     }

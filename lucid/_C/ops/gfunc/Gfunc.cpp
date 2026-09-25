@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <variant>
 
 #include "../../autograd/AccumulateGrad.h"
@@ -163,6 +164,49 @@ TensorImplPtr eye_op(
     return finalize(std::move(s), shape, dt, device, requires_grad);
 }
 
+namespace {
+
+// The width a sequence is filled at.  The fill loop has four: a narrower
+// float or integer — and, for ``linspace``, complex — is that sequence
+// rounded once to the requested dtype, which is how the reference computes
+// them too.  Bool has neither op there, and complex has no ``arange``.
+Dtype sequence_fill_dtype(Dtype dt, const char* op, bool complex_ok) {
+    switch (dt) {
+    case Dtype::F32:
+    case Dtype::F64:
+    case Dtype::I32:
+    case Dtype::I64:
+        return dt;
+    case Dtype::F16:
+    case Dtype::BF16:
+        return Dtype::F64;
+    case Dtype::I8:
+    case Dtype::I16:
+        return Dtype::I64;
+    case Dtype::C64:
+        if (complex_ok)
+            return Dtype::F64;
+        break;
+    default:
+        break;
+    }
+    ErrorBuilder(op).not_implemented("not implemented for " + std::string(dtype_name(dt)));
+}
+
+// Round a sequence filled at ``fill`` to ``dt`` on the CPU, where it was
+// filled, and hand it to ``device``.
+Storage
+sequence_to_device(CpuStorage cpu, const Shape& shape, Dtype fill, Dtype dt, Device device) {
+    if (fill != dt) {
+        Storage narrow = backend::Dispatcher::for_device(Device::CPU)
+                             .astype(Storage{std::move(cpu)}, shape, fill, dt);
+        cpu = std::get<CpuStorage>(std::move(narrow));
+    }
+    return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
+}
+
+}  // namespace
+
 // Create a 1-D tensor with arithmetic progression values.
 //
 // Computes the element count as ceil((stop - start) / step) and fills a CPU
@@ -198,8 +242,9 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
         }
     };
 
-    auto cpu = allocate_cpu(shape, dt);
-    switch (dt) {
+    const Dtype fill = sequence_fill_dtype(dt, "arange", /*complex_ok=*/false);
+    auto cpu = allocate_cpu(shape, fill);
+    switch (fill) {
     case Dtype::F32:
         compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
         break;
@@ -209,15 +254,12 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
     case Dtype::I32:
         compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
         break;
-    case Dtype::I64:
+    default:
         compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
         break;
-    default:
-        ErrorBuilder("arange").not_implemented("dtype not supported");
     }
-    // from_cpu uploads the filled buffer to the requested device.
-    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
-                    dt, device, requires_grad);
+    return finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device), shape, dt, device,
+                    requires_grad);
 }
 
 // Create a 1-D tensor with num evenly spaced values between start and stop
@@ -258,8 +300,9 @@ TensorImplPtr linspace_op(
             p[num - 1] = static_cast<T>(stop);
     };
 
-    auto cpu = allocate_cpu(shape, dt);
-    switch (dt) {
+    const Dtype fill = sequence_fill_dtype(dt, "linspace", /*complex_ok=*/true);
+    auto cpu = allocate_cpu(shape, fill);
+    switch (fill) {
     case Dtype::F32:
         compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
         break;
@@ -269,14 +312,12 @@ TensorImplPtr linspace_op(
     case Dtype::I32:
         compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
         break;
-    case Dtype::I64:
+    default:
         compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
         break;
-    default:
-        ErrorBuilder("linspace").not_implemented("dtype not supported");
     }
-    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
-                    dt, device, requires_grad);
+    return finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device), shape, dt, device,
+                    requires_grad);
 }
 
 // Extract a diagonal from a 2-D matrix, or construct a 2-D matrix from a

@@ -13065,6 +13065,13 @@ private:
                 hp[i] = bits;
             break;
         }
+        case Dtype::BF16: {
+            const auto bits = detail::float_to_bfloat_bits(static_cast<float>(fill_value));
+            auto* hp = reinterpret_cast<std::uint16_t*>(p);
+            for (std::size_t i = 0; i < n; ++i)
+                hp[i] = bits;
+            break;
+        }
         default:
             ErrorBuilder("cpu_backend::full").not_implemented("dtype not supported");
         }
@@ -13112,6 +13119,9 @@ private:
             break;
         case Dtype::F64:
             set_one(reinterpret_cast<double*>(ptr.get()));
+            break;
+        case Dtype::C64:
+            set_one(reinterpret_cast<std::complex<float>*>(ptr.get()));
             break;
         default:
             ErrorBuilder("cpu_backend::eye").not_implemented("dtype not supported");
