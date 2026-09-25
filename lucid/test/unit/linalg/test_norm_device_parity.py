@@ -40,6 +40,17 @@ from lucid.linalg import _la
 from lucid.test._fixtures.devices import metal_available
 
 _SHAPES = [(6,), (4, 5), (2, 3, 4), (2, 3, 4, 5)]
+_DIMS = [0, 1, [0, 1]]
+
+#: ``(shape, dim)`` pairs whose every axis exists.  A 1-D input has no axis 1,
+#: so those pairs are not generated at all; what such a call does instead is
+#: asserted by ``test_norm_rejects_an_axis_the_input_lacks``.
+_IN_RANGE = [
+    (shape, dim)
+    for shape in _SHAPES
+    for dim in _DIMS
+    if max([dim] if isinstance(dim, int) else dim) < len(shape)
+]
 
 
 def _entrywise(x: np.ndarray, ord_: float, axis: object, keepdims: bool) -> np.ndarray:
@@ -52,8 +63,7 @@ def _entrywise(x: np.ndarray, ord_: float, axis: object, keepdims: bool) -> np.n
 # ── bug 2: the engine's elementwise loop, reached directly ────────────────────
 
 
-@pytest.mark.parametrize("shape", _SHAPES)
-@pytest.mark.parametrize("dim", [0, 1, [0, 1]])
+@pytest.mark.parametrize(("shape", "dim"), _IN_RANGE)
 @pytest.mark.parametrize("keepdim", [False, True])
 @pytest.mark.parametrize("ord_", [1.0, 2.0])
 def test_engine_norm_keepdim_indexing(
@@ -61,8 +71,6 @@ def test_engine_norm_keepdim_indexing(
 ) -> None:
     """This segfaulted at 3-D once ``keepdim`` kept the ranks equal."""
     dims = [dim] if isinstance(dim, int) else dim
-    if max(dims) >= len(shape):
-        pytest.skip("dim out of range for this rank")
     x = np.random.default_rng(7).standard_normal(shape).astype(np.float32)
     axis = dim if isinstance(dim, int) else tuple(dim)
     ref = _entrywise(x, ord_, axis, keepdim)
@@ -70,6 +78,24 @@ def test_engine_norm_keepdim_indexing(
     got = _wrap(_la.norm(_unwrap(lucid.tensor(x)), ord_, dims, keepdim)).numpy()
     assert got.shape == ref.shape
     np.testing.assert_allclose(got, ref, atol=1e-4, rtol=1e-4)
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_norm_rejects_an_axis_the_input_lacks(device: str) -> None:
+    """An axis the input does not have is refused, the same way on both streams.
+
+    This is the public entry point, which validates the axes before any kernel
+    runs.  The engine op above does not validate on the CPU stream, which is
+    why the out-of-range pairs are never generated against it.
+
+    The engine's ``IndexError`` derives from ``RuntimeError``, not from the
+    builtin ``IndexError``, so that is the class to catch.
+    """
+    x = lucid.tensor(np.ones(6, dtype=np.float32), device=device)
+    with pytest.raises(RuntimeError, match="axis out of range"):
+        LA.norm(x, dim=1)
+    with pytest.raises(ValueError, match="at least 2 dimensions"):
+        LA.norm(x, dim=(0, 1))
 
 
 @pytest.mark.skipif(not metal_available(), reason="metal unavailable")

@@ -91,11 +91,19 @@ OPTIMIZER_FACTORIES = [
 
 
 # Y-series closed the previous rejection list — every Lucid optimizer
-# now compiles.  The few cases that retain caveats (LBFGS only without
-# closure / line search; SparseAdam runs dense Adam math without the
-# zero-grad-skip shortcut) are still listed in the supported set
+# *class* now compiles.  The few cases that retain caveats (LBFGS only
+# without closure / line search; SparseAdam runs dense Adam math without
+# the zero-grad-skip shortcut) are still listed in the supported set
 # because the fused-step usage doesn't exercise those caveats.
-UNSUPPORTED_OPTIMIZERS: list[object] = []
+#
+# What is still refused is a configuration flag the compiled update
+# does not implement.  Each would otherwise be dropped without a word.
+UNSUPPORTED_OPTIMIZERS = [
+    pytest.param(lambda p: optim.Adam(p, lr=0.05, amsgrad=True), id="Adam_amsgrad"),
+    pytest.param(
+        lambda p: optim.RMSprop(p, lr=0.05, centered=True), id="RMSprop_centered"
+    ),
+]
 
 
 def _clone_state(model: nn.Module) -> dict[str, lucid.Tensor]:
@@ -195,14 +203,14 @@ def test_fused_step_parity(mk_opt: object) -> None:
 
 @pytest.mark.parametrize("mk_opt", UNSUPPORTED_OPTIMIZERS)
 def test_compile_optimizer_rejects_unsupported(mk_opt: object) -> None:
-    """Unsupported optimizers must raise NotImplementedError with reason.
+    """Unsupported optimizer configurations must raise NotImplementedError.
 
     Silent fallback to eager would mask user expectations of compile
     speedup.  An informative error is the production-safe contract.
     """
     model = _tiny_model()
     opt = mk_opt(list(model.parameters()))
-    with pytest.raises(NotImplementedError, match="not supported"):
+    with pytest.raises(NotImplementedError, match="not yet supported"):
         compile_optimizer(opt)
 
 

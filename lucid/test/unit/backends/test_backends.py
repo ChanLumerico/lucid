@@ -9,16 +9,31 @@ class TestBackendsSurface:
     def test_module_present(self) -> None:
         assert hasattr(lucid, "backends")
 
+    def test_the_backends_are_named_for_apple_silicon(self) -> None:
+        """One namespace per stream, named for what runs it.
 
-class TestMpsAccessor:
-    def test_is_available_callable(self) -> None:
-        # ``lucid.backends.mps.is_available()`` (or equivalent) should
-        # exist and return a bool — engine surface varies, so we tolerate.
-        if not hasattr(lucid.backends, "mps"):
-            pytest.skip("backends.mps not exposed")
-        if hasattr(lucid.backends.mps, "is_available"):
-            v = lucid.backends.mps.is_available()
-            assert isinstance(v, bool)
+        The GPU stream is ``metal`` everywhere in Lucid, so there is no
+        ``mps`` alias here to keep in step with it.
+        """
+        assert lucid.backends.__all__ == ["accelerate", "metal", "quantized"]
+        assert not hasattr(lucid.backends, "mps")
+
+
+class TestMetalBackend:
+    def test_the_metal_backend_carries_its_flags(self) -> None:
+        metal = lucid.backends.metal
+        prev = metal.deterministic
+        try:
+            metal.deterministic = not prev
+            assert metal.deterministic is (not prev)
+        finally:
+            metal.deterministic = prev
+        assert isinstance(metal.benchmark, bool)
+
+    def test_availability_lives_on_the_device_module(self) -> None:
+        """``lucid.metal.is_available()`` is the accessor, and on the only
+        hardware Lucid installs on it is always true."""
+        assert lucid.metal.is_available() is True
 
 
 class TestQuantizedEngine:
