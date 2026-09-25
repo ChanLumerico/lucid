@@ -15,6 +15,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.15.2] — 2026-09-26
+
+Lucid now requires **macOS 26**. 3.15.1 was the last release for macOS 15,
+and pip there keeps resolving to it; this wheel targets macOS 26.0. The
+engine ABI moves from 13 to 14, so a C++ extension built against 3.15.1
+has to be rebuilt.
+
+Most of the rest is correctness: defects that answered instead of
+refusing, found by turning the fast test tier's 317 skips into assertions
+and by sweeping compiled training and second derivatives on both devices:
+
+- **A custom `autograd.Function` that returned `None` for an input could
+  give it a garbage `.grad`.** The engine routed the `None` on as an empty
+  storage, and the leaf read whatever the allocator had last left there.
+  It stays `None` now.
+- **`Adam(amsgrad=True)` and `AdamW(amsgrad=True)` ran plain Adam.** The
+  flag never reached the engine. The running maximum is now kept, saved
+  and restored.
+- **In-place writes inside a compiled call happened on the first call
+  only** — EMA buffers, step counters, spectral-norm vectors, `setitem`.
+- **`nan_to_num` and `nextafter` dropped their gradients**, and `floor`,
+  `ceil`, `round`, `trunc` and `sign` left the graph instead of
+  differentiating to zero.
+- **Fused attention**: `attn_mask` with `is_causal` let Metal see the
+  future, a non-square causal mask was aligned differently on each
+  device, and second derivatives raised.
+- **`expm1` was `exp(x) - 1`** — 19% off at `1e-7`, and 100% below it.
+
+Comparisons now promote their operands, so `mask > 0` works on a bool
+tensor; `-` on two bools and unary `-` on a bool are refused, as the
+reference refuses them. Every factory makes the dtypes the reference makes:
+bfloat16 `full`, half and narrow-integer `arange` / `linspace`, complex
+`eye` / `rand` / `randn`. EfficientDet, DreamerV3, NCSN and Mask2Former
+train compiled.
+
+New: **MobileNet-v4** and **Inception-v4**, with ImageNet-1k weights.
+
+### Removed
+
+- drop macOS 15 — Lucid requires macOS 26 from 3.15.2
+
+### Added
+
+- add MobileNet-v4 and Inception-v4
+- publish MobileNet-v4 and Inception-v4 ImageNet-1k weights
 
 ### Fixed
 
@@ -24,47 +71,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - keep the return scale on the device, so the training step compiles
 - differentiate grid_sample and 3-D interpolation in compiled training
 - trace channel- and sample-wise dropout like element-wise dropout
-
 - draw the noise levels on the device, so the training step compiles
-
 - three undefined conversions the UBSan build halted on
-
 - refuse an output_padding outside the stride and dilation
-
 - nan_to_num and nextafter pass their gradients through
-
 - Adam and AdamW run AMSGrad when asked
-
 - export nan_to_num, and name why nextafter cannot be
-
 - the engine's exceptions subclass the builtins they name
-
 - a custom Function's None gradient stays None
-
 - floor, ceil, round, trunc and sign differentiate to zero
-
 - comparisons promote; bool minus and negation are refused
-
 - integer inputs to xlogy, logsumexp, inner, hypot, logaddexp
-
 - expm1 keeps its precision near zero
-
 - norm refuses an axis that is out of range or repeated
-
 - lucid.backends no longer exports typing's final
-
 - every factory makes the dtypes the reference makes
-
 - trunc is its own op; fmod and frac differentiate twice again
-
-### Removed
-
-- drop macOS 15 — Lucid requires macOS 26 from 3.16.0
-
-### Added
-
-- add MobileNet-v4 and Inception-v4
-- publish MobileNet-v4 and Inception-v4 ImageNet-1k weights
 
 ---
 

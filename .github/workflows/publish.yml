@@ -181,7 +181,7 @@ jobs:
           retention-days: 30
 
   # ── The wheel on the oldest macOS it claims ─────────────────────────
-  # The wheel targets macOS 26.0, the floor since 3.16.0 (3.15.0 was the
+  # The wheel targets macOS 26.0, the floor since 3.15.2 (3.15.1 was the
   # last release for macOS 15).  Installing it into a fresh environment on
   # macos-26 — where pip resolves MLX's macOS 26 build — is what makes the
   # macosx_26_0 tag true: a missing symbol or a difference in that MLX
