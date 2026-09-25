@@ -997,6 +997,23 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
 #: Exact overrides, for the handful whose family cannot be inferred.
 _EXACT: dict[str, "Callable[[str, str], Iterator[Call]]"] = {
     "one_hot": lambda n, d: iter([Call([_int((_N,), 4), 4], {}, 0, "one_hot(idx, n)")]),
+    # Class scores against class indices.  The blind ladder's ``op(x, dim)``
+    # used to be the first call that ran; once ``==`` promoted its operands
+    # the signature-derived call at rank 1 ran first instead, and the rank
+    # axis had nothing to take away from it.
+    **{
+        metric: lambda n, d: iter(
+            [
+                Call(
+                    [_f((_N, 4), d), _int((_N,), 4)],
+                    {},
+                    0,
+                    "metric(logits, class index)",
+                )
+            ]
+        )
+        for metric in ("accuracy", "correct_count")
+    },
     # ``rrelu`` only draws in training mode; its default is the
     # *expectation* of the uniform slope, which is deterministic by
     # design.  Called with the default the determinism axis saw the same
