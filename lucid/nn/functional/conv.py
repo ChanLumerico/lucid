@@ -16,6 +16,29 @@ def _normalize_int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]
     return tuple(v)
 
 
+def _check_output_padding(
+    name: str,
+    output_padding: tuple[int, ...],
+    stride: tuple[int, ...],
+    dilation: tuple[int, ...],
+) -> None:
+    """Refuse an ``output_padding`` the transposed convolution cannot mean.
+
+    ``output_padding`` picks one of the ``stride`` input sizes a strided
+    convolution maps to the same output, so it has to be smaller than the
+    stride — or than the dilation, which spaces the kernel taps the same
+    way.  Anything larger reaches past every input position: the engine used
+    to answer anyway, with rows that hold the bias alone.
+    """
+    for axis, (op, s, d) in enumerate(zip(output_padding, stride, dilation)):
+        if op < 0 or op >= max(s, d):
+            raise ValueError(
+                f"{name}: output_padding {tuple(output_padding)} must be "
+                f"non-negative and smaller than stride {tuple(stride)} or "
+                f"dilation {tuple(dilation)} on every axis (axis {axis}: {op})"
+            )
+
+
 def conv1d(
     x: Tensor,
     weight: Tensor,
@@ -327,6 +350,7 @@ def conv_transpose1d(
     p = _normalize_int_or_tuple(padding, 1)[0]
     op = _normalize_int_or_tuple(output_padding, 1)[0]
     d = _normalize_int_or_tuple(dilation, 1)[0]
+    _check_output_padding("conv_transpose1d", (op,), (s,), (d,))
     wi = _unwrap(weight)
     # engine requires explicit bias; create zeros(C_out) when caller passes None.
     # The transposed weight's second axis is C_out // groups, so it has to be
@@ -416,6 +440,7 @@ def conv_transpose2d(
     ph, pw = _normalize_int_or_tuple(padding, 2)
     oh, ow = _normalize_int_or_tuple(output_padding, 2)
     dh, dw = _normalize_int_or_tuple(dilation, 2)
+    _check_output_padding("conv_transpose2d", (oh, ow), (sh, sw), (dh, dw))
     wi = _unwrap(weight)
     if bias is not None:
         b = _unwrap(bias)
@@ -501,6 +526,7 @@ def conv_transpose3d(
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
     od, oh, ow = _normalize_int_or_tuple(output_padding, 3)
     dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
+    _check_output_padding("conv_transpose3d", (od, oh, ow), (sd, sh, sw), (dd, dh, dw))
     wi = _unwrap(weight)
     if bias is not None:
         b = _unwrap(bias)

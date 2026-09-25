@@ -95,11 +95,13 @@ def test_bias_free_convolution(rank):
 
 
 @pytest.mark.parametrize("rank", RANKS)
-@pytest.mark.parametrize("stride", [1, 2])
-@pytest.mark.parametrize("output_padding", [0, 1])
+@pytest.mark.parametrize(("stride", "output_padding"), [(1, 0), (2, 0), (2, 1)])
 def test_conv_transpose_output_shape(rank, stride, output_padding):
-    if output_padding >= stride:
-        pytest.skip("output_padding must be smaller than stride")
+    """The usual combinations, where ``output_padding`` is below the stride.
+
+    ``output_padding`` at the stride or above is refused, asserted by
+    the test below.
+    """
     layer = {
         1: nn.ConvTranspose1d,
         2: nn.ConvTranspose2d,
@@ -109,6 +111,56 @@ def test_conv_transpose_output_shape(rank, stride, output_padding):
     ](3, 4, kernel_size=3, stride=stride, padding=1, output_padding=output_padding)
     out = layer(_input(rank))
     expected = (8 - 1) * stride - 2 * 1 + 3 + output_padding
+    assert tuple(out.shape) == (2, 4) + (expected,) * rank
+
+
+@pytest.mark.parametrize("rank", RANKS)
+@pytest.mark.parametrize(
+    ("stride", "dilation", "output_padding"), [(1, 1, 1), (2, 1, 2), (2, 1, -1)]
+)
+def test_output_padding_outside_the_stride_is_refused(
+    rank, stride, dilation, output_padding
+):
+    """``output_padding`` must be non-negative and below the stride or dilation.
+
+    It picks one of the ``stride`` input sizes a strided convolution maps to
+    the same output; at the stride or above it reaches past every input
+    position.  The engine used to answer anyway, with rows holding the bias
+    alone — both the module and the function now refuse, as the reference
+    framework does.
+    """
+    cls = {1: nn.ConvTranspose1d, 2: nn.ConvTranspose2d, 3: nn.ConvTranspose3d}[rank]
+    fn = {1: F.conv_transpose1d, 2: F.conv_transpose2d, 3: F.conv_transpose3d}[rank]
+    x = _input(rank)
+    layer = cls(
+        3,
+        4,
+        kernel_size=3,
+        stride=stride,
+        padding=1,
+        dilation=dilation,
+        output_padding=output_padding,
+    )
+    with pytest.raises(ValueError, match="output_padding"):
+        layer(x)
+    with pytest.raises(ValueError, match="output_padding"):
+        fn(
+            x,
+            layer.weight,
+            stride=stride,
+            padding=1,
+            dilation=dilation,
+            output_padding=output_padding,
+        )
+
+
+@pytest.mark.parametrize("rank", RANKS)
+def test_a_dilation_above_the_stride_admits_a_larger_output_padding(rank):
+    """Below the dilation is enough, even when it is not below the stride."""
+    cls = {1: nn.ConvTranspose1d, 2: nn.ConvTranspose2d, 3: nn.ConvTranspose3d}[rank]
+    layer = cls(3, 4, kernel_size=3, stride=1, padding=1, dilation=2, output_padding=1)
+    out = layer(_input(rank))
+    expected = (8 - 1) * 1 - 2 * 1 + 2 * (3 - 1) + 1 + 1
     assert tuple(out.shape) == (2, 4) + (expected,) * rank
 
 

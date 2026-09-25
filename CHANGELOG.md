@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - three undefined conversions the UBSan build halted on
 
+- refuse an output_padding outside the stride and dilation
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
