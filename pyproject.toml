@@ -14,9 +14,8 @@ requires = [
     # Every mlx-metal release from 0.31 on ships macOS 14, 15 and 26 builds
     # with one ABI (same headers, same exported symbols).  The engine targets
     # 26.0 (setup.py), so one macosx_26_0_arm64 wheel links against the macOS
-    # 26 build pip picks for the machine.  Capped below 0.32.1 with the
-    # runtime dependency — see there.
-    "mlx>=0.31,<0.32.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # 26 build pip picks for the machine.
+    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -60,13 +59,7 @@ classifiers = [
 # and use `pip install --no-build-isolation` so the build-env path matches
 # the runtime path.
 dependencies = [
-    # Below 0.32.1: from that release a Metal training forward whose BatchNorm
-    # schedules its running statistics with ``async_eval`` intermittently
-    # computes wrong activations — whole layers off, some NaN (ResNet on
-    # MNIST: 4 of 16 runs on the CI VM, 14 of 16 in one M4 Max process;
-    # 0.32.0 clean).  Lift the cap once a release passes
-    # ``test_mnist_training_parity[metal-resnet-adam]`` on a cold start.
-    "mlx>=0.31,<0.32.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "numpy>=1.24",
     # Every pretrained weight in the zoo is a safetensors blob, so
     # `pretrained=True` is not an optional path — it is the advertised
