@@ -656,10 +656,10 @@ def atanh(x: Tensor) -> Tensor:
 def expm1(x: Tensor) -> Tensor:
     r"""Element-wise :math:`e^{x} - 1`.
 
-    Computes the exponential-minus-one function. The current composite
-    implementation evaluates the naive form ``exp(x) - 1``; a dedicated
-    engine primitive would additionally preserve relative accuracy for
-    :math:`|x| \ll 1`, but the algebraic result is identical.
+    Computes the exponential-minus-one function to full relative precision,
+    including for :math:`|x| \ll 1`, where ``exp(x) - 1`` cancels: in
+    float32 that naive form returned ``1.19e-7`` for ``x = 1e-7`` (19% off)
+    and ``0`` below it.
 
     Parameters
     ----------
@@ -690,7 +690,23 @@ def expm1(x: Tensor) -> Tensor:
     >>> lucid.expm1(x)
     tensor([0., 1.718, 6.389])
     """
-    return lucid.exp(x) - 1.0
+    # Kahan's form: with u = exp(x), (u - 1) * x / log(u) cancels the rounding
+    # of u against the same rounding in log(u), so it keeps full relative
+    # precision near 0.  The guards take u == 1 (x underflowed), u == 0 and
+    # u == inf, where the ratio is 0/0 or inf/inf.
+    xd = x.detach()
+    u = lucid.exp(xd)
+    accurate = lucid.where(u == 1.0, xd, (u - 1.0) * xd / lucid.log(u))
+    accurate = lucid.where((u == 0.0) | ~lucid.isfinite(u), u - 1.0, accurate)
+    # The value is the accurate one; the gradient is exp(x)'s, carried by the
+    # naive form under it, so the guards' 0/0 branches never reach backward.
+    naive = lucid.exp(x) - 1.0
+    correction = lucid.where(
+        lucid.isfinite(naive.detach()),
+        accurate - naive.detach(),
+        lucid.zeros_like(accurate),
+    )
+    return naive + correction.detach()
 
 
 def sinc(x: Tensor) -> Tensor:

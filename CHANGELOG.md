@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - integer inputs to xlogy, logsumexp, inner, hypot, logaddexp
 
+- expm1 keeps its precision near zero
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
