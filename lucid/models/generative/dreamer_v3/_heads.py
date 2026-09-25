@@ -156,12 +156,12 @@ class TwoHotHead(nn.Module):
         (2, 3)
 
         A zero-initialised head is uniform over a grid symmetric about zero,
-        so it predicts exactly ``symexp(0) = 0`` — which is how the critic
-        starts:
+        so it predicts ``symexp(0) = 0``, up to the rounding of the grid's
+        float32 sum — which is how the critic starts:
 
         >>> critic = TwoHotHead(8, 16, 2, num_bins=41, zero_init=True)
-        >>> float(critic.predict(lucid.randn((2, 3, 8))).abs().max().item())
-        0.0
+        >>> float(critic.predict(lucid.randn((2, 3, 8))).abs().max().item()) < 1e-6
+        True
         """
         probabilities = F.softmax(self._logits(feature), dim=-1)
         return F.symexp((probabilities * self.grid).sum(dim=-1))
