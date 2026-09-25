@@ -25,16 +25,15 @@ namespace lucid {
 // Autograd node for element-wise round-to-nearest-even: $y = \operatorname{round}(x)$.
 //
 // Piecewise-constant; derivative is zero almost everywhere and undefined
-// at half-integer boundaries.  ``kHasGradient = false`` causes
-// ``UnaryKernel::forward`` to skip autograd wiring entirely.
+// at half-integer boundaries.  The node stays in the graph with that zero
+// gradient, as the reference keeps it.
 //
 // Attributes
 // ----------
 // kSavesInput : bool
 //     ``false`` — no tensor needs to be saved across the backward pass.
 // kHasGradient : bool
-//     ``false`` — predicate-style op; the backward node is never invoked
-//     in practice.
+//     ``true`` — kept in the graph with a zero gradient.
 // schema_v1 : OpSchema
 //     Op name ``"round"`` with ``AmpPolicy::KeepInput`` (integer inputs
 //     pass through unchanged).
@@ -63,8 +62,7 @@ public:
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.round(a, s, dt);
     }
-    // Zero-gradient sentinel — returns an empty ``CpuStorage`` because
-    // ``kHasGradient = false`` guarantees this is never called.
+    // Zero gradient, shaped like the output.
     //
     // Parameters
     // ----------
@@ -74,7 +72,7 @@ public:
     // Returns
     // -------
     // Storage
-    //     Empty ``CpuStorage`` placeholder.
+    //     Zeros shaped like the output.
     Storage grad_formula(const Storage& g);
 
     // Graph-mode backward — zero, like ``grad_formula``, so the node stays
@@ -86,7 +84,7 @@ public:
 // Element-wise round-to-nearest-even — returns a new tensor whose values
 // are ``round(a)`` with the same shape and dtype as ``a``.
 //
-// Not differentiable: ``a`` is detached from the autograd graph.
+// Differentiable with a zero gradient, as the reference keeps it.
 //
 // Parameters
 // ----------
@@ -114,15 +112,15 @@ LUCID_API TensorImplPtr round_op(const TensorImplPtr& a);
 // Autograd node for element-wise floor: $y = \lfloor x \rfloor$.
 //
 // Piecewise-constant; derivative is zero almost everywhere and undefined
-// at integer boundaries.  ``kHasGradient = false``; the backward node is
-// registered for schema completeness only.
+// at integer boundaries.  The node stays in the graph with that zero
+// gradient, as the reference keeps it.
 //
 // Attributes
 // ----------
 // kSavesInput : bool
 //     ``false`` — nothing to save.
 // kHasGradient : bool
-//     ``false`` — autograd wiring is skipped.
+//     ``true`` — kept in the graph with a zero gradient.
 // schema_v1 : OpSchema
 //     Op name ``"floor"`` with ``AmpPolicy::KeepInput``.
 //
@@ -143,7 +141,7 @@ public:
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.floor(a, s, dt);
     }
-    // Zero-gradient sentinel; never invoked since ``kHasGradient = false``.
+    // Zero gradient, shaped like the output.
     //
     // Parameters
     // ----------
@@ -153,7 +151,7 @@ public:
     // Returns
     // -------
     // Storage
-    //     Empty ``CpuStorage`` placeholder.
+    //     Zeros shaped like the output.
     Storage grad_formula(const Storage& g);
 
     // Graph-mode backward — zero, like ``grad_formula``, so the node stays
@@ -165,7 +163,7 @@ public:
 // Element-wise floor — returns the largest integer-valued tensor not
 // greater than ``a``, with the same dtype as ``a``.
 //
-// Not differentiable: output is detached from the autograd graph.
+// Differentiable with a zero gradient, as the reference keeps it.
 //
 // Parameters
 // ----------
@@ -197,7 +195,7 @@ LUCID_API TensorImplPtr floor_op(const TensorImplPtr& a);
 // Autograd node for element-wise ceiling: $y = \lceil x \rceil$.
 //
 // Piecewise-constant; derivative is zero almost everywhere and undefined
-// at integer boundaries.  ``kHasGradient = false``.
+// at integer boundaries; kept in the graph with a zero gradient.
 //
 // Attributes
 // ----------
@@ -225,7 +223,7 @@ public:
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.ceil(a, s, dt);
     }
-    // Zero-gradient sentinel; never invoked since ``kHasGradient = false``.
+    // Zero gradient, shaped like the output.
     //
     // Parameters
     // ----------
@@ -235,7 +233,7 @@ public:
     // Returns
     // -------
     // Storage
-    //     Empty ``CpuStorage`` placeholder.
+    //     Zeros shaped like the output.
     Storage grad_formula(const Storage& g);
 
     // Graph-mode backward — zero, like ``grad_formula``, so the node stays
@@ -247,7 +245,7 @@ public:
 // Element-wise ceiling — returns the smallest integer-valued tensor not
 // less than ``a``, with the same dtype as ``a``.
 //
-// Not differentiable: output is detached from the autograd graph.
+// Differentiable with a zero gradient, as the reference keeps it.
 //
 // Parameters
 // ----------
@@ -271,6 +269,47 @@ public:
 // --------
 // :func:`floor_op`, :func:`round_op`.
 LUCID_API TensorImplPtr ceil_op(const TensorImplPtr& a);
+
+// Autograd node for element-wise truncation toward zero:
+// $y = \operatorname{trunc}(x)$.
+//
+// Piecewise-constant like floor and ceil, and kept in the graph the same way,
+// with a zero gradient.  No backend has a trunc kernel, so the forward picks
+// ``floor`` for $x \ge 0$ and ``ceil`` below — on storages, so no autograd
+// node sits in between.  It used to be that composition over tensors, and
+// once floor and ceil kept the graph a ``where`` node landed on the path,
+// which refuses a second derivative: ``fmod`` and ``frac`` lost theirs.
+//
+// Math
+// ----
+// $$y_i = \operatorname{sgn}(x_i) \lfloor |x_i| \rfloor$$, with
+// ``trunc(-0.0) = -0.0`` and ``trunc(-0.5) = -0.0``.
+//
+// Notes
+// -----
+// Integer dtypes are a no-op.
+class LUCID_API TruncBackward : public UnaryOp<TruncBackward> {
+public:
+    static constexpr bool kSavesInput = false;
+    static constexpr bool kHasGradient = true;
+    static const OpSchema schema_v1;
+    // Forward — ``floor`` where ``a >= 0``, ``ceil`` elsewhere (NaN included).
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt);
+    // Zero gradient, shaped like the output.
+    Storage grad_formula(const Storage& g);
+    // Graph-mode backward — zero, so the node stays differentiable under
+    // ``create_graph``.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
+};
+
+// Element-wise truncation toward zero; same shape, dtype and device as ``a``.
+// Differentiable with a zero gradient, as the reference keeps it.
+//
+// See Also
+// --------
+// :func:`floor_op`, :func:`ceil_op`, :func:`frac_op`.
+LUCID_API TensorImplPtr trunc_op(const TensorImplPtr& a);
 
 // Autograd node for element-wise bitwise NOT: $y = \mathtt{\sim}x$.
 //

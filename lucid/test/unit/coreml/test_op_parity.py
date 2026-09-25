@@ -67,6 +67,7 @@ _UNARY = [
     ("erf", lucid.erf, False),
     ("exp", lucid.exp, False),
     ("floor", lucid.floor, False),
+    ("trunc", lucid.trunc, False),
     ("log", lucid.log, True),
     ("log2", lucid.log2, True),
     ("neg", lambda x: -x, False),

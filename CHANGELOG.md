@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - every factory makes the dtypes the reference makes
 
+- trunc is its own op; fmod and frac differentiate twice again
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

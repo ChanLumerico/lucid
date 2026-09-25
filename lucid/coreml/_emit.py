@@ -1501,6 +1501,22 @@ def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "equal", [("x", zeroed), ("y", b.const_float(0.0))]
 
 
+@_emitter("trunc")
+def _trunc(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``floor`` where ``x >= 0``, ``ceil`` elsewhere — MIL has no ``trunc``.
+
+    The engine computes it the same way, so ``-0.0`` keeps its sign here too.
+    """
+    x = ins[0]
+    shape = b.shape_of(x)
+    non_negative = b.emit(
+        "greater_equal", [("x", x), ("y", b.const_float(0.0))], shape, dtype=_MIL_BOOL
+    )
+    floored = b.emit("floor", [("x", x)], shape)
+    ceiled = b.emit("ceil", [("x", x)], shape)
+    return "select", [("cond", non_negative), ("a", floored), ("b", ceiled)]
+
+
 @_emitter("nan_to_num")
 def _nan_to_num(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Three selects — MIL has no ``nan_to_num``.

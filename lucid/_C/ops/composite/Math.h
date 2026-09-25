@@ -12,7 +12,7 @@
 //   log10  = log(x) / log(10)
 //   log1p  = log(1 + x)
 //   exp2   = exp(x · log(2))
-//   trunc  = where(x ≥ 0, floor(x), ceil(x))           [zero gradient]
+//   (trunc, which frac and fmod use, is a step function of its own — ufunc/Discrete.h)
 //   frac   = x − trunc(x)
 //   atan2  = quadrant-aware arctangent (where + arctan + ±π corrections)
 //   fmod   = a − trunc(a / b) · b                       [C-style modulo]
@@ -121,38 +121,6 @@ LUCID_API TensorImplPtr log1p_op(const TensorImplPtr& a);
 // --------
 // :func:`exp_op`.
 LUCID_API TensorImplPtr exp2_op(const TensorImplPtr& a);
-
-// Round toward zero: $y = \mathrm{trunc}(x) = \mathrm{sgn}(x) \lfloor |x| \rfloor$.
-//
-// Composite over :func:`greater_equal_op` + :func:`where_op` +
-// :func:`floor_op` + :func:`ceil_op`.  Picks floor for non-negative
-// inputs and ceil for negatives.  Both branches are piecewise constant,
-// so the gradient contribution is **zero** (matches the reference
-// framework's convention).
-//
-// Math
-// ----
-// $$
-//   y = \begin{cases}
-//     \lfloor x \rfloor & x \ge 0 \\
-//     \lceil x \rceil & x < 0
-//   \end{cases}, \qquad \frac{\partial y}{\partial x} = 0
-// $$
-//
-// Parameters
-// ----------
-// a : TensorImplPtr
-//     Input tensor.
-//
-// Returns
-// -------
-// TensorImplPtr
-//     Tensor of the same shape and dtype as ``a``.
-//
-// See Also
-// --------
-// :func:`floor_op`, :func:`ceil_op`, :func:`frac_op`.
-LUCID_API TensorImplPtr trunc_op(const TensorImplPtr& a);
 
 // Fractional part: $y = x - \mathrm{trunc}(x)$.
 //

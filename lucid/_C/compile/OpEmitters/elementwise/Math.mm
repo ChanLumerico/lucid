@@ -188,6 +188,20 @@ public:
     }
 };
 
+// ``trunc`` became an op of its own (it was a ``where`` over floor and ceil).
+// An integer is already whole; MPSGraph's truncate is for floats.
+class TruncEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "trunc"; }
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
+            if ((x.dataType & MPSDataTypeFloatBit) == 0)
+                return [g identityWithTensor:x name:@"trunc"];
+            return [g truncateWithTensor:x name:@"trunc"];
+        });
+    }
+};
+
 class RoundEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "round"; }
@@ -439,6 +453,7 @@ struct UnaryMathEmitterRegistrar {
         register_emitter(std::make_unique<ArctanEmitter>());
         register_emitter(std::make_unique<CeilEmitter>());
         register_emitter(std::make_unique<FloorEmitter>());
+        register_emitter(std::make_unique<TruncEmitter>());
         register_emitter(std::make_unique<RoundEmitter>());
         register_emitter(std::make_unique<CubeEmitter>());
         register_emitter(std::make_unique<CubeRootEmitter>());

@@ -77,15 +77,6 @@ TensorImplPtr exp2_op(const TensorImplPtr& a) {
     return exp_op(mul_op(a, ln2));
 }
 
-// Round toward zero — pick ``floor`` for non-negative inputs and ``ceil`` for
-// negatives.  Both branches are piecewise constant, so the backward chain
-// contributes zero gradient (matching the reference framework).
-TensorImplPtr trunc_op(const TensorImplPtr& a) {
-    auto zero = full_like_op(a, 0.0);
-    auto cond = greater_equal_op(a, zero);
-    return where_op(cond, floor_op(a), ceil_op(a));
-}
-
 // Fractional part — the ``trunc`` term contributes zero gradient, so the
 // gradient w.r.t. ``a`` is just the upstream gradient.
 TensorImplPtr frac_op(const TensorImplPtr& a) {

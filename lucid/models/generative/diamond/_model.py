@@ -1364,8 +1364,8 @@ class DIAMONDModel(PretrainedModel):
             history clean, which is what Atari does.
         quantize : bool, default=True, keyword-only
             Put the estimate back on the 8-bit grid, as the released
-            sampler does.  Training passes ``False``: the quantiser has
-            no gradient, and the loss belongs on the estimate anyway.
+            sampler does.  Training passes ``False``: the quantiser's
+            gradient is zero, and the loss belongs on the estimate anyway.
 
         Returns
         -------
@@ -1391,10 +1391,11 @@ class DIAMONDModel(PretrainedModel):
         (2, 3, 16, 16)
 
         By default the estimate is put back on the 8-bit grid of ``[-1, 1]``,
-        which has no gradient; training asks for the raw estimate instead:
+        whose gradient is zero everywhere; training asks for the raw estimate
+        instead:
 
-        >>> bool(clean.min() >= -1.0), bool(clean.max() <= 1.0), clean.requires_grad
-        (True, True, False)
+        >>> bool(clean.min() >= -1.0), bool(clean.max() <= 1.0)
+        (True, True)
         >>> model.denoise(noised, sigma, frames, actions, quantize=False).requires_grad
         True
         """
