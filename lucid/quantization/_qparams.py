@@ -9,14 +9,14 @@ is the shared math behind every observer.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.quantization._qscheme import QDtype, QScheme
 
-if TYPE_CHECKING:
-    _RangeLike = Tensor | float
+# A ``type`` alias, evaluated when read: under ``TYPE_CHECKING`` it was
+# absent at run time, and every signature naming it raised ``NameError``.
+type _RangeLike = Tensor | float
 
 
 @dataclass(frozen=True)

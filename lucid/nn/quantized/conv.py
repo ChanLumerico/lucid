@@ -26,10 +26,11 @@ from lucid.nn.quantized._utils import activation_qparams, quantize_weight
 from lucid.quantization._functional import dequantize, fake_quantize
 from lucid.quantization._qscheme import QDtype, quint8
 
+# Outside ``TYPE_CHECKING``: the constructors' signatures name it.
+type _IntTuple = tuple[int, ...]
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-    _IntTuple = tuple[int, ...]
 
     class _FloatConv(Protocol):
         """Structural view of a calibrated float conv module."""

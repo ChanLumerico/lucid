@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - where differentiates twice and reaches a broadcast operand
 - schedulers set the first step's rate; ChainedScheduler multiplies
 
+- every public callable's signature is readable
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

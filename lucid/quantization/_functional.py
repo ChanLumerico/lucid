@@ -38,8 +38,10 @@ from lucid.autograd import Function, FunctionCtx
 if TYPE_CHECKING:
     from lucid.quantization._qscheme import QDtype
 
-    _ScaleLike = Tensor | float
-    _ZeroPointLike = Tensor | float | int
+# ``type`` aliases, evaluated when read: under ``TYPE_CHECKING`` they were
+# absent at run time, and every signature naming them raised ``NameError``.
+type _ScaleLike = Tensor | float
+type _ZeroPointLike = Tensor | float | int
 
 
 def _reshape_for_channel(param: Tensor, ch_axis: int, ndim: int) -> Tensor:

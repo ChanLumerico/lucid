@@ -13,14 +13,20 @@ third of ``lucid.__all__`` was raising ``NameError`` when asked, silently
 enough that nothing noticed until an export needed one factory's
 signature.
 
-The rule the package follows is that a module whose annotations mention
-``Tensor`` binds it at runtime: at the foot of the file where the import
-cycle allows, and from ``lucid/__init__.py`` for the three factory
-modules that run while ``Tensor`` is still being defined.
+That rule once covered ``lucid.__all__`` alone, by binding ``Tensor`` at the
+foot of each file; 297 callables across ``nn``, ``compile``,
+``quantization``, ``models`` and the rest still raised.  Now
+:mod:`lucid._annotation_resolver` binds every name a module imports under
+``TYPE_CHECKING`` once the module has finished executing, from a table
+``tools/gen_annotation_names.py`` writes — and the whole surface is held
+here, not only the top level.
 """
 
 import annotationlib
 import inspect
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -139,3 +145,61 @@ def test_a_module_that_annotates_tensor_binds_it() -> None:
         "these modules annotate Tensor but do not bind it at runtime, so "
         f"inspect.signature cannot read them: {sorted(set(missing))}"
     )
+
+
+_REPO = Path(__file__).resolve().parents[3]
+
+
+def test_every_public_callable_in_every_subpackage_has_a_readable_signature() -> None:
+    """The whole surface the audit walks, not only ``lucid.__all__``."""
+    from lucid.test.audit import _surface
+
+    unreadable = []
+    for symbol in _surface.enumerate_surface():
+        value = _surface.resolve(symbol)
+        if value is None or not callable(value):
+            continue
+        if symbol.qualname.rsplit(".", 1)[-1] in NO_PYTHON_SIGNATURE:
+            continue
+        try:
+            inspect.signature(value)
+        except NameError as exc:
+            unreadable.append(f"{symbol.qualname}: {exc}")
+        except ValueError, TypeError:
+            pass  # a builtin or C type: not something an annotation fixes
+    assert not unreadable, "\n".join(unreadable)
+
+
+def test_the_annotation_table_is_fresh() -> None:
+    """``lucid/_annotation_names.py`` matches the ``TYPE_CHECKING`` blocks."""
+    result = subprocess.run(
+        [sys.executable, "-m", "tools.gen_annotation_names", "--check"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_binding_names_imports_nothing_the_package_defers() -> None:
+    """Readable signatures, at no cost to ``import lucid`` or to numpy.
+
+    ``lucid.nn`` stays unloaded by ``import lucid`` alone, and reading every
+    ``lucid.nn`` signature never imports numpy — a dependency of the bridge,
+    not of the package.
+    """
+    code = (
+        "import sys, inspect, lucid\n"
+        "assert 'lucid.nn' not in sys.modules, 'import lucid now loads lucid.nn'\n"
+        "import lucid.nn as nn\n"
+        "for name in dir(nn):\n"
+        "    obj = getattr(nn, name)\n"
+        "    if callable(obj):\n"
+        "        try: inspect.signature(obj)\n"
+        "        except (ValueError, TypeError): pass\n"
+        "assert 'numpy' not in sys.modules, 'reading a signature imported numpy'\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=_REPO
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
