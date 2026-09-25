@@ -411,8 +411,8 @@ def test_darknet_download_has_a_read_timeout_and_verifies_bytes(
     import importlib
     import io
 
-    if parity.ref_module() is None:
-        pytest.skip("optional conversion reference is not installed")
+    # The YOLO converter imports only Lucid, NumPy and the standard library,
+    # so fetching and verifying bytes needs no oracle and runs in every tier.
     converter = importlib.import_module("tools.convert_weights.yolo")
     data = b"checkpoint bytes"
 

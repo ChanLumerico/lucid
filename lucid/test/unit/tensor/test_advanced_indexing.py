@@ -8,7 +8,10 @@ plausible data all the way into a loss curve.
 
 NumPy is the oracle for everything here except one expression, noted
 where it appears, on which the reference framework and NumPy genuinely
-disagree; Lucid follows the reference.
+disagree; Lucid follows the reference.  The split cases checked against
+the reference itself live in
+``lucid/test/parity/tensor/test_advanced_indexing_parity.py``, because
+they need it installed.
 """
 
 import numpy as np
@@ -231,24 +234,6 @@ def test_an_integer_split_from_an_array_follows_the_reference():
     assert got.shape == from_numpy.shape == (3, 3)
     assert np.array_equal(got, from_numpy.T)
     assert not np.array_equal(got, from_numpy)
-
-
-@pytest.mark.parity
-def test_the_split_cases_match_the_reference_framework():
-    from lucid.test._fixtures.ref_framework import require_ref
-
-    ref = require_ref()
-    cases = [
-        (lambda t, i: t[:, i(I1), :, i([1, 2, 3])], A),
-        (lambda t, i: t[1:, i(I1), :, i([1, 2, 3])], A),
-        (lambda t, i: t[:, i(I1), None, :, i([1, 2, 3])], A),
-        (lambda t, i: t[None, :, i(I1), :, i([1, 2, 3])], A),
-        (lambda t, i: t[:, i(I1), :, i([1, 2, 3]), :], B),
-        (lambda t, i: t[0, :, i(I1), 1], A),
-    ]
-    for k, (take, array) in enumerate(cases):
-        want = take(ref.tensor(array), lambda a: ref.tensor(np.asarray(a, np.int64)))
-        _same(_v(take(_t(array), _i)), want.numpy())
 
 
 # ── assignment ────────────────────────────────────────────────────────────────

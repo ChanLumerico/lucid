@@ -4,7 +4,9 @@ This file tests *mathematical correctness against the paper spec*,
 not framework parity (reference framework doesn't ship an RA sampler;
 the pattern originated in timm).  No reference framework required —
 these tests live under ``unit/`` so they are not auto-skipped by the
-parity conftest.
+parity conftest.  The one comparison against timm's ``RepeatAugSampler``
+needs timm installed, so it lives in
+``lucid/test/parity/utils/test_ra_sampler_spec_parity.py``.
 
 The base behavioural tests are in `test_ra_sampler.py`; this file
 adds the rigorous paper-formula checks across parameter sweeps:
@@ -432,72 +434,3 @@ class TestDataLoaderIntegration:
         for batch in loader:
             (x,) = batch
             assert tuple(x.shape) == (BS, 1)
-
-
-# --------------------------------------------------------------------------- #
-# Pattern 7 — optional comparison against timm                                #
-# --------------------------------------------------------------------------- #
-
-
-_timm_available: bool
-try:
-    import timm.data.distributed_sampler as _timm_ds  # noqa: F401
-
-    _timm_available = True
-except ImportError:
-    _timm_available = False
-
-
-@pytest.mark.skipif(not _timm_available, reason="timm not installed")
-class TestTimmComparison:
-    """If timm is installed, verify our sequence matches timm's
-    RepeatAugSampler bit-for-bit at seed=0, epoch=0."""
-
-    def test_matches_timm_ra_sampler_seed_zero(self) -> None:
-        from timm.data.distributed_sampler import (
-            RepeatAugSampler,
-        )
-
-        N = 20
-        ds = _ToyDataset(N)
-        lucid_s = D.RASampler(
-            ds,
-            num_replicas=1,
-            rank=0,
-            num_repeats=3,
-            shuffle=True,
-            seed=0,
-        )
-        lucid_s.set_epoch(0)
-        # timm's RepeatAugSampler signature varies across versions —
-        # newer releases drop the ``seed`` kwarg.  Try with seed first,
-        # fall back to without (the epoch counter still drives shuffling).
-        try:
-            timm_s = RepeatAugSampler(
-                ds,
-                num_replicas=1,
-                rank=0,
-                num_repeats=3,
-                shuffle=True,
-                seed=0,
-            )
-        except TypeError:
-            timm_s = RepeatAugSampler(
-                ds,
-                num_replicas=1,
-                rank=0,
-                num_repeats=3,
-                shuffle=True,
-            )
-        timm_s.set_epoch(0)
-        # The RNG is platform-specific (timm uses the reference's Generator,
-        # lucid uses random.Random) so we don't insist on equal
-        # *sequences*, only on equal *lengths* and equal *multisets*
-        # within the repeat structure.
-        lucid_out = list(lucid_s)
-        timm_out = list(timm_s)
-        if len(timm_out) == 0:
-            # Some timm versions need explicit setup that's incompatible
-            # with our calling convention — skip rather than fail.
-            pytest.skip("installed timm RepeatAugSampler API incompatible")
-        assert len(lucid_out) == len(timm_out)

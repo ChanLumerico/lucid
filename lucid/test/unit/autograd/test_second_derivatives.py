@@ -12,10 +12,10 @@ largest single unexplained bucket in the audit.  ``where`` is how every
 piecewise function is written, so ``softplus``, ``celu``, ``prelu`` and
 the rest inherited a refusal from a composite they had no say in.
 
-The reference cannot differentiate some of its own backward kernels
-(``derivative for aten::hardsigmoid_backward is not implemented``), so it
-is the arbiter for the *first* derivative only; the second is checked
-against a central difference of the reference's gradient.
+Every check that needs the reference — first derivatives against it,
+second derivatives against a central difference of its gradient — lives
+in ``lucid/test/parity/autograd/test_second_derivatives_parity.py``; this
+file keeps the properties that need no oracle, so the fast tier runs them.
 """
 
 import numpy as np
@@ -24,19 +24,8 @@ import pytest
 import lucid
 import lucid.autograd
 import lucid.nn.functional as F
-from lucid.test._fixtures.ref_framework import require_ref
 
 X = np.array([-4.0, -3.5, -1.0, -0.25, 0.25, 1.0, 3.5, 4.0])
-
-ACTIVATIONS = [
-    ("leaky_relu", F.leaky_relu, "leaky_relu"),
-    ("elu", F.elu, "elu"),
-    ("selu", F.selu, "selu"),
-    ("mish", F.mish, "mish"),
-    ("hardsigmoid", F.hardsigmoid, "hardsigmoid"),
-    ("hardswish", F.hardswish, "hardswish"),
-    ("relu6", F.relu6, "relu6"),
-]
 
 
 def _first(fn, values=X):
@@ -52,40 +41,6 @@ def _second(x, g):
 
 
 # ── the activations ───────────────────────────────────────────────────────────
-
-
-@pytest.mark.parametrize("name,fn,ref_name", ACTIVATIONS)
-def test_first_derivative_matches_the_reference(name, fn, ref_name) -> None:
-    t = require_ref()
-    _, _, got = _first(fn)
-    r = t.from_numpy(X.copy()).requires_grad_(True)
-    (rg,) = t.autograd.grad(
-        getattr(t.nn.functional, ref_name)(r).sum(), [r], create_graph=True
-    )
-    assert np.allclose(got, np.asarray(rg.tolist()), atol=1e-6)
-
-
-@pytest.mark.parametrize("name,fn,ref_name", ACTIVATIONS)
-def test_second_derivative_matches_a_finite_difference(name, fn, ref_name) -> None:
-    """Of the *reference's* first derivative, so the check does not lean
-    on the implementation it is checking."""
-    t = require_ref()
-    x, g, _ = _first(fn)
-    got = _second(x, g)
-
-    def ref_first_at(values, index):
-        r = t.from_numpy(values).requires_grad_(True)
-        (rg,) = t.autograd.grad(getattr(t.nn.functional, ref_name)(r).sum(), [r])
-        return np.asarray(rg.tolist())[index]
-
-    step = 1e-4
-    numeric = np.empty_like(X)
-    for i in range(X.size):
-        up, down = X.copy(), X.copy()
-        up[i] += step
-        down[i] -= step
-        numeric[i] = (ref_first_at(up, i) - ref_first_at(down, i)) / (2 * step)
-    assert np.allclose(got, numeric, atol=2e-3), (got, numeric)
 
 
 def test_a_piecewise_linear_second_derivative_is_zero() -> None:
@@ -108,26 +63,6 @@ A = np.array([-2.0, -0.5, 0.5, 1.5, 3.0])
 B = np.array([-1.0, 0.5, -0.5, 2.5, 1.0])
 
 
-@pytest.mark.parametrize(
-    "name,lf,rf",
-    [("maximum", lucid.maximum, "maximum"), ("minimum", lucid.minimum, "minimum")],
-)
-@pytest.mark.parametrize("wrt", ["a", "b"])
-def test_comparison_first_derivative(name, lf, rf, wrt) -> None:
-    t = require_ref()
-    a = lucid.tensor(A.copy(), requires_grad=True)
-    b = lucid.tensor(B.copy(), requires_grad=True)
-    (g,) = lucid.autograd.grad(
-        lf(a, b).sum(), [a if wrt == "a" else b], create_graph=True
-    )
-    ra = t.from_numpy(A.copy()).requires_grad_(True)
-    rb = t.from_numpy(B.copy()).requires_grad_(True)
-    (rg,) = t.autograd.grad(
-        getattr(t, rf)(ra, rb).sum(), [ra if wrt == "a" else rb], create_graph=True
-    )
-    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()), atol=1e-8)
-
-
 def test_the_two_branches_sum_to_the_incoming_gradient() -> None:
     """Nothing created, nothing lost: a tie must not send the gradient to
     both operands, and a win must not drop it."""
@@ -138,15 +73,6 @@ def test_the_two_branches_sum_to_the_incoming_gradient() -> None:
     (gb,) = lucid.autograd.grad(out.sum(), [b], create_graph=True)
     total = np.asarray(ga.numpy()) + np.asarray(gb.numpy())
     assert np.allclose(total, 1.0)
-
-
-def test_clip_first_derivative() -> None:
-    t = require_ref()
-    x = lucid.tensor(A.copy(), requires_grad=True)
-    (g,) = lucid.autograd.grad(lucid.clip(x, -1.0, 2.0).sum(), [x], create_graph=True)
-    r = t.from_numpy(A.copy()).requires_grad_(True)
-    (rg,) = t.autograd.grad(t.clip(r, -1.0, 2.0).sum(), [r], create_graph=True)
-    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()), atol=1e-8)
 
 
 # ── where, which unblocked the rest ───────────────────────────────────────────
@@ -241,28 +167,6 @@ def test_tril_zeroes_the_second_derivative_where_it_masks() -> None:
 # ── gather, and the loss path behind it ───────────────────────────────────────
 
 
-def test_gather_is_differentiable_twice() -> None:
-    """The adjoint of a gather is a scatter-add: each output element came
-    from one input position, so the gradient goes back there."""
-    values = np.arange(1.0, 13.0).reshape(3, 4)
-    indices = np.array([[0, 2, 1, 3], [3, 1, 0, 0], [2, 2, 2, 1]])
-    t = require_ref()
-
-    x = lucid.tensor(values.copy(), requires_grad=True)
-    idx = lucid.tensor(indices, dtype=lucid.int32)
-    (g,) = lucid.autograd.grad(
-        (lucid.gather(x, idx, 1) ** 2).sum(), [x], create_graph=True
-    )
-
-    r = t.from_numpy(values.copy()).requires_grad_(True)
-    (rg,) = t.autograd.grad(
-        (t.gather(r, 1, t.from_numpy(indices).long()) ** 2).sum(),
-        [r],
-        create_graph=True,
-    )
-    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()))
-
-
 def test_duplicate_indices_accumulate() -> None:
     """It is a scatter-*add*: reading one position three times must send
     three units of gradient back, not one."""
@@ -270,32 +174,6 @@ def test_duplicate_indices_accumulate() -> None:
     idx = lucid.tensor(np.array([1, 1, 1]), dtype=lucid.int32)
     (g,) = lucid.autograd.grad(lucid.gather(x, idx, 0).sum(), [x], create_graph=True)
     assert np.allclose(np.asarray(g.numpy()), [0.0, 3.0, 0.0])
-
-
-@pytest.mark.parametrize("name", ["cross_entropy", "nll_loss"])
-def test_the_classification_losses_reach_create_graph(name) -> None:
-    """What sixteen symbols were actually blocked on — these are training
-    paths, not corners."""
-    t = require_ref()
-    logits = np.random.default_rng(0).standard_normal((4, 5))
-    target = np.array([0, 3, 1, 4])
-
-    a = lucid.tensor(logits.copy(), requires_grad=True)
-    tgt = lucid.tensor(target, dtype=lucid.int32)
-    if name == "cross_entropy":
-        loss = F.cross_entropy(a, tgt)
-    else:
-        loss = F.nll_loss(lucid.log(F.softmax(a, dim=1)), tgt)
-    (g,) = lucid.autograd.grad(loss, [a], create_graph=True)
-
-    ra = t.from_numpy(logits.copy()).requires_grad_(True)
-    rtgt = t.from_numpy(target).long()
-    if name == "cross_entropy":
-        ref_loss = t.nn.functional.cross_entropy(ra, rtgt)
-    else:
-        ref_loss = t.nn.functional.nll_loss(t.log_softmax(ra, dim=1), rtgt)
-    (rg,) = t.autograd.grad(ref_loss, [ra], create_graph=True)
-    assert np.allclose(np.asarray(g.numpy()), np.asarray(rg.tolist()), atol=1e-6)
 
 
 def test_cross_entropy_has_a_second_derivative() -> None:
@@ -345,9 +223,12 @@ class TestUnsupportedOpIsNamed:
         except RuntimeError as exc:
             message = str(exc)
             if "not yet supported for op" not in message:
-                pytest.skip(f"different failure: {message}")
+                pytest.fail(f"refused for another reason: {message}")
             return message.split("op '")[1].split("'")[0]
-        pytest.skip("op now supports create_graph — nothing refuses")
+        pytest.fail(
+            "the op now supports create_graph, so nothing refuses — pick an op "
+            "that still does, or drop the case"
+        )
 
     @pytest.mark.parametrize(
         "label,build",
