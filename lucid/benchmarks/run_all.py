@@ -66,12 +66,33 @@ def run_all(verbose: bool = True) -> dict[str, object]:
 # ── save ──────────────────────────────────────────────────────────────────────
 
 
-def save_baseline(results: dict[str, object]) -> None:
-    payload = {
+def _payload(results: dict[str, object]) -> dict[str, object]:
+    import platform
+
+    return {
         "commit": _git_sha(),
         "date": _now_iso(),
+        # A timing is only comparable with one from the same machine, so it
+        # travels with what produced it.
+        "machine": {
+            "platform": platform.platform(),
+            "processor": platform.processor(),
+            "python": platform.python_version(),
+        },
         "results": results,
     }
+
+
+def save_json(results: dict[str, object], path: str) -> None:
+    """Write this run on its own — the nightly job keeps one per night."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(_payload(results), f, indent=2)
+    print(f"\n   Results written → {path}")
+
+
+def save_baseline(results: dict[str, object]) -> None:
+    payload = _payload(results)
     os.makedirs(os.path.dirname(_BASELINE_PATH), exist_ok=True)
     with open(_BASELINE_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -211,6 +232,11 @@ def main() -> None:
         help=f"Regression threshold in %% (default: {_DEFAULT_THRESHOLD})",
     )
     parser.add_argument(
+        "--json",
+        metavar="PATH",
+        help="Also write this run's results (with commit and machine) to PATH",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress per-suite tables (only print comparison/summary)",
@@ -224,6 +250,8 @@ def main() -> None:
     print(f"{'='*62}")
 
     results = run_all(verbose=verbose)
+    if args.json:
+        save_json(results, args.json)
 
     if args.save:
         save_baseline(results)

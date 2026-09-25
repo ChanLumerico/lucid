@@ -1,0 +1,208 @@
+{
+  "cnn_inference/cpu": {
+    "allocations": 11,
+    "forward_ops": {
+      "batch_norm_eval": 1,
+      "conv2d": 1,
+      "linear": 1,
+      "max_pool2d": 1,
+      "relu": 1,
+      "reshape": 1,
+      "sum": 1
+    },
+    "frees": 11,
+    "peak_bytes": 65568
+  },
+  "cnn_inference/metal": {
+    "allocations": 9,
+    "forward_ops": {
+      "batch_norm_eval": 1,
+      "conv2d": 1,
+      "linear": 1,
+      "max_pool2d": 1,
+      "relu": 1,
+      "reshape": 1,
+      "sum": 1
+    },
+    "frees": 9,
+    "host_allocations": 0,
+    "peak_bytes": 65568
+  },
+  "cnn_sgd/cpu": {
+    "allocations": 72,
+    "forward_ops": {
+      "add": 1,
+      "astype": 2,
+      "batch_norm": 1,
+      "clip": 1,
+      "contiguous": 2,
+      "conv2d": 1,
+      "div": 1,
+      "full": 2,
+      "gather": 1,
+      "linear": 1,
+      "log_softmax": 1,
+      "max_pool2d": 1,
+      "mul": 1,
+      "neg": 1,
+      "not_equal": 1,
+      "relu": 1,
+      "reshape": 1,
+      "squeeze": 1,
+      "sum": 2,
+      "unsqueeze": 1
+    },
+    "frees": 72,
+    "peak_bytes": 171156
+  },
+  "cnn_sgd/metal": {
+    "allocations": 82,
+    "forward_ops": {
+      "add": 1,
+      "astype": 2,
+      "batch_norm": 1,
+      "clip": 1,
+      "contiguous": 2,
+      "conv2d": 1,
+      "div": 1,
+      "full": 2,
+      "gather": 1,
+      "linear": 1,
+      "log_softmax": 1,
+      "max_pool2d": 1,
+      "mul": 1,
+      "neg": 1,
+      "not_equal": 1,
+      "relu": 1,
+      "reshape": 1,
+      "squeeze": 1,
+      "sum": 2,
+      "unsqueeze": 1
+    },
+    "frees": 82,
+    "host_allocations": 0,
+    "peak_bytes": 203924
+  },
+  "compiled_mlp_adam/metal": {
+    "allocations": 17,
+    "eager_fallbacks": 0,
+    "executables": 1,
+    "forward_ops": {
+      "mul": 4
+    },
+    "frees": 17,
+    "host_allocations": 0,
+    "peak_bytes": 8192
+  },
+  "lstm_adam/cpu": {
+    "allocations": 36,
+    "forward_ops": {
+      "concatenate": 2,
+      "linear": 1,
+      "lstm": 1,
+      "mse_loss": 1,
+      "permute": 2,
+      "split_at": 1,
+      "squeeze": 1,
+      "zeros": 2
+    },
+    "frees": 36,
+    "peak_bytes": 14340
+  },
+  "lstm_adam/metal": {
+    "allocations": 54,
+    "forward_ops": {
+      "concatenate": 2,
+      "linear": 1,
+      "lstm": 1,
+      "mse_loss": 1,
+      "permute": 2,
+      "split_at": 1,
+      "squeeze": 1,
+      "zeros": 2
+    },
+    "frees": 54,
+    "host_allocations": 0,
+    "peak_bytes": 36740
+  },
+  "mlp_adam/cpu": {
+    "allocations": 49,
+    "forward_ops": {
+      "astype": 2,
+      "clip": 1,
+      "contiguous": 2,
+      "div": 1,
+      "full": 1,
+      "gather": 1,
+      "linear": 2,
+      "log_softmax": 1,
+      "mul": 1,
+      "neg": 1,
+      "not_equal": 1,
+      "relu": 1,
+      "squeeze": 1,
+      "sum": 2,
+      "unsqueeze": 1
+    },
+    "frees": 49,
+    "peak_bytes": 14404
+  },
+  "mlp_adam/metal": {
+    "allocations": 57,
+    "forward_ops": {
+      "astype": 2,
+      "clip": 1,
+      "contiguous": 2,
+      "div": 1,
+      "full": 1,
+      "gather": 1,
+      "linear": 2,
+      "log_softmax": 1,
+      "mul": 1,
+      "neg": 1,
+      "not_equal": 1,
+      "relu": 1,
+      "squeeze": 1,
+      "sum": 2,
+      "unsqueeze": 1
+    },
+    "frees": 57,
+    "host_allocations": 0,
+    "peak_bytes": 8196
+  },
+  "transformer_adamw/cpu": {
+    "allocations": 102,
+    "forward_ops": {
+      "add": 2,
+      "dropout": 3,
+      "layer_norm": 2,
+      "linear": 6,
+      "mse_loss": 1,
+      "permute": 4,
+      "relu": 1,
+      "reshape": 4,
+      "scaled_dot_product_attention": 1,
+      "split_at": 2
+    },
+    "frees": 102,
+    "peak_bytes": 32004
+  },
+  "transformer_adamw/metal": {
+    "allocations": 146,
+    "forward_ops": {
+      "add": 2,
+      "dropout": 3,
+      "layer_norm": 2,
+      "linear": 6,
+      "mse_loss": 1,
+      "permute": 4,
+      "relu": 1,
+      "reshape": 4,
+      "scaled_dot_product_attention": 1,
+      "split_at": 2
+    },
+    "frees": 146,
+    "host_allocations": 0,
+    "peak_bytes": 40584
+  }
+}
