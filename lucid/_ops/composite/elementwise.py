@@ -839,6 +839,14 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
         x = lucid.tensor(float(cast(float, x)))
     if not _is_tensor(y):
         y = lucid.tensor(float(cast(float, y)))
+    # Integer and bool inputs are taken in the default float dtype, as the
+    # reference framework takes them — the log of an integer is not one.
+    # They used to fail inside, at ``y == 0.0``, with a DtypeMismatch.
+    default = lucid.get_default_dtype()
+    if not (x.is_floating_point() or x.is_complex()):
+        x = x.to(dtype=default)
+    if not (y.is_floating_point() or y.is_complex()):
+        y = y.to(dtype=default)
     safe_y = lucid.where(y == 0.0, lucid.full_like(y, 1.0), y)
     out = x * lucid.log(safe_y)
     return lucid.where(x == 0.0, lucid.full_like(out, 0.0), out)

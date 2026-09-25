@@ -725,6 +725,9 @@ EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("matrix_power", "i64"): _INT_MATMUL,
     ("matrix_power", "i32"): _INT_MATMUL,
     ("matrix_power", "bool"): _INT_MATMUL,
+    # An integer inner product runs as ``A @ B^T``: no kernel takes integers.
+    ("inner", "i64"): _INT_MATMUL,
+    ("inner", "i32"): _INT_MATMUL,
 }
 
 
@@ -746,7 +749,6 @@ class Refusal:
 
 # The engine's own classes, both ``LucidError`` subclasses — the engine's
 # ``NotImplementedError`` is not the builtin.
-_DTYPE = _C_engine.DtypeMismatch
 _NOT_IMPL = _C_engine.NotImplementedError
 
 
@@ -760,7 +762,6 @@ def _each(
     return {(name, d): r for d in dtypes}
 
 
-_MLX_LEAK = "Metal lets MLX's own ValueError through instead of refusing first"
 _INT = ("i64", "i32")
 _NON_FLOAT = ("i64", "i32", "bool")
 
@@ -776,8 +777,11 @@ _NON_FLOAT = ("i64", "i32", "bool")
 #: group are inputs the reference framework answers, kept on record here
 #: until the ops are fixed.
 EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
-    # ── the reference framework refuses these as well
-    ("neg", "bool"): Refusal(_NOT_IMPL, ValueError, f"negating a bool; {_MLX_LEAK}"),
+    # The reference framework refuses every one of these as well.
+    ("neg", "bool"): _both(_C_engine.LucidError, "negating a bool; use ~"),
+    # ``sub`` of two bools, refused at the public entry point (the engine's
+    # own composites still subtract bool masks — ``scatter`` does).
+    ("sub", "bool"): _both(_C_engine.LucidError, "subtracting bools; use ^"),
     **_each("lerp", _INT, _both(TypeError, "lerp takes floating tensors only")),
     **_each(
         "nextafter",
@@ -790,41 +794,10 @@ EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
     ("trace", "bool"): _both(_NOT_IMPL, "no trace of a bool matrix"),
     ("topk_values", "bool"): _both(_NOT_IMPL, "topk does not order bools"),
     ("kthvalue", "bool"): _both(_NOT_IMPL, "kthvalue does not order bools"),
-    ("inner", "bool"): Refusal(_NOT_IMPL, ValueError, f"no bool matmul; {_MLX_LEAK}"),
-    # Refused there too, but here not by a dtype check: the composite mixes
-    # the integer or bool input with a float32 intermediate and trips on it.
+    ("inner", "bool"): _both(_NOT_IMPL, "no inner product of bools"),
+    **_each("hypot", _NON_FLOAT, _both(_NOT_IMPL, "hypot takes floating tensors")),
     **_each(
-        "hypot",
-        _NON_FLOAT,
-        _both(_DTYPE, "float32 intermediate inside the composite (mul)"),
-    ),
-    **_each(
-        "logaddexp",
-        _NON_FLOAT,
-        _both(_DTYPE, "float32 intermediate inside the composite (add)"),
-    ),
-    # ── Lucid defects: the reference framework answers every one of these
-    # ``t > 0`` / ``t > 1`` in the recipe: a bool tensor against an int
-    # scalar raises (``t > True`` works); the reference promotes and answers.
-    ("where", "bool"): _both(_DTYPE, "bool tensor compared with an int scalar"),
-    ("masked_fill", "bool"): _both(_DTYPE, "bool tensor compared with an int scalar"),
-    # The reference answers these ops on integers and bools in float32.
-    **_each(
-        "xlogy",
-        _NON_FLOAT,
-        _both(_DTYPE, "float32 intermediate inside the composite (equal)"),
-    ),
-    **_each(
-        "logsumexp",
-        _NON_FLOAT,
-        _both(_DTYPE, "float32 intermediate inside the composite (add)"),
-    ),
-    # The reference answers an integer ``inner`` in the integer dtype, and
-    # Lucid's own ``matmul`` does; ``inner`` has no CPU integer kernel.
-    **_each(
-        "inner",
-        _INT,
-        Refusal(_NOT_IMPL, ValueError, f"no integer kernel; {_MLX_LEAK}"),
+        "logaddexp", _NON_FLOAT, _both(_NOT_IMPL, "logaddexp takes floating tensors")
     ),
 }
 

@@ -589,6 +589,10 @@ def _logsumexp_adapter(
         axes = [int(d) for d in dim]
     else:
         axes = [int(cast(int, dim))]
+    # An integer or bool input is summed in the default float dtype, as the
+    # reference framework does — the engine op computes in the input dtype.
+    if _is_integral(a_impl.dtype):
+        a_impl = _C_engine.astype(a_impl, to_engine_dtype(None))
     return _C_engine.logsumexp(a_impl, axes, bool(keepdim))
 
 

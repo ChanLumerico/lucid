@@ -21,6 +21,9 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../einops/Einops.h"
+#include "../ufunc/Transpose.h"
+#include "../utils/View.h"
+#include "Matmul.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -70,7 +73,6 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
     const Dtype dt = a->dtype();
     const Device device = a->device();
-    OpScopeFull scope{"inner", device, dt, Shape{}};
 
     const auto& sa = a->shape();
     const auto& sb = b->shape();
@@ -80,6 +82,26 @@ TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     // Output shape: all-but-last dims of A followed by all-but-last dims of B.
     Shape out_shape(sa.begin(), sa.end() - 1);
     out_shape.insert(out_shape.end(), sb.begin(), sb.end() - 1);
+
+    // Integers have no BLAS or MLX inner kernel: the CPU refused them and
+    // Metal passed MLX's own ValueError through.  The same contraction runs
+    // as ``A @ B^T`` over the flattened leading axes, and matmul takes
+    // integers on both devices.  Bool is refused, as the reference refuses it.
+    if (dt == Dtype::Bool)
+        ErrorBuilder("inner").not_implemented("not implemented for bool");
+    if (!is_floating_point(dt) && !is_complex(dt)) {
+        const std::int64_t k = sa.back();
+        const std::int64_t rows_a = k == 0 ? 0 : static_cast<std::int64_t>(shape_numel(sa)) / k;
+        const std::int64_t rows_b = k == 0 ? 0 : static_cast<std::int64_t>(shape_numel(sb)) / k;
+        auto a2 = reshape_op(a, Shape{rows_a, k});
+        auto b2 = reshape_op(b, Shape{rows_b, k});
+        return reshape_op(matmul_op(a2, swapaxes_op(b2, 0, 1)), out_shape);
+    }
+
+    // Opened only here: the integer path above is a composition whose ops
+    // trace themselves, and an ``inner`` scope around them would record an
+    // op with no trace I/O, which ``lucid.compile`` refuses.
+    OpScopeFull scope{"inner", device, dt, Shape{}};
 
     if (device == Device::GPU) {
         auto out_storage = backend::Dispatcher::for_device(device).inner(a->storage(), b->storage(),

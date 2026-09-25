@@ -9,8 +9,10 @@
 
 #include <cmath>
 #include <limits>
+#include <string>
 
 #include "../../core/Dtype.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Compare.h"
@@ -158,6 +160,24 @@ TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     return sub_op(a, mul_op(k, b));
 }
 
+namespace {
+
+// ``hypot`` and ``logaddexp`` are defined on real floating values only, as
+// in the reference framework.  An integer or bool input used to fail deep
+// inside the composition — a ``DtypeMismatch`` from an internal ``mul`` or
+// ``add`` against a float constant — which named neither the op nor the
+// reason.
+void require_floating(const char* op, const TensorImplPtr& a, const TensorImplPtr& b) {
+    for (const auto* t : {&a, &b}) {
+        if (*t && !is_floating_point((*t)->dtype()))
+            ErrorBuilder(op).not_implemented(std::string("not implemented for ") +
+                                             std::string(dtype_name((*t)->dtype())) +
+                                             "; cast to a floating dtype first");
+    }
+}
+
+}  // namespace
+
 // Pythagorean length, scaled so it cannot overflow on the way.
 //
 // The naive ``sqrt(a² + b²)`` squares first, so ``hypot(1e200, 1e200)``
@@ -173,6 +193,7 @@ TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // division would be 0/0, so the ratio is taken against a max with the
 // smallest normal and the result multiplied by ``m`` puts it back.
 TensorImplPtr hypot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    require_floating("hypot", a, b);
     auto abs_a = abs_op(a);
     auto abs_b = abs_op(b);
     auto big = maximum_op(abs_a, abs_b);
@@ -186,6 +207,7 @@ TensorImplPtr hypot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // Numerically-stable ``log(exp(a) + exp(b))``.  Factor out the per-pair max
 // so only the smaller-magnitude exponential sees rounding error.
 TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    require_floating("logaddexp", a, b);
     auto m = maximum_op(a, b);
     auto exp_a = exp_op(sub_op(a, m));
     auto exp_b = exp_op(sub_op(b, m));

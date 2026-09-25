@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - comparisons promote; bool minus and negation are refused
 
+- integer inputs to xlogy, logsumexp, inner, hypot, logaddexp
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
