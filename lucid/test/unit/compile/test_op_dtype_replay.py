@@ -7,8 +7,12 @@ compiled integer output as float32.
 
 A fallback to eager is allowed only where :data:`EXPECTED_EAGER` says why;
 any other fallback fails, so a graph that stops compiling is seen the day
-it happens.  An expected fallback that starts compiling passes — delete its
-entry.
+it happens.  An expected fallback that starts compiling fails as stale —
+delete its entry.
+
+The dtypes eager itself refuses are not generated: they are listed in
+:data:`EAGER_REJECTS` and held to it by ``test_op_eager_rejects``.  A refusal
+that is not listed fails here.
 
 The matrix found, in its first rounds, answers that were silently wrong
 (integer ``topk``, ``scatter`` on int64, ``erfinv(±1)``, float math on
@@ -44,8 +48,10 @@ pytestmark = pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
 @pytest.mark.parametrize(("name", "dtype"), all_params(), ids=lambda v: str(v))
 def test_compiled_matches_eager(name: str, dtype: str) -> None:
     outcome = run(CASE_BY_NAME[name], dtype)
-    if outcome.status == "skip":
-        pytest.skip(f"eager rejects {dtype}: {outcome.detail}")
+    if outcome.status == "rejected":
+        pytest.fail(
+            f"eager rejects {dtype}, not listed in EAGER_REJECTS: {outcome.detail}"
+        )
     listed = (name, dtype) in EXPECTED_EAGER
     if outcome.status == "eager":
         if listed:

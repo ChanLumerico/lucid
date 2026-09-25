@@ -24,8 +24,13 @@ from lucid.test.unit.compile._op_matrix import CASES, DEV, Case, _leaves, make_i
 
 @dataclass
 class GradOutcome:
-    status: str  # ok | wrong | eager | error | skip | recipe
+    status: str  # ok | wrong | eager | error | nograd | recipe
     detail: str = ""
+
+
+#: The two ways :func:`run_grad` finds nothing to differentiate (``nograd``).
+NO_FLOAT = "no floating output"
+NO_DEP = "output does not depend on w"
 
 
 _PROBES: dict[tuple[int, ...], lucid.Tensor] = {}
@@ -70,7 +75,7 @@ def _loss(out: lucid.Tensor) -> lucid.Tensor:
 
 def run_grad(case: Case) -> GradOutcome:
     if case.random or "f32" not in case.dtypes:
-        return GradOutcome("skip", "random or no float32")
+        return GradOutcome("recipe", "random or no float32")
     x1 = make_input(case.kind, "f32", case.shape, 1)
     x2 = make_input(case.kind, "f32", case.shape, 2)
 
@@ -79,14 +84,16 @@ def run_grad(case: Case) -> GradOutcome:
         model.w.grad = None
         loss = model(x2)
         if not loss.requires_grad:
-            return GradOutcome("skip", "output does not depend on w")
+            return GradOutcome("nograd", NO_DEP)
         loss.backward()
     except _NoGrad:
-        return GradOutcome("skip", "no floating output")
+        return GradOutcome("nograd", NO_FLOAT)
     except Exception as e:  # noqa: BLE001
-        return GradOutcome("skip", f"eager backward: {type(e).__name__}: {str(e)[:80]}")
+        return GradOutcome(
+            "recipe", f"eager backward: {type(e).__name__}: {str(e)[:80]}"
+        )
     if model.w.grad is None:
-        return GradOutcome("skip", "no gradient reaches w")
+        return GradOutcome("nograd", "no gradient reaches w")
     want = model.w.grad.numpy().copy()
 
     step = lucid.compile.make_step(model, _loss)
@@ -120,7 +127,57 @@ def run_grad(case: Case) -> GradOutcome:
     return GradOutcome("ok")
 
 
-GRAD_CASES = [c for c in CASES if "f32" in c.dtypes and not c.random]
+#: Float32 case → which of :data:`NO_FLOAT` / :data:`NO_DEP` it is, for every
+#: case with no gradient to compare.  They are left out of
+#: :data:`GRAD_CASES`.  Strict both ways: ``test_no_grad_case_still_has_none``
+#: runs :func:`run_grad` on each and fails when one has a gradient now (drop
+#: the entry and the matrix checks it), and a case not listed here that finds
+#: nothing to differentiate fails the matrix.
+NO_GRAD: dict[str, str] = {
+    # Bool predicates and masks.
+    **dict.fromkeys(
+        (
+            "isnan",
+            "isinf",
+            "isfinite",
+            "logical_not",
+            "astype_bool",
+            "eq",
+            "ne",
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "logical_and",
+            "logical_or",
+            "logical_xor",
+            "isclose",
+            "all",
+            "any",
+        ),
+        NO_FLOAT,
+    ),
+    # Integer results: a cast, indices, a one-hot code.
+    **dict.fromkeys(("astype_i64", "argmax", "argmin", "argsort", "one_hot"), NO_FLOAT),
+    # Piecewise constant.  Lucid records no graph for them; the reference
+    # framework records one whose gradient is zero (and for ``//`` raises on
+    # backward) — nothing to compare either way.  ``erfinv_edge`` is
+    # constant through its ``round``.
+    **dict.fromkeys(
+        ("sign", "round", "floor", "ceil", "trunc", "floordiv", "erfinv_edge"),
+        NO_DEP,
+    ),
+    # Lucid defects: the reference framework differentiates both —
+    # ``nan_to_num`` passes the gradient where the input is finite,
+    # ``nextafter`` passes it to its first argument — and Lucid records no
+    # graph, so ``nan_to_num(x) + x`` gets a gradient of 1 where it is 2.
+    "nan_to_num": NO_DEP,
+    "nextafter": NO_DEP,
+}
+
+GRAD_CASES = [
+    c for c in CASES if "f32" in c.dtypes and not c.random and c.name not in NO_GRAD
+]
 
 #: Case → why its compiled training step runs eager.  The manual VJPs for
 #: prod, cumprod, cummax/cummin, sort/kthvalue, repeat_interleave,

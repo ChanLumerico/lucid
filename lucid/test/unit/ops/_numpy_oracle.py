@@ -276,7 +276,9 @@ REFS: dict[str, Ref] = {
     # ── unary
     "abs": lambda x, c: np.abs(x),
     "neg": lambda x, c: -x.astype(np.int64) if x.dtype == np.bool_ else -x,
-    "sign": lambda x, c: np.sign(x),
+    # numpy has no ``sign`` of a bool; the reference framework's is the
+    # identity (``sign(True)`` is ``True``, still bool).
+    "sign": lambda x, c: x.copy() if x.dtype == np.bool_ else np.sign(x),
     "square": lambda x, c: x.astype(np.int64) ** 2 if x.dtype == np.bool_ else x * x,
     "round": lambda x, c: np.round(x),
     "floor": lambda x, c: np.floor(x),
@@ -601,6 +603,20 @@ REAL_VALUED = frozenset(
         "vector_norm",
     }
 )
+
+#: (case, dtype) → (Lucid's answer, why) for inputs the reference framework
+#: refuses and Lucid's eager answers anyway.  There is no reference answer to
+#: hold these to, so the oracle does not generate them;
+#: ``test_divergence_is_pinned`` holds eager to the answer written here, dtype
+#: included, so the divergence stays on record.  A Lucid that starts refusing
+#: fails that test — move the pair to ``EAGER_REJECTS`` then.
+DIVERGES: dict[tuple[str, str], tuple[Ref, str]] = {
+    ("sub", "bool"): (
+        lambda x, c: x ^ _flip0(x),
+        "the reference framework refuses ``-`` on two bools and points to "
+        "``^``; Lucid's eager answers with ``^``",
+    ),
+}
 
 #: Cases with no numpy reference, and why — the ledger reads this list.
 NO_REF: dict[str, str] = {

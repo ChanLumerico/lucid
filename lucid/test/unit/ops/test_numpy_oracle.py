@@ -11,6 +11,13 @@ is float64, the reference framework's is integer), and the dtype *kind* is
 enforced only for :data:`REAL_VALUED` ops — an integer input to ``arcsin``
 must come back floating point, whatever width.
 
+Nothing here is skipped.  A dtype eager refuses is not generated: it is
+listed in ``_op_matrix.EAGER_REJECTS`` and held there by
+``test_op_eager_rejects``, and an unlisted refusal fails.  An input numpy has
+no answer for either gets an adapter with the reference framework's answer
+in :data:`REFS`, or — where that framework refuses and Lucid answers — an
+entry in :data:`DIVERGES`, which pins Lucid's answer instead.
+
 H4: numpy computes expected values here and nowhere else; Lucid values reach
 it only through ``Tensor.numpy()``.
 """
@@ -22,7 +29,7 @@ import lucid
 import lucid.test.unit.compile._op_matrix as M
 
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
-from lucid.test.unit.ops._numpy_oracle import NO_REF, REAL_VALUED, REFS
+from lucid.test.unit.ops._numpy_oracle import DIVERGES, NO_REF, REAL_VALUED, REFS
 
 #: Compared bit for bit: a one-ULP step disappears inside any float tolerance.
 EXACT = frozenset({"nextafter"})
@@ -59,42 +66,38 @@ def _leaves(out: object) -> list[object]:
 
 
 def _params() -> list[tuple[str, str, str]]:
+    """Every case with a reference, on every declared dtype eager answers.
+
+    The dtypes eager refuses are listed in ``_op_matrix.EAGER_REJECTS`` and
+    held there; the inputs the reference framework refuses and Lucid answers
+    are pinned by :func:`test_divergence_is_pinned`.
+    """
     return [
         (c.name, d, dev)
         for c in M.CASES
         if c.name in REFS and not c.random
         for d in c.dtypes
         for dev in DEVICES
+        if M.refusal(c.name, d, dev) is None and (c.name, d) not in DIVERGES
     ]
 
 
-def test_every_case_is_accounted_for() -> None:
-    """A case is either held to a reference or listed with the reason it is not."""
-    unaccounted = [
-        c.name for c in M.CASES if c.name not in REFS and c.name not in NO_REF
-    ]
-    assert (
-        not unaccounted
-    ), f"cases with neither a reference nor a reason: {unaccounted}"
-
-
-@pytest.mark.parametrize(("name", "dtype", "device"), _params(), ids=str)
-def test_eager_matches_numpy(name: str, dtype: str, device: str) -> None:
+def _eager(name: str, dtype: str, device: str) -> tuple[object, np.ndarray]:
+    """The case's eager answer on ``device``, and its input as numpy."""
     case = M.CASE_BY_NAME[name]
     x = M.make_input(case.kind, dtype, case.shape, 2)
     with M.on_device(device):
         x = x.to(device)
         try:
-            got = case.fn(x)
+            return case.fn(x), x.numpy()
         except Exception as e:  # noqa: BLE001 — eager decides which dtypes exist
-            if dtype == "f32":
-                pytest.fail(f"eager float32 raised {type(e).__name__}: {e}")
-            pytest.skip(f"eager rejects {dtype}: {type(e).__name__}")
-        try:
-            want = REFS[name](x.numpy(), _Consts())
-        except Exception as e:  # noqa: BLE001 — numpy has no answer for this input
-            pytest.skip(f"numpy has no answer: {type(e).__name__}: {e}")
+            pytest.fail(
+                f"eager {dtype} raised {type(e).__name__}: {e} — not listed in "
+                "EAGER_REJECTS"
+            )
 
+
+def _assert_matches(name: str, dtype: str, got: object, want: object) -> None:
     g_leaves = [t for t in _leaves(got) if isinstance(t, lucid.Tensor)]
     w_leaves = [np.asarray(w) for w in _leaves(want)]
     assert len(g_leaves) == len(
@@ -129,3 +132,57 @@ def test_eager_matches_numpy(name: str, dtype: str, device: str) -> None:
             assert np.array_equal(
                 gn.astype(np.int64), w.astype(np.int64)
             ), f"out[{i}] differs: {gn.ravel()[:6].tolist()} vs {w.ravel()[:6].tolist()}"
+
+
+def test_every_case_is_accounted_for() -> None:
+    """A case is either held to a reference or listed with the reason it is not."""
+    unaccounted = [
+        c.name for c in M.CASES if c.name not in REFS and c.name not in NO_REF
+    ]
+    assert (
+        not unaccounted
+    ), f"cases with neither a reference nor a reason: {unaccounted}"
+
+
+@pytest.mark.parametrize(("name", "dtype", "device"), _params(), ids=str)
+def test_eager_matches_numpy(name: str, dtype: str, device: str) -> None:
+    got, x = _eager(name, dtype, device)
+    with M.on_device(device):
+        try:
+            want = REFS[name](x, _Consts())
+        except Exception as e:  # noqa: BLE001 — numpy has no answer for this input
+            pytest.fail(
+                f"numpy has no answer: {type(e).__name__}: {e} — give the REFS "
+                "entry an adapter with the reference framework's answer, or "
+                "list the pair in DIVERGES if that framework refuses it"
+            )
+    _assert_matches(name, dtype, got, want)
+
+
+@pytest.mark.parametrize(
+    ("name", "dtype", "device"),
+    [(n, d, dev) for n, d in sorted(DIVERGES) for dev in DEVICES],
+    ids=str,
+)
+def test_divergence_is_pinned(name: str, dtype: str, device: str) -> None:
+    """Where the reference framework refuses and Lucid answers, pin the answer.
+
+    Eager is held to the answer :data:`DIVERGES` records, and to its numpy
+    dtype exactly.  A refusal fails with the move to make: the pair belongs
+    in ``EAGER_REJECTS`` once Lucid refuses it as the reference does.
+    """
+    case = M.CASE_BY_NAME[name]
+    x = M.make_input(case.kind, dtype, case.shape, 2)
+    with M.on_device(device):
+        x = x.to(device)
+        try:
+            got = case.fn(x)
+        except Exception as e:  # noqa: BLE001 — a refusal is the fix arriving
+            pytest.fail(
+                f"eager refuses now ({type(e).__name__}: {e}), as the reference "
+                "framework does — move the pair from DIVERGES to EAGER_REJECTS"
+            )
+        want = np.asarray(DIVERGES[(name, dtype)][0](x.numpy(), _Consts()))
+    assert isinstance(got, lucid.Tensor), type(got)
+    assert got.numpy().dtype == want.dtype, f"{got.numpy().dtype}, want {want.dtype}"
+    _assert_matches(name, dtype, got, want)

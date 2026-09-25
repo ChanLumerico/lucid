@@ -12,8 +12,11 @@ outcomes, of which only the first is quiet:
   compile is lost);
 * ``error``     — the compiled call raised where eager answers.
 
-A dtype eager itself rejects is ``skip``.  float32 must never be ``skip``:
-if eager float32 raises, the recipe is wrong, not the op.
+A declared dtype eager itself refuses is not run at all: :data:`EAGER_REJECTS`
+lists every such pair with the exception eager raises on each device, and
+``test_op_eager_rejects`` holds eager to that list.  A refusal that is not
+listed is ``rejected``, which fails.  float32 is never listed: if eager
+float32 raises, the recipe is wrong, not the op (``recipe``).
 
 Reading goes through ``.numpy()`` on the Metal tensor, not ``.to("cpu")``:
 the two take different paths out of a compiled output's storage, and the
@@ -31,6 +34,7 @@ import numpy as np
 import lucid
 import lucid.nn.functional as F
 
+from lucid._C import engine as _C_engine
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 DEV = COMPILE_DEVICE
@@ -131,7 +135,7 @@ def run(case: Case, dtype: str) -> Outcome:
     except Exception as e:  # noqa: BLE001 — eager decides which dtypes are valid
         if dtype == "f32":
             return Outcome("recipe", f"eager float32 raised {type(e).__name__}: {e}")
-        return Outcome("skip", f"{type(e).__name__}")
+        return Outcome("rejected", f"{type(e).__name__}: {str(e)[:160]}")
     if not _leaves(want):
         return Outcome("recipe", "case returns no tensor")
 
@@ -724,8 +728,119 @@ EXPECTED_EAGER: dict[tuple[str, str], str] = {
 }
 
 
+@dataclass(frozen=True)
+class Refusal:
+    """The exception eager raises for one (case, dtype), on each device.
+
+    ``None`` for a device means eager answers there, and the pair is run on
+    that device like any other.
+    """
+
+    cpu: type[Exception] | None
+    metal: type[Exception] | None
+    why: str
+
+    def on(self, device: str) -> type[Exception] | None:
+        return self.cpu if device == "cpu" else self.metal
+
+
+# The engine's own classes, both ``LucidError`` subclasses — the engine's
+# ``NotImplementedError`` is not the builtin.
+_DTYPE = _C_engine.DtypeMismatch
+_NOT_IMPL = _C_engine.NotImplementedError
+
+
+def _both(exc: type[Exception], why: str) -> Refusal:
+    return Refusal(exc, exc, why)
+
+
+def _each(
+    name: str, dtypes: tuple[str, ...], r: Refusal
+) -> dict[tuple[str, str], Refusal]:
+    return {(name, d): r for d in dtypes}
+
+
+_MLX_LEAK = "Metal lets MLX's own ValueError through instead of refusing first"
+_INT = ("i64", "i32")
+_NON_FLOAT = ("i64", "i32", "bool")
+
+#: (case, dtype) → what eager raises instead of answering, for every declared
+#: dtype eager refuses.  The matrices do not generate these pairs;
+#: ``test_op_eager_rejects`` holds eager to the table both ways — each entry
+#: must still raise exactly its exception type on each device (one that now
+#: answers, or raises something else, is stale), and no pair outside the table
+#: may raise at all.  float32 is never here: an eager float32 that raises is a
+#: broken recipe.
+#:
+#: Measured 2026-09-25.  Not every entry is behaviour worth keeping: the last
+#: group are inputs the reference framework answers, kept on record here
+#: until the ops are fixed.
+EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
+    # ── the reference framework refuses these as well
+    ("neg", "bool"): Refusal(_NOT_IMPL, ValueError, f"negating a bool; {_MLX_LEAK}"),
+    **_each("lerp", _INT, _both(TypeError, "lerp takes floating tensors only")),
+    **_each(
+        "nextafter",
+        _NON_FLOAT,
+        # Every other clean refusal here is a subclass; this one is the base.
+        _both(_C_engine.LucidError, "nextafter takes float32 / float64 only"),
+    ),
+    ("argmax", "bool"): _both(_NOT_IMPL, "no arg-reduction of bools"),
+    ("argmin", "bool"): _both(_NOT_IMPL, "no arg-reduction of bools"),
+    ("trace", "bool"): _both(_NOT_IMPL, "no trace of a bool matrix"),
+    ("topk_values", "bool"): _both(_NOT_IMPL, "topk does not order bools"),
+    ("kthvalue", "bool"): _both(_NOT_IMPL, "kthvalue does not order bools"),
+    ("inner", "bool"): Refusal(_NOT_IMPL, ValueError, f"no bool matmul; {_MLX_LEAK}"),
+    # Refused there too, but here not by a dtype check: the composite mixes
+    # the integer or bool input with a float32 intermediate and trips on it.
+    **_each(
+        "hypot",
+        _NON_FLOAT,
+        _both(_DTYPE, "float32 intermediate inside the composite (mul)"),
+    ),
+    **_each(
+        "logaddexp",
+        _NON_FLOAT,
+        _both(_DTYPE, "float32 intermediate inside the composite (add)"),
+    ),
+    # ── Lucid defects: the reference framework answers every one of these
+    # ``t > 0`` / ``t > 1`` in the recipe: a bool tensor against an int
+    # scalar raises (``t > True`` works); the reference promotes and answers.
+    ("where", "bool"): _both(_DTYPE, "bool tensor compared with an int scalar"),
+    ("masked_fill", "bool"): _both(_DTYPE, "bool tensor compared with an int scalar"),
+    # The reference answers these ops on integers and bools in float32.
+    **_each(
+        "xlogy",
+        _NON_FLOAT,
+        _both(_DTYPE, "float32 intermediate inside the composite (equal)"),
+    ),
+    **_each(
+        "logsumexp",
+        _NON_FLOAT,
+        _both(_DTYPE, "float32 intermediate inside the composite (add)"),
+    ),
+    # The reference answers an integer ``inner`` in the integer dtype, and
+    # Lucid's own ``matmul`` does; ``inner`` has no CPU integer kernel.
+    **_each(
+        "inner",
+        _INT,
+        Refusal(_NOT_IMPL, ValueError, f"no integer kernel; {_MLX_LEAK}"),
+    ),
+}
+
+
+def refusal(name: str, dtype: str, device: str) -> type[Exception] | None:
+    """What eager raises for ``name`` on ``dtype`` on ``device``; ``None`` if it
+    answers."""
+    r = EAGER_REJECTS.get((name, dtype))
+    return None if r is None else r.on(device)
+
+
 def all_params() -> list[tuple[str, str]]:
-    return [(c.name, d) for c in CASES for d in c.dtypes]
+    """Every (case, dtype) the replay runs: the declared dtypes eager answers."""
+    return [
+        (c.name, d) for c in CASES for d in c.dtypes if refusal(c.name, d, DEV) is None
+    ]
 
 
 def _main() -> None:  # pragma: no cover — manual triage
@@ -739,7 +854,7 @@ def _main() -> None:  # pragma: no cover — manual triage
         o = run(CASE_BY_NAME[name], dtype)
         reached |= o.reached
         counts[o.status] = counts.get(o.status, 0) + 1
-        if o.status not in ("ok", "skip"):
+        if o.status != "ok":
             print(f"{o.status:7s} {name:18s} {dtype:5s} {o.detail}", flush=True)
     print("counts", counts)
     print("reached", len(reached), "op names")
