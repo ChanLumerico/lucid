@@ -29,10 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - three undefined conversions the UBSan build halted on
 
-- transpose the value matmul of attention whose value width differs from the key's
-
-- align convolution channels on Metal, so MLX never pads them — MLX 0.32.1 and later work again
-
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
@@ -41,6 +37,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add MobileNet-v4 and Inception-v4
 - publish MobileNet-v4 and Inception-v4 ImageNet-1k weights
+
+---
+
+## [3.15.1] — 2026-09-25
+
+A patch release for two defects the new nightly jobs found on their first
+run. Both reach users of 3.15.0. This is the last release for macOS 15.
+
+- **Metal convolutions no longer come out wrong under MLX 0.32.1 and
+  later.** MLX pads convolution channels that are not a multiple of 16
+  inside its Metal kernel, and fills the padding from a zero it frees
+  before the GPU reads it. A value written into that memory in between
+  becomes the padding. From MLX 0.32.1 this reaches ordinary 2-D
+  convolutions: a small ResNet trained on MNIST computed whole layers
+  wrong, some of them NaN, in 4 of 16 Metal training steps. 3-D
+  convolutions were exposed on every MLX release. Lucid now pads those
+  channels itself, and MLX never does. Results are exact, and the
+  affected convolutions run as fast as before. No MLX version needs to
+  be avoided.
+- **Compiled attention with a value width unlike the key's no longer
+  aborts on macOS 26.** MPSGraph fused such attention (EfficientFormer:
+  value 128, key 32) and then killed the process in its optimisation
+  passes (`MLIR pass manager failed`). The emitter now builds it in the
+  form MPSGraph does not fuse. Equal widths compile as before.
+
+### Fixed
+
+- align convolution channels on Metal, so MLX never pads them — MLX 0.32.1 and later work again
+- transpose the value matmul of attention whose value width differs from the key's
 
 ---
 
