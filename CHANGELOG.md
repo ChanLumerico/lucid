@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a custom Function's None gradient stays None
 
+- floor, ceil, round, trunc and sign differentiate to zero
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

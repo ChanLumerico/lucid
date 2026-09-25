@@ -276,13 +276,18 @@ def test_a_recorded_write_re_derives_the_other_views() -> None:
     assert _flat(w.grad) == [6.0] * 6
 
 
-def test_a_write_that_cuts_the_graph_leaves_constants_behind() -> None:
+def test_a_zero_gradient_write_reaches_an_earlier_view() -> None:
     w = lucid.tensor([1.5, 2.5, 3.5, 4.5, 5.5, 6.5], requires_grad=True)
     h = w * 1.0
     v = _view(h, 2, 3)
-    h.floor_()  # not differentiable: h is a constant afterwards
-    assert not h.requires_grad and not v.requires_grad
+    # floor's gradient is zero; the write stays in the graph, as in the
+    # reference framework, and the view taken before it follows it there.
+    h.floor_()
+    assert h.requires_grad and v.requires_grad
     assert _flat(v) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    v.sum().backward()
+    assert w.grad is not None
+    assert _flat(w.grad) == [0.0] * 6
 
 
 # ── reshape-family ops make these views on the CPU ────────────────────────────

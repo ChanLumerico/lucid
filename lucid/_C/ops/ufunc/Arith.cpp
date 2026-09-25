@@ -169,9 +169,8 @@ LUCID_REGISTER_OP(AbsBackward)
 const OpSchema SignBackward::schema_v1{"sign", 1, AmpPolicy::KeepInput, true};
 
 // Gradient of sign is zero almost everywhere (discontinuous at 0).
-Storage SignBackward::grad_formula(const Storage& g) {
-    (void)g;
-    return Storage{CpuStorage{}};
+Storage SignBackward::grad_formula(const Storage&) {
+    return make_zero_storage(out_shape_, dtype_, device_);
 }
 
 TensorImplPtr sign_op(const TensorImplPtr& a) {

@@ -158,14 +158,14 @@ public:
 class LUCID_API SignBackward : public UnaryOp<SignBackward> {
 public:
     static constexpr bool kSavesInput = false;
-    static constexpr bool kHasGradient = false;
+    static constexpr bool kHasGradient = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::sign`` to compute $y = \mathrm{sign}(x) \in \{-1, 0, +1\}$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.sign(a, s, dt);
     }
-    // Backward — $\partial y/\partial x = 0$ almost everywhere; returns an
-    // empty zero-sentinel since no autograd edge is wired.
+    // Backward — $\partial y/\partial x = 0$ almost everywhere: a zero
+    // gradient, kept in the graph as the reference framework keeps it.
     Storage grad_formula(const Storage& g);
 
     // Graph-mode backward: the same derivative built from composable ops,

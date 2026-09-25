@@ -159,14 +159,6 @@ NO_GRAD: dict[str, str] = {
     ),
     # Integer results: a cast, indices, a one-hot code.
     **dict.fromkeys(("astype_i64", "argmax", "argmin", "argsort", "one_hot"), NO_FLOAT),
-    # Piecewise constant.  Lucid records no graph for them; the reference
-    # framework records one whose gradient is zero (and for ``//`` raises on
-    # backward) — nothing to compare either way.  ``erfinv_edge`` is
-    # constant through its ``round``.
-    **dict.fromkeys(
-        ("sign", "round", "floor", "ceil", "trunc", "floordiv", "erfinv_edge"),
-        NO_DEP,
-    ),
 }
 
 GRAD_CASES = [

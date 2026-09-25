@@ -3,7 +3,9 @@
 // Backward nodes for discontinuous (piecewise-constant) unary operations:
 // round, floor, ceil, invert.  These functions have zero derivative almost
 // everywhere (the derivative is undefined at integer boundaries) so all four
-// set kHasGradient = false.  UnaryKernel::forward will skip autograd wiring
+// return a zero gradient.  (They used to set kHasGradient = false, which
+// left the result out of the graph: ``round(x).sum().backward()`` raised,
+// where the reference framework answers zeros.)  UnaryKernel::forward
 // entirely; grad_formula is provided only for completeness and returns an
 // empty CpuStorage as a zero-gradient sentinel.  This matches reference framework's
 // behaviour for the same ops.
@@ -54,7 +56,7 @@ namespace lucid {
 class LUCID_API RoundBackward : public UnaryOp<RoundBackward> {
 public:
     static constexpr bool kSavesInput = false;
-    static constexpr bool kHasGradient = false;
+    static constexpr bool kHasGradient = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::round`` to compute $y = \operatorname{round}(x)$
     // with banker's rounding.
@@ -74,6 +76,11 @@ public:
     // Storage
     //     Empty ``CpuStorage`` placeholder.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward — zero, like ``grad_formula``, so the node stays
+    // differentiable under ``create_graph``.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
 // Element-wise round-to-nearest-even — returns a new tensor whose values
@@ -130,7 +137,7 @@ LUCID_API TensorImplPtr round_op(const TensorImplPtr& a);
 class LUCID_API FloorBackward : public UnaryOp<FloorBackward> {
 public:
     static constexpr bool kSavesInput = false;
-    static constexpr bool kHasGradient = false;
+    static constexpr bool kHasGradient = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::floor`` to compute $y = \lfloor x \rfloor$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
@@ -148,6 +155,11 @@ public:
     // Storage
     //     Empty ``CpuStorage`` placeholder.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward — zero, like ``grad_formula``, so the node stays
+    // differentiable under ``create_graph``.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
 // Element-wise floor — returns the largest integer-valued tensor not
@@ -207,7 +219,7 @@ LUCID_API TensorImplPtr floor_op(const TensorImplPtr& a);
 class LUCID_API CeilBackward : public UnaryOp<CeilBackward> {
 public:
     static constexpr bool kSavesInput = false;
-    static constexpr bool kHasGradient = false;
+    static constexpr bool kHasGradient = true;
     static const OpSchema schema_v1;
     // Forward — calls ``IBackend::ceil`` to compute $y = \lceil x \rceil$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
@@ -225,6 +237,11 @@ public:
     // Storage
     //     Empty ``CpuStorage`` placeholder.
     Storage grad_formula(const Storage& g);
+
+    // Graph-mode backward — zero, like ``grad_formula``, so the node stays
+    // differentiable under ``create_graph``.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
 // Element-wise ceiling — returns the smallest integer-valued tensor not

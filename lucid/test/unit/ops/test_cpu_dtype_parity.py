@@ -1167,16 +1167,17 @@ def test_non_differentiable_inplace_ops_end_the_graph(name: str) -> None:
 
     ``y = x * 1.0; y.ceil_(); y.sum().backward()`` gave ``dx = 1``.  The
     in-place wrapper adopts the forward's graph position, and these ops
-    build no node to adopt — so the old one stayed and the gradient
-    flowed through as if the call had not happened.  The reference
-    answers 0; Lucid's own out-of-place ``ceil`` answers with no gradient
-    at all, which is the convention followed here.
+    built no node to adopt — so the old one stayed and the gradient
+    flowed through as if the call had not happened.  They now build a node
+    whose gradient is zero, in place as out of place, and the reference
+    answers 0 too.
     """
     x = lucid.tensor(np.array([1.3, 2.7, 3.5]), requires_grad=True)
     y = x * 1.0
     getattr(y, name)()
     y.sum().backward()
-    assert x.grad is None, f"{name} passed a gradient through: {x.grad}"
+    assert x.grad is not None, f"{name} left the graph"
+    np.testing.assert_array_equal(x.grad.numpy(), [0.0, 0.0, 0.0])
 
 
 @pytest.mark.parametrize(

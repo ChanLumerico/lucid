@@ -253,6 +253,30 @@ public:
     }
 };
 
+// floor / ceil / round / trunc / sign: piecewise constant, so the gradient
+// is zero wherever it exists — and eager returns exactly that, zeros shaped
+// like the input.  Not ``go * 0``: an infinite ``go`` (erfinv at ±1 just
+// downstream) would make it NaN where eager has 0.  These used to be grad
+// sinks in the walk, which left a parameter reached only through them with
+// no gradient at all while eager handed it zeros.
+class PiecewiseConstantVjp final : public VjpEmitter {
+public:
+    explicit PiecewiseConstantVjp(const char* name) : name_(name) {}
+    std::string_view op_name() const override { return name_; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                return [g broadcastTensor:[g constantWithScalar:0.0 dataType:go.dataType]
+                            toShapeTensor:[g shapeOfTensor:x name:nil]
+                                     name:@"piecewise_constant_vjp"];
+            });
+    }
+
+private:
+    const char* name_;
+};
+
 // nan_to_num: dx = grad where x is finite, 0 where it was replaced — the
 // replacements are constants.  Mirrors ``NanToNumBackward``.
 class NanToNumVjp final : public VjpEmitter {
@@ -349,6 +373,8 @@ struct MathVjpRegistrar {
         register_vjp_emitter(std::make_unique<ErfinvVjp>());
         register_vjp_emitter(std::make_unique<ClipVjp>());
         register_vjp_emitter(std::make_unique<NanToNumVjp>());
+        for (const char* name : {"floor", "ceil", "round", "trunc", "sign"})
+            register_vjp_emitter(std::make_unique<PiecewiseConstantVjp>(name));
         register_vjp_emitter(std::make_unique<PowScalarVjp<false>>());
         register_vjp_emitter(std::make_unique<PowScalarVjp<true>>());
         register_vjp_emitter(unary_deriv("arcsin", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {
