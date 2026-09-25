@@ -259,6 +259,8 @@ public:
     //     single-output custom op stays on the direct path, exactly as
     //     before multi-output support existed.
     bool is_barrier() const noexcept override { return out_shapes.size() > 1; }
+    // A Python ``None`` comes back as an empty storage.
+    bool empty_grad_is_none() const noexcept override { return true; }
 
     // Park one output's gradient until the rest arrive.
     //

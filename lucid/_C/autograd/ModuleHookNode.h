@@ -185,6 +185,8 @@ public:
     // Identifies this node as a staged barrier so the engine routes
     // gradients through the barrier protocol instead of the direct path.
     bool is_barrier() const noexcept override { return true; }
+    // A hook's ``None``, or a slot no gradient reached, is an empty storage.
+    bool empty_grad_is_none() const noexcept override { return true; }
 
     // Park a single incoming gradient into the shared state.
     //
@@ -264,6 +266,8 @@ public:
 
     // Identifies this node as a staged barrier.
     bool is_barrier() const noexcept override { return true; }
+    // A hook's ``None``, or a slot no gradient reached, is an empty storage.
+    bool empty_grad_is_none() const noexcept override { return true; }
 
     // Park an incoming input gradient into the shared state.
     //

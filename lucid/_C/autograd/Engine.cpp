@@ -257,6 +257,12 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         // If a consumer already has a partial gradient from another path,
         // accumulate in-place; otherwise insert directly.
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+            // A custom Function's ``None`` arrives as an empty storage: no
+            // gradient for that input.  Routed on, it became the leaf's
+            // ``.grad`` — the leaf's shape over no memory, read back as
+            // whatever the allocator had last left there.
+            if (node->empty_grad_is_none() && storage_is_empty(input_grads[i]))
+                continue;
             // retain_grad: accumulate into non-leaf tensors that requested it.
             if (i < retain_ins.size()) {
                 if (auto t = retain_ins[i].lock()) {
@@ -503,7 +509,9 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
             auto next = edges[i].node;
-            if (!next)
+            // As in ``backward``: from these nodes an empty storage is a
+            // ``None``, not a value.
+            if (!next || (node->empty_grad_is_none() && storage_is_empty(input_grads[i])))
                 continue;
             if (next->is_barrier()) {
                 next->accumulate_barrier_grad(edges[i].input_nr, input_grads[i]);

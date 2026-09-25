@@ -184,6 +184,20 @@ public:
     //     of :meth:`apply`.
     virtual bool is_barrier() const noexcept { return false; }
 
+    // Whether an empty storage among this node's results means "no gradient
+    // for that input" rather than a gradient of zero elements.  The nodes
+    // that call into Python say ``None`` that way; a native node's empty
+    // result is a real gradient of a zero-size tensor, which a CPU
+    // allocation of zero bytes also leaves empty.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` if the engine should drop an empty result instead of
+    //     routing it on — routed, it became a leaf's ``.grad`` over no
+    //     memory.
+    virtual bool empty_grad_is_none() const noexcept { return false; }
+
     // Accumulate an arriving gradient into this barrier's internal buffer.
     //
     // Parameters

@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the engine's exceptions subclass the builtins they name
 
+- a custom Function's None gradient stays None
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
