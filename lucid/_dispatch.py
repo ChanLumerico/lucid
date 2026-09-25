@@ -123,6 +123,22 @@ def _scalar_dtype(
     return fallback
 
 
+def _refuse_bool_subtraction(a: _C_engine.TensorImpl, b: _C_engine.TensorImpl) -> None:
+    """Refuse ``bool - bool``, as the reference framework refuses it.
+
+    Two bools have no difference; the engine's kernels answer with XOR,
+    which is not subtraction, and ``-`` used to return it without a word.
+    The engine's own composites still subtract bool masks internally
+    (``scatter`` does), so the refusal lives at the public entry points —
+    ``-``, ``-=``, ``sub`` and ``sub_`` — rather than in the op.
+    """
+    if a.dtype == _C_engine.Bool and b.dtype == _C_engine.Bool:
+        raise _C_engine.LucidError(
+            "subtraction, the `-` operator, with two bool tensors is not "
+            "supported; use `^` or logical_xor() instead"
+        )
+
+
 def _unwrap_or_scalar(
     x: object,
     ref_impl: _C_engine.TensorImpl | None = None,

@@ -159,30 +159,32 @@ def test_eager_matches_numpy(name: str, dtype: str, device: str) -> None:
     _assert_matches(name, dtype, got, want)
 
 
-@pytest.mark.parametrize(
-    ("name", "dtype", "device"),
-    [(n, d, dev) for n, d in sorted(DIVERGES) for dev in DEVICES],
-    ids=str,
-)
-def test_divergence_is_pinned(name: str, dtype: str, device: str) -> None:
+def test_divergences_are_pinned() -> None:
     """Where the reference framework refuses and Lucid answers, pin the answer.
 
     Eager is held to the answer :data:`DIVERGES` records, and to its numpy
     dtype exactly.  A refusal fails with the move to make: the pair belongs
-    in ``EAGER_REJECTS`` once Lucid refuses it as the reference does.
+    in ``EAGER_REJECTS`` once Lucid refuses it as the reference does.  One
+    test over the whole table rather than one per entry, so an empty table
+    — the state to aim for — is a pass, not a skipped parameter set.
     """
-    case = M.CASE_BY_NAME[name]
-    x = M.make_input(case.kind, dtype, case.shape, 2)
-    with M.on_device(device):
-        x = x.to(device)
-        try:
-            got = case.fn(x)
-        except Exception as e:  # noqa: BLE001 — a refusal is the fix arriving
-            pytest.fail(
-                f"eager refuses now ({type(e).__name__}: {e}), as the reference "
-                "framework does — move the pair from DIVERGES to EAGER_REJECTS"
-            )
-        want = np.asarray(DIVERGES[(name, dtype)][0](x.numpy(), _Consts()))
-    assert isinstance(got, lucid.Tensor), type(got)
-    assert got.numpy().dtype == want.dtype, f"{got.numpy().dtype}, want {want.dtype}"
-    _assert_matches(name, dtype, got, want)
+    for (name, dtype), (ref, _why) in sorted(DIVERGES.items()):
+        for device in DEVICES:
+            case = M.CASE_BY_NAME[name]
+            x = M.make_input(case.kind, dtype, case.shape, 2)
+            with M.on_device(device):
+                x = x.to(device)
+                try:
+                    got = case.fn(x)
+                except Exception as e:  # noqa: BLE001 — a refusal is the fix arriving
+                    pytest.fail(
+                        f"{name}/{dtype}/{device}: eager refuses now "
+                        f"({type(e).__name__}: {e}), as the reference framework "
+                        "does — move the pair from DIVERGES to EAGER_REJECTS"
+                    )
+                want = np.asarray(ref(x.numpy(), _Consts()))
+            assert isinstance(got, lucid.Tensor), type(got)
+            assert (
+                got.numpy().dtype == want.dtype
+            ), f"{name}/{dtype}/{device}: {got.numpy().dtype}, want {want.dtype}"
+            _assert_matches(name, dtype, got, want)

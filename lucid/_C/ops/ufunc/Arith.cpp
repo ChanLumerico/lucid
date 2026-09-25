@@ -42,6 +42,12 @@ NegBackward::grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, con
 }
 
 TensorImplPtr neg_op(const TensorImplPtr& a) {
+    // A bool has no negation.  The CPU refused with "dtype not supported"
+    // and Metal passed MLX's own ValueError through; both now say what to
+    // use instead, as the reference framework does.
+    if (a && a->dtype() == Dtype::Bool)
+        ErrorBuilder("neg").fail("negation, the `-` operator, on a bool tensor is not supported; "
+                                 "use `~` or logical_not() to invert a mask");
     return NegBackward::forward(a);
 }
 LUCID_REGISTER_OP(NegBackward)

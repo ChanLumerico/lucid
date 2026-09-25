@@ -611,11 +611,8 @@ REAL_VALUED = frozenset(
 #: included, so the divergence stays on record.  A Lucid that starts refusing
 #: fails that test — move the pair to ``EAGER_REJECTS`` then.
 DIVERGES: dict[tuple[str, str], tuple[Ref, str]] = {
-    ("sub", "bool"): (
-        lambda x, c: x ^ _flip0(x),
-        "the reference framework refuses ``-`` on two bools and points to "
-        "``^``; Lucid's eager answers with ``^``",
-    ),
+    # Empty: ``sub`` of two bools, the one entry, is now refused as the
+    # reference framework refuses it (``EAGER_REJECTS``).
 }
 
 #: Cases with no numpy reference, and why — the ledger reads this list.

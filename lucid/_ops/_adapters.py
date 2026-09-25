@@ -25,7 +25,12 @@ import math
 from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _scalar_dtype, _unwrap, _unwrap_or_scalar
+from lucid._dispatch import (
+    _refuse_bool_subtraction,
+    _scalar_dtype,
+    _unwrap,
+    _unwrap_or_scalar,
+)
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._types import Scalar, TensorOrScalar
 
@@ -155,6 +160,8 @@ def _make_arith_adapter(
     """
     name = getattr(engine_fn, "__name__", "_arith_adapter")
 
+    subtracts = engine_fn in (_C_engine.sub, _C_engine.sub_)
+
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
         if not isinstance(b, _C_engine.TensorImpl):
             b = _unwrap_or_scalar(b, a if isinstance(a, _C_engine.TensorImpl) else None)
@@ -178,6 +185,8 @@ def _make_arith_adapter(
             tgt = to_engine_dtype(None)
             a = _C_engine.astype(a, tgt)
             b = _C_engine.astype(b, tgt)
+        if subtracts:
+            _refuse_bool_subtraction(a, b)
         return engine_fn(a, b)
 
     _keep_engine_signature(_adapter, engine_fn)

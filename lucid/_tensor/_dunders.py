@@ -5,9 +5,10 @@ All arithmetic/comparison operators are implemented here and attached to
 the Tensor class by _inject_dunders() at module import time.
 """
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap_or_scalar, _wrap
+from lucid._dispatch import _refuse_bool_subtraction, _unwrap_or_scalar, _wrap
 from lucid._dtype import to_engine_dtype
 from lucid._tensor._indexing import _adopt_inplace, _getitem, _setitem
 
@@ -89,6 +90,22 @@ def _true_div_operands(
         a_impl = _C_engine.astype(a_impl, tgt)
         b_impl = _C_engine.astype(b_impl, tgt)
     return a_impl, b_impl
+
+
+def _compare(
+    op: Callable[[_C_engine.TensorImpl, _C_engine.TensorImpl], _C_engine.TensorImpl],
+    self_impl: _C_engine.TensorImpl,
+    other: TensorOrScalar,
+) -> Tensor:
+    """Compare at the operands' common dtype, as arithmetic does.
+
+    The engine compares only equal dtypes, and the comparison operators
+    handed it the operands as they came — so ``bool_tensor > 0`` and
+    ``int_tensor > 0.5`` raised ``DtypeMismatch`` while ``bool_tensor + 1``
+    and the functional ``lucid.greater`` promoted and answered.
+    """
+    a, b = _maybe_promote(self_impl, _unwrap_or_scalar(other, self_impl))
+    return _wrap(op(a, b))
 
 
 def _inject_dunders(cls: type) -> None:
@@ -255,6 +272,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([9., 19., 29.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        _refuse_bool_subtraction(a, b)
         return _wrap(_C_engine.sub(a, b))
 
     def __rsub__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -292,6 +310,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([9., 8., 7.])
         """
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        _refuse_bool_subtraction(a, b)
         return _wrap(_C_engine.sub(a, b))
 
     def __isub__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -330,6 +349,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([5., 15., 25.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        _refuse_bool_subtraction(a, b)
         return _adopt_inplace(self, _C_engine.sub_(a, b), "-=")
 
     def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -1487,7 +1507,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a == b
         Tensor([True, False, True])
         """
-        return _wrap(_C_engine.equal(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _compare(_C_engine.equal, self._impl, other)
 
     def __ne__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise inequality comparison: ``self != other``.
@@ -1522,9 +1542,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a != b
         Tensor([False, True, False])
         """
-        return _wrap(
-            _C_engine.not_equal(self._impl, _unwrap_or_scalar(other, self._impl))
-        )
+        return _compare(_C_engine.not_equal, self._impl, other)
 
     def __lt__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise less-than comparison: ``self < other``.
@@ -1557,7 +1575,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a < 2.5
         Tensor([True, True, False])
         """
-        return _wrap(_C_engine.less(self._impl, _unwrap_or_scalar(other, self._impl)))
+        return _compare(_C_engine.less, self._impl, other)
 
     def __le__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise less-than-or-equal comparison: ``self <= other``.
@@ -1590,9 +1608,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a <= 2.0
         Tensor([True, True, False])
         """
-        return _wrap(
-            _C_engine.less_equal(self._impl, _unwrap_or_scalar(other, self._impl))
-        )
+        return _compare(_C_engine.less_equal, self._impl, other)
 
     def __gt__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise greater-than comparison: ``self > other``.
@@ -1625,9 +1641,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a > 1.5
         Tensor([False, True, True])
         """
-        return _wrap(
-            _C_engine.greater(self._impl, _unwrap_or_scalar(other, self._impl))
-        )
+        return _compare(_C_engine.greater, self._impl, other)
 
     def __ge__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise greater-than-or-equal comparison: ``self >= other``.
@@ -1660,9 +1674,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a >= 2.0
         Tensor([False, True, True])
         """
-        return _wrap(
-            _C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl))
-        )
+        return _compare(_C_engine.greater_equal, self._impl, other)
 
     def __getitem__(self: Tensor, idx: _IndexType) -> Tensor:
         r"""Tensor indexing: ``self[idx]``.

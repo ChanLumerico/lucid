@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - floor, ceil, round, trunc and sign differentiate to zero
 
+- comparisons promote; bool minus and negation are refused
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
