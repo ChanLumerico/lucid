@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - norm refuses an axis that is out of range or repeated
 
+- lucid.backends no longer exports typing's final
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

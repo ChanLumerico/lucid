@@ -17,6 +17,10 @@ class TestBackendsSurface:
         """
         assert lucid.backends.__all__ == ["accelerate", "metal", "quantized"]
         assert not hasattr(lucid.backends, "mps")
+        # Nothing else public leaks through: the ``typing.final`` the module
+        # decorates with used to show up in ``dir()``.
+        public = [n for n in dir(lucid.backends) if not n.startswith("_")]
+        assert public == ["accelerate", "metal", "quantized"]
 
 
 class TestMetalBackend:
