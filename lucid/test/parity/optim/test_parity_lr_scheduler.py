@@ -34,7 +34,10 @@ def _dummy_ref_optimizer(lr: float, ref: Any) -> Any:
 
 
 def _collect_lrs(scheduler: Any, steps: int) -> list[float]:
-    lrs: list[float] = []
+    # The rate in force before the first step() is the first optimizer
+    # step's.  It was left out, and five schedulers ran that step at the
+    # base rate — OneCycleLR at 25x its own — with every test here green.
+    lrs: list[float] = [scheduler.get_last_lr()[0]]
     for _ in range(steps):
         scheduler.step()
         lrs.append(scheduler.get_last_lr()[0])
@@ -463,3 +466,30 @@ class TestChainedSchedulerParity:
         )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 15), _collect_lrs(ref_sched, 15))
+
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda S, o: [
+                S.ConstantLR(o, factor=0.5, total_iters=3),
+                S.ExponentialLR(o, gamma=0.9),
+            ],
+            lambda S, o: [
+                S.LinearLR(o, start_factor=0.25, total_iters=4),
+                S.StepLR(o, step_size=3, gamma=0.5),
+            ],
+        ],
+        ids=["warmup-and-decay", "linear-and-step"],
+    )
+    def test_the_factors_multiply(self, make: Any, ref: Any) -> None:
+        """Each child computed its rate from its own base and wrote it over the
+        last one's, so a warmup chained with a decay lost the decay."""
+        lucid_opt = _dummy_lucid_optimizer(0.1)
+        ref_opt = _dummy_ref_optimizer(0.1, ref)
+        lucid_sched = optim.lr_scheduler.ChainedScheduler(
+            make(optim.lr_scheduler, lucid_opt)
+        )
+        ref_sched = ref.optim.lr_scheduler.ChainedScheduler(
+            make(ref.optim.lr_scheduler, ref_opt)
+        )
+        _assert_lr_sequence(_collect_lrs(lucid_sched, 12), _collect_lrs(ref_sched, 12))

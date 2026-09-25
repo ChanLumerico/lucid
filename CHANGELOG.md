@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - where differentiates twice and reaches a broadcast operand
+- schedulers set the first step's rate; ChainedScheduler multiplies
 
 ---
 

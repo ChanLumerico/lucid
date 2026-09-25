@@ -89,8 +89,26 @@ class _LRScheduler:
         )  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.verbose = verbose
-        self.base_lrs: list[float] = [float(g["lr"]) for g in optimizer.param_groups]  # type: ignore[arg-type]
-        self._last_lr: list[float] = list(self.base_lrs)
+        # The rate before any scheduler touched it, kept on the group: the
+        # schedule below writes step 0's rate straight away, and a second
+        # scheduler on the same optimizer — a SequentialLR's cosine after
+        # its warmup — must still start from the true base, not from that.
+        if last_epoch == -1:
+            for group in optimizer.param_groups:
+                group.setdefault("initial_lr", group["lr"])
+        self.base_lrs: list[float] = [
+            float(g.get("initial_lr", g["lr"]))  # type: ignore[arg-type]
+            for g in optimizer.param_groups
+        ]
+        # Step 0's rate takes effect now, before the first optimizer step.
+        # Only step() used to write a rate, so the first update ran at the
+        # base rate whatever the schedule said: LambdaLR and LinearLR warmups
+        # at full rate, ConstantLR unscaled, CyclicLR at max_lr, OneCycleLR at
+        # max_lr rather than max_lr / div_factor — 25x its first step.
+        self._last_lr: list[float] = list(self.get_lr())
+        for group, lr in zip(optimizer.param_groups, self._last_lr):
+            group["lr"] = lr
+        optimizer._sync_hyperparams()
 
     def step(self) -> None:
         """Advance the scheduler by one epoch and update optimizer learning rates.
@@ -1585,6 +1603,12 @@ class OneCycleLR(_LRScheduler):
         )
         t = self.last_epoch
         T = self.total_steps
+        # Past the end the schedule has no rate to give; carrying on returned
+        # the cosine's continuation, a rate the schedule never had.
+        if t > T:
+            raise ValueError(
+                f"Tried to step {t} times. The specified number of total steps is {T}"
+            )
         warmup_end = T * self.pct_start - 1.0  # end step of warmup phase (inclusive)
         cooldown_end = float(T - 1)
         init_lr = self.max_lr / self.div_factor
@@ -1674,6 +1698,12 @@ class SequentialLR:
         self.milestones = milestones
         self.last_epoch = last_epoch
         self._idx = 0
+        # Each child wrote its own step-0 rate as it was built, so the last
+        # one built won.  The first child's is the rate until its milestone.
+        first = schedulers[0]
+        for group, lr in zip(optimizer.param_groups, first.get_lr()):
+            group["lr"] = lr
+        optimizer._sync_hyperparams()
 
     def state_dict(self) -> dict[str, object]:
         """Serialisable state, including each wrapped scheduler's own state.
@@ -1787,9 +1817,8 @@ class ChainedScheduler:
     useful when you want, for example, a warmup schedule and an exponential
     decay to both apply simultaneously.
 
-    Only the last scheduler in the chain is consulted by
-    :meth:`get_last_lr`, so the returned value reflects that scheduler's
-    view of the current LR (which is also what is stored in the optimizer).
+    :meth:`get_last_lr` returns the composed rate, which is also what is
+    stored in the optimizer.
 
     Examples
     --------
@@ -1808,6 +1837,35 @@ class ChainedScheduler:
     def __init__(self, schedulers: list[_LRScheduler]) -> None:
         """Initialise the ChainedScheduler.  See the class docstring for parameter semantics."""
         self.schedulers = schedulers
+        self._last_lr: list[float] = []
+        # Each child was built after the one before it had written its own
+        # step-0 rate, and some read that rate back (StepLR).  Start every
+        # track from the base instead.
+        for sched in schedulers:
+            for group, base in zip(sched.optimizer.param_groups, sched.base_lrs):
+                group["lr"] = base
+            sched._last_lr = list(sched.get_lr())
+        self._compose()
+
+    def _compose(self) -> None:
+        """Write :math:`\\eta_0 \\prod_k f_k(t)` into the optimizer.
+
+        Each child computes its own rate from its own base and writes it,
+        so stepping them in turn left only the last one's — a warmup chained
+        with a decay kept the warmup and lost the decay once it ended.  The
+        chain multiplies the factors instead, each child's rate over its base.
+        """
+        optimizer = self.schedulers[0].optimizer
+        values: list[float] = []
+        for i, group in enumerate(optimizer.param_groups):
+            lr = float(group.get("initial_lr", group["lr"]))  # type: ignore[arg-type]
+            for sch in self.schedulers:
+                base = sch.base_lrs[i]
+                lr *= sch._last_lr[i] / base if base else 1.0
+            group["lr"] = lr
+            values.append(lr)
+        self._last_lr = values
+        optimizer._sync_hyperparams()
 
     def state_dict(self) -> dict[str, object]:
         """Serialisable state, including each wrapped scheduler's own state.
@@ -1863,15 +1921,22 @@ class ChainedScheduler:
         ...     optimizer.step()
         """
         for sched in self.schedulers:
+            # Each child steps on its own track.  Several compute from the
+            # group's current rate (ExponentialLR, StepLR), and that rate is
+            # the chain's product — the previous child's factor would be
+            # applied again.
+            for group, lr in zip(sched.optimizer.param_groups, sched._last_lr):
+                group["lr"] = lr
             sched.step()
+        self._compose()
 
     def get_last_lr(self) -> list[float]:
-        """Return the last learning rates from the final scheduler in the chain.
+        """Return the composed learning rates the chain last wrote.
 
         Returns
         -------
         list of float
-            Current learning rate of each optimizer param group, as
-            reported by the last scheduler in `schedulers`.
+            Current learning rate of each optimizer param group — the
+            product of every chained scheduler's factor.
         """
-        return self.schedulers[-1].get_last_lr()
+        return list(self._last_lr)
