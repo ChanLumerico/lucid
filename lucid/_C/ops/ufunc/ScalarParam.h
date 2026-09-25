@@ -289,6 +289,52 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+// Autograd node for ``nan_to_num`` — finite values pass through, NaN and
+// the infinities are replaced by the three scalars.
+//
+// Math
+// ----
+// $$\frac{\partial y}{\partial x} = \mathbb{1}[x \text{ finite}]$$
+//
+// The replaced slots are constants, so they carry no gradient; everywhere
+// else the op is the identity.  This is the reference framework's rule, and
+// it used to be missing: the op returned a detached tensor, so
+// ``nan_to_num(x) + x`` differentiated to 1 instead of 2 — silently.
+//
+// Notes
+// -----
+// The three scalars are recorded on the trace (``scope.set_attr``) for the
+// compile path; the gradient needs only the saved input.
+//
+// See Also
+// --------
+// :func:`nan_to_num_op`, :class:`ClipBackward`.
+class LUCID_API NanToNumBackward : public UnaryOp<NanToNumBackward> {
+public:
+    static const OpSchema schema_v1;
+    // Forward — replaces NaN / +inf / -inf and wires the backward node.
+    //
+    // Parameters
+    // ----------
+    // a : const TensorImplPtr&
+    //     Input tensor.
+    // nan_val, posinf_val, neginf_val : double
+    //     Replacements for NaN, +inf and -inf.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     Tensor of the input's shape, dtype and device.
+    static TensorImplPtr
+    forward(const TensorImplPtr& a, double nan_val, double posinf_val, double neginf_val);
+    // $g \odot \mathbb{1}[x \text{ finite}]$ from the saved input.
+    Storage grad_formula(const Storage& g);
+    // Graph-mode equivalent — ``where(isfinite(x), g, 0)`` — so the
+    // gradient itself stays differentiable.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr& out);
+};
+
 // Element-wise scalar-exponent power — returns $a^{\text{exp}}$ with a
 // fully wired autograd node.
 //

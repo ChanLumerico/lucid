@@ -2,7 +2,8 @@
 //
 // Floating-point predicate ops (isinf, isnan, isfinite) and nan_to_num.
 // Predicates always produce a Bool output tensor; nan_to_num preserves dtype.
-// None of these ops are differentiable.
+// The predicates are not differentiable; nan_to_num is (the identity on
+// finite values — see ``NanToNumBackward``).
 
 #pragma once
 
@@ -126,8 +127,8 @@ LUCID_API TensorImplPtr isfinite_op(const TensorImplPtr& a);
 // Replace ``NaN`` and $\pm\infty$ values with user-specified finite
 // substitutes, preserving dtype and shape.
 //
-// Not differentiable: returns a detached tensor with no backward node.
-// Use only in inference / data-cleaning paths.
+// Differentiable: the gradient passes through finite slots and is zero
+// where a value was replaced (``NanToNumBackward``).
 //
 // Parameters
 // ----------

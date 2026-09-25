@@ -21,6 +21,8 @@
 #include "../bfunc/Mul.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Select.h"
+#include "Astype.h"
+#include "Predicate.h"
 
 namespace lucid {
 
@@ -165,5 +167,44 @@ TensorImplPtr clip_op(const TensorImplPtr& a, double min_v, double max_v) {
     return ClipBackward::forward(a, min_v, max_v);
 }
 LUCID_REGISTER_OP(ClipBackward)
+
+const OpSchema NanToNumBackward::schema_v1{"nan_to_num", 1, AmpPolicy::KeepInput, true};
+
+TensorImplPtr NanToNumBackward::forward(const TensorImplPtr& a,
+                                        double nan_val,
+                                        double posinf_val,
+                                        double neginf_val) {
+    Validator::input(a, "nan_to_num.a").non_null();
+    OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("nan", nan_val);
+    scope.set_attr("posinf", posinf_val);
+    scope.set_attr("neginf", neginf_val);
+    Storage out_storage =
+        backend::Dispatcher::for_device(a->device())
+            .nan_to_num(a->storage(), a->shape(), a->dtype(), nan_val, posinf_val, neginf_val);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
+                                            a->device(), false);
+    scope.set_flops(static_cast<std::int64_t>(out->numel()));
+    // ``wire_autograd`` also records the op on an active trace.
+    kernel::NaryKernel<NanToNumBackward, 1>::wire_autograd(std::make_shared<NanToNumBackward>(),
+                                                           {a}, out);
+    return out;
+}
+
+Storage NanToNumBackward::grad_formula(const Storage& g) {
+    const std::size_t n = shape_numel(out_shape_);
+    auto& be = backend::Dispatcher::for_device(device_);
+    Storage finite = be.isfinite(saved_inputs_[0], out_shape_, dtype_);
+    Storage mask = be.astype(finite, out_shape_, Dtype::Bool, dtype_);
+    return multiply_storages(g, mask, n, dtype_, device_);
+}
+
+TensorImplPtr NanToNumBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                  const TensorImplPtr& x,
+                                                  const TensorImplPtr&) {
+    return where_op(isfinite_op(x), g, zeros_like_op(g));
+}
+
+LUCID_REGISTER_OP(NanToNumBackward)
 
 }  // namespace lucid

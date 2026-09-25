@@ -253,6 +253,23 @@ public:
     }
 };
 
+// nan_to_num: dx = grad where x is finite, 0 where it was replaced — the
+// replacements are constants.  Mirrors ``NanToNumBackward``.
+class NanToNumVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "nan_to_num"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                return [g selectWithPredicateTensor:[g isFiniteWithTensor:x name:nil]
+                                truePredicateTensor:go
+                               falsePredicateTensor:cst(g, 0.0, go.dataType)
+                                               name:@"nan_to_num_vjp"];
+            });
+    }
+};
+
 // clip / clamp: the gradient passes where the input was inside the bounds
 // (inclusive) and stops where it was clipped.  Used by both BCE losses.
 class ClipVjp final : public VjpEmitter {
@@ -331,6 +348,7 @@ struct MathVjpRegistrar {
         register_vjp_emitter(std::make_unique<LogVjp>());
         register_vjp_emitter(std::make_unique<ErfinvVjp>());
         register_vjp_emitter(std::make_unique<ClipVjp>());
+        register_vjp_emitter(std::make_unique<NanToNumVjp>());
         register_vjp_emitter(std::make_unique<PowScalarVjp<false>>());
         register_vjp_emitter(std::make_unique<PowScalarVjp<true>>());
         register_vjp_emitter(unary_deriv("arcsin", [](MPSGraph* g, MPSGraphTensor* x, MPSDataType dt) {

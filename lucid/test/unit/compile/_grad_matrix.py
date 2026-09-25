@@ -167,12 +167,6 @@ NO_GRAD: dict[str, str] = {
         ("sign", "round", "floor", "ceil", "trunc", "floordiv", "erfinv_edge"),
         NO_DEP,
     ),
-    # Lucid defects: the reference framework differentiates both —
-    # ``nan_to_num`` passes the gradient where the input is finite,
-    # ``nextafter`` passes it to its first argument — and Lucid records no
-    # graph, so ``nan_to_num(x) + x`` gets a gradient of 1 where it is 2.
-    "nan_to_num": NO_DEP,
-    "nextafter": NO_DEP,
 }
 
 GRAD_CASES = [

@@ -91,6 +91,25 @@ public:
 };
 
 // ────────────────────────────────────────────────────────────────────
+// nextafter: dA = grad, dB = 0.  One ulp from ``a`` follows ``a`` and does
+// not move with ``b``.  Mirrors ``NextafterBackward``.
+// ────────────────────────────────────────────────────────────────────
+class NextafterVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "nextafter"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(bctx, node, grad_outs,
+            [](const BinaryVjpCtx& c) -> BinaryGradPair {
+                MPSGraphTensor* zero = [c.g constantWithScalar:0.0 dataType:c.go.dataType];
+                return { c.go, [c.g multiplicationWithPrimaryTensor:c.go
+                                                    secondaryTensor:zero
+                                                               name:nil] };
+            });
+    }
+};
+
+// ────────────────────────────────────────────────────────────────────
 // mul: dA = grad * b, dB = grad * a (unreduce).  Product rule.
 // ────────────────────────────────────────────────────────────────────
 class MulVjp final : public VjpEmitter {
@@ -301,6 +320,7 @@ struct ArithVjpRegistrar {
         register_vjp_emitter(std::make_unique<WhereVjp>());
         register_vjp_emitter(std::make_unique<MaskedFillVjp>());
         register_vjp_emitter(std::make_unique<SubVjp>());
+        register_vjp_emitter(std::make_unique<NextafterVjp>());
         register_vjp_emitter(std::make_unique<MulVjp>());
         register_vjp_emitter(std::make_unique<DivVjp>());
         register_vjp_emitter(std::make_unique<PowVjp>());

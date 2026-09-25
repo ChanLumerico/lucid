@@ -1,8 +1,10 @@
 // lucid/_C/ops/ufunc/Predicate.cpp
 //
-// Implements isinf, isnan, isfinite, and nan_to_num by routing directly
-// through the backend dispatcher.  No autograd node is attached because
-// none of these operations are differentiable.
+// Implements isinf, isnan and isfinite by routing directly through the
+// backend dispatcher.  The predicates carry no autograd node — their Bool
+// output has no derivative.  ``nan_to_num`` does: it is the identity on
+// finite values, so it lives with the scalar-parameter ops
+// (``NanToNumBackward`` in ScalarParam.cpp) and this entry point delegates.
 
 #include "Predicate.h"
 
@@ -13,6 +15,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "ScalarParam.h"
 
 namespace lucid {
 
@@ -64,19 +67,7 @@ TensorImplPtr isfinite_op(const TensorImplPtr& a) {
 
 TensorImplPtr
 nan_to_num_op(const TensorImplPtr& a, double nan_val, double posinf_val, double neginf_val) {
-    Validator::input(a, "nan_to_num.a").non_null();
-    OpScopeFull scope{"nan_to_num", a->device(), a->dtype(), a->shape()};
-    scope.set_attr("nan", nan_val);
-    scope.set_attr("posinf", posinf_val);
-    scope.set_attr("neginf", neginf_val);
-    Storage out =
-        backend::Dispatcher::for_device(a->device())
-            .nan_to_num(a->storage(), a->shape(), a->dtype(), nan_val, posinf_val, neginf_val);
-    auto result = fresh(std::move(out), a->shape(), a->dtype(), a->device());
-    if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({a}, result);
-    }
-    return result;
+    return NanToNumBackward::forward(a, nan_val, posinf_val, neginf_val);
 }
 
 TensorImplPtr any_op(const TensorImplPtr& a) {

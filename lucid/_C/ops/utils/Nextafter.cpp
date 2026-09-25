@@ -20,12 +20,14 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
-#include "../../compile/Tracer.h"
+#include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
-#include "Layout.h"                     // broadcast_to_op
+#include "../../kernel/NaryKernel.h"
+#include "../gfunc/Gfunc.h"  // zeros_like_op
+#include "Layout.h"          // broadcast_to_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -145,11 +147,10 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
         const auto& gb = std::get<GpuStorage>(b->storage());
         auto result =
             fresh(Storage{nextafter_gpu_f32(ga, gb)}, a->shape(), a->dtype(), Device::GPU);
-        // No derivative, so no ``wire_autograd`` — and that is also what
-        // records a traced op's operands.  Without this ``lucid.compile``
-        // sees ``nextafter`` with no inputs and refuses the whole graph.
-        if (auto* trc = ::lucid::compile::current_tracer())
-            trc->on_op_io({a, b}, result);
+        // ``wire_autograd`` also records the op's operands on an active trace;
+        // without that ``lucid.compile`` sees no inputs and refuses the graph.
+        kernel::NaryKernel<NextafterBackward, 2>::wire_autograd(
+            std::make_shared<NextafterBackward>(), {a, b}, result, false);
         return result;
     }
 
@@ -171,9 +172,22 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
 
     Storage final_storage = to_device_storage(std::move(out), a->device(), a->shape());
     auto result = fresh(std::move(final_storage), a->shape(), a->dtype(), a->device());
-    if (auto* trc = ::lucid::compile::current_tracer())
-        trc->on_op_io({a, b}, result);
+    kernel::NaryKernel<NextafterBackward, 2>::wire_autograd(std::make_shared<NextafterBackward>(),
+                                                            {a, b}, result, false);
     return result;
 }
+
+const OpSchema NextafterBackward::schema_v1{"nextafter", 1, AmpPolicy::KeepInput, true};
+
+std::vector<Storage> NextafterBackward::apply(Storage grad_out) {
+    Storage zeros = backend::Dispatcher::for_device(device_).zeros(out_shape_, dtype_);
+    return {std::move(grad_out), std::move(zeros)};
+}
+
+std::vector<TensorImplPtr> NextafterBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {grad_out, zeros_like_op(grad_out)};
+}
+
+LUCID_REGISTER_OP(NextafterBackward)
 
 }  // namespace lucid

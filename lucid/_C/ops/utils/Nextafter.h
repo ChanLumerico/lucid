@@ -12,7 +12,12 @@
 
 #pragma once
 
+#include <vector>
+
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
@@ -62,6 +67,20 @@ namespace lucid {
 // ------
 // ValueError
 //     If ``a`` and ``b`` differ in dtype, or the dtype is not F32 / F64.
+// Autograd node for ``nextafter(a, b)``.
+//
+// The result is ``a`` moved by one unit in the last place, so within a
+// step it follows ``a`` exactly and does not depend on ``b`` at all: the
+// gradient is the incoming one for ``a`` and zero for ``b`` — the reference
+// framework's rule.  The op used to return a detached tensor, dropping the
+// gradient to ``a`` without a word.
+class LUCID_API NextafterBackward : public FuncOp<NextafterBackward, 2> {
+public:
+    static const OpSchema schema_v1;
+    std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+};
+
 LUCID_API TensorImplPtr nextafter_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

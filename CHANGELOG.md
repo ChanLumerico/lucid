@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse an output_padding outside the stride and dilation
 
+- nan_to_num and nextafter pass their gradients through
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0
