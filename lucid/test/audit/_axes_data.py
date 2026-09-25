@@ -136,6 +136,9 @@ _BY_NAME: "dict[str, Any]" = {
     "step_size": 2,
     "milestones": [2, 4],
     "total_iters": 5,
+    # Past its end ``OneCycleLR`` raises, as the reference does; the axis
+    # walks it six epochs and then six more from a resumed copy.
+    "total_steps": 20,
     "base_lr": 0.01,
     "max_lr": 0.1,
     "start_factor": 0.5,
@@ -157,7 +160,6 @@ _BY_NAME: "dict[str, Any]" = {
     "weights": [1.0] * 6,
     "scores": [0.0] * 6,
     "lr_lambda": (lambda epoch: 0.95**epoch),
-    "schedulers": None,  # filled in by the scheduler axis
     "policy": None,
 }
 
@@ -186,6 +188,11 @@ _VARIADIC: "dict[str, Any]" = {
 #: axis and its own subsystem axis — the same gap counted twice.
 _BUILD_BY_NAME: "dict[str, Any]" = {
     "data": lambda: lucid.tensor(np.linspace(0.1, 0.9, 12, dtype=np.float32)),
+    # ``SequentialLR`` and ``ChainedScheduler`` compose real schedulers.
+    # ``None`` here passed only while their constructors never looked at
+    # the list; the reference refuses it too.  The scheduler axis still
+    # passes its own.
+    "schedulers": lambda: [s for s in (_constant_scheduler(),) if s is not None],
     "vocab": _tiny_vocab,
     # The last handful of classes whose one required argument is an
     # object no annotation describes.  Each is one line and each was
