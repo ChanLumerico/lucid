@@ -69,6 +69,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -4312,8 +4313,8 @@ public:
             // PERF: contiguous before dW conv_general (see conv_nd_forward bench).
             auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(g_arr, perm_axes));
             auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(x_arr, perm_axes));
-            auto raw = ::mlx::core::conv_general(g_perm, x_perm, dv, pv, pv, sv, ones_n,
-                                                 /*groups=*/1, /*flip=*/false);
+            auto raw = gpu_conv_general(g_perm, x_perm, dv, pv, pv, sv, ones_n,
+                                        /*groups=*/1, /*flip=*/false);
             using SE = ::mlx::core::ShapeElem;
             ::mlx::core::Shape crop_lo(N + 2, 0);
             ::mlx::core::Shape crop_hi;
@@ -5211,8 +5212,8 @@ public:
             auto grad_nhwc = ::mlx::core::transpose(grad_arr, gpu_nchw_to_nhwc_perm(N));
             auto W_t_nhwc = ::mlx::core::transpose(W_arr, W_t_perm);
             auto dx_nhwc =
-                ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx, dv, sv,
-                                          /*groups=*/1, /*flip=*/true);
+                gpu_conv_general(grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx, dv, sv,
+                                 /*groups=*/1, /*flip=*/true);
             return ::mlx::core::transpose(dx_nhwc, gpu_nhwc_to_nchw_perm(N));
         };
 
@@ -5228,8 +5229,8 @@ public:
             // coincides with the correct mapping ONLY when dilation == 1 — every
             // dilated conv silently produced wrong weight gradients (the forward
             // and dx were correct, so it never surfaced).
-            auto dW_raw = ::mlx::core::conv_general(x_perm, g_perm, dv, pv, pv, sv, ones_n,
-                                                    /*groups=*/1, /*flip=*/false);
+            auto dW_raw = gpu_conv_general(x_perm, g_perm, dv, pv, pv, sv, ones_n,
+                                           /*groups=*/1, /*flip=*/false);
             ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
             crop_hi.push_back(local_Cin_g);
             for (int i = 0; i < N; ++i)
@@ -5581,6 +5582,98 @@ private:
         return ::mlx::core::slice(a, start, stop);
     }
 
+    // Convolution operands with their channels aligned, so MLX never pads them.
+    //
+    // MLX pads unaligned channels up to a multiple of 16 inside the Metal
+    // convolution — 2-D from 0.32.1 (``pad_in_channels_conv_2D_gpu``), 3-D in
+    // every release (``pad_and_slice_conv_3D_gpu``) — and fills the padding
+    // from a zero scalar it does not keep alive: the kernel reads it on the GPU
+    // after the function that made it has freed it.  When the allocator hands
+    // that buffer to another array first — any scalar written while the work is
+    // still queued, which ``async_eval`` makes routine — the padded channels
+    // take its value instead of zero and the convolution comes out wrong, whole
+    // layers off and some NaN (a ResNet on MNIST: 4 of 16 Metal training
+    // forwards on MLX 0.32.1).  Padding here, as a graph op, gives the same zero
+    // channels from buffers MLX tracks, and MLX then runs the kernel it padded
+    // for.  Both operands get the same extra channels, all zero, so every added
+    // product is zero and the result is exact.
+    //
+    // The conditions mirror MLX's own: groups == 1 and no input dilation, then
+    // for 2-D a stride-1 kernel of area >= 9 whose input channels are above 4
+    // and unaligned while its output channels are aligned; for 3-D any
+    // unaligned channels, output channels included (sliced off after).
+    struct AlignedConv {
+        ::mlx::core::array x;
+        ::mlx::core::array w;
+        int out_channels;  // O before padding; the caller slices when it grew
+        bool sliced;
+    };
+
+    static AlignedConv gpu_align_conv_channels(
+        ::mlx::core::array x, ::mlx::core::array w, int groups, bool stride_one, bool idil_one) {
+        const int n = static_cast<int>(x.ndim()) - 2;
+        const int C = static_cast<int>(x.shape(n + 1));
+        const int O = static_cast<int>(w.shape(0));
+        AlignedConv out{std::move(x), std::move(w), O, false};
+        if (groups != 1 || !idil_one || (n != 2 && n != 3) || C == 0 || O == 0)
+            return out;
+        const auto up16 = [](int v) { return (v + 15) / 16 * 16 - v; };
+        const bool o_aligned = O <= 16 || O % 16 == 0;
+        int extra_c = 0;
+        int extra_o = 0;
+        if (n == 2) {
+            const auto k_area = out.w.shape(1) * out.w.shape(2);
+            if (stride_one && k_area >= 9 && C > 4 && C % 16 != 0 && o_aligned)
+                extra_c = up16(C);
+        } else {
+            if (C % 16 != 0)
+                extra_c = up16(C);
+            if (!o_aligned)
+                extra_o = up16(O);
+        }
+        if (extra_c == 0 && extra_o == 0)
+            return out;
+        const auto zero_width = [](const ::mlx::core::array& a, int axis, int extra) {
+            std::vector<std::pair<int, int>> width(a.ndim(), {0, 0});
+            width[static_cast<std::size_t>(axis)] = {0, extra};
+            return ::mlx::core::pad(a, width,
+                                    ::mlx::core::array(static_cast<float>(0.0), a.dtype()));
+        };
+        if (extra_c > 0) {
+            out.x = zero_width(out.x, n + 1, extra_c);
+            out.w = zero_width(out.w, n + 1, extra_c);
+        }
+        if (extra_o > 0) {
+            out.w = zero_width(out.w, 0, extra_o);
+            out.sliced = true;
+        }
+        return out;
+    }
+
+    // ``mlx::core::conv_general`` over channel-aligned operands (see
+    // ``gpu_align_conv_channels``).  Every convolution this backend runs —
+    // forward, both gradients, transposed — goes through here or through
+    // ``gpu_mlx_conv_transpose``.
+    static ::mlx::core::array gpu_conv_general(const ::mlx::core::array& x,
+                                               const ::mlx::core::array& w,
+                                               const std::vector<int>& stride,
+                                               const std::vector<int>& pad_lo,
+                                               const std::vector<int>& pad_hi,
+                                               const std::vector<int>& kernel_dilation,
+                                               const std::vector<int>& input_dilation,
+                                               int groups,
+                                               bool flip) {
+        const auto all_one = [](const std::vector<int>& v) {
+            return std::all_of(v.begin(), v.end(), [](int e) { return e == 1; });
+        };
+        auto a = gpu_align_conv_channels(x, w, groups, all_one(stride), all_one(input_dilation));
+        auto y = ::mlx::core::conv_general(a.x, a.w, stride, pad_lo, pad_hi, kernel_dilation,
+                                           input_dilation, groups, flip);
+        if (a.sliced)
+            y = gpu_slice_axis(y, static_cast<int>(y.ndim()) - 1, 0, a.out_channels);
+        return y;
+    }
+
     // Forward convolution, with the same rank-5 group fallback as
     // ``gpu_mlx_conv_transpose`` below.  ``x_nhwc`` is channels-last and
     // ``W_nhwc`` is ``(out, K..., in / groups)``.
@@ -5598,14 +5691,14 @@ private:
             std::vector<::mlx::core::array> parts;
             parts.reserve(static_cast<std::size_t>(groups));
             for (int j = 0; j < groups; ++j)
-                parts.push_back(::mlx::core::conv_general(
-                    gpu_slice_axis(x_nhwc, N + 1, j * in_g, (j + 1) * in_g),
-                    gpu_slice_axis(W_nhwc, 0, j * out_g, (j + 1) * out_g), stride, pad, pad, dil,
-                    ones_n, /*groups=*/1, /*flip=*/false));
+                parts.push_back(
+                    gpu_conv_general(gpu_slice_axis(x_nhwc, N + 1, j * in_g, (j + 1) * in_g),
+                                     gpu_slice_axis(W_nhwc, 0, j * out_g, (j + 1) * out_g), stride,
+                                     pad, pad, dil, ones_n, /*groups=*/1, /*flip=*/false));
             return ::mlx::core::concatenate(std::move(parts), /*axis=*/N + 1);
         }
-        return ::mlx::core::conv_general(x_nhwc, W_nhwc, stride, pad, pad, dil, ones_n, groups,
-                                         /*flip=*/false);
+        return gpu_conv_general(x_nhwc, W_nhwc, stride, pad, pad, dil, ones_n, groups,
+                                /*flip=*/false);
     }
 
     static ::mlx::core::array gpu_mlx_conv_transpose(const ::mlx::core::array& x_nhwc,
@@ -5635,16 +5728,24 @@ private:
         if (N == 1)
             return ::mlx::core::conv_transpose1d(x_nhwc, W_nhwc, stride[0], pad[0], dil[0], opad[0],
                                                  groups);
-        if (N == 2)
-            return ::mlx::core::conv_transpose2d(
-                x_nhwc, W_nhwc, std::pair<int, int>{stride[0], stride[1]},
-                std::pair<int, int>{pad[0], pad[1]}, std::pair<int, int>{dil[0], dil[1]},
-                std::pair<int, int>{opad[0], opad[1]}, groups);
-        return ::mlx::core::conv_transpose3d(
-            x_nhwc, W_nhwc, std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
-            std::tuple<int, int, int>{pad[0], pad[1], pad[2]},
-            std::tuple<int, int, int>{dil[0], dil[1], dil[2]},
-            std::tuple<int, int, int>{opad[0], opad[1], opad[2]}, groups);
+        // MLX runs a transposed convolution as a stride-1 one whose input is
+        // dilated by ``stride``, so that is the convolution to align for.
+        const bool idil_one = std::all_of(stride, stride + N, [](int e) { return e == 1; });
+        auto a = gpu_align_conv_channels(x_nhwc, W_nhwc, groups, /*stride_one=*/true, idil_one);
+        ::mlx::core::array y =
+            N == 2
+                ? ::mlx::core::conv_transpose2d(a.x, a.w, std::pair<int, int>{stride[0], stride[1]},
+                                                std::pair<int, int>{pad[0], pad[1]},
+                                                std::pair<int, int>{dil[0], dil[1]},
+                                                std::pair<int, int>{opad[0], opad[1]}, groups)
+                : ::mlx::core::conv_transpose3d(
+                      a.x, a.w, std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
+                      std::tuple<int, int, int>{pad[0], pad[1], pad[2]},
+                      std::tuple<int, int, int>{dil[0], dil[1], dil[2]},
+                      std::tuple<int, int, int>{opad[0], opad[1], opad[2]}, groups);
+        if (a.sliced)
+            y = gpu_slice_axis(y, N + 1, 0, a.out_channels);
+        return y;
     }
 
     // Divide a summed pool by the per-output-position window span.
