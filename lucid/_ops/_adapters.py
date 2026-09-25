@@ -398,6 +398,21 @@ def _reshape_adapter(x_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
     return _C_engine.reshape(x_impl, s)
 
 
+def _transpose_adapter(
+    x_impl: _Impl, dim0: int | None = None, dim1: int | None = None
+) -> _Impl:
+    """transpose(x) swaps the last two axes; transpose(x, dim0, dim1) swaps those.
+
+    The two-axis form is the reference framework's, and code written for it
+    raised a TypeError here — the engine op takes no axes.
+    """
+    if dim0 is None and dim1 is None:
+        return _C_engine.transpose(x_impl)
+    if dim0 is None or dim1 is None:
+        raise TypeError("transpose takes no axes, or two: transpose(dim0, dim1)")
+    return _C_engine.swapaxes(x_impl, int(dim0), int(dim1))
+
+
 def _permute_adapter(x_impl: _Impl, *dims: int | Sequence[int]) -> _Impl:
     """permute(x, *dims) — accept variadic ints or single list/tuple."""
     if len(dims) == 1 and isinstance(dims[0], (list, tuple)):

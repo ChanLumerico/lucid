@@ -1586,28 +1586,37 @@ def permute(input: Tensor, *dims: _int | Sequence[_int]) -> Tensor:
     (4, 2, 3)
     """
     ...
-def transpose(input: Tensor) -> Tensor:
-    r"""    Swap the last two dimensions of ``input``.
+def transpose(input: Tensor, dim0: _int | None = ..., dim1: _int | None = ...) -> Tensor:
+    r"""    Reverse the axes of ``input``, or swap the two named.
     
-    The zero-argument form: for a 2-D tensor this is the matrix
-    transpose; for higher-rank tensors the final two axes are swapped
-    (batch dims are preserved).  On the CPU the result is a view with the
-    two strides swapped; on metal the data is copied.
+    Without axes this is NumPy's ``transpose``: the order of every axis is
+    reversed, which for a 2-D tensor is the matrix transpose (``.T`` is the
+    same; ``.mT`` swaps only the last two).  With ``dim0`` and ``dim1``,
+    those two are swapped, as the reference framework's ``transpose`` does.
+    On the CPU the result is a view with the strides permuted; on metal the
+    data is copied.
     
     Parameters
     ----------
     input : Tensor
         Source tensor with ``ndim >= 2``.
+    dim0, dim1 : int, optional
+        The two axes to swap.  Give both, or neither to reverse them all.
     
     Returns
     -------
     Tensor
-        ``input`` with its last two axes swapped — a non-contiguous view on
-        the CPU, a copy on metal.
+        ``input`` with its axes reversed or the two swapped — a
+        non-contiguous view on the CPU, a copy on metal.
+    
+    Raises
+    ------
+    TypeError
+        If only one of ``dim0`` and ``dim1`` is given.
     
     Notes
     -----
-    To swap arbitrary axes use :func:`permute` or :func:`movedim`.
+    To reorder more than two axes use :func:`permute` or :func:`movedim`.
     Because the output is non-contiguous, downstream ops requiring a flat
     layout should follow with :func:`contiguous`.
     
@@ -1616,7 +1625,9 @@ def transpose(input: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.zeros(2, 3, 4)
     >>> lucid.transpose(x).shape
-    (2, 4, 3)
+    (4, 3, 2)
+    >>> lucid.transpose(x, 0, 1).shape
+    (3, 2, 4)
     """
     ...
 def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:

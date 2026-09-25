@@ -210,7 +210,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("flatten",    _R.flatten,    1, method_name="flatten",    free_fn_name="flatten",
             extra_kwargs=["start", "end"]),
     OpEntry("permute",    A._permute_adapter, 1, method_name="permute",    free_fn_name="permute"),
-    OpEntry("transpose",  _R.transpose,  1, method_name="transpose",  free_fn_name="transpose"),
+    OpEntry("transpose",  A._transpose_adapter, 1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   _R.swapaxes,   1, method_name="swapaxes",
             extra_kwargs=["d0", "d1"]),  # positional: swapaxes(d0, d1)
     # broadcast_to is expand without the -1: a view on the CPU, as expand is.
