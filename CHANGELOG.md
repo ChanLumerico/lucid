@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- where differentiates twice and reaches a broadcast operand
+
 ---
 
 ## [3.15.2] — 2026-09-26

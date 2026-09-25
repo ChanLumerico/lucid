@@ -78,34 +78,28 @@ def test_the_two_branches_sum_to_the_incoming_gradient() -> None:
 # ── where, which unblocked the rest ───────────────────────────────────────────
 
 
-def test_where_refuses_create_graph_rather_than_answering_wrongly() -> None:
-    """A graph-mode derivative for ``where`` was written and reverted.
+def test_where_differentiates_twice() -> None:
+    """``where`` refused ``create_graph`` for a while, for the wrong reason.
 
-    Routing the gradient with the same condition is right when the two
-    branches are independent, and wrong when they share a subexpression.
-    ``cdist`` computes ``where(sq == 0, zeros_like(sq), sqrt(sq))``, where
-    both branches come from ``sq``, and the second derivative came back
-    ``[0.447, -1.252]`` against a true ``[-0.143, -0.072]``: right
-    magnitude class, wrong value, wrong sign.
+    Its graph-mode derivative was written and reverted because ``cdist``'s
+    second derivative came back wrong.  The fault was upstream: ``where``
+    keeps no reference to its operands, so ``sqrt``'s output was dropped
+    and rebuilt as a leaf by ``sqrt``'s graph-mode backward, making its
+    formula ``g / 2y`` treat ``y`` as a constant.  The rebuild keeps the
+    output's history now (``test_where_gradients.py``).
 
-    ``where`` alone is correct even with both branches differentiable and
-    an x-dependent condition, so the fault is in how the two returned
-    gradients meet again upstream — isolated, not yet understood.
-
-    Refusing is the honest answer until it is.  A wrong second derivative
-    is worse than a missing one: it trains.  ``softplus`` is written over
-    ``where`` and so is refused with it.
+    ``softplus`` is written over ``where`` and was refused with it; its
+    second derivative is ``sigmoid(x) * (1 - sigmoid(x))``.
     """
-    condition = lucid.tensor(np.array([True, False, True, False, True]))
-    a = lucid.tensor(A.copy(), requires_grad=True)
-    b = lucid.tensor(B.copy(), requires_grad=True)
-    out = lucid.where(condition, a, b)
-    with pytest.raises(RuntimeError, match="create_graph"):
-        lucid.autograd.grad(out.sum(), [a], create_graph=True)
+    x = lucid.tensor(A.copy(), requires_grad=True)
+    (g,) = lucid.autograd.grad(F.softplus(x).sum(), [x], create_graph=True)
+    (h,) = lucid.autograd.grad(g.sum(), [x])
+    s = 1.0 / (1.0 + np.exp(-A))
+    np.testing.assert_allclose(np.asarray(h.numpy()), s * (1.0 - s), rtol=1e-5)
 
 
 def test_wheres_eager_gradient_is_unaffected() -> None:
-    """Only the graph-mode path is missing; ordinary backward still works."""
+    """The first-order routing: each branch gets the gradient where it was chosen."""
     condition = lucid.tensor(np.array([True, False, True, False, True]))
     a = lucid.tensor(A.copy(), requires_grad=True)
     b = lucid.tensor(B.copy(), requires_grad=True)

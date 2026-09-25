@@ -50,7 +50,9 @@
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
+#include "../ufunc/Reductions.h"
 #include "Layout.h"  // broadcast_to_op
+#include "View.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -118,36 +120,70 @@ Storage diagonal_backward_storage(const Storage& grad,
 //   cond/x/y_tensor_ — weak refs for version checking.
 //
 // Backward: grad_out * cond → dx,  grad_out * ~cond → dy.
+// Sum a gradient over the axes broadcasting expanded, back to ``shape`` —
+// the graph-mode counterpart of ``reduce_grad_to_shape``, as
+// ``BinaryKernel::reduce_impl_to_shape`` is for the binary ops.
+TensorImplPtr sum_to_shape(const TensorImplPtr& grad, const Shape& shape) {
+    if (grad->shape() == shape)
+        return grad;
+    const auto& gs = grad->shape();
+    const int ng = static_cast<int>(gs.size());
+    const int nt = static_cast<int>(shape.size());
+    std::vector<int> axes;
+    for (int i = 0; i < ng - nt; ++i)
+        axes.push_back(i);
+    for (int i = 0; i < nt; ++i)
+        if (shape[static_cast<std::size_t>(i)] == 1 &&
+            gs[static_cast<std::size_t>(i + ng - nt)] != 1)
+            axes.push_back(i + ng - nt);
+    auto reduced = axes.empty() ? grad : sum_op(grad, axes, false);
+    return reduced->shape() == shape ? reduced : reshape_op(reduced, shape);
+}
+
 class WhereBackward : public AutogradNode<WhereBackward, 2> {
 public:
     static const OpSchema schema_v1;
 
     Storage cond_;
     Shape shape_;
+    // Each operand's own shape.  On the GPU MLX broadcasts them natively,
+    // so a branch's gradient has the output's shape and must be summed back
+    // to the operand's — a ``(1, 3)`` operand of a ``(2, 3)`` result used to
+    // receive the first row, not the column sums.  The CPU expands them
+    // first, and there the shapes already agree.
+    Shape cond_shape_;
+    Shape x_shape_;
+    Shape y_shape_;
     std::weak_ptr<TensorImpl> cond_tensor_;
     std::weak_ptr<TensorImpl> x_tensor_;
     std::weak_ptr<TensorImpl> y_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        return {where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true),
-                where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false)};
+        Storage dx = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true);
+        Storage dy = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false);
+        if (x_shape_ != shape_)
+            dx = reduce_grad_to_shape(dx, shape_, x_shape_, dtype_, device_);
+        if (y_shape_ != shape_)
+            dy = reduce_grad_to_shape(dy, shape_, y_shape_, dtype_, device_);
+        return {std::move(dx), std::move(dy)};
     }
 
-    // No ``apply_for_graph``, deliberately.
+    // Graph mode: the same routing, built from ops, so the gradient is
+    // differentiable in turn.
     //
-    // One was written and reverted.  Routing the gradient with the same
-    // condition is right when the branches are independent, and wrong
-    // when they share a subexpression: ``cdist`` computes
-    // ``where(sq == 0, zeros_like(sq), sqrt(sq))``, where both branches
-    // come from ``sq``, and the second derivative came back
-    // ``[0.447, -1.252]`` against a true ``[-0.143, -0.072]`` — right
-    // magnitude class, wrong value, wrong sign.  Isolated to this node by
-    // bisecting the composite; ``where`` alone is correct even with both
-    // branches differentiable and an x-dependent condition, so the fault
-    // is in how the two returned gradients meet again upstream.
-    //
-    // Refusing is the honest answer until that is understood.  A wrong
-    // second derivative is worse than a missing one: it trains.
+    // It was written once before and reverted: ``cdist``'s second derivative
+    // came back wrong, and ``where`` took the blame.  The fault was upstream.
+    // ``cdist`` is ``where(sq == 0, 0, sqrt(sq))``, this node pins neither
+    // branch, so ``sqrt``'s output was dropped — and its graph-mode backward
+    // rebuilt it as a leaf, turning ``g / 2y`` into a formula with a
+    // constant ``y``.  The rebuild now keeps the output's grad_fn
+    // (``UnaryKernel::apply_for_graph``), which is what made this safe.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        auto cond = std::make_shared<TensorImpl>(cond_, cond_shape_, Dtype::Bool, device_, false);
+        auto zero = zeros_like_op(grad_out);
+        return {sum_to_shape(where_op(cond, grad_out, zero), x_shape_),
+                sum_to_shape(where_op(cond, zero, grad_out), y_shape_)};
+    }
 
     void validate_versions() override {
         check_version_match(cond_tensor_, saved_versions_.size() > 0 ? saved_versions_[0] : 0,
@@ -323,6 +359,9 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     auto bwd = std::make_shared<WhereBackward>();
     bwd->cond_ = cond->storage();
     bwd->shape_ = out->shape();
+    bwd->cond_shape_ = cond->shape();
+    bwd->x_shape_ = x->shape();
+    bwd->y_shape_ = y->shape();
     bwd->dtype_ = out->dtype();
     bwd->device_ = out->device();
     bwd->cond_tensor_ = cond;
