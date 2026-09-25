@@ -63,6 +63,8 @@ OPTIMIZER_FACTORIES = [
     pytest.param(lambda p: optim.SGD(p, lr=0.05, momentum=0.9), id="SGD_momentum"),
     pytest.param(lambda p: optim.Adam(p, lr=0.05), id="Adam"),
     pytest.param(lambda p: optim.AdamW(p, lr=0.05), id="AdamW"),
+    pytest.param(lambda p: optim.Adam(p, lr=0.05, amsgrad=True), id="Adam_amsgrad"),
+    pytest.param(lambda p: optim.AdamW(p, lr=0.05, amsgrad=True), id="AdamW_amsgrad"),
     pytest.param(lambda p: optim.RMSprop(p, lr=0.05), id="RMSprop"),
     pytest.param(lambda p: optim.Adagrad(p, lr=0.05), id="Adagrad"),
     pytest.param(lambda p: optim.Adadelta(p, lr=0.05), id="Adadelta"),
@@ -99,7 +101,6 @@ OPTIMIZER_FACTORIES = [
 # What is still refused is a configuration flag the compiled update
 # does not implement.  Each would otherwise be dropped without a word.
 UNSUPPORTED_OPTIMIZERS = [
-    pytest.param(lambda p: optim.Adam(p, lr=0.05, amsgrad=True), id="Adam_amsgrad"),
     pytest.param(
         lambda p: optim.RMSprop(p, lr=0.05, centered=True), id="RMSprop_centered"
     ),
@@ -199,6 +200,38 @@ def test_fused_step_parity(mk_opt: object) -> None:
 
     worst = _max_diff(eager_state, comp_state)
     assert worst < 1e-4, f"fused_step drift = {worst:.3e}"
+
+
+@pytest.mark.parametrize("cls", [optim.Adam, optim.AdamW], ids=["Adam", "AdamW"])
+def test_compiled_amsgrad_tracks_the_running_maximum(cls: object) -> None:
+    """AMSGrad over steps whose gradients shrink, compiled against eager.
+
+    One step cannot tell AMSGrad from Adam — the maximum of a zero buffer
+    and ``v`` is ``v`` — so this runs several, with a large gradient
+    followed by many small ones, where the running maximum and ``v`` part.
+    """
+    lucid.manual_seed(0)
+    w0 = lucid.randn(4, 3)
+    scales = (10.0, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01)
+    grads = [lucid.randn(4, 3) * s for s in scales]
+
+    def run(compiled: bool, amsgrad: bool) -> lucid.Tensor:
+        p = nn.Parameter(w0.to(COMPILE_DEVICE).detach().clone())
+        opt = cls(  # type: ignore[operator]
+            [p], lr=0.1, betas=(0.9, 0.5), amsgrad=amsgrad
+        )
+        stepper = compile_optimizer(opt) if compiled else opt
+        for g in grads:
+            p.grad = g.to(COMPILE_DEVICE)
+            stepper.step()
+        return p.detach()
+
+    eager, compiled = run(False, True), run(True, True)
+    plain = run(False, False)
+    assert float((eager - compiled).abs().max().item()) < 1e-5
+    # The case has to exercise the maximum, or the parity above says nothing:
+    # beta2 at 0.5 lets ``v`` fall fast after the large gradient.
+    assert float((eager - plain).abs().max().item()) > 1e-2
 
 
 @pytest.mark.parametrize("mk_opt", UNSUPPORTED_OPTIMIZERS)

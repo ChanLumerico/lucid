@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - nan_to_num and nextafter pass their gradients through
 
+- Adam and AdamW run AMSGrad when asked
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

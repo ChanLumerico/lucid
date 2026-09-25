@@ -899,13 +899,9 @@ class _CompiledAdam(_CompiledStepBase):
     update (coupled L₂), matching the eager :class:`~lucid.optim.Adam`.
     Use :class:`_CompiledAdamW` for the decoupled variant.
 
-    Raises (at construct time)
-    --------------------------
-    NotImplementedError
-        When ``amsgrad=True`` is set.  The maximum-history variant
-        keeps an extra running max of the second moment — a
-        straightforward extension once the test surface for it
-        lands.
+    With ``amsgrad=True`` the denominator uses the running maximum of the
+    second moment (Reddi et al., 2018), kept in a third state buffer and
+    bias-corrected after the maximum, as the eager optimizer does.
 
     See Also
     --------
@@ -926,9 +922,6 @@ class _CompiledAdam(_CompiledStepBase):
         TypeError
             If ``opt`` is not an :class:`~lucid.optim.adam.Adam`
             instance.
-        NotImplementedError
-            If ``amsgrad=True`` is set — the maximum-history variant
-            isn't supported on the compile path.
         """
         from lucid.optim.adam import Adam
 
@@ -938,10 +931,7 @@ class _CompiledAdam(_CompiledStepBase):
             raise TypeError(f"_CompiledAdam: expected Adam, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        if g.get("amsgrad", False):
-            raise NotImplementedError(
-                "compile_optimizer: AMSGrad variant not yet supported."
-            )
+        self._amsgrad = bool(g.get("amsgrad", False))
         spec = OptimizerSpec.from_optim(opt)
         self._spec = spec
         self._lr = spec.lr
@@ -955,6 +945,10 @@ class _CompiledAdam(_CompiledStepBase):
         for i in range(len(self._params)):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
+        # AMSGrad: the running maximum of ``v``, empty without it.
+        self._vmax_buf = [_zeros_like(p) for p in self._params] if self._amsgrad else []
+        for i in range(len(self._vmax_buf)):
+            self._buffer_table[("vmax", i)] = _list_getter(self._vmax_buf, i)
 
     @override
     def _register_state_in_inputs(
@@ -965,6 +959,8 @@ class _CompiledAdam(_CompiledStepBase):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
+        for i, vmax in enumerate(self._vmax_buf):
+            register("vmax", i, vmax)
 
     @override
     def _register_scalars(
@@ -1001,6 +997,8 @@ class _CompiledAdam(_CompiledStepBase):
         Returns ``new_params + new_m + new_v`` in that order;
         :meth:`_outputs_to_targets` must mirror it.
         """
+        import lucid as _lucid
+
         bias1 = scalars["bias1"]
         bias2 = scalars["bias2"]
         params = self._params
@@ -1014,24 +1012,35 @@ class _CompiledAdam(_CompiledStepBase):
         new_params: list[Tensor] = []
         new_m: list[Tensor] = []
         new_v: list[Tensor] = []
+        new_vmax: list[Tensor] = []
         for i, (p, g) in enumerate(zip(params, grads)):
             if wd != 0.0:
                 g = g + wd * p
             m_t = beta1 * m_buf[i] + (1.0 - beta1) * g
             v_t = beta2 * v_buf[i] + (1.0 - beta2) * (g * g)
             m_hat = m_t / bias1
-            v_hat = v_t / bias2
+            if self._amsgrad:
+                v_t_max = _lucid.maximum(self._vmax_buf[i], v_t)
+                new_vmax.append(v_t_max)
+                v_hat = v_t_max / bias2
+            else:
+                v_hat = v_t / bias2
             denom = v_hat.sqrt() + eps
             p_t = p - lr * m_hat / denom
             new_params.append(p_t)
             new_m.append(m_t)
             new_v.append(v_t)
-        return new_params + new_m + new_v
+        return new_params + new_m + new_v + new_vmax
 
     @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
-        """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` in order."""
-        return list(self._params) + list(self._m_buf) + list(self._v_buf)
+        """Map outputs to ``params``, ``m_buf``, ``v_buf`` then ``vmax_buf``."""
+        return (
+            list(self._params)
+            + list(self._m_buf)
+            + list(self._v_buf)
+            + list(self._vmax_buf)
+        )
 
     @override
     def _refresh_scalars(self) -> None:
@@ -1123,12 +1132,17 @@ class _CompiledAdamW(_CompiledAdam):
         # AdamW default weight_decay is 0.01 (not 0); spec handles via param_group.
         g = opt.param_groups[0]
         self._weight_decay = _hp(g, "weight_decay", 0.01)
+        self._amsgrad = bool(g.get("amsgrad", False))
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
             self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
             self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
+        # AMSGrad: the running maximum of ``v``, empty without it.
+        self._vmax_buf = [_zeros_like(p) for p in self._params] if self._amsgrad else []
+        for i in range(len(self._vmax_buf)):
+            self._buffer_table[("vmax", i)] = _list_getter(self._vmax_buf, i)
 
     @override
     def _trace_update(
@@ -1144,6 +1158,8 @@ class _CompiledAdamW(_CompiledAdam):
         rather than folded into the gradient.  This avoids skewing
         the second-moment estimate by the decay term.
         """
+        import lucid as _lucid
+
         bias1 = scalars["bias1"]
         bias2 = scalars["bias2"]
         params = self._params
@@ -1157,18 +1173,24 @@ class _CompiledAdamW(_CompiledAdam):
         new_params: list[Tensor] = []
         new_m: list[Tensor] = []
         new_v: list[Tensor] = []
+        new_vmax: list[Tensor] = []
         for i, (p, g) in enumerate(zip(params, grads)):
             m_t = beta1 * m_buf[i] + (1.0 - beta1) * g
             v_t = beta2 * v_buf[i] + (1.0 - beta2) * (g * g)
             m_hat = m_t / bias1
-            v_hat = v_t / bias2
+            if self._amsgrad:
+                v_t_max = _lucid.maximum(self._vmax_buf[i], v_t)
+                new_vmax.append(v_t_max)
+                v_hat = v_t_max / bias2
+            else:
+                v_hat = v_t / bias2
             denom = v_hat.sqrt() + eps
             # Decoupled weight decay: ``p - lr * (m_hat / denom + wd * p)``
             p_t = p - lr * (m_hat / denom + wd * p)
             new_params.append(p_t)
             new_m.append(m_t)
             new_v.append(v_t)
-        return new_params + new_m + new_v
+        return new_params + new_m + new_v + new_vmax
 
 
 # ── RMSprop ─────────────────────────────────────────────────────────
@@ -1937,8 +1959,10 @@ class _CompiledSparseAdam(_CompiledAdam):
         self._beta1 = float(betas[0])
         self._beta2 = float(betas[1])
         self._eps = _hp(g, "eps", 1e-8)
-        # SparseAdam exposes no weight_decay knob in its constructor.
+        # SparseAdam exposes no weight_decay or amsgrad knob in its constructor.
         self._weight_decay = 0.0
+        self._amsgrad = False
+        self._vmax_buf: list[Tensor] = []
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0

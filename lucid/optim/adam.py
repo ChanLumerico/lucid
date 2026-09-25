@@ -108,6 +108,7 @@ class Adam(Optimizer):
                 cast(float, group.get("beta2", 0.999)),
                 cast(float, group.get("eps", 1e-8)),
                 cast(float, group.get("weight_decay", 0.0)),
+                bool(group.get("amsgrad", False)),
             )
         )
 
@@ -253,6 +254,7 @@ class AdamW(Optimizer):
                 cast(float, group.get("beta2", 0.999)),
                 cast(float, group.get("eps", 1e-8)),
                 cast(float, group.get("weight_decay", 1e-2)),
+                bool(group.get("amsgrad", False)),
             )
         )
 

@@ -318,6 +318,9 @@ private:
 
     std::vector<Storage> m_;  // Per-parameter first-moment estimates.
     std::vector<Storage> v_;  // Per-parameter second-moment estimates.
+    // AMSGrad only: per-parameter running maximum of ``v`` (the reference
+    // framework's ``max_exp_avg_sq``).  Empty storages otherwise.
+    std::vector<Storage> vmax_;
 
     // 3.4 perf: see AdamScalarCache documentation above.
     AdamScalarCache scalar_cache_;
@@ -403,12 +406,16 @@ public:
     //     Denominator stabiliser $\epsilon$.  Default ``1e-8``.
     // weight_decay : float, optional
     //     Decoupled penalty coefficient $\lambda$.  Default ``1e-2``.
+    // amsgrad : bool, optional
+    //     Use the running maximum of the second moment in the denominator
+    //     (Reddi et al., 2018).  Default ``false``.
     AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
           double lr = 1e-3,
           double beta1 = 0.9,
           double beta2 = 0.999,
           double eps = 1e-8,
-          double weight_decay = 1e-2);
+          double weight_decay = 1e-2,
+          bool amsgrad = false);
 
     // Set the learning rate and invalidate the scalar cache.
     //
@@ -463,10 +470,12 @@ private:
     double lr_;
     double beta1_, beta2_, eps_;
     double weight_decay_;
+    bool amsgrad_;
     std::int64_t step_count_;
 
     std::vector<Storage> m_;
     std::vector<Storage> v_;
+    std::vector<Storage> vmax_;  // AMSGrad running maximum of ``v``.
 
     // 3.4 perf: see AdamScalarCache documentation above.
     AdamScalarCache scalar_cache_;

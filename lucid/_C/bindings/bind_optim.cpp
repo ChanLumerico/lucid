@@ -88,9 +88,10 @@ void register_optim(py::module_& m) {
     // folded into the gradient (Loshchilov & Hutter 2017).
     py::class_<AdamW, Optimizer>(m, "AdamW")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double>(),
+                      double, bool>(),
              py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 1e-2,
+             py::arg("amsgrad") = false,
              "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
 
     // ASGD averages parameters after t0 steps; useful for convex problems.

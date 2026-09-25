@@ -8,6 +8,7 @@
 
 #include "Adam.h"
 
+#include <algorithm>
 #include <cmath>
 #include <variant>
 
@@ -46,6 +47,7 @@ void adam_step_cpu(T* param,
                    const T* grad,
                    T* m_buf,
                    T* v_buf,
+                   T* vmax_buf,
                    std::size_t numel,
                    double lr,
                    double beta1,
@@ -78,7 +80,14 @@ void adam_step_cpu(T* param,
         m_buf[i] = b1T * m_buf[i] + omb1 * g;
         v_buf[i] = b2T * v_buf[i] + omb2 * g * g;
         const T m_hat = m_buf[i] * inv_bc1;
-        const T v_hat = v_buf[i] * inv_bc2;
+        // AMSGrad keeps the largest ``v`` seen and corrects that for bias,
+        // as the reference framework does; ``vmax_buf`` is null otherwise.
+        T v_used = v_buf[i];
+        if (vmax_buf != nullptr) {
+            vmax_buf[i] = std::max(vmax_buf[i], v_buf[i]);
+            v_used = vmax_buf[i];
+        }
+        const T v_hat = v_used * inv_bc2;
         param[i] -= lrT * m_hat / (std::sqrt(v_hat) + epsT);
     }
 }
@@ -140,6 +149,7 @@ void adam_step_gpu_cached(GpuStorage& param_g,
                           const GpuStorage& grad_g,
                           GpuStorage& m_g,
                           GpuStorage& v_g,
+                          GpuStorage* vmax_g,
                           Dtype dt,
                           double weight_decay,
                           bool decoupled_wd,
@@ -172,7 +182,12 @@ void adam_step_gpu_cached(GpuStorage& param_g,
     //   step = (lr * sqrt(bc2) / bc1) * m_new / (sqrt(v_new) + eps * sqrt(bc2))
     // and saves the two ``m_hat`` / ``v_hat`` materialisations (2 full-
     // tensor multiplies) per parameter.
-    auto denom = ::mlx::core::add(::mlx::core::sqrt(v_new), *cache.eps_eff_a);
+    auto v_used = v_new;
+    if (vmax_g != nullptr) {
+        v_used = ::mlx::core::maximum(*vmax_g->arr, v_new);
+        vmax_g->arr = gpu::wrap_mlx_array(::mlx::core::array(v_used), dt).arr;
+    }
+    auto denom = ::mlx::core::add(::mlx::core::sqrt(v_used), *cache.eps_eff_a);
     auto step_arr = ::mlx::core::multiply(*cache.lr_eff_a, ::mlx::core::divide(m_new, denom));
     auto new_param = ::mlx::core::subtract(*param_g.arr, step_arr);
     param_g.arr = gpu::wrap_mlx_array(std::move(new_param), dt).arr;
@@ -205,8 +220,6 @@ Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
         ErrorBuilder("Adam").fail("eps must be >= 0");
     if (weight_decay_ < 0.0)
         ErrorBuilder("Adam").fail("weight_decay must be >= 0");
-    if (amsgrad_)
-        ErrorBuilder("Adam").not_implemented("amsgrad not yet supported");
 }
 
 // Allocate zero-initialized first- and second-moment buffers.
@@ -217,6 +230,11 @@ void Adam::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImp
         v_.resize(params_.size());
     m_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
     v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    if (amsgrad_) {
+        if (vmax_.size() < params_.size())
+            vmax_.resize(params_.size());
+        vmax_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    }
 }
 
 // Advance the global step counter on the first parameter of each step,
@@ -245,7 +263,9 @@ void Adam::update_one(std::size_t slot_idx,
             refresh_adam_scalar_cache(scalar_cache_, param->dtype(), lr_, beta1_, beta2_, eps_,
                                       weight_decay_, false, step_count_);
         }
-        adam_step_gpu_cached(pg, gg, mg, vg, param->dtype(), weight_decay_, false, scalar_cache_);
+        GpuStorage* vmg = amsgrad_ ? &storage_gpu(vmax_[slot_idx]) : nullptr;
+        adam_step_gpu_cached(pg, gg, mg, vg, vmg, param->dtype(), weight_decay_, false,
+                             scalar_cache_);
         pg.bump_version();
         return;
     }
@@ -253,19 +273,22 @@ void Adam::update_one(std::size_t slot_idx,
     const auto& gc = storage_cpu(grad);
     auto& mc = storage_cpu(m_[slot_idx]);
     auto& vc = storage_cpu(v_[slot_idx]);
+    CpuStorage* vmc = amsgrad_ ? &storage_cpu(vmax_[slot_idx]) : nullptr;
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
     case Dtype::F32:
         adam_step_cpu<float>(
             reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
-            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()), numel,
-            lr_, beta1_, beta2_, eps_, weight_decay_, false, step_count_);
+            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()),
+            vmc ? reinterpret_cast<float*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
+            eps_, weight_decay_, false, step_count_);
         break;
     case Dtype::F64:
         adam_step_cpu<double>(
             reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
-            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()), numel,
-            lr_, beta1_, beta2_, eps_, weight_decay_, false, step_count_);
+            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()),
+            vmc ? reinterpret_cast<double*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
+            eps_, weight_decay_, false, step_count_);
         break;
     default:
         ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
@@ -279,20 +302,27 @@ std::vector<Optimizer::NamedBuffers> Adam::state_buffers() const {
         return out;
     std::vector<std::shared_ptr<TensorImpl>> ms;
     std::vector<std::shared_ptr<TensorImpl>> vs;
+    std::vector<std::shared_ptr<TensorImpl>> vmaxs;
     ms.reserve(params_.size());
     vs.reserve(params_.size());
     for (std::size_t i = 0; i < params_.size(); ++i) {
         if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
             ms.push_back(nullptr);
             vs.push_back(nullptr);
+            vmaxs.push_back(nullptr);
             continue;
         }
         const auto& p = params_[i];
         ms.push_back(clone_state_storage(m_[i], p->shape(), p->dtype(), p->device()));
         vs.push_back(clone_state_storage(v_[i], p->shape(), p->dtype(), p->device()));
+        vmaxs.push_back(amsgrad_
+                            ? clone_state_storage(vmax_[i], p->shape(), p->dtype(), p->device())
+                            : nullptr);
     }
     out.emplace_back("exp_avg", std::move(ms));
     out.emplace_back("exp_avg_sq", std::move(vs));
+    if (amsgrad_)
+        out.emplace_back("max_exp_avg_sq", std::move(vmaxs));
     return out;
 }
 
@@ -301,6 +331,8 @@ void Adam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
         m_.resize(params_.size());
     if (v_.size() != params_.size())
         v_.resize(params_.size());
+    if (amsgrad_ && vmax_.size() != params_.size())
+        vmax_.resize(params_.size());
     if (state_initialized_.size() != params_.size())
         state_initialized_.assign(params_.size(), false);
     for (const auto& [name, tensors] : bufs) {
@@ -309,6 +341,8 @@ void Adam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
             dst = &m_;
         else if (name == "exp_avg_sq")
             dst = &v_;
+        else if (name == "max_exp_avg_sq" && amsgrad_)
+            dst = &vmax_;
         else
             continue;
         for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
@@ -328,13 +362,15 @@ AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
              double beta1,
              double beta2,
              double eps,
-             double weight_decay)
+             double weight_decay,
+             bool amsgrad)
     : Optimizer(std::move(params)),
       lr_(lr),
       beta1_(beta1),
       beta2_(beta2),
       eps_(eps),
       weight_decay_(weight_decay),
+      amsgrad_(amsgrad),
       step_count_(0) {
     if (lr_ < 0.0)
         ErrorBuilder("AdamW").fail("lr must be >= 0");
@@ -356,6 +392,11 @@ void AdamW::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorIm
         v_.resize(params_.size());
     m_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
     v_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    if (amsgrad_) {
+        if (vmax_.size() < params_.size())
+            vmax_.resize(params_.size());
+        vmax_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    }
 }
 
 // Same as Adam::update_one but with decoupled_wd = true, directing the
@@ -379,7 +420,9 @@ void AdamW::update_one(std::size_t slot_idx,
             refresh_adam_scalar_cache(scalar_cache_, param->dtype(), lr_, beta1_, beta2_, eps_,
                                       weight_decay_, true, step_count_);
         }
-        adam_step_gpu_cached(pg, gg, mg, vg, param->dtype(), weight_decay_, true, scalar_cache_);
+        GpuStorage* vmg = amsgrad_ ? &storage_gpu(vmax_[slot_idx]) : nullptr;
+        adam_step_gpu_cached(pg, gg, mg, vg, vmg, param->dtype(), weight_decay_, true,
+                             scalar_cache_);
         pg.bump_version();
         return;
     }
@@ -387,19 +430,22 @@ void AdamW::update_one(std::size_t slot_idx,
     const auto& gc = storage_cpu(grad);
     auto& mc = storage_cpu(m_[slot_idx]);
     auto& vc = storage_cpu(v_[slot_idx]);
+    CpuStorage* vmc = amsgrad_ ? &storage_cpu(vmax_[slot_idx]) : nullptr;
     const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
     switch (param->dtype()) {
     case Dtype::F32:
         adam_step_cpu<float>(
             reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
-            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()), numel,
-            lr_, beta1_, beta2_, eps_, weight_decay_, true, step_count_);
+            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()),
+            vmc ? reinterpret_cast<float*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
+            eps_, weight_decay_, true, step_count_);
         break;
     case Dtype::F64:
         adam_step_cpu<double>(
             reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
-            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()), numel,
-            lr_, beta1_, beta2_, eps_, weight_decay_, true, step_count_);
+            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()),
+            vmc ? reinterpret_cast<double*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
+            eps_, weight_decay_, true, step_count_);
         break;
     default:
         ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
@@ -413,20 +459,27 @@ std::vector<Optimizer::NamedBuffers> AdamW::state_buffers() const {
         return out;
     std::vector<std::shared_ptr<TensorImpl>> ms;
     std::vector<std::shared_ptr<TensorImpl>> vs;
+    std::vector<std::shared_ptr<TensorImpl>> vmaxs;
     ms.reserve(params_.size());
     vs.reserve(params_.size());
     for (std::size_t i = 0; i < params_.size(); ++i) {
         if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
             ms.push_back(nullptr);
             vs.push_back(nullptr);
+            vmaxs.push_back(nullptr);
             continue;
         }
         const auto& p = params_[i];
         ms.push_back(clone_state_storage(m_[i], p->shape(), p->dtype(), p->device()));
         vs.push_back(clone_state_storage(v_[i], p->shape(), p->dtype(), p->device()));
+        vmaxs.push_back(amsgrad_
+                            ? clone_state_storage(vmax_[i], p->shape(), p->dtype(), p->device())
+                            : nullptr);
     }
     out.emplace_back("exp_avg", std::move(ms));
     out.emplace_back("exp_avg_sq", std::move(vs));
+    if (amsgrad_)
+        out.emplace_back("max_exp_avg_sq", std::move(vmaxs));
     return out;
 }
 
@@ -435,6 +488,8 @@ void AdamW::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
         m_.resize(params_.size());
     if (v_.size() != params_.size())
         v_.resize(params_.size());
+    if (amsgrad_ && vmax_.size() != params_.size())
+        vmax_.resize(params_.size());
     if (state_initialized_.size() != params_.size())
         state_initialized_.assign(params_.size(), false);
     for (const auto& [name, tensors] : bufs) {
@@ -443,6 +498,8 @@ void AdamW::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
             dst = &m_;
         else if (name == "exp_avg_sq")
             dst = &v_;
+        else if (name == "max_exp_avg_sq" && amsgrad_)
+            dst = &vmax_;
         else
             continue;
         for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
