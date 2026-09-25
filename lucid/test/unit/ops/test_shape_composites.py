@@ -59,30 +59,26 @@ def test_adjoint_of_a_complex_matrix_is_its_conjugate_transpose():
     assert np.allclose(_v(lucid.adjoint(z)), np.array([[1 - 2j], [3 + 1j]]))
 
 
-def test_the_engines_NotImplementedError_is_not_the_builtin_one():
-    """Recorded as a trap, not endorsed.
+def test_the_engines_NotImplementedError_is_the_builtin_one_too():
+    """``except NotImplementedError`` catches the engine's refusal.
 
-    ``lucid._C`` defines a ``NotImplementedError`` that subclasses
-    ``LucidError`` -> ``RuntimeError``.  It shadows the builtin without
-    inheriting from it, so the natural
+    ``lucid._C`` defines a ``NotImplementedError`` under ``LucidError`` ->
+    ``RuntimeError``.  It used to shadow the builtin without inheriting from
+    it, so the natural
 
         try:  ...
         except NotImplementedError:  fallback()
 
-    silently does not fire, and the fallback never runs.  Catching
-    ``RuntimeError`` or ``LucidError`` works.  Changing the hierarchy is
-    an API decision; this pins the current behaviour so it is at least
-    written down.
+    silently did not fire.  It now derives from the builtin as well, so both
+    that and ``except RuntimeError`` / ``LucidError`` catch it — and it names
+    its own module rather than ``importlib._bootstrap``.
     """
     z = lucid.tensor(np.array([[1 + 2j]], dtype=np.complex64))
-    try:
+    with pytest.raises(NotImplementedError) as info:
         lucid.sigmoid(z)
-    except Exception as exc:
-        assert type(exc).__name__ == "NotImplementedError"
-        assert not isinstance(exc, NotImplementedError)
-        assert isinstance(exc, RuntimeError)
-    else:
-        pytest.fail("expected the complex sigmoid refusal")
+    exc = info.value
+    assert isinstance(exc, RuntimeError)
+    assert type(exc).__module__ == "lucid._C.engine"
 
 
 def test_adjoint_of_a_real_matrix_is_the_transpose():

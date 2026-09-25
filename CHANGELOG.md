@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - export nan_to_num, and name why nextafter cannot be
 
+- the engine's exceptions subclass the builtins they name
+
 ### Removed
 
 - drop macOS 15 — Lucid requires macOS 26 from 3.16.0

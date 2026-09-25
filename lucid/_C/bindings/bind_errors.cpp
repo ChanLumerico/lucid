@@ -32,10 +32,22 @@ void register_errors(py::module_& m) {
     // Creates a Python subclass of LucidError and exports it as m.<name>.
     // Static locals ensure the class objects survive the module's lifetime
     // without holding a Python reference on the stack.
-    auto make_subclass = [&](const char* name) {
-        py::object cls =
-            py::module_::import("builtins")
-                .attr("type")(py::str(name), py::make_tuple(lucid_error_cls), py::dict());
+    // ``__module__`` is given explicitly: ``type()`` otherwise records the
+    // module of its caller, which here is ``importlib._bootstrap``, and every
+    // traceback printed ``importlib._bootstrap.DtypeMismatch``.
+    //
+    // A class that shares its name with a builtin also derives from it, so
+    // ``except NotImplementedError`` and ``except IndexError`` (and
+    // ``LookupError``) catch the engine's as they would Python's own; before,
+    // they slipped past both.
+    auto builtins = py::module_::import("builtins");
+    auto make_subclass = [&](const char* name, py::object builtin_base = py::none()) {
+        py::tuple bases = builtin_base.is_none()
+                              ? py::tuple(py::make_tuple(lucid_error_cls))
+                              : py::tuple(py::make_tuple(lucid_error_cls, builtin_base));
+        py::dict ns;
+        ns["__module__"] = m.attr("__name__");
+        py::object cls = builtins.attr("type")(py::str(name), bases, ns);
         m.attr(name) = cls;
         return cls;
     };
@@ -46,8 +58,9 @@ void register_errors(py::module_& m) {
     static py::object device_mismatch_cls = make_subclass("DeviceMismatch");
     static py::object version_mismatch_cls = make_subclass("VersionMismatch");
     static py::object gpu_unavailable_cls = make_subclass("GpuNotAvailable");
-    static py::object index_error_cls = make_subclass("IndexError");
-    static py::object not_implemented_cls = make_subclass("NotImplementedError");
+    static py::object index_error_cls = make_subclass("IndexError", builtins.attr("IndexError"));
+    static py::object not_implemented_cls =
+        make_subclass("NotImplementedError", builtins.attr("NotImplementedError"));
 
     // The translator is called for every active exception that crosses the
     // C++/Python boundary.  More-derived types are checked first so that they
