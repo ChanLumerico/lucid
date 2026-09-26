@@ -465,6 +465,24 @@ void register_coreml(py::module_& m) {
             "reset_state",
             [](const PyCoreMLModel& self) { lucid::coreml::reset_state(self.raw()); },
             "Forget everything the model has accumulated.")
+        .def_property_readonly(
+            "state_names",
+            [](const PyCoreMLModel& self) { return lucid::coreml::state_names(self.raw()); },
+            "Names of the states the model declares, sorted.")
+        .def(
+            "read_state",
+            [](const PyCoreMLModel& self, const std::string& name) {
+                return lucid::coreml::read_state(self.raw(), name);
+            },
+            py::arg("name"), "A state's current value as a CPU tensor.")
+        .def(
+            "write_state",
+            [](const PyCoreMLModel& self, const std::string& name,
+               const lucid::TensorImplPtr& value) {
+                lucid::coreml::write_state(self.raw(), name, value);
+            },
+            py::arg("name"), py::arg("value"),
+            "Overwrite a state with a contiguous CPU tensor of its shape and dtype.")
         .def("close", &PyCoreMLModel::close,
              "Release the compiled model and its cached artifacts.");
 

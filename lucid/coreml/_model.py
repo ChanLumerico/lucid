@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, NamedTuple, Self, override
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
+from lucid._dispatch import _unwrap, _wrap
 from lucid.coreml import _spec
 from lucid.coreml._build import (
     _floor_of,
@@ -530,6 +530,62 @@ class CoreMLModel:
             The package carries no state.
         """
         self._handle.reset_state()
+
+    @property
+    def state_names(self) -> tuple[str, ...]:
+        """Names of the states the package carries between predictions, sorted."""
+        return tuple(self._handle.state_names)
+
+    def read_state(self, name: str) -> Tensor:
+        """A state's current value, as a CPU tensor of its element type.
+
+        Parameters
+        ----------
+        name : str
+            One of :attr:`state_names`.
+
+        Returns
+        -------
+        Tensor
+            A copy; writing to it does not change the state.
+
+        Raises
+        ------
+        ValueError
+            The package carries no state, or none by that name.
+        """
+        return _wrap(self._handle.read_state(name))
+
+    def write_state(self, name: str, value: Tensor) -> None:
+        """Overwrite a state — to seed a stream, or to restore a saved one.
+
+        A state was write-only from outside the package: a stream whose
+        first step differs from the rest (a video decoder that skips its
+        temporal upsampling on frame 0) could not be seeded, and what one
+        had accumulated could not be saved or inspected.
+
+        Parameters
+        ----------
+        name : str
+            One of :attr:`state_names`.
+        value : Tensor
+            The new value, of the state's shape.  It is converted to the
+            state's element type and copied to the host.
+
+        Raises
+        ------
+        ValueError
+            The package carries no state, no state by that name, or the
+            value's shape differs from the state's.
+        """
+        current = _wrap(self._handle.read_state(name))
+        if tuple(value.shape) != tuple(current.shape):
+            raise ValueError(
+                f"write_state: state {name!r} has shape {tuple(current.shape)}, "
+                f"the value has {tuple(value.shape)}"
+            )
+        host = value.detach().to("cpu").to(current.dtype).contiguous()
+        self._handle.write_state(name, _unwrap(host))
 
     def _images(self) -> list[tuple[str, int]]:
         if self.image_input is None:

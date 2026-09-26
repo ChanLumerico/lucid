@@ -4,16 +4,16 @@
 #import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
-#include <algorithm>
 #include <vector>
 
+#include "../core/Dtype.h"
 #include "CoreMLRuntime.h"
 #include "MilSchema.h"
-#include "../core/Dtype.h"
 
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -51,10 +51,8 @@ MLComputeUnits to_mlcompute(ComputeUnits units) {
 // from Lucid without this.  The tensor is ``(1, C, H, W)`` in the colour
 // space the package declared, holding pixel values, and the buffer is
 // whatever format the model's own constraint asks for.
-MLFeatureValue* make_image_feature(MLModel* model,
-                                   NSString* key,
-                                   const TensorImplPtr& tensor,
-                                   int color_space) {
+MLFeatureValue*
+make_image_feature(MLModel* model, NSString* key, const TensorImplPtr& tensor, int color_space) {
     MLFeatureDescription* described = model.modelDescription.inputDescriptionsByName[key];
     MLImageConstraint* constraint = described.imageConstraint;
     if (constraint == nil)
@@ -63,15 +61,13 @@ MLFeatureValue* make_image_feature(MLModel* model,
 
     const Shape& shape = tensor->shape();
     if (shape.size() != 4 || shape[0] != 1)
-        throw std::invalid_argument(
-            "lucid.coreml: an image input must be a (1, C, H, W) tensor");
+        throw std::invalid_argument("lucid.coreml: an image input must be a (1, C, H, W) tensor");
     const std::int64_t channels = shape[1];
     const std::int64_t height = shape[2];
     const std::int64_t width = shape[3];
     if (width != static_cast<std::int64_t>(constraint.pixelsWide) ||
         height != static_cast<std::int64_t>(constraint.pixelsHigh))
-        throw std::invalid_argument(
-            "lucid.coreml: the image is the wrong size for this model");
+        throw std::invalid_argument("lucid.coreml: the image is the wrong size for this model");
 
     CVPixelBufferRef buffer = nullptr;
     const CVReturn created =
@@ -83,8 +79,8 @@ MLFeatureValue* make_image_feature(MLModel* model,
     CVPixelBufferLockBaseAddress(buffer, 0);
     auto* base = static_cast<std::uint8_t*>(CVPixelBufferGetBaseAddress(buffer));
     const std::size_t stride = CVPixelBufferGetBytesPerRow(buffer);
-    const auto* source = reinterpret_cast<const float*>(
-        std::get<CpuStorage>(tensor->storage()).ptr.get());
+    const auto* source =
+        reinterpret_cast<const float*>(std::get<CpuStorage>(tensor->storage()).ptr.get());
     const std::size_t plane = static_cast<std::size_t>(height * width);
 
     // In a 32-bit buffer the bytes are B, G, R, A.  Which tensor channel
@@ -108,8 +104,7 @@ MLFeatureValue* make_image_feature(MLModel* model,
             std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 4;
             for (int c = 0; c < 3; ++c) {
                 const float v = source[static_cast<std::size_t>(c) * plane + at];
-                pixel[slot_for[c]] =
-                    static_cast<std::uint8_t>(std::clamp(v, 0.0f, 255.0f) + 0.5f);
+                pixel[slot_for[c]] = static_cast<std::uint8_t>(std::clamp(v, 0.0f, 255.0f) + 0.5f);
             }
             pixel[3] = 255;
         }
@@ -167,8 +162,8 @@ public:
     }
 };
 
-CoreMLModel* load_model(const std::string& path, ComputeUnits units,
-                        const std::string& function_name) {
+CoreMLModel*
+load_model(const std::string& path, ComputeUnits units, const std::string& function_name) {
     @autoreleasepool {
         NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
         NSError* error = nil;
@@ -317,6 +312,148 @@ bool carries_state(const CoreMLModel* model) {
     return model != nullptr && model->state != nil;
 }
 
+namespace {
+// Defined with the prediction path below; shared with reading a state back.
+TensorImplPtr copy_multiarray(MLMultiArray* out, const std::string& output_name);
+}  // namespace
+
+std::vector<std::string> state_names(const CoreMLModel* model) {
+    std::vector<std::string> names;
+    if (model == nullptr || model->model == nil || model->state == nil)
+        return names;
+    @autoreleasepool {
+        NSDictionary<NSString*, MLFeatureDescription*>* states =
+            model->model.modelDescription.stateDescriptionsByName;
+        for (NSString* key in states)
+            names.emplace_back([key UTF8String]);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+namespace {
+
+void require_state(const CoreMLModel* model, const std::string& name) {
+    if (model == nullptr || model->model == nil)
+        throw std::invalid_argument("lucid.coreml: null model handle");
+    if (model->state == nil)
+        throw std::invalid_argument("lucid.coreml: this model carries no state");
+    const auto names = state_names(model);
+    if (std::find(names.begin(), names.end(), name) == names.end())
+        throw std::invalid_argument("lucid.coreml: the model has no state named " + name);
+}
+
+}  // namespace
+
+TensorImplPtr read_state(CoreMLModel* model, const std::string& name) {
+    require_state(model, name);
+    __block TensorImplPtr value;
+    __block std::string failure;
+    @autoreleasepool {
+        std::lock_guard<std::mutex> queued(model->state_lock);
+        [model->state getMultiArrayForStateNamed:[NSString stringWithUTF8String:name.c_str()]
+                                         handler:^(MLMultiArray* buffer) {
+                                           try {
+                                               value = copy_multiarray(buffer, name);
+                                           } catch (const std::exception& exc) {
+                                               failure = exc.what();
+                                           }
+                                         }];
+    }
+    if (!failure.empty())
+        throw std::runtime_error(failure);
+    if (!value)
+        throw std::runtime_error("lucid.coreml: could not read state " + name);
+    return value;
+}
+
+void write_state(CoreMLModel* model, const std::string& name, const TensorImplPtr& value) {
+    require_state(model, name);
+    if (!value || value->device() != Device::CPU || !value->is_contiguous())
+        throw std::invalid_argument("lucid.coreml: a state value must be a contiguous CPU tensor");
+    const auto& src_storage = std::get<CpuStorage>(value->storage());
+    const auto* src =
+        static_cast<const std::byte*>(src_storage.ptr.get()) + value->storage_offset();
+    __block std::string failure;
+    @autoreleasepool {
+        std::lock_guard<std::mutex> queued(model->state_lock);
+        [model->state
+            getMultiArrayForStateNamed:[NSString stringWithUTF8String:name.c_str()]
+                               handler:^(MLMultiArray* buffer) {
+                                 Dtype want = Dtype::F32;
+                                 switch (buffer.dataType) {
+                                 case MLMultiArrayDataTypeFloat32:
+                                     want = Dtype::F32;
+                                     break;
+                                 case MLMultiArrayDataTypeFloat16:
+                                     want = Dtype::F16;
+                                     break;
+                                 case MLMultiArrayDataTypeDouble:
+                                     want = Dtype::F64;
+                                     break;
+                                 case MLMultiArrayDataTypeInt32:
+                                     want = Dtype::I32;
+                                     break;
+                                 default:
+                                     failure = "state " + name +
+                                               " has an element type Lucid has no equivalent for";
+                                     return;
+                                 }
+                                 if (value->dtype() != want) {
+                                     failure = "state " + name + " holds " +
+                                               std::string(dtype_name(want)) + ", not " +
+                                               std::string(dtype_name(value->dtype()));
+                                     return;
+                                 }
+                                 Shape shape;
+                                 for (NSNumber* dim in buffer.shape)
+                                     shape.push_back(
+                                         static_cast<std::int64_t>([dim longLongValue]));
+                                 if (shape != value->shape()) {
+                                     failure = "state " + name +
+                                               " has a different shape than the value written";
+                                     return;
+                                 }
+                                 std::vector<std::int64_t> strides;
+                                 for (NSNumber* stride in buffer.strides)
+                                     strides.push_back(
+                                         static_cast<std::int64_t>([stride longLongValue]));
+                                 const std::size_t element = dtype_size(want);
+                                 std::size_t count = 1;
+                                 for (auto d : shape)
+                                     count *= static_cast<std::size_t>(d);
+                                 // The buffer is padded on the Neural Engine paths, so the write
+                                 // walks its strides just as reading an output does.
+                                 [buffer getMutableBytesWithHandler:^(void* raw, NSInteger size,
+                                                                      NSArray<NSNumber*>*) {
+                                   auto* dst = static_cast<std::byte*>(raw);
+                                   std::vector<std::int64_t> index(shape.size(), 0);
+                                   for (std::size_t linear = 0; linear < count; ++linear) {
+                                       std::int64_t offset = 0;
+                                       for (std::size_t d = 0; d < index.size(); ++d)
+                                           offset += index[d] * strides[d];
+                                       if ((offset + 1) * static_cast<std::int64_t>(element) >
+                                           size) {
+                                           failure =
+                                               "state " + name + " is smaller than its shape says";
+                                           return;
+                                       }
+                                       std::memcpy(dst + static_cast<std::size_t>(offset) * element,
+                                                   src + linear * element, element);
+                                       for (std::size_t d = index.size(); d-- > 0;) {
+                                           ++index[d];
+                                           if (index[d] < shape[d])
+                                               break;
+                                           index[d] = 0;
+                                       }
+                                   }
+                                 }];
+                               }];
+    }
+    if (!failure.empty())
+        throw std::invalid_argument("lucid.coreml: " + failure);
+}
+
 std::vector<std::string> input_feature_names(const CoreMLModel* model) {
     return model == nullptr ? std::vector<std::string>{} : model->input_names;
 }
@@ -367,8 +504,8 @@ std::vector<std::pair<std::string, std::string>> user_metadata(const CoreMLModel
             id value = ((NSDictionary*)defined)[key];
             if (![key isKindOfClass:[NSString class]])
                 continue;
-            NSString* text = [value isKindOfClass:[NSString class]] ? (NSString*)value
-                                                                   : [value description];
+            NSString* text =
+                [value isKindOfClass:[NSString class]] ? (NSString*)value : [value description];
             pairs.emplace_back(std::string([(NSString*)key UTF8String]),
                                std::string([text UTF8String]));
         }
@@ -391,36 +528,30 @@ namespace {
 // has the right shape and the wrong values, which is the failure this
 // whole package exists to make impossible.  The size check does not catch
 // it either, since a padded buffer is larger.
-TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& output_name) {
-    NSString* out_key = [NSString stringWithUTF8String:output_name.c_str()];
-    MLFeatureValue* value = [result featureValueForName:out_key];
-    if (value == nil || value.multiArrayValue == nil)
-        throw std::runtime_error("lucid.coreml: the model produced no output named " +
-                                 output_name);
-    MLMultiArray* out = value.multiArrayValue;
-
+// A multi-array's elements as a packed CPU tensor of its own dtype.  Shared
+// by prediction outputs and by reading a model's state back.
+TensorImplPtr copy_multiarray(MLMultiArray* out, const std::string& output_name) {
     // The output's element type is the package's to choose, not ours.  A
     // package Lucid wrote casts its outputs to float32, but one written
     // elsewhere need not: the reference stateful model returns float16,
     // and reading that as float32 asks for twice the bytes it has.
     Dtype dtype = Dtype::F32;
     switch (out.dataType) {
-        case MLMultiArrayDataTypeFloat32:
-            dtype = Dtype::F32;
-            break;
-        case MLMultiArrayDataTypeFloat16:
-            dtype = Dtype::F16;
-            break;
-        case MLMultiArrayDataTypeDouble:
-            dtype = Dtype::F64;
-            break;
-        case MLMultiArrayDataTypeInt32:
-            dtype = Dtype::I32;
-            break;
-        default:
-            throw std::runtime_error(
-                "lucid.coreml: output " + output_name +
-                " has an element type Lucid has no equivalent for");
+    case MLMultiArrayDataTypeFloat32:
+        dtype = Dtype::F32;
+        break;
+    case MLMultiArrayDataTypeFloat16:
+        dtype = Dtype::F16;
+        break;
+    case MLMultiArrayDataTypeDouble:
+        dtype = Dtype::F64;
+        break;
+    case MLMultiArrayDataTypeInt32:
+        dtype = Dtype::I32;
+        break;
+    default:
+        throw std::runtime_error("lucid.coreml: output " + output_name +
+                                 " has an element type Lucid has no equivalent for");
     }
     const std::size_t element = dtype_size(dtype);
 
@@ -484,8 +615,8 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
           std::int64_t offset = 0;
           for (std::size_t d = 0; d < index.size(); ++d)
               offset += index[d] * out_strides[d];
-          std::memcpy(dst + linear * element,
-                      src + static_cast<std::size_t>(offset) * element, element);
+          std::memcpy(dst + linear * element, src + static_cast<std::size_t>(offset) * element,
+                      element);
           for (std::size_t d = index.size(); d-- > 0;) {
               ++index[d];
               if (index[d] < out_shape[d])
@@ -503,8 +634,16 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
     cpu.ptr = std::move(bytes);
     cpu.nbytes = nbytes;
     cpu.dtype = dtype;
-    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, dtype,
-                                        Device::CPU, false);
+    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, dtype, Device::CPU,
+                                        false);
+}
+
+TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& output_name) {
+    NSString* out_key = [NSString stringWithUTF8String:output_name.c_str()];
+    MLFeatureValue* value = [result featureValueForName:out_key];
+    if (value == nil || value.multiArrayValue == nil)
+        throw std::runtime_error("lucid.coreml: the model produced no output named " + output_name);
+    return copy_multiarray(value.multiArrayValue, output_name);
 }
 
 }  // namespace
@@ -512,10 +651,9 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
 namespace {
 
 // Everything both entry points do before the prediction itself.
-id<MLFeatureProvider>
-run(CoreMLModel* model,
-    const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
-    const std::vector<std::pair<std::string, int>>& images) {
+id<MLFeatureProvider> run(CoreMLModel* model,
+                          const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+                          const std::vector<std::pair<std::string, int>>& images) {
     if (model == nullptr || model->model == nil)
         throw std::invalid_argument("lucid.coreml: null model handle");
     if (inputs.empty())
@@ -535,8 +673,7 @@ run(CoreMLModel* model,
         if (tensor->dtype() != Dtype::F32 && tensor->dtype() != Dtype::F16 &&
             tensor->dtype() != Dtype::I32)
             throw std::invalid_argument(
-                "lucid.coreml: input " + name + " is " +
-                std::string(dtype_name(tensor->dtype())) +
+                "lucid.coreml: input " + name + " is " + std::string(dtype_name(tensor->dtype())) +
                 ", and Core ML's multi-array reads float32, float16 or int32 — there "
                 "is no int64 there, so integer inputs are narrowed before they arrive");
         if (!std::get<CpuStorage>(tensor->storage()).ptr)
@@ -596,8 +733,8 @@ run(CoreMLModel* model,
     if (model->state != nil) {
         std::lock_guard<std::mutex> queued(model->state_lock);
         result = [model->model predictionFromFeatures:features
-                                            usingState:model->state
-                                                 error:&error];
+                                           usingState:model->state
+                                                error:&error];
     } else {
         result = [model->model predictionFromFeatures:features error:&error];
     }
@@ -623,8 +760,8 @@ classify(CoreMLModel* model,
             throw std::runtime_error("lucid.coreml: the model produced no label named " +
                                      label_name);
 
-        MLFeatureValue* probabilities = [result
-            featureValueForName:[NSString stringWithUTF8String:probabilities_name.c_str()]];
+        MLFeatureValue* probabilities =
+            [result featureValueForName:[NSString stringWithUTF8String:probabilities_name.c_str()]];
         if (probabilities == nil || probabilities.dictionaryValue == nil)
             throw std::runtime_error("lucid.coreml: the model produced no probabilities "
                                      "named " +

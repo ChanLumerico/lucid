@@ -129,6 +129,21 @@ LUCID_API void reset_state(CoreMLModel* model);
 // Whether the loaded model declares any state.
 LUCID_API bool carries_state(const CoreMLModel* model);
 
+// The names of the states a loaded model declares, sorted; empty when it
+// carries none.
+LUCID_API std::vector<std::string> state_names(const CoreMLModel* model);
+
+// A state's current value, as a packed CPU tensor of its element type.
+//
+// A stateful model's carried values were write-only from the outside: a
+// stream whose first step differs from the rest could not be seeded, and
+// nothing it had accumulated could be inspected.
+LUCID_API TensorImplPtr read_state(CoreMLModel* model, const std::string& name);
+
+// Overwrite a state with ``value`` — a contiguous CPU tensor of the state's
+// exact shape and element type.
+LUCID_API void write_state(CoreMLModel* model, const std::string& name, const TensorImplPtr& value);
+
 // Feature names the loaded model declares, for diagnostics and for the
 // Python layer to check a package it did not write itself.
 LUCID_API std::vector<std::string> input_feature_names(const CoreMLModel* model);
