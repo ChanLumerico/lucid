@@ -159,16 +159,23 @@ def measure(workload: Workload, device: str) -> dict[str, object]:
     _C_engine.reset_peak_memory_stats(here)
     before = _C_engine.memory_stats(here)
     host_before = _C_engine.memory_stats(_C_engine.Device.CPU)
+    syncs_before = _C_engine.host_sync_count()
     with lucid.profiler.profile() as prof:
         step()
     after = _C_engine.memory_stats(here)
     host_after = _C_engine.memory_stats(_C_engine.Device.CPU)
+    syncs_after = _C_engine.host_sync_count()
     ops = collections.Counter(event.name for event in prof.events())
     cost: dict[str, object] = {
         "allocations": after.alloc_count - before.alloc_count,
         "frees": after.free_count - before.free_count,
         "peak_bytes": after.peak_bytes - before.current_bytes,
         "forward_ops": dict(sorted(ops.items())),
+        # Each read of an evaluated array by the host waits for the lazy
+        # graph behind it: a loss read with ``.item()`` every step, or an
+        # op that falls back to the CPU, stalls the pipeline without
+        # allocating anything the counts above would see.
+        "host_syncs": syncs_after - syncs_before,
     }
     if device == "metal":
         # A storage made on the host while the step runs on the GPU is a

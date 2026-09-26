@@ -191,6 +191,7 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     materialised.eval();
 
     out.ptr = allocate_aligned_bytes(total, Device::CPU);
+    MemoryTracker::track_host_sync(total);
     const auto* src = materialised.data<std::uint8_t>();
     std::memcpy(out.ptr.get(), src, total);
     return out;

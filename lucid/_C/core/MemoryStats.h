@@ -177,6 +177,28 @@ public:
     // API parity.
     static void reset_peak(Device device);
 
+    // Record one read of an evaluated engine array by the host.
+    //
+    // Every such read waits for the lazy graph behind the array to finish
+    // and copies its bytes out — a pipeline stall on Metal, and the cost a
+    // training step's allocation counts cannot see: a loop that reads a
+    // loss with ``.item()`` every step allocates nothing extra and still
+    // serialises the GPU.  Called from each place the engine hands device
+    // memory to the host (``download_gpu_to_cpu``, the CPU-side fallbacks
+    // for data-dependent and linear-algebra ops, ``item``).
+    //
+    // Parameters
+    // ----------
+    // nbytes : std::size_t
+    //     Bytes read.
+    static void track_host_sync(std::size_t nbytes);
+
+    // Lifetime count of host reads recorded by :func:`track_host_sync`.
+    static std::size_t host_sync_count();
+
+    // Lifetime bytes read by the host, per :func:`track_host_sync`.
+    static std::size_t host_sync_bytes();
+
 private:
     // Returns the live :class:`Counters` bank for ``device``.
     //

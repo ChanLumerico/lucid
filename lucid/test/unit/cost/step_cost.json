@@ -11,6 +11,7 @@
       "sum": 1
     },
     "frees": 11,
+    "host_syncs": 0,
     "peak_bytes": 65568
   },
   "cnn_inference/metal": {
@@ -26,6 +27,7 @@
     },
     "frees": 9,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 65568
   },
   "cnn_sgd/cpu": {
@@ -53,6 +55,7 @@
       "unsqueeze": 1
     },
     "frees": 72,
+    "host_syncs": 0,
     "peak_bytes": 171156
   },
   "cnn_sgd/metal": {
@@ -81,6 +84,7 @@
     },
     "frees": 82,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 203924
   },
   "compiled_mlp_adam/metal": {
@@ -92,6 +96,7 @@
     },
     "frees": 17,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 8192
   },
   "lstm_adam/cpu": {
@@ -107,6 +112,7 @@
       "zeros": 2
     },
     "frees": 36,
+    "host_syncs": 0,
     "peak_bytes": 14340
   },
   "lstm_adam/metal": {
@@ -123,6 +129,7 @@
     },
     "frees": 54,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 36740
   },
   "mlp_adam/cpu": {
@@ -145,6 +152,7 @@
       "unsqueeze": 1
     },
     "frees": 49,
+    "host_syncs": 0,
     "peak_bytes": 14404
   },
   "mlp_adam/metal": {
@@ -168,6 +176,7 @@
     },
     "frees": 57,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 8196
   },
   "transformer_adamw/cpu": {
@@ -185,6 +194,7 @@
       "split_at": 2
     },
     "frees": 102,
+    "host_syncs": 0,
     "peak_bytes": 32004
   },
   "transformer_adamw/metal": {
@@ -203,6 +213,7 @@
     },
     "frees": 146,
     "host_allocations": 0,
+    "host_syncs": 1,
     "peak_bytes": 40584
   }
 }

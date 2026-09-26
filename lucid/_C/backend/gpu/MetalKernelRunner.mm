@@ -39,6 +39,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
+#include "../../core/MemoryStats.h"
 #include "MlxBridge.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -181,6 +182,7 @@ BoundBuffer resolve_storage_to_mtl(const Storage& s, id<MTLDevice> dev) {
         }
 
         gs.arr->eval();
+        MemoryTracker::track_host_sync(gs.nbytes);
         const void* ptr = gs.arr->data<std::uint8_t>();
         if (!ptr) {
             ErrorBuilder("run_metal_kernel").fail("MLX array data pointer is null after eval");

@@ -87,6 +87,7 @@
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/MemoryStats.h"
 #include "../../core/Shape.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
@@ -2507,6 +2508,7 @@ public:
             ::mlx::core::logical_or(::mlx::core::less_equal(diag, zero), ::mlx::core::isnan(diag)),
             k_linalg_stream);
         broken.eval();
+        MemoryTracker::track_host_sync(broken.nbytes());
         if (broken.item<bool>())
             ErrorBuilder("gpu_backend::linalg_cholesky").fail("matrix is not positive definite");
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
@@ -2576,6 +2578,7 @@ public:
         p_eval.eval();
         const std::size_t matrix_n = static_cast<std::size_t>(n);
         std::vector<float> signs(static_cast<std::size_t>(batch), 1.0f);
+        MemoryTracker::track_host_sync(p_eval.nbytes());
         const auto* p_data = p_eval.data<std::uint32_t>();
         for (std::int64_t b = 0; b < batch; ++b)
             signs[static_cast<std::size_t>(b)] = perm_index_sign(p_data + b * matrix_n, matrix_n);
@@ -2666,6 +2669,7 @@ public:
         auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
         int info = 0;
         if (dt == Dtype::F32) {
+            MemoryTracker::track_host_sync(cpu_arr.nbytes());
             const float* src = cpu_arr.data<float>();
             float* lu_p = reinterpret_cast<float*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
@@ -2676,6 +2680,7 @@ public:
                     ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
         } else {
+            MemoryTracker::track_host_sync(cpu_arr.nbytes());
             const double* src = cpu_arr.data<double>();
             double* lu_p = reinterpret_cast<double*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
@@ -2723,15 +2728,18 @@ public:
         const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
         const std::size_t out_bytes = cb.nbytes();
         auto out_ptr = allocate_aligned_bytes(out_bytes, Device::CPU);
+        MemoryTracker::track_host_sync(cb.nbytes());
         std::memcpy(out_ptr.get(), cb.data<void>(), out_bytes);
         int info = 0;
         if (dt == Dtype::F32) {
+            MemoryTracker::track_host_sync(ca.nbytes());
             const float* a_p = ca.data<float>();
             float* x_p = reinterpret_cast<float*>(out_ptr.get());
             for (std::int64_t bi = 0; bi < batch; ++bi)
                 cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
                                                  unitriangular, &info);
         } else {
+            MemoryTracker::track_host_sync(ca.nbytes());
             const double* a_p = ca.data<double>();
             double* x_p = reinterpret_cast<double*>(out_ptr.get());
             for (std::int64_t bi = 0; bi < batch; ++bi)
@@ -2760,6 +2768,8 @@ public:
         const std::size_t a_nb = ca_mlx.nbytes(), b_nb = cb_mlx.nbytes();
         auto a_cpu = allocate_aligned_bytes(a_nb, Device::CPU);
         auto b_cpu = allocate_aligned_bytes(b_nb, Device::CPU);
+        MemoryTracker::track_host_sync(ca_mlx.nbytes());
+        MemoryTracker::track_host_sync(cb_mlx.nbytes());
         std::memcpy(a_cpu.get(), ca_mlx.data<void>(), a_nb);
         std::memcpy(b_cpu.get(), cb_mlx.data<void>(), b_nb);
         CpuStorage a_cs{a_cpu, a_nb, dt}, b_cs{b_cpu, b_nb, dt};
@@ -2799,6 +2809,9 @@ public:
         auto lu_cpu = allocate_aligned_bytes(clu.nbytes(), Device::CPU);
         auto piv_cpu = allocate_aligned_bytes(cpiv.nbytes(), Device::CPU);
         auto b_cpu = allocate_aligned_bytes(cb.nbytes(), Device::CPU);
+        MemoryTracker::track_host_sync(clu.nbytes());
+        MemoryTracker::track_host_sync(cpiv.nbytes());
+        MemoryTracker::track_host_sync(cb.nbytes());
         std::memcpy(lu_cpu.get(), clu.data<void>(), clu.nbytes());
         std::memcpy(piv_cpu.get(), cpiv.data<void>(), cpiv.nbytes());
         std::memcpy(b_cpu.get(), cb.data<void>(), cb.nbytes());
@@ -2825,6 +2838,8 @@ public:
         ct.eval();
         auto h_cpu = allocate_aligned_bytes(ch.nbytes(), Device::CPU);
         auto t_cpu = allocate_aligned_bytes(ct.nbytes(), Device::CPU);
+        MemoryTracker::track_host_sync(ch.nbytes());
+        MemoryTracker::track_host_sync(ct.nbytes());
         std::memcpy(h_cpu.get(), ch.data<void>(), ch.nbytes());
         std::memcpy(t_cpu.get(), ct.data<void>(), ct.nbytes());
         const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
@@ -2845,6 +2860,7 @@ public:
         auto ca = ::mlx::core::contiguous(*ga.arr);
         ca.eval();
         auto a_cpu = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
+        MemoryTracker::track_host_sync(ca.nbytes());
         std::memcpy(a_cpu.get(), ca.data<void>(), ca.nbytes());
         CpuStorage a_cs{a_cpu, ca.nbytes(), dt};
         auto [ld_s, piv_s] =
@@ -3485,6 +3501,7 @@ public:
         auto cm = ::mlx::core::contiguous(*gm.arr);
         cm.eval();
         auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
+        MemoryTracker::track_host_sync(cm.nbytes());
         std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
         CpuStorage m_cs{cpu_m, cm.nbytes(), dt};
         return Dispatcher::for_device(Device::CPU).masked_select_count(Storage{m_cs}, shape, dt);
@@ -3503,6 +3520,8 @@ public:
         cm.eval();
         auto cpu_a = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
         auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
+        MemoryTracker::track_host_sync(ca.nbytes());
+        MemoryTracker::track_host_sync(cm.nbytes());
         std::memcpy(cpu_a.get(), ca.data<void>(), ca.nbytes());
         std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
         CpuStorage a_cs{cpu_a, ca.nbytes(), dt};
@@ -3537,6 +3556,7 @@ public:
             auto c = ::mlx::core::contiguous(*g.arr);
             c.eval();
             auto p = allocate_aligned_bytes(c.nbytes(), Device::CPU);
+            MemoryTracker::track_host_sync(c.nbytes());
             std::memcpy(p.get(), c.data<void>(), c.nbytes());
             return CpuStorage{p, c.nbytes(), Dtype::F32};  // dtype set by caller
         };
@@ -8028,6 +8048,7 @@ private:
             if (!gs.arr)
                 return src;
             gs.arr->eval();
+            MemoryTracker::track_host_sync(gs.nbytes);
             src_ptr = reinterpret_cast<const std::byte*>(gs.arr->data<std::uint8_t>());
             src_bytes = gs.nbytes;
             src_dtype = gs.dtype;

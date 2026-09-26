@@ -36,6 +36,7 @@
 #include "Error.h"
 #include "ErrorBuilder.h"
 #include "GradMode.h"
+#include "MemoryStats.h"
 
 namespace lucid {
 
@@ -265,6 +266,7 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                               // data() ignores strides, so lay the result out first.
                               ::mlx::core::array packed = ::mlx::core::contiguous(*g.arr);
                               packed.eval();
+                              MemoryTracker::track_host_sync(packed.nbytes());
                               const auto* from =
                                   reinterpret_cast<const std::byte*>(packed.data<std::uint8_t>());
                               if (from != dst)
@@ -1260,6 +1262,7 @@ py::object TensorImpl::item() const {
                     ErrorBuilder("item").fail("null GPU array");
                 }
                 g.arr->eval();
+                MemoryTracker::track_host_sync(dtype_size(meta_.dtype));
                 const auto* raw =
                     reinterpret_cast<const char*>(g.arr->data<std::uint8_t>()) + byte_offset;
                 return decode_scalar(raw, meta_.dtype);

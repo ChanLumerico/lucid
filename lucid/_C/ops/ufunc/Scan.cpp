@@ -32,6 +32,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/MemoryStats.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -335,12 +336,16 @@ public:
 
             if (dtype_ == Dtype::F32) {
                 std::vector<float> dx(n, 0.0f);
+                MemoryTracker::track_host_sync(g_cont.nbytes());
+                MemoryTracker::track_host_sync(y_cont.nbytes());
                 scan_ext_backward_loop<true>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
                                              input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
+                MemoryTracker::track_host_sync(g_cont.nbytes());
+                MemoryTracker::track_host_sync(y_cont.nbytes());
                 scan_ext_backward_loop<true>(g_cont.data<double>(), y_cont.data<double>(),
                                              dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
@@ -381,12 +386,16 @@ public:
 
             if (dtype_ == Dtype::F32) {
                 std::vector<float> dx(n, 0.0f);
+                MemoryTracker::track_host_sync(g_cont.nbytes());
+                MemoryTracker::track_host_sync(y_cont.nbytes());
                 scan_ext_backward_loop<false>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
                                               input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
+                MemoryTracker::track_host_sync(g_cont.nbytes());
+                MemoryTracker::track_host_sync(y_cont.nbytes());
                 scan_ext_backward_loop<false>(g_cont.data<double>(), y_cont.data<double>(),
                                               dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);

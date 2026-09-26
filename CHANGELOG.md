@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - transpose takes two axes, as the reference framework's does
 
+- count every host read of an evaluated array (ABI 15)
+
 ### Performance
 
 - check_weight_fit builds in shadow and reads headers in parallel

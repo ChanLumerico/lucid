@@ -104,6 +104,10 @@ void register_core(py::module_& m) {
         });
     m.def("memory_stats", &MemoryTracker::get_stats, py::arg("device"));
     m.def("reset_peak_memory_stats", &MemoryTracker::reset_peak, py::arg("device"));
+    // Host reads of evaluated engine arrays — each one a wait on the lazy
+    // graph.  Monotonic; take differences.
+    m.def("host_sync_count", &MemoryTracker::host_sync_count);
+    m.def("host_sync_bytes", &MemoryTracker::host_sync_bytes);
     // Total Metal-device allocation (includes MPSGraph executable internals,
     // which MLX's allocator peak does not see) — for compiled-step footprint.
     m.def("metal_device_allocated_bytes", &lucid::gpu::mps::metal_device_allocated_bytes);
@@ -169,6 +173,7 @@ void register_tensor_impl(py::module_& m) {
                     if (!g.arr)
                         return 0;
                     g.arr->eval();
+                    MemoryTracker::track_host_sync(g.nbytes);
                     return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
                 }
                 return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr) + off;

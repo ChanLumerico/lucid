@@ -18,7 +18,24 @@ namespace {
 MemoryTracker::Counters g_cpu;
 MemoryTracker::Counters g_gpu;
 
+// Host reads of evaluated engine arrays: count and bytes.
+std::atomic<std::size_t> g_host_syncs{0};
+std::atomic<std::size_t> g_host_sync_bytes{0};
+
 }  // namespace
+
+void MemoryTracker::track_host_sync(std::size_t nbytes) {
+    g_host_syncs.fetch_add(1, std::memory_order_relaxed);
+    g_host_sync_bytes.fetch_add(nbytes, std::memory_order_relaxed);
+}
+
+std::size_t MemoryTracker::host_sync_count() {
+    return g_host_syncs.load(std::memory_order_relaxed);
+}
+
+std::size_t MemoryTracker::host_sync_bytes() {
+    return g_host_sync_bytes.load(std::memory_order_relaxed);
+}
 
 MemoryTracker::Counters& MemoryTracker::counters_for(Device device) {
     return device == Device::CPU ? g_cpu : g_gpu;
