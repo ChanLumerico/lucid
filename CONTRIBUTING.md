@@ -633,6 +633,35 @@ ci: enforce strict commit convention
 
 ---
 
+### API stability
+
+Semantic Versioning is a promise to the people running Lucid: code written
+against one 3.x release runs on every later 3.x. A minor or patch release may
+add names and optional parameters. It may not remove a public name, rename or
+reorder a parameter, make one keyword-only, or make an optional one required.
+3.x broke this in minor releases — `mobilenet_v1` became `mobilenet`,
+`GenerationMixin` became `CausalLMMixin`, 43 names left `lucid.models` — and
+code written a month earlier stopped importing.
+
+- **A test holds the surface.** `lucid/test/audit/released_surface.json`
+  records every public name in the last release — the audited namespaces,
+  `lucid.models`, and the public methods of public classes — with the
+  parameters a caller could pass. `lucid/test/unit/audit/test_released_surface.py`
+  fails when a released call would stop binding. Defaults and annotations are
+  not recorded, since no call site spells them; a changed default is still a
+  change of behaviour and goes under `Changed`.
+- **Retire a name, don't delete it.** Keep the old spelling working and mark
+  it with `lucid._deprecation.deprecated(since=, removal=, alternative=)` — a
+  renamed function becomes a thin wrapper, a renamed class a subclass of its
+  replacement. Every use raises `LucidDeprecationWarning`, a `FutureWarning`
+  so the person running the code sees it. `removal` is at least two minor
+  releases after `since`, or the next major version; the helper refuses
+  anything sooner. The deprecation goes under `Deprecated` in the CHANGELOG,
+  the removal under `Removed` in the release it reaches.
+- **The release commit rewrites the snapshot**, after bumping the version:
+  `python -m lucid.test.audit._released --update`. It refuses while any
+  released call would break. Nothing else writes the file.
+
 ### Linking work to the backlog
 
 The backlog lives in Linear (team key `CHA`), connected to this repository.
@@ -657,6 +686,7 @@ Before opening a PR, verify every item:
 - [ ] Unit test added for new public API
 - [ ] Parity test added for new public API (via `ref` fixture)
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`
+- [ ] No released call stops binding (`test_released_surface.py`); a name on its way out is marked with `lucid._deprecation.deprecated`
 - [ ] No `torch` / `pytorch` / `cuda` in any new or modified source
 - [ ] No `from __future__ import annotations` introduced
 - [ ] No `*args` / `**kwargs` in any new `.pyi` signatures
