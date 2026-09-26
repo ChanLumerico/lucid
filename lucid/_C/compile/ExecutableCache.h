@@ -23,6 +23,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -137,11 +138,21 @@ make_cache_key(const TraceGraph& graph,
                const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta = {},
                const std::vector<TensorId>& explicit_outputs = {});
 
+// Shared ownership of a compiled executable.  The last holder — the cache,
+// or a Python wrapper that took it out of the cache — releases it through
+// :func:`destroy_executable`.
+using SharedExecutable = std::shared_ptr<CompiledExecutable>;
+
+// Take ownership of ``exec`` (``nullptr`` gives an empty pointer).
+LUCID_API SharedExecutable share_executable(CompiledExecutable* exec);
+
 // Bounded-LRU cache of compiled MPSGraph executables.
 //
-// Thread-safe.  Stores raw :class:`CompiledExecutable` pointers and
-// destroys them via :func:`destroy_executable` on eviction or
-// destruction.
+// Thread-safe.  Entries are shared: eviction drops the cache's reference
+// only.  It used to hand out borrowed raw pointers and delete the
+// executable on eviction, so a module holding one — every CompiledModule
+// keeps its executables — called freed memory once more than
+// ``max_entries`` signatures had been compiled in the process.
 class LUCID_API ExecutableCache {
 public:
     // Construct an empty cache with the default LRU cap (32 entries).
@@ -159,17 +170,17 @@ public:
 
     // Look up an executable.
     //
-    // Returns the borrowed pointer on hit (and bumps the entry to
-    // most-recent in the LRU order) or ``nullptr`` on miss.
-    CompiledExecutable* find(const CacheKey& key);
+    // Returns a shared reference on hit (and bumps the entry to
+    // most-recent in the LRU order) or an empty pointer on miss.
+    SharedExecutable find(const CacheKey& key);
 
-    // Insert ``exec`` under ``key``, taking ownership.  Replaces any
-    // existing entry (releasing the previous executable).  If the
-    // resulting size exceeds ``max_entries``, evicts least-recently
-    // used entries until back at capacity.
-    void insert(CacheKey key, CompiledExecutable* exec);
+    // Insert ``exec`` under ``key`` and return it.  Replaces any existing
+    // entry (dropping the cache's reference to the previous executable).
+    // If the resulting size exceeds ``max_entries``, drops the
+    // least-recently used entries until back at capacity.
+    SharedExecutable insert(CacheKey key, SharedExecutable exec);
 
-    // Release every stored executable.
+    // Drop the cache's reference to every stored executable.
     void clear();
 
     // Number of currently-cached entries.
@@ -186,7 +197,7 @@ public:
 
 private:
     mutable std::mutex mu_;
-    std::unordered_map<CacheKey, CompiledExecutable*, CacheKeyHash> map_;
+    std::unordered_map<CacheKey, SharedExecutable, CacheKeyHash> map_;
     // Most-recent at the back; front = next eviction candidate.
     std::vector<CacheKey> lru_order_;
     std::size_t max_entries_ = 32;

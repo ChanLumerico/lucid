@@ -71,56 +71,51 @@ public:
 namespace lucid::bindings {
 
 namespace {
-// Python-side wrapper that owns the raw :class:`CompiledExecutable*`
-// allocated by :func:`compile_trace` and releases it via
-// :func:`destroy_executable` on destruction.
+// Python-side wrapper holding a shared reference to a compiled executable;
+// the last holder releases it via :func:`destroy_executable`.
 class PyCompiledExecutable {
 public:
-    explicit PyCompiledExecutable(lucid::compile::CompiledExecutable* exe, bool owns = true)
-        : exe_(exe), owns_(owns) {}
-    ~PyCompiledExecutable() {
-        if (owns_)
-            lucid::compile::destroy_executable(exe_);
-    }
+    explicit PyCompiledExecutable(lucid::compile::SharedExecutable exe) : exe_(std::move(exe)) {}
 
     PyCompiledExecutable(const PyCompiledExecutable&) = delete;
     PyCompiledExecutable& operator=(const PyCompiledExecutable&) = delete;
 
-    lucid::compile::CompiledExecutable* raw() const { return exe_; }
+    lucid::compile::CompiledExecutable* raw() const { return exe_.get(); }
 
-    std::size_t num_inputs() const { return lucid::compile::executable_num_inputs(exe_); }
-    std::size_t num_outputs() const { return lucid::compile::executable_num_outputs(exe_); }
+    std::size_t num_inputs() const { return lucid::compile::executable_num_inputs(exe_.get()); }
+    std::size_t num_outputs() const { return lucid::compile::executable_num_outputs(exe_.get()); }
     std::vector<lucid::compile::TensorId> input_ids() const {
-        return lucid::compile::executable_input_ids(exe_);
+        return lucid::compile::executable_input_ids(exe_.get());
     }
     std::vector<lucid::compile::TensorId> output_ids() const {
-        return lucid::compile::executable_output_ids(exe_);
+        return lucid::compile::executable_output_ids(exe_.get());
     }
     std::vector<lucid::compile::TensorId> grad_output_ids() const {
-        return lucid::compile::executable_grad_output_ids(exe_);
+        return lucid::compile::executable_grad_output_ids(exe_.get());
     }
     std::vector<std::vector<std::int64_t>> input_shapes() const {
         std::vector<std::vector<std::int64_t>> out;
-        for (const auto& s : lucid::compile::executable_input_shapes(exe_))
+        for (const auto& s : lucid::compile::executable_input_shapes(exe_.get()))
             out.emplace_back(s.begin(), s.end());
         return out;
     }
     std::vector<std::string> input_dtypes() const {
         std::vector<std::string> out;
-        for (lucid::Dtype dt : lucid::compile::executable_input_dtypes(exe_))
+        for (lucid::Dtype dt : lucid::compile::executable_input_dtypes(exe_.get()))
             out.emplace_back(lucid::dtype_name(dt));
         return out;
     }
     std::vector<std::size_t> feed_order() const {
-        return lucid::compile::executable_feed_order(exe_);
+        return lucid::compile::executable_feed_order(exe_.get());
     }
     std::vector<std::string> feed_names() const {
-        return lucid::compile::executable_feed_names(exe_);
+        return lucid::compile::executable_feed_names(exe_.get());
     }
 
 private:
-    lucid::compile::CompiledExecutable* exe_;
-    bool owns_;
+    // Shared with the session cache: eviction there no longer frees an
+    // executable a module still runs.
+    lucid::compile::SharedExecutable exe_;
 };
 
 }  // namespace
@@ -291,7 +286,8 @@ void register_compile(py::module_& m) {
                 lucid::compile::compile_trace(graph, feeds, &err);
             if (exe == nullptr)
                 return py::none();
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("graph"), py::arg("external_feeds"),
         "Lower a TraceGraph to a compiled MPSGraph executable; "
@@ -362,8 +358,8 @@ void register_compile(py::module_& m) {
     // Phase 1.2 secondary acceptance gate: cache-aware compile.  On the
     // first call with a given structural signature the trace is compiled
     // and inserted into the session-global cache; subsequent calls with
-    // a matching CacheKey return the same executable (borrowed wrapper,
-    // owns=false — cache owns the raw pointer).
+    // a matching CacheKey return the same executable, shared with the
+    // cache so an eviction cannot free it under a module that holds it.
     m.def(
         "compile_or_cached",
         [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
@@ -394,7 +390,8 @@ void register_compile(py::module_& m) {
                         throw std::runtime_error(err);
                     return py::none();
                 }
-                return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+                return py::cast(
+                    std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
             }
 
             auto& cache = lucid::compile::ExecutableCache::session();
@@ -407,8 +404,8 @@ void register_compile(py::module_& m) {
             lucid::compile::CacheKey key =
                 lucid::compile::make_cache_key(graph, feed_meta, explicit_outputs);
 
-            if (auto* hit = cache.find(key)) {
-                return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
+            if (auto hit = cache.find(key)) {
+                return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
             }
 
             // ``LUCID_COMPILE_DISK_CACHE=1`` opt-in: before falling
@@ -452,9 +449,8 @@ void register_compile(py::module_& m) {
                 lucid::compile::CompiledExecutable* disk_hit =
                     lucid::compile::load_executable(disk_path, &load_err);
                 if (disk_hit != nullptr) {
-                    cache.insert(key, disk_hit);
-                    auto* hit = cache.find(key);
-                    return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
+                    auto hit = cache.insert(key, lucid::compile::share_executable(disk_hit));
+                    return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
                 }
             }
 
@@ -467,11 +463,10 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            cache.insert(key, exe);
-            auto* hit = cache.find(key);  // borrowed pointer from the cache
+            auto hit = cache.insert(key, lucid::compile::share_executable(exe));
             if (disk_cache_enabled && !disk_path.empty())
-                (void)lucid::compile::save_executable(hit, disk_path);
-            return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
+                (void)lucid::compile::save_executable(hit.get(), disk_path);
+            return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("dynamic_batch") = false,
         py::arg("param_ids") = std::vector<lucid::compile::TensorId>{},
@@ -517,7 +512,8 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("path"),
         "Reload a CompiledExecutable previously saved via "
@@ -552,7 +548,8 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
         py::arg("dynamic_batch") = false,
@@ -613,7 +610,8 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
         py::arg("opt_spec"), py::arg("state_buf_ids_per_param"), py::arg("scalar_input_ids"),
@@ -661,7 +659,8 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
         py::arg("ghost_grad_ids"), py::arg("output_target_ids"),
@@ -709,7 +708,8 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(lucid::compile::share_executable(exe)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
         py::arg("ghost_grad_ids"), py::arg("output_target_ids"), py::arg("variable_pairs"),

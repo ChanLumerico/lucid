@@ -157,15 +157,21 @@ CacheKey make_cache_key(const TraceGraph& graph,
     return key;
 }
 
+SharedExecutable share_executable(CompiledExecutable* exec) {
+    if (exec == nullptr)
+        return {};
+    return SharedExecutable(exec, [](CompiledExecutable* e) { destroy_executable(e); });
+}
+
 ExecutableCache::~ExecutableCache() {
     clear();
 }
 
-CompiledExecutable* ExecutableCache::find(const CacheKey& key) {
+SharedExecutable ExecutableCache::find(const CacheKey& key) {
     std::lock_guard<std::mutex> lock(mu_);
     auto it = map_.find(key);
     if (it == map_.end())
-        return nullptr;
+        return {};
 
     // Bump the matching entry to the back of the LRU vector (most
     // recent).  Linear scan is acceptable because ``max_entries_`` is
@@ -179,18 +185,12 @@ CompiledExecutable* ExecutableCache::find(const CacheKey& key) {
     return it->second;
 }
 
-void ExecutableCache::insert(CacheKey key, CompiledExecutable* exec) {
+SharedExecutable ExecutableCache::insert(CacheKey key, SharedExecutable exec) {
     std::lock_guard<std::mutex> lock(mu_);
 
-    // Replace existing entry under the same key, releasing the prior
-    // executable.
-    auto it = map_.find(key);
-    if (it != map_.end()) {
-        destroy_executable(it->second);
-        it->second = exec;
-    } else {
-        map_.emplace(key, exec);
-    }
+    // Replace any existing entry under the same key; a caller still
+    // holding the previous executable keeps it alive.
+    map_[key] = exec;
 
     // Bring the key to the front of "most-recent".
     auto vit = std::find(lru_order_.begin(), lru_order_.end(), key);
@@ -202,18 +202,13 @@ void ExecutableCache::insert(CacheKey key, CompiledExecutable* exec) {
     while (lru_order_.size() > max_entries_) {
         const CacheKey victim = std::move(lru_order_.front());
         lru_order_.erase(lru_order_.begin());
-        auto mit = map_.find(victim);
-        if (mit != map_.end()) {
-            destroy_executable(mit->second);
-            map_.erase(mit);
-        }
+        map_.erase(victim);
     }
+    return exec;
 }
 
 void ExecutableCache::clear() {
     std::lock_guard<std::mutex> lock(mu_);
-    for (auto& [_, exec] : map_)
-        destroy_executable(exec);
     map_.clear();
     lru_order_.clear();
 }
