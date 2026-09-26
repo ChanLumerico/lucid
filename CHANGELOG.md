@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the Python backward node declares once_differentiable
 
+- a compiled module stays in its parent's tree and recompiles on new weights
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

@@ -3,6 +3,7 @@ nn.Module: base class for all neural network layers.
 """
 
 import warnings
+import weakref
 from collections import OrderedDict
 from typing import (
     Callable,
@@ -53,6 +54,45 @@ def _next_hook_id() -> int:
     global _HOOK_ID
     _HOOK_ID += 1
     return _HOOK_ID
+
+
+class _ModuleWrapper:
+    """Answers calls on behalf of a module that stays in its parent's tree.
+
+    :func:`lucid.compile` returns one.  Assigned as a module attribute, the
+    wrapped :attr:`model` is what the parent registers — so its parameters,
+    ``state_dict`` keys, ``.to()`` and ``.train()`` are exactly what they
+    were before it was wrapped — while the attribute itself keeps answering
+    with the wrapper, so ``self.encoder(x)`` still takes the wrapper's path.
+    """
+
+    @property
+    def model(self) -> Module:
+        """The module this wrapper answers for."""
+        raise NotImplementedError
+
+    def _tensors_replaced(self) -> None:
+        """The model's parameters or buffers were swapped for new tensors."""
+
+
+# Wrappers holding work derived from a module's tensors, keyed by that module.
+# ``_apply`` (``.to()`` / ``.half()``) and ``load_state_dict`` put new tensors
+# in place of the old ones, and a compiled executable fed the old ones keeps
+# answering with the old weights — so both tell the module's wrappers.
+_WRAPPERS: weakref.WeakKeyDictionary[Module, weakref.WeakSet[_ModuleWrapper]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _watch_tensors(module: Module, wrapper: _ModuleWrapper) -> None:
+    """Tell ``wrapper`` whenever ``module``'s tensors are replaced."""
+    _WRAPPERS.setdefault(module, weakref.WeakSet()).add(wrapper)
+
+
+def _tensors_replaced(module: Module) -> None:
+    if _WRAPPERS:
+        for wrapper in tuple(_WRAPPERS.get(module, ())):
+            wrapper._tensors_replaced()
 
 
 class Module:
@@ -427,6 +467,16 @@ class Module:
         elif isinstance(value, Module):
             self.__dict__.pop(name, None)
             self._modules[name] = value
+        elif isinstance(value, _ModuleWrapper):
+            # The wrapped model joins the tree under this name — every walk
+            # (parameters, state_dict, ``.to()``, ``.train()``) reaches it as
+            # if it had been assigned bare — and the attribute, found in
+            # ``__dict__`` before ``__getattr__`` is consulted, answers with
+            # the wrapper.  Held only as a plain attribute, the model was
+            # outside the tree: an optimizer built from the parent missed
+            # its parameters and a checkpoint missed its weights.
+            self._modules[name] = value.model
+            object.__setattr__(self, name, value)
         elif was_buffer and (value is None or isinstance(value, Tensor)):
             # Assigning to a registered buffer updates it; it does not
             # un-register it.  Without this branch the de-registration
@@ -471,6 +521,8 @@ class Module:
             return
         if name in self._modules:
             del self._modules[name]
+            # A wrapped model's wrapper sits in ``__dict__`` beside it.
+            self.__dict__.pop(name, None)
             return
         object.__delattr__(self, name)
 
@@ -817,6 +869,7 @@ class Module:
             if buf is None:
                 continue
             self._buffers[key] = fn(buf)
+        _tensors_replaced(self)
         return self
 
     def to(self, *args: object, **kwargs: object) -> Self:

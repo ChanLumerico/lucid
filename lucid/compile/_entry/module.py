@@ -3,12 +3,11 @@ lucid.compile._entry.module — Phase 1.4 CompiledModule.
 
 Wraps a regular :class:`nn.Module` so that subsequent calls with the
 same input signature reuse a single :class:`MPSGraphExecutable` rather
-than re-dispatching through eager.  Mirrors the delegation pattern of
-:class:`lucid.nn.functional.linear.FusedLinear` — the wrapper is
-itself a :class:`nn.Module` and re-exposes the inner model's
-parameters / state_dict / training mode, but does NOT register the
-inner model under ``_modules`` (that would double-count parameters on
-walks).
+than re-dispatching through eager.  The wrapper is not itself an
+:class:`nn.Module`: it re-exposes the inner model's parameters /
+state_dict / training mode, and assigned onto a parent module it
+registers the inner model in the parent's tree while the attribute
+keeps answering with the wrapper (``lucid.nn.module._ModuleWrapper``).
 
 Phase 1.4 ships **forward-only graph caching**: the cached executable
 captures the forward pass only, and the result tensor is returned
@@ -39,6 +38,7 @@ from typing import (
     Self,
     cast,
     final,
+    override,
 )
 
 
@@ -61,7 +61,7 @@ from lucid._C import engine as _C_engine
 
 from lucid.compile._core.fallback import EagerFallbackSet, run_eager
 from lucid.compile._core.signature import CacheKey, leaf_tensors, signature_of
-from lucid.nn.module import Module
+from lucid.nn.module import Module, _ModuleWrapper, _watch_tensors
 from lucid.nn.parameter import Parameter
 
 if TYPE_CHECKING:
@@ -224,7 +224,7 @@ class _CacheEntry:
     written: list[object] = field(default_factory=list)
 
 
-class CompiledModule[**P, R]:
+class CompiledModule[**P, R](_ModuleWrapper):
     # ── Class-level annotations ──────────────────────────────────
     # ``CompiledModule[**P, R]`` (PEP 695) captures the wrapped model's /
     # callable's call signature so ``compiled(*args)`` keeps the original
@@ -425,10 +425,21 @@ class CompiledModule[**P, R]:
         # a fresh closure each call would defeat the cache, which the
         # docstring warns about.
         object.__setattr__(self, "_step_callables", {})
+        # Executables pin the tensors they were traced with.  A ``.to()`` or
+        # an ``assign=True`` load reaching the model some other way — through
+        # a parent module, or on the model itself — replaces those tensors,
+        # and a cached call would go on answering with the old weights.
+        _watch_tensors(model, self)
+
+    @override
+    def _tensors_replaced(self) -> None:
+        """Recompile on the next call: the model's tensors were replaced."""
+        self.clear_cache()
 
     # ── Delegation surface ────────────────────────────────────────
 
     @property
+    @override
     def model(self) -> Module:
         """The wrapped :class:`nn.Module` (or duck-typed callable wrapper)."""
 

@@ -26,7 +26,7 @@ from lucid.nn.hooks import (
     _GLOBAL_LOAD_STATE_DICT_POST_HOOKS,
     _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS,
 )
-from lucid.nn.module import Module
+from lucid.nn.module import Module, _tensors_replaced
 from lucid._types import StateDict
 
 
@@ -276,6 +276,9 @@ def _walk_load(
             error_msgs,
             assign=True,
         )
+        # New tensor objects now stand where the old ones did; a copy (the
+        # branch below) writes into the old ones, which every holder sees.
+        _tensors_replaced(module)
     else:
         module._load_from_state_dict(
             state_dict,
