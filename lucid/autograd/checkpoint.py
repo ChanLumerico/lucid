@@ -23,14 +23,15 @@ Usage
     loss = criterion(y, target)
     loss.backward()
 
-Limitations
------------
-* Only single-Tensor outputs are supported.  If *function* returns a
-  tuple, use a wrapper that stacks/concatenates outputs into one Tensor
-  and splits in the caller.
-* ``preserve_rng_state`` is accepted but **not implemented** — RNG state
-  is not saved/restored around the recomputation.  Set it to ``False``
-  when using stochastic layers (Dropout) inside the checkpoint segment.
+Notes
+-----
+* ``function`` may return one tensor or a tuple of them; each output's
+  gradient seeds the recomputed graph.
+* RNG state is saved before the forward and restored for the
+  recomputation (``preserve_rng_state=True``, the default), so a dropout
+  inside the segment masks the same units both times.  Without it the
+  recomputed segment drew a fresh mask and the gradient belonged to a
+  different network than the one that produced the loss.
 * ``use_reentrant=True`` (the default, for compatibility) derives the
   output's ``requires_grad`` from the positional inputs alone, so a
   segment fed only constants produces no gradient for the parameters it
@@ -43,6 +44,7 @@ Limitations
 from typing import Callable, TYPE_CHECKING, cast, final, override
 
 from lucid._factories.creation import zeros
+from lucid._factories.random import get_rng_state, set_rng_state
 from lucid.autograd._grad_mode import no_grad, enable_grad
 from lucid.autograd.function import Function, FunctionCtx
 
@@ -51,12 +53,12 @@ if TYPE_CHECKING:
 
 
 def checkpoint(
-    function: Callable[..., Tensor],
+    function: Callable[..., Tensor | tuple[Tensor, ...]],
     *args: Tensor,
     preserve_rng_state: bool = True,
     use_reentrant: bool = True,
     **kwargs: object,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, ...]:
     """Run *function* under gradient checkpointing.
 
     Executes ``function(*args, **kwargs)`` during the forward pass
@@ -69,13 +71,13 @@ def checkpoint(
     ----------
     function : callable
         The differentiable segment to checkpoint.  Must accept tensors as
-        positional arguments and return a single :class:`~lucid.Tensor`.
+        positional arguments and return a :class:`~lucid.Tensor` or a
+        tuple of them.
     *args : Tensor
         Positional tensor inputs to *function*.
     preserve_rng_state : bool
-        Accepted for API compatibility.  RNG state restoration is not yet
-        implemented — set to ``False`` when *function* contains stochastic
-        layers.
+        Restore the random state the forward saw before recomputing, so
+        stochastic layers draw the same values twice.  Default ``True``.
     use_reentrant : bool
         ``True`` (default, kept for backward compatibility) ties the
         recomputation to the positional inputs: if none of them requires
@@ -90,7 +92,7 @@ def checkpoint(
 
     Returns
     -------
-    Tensor
+    Tensor or tuple of Tensor
         Output of ``function(*args, **kwargs)``.
 
     Examples
@@ -119,9 +121,13 @@ def checkpoint(
 
         @override
         @staticmethod
-        def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor:
+        def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
             real = inputs[:n_args]
             ctx.save_for_backward(*real)
+            # The segment runs twice, and the second run has to draw what
+            # the first drew — or a dropout inside it masks different units
+            # and the gradient belongs to a different network.
+            ctx.rng_state = get_rng_state() if preserve_rng_state else None
             # Run without tracking so intermediate activations are NOT stored.
             with no_grad():
                 output = fn(*real, **kw)
@@ -130,7 +136,7 @@ def checkpoint(
         @override
         @staticmethod
         def backward(  # type: ignore[override]
-            ctx: FunctionCtx, grad_output: Tensor
+            ctx: FunctionCtx, *grad_outputs: Tensor
         ) -> tuple[Tensor | None, ...]:
             inputs = ctx.saved_tensors
 
@@ -141,18 +147,36 @@ def checkpoint(
             # Re-run the forward segment to rebuild the local graph.  Anything
             # the segment closed over — module parameters, most often — is
             # part of that graph and accumulates through the backward below.
-            with enable_grad():
-                output = fn(*detached, **kw)
+            saved_state = cast(Tensor | None, ctx.rng_state)
+            resume = get_rng_state() if saved_state is not None else None
+            if saved_state is not None:
+                set_rng_state(saved_state)
+            try:
+                with enable_grad():
+                    output = fn(*detached, **kw)
+            finally:
+                if resume is not None:
+                    set_rng_state(resume)
 
-            # Backward through the re-computed graph.  The seed arrives
-            # shaped ``(1,)`` for a 0-d output — harmless for an ordinary
-            # backward, which broadcasts, but ``Tensor.backward`` checks the
-            # shape exactly, so a segment returning a scalar (a loss block, a
-            # pooled embedding) could not be checkpointed at all.
-            seed = grad_output
-            if tuple(seed.shape) != tuple(output.shape):
-                seed = seed.reshape(output.shape)
-            output.backward(seed)
+            # Backward through the re-computed graph, every output seeded
+            # with its own gradient.  A seed arrives shaped ``(1,)`` for a
+            # 0-d output — harmless for an ordinary backward, which
+            # broadcasts, but the engine checks the shape exactly, so a
+            # segment returning a scalar could not be checkpointed at all.
+            outputs = output if isinstance(output, tuple) else (output,)
+            roots: list[Tensor] = []
+            seeds: list[Tensor] = []
+            for out, seed in zip(outputs, grad_outputs):
+                if seed is None or not out.requires_grad:
+                    continue
+                if tuple(seed.shape) != tuple(out.shape):
+                    seed = seed.reshape(out.shape)
+                roots.append(out)
+                seeds.append(seed)
+            if roots:
+                from lucid.autograd._backward import backward
+
+                backward(roots, seeds)
 
             grads: tuple[Tensor | None, ...] = tuple(
                 t.grad if t.requires_grad else None for t in detached
@@ -161,7 +185,7 @@ def checkpoint(
             return grads if n_inputs == n_args else grads + (None,)
 
     if use_reentrant:
-        return cast("Tensor", _CheckpointFn.apply(*args))
+        return cast(Tensor | tuple[Tensor, ...], _CheckpointFn.apply(*args))
 
     # ── non-reentrant ────────────────────────────────────────────────────
     #
@@ -178,7 +202,7 @@ def checkpoint(
     # that backward fires, the segment is recomputed under ``enable_grad``,
     # and the closed-over parameters accumulate.
     anchor = zeros(1, requires_grad=True)
-    return cast("Tensor", _CheckpointFn.apply(*args, anchor))
+    return cast(Tensor | tuple[Tensor, ...], _CheckpointFn.apply(*args, anchor))
 
 
 __all__ = ["checkpoint"]

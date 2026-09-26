@@ -2,11 +2,8 @@
 Gradient checkpointing: trade memory for recomputation during backward.
 """
 
-from typing import Callable, cast, override
+from typing import Callable
 from lucid._tensor.tensor import Tensor
-from lucid.autograd.function import Function, FunctionCtx
-from lucid.autograd._grad_mode import no_grad, enable_grad
-import lucid.autograd as _autograd
 
 
 def checkpoint(
@@ -32,18 +29,16 @@ def checkpoint(
     Parameters
     ----------
     function : callable
-        The forward computation to checkpoint.  Must be deterministic
-        given ``(args, kwargs)`` — if it consumes randomness (dropout,
-        random init), seed it explicitly inside the callable, otherwise
-        forward and re-forward will disagree.
+        The forward computation to checkpoint.  Randomness it consumes
+        (dropout) is replayed on the recompute: the random state is saved
+        before the forward and restored for the second run.
     *args : Tensor
         Positional tensor inputs.  Saved by the autograd context and
         passed back to ``function`` on backward.
     use_reentrant : bool, optional
-        Accepted for API parity with reference frameworks; currently
-        ignored — Lucid always uses the non-reentrant strategy (a
-        dedicated :class:`Function` subclass with manual recompute).
-        Default ``False``.
+        ``False`` (the default) keeps the segment in the graph even when
+        no positional input requires grad, so parameters it closes over
+        still train; see :func:`lucid.autograd.checkpoint`.
     **kwargs : object
         Non-tensor keyword arguments forwarded to ``function``.  They
         are *not* differentiated through.
@@ -52,8 +47,8 @@ def checkpoint(
     -------
     Tensor or tuple[Tensor, ...]
         Whatever ``function(*args, **kwargs)`` returns — the gradient
-        graph routes through `CheckpointFunction` so backward
-        triggers the recompute path.
+        graph routes through :func:`lucid.autograd.checkpoint`, so
+        backward triggers the recompute path.
 
     Examples
     --------
@@ -79,53 +74,16 @@ def checkpoint(
     lucid.autograd.Function : the autograd primitive underneath.
     """
 
-    class CheckpointFunction(Function):
-        """Custom autograd Function that runs the wrapped callable without saving intermediates, then re-executes it during backward to recompute the activations on demand."""
+    # One implementation, :func:`lucid.autograd.checkpoint`.  This module
+    # kept a second copy whose backward took gradients with respect to the
+    # explicit inputs only, so every parameter inside the checkpointed
+    # function received none and training through it left those weights
+    # frozen — and it recomputed with a fresh random state, so a dropout
+    # in the segment was differentiated through a different mask.
+    from lucid.autograd.checkpoint import checkpoint as _checkpoint
 
-        _once_differentiable = True  # second derivatives through it are unverified
-
-        @override
-        @staticmethod
-        def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
-            """Apply the layer / parametrization to the input."""
-            ctx.function = function
-            ctx.kwargs = kwargs
-            ctx.num_inputs = len(inputs)
-            ctx.save_for_backward(*inputs)
-            with no_grad():
-                return function(*inputs, **kwargs)
-
-        @override
-        @staticmethod
-        def backward(
-            ctx: FunctionCtx, *grad_outputs: Tensor
-        ) -> Tensor | tuple[Tensor, ...]:
-            """Compute the gradient for the saved input(s)."""
-            saved = ctx.saved_tensors
-            inputs_detached = [
-                s.detach().requires_grad_(s.requires_grad) for s in saved
-            ]
-            fn: Callable[..., Tensor | tuple[Tensor, ...]] = cast(
-                Callable[..., Tensor | tuple[Tensor, ...]], ctx.function
-            )
-            kw: dict[str, object] = cast(dict[str, object], ctx.kwargs)
-            with enable_grad():
-                output = fn(*inputs_detached, **kw)
-
-            if not isinstance(output, (list, tuple)):
-                output = (output,)
-            grads = _autograd.grad(
-                list(output),
-                [inp for inp in inputs_detached if inp.requires_grad],
-                grad_outputs=list(grad_outputs),
-                allow_unused=True,
-            )
-
-            grad_iter = iter(grads)
-            result: tuple[Tensor | None, ...] = tuple(
-                next(grad_iter) if inp.requires_grad else None
-                for inp in inputs_detached
-            )
-            return result  # type: ignore[return-value]
-
-    return CheckpointFunction.apply(*args)  # type: ignore[return-value]
+    # ``kwargs`` belong to ``function``; mypy cannot tell them from the
+    # checkpoint's own keyword arguments.
+    return _checkpoint(
+        function, *args, use_reentrant=use_reentrant, **kwargs  # type: ignore[arg-type]
+    )

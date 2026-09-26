@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - eigh's eigenvector gradient sign, a differentiable triangular solve
 
+- checkpoint trains the parameters it wraps and replays its dropout
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does
