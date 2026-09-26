@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - max and min split a tie's gradient instead of repeating it
 
+- sort stably and descending, split unevenly, and hold stubs to the runtime
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

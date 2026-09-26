@@ -1300,6 +1300,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
             "tril",
             "triu",
             "unbind",
+            "chunk",
             # Additional TENSOR_HEADER methods that registry also has
             "clone",
             "detach",
@@ -1327,7 +1328,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
     # Also add the Python-only methods that override registry (from _methods.py).
     # Uses _int / _bool / DimLike aliases — defined in the stub header above.
     python_only = [
-        "    def sum(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "    def sum(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def mean(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def prod(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def max(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
@@ -1343,11 +1344,12 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
         "    def unsqueeze(self, dim: DimLike = None) -> Tensor: ...",
         "    def gather(self, other: Tensor | _float, dim: DimLike = None) -> Tensor: ...",
-        "    def sort(self, dim: DimLike = None, descending: _bool = False) -> Tensor: ...",
-        "    def argsort(self, dim: DimLike = None, descending: _bool = False) -> Tensor: ...",
-        "    def topk(self, k: _int, dim: DimLike = None, largest: _bool = True) -> Tensor: ...",
-        "    def softmax(self, axis: _int = -1) -> Tensor: ...",
-        "    def log_softmax(self, axis: _int = -1) -> Tensor: ...",
+        "    def sort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
+        "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
+        "    def topk(self, k: _int, dim: _int = -1, largest: _bool = True) -> tuple[Tensor, Tensor]: ...",
+        "    def chunk(self, chunks: _int, dim: _int = 0) -> list[Tensor]: ...",
+        "    def softmax(self, dim: _int = -1) -> Tensor: ...",
+        "    def log_softmax(self, dim: _int = -1) -> Tensor: ...",
         "    def clip(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
         "    def clamp(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
         "    def repeat(self, *sizes: _int) -> Tensor: ...",
@@ -1361,7 +1363,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def scatter(self, dim: _int, index: Tensor, src: Tensor | _float, reduce: str | None = None) -> Tensor: ...",
         "    def kthvalue(self, k: _int, dim: _int = -1, keepdim: _bool = False) -> Tensor: ...",
         "    def movedim(self, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...",
-        "    def flatten(self, start: _int = 0, end: _int = -1) -> Tensor: ...",
+        "    def flatten(self, start_axis: _int = 0, end_axis: _int = -1) -> Tensor: ...",
         "    def unflatten(self, dim: _int, sizes: Sequence[_int]) -> Tensor: ...",
         "    def histc(self, bins: _int = 100, min: _float = 0.0, max: _float = 0.0) -> Tensor: ...",
         "    def eq(self, other: Tensor | _float) -> Tensor: ...",
@@ -1388,7 +1390,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def swapaxes(self, axis0: _int, axis1: _int) -> Tensor: ...",
         "    def transpose(self, dim0: _int | None = None, dim1: _int | None = None) -> Tensor: ...",
         "    def broadcast_to(self, shape: Sequence[_int]) -> Tensor: ...",
-        "    def unbind(self, axis: _int = 0) -> tuple[Tensor, ...]: ...",
+        "    def unbind(self, dim: _int = 0) -> list[Tensor]: ...",
         "    def rsqrt(self) -> Tensor: ...",
     ]
 
@@ -1827,7 +1829,8 @@ def _free_fn_sig(entry) -> str:
                     parts.append(f"{pname}{ann_str}")
                 else:
                     parts.append(f"{pname}{ann_str} = ...")
-        return f"def {name}({', '.join(parts)}) -> Tensor: ..."
+        ret = _RETURN_TYPE_MAP.get(name, "Tensor")
+        return f"def {name}({', '.join(parts)}) -> {ret}: ..."
 
     # Fallback (shouldn't trigger in normal builds): legacy heuristic.
     n = entry.n_tensor_args
@@ -2214,6 +2217,9 @@ _RETURN_TYPE_MAP: dict[str, str] = {
     "var_mean": "tuple[Tensor, Tensor]",
     "frexp": "tuple[Tensor, Tensor]",
     "histogram": "tuple[Tensor, Tensor]",
+    "topk": "tuple[Tensor, Tensor]",
+    "chunk": "list[Tensor]",
+    "unbind": "list[Tensor]",
     "histogram2d": "tuple[Tensor, Tensor, Tensor]",
     "histogramdd": "tuple[Tensor, list[Tensor]]",
     "atleast_1d": "Tensor | tuple[Tensor, ...]",

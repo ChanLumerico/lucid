@@ -11197,7 +11197,9 @@ private:
                     return descending ? (lv > rv) : (lv < rv);
                 };
                 if (K == L) {
-                    std::sort(order.begin(), order.end(), cmp);
+                    // Stable, so equal keys keep their input order — what
+                    // sort / argsort document, and what the GPU path does.
+                    std::stable_sort(order.begin(), order.end(), cmp);
                 } else {
                     std::partial_sort(order.begin(), order.begin() + K, order.end(), cmp);
                 }

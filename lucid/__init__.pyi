@@ -1407,38 +1407,35 @@ def cummin(input: Tensor, dim: DimLike = ...) -> Tensor: ...
 def erf(input: Tensor) -> Tensor: ...
 def erfinv(input: Tensor) -> Tensor: ...
 def trace(input: Tensor) -> Tensor:
-    r"""    Return the sum of the diagonal entries of a 2-D tensor.
+    r"""    Return the running minimum of ``input`` along ``dim``.
     
-    For a matrix :math:`A \in \mathbb{R}^{n \times n}` (or its non-square
-    generalisation, where the shorter dimension determines the diagonal
-    length), :func:`trace` reduces along the main diagonal.
+    Output ``i`` along ``dim`` is the minimum of elements ``0..i``.  Only the
+    values come back; the reference framework also returns the index of
+    each running minimum, which is not computed here.
     
     Parameters
     ----------
     input : Tensor
-        2-D tensor.  Non-square matrices use the shorter axis for the
-        diagonal length.
+        Source tensor.
+    dim : int, default -1
+        Dimension to scan along.
     
     Returns
     -------
     Tensor
-        0-D tensor (scalar).
+        Same shape and dtype as ``input``.
     
     Notes
     -----
-    .. math::
-    
-        \mathrm{tr}(A) \;=\; \sum_{i=1}^{\min(m,n)} A_{ii} .
-    
-    The trace is invariant under cyclic permutations of products:
-    :math:`\mathrm{tr}(AB) = \mathrm{tr}(BA)`.
+    The gradient of output ``i`` flows to the element that set the running
+    minimum at step ``i``; differentiable twice.
     
     Examples
     --------
     >>> import lucid
-    >>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
-    >>> lucid.trace(A)
-    Tensor(5.)
+    >>> x = lucid.tensor([1.0, 3.0, 2.0, 4.0])
+    >>> lucid.cummin(x, dim=0)
+    Tensor([1., 1., 1., 1.])
     """
     ...
 def reshape(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
@@ -2068,63 +2065,69 @@ def gather(input: Tensor, indices: Tensor, dim: DimLike = ...) -> Tensor:
             [5, 5]])
     """
     ...
-def sort(input: Tensor, dim: DimLike = ...) -> Tensor:
-    r"""    Sort ``input`` along ``dim`` in ascending order and return values + indices.
+def sort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
+    r"""    Sort ``input`` along ``dim`` and return the sorted values.
     
-    The sort is stable: equal keys retain their relative order.  For
-    descending order, negate the input or post-process the returned
-    indices.
+    The sort is stable: equal keys keep their input order.  Only the values
+    come back — :func:`argsort` gives the permutation that produces them,
+    with the same ``descending`` flag.  (The reference framework returns a
+    ``(values, indices)`` pair here.)
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
-    dim : DimLike
+    dim : int, default -1
         Axis to sort along.
+    descending : bool, default False
+        Largest first.
     
     Returns
     -------
-    tuple of (Tensor, Tensor)
-        ``(sorted_values, indices)`` — values sorted along ``dim``, and
-        the indices into ``input`` that produce them.
+    Tensor
+        ``input``'s values ordered along ``dim``, same shape and dtype.
     
     Notes
     -----
-    ``input[indices] == sorted_values`` along ``dim``.  See
-    :func:`argsort` for the index-only variant.
+    NaN sorts as the largest value: last ascending, first descending.
+    ``lucid.gather(input, lucid.argsort(input, dim), dim)`` equals
+    ``lucid.sort(input, dim)``.  Gradients flow back to the positions the
+    values came from.
     
     Examples
     --------
     >>> import lucid
     >>> x = lucid.tensor([3, 1, 2])
     >>> lucid.sort(x, dim=0)
-    (Tensor([1, 2, 3]), Tensor([1, 2, 0]))
+    Tensor([1, 2, 3])
+    >>> lucid.sort(x, dim=0, descending=True)
+    Tensor([3, 2, 1])
     """
     ...
-def argsort(input: Tensor, dim: DimLike = ...) -> Tensor:
+def argsort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
     r"""    Return the indices that would sort ``input`` along ``dim``.
     
-    Indexing ``input`` with the returned tensor along ``dim`` yields a
-    sorted tensor.  Equivalent to ``sort(input, dim)[1]`` but returns
-    only the index half.
+    Gathering ``input`` with the returned tensor along ``dim`` gives
+    :func:`sort`'s result.
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
-    dim : DimLike
+    dim : int, default -1
         Axis along which to sort.
+    descending : bool, default False
+        Order largest first.
     
     Returns
     -------
     Tensor
-        ``int64`` index tensor of the same shape as ``input``.
+        Integer index tensor of the same shape as ``input``.
     
     Notes
     -----
-    The sort is stable: equal keys preserve their input order.  For
-    descending order, negate the input or pass ``descending=True`` to
-    :func:`sort` and use its index output.
+    The sort is stable in both directions: equal keys keep their input
+    order, descending included.  NaN sorts as the largest value.
     
     Examples
     --------
@@ -2132,6 +2135,8 @@ def argsort(input: Tensor, dim: DimLike = ...) -> Tensor:
     >>> x = lucid.tensor([3, 1, 4, 1, 5])
     >>> lucid.argsort(x, dim=0)
     Tensor([1, 3, 0, 2, 4])
+    >>> lucid.argsort(x, dim=0, descending=True)
+    Tensor([4, 2, 0, 1, 3])
     """
     ...
 def nonzero(input: Tensor) -> Tensor:
@@ -2196,22 +2201,24 @@ def unique(input: Tensor) -> Tensor:
     Tensor([1, 2, 3, 4])
     """
     ...
-def topk(input: Tensor, k: _int, dim: DimLike = ...) -> Tensor:
-    r"""    Return the ``k`` largest values along ``dim`` and their indices.
+def topk(input: Tensor, k: _int, dim: _int = ..., largest: _bool = ...) -> tuple[Tensor, Tensor]:
+    r"""    Return the ``k`` largest (or smallest) values along ``dim`` and their indices.
     
     Both outputs have size ``k`` along ``dim``; all other dims match
-    ``input``.  The result is unsorted unless the backend chooses to
-    sort it as a side effect.
+    ``input``.  Values come best first: descending for ``largest=True``,
+    ascending otherwise.
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
     k : int
-        Number of top elements to return.  Must satisfy
+        Number of elements to return.  Must satisfy
         ``0 < k <= input.size(dim)``.
-    dim : DimLike
+    dim : int, default -1
         Reduction axis.
+    largest : bool, default True
+        ``False`` returns the ``k`` smallest instead.
     
     Returns
     -------
@@ -2220,8 +2227,10 @@ def topk(input: Tensor, k: _int, dim: DimLike = ...) -> Tensor:
     
     Notes
     -----
-    For the ``k``-th order statistic only, prefer :func:`kthvalue`.  For
-    full sort, prefer :func:`sort`.
+    ``largest=False`` takes the head of the stable ascending order, so equal
+    values keep their input order and NaN is taken only when fewer than
+    ``k`` numbers remain.  For the ``k``-th order statistic alone, prefer
+    :func:`kthvalue`.
     
     Examples
     --------
@@ -2230,6 +2239,8 @@ def topk(input: Tensor, k: _int, dim: DimLike = ...) -> Tensor:
     >>> v, i = lucid.topk(x, k=3, dim=0)
     >>> v
     Tensor([5., 4., 3.])
+    >>> lucid.topk(x, k=2, dim=0, largest=False)[1]
+    Tensor([0, 4])
     """
     ...
 def diagonal(input: Tensor, offset: _int = ..., dim1: _int = ..., dim2: _int = ...) -> Tensor: ...
@@ -2703,13 +2714,13 @@ def vstack(tensors: list[Tensor]) -> Tensor:
             [4, 5, 6]])
     """
     ...
-def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
-    r"""    Split a tensor into ``chunks`` roughly equal pieces along ``dim``.
+def chunk(input: Tensor, chunks: _int, dim: _int = ...) -> list[Tensor]:
+    r"""    Split a tensor into at most ``chunks`` pieces along ``dim``.
     
-    Unlike :func:`split`, which takes an explicit size or list of sizes,
-    :func:`chunk` divides the input dimension into ``chunks`` parts whose
-    sizes differ by at most one element.  If ``dim`` is not divisible by
-    ``chunks`` the last chunk is smaller.
+    Each piece has size :math:`\lceil n / c \rceil` along ``dim`` except the
+    last, which holds what remains — so fewer than ``chunks`` pieces come
+    back when that size exhausts the dimension early (``n=6, c=4`` gives
+    ``[2, 2, 2]``).  :func:`split` takes the piece size instead.
     
     Parameters
     ----------
@@ -2717,19 +2728,14 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
         Source tensor.
     chunks : int
         Desired number of pieces.  Must be positive.
-    dim : DimLike
+    dim : int, default 0
         Dimension along which to split.
     
     Returns
     -------
     list of Tensor
-        Up to ``chunks`` pieces of ``input`` — views of its buffer on the
-        CPU, copies on metal.
-    
-    Notes
-    -----
-    Each chunk has size :math:`\lceil n / c \rceil` except possibly the
-    last; for ``n=7, c=3`` the chunks are ``[3, 3, 1]``.
+        The pieces of ``input`` in order — views of its buffer on the CPU,
+        copies on metal.
     
     Examples
     --------
@@ -2737,9 +2743,11 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
     >>> x = lucid.arange(7)
     >>> [t.shape for t in lucid.chunk(x, 3, dim=0)]
     [(3,), (3,), (1,)]
+    >>> [t.shape for t in lucid.chunk(x, 4, dim=0)]
+    [(2,), (2,), (2,), (1,)]
     """
     ...
-def unbind(input: Tensor, dim: DimLike = ...) -> Tensor:
+def unbind(input: Tensor, dim: DimLike = ...) -> list[Tensor]:
     r"""    Remove ``dim`` and return the slices along it.
     
     Equivalent to ``[x.select(dim, i) for i in range(x.size(dim))]`` but
@@ -2751,18 +2759,17 @@ def unbind(input: Tensor, dim: DimLike = ...) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    dim : DimLike
+    dim : int, default 0
         Dimension to unbind.
     
     Returns
     -------
-    tuple of Tensor
-        ``input.size(dim)`` views, each of rank ``input.ndim - 1``.
+    list of Tensor
+        ``input.size(dim)`` tensors, each of rank ``input.ndim - 1``.
     
     Notes
     -----
-    The inverse operation is :func:`stack` along the same dim.  Useful
-    for unpacking batched sequences without copying.
+    The inverse operation is :func:`stack` along the same dim.
     
     Examples
     --------
@@ -4005,11 +4012,12 @@ def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor, reduce: st
     """
     ...
 def kthvalue(input: Tensor, k: _int, dim: _int = ..., keepdim: _bool = ...) -> Tensor:
-    r"""    Return the ``k``-th smallest value along ``dim`` and its index.
+    r"""    Return the ``k``-th smallest value along ``dim``.
     
-    Indices are 1-based: ``k=1`` is the minimum, ``k=size(dim)`` is the
-    maximum.  Equivalent to :func:`sort` followed by an index along
-    ``dim`` but typically faster (``O(n)`` via quickselect).
+    ``k`` is 1-based: ``k=1`` is the minimum, ``k=size(dim)`` the maximum.
+    Only the values come back.  The reference framework returns a
+    ``(values, indices)`` pair; for the position here, take slot ``k - 1``
+    of ``lucid.argsort(input, dim)`` along ``dim``.
     
     Parameters
     ----------
@@ -4020,25 +4028,25 @@ def kthvalue(input: Tensor, k: _int, dim: _int = ..., keepdim: _bool = ...) -> T
     dim : int, default -1
         Reduction axis.
     keepdim : bool, default False
-        Retain reduced dim with size 1.
+        Retain the reduced dim with size 1.
     
     Returns
     -------
-    tuple of (Tensor, Tensor)
-        ``(values, indices)`` — values of the ``k``-th order statistic
-        and their positions along ``dim``.
+    Tensor
+        The ``k``-th smallest values; ``input.shape`` with ``dim`` removed
+        (or kept as 1).
     
-    Notes
-    -----
-    Ties are broken by the order in which they appear in ``input``.
-    Behaviour is undefined if ``k`` is outside ``[1, size(dim)]``.
+    Raises
+    ------
+    LucidError
+        If ``k`` is outside ``[1, size(dim)]``.
     
     Examples
     --------
     >>> import lucid
     >>> x = lucid.tensor([5.0, 1.0, 4.0, 2.0, 3.0])
     >>> lucid.kthvalue(x, k=2, dim=0)
-    (Tensor(2.), Tensor(3))
+    Tensor(2.)
     """
     ...
 def movedim(input: Tensor, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor:
@@ -5157,43 +5165,42 @@ def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
 def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
 def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
 def var(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor:
-    r"""    Compute the sample variance along ``dim``.
+    r"""    Return the smallest element of ``x``, or the smallest along ``dim``.
     
-    Computes the mean squared deviation from the per-slice mean.  Selecting
-    ``correction=1`` (default) yields Bessel's unbiased estimator;
-    ``correction=0`` produces the maximum-likelihood (biased) estimator.
+    Only the values come back.  The reference framework's ``min(x, dim)``
+    returns a ``(values, indices)`` pair; here :func:`argmin` gives the
+    positions, and ``lucid.topk(x, 1, dim, largest=False)`` returns both.
     
     Parameters
     ----------
     x : Tensor
         Input tensor.
     dim : int or list of int, optional
-        Dimension(s) to reduce.
+        Axis or axes to reduce.  ``None`` reduces every element.
     keepdim : bool, default False
-        Retain reduced dims with size 1.
-    correction : int, default 1
-        Degrees-of-freedom correction.
+        Keep each reduced axis with size 1.
     
     Returns
     -------
     Tensor
-        Reduced floating-point tensor.
+        The smallest values; ``x.shape`` with the reduced axes removed (or
+        kept as 1).
     
     Notes
     -----
-    .. math::
-    
-        \mathrm{Var}(x) \;=\; \frac{1}{n - c}
-            \sum_{i=1}^{n} (x_i - \bar{x})^2 ,
-    
-    with :math:`c \in \{0, 1\}` set by the ``correction`` keyword.
+    NaN propagates: a slice holding NaN reduces to NaN.  The gradient is
+    shared equally among the positions tied for the smallest value, so the
+    shares sum to one — the subgradient the reference framework's
+    ``amin`` gives.
     
     Examples
     --------
     >>> import lucid
-    >>> x = lucid.tensor([1.0, 2.0, 3.0, 4.0])
-    >>> lucid.var(x)
-    Tensor(1.6667)
+    >>> x = lucid.tensor([[1.0, 4.0], [3.0, 2.0]])
+    >>> lucid.min(x)
+    Tensor(1.)
+    >>> lucid.min(x, dim=1)
+    Tensor([1., 2.])
     """
     ...
 def std(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor:

@@ -320,6 +320,70 @@ def _scatter_adapter(
     )
 
 
+def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
+    """sort(a, dim=-1, descending=False) — the sorted values along ``dim``."""
+    out = _C_engine.sort(a_impl, int(dim))
+    if descending:
+        out = _C_engine.flip(out, [int(dim)])
+    return out
+
+
+def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
+    """argsort(a, dim=-1, descending=False).
+
+    Descending keeps equal keys in their input order, as ascending does:
+    sort the reversed input ascending, map each position ``p`` of it back
+    to index ``n - 1 - p``, and reverse.  Reversing the ascending indices
+    instead would put ties last-first.
+    """
+    d = int(dim)
+    if not descending:
+        return _C_engine.argsort(a_impl, d)
+    reversed_order = _C_engine.argsort(_C_engine.flip(a_impl, [d]), d)
+    last = _C_engine.full_like(reversed_order, float(a_impl.shape[d] - 1))
+    return _C_engine.flip(_C_engine.sub(last, reversed_order), [d])
+
+
+def _topk_adapter(
+    a_impl: _Impl, k: int, dim: int = -1, largest: bool = True
+) -> tuple[_Impl, _Impl]:
+    """topk(a, k, dim=-1, largest=True) — ``(values, indices)``, best first.
+
+    The smallest ``k`` are the head of the stable ascending order, so equal
+    keys keep their input order and NaN, which sorts last, is taken only
+    when fewer than ``k`` numbers remain.
+    """
+    d = int(dim)
+    if largest:
+        values, indices = _C_engine.topk(a_impl, int(k), d)
+        return values, indices
+    order = _C_engine.narrow(_C_engine.argsort(a_impl, d), d, 0, int(k))
+    return _C_engine.gather(a_impl, order, d), order
+
+
+def _chunk_adapter(a_impl: _Impl, chunks: int, dim: int = 0) -> list[_Impl]:
+    """chunk(a, chunks, dim=0).
+
+    Pieces of ``ceil(n / chunks)`` along ``dim``, the last one shorter —
+    so fewer than ``chunks`` pieces come back when that size leaves nothing
+    for the tail (7 split into 4 is 2, 2, 2, 1; 6 split into 4 is 2, 2, 2).
+    """
+    d = int(dim)
+    count = int(chunks)
+    if count <= 0:
+        raise ValueError(f"chunk: chunks must be positive, got {count}")
+    size = int(a_impl.shape[d])
+    if size % count == 0:
+        return _C_engine.chunk(a_impl, count, d)
+    step = (size + count - 1) // count
+    return _C_engine.split_at(a_impl, list(range(step, size, step)), d)
+
+
+def _swapaxes_adapter(a_impl: _Impl, axis0: int, axis1: int) -> _Impl:
+    """swapaxes(a, axis0, axis1) — the free function's parameter names."""
+    return _C_engine.swapaxes(a_impl, int(axis0), int(axis1))
+
+
 def _kthvalue_adapter(
     a_impl: _Impl,
     k: int,
@@ -662,12 +726,16 @@ def _split_adapter(
     split_size_or_sections: int | Sequence[int],
     dim: int = 0,
 ) -> list[_Impl]:
-    """split(x, sections, dim=0) — int → equal chunks; list → explicit sizes."""
+    """split(x, sections, dim=0) — int → pieces of that size, the last one
+    shorter when it does not divide; list → explicit sizes."""
     axis_size = int(x_impl.shape[dim])
     if isinstance(split_size_or_sections, int):
-        chunk = split_size_or_sections
-        n = (axis_size + chunk - 1) // chunk
-        return _C_engine.split(x_impl, n, int(dim))
+        size = split_size_or_sections
+        if size <= 0:
+            raise ValueError(f"split: split_size must be positive, got {size}")
+        if axis_size and axis_size % size == 0:
+            return _C_engine.split(x_impl, axis_size // size, int(dim))
+        return _C_engine.split_at(x_impl, list(range(size, axis_size, size)), int(dim))
     indices: list[int] = []
     cumsum = 0
     for s in split_size_or_sections[:-1]:
