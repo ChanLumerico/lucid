@@ -230,7 +230,8 @@ class RMSNorm(Module):
         ``d`` is equivalent to the single-element tuple ``(d,)``.
     eps : float, optional
         Small constant added inside the square root for numerical
-        stability.  Default: ``1e-8``.
+        stability.  ``None`` (the default) uses the machine epsilon of the
+        input's dtype at each call.
     device : DeviceLike, optional
         Device on which to allocate ``weight``.  Default: ``None``.
     dtype : DTypeLike, optional
@@ -252,9 +253,10 @@ class RMSNorm(Module):
     -----
     - RMSNorm has no bias term; if a shift is needed, add a separate
       bias or use :class:`LayerNorm`.
-    - The default ``eps`` (``1e-8``) is intentionally smaller than that
-      of :class:`LayerNorm` (``1e-5``), since RMS values can be very
-      small for zero-mean inputs.
+    - With ``eps=None`` the epsilon follows the input's dtype, as the
+      reference framework's does.  A fixed ``1e-8`` — the old default —
+      rounds to zero in float16, so a half-precision Core ML export of an
+      all-zero row divided by an exact zero.
     - The weight is initialised to all ones so the transformation starts
       as a pure normalisation.
 
@@ -282,7 +284,7 @@ class RMSNorm(Module):
     def __init__(
         self,
         normalized_shape: int | list[int] | tuple[int, ...],
-        eps: float = 1e-8,
+        eps: float | None = None,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:

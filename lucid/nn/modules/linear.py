@@ -225,19 +225,28 @@ class Identity(Module):
     (1, 512)
     """
 
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Accept and ignore any arguments.
+
+        So ``Identity`` can stand in wherever a layer is built from
+        arguments — ``norm_layer(dim)``, ``act(inplace=True)`` — without a
+        special case at the call site.  It raised on any argument before.
+        """
+        super().__init__()
+
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        r"""Apply the linear transformation to the input tensor.
+        r"""Return the input unchanged.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor of shape :math:`(*, \text{in\_features})`.
+        x : Tensor
+            Input of any shape.
 
         Returns
         -------
         Tensor
-            Output tensor of shape :math:`(*, \text{out\_features})`.
+            ``x`` itself.
         """
         return x
 

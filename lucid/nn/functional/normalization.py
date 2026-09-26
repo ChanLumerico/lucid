@@ -294,7 +294,7 @@ def rms_norm(
     x: Tensor,
     normalized_shape: list[int] | tuple[int, ...],
     weight: Tensor | None = None,
-    eps: float = 1e-8,
+    eps: float | None = None,
 ) -> Tensor:
     r"""Root-mean-square layer normalization (Zhang & Sennrich, 2019).
 
@@ -314,7 +314,11 @@ def rms_norm(
     weight : Tensor, optional
         Per-element scale :math:`\gamma`.  Defaults to ones.
     eps : float, optional
-        Numerical safety added inside the square root.
+        Numerical safety added inside the square root.  ``None`` (the
+        default) uses the machine epsilon of ``x``'s dtype, as the
+        reference framework does — a fixed ``1e-8`` rounds to zero in
+        float16, so a half-precision export divided by an exact zero on
+        an all-zero row.
 
     Returns
     -------
@@ -346,6 +350,10 @@ def rms_norm(
     """
     from lucid._factories.creation import ones
 
+    if eps is None:
+        from lucid._dtype import finfo
+
+        eps = float(finfo(x.dtype).eps)
     norm_shape = tuple(int(d) for d in normalized_shape)
     if not norm_shape:
         raise ValueError("rms_norm: normalized_shape must not be empty")

@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - SafeTensors loads and saves bfloat16, and unsigned arrays convert
 
+- Identity takes any arguments; RMSNorm's default eps follows the dtype
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

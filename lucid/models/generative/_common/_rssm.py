@@ -521,13 +521,15 @@ class RSSM(nn.Module):
             self.deter_in = nn.Linear(deter_size, hidden_size)
             self.stoch_in = nn.Linear(self.stoch_width, hidden_size)
             self.action_in = nn.Linear(action_dim, hidden_size)
-            self.deter_in_norm = nn.RMSNorm(hidden_size)
-            self.stoch_in_norm = nn.RMSNorm(hidden_size)
-            self.action_in_norm = nn.RMSNorm(hidden_size)
+            # eps pinned to the value this port has always used, so the
+            # module default following the dtype changes nothing here.
+            self.deter_in_norm = nn.RMSNorm(hidden_size, eps=1e-8)
+            self.stoch_in_norm = nn.RMSNorm(hidden_size, eps=1e-8)
+            self.action_in_norm = nn.RMSNorm(hidden_size, eps=1e-8)
             self.block_hidden = BlockLinear(
                 deter_size + 3 * hidden_size * blocks, deter_size, blocks
             )
-            self.block_hidden_norm = nn.RMSNorm(deter_size)
+            self.block_hidden_norm = nn.RMSNorm(deter_size, eps=1e-8)
             self.block_gate = BlockLinear(deter_size, 3 * deter_size, blocks)
         else:
             self.pre_cell = nn.Linear(self.stoch_width + action_dim, hidden_size)
