@@ -33,12 +33,25 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Add.h"
+#include "../ops/bfunc/Compare.h"
 #include "../ops/bfunc/Matmul.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/composite/Indexing.h"
+#include "../ops/composite/Logical.h"
 #include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Discrete.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/ScalarParam.h"
 #include "../ops/ufunc/Transpose.h"
 #include "../ops/utils/Concat.h"
+#include "../ops/utils/Contiguous.h"
+#include "../ops/utils/Layout.h"
 #include "../ops/utils/Promote.h"
+#include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
 
 namespace lucid {
@@ -201,6 +214,141 @@ std::vector<Storage> GridSampleBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return be.grid_sample_backward(grad_out, saved_inputs_[0], saved_inputs_[1], input_shape_,
                                    grid_shape_, mode_, padding_mode_, align_corners_, dtype_);
+}
+
+std::vector<TensorImplPtr> GridSampleBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The adjoint the kernel computes, step for step, in ops.  Sampling is
+    // a weighted gather of the input at (ix, iy); its input gradient is the
+    // matching weighted scatter-add of the incoming gradient, and its grid
+    // gradient is the gradient's projection onto the weights' slope — the
+    // differences between neighbouring corners.  The weights depend on the
+    // grid and the corner values on the input, so both gradients are
+    // differentiable in both.
+    const auto& input = saved_impl_inputs_[0];
+    const auto& grid = saved_impl_inputs_[1];
+    if (!input || !grid)
+        ErrorBuilder("grid_sample").fail("graph-mode backward is missing a saved input");
+    if (input_shape_.size() != 4)
+        ErrorBuilder("grid_sample").not_implemented("create_graph=True needs a 4-D input");
+    const std::int64_t n = input_shape_[0], ch = input_shape_[1];
+    const std::int64_t h = input_shape_[2], w = input_shape_[3];
+    const std::int64_t points = grid_shape_[1] * grid_shape_[2];
+    const auto constant = [](const TensorImplPtr& like, double v) {
+        return full_like_op(like, v, false);
+    };
+
+    // Source coordinates as the kernel forms them: (g + 1) * (dim - 1) / 2
+    // aligned, (g + 1) * dim / 2 - 0.5 otherwise.  The same order of
+    // operations, so the corner each point picks is the kernel's.
+    const auto source = [&](int axis, std::int64_t dim, double& slope) {
+        auto g = reshape_op(narrow_op(grid, 3, axis, 1), {n, points});
+        slope = align_corners_ ? (static_cast<double>(dim) - 1.0) / 2.0
+                               : static_cast<double>(dim) / 2.0;
+        auto coord = mul_op(add_op(g, constant(g, 1.0)), constant(g, slope));
+        return align_corners_ ? coord : sub_op(coord, constant(coord, 0.5));
+    };
+    double sx = 0.0, sy = 0.0;
+    auto ix = source(0, w, sx);
+    auto iy = source(1, h, sy);
+
+    // A border-clipped coordinate's gradient is zero where the clip bit.
+    const bool clip = mode_ == 0 && padding_mode_ == 1;
+    const auto inside = [&](const TensorImplPtr& c, std::int64_t dim) {
+        return astype_op(
+            logical_and_op(greater_equal_op(c, constant(c, 0.0)),
+                           less_equal_op(c, constant(c, static_cast<double>(dim - 1)))),
+            dtype_);
+    };
+    TensorImplPtr keep_x, keep_y;
+    if (clip) {
+        keep_x = inside(ix, w);
+        keep_y = inside(iy, h);
+        ix = clip_op(ix, 0.0, static_cast<double>(w - 1));
+        iy = clip_op(iy, 0.0, static_cast<double>(h - 1));
+    }
+
+    auto input_flat = reshape_op(input, {n, ch, h * w});
+    auto g_flat = reshape_op(grad_out, {n, ch, points});
+    const auto spread = [&](const TensorImplPtr& t) {  // (N, P) -> (N, 1, P)
+        return unsqueeze_op(t, 1);
+    };
+    // A corner's flat index, clamped as the kernel clamps its reads, and
+    // whether zero padding keeps it.
+    const auto corner = [&](const TensorImplPtr& xc, const TensorImplPtr& yc,
+                            TensorImplPtr& valid) {
+        valid =
+            padding_mode_ == 0
+                ? astype_op(logical_and_op(
+                                logical_and_op(
+                                    greater_equal_op(xc, constant(xc, 0.0)),
+                                    less_equal_op(xc, constant(xc, static_cast<double>(w - 1)))),
+                                logical_and_op(
+                                    greater_equal_op(yc, constant(yc, 0.0)),
+                                    less_equal_op(yc, constant(yc, static_cast<double>(h - 1))))),
+                            dtype_)
+                : TensorImplPtr{};
+        auto xi = astype_op(clip_op(xc, 0.0, static_cast<double>(w - 1)), Dtype::I32);
+        auto yi = astype_op(clip_op(yc, 0.0, static_cast<double>(h - 1)), Dtype::I32);
+        auto flat = add_op(mul_op(yi, full_like_op(yi, static_cast<double>(w), false)), xi);
+        return contiguous_op(broadcast_to_op(spread(flat), Shape{n, ch, points}));
+    };
+    const auto masked = [&](const TensorImplPtr& t, const TensorImplPtr& valid) {
+        return valid ? mul_op(t, valid) : t;
+    };
+
+    auto dinput = zeros_op(Shape{n, ch, h * w}, dtype_, device_);
+    if (mode_ == 1) {
+        // Nearest: one source per point, a gradient only for the input.
+        TensorImplPtr valid;
+        auto idx = corner(round_op(ix), round_op(iy), valid);
+        auto src = valid ? mul_op(g_flat, spread(valid)) : g_flat;
+        dinput = scatter_add_op(dinput, idx, src, 2);
+        return {reshape_op(dinput, {n, ch, h, w}), zeros_like_op(grid)};
+    }
+
+    auto x0 = floor_op(ix);
+    auto y0 = floor_op(iy);
+    auto x1 = add_op(x0, constant(x0, 1.0));
+    auto y1 = add_op(y0, constant(y0, 1.0));
+    auto fx = sub_op(ix, x0);
+    auto fy = sub_op(iy, y0);
+    auto gx = sub_op(constant(fx, 1.0), fx);  // weight toward x0
+    auto gy = sub_op(constant(fy, 1.0), fy);  // weight toward y0
+
+    TensorImplPtr va, vb, vc, vd;
+    auto ia = corner(x0, y0, va);  // (y0, x0)
+    auto ib = corner(x0, y1, vb);  // (y1, x0)
+    auto ic = corner(x1, y0, vc);  // (y0, x1)
+    auto id = corner(x1, y1, vd);  // (y1, x1)
+
+    const auto scatter = [&](const TensorImplPtr& idx, const TensorImplPtr& weight,
+                             const TensorImplPtr& valid) {
+        dinput = scatter_add_op(dinput, idx, mul_op(g_flat, spread(masked(weight, valid))), 2);
+    };
+    scatter(ia, mul_op(gx, gy), va);
+    scatter(ib, mul_op(gx, fy), vb);
+    scatter(ic, mul_op(fx, gy), vc);
+    scatter(id, mul_op(fx, fy), vd);
+
+    const auto value = [&](const TensorImplPtr& idx, const TensorImplPtr& valid) {
+        auto v = gather_op(input_flat, idx, 2);
+        return valid ? mul_op(v, spread(valid)) : v;
+    };
+    auto a = value(ia, va), b = value(ib, vb), c = value(ic, vc), d = value(id, vd);
+    auto dix = sum_op(
+        mul_op(g_flat, add_op(mul_op(sub_op(c, a), spread(gy)), mul_op(sub_op(d, b), spread(fy)))),
+        std::vector<int>{1}, false);
+    auto diy = sum_op(
+        mul_op(g_flat, add_op(mul_op(sub_op(b, a), spread(gx)), mul_op(sub_op(d, c), spread(fx)))),
+        std::vector<int>{1}, false);
+    if (clip) {
+        dix = mul_op(dix, keep_x);
+        diy = mul_op(diy, keep_y);
+    }
+    auto dgx = mul_op(dix, constant(dix, sx));
+    auto dgy = mul_op(diy, constant(diy, sy));
+    auto dgrid = reshape_op(stack_op({dgx, dgy}, 2), {n, grid_shape_[1], grid_shape_[2], 2});
+    return {reshape_op(dinput, {n, ch, h, w}), dgrid};
 }
 
 TensorImplPtr grid_sample_op(const TensorImplPtr& input,

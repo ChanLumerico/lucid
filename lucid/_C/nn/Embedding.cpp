@@ -25,10 +25,12 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../backend/gpu/MlxBridge.h"
 #include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/Helpers.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
@@ -36,8 +38,10 @@
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Mul.h"
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Astype.h"
 #include "../ops/utils/Layout.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
@@ -267,6 +271,138 @@ std::vector<Storage> EmbeddingBagBackward::apply(Storage grad_out) {
     return {be.embedding_bag_backward(grad_out, saved_weight_, saved_indices_, saved_offsets_,
                                       weight_shape_, indices_shape_, mode_, padding_idx_,
                                       include_last_offset_, dtype_)};
+}
+
+namespace {
+
+// A saved storage's bytes on the host, whichever device holds them.
+CpuStorage host_copy(const Storage& s, const Shape& shape) {
+    if (const auto* cpu = std::get_if<CpuStorage>(&s))
+        return *cpu;
+    return gpu::download_gpu_to_cpu(std::get<GpuStorage>(s), shape);
+}
+
+std::int64_t read_index(const CpuStorage& s, std::size_t k) {
+    return s.dtype == Dtype::I64 ? reinterpret_cast<const std::int64_t*>(s.ptr.get())[k]
+                                 : reinterpret_cast<const std::int32_t*>(s.ptr.get())[k];
+}
+
+}  // namespace
+
+std::vector<TensorImplPtr> EmbeddingBagBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The same rows, bags and weights the eager backward uses, as data; the
+    // scatter-add that lands the bag gradients on the rows is the op.
+    const std::int64_t num_emb = weight_shape_[0];
+    const std::int64_t dim = weight_shape_[1];
+    std::size_t n_idx = 1;
+    for (auto d : indices_shape_)
+        n_idx *= static_cast<std::size_t>(d);
+    const CpuStorage indices = host_copy(saved_indices_, indices_shape_);
+    const std::size_t off_elem = std::holds_alternative<CpuStorage>(saved_offsets_)
+                                     ? dtype_size(std::get<CpuStorage>(saved_offsets_).dtype)
+                                     : dtype_size(std::get<GpuStorage>(saved_offsets_).dtype);
+    const std::size_t n_bags = storage_nbytes(saved_offsets_) / off_elem;
+    const CpuStorage offsets = host_copy(saved_offsets_, Shape{static_cast<std::int64_t>(n_bags)});
+
+    std::vector<std::size_t> starts(n_bags), ends(n_bags);
+    for (std::size_t b = 0; b < n_bags; ++b) {
+        starts[b] = static_cast<std::size_t>(read_index(offsets, b));
+        ends[b] = (b + 1 < n_bags && !include_last_offset_)
+                      ? static_cast<std::size_t>(read_index(offsets, b + 1))
+                      : n_idx;
+    }
+    if (include_last_offset_ && n_bags > 0)
+        ends[n_bags - 1] = static_cast<std::size_t>(read_index(offsets, n_bags - 1));
+    const auto usable = [&](std::int64_t emb) {
+        return emb != padding_idx_ && emb >= 0 && emb < num_emb;
+    };
+
+    const Shape weight_shape{num_emb, dim};
+    auto base = zeros_op(weight_shape, dtype_, device_);
+    const auto upload = [&](CpuStorage cpu, const Shape& shape, Dtype dt) {
+        return std::make_shared<TensorImpl>(
+            backend::Dispatcher::for_device(device_).from_cpu(std::move(cpu), shape), shape, dt,
+            device_, false);
+    };
+
+    if (mode_ == 2) {
+        // max: each (bag, column) sends its gradient to the row that won it,
+        // first on ties, as the forward's strict ``>`` decided.
+        const CpuStorage weight = host_copy(saved_weight_, weight_shape);
+        const Shape grid{static_cast<std::int64_t>(n_bags), dim};
+        CpuStorage rows = helpers::allocate_cpu(grid, Dtype::I32);
+        CpuStorage keep = helpers::allocate_cpu(grid, Dtype::F64);
+        auto* row = reinterpret_cast<std::int32_t*>(rows.ptr.get());
+        auto* kept = reinterpret_cast<double*>(keep.ptr.get());
+        const auto value = [&](std::int64_t emb, std::int64_t d) -> double {
+            const std::size_t at = static_cast<std::size_t>(emb * dim + d);
+            switch (weight.dtype) {
+            case Dtype::F64:
+                return reinterpret_cast<const double*>(weight.ptr.get())[at];
+            case Dtype::F32:
+                return reinterpret_cast<const float*>(weight.ptr.get())[at];
+            default:
+                ErrorBuilder("embedding_bag").not_implemented("create_graph=True for this dtype");
+                return 0.0;
+            }
+        };
+        for (std::size_t b = 0; b < n_bags; ++b)
+            for (std::int64_t d = 0; d < dim; ++d) {
+                std::int64_t best = -1;
+                double best_val = 0.0;
+                for (std::size_t k = starts[b]; k < ends[b]; ++k) {
+                    const std::int64_t emb = read_index(indices, k);
+                    if (!usable(emb))
+                        continue;
+                    const double v = value(emb, d);
+                    if (best < 0 || v > best_val) {
+                        best = emb;
+                        best_val = v;
+                    }
+                }
+                const std::size_t at = b * static_cast<std::size_t>(dim) + d;
+                row[at] = static_cast<std::int32_t>(best < 0 ? 0 : best);
+                kept[at] = best < 0 ? 0.0 : 1.0;
+            }
+        auto keep_t = astype_op(upload(std::move(keep), grid, Dtype::F64), dtype_);
+        auto src = mul_op(grad_out, keep_t);
+        return {scatter_add_op(base, upload(std::move(rows), grid, Dtype::I32), src, 0)};
+    }
+
+    // sum / mean: every usable index k sends its bag's gradient, scaled by
+    // 1 / count for mean, to its row.
+    std::vector<std::int32_t> bag_of, row_of;
+    std::vector<double> scale_of;
+    for (std::size_t b = 0; b < n_bags; ++b) {
+        std::size_t count = 0;
+        for (std::size_t k = starts[b]; k < ends[b]; ++k)
+            count += usable(read_index(indices, k)) ? 1 : 0;
+        for (std::size_t k = starts[b]; k < ends[b]; ++k) {
+            const std::int64_t emb = read_index(indices, k);
+            if (!usable(emb))
+                continue;
+            bag_of.push_back(static_cast<std::int32_t>(b));
+            row_of.push_back(static_cast<std::int32_t>(emb));
+            scale_of.push_back(mode_ == 1 ? 1.0 / static_cast<double>(count) : 1.0);
+        }
+    }
+    const std::int64_t used = static_cast<std::int64_t>(bag_of.size());
+    if (used == 0)
+        return {base};
+    const Shape pick{used, dim};
+    CpuStorage bags = helpers::allocate_cpu(pick, Dtype::I32);
+    CpuStorage rows = helpers::allocate_cpu(pick, Dtype::I32);
+    CpuStorage scales = helpers::allocate_cpu(pick, Dtype::F64);
+    for (std::int64_t k = 0; k < used; ++k)
+        for (std::int64_t d = 0; d < dim; ++d) {
+            const std::size_t at = static_cast<std::size_t>(k * dim + d);
+            reinterpret_cast<std::int32_t*>(bags.ptr.get())[at] = bag_of[k];
+            reinterpret_cast<std::int32_t*>(rows.ptr.get())[at] = row_of[k];
+            reinterpret_cast<double*>(scales.ptr.get())[at] = scale_of[k];
+        }
+    auto src = gather_op(grad_out, upload(std::move(bags), pick, Dtype::I32), 0);
+    src = mul_op(src, astype_op(upload(std::move(scales), pick, Dtype::F64), dtype_));
+    return {scatter_add_op(base, upload(std::move(rows), pick, Dtype::I32), src, 0)};
 }
 
 LUCID_REGISTER_OP(EmbeddingBagBackward)

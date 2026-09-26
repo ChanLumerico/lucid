@@ -196,8 +196,8 @@ def test_a_layout_copy_passes_the_gradient_through(fn) -> None:
 # ── the name in the refusal ───────────────────────────────────────────────────
 
 
-class TestUnsupportedOpIsNamed:
-    """A refusal has to say which op refused.
+class TestANodeIsNamed:
+    """A node says which op it differentiates.
 
     ``node_name`` falls back to the C++ type name, and it derived that by
     stripping a leading run of digits — the flat Itanium mangling
@@ -207,22 +207,11 @@ class TestUnsupportedOpIsNamed:
     advanced, and the whole mangled string came back as the op name.
     Nodes in the anonymous namespace inside ``lucid`` were worse
     (``N5lucid12_GLOBAL__N_113WhereBackwardE``).
-    """
 
-    @staticmethod
-    def _refused_op_name(build):
-        x = lucid.tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
-        try:
-            lucid.autograd.grad(build(x).sum(), [x], create_graph=True)
-        except RuntimeError as exc:
-            message = str(exc)
-            if "not yet supported for op" not in message:
-                pytest.fail(f"refused for another reason: {message}")
-            return message.split("op '")[1].split("'")[0]
-        pytest.fail(
-            "the op now supports create_graph, so nothing refuses — pick an op "
-            "that still does, or drop the case"
-        )
+    It was checked through refusal messages, the only place the name
+    surfaced, until no op reached from Python refused ``create_graph``
+    any more; ``grad_fn.name()`` shows it directly now.
+    """
 
     @pytest.mark.parametrize(
         "label,build",
@@ -234,19 +223,20 @@ class TestUnsupportedOpIsNamed:
                     x.reshape(1, 1, 2, 2), lucid.zeros(1, 1, 1, 2, dtype=x.dtype)
                 ),
             ),
-            # ``Dot2DBackward`` lives in an anonymous namespace inside
-            # ``lucid``, which mangles differently again and was the worse of
-            # the two.  (cummax and cummin stood here until they gained a
-            # graph-mode backward.)
+            # These live in an anonymous namespace inside ``lucid``, which
+            # mangles differently again and was the worse of the two.
             ("dot 2-D", lambda x: x.dot(x)),
+            ("cummax", lambda x: lucid.cummax(x, dim=1)),
         ],
     )
-    def test_the_message_names_the_op_not_its_mangling(self, label, build) -> None:
-        name = self._refused_op_name(build)
-        assert name != "unknown"
+    def test_the_name_is_the_op_not_its_mangling(self, label, build) -> None:
+        x = lucid.tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
+        name = build(x).grad_fn.name()
         assert name.endswith("Backward"), name
         # The tells of an unparsed mangling.
         assert not name.startswith("N"), name
         assert "_GLOBAL__N_" not in name, name
         assert "lucid" not in name, name
         assert name.isidentifier(), name
+
+

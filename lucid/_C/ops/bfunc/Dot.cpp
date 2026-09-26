@@ -20,6 +20,8 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
+#include "../ufunc/Transpose.h"
+#include "Matmul.h"
 #include "Mul.h"
 #include "_BinaryOp.h"
 #include "_Detail.h"
@@ -103,6 +105,16 @@ public:
         Storage da = be.matmul(grad_out, saved_b_, da_opts, dtype_);
         Storage db = be.matmul(saved_a_, grad_out, db_opts, dtype_);
         return {std::move(da), std::move(db)};
+    }
+
+    // Graph mode: the same two products as matmuls, differentiable again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const auto& a = saved_impl_inputs_[0];
+        const auto& b = saved_impl_inputs_[1];
+        if (!a || !b)
+            ErrorBuilder("dot").fail("graph-mode backward is missing a saved input");
+        const std::vector<int> swap{1, 0};
+        return {matmul_op(grad_out, permute_op(b, swap)), matmul_op(permute_op(a, swap), grad_out)};
     }
 };
 

@@ -391,7 +391,12 @@ public:
     Device device_ = Device::CPU;
 
     // Accumulate ``grad_out`` back onto the rows each bag gathered.
-    std::vector<Storage> apply(Storage grad_out);
+    std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the rows each bag drew from are read on the host,
+    // as the eager backward reads them, and the gradient is a scatter-add of
+    // the bag gradients onto them — differentiable again in the gradient.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,

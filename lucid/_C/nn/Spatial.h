@@ -192,6 +192,11 @@ public:
 
     // Backward pass: gradients w.r.t. ``input`` and ``grid``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the kernel's adjoint written in ops — gathers,
+    // scatter-adds and the bilinear weights — so it can be differentiated
+    // again, in the input and the grid alike.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public affine-grid entry point.

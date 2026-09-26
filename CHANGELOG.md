@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a package's state can be seeded, read back and restored
 
+- second derivatives through grid_sample, embedding_bag and 2-D dot
+
 ### Performance
 
 - check_weight_fit builds in shadow and reads headers in parallel

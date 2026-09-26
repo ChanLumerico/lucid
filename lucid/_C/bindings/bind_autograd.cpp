@@ -33,8 +33,10 @@ void register_autograd(py::module_& m) {
     // Python may hold a reference longer than the graph itself.
     py::class_<Node, std::shared_ptr<Node>>(m, "Node")
         .def_property_readonly("sequence_nr", &Node::sequence_nr)
+        .def("name", &Node::node_name,
+             "The operation this node differentiates, e.g. ``\"MulBackward\"``.")
         .def("__repr__", [](const Node& n) {
-            return "<lucid.Node seq=" + std::to_string(n.sequence_nr()) + ">";
+            return "<lucid.Node " + n.node_name() + " seq=" + std::to_string(n.sequence_nr()) + ">";
         });
 
     // AccumulateGrad is the leaf-variable sink node; Python code can detect it
