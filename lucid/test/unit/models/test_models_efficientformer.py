@@ -136,7 +136,7 @@ class TestEfficientFormerWeightsEnums(unittest.TestCase):
         for cls in self._enums():
             tf = cls.SNAP_DIST_IN1K.transforms()
             self.assertEqual(tf.crop_size, 224)
-            self.assertEqual(tf.resize_size, 236)
+            self.assertEqual(tf.resize_size, 235)  # timm truncates 224 / 0.95
             self.assertEqual(tf.interpolation, "bicubic")
 
     def test_registry_discoverable(self) -> None:

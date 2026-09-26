@@ -55,6 +55,9 @@ def _register(
     node = _C_engine._PythonBackwardNode()
     node.ctx = cpp_ctx
     node.backward_fn = backward_fn
+    # A backward that leaves the graph says so, and create_graph=True through
+    # it is refused instead of answered with a detached gradient.
+    node.once_differentiable = bool(getattr(fn_class, "_once_differentiable", False))
 
     impl_inputs = [_unwrap(t) for t in tensor_inputs]
     out_seq = outputs if isinstance(outputs, tuple) else (outputs,)

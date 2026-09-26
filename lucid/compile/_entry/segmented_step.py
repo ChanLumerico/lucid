@@ -335,6 +335,8 @@ class _SegmentFunction(Function):
     the Tensor inputs; backward returns one cotangent per Tensor input.
     """
 
+    _once_differentiable = True  # second derivatives through it are unverified
+
     # forward's 1st positional is a non-Tensor holder list, like
     # make_step._CompiledStepFunction's.
     @override

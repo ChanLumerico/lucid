@@ -115,6 +115,10 @@ std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplP
     if (out_shapes.size() > 1)
         ErrorBuilder("custom Function")
             .not_implemented("create_graph=True through a Function with several outputs");
+    if (once_differentiable)
+        ErrorBuilder("custom Function")
+            .not_implemented("create_graph=True through a Function whose backward is "
+                             "once_differentiable — it does not record its own graph");
 
     py::object result;
     try {
@@ -252,7 +256,8 @@ void register_custom_function(py::module_& m) {
                                                                               "_PythonBackwardNode")
         .def(py::init<>())
         .def_readwrite("ctx", &PythonBackwardNode::py_ctx)
-        .def_readwrite("backward_fn", &PythonBackwardNode::py_backward_fn);
+        .def_readwrite("backward_fn", &PythonBackwardNode::py_backward_fn)
+        .def_readwrite("once_differentiable", &PythonBackwardNode::once_differentiable);
 
     // _register_python_backward_node(output, node, inputs)
     //

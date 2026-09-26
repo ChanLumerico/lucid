@@ -286,6 +286,8 @@ def dequantize(
 class _FakeQuantizeAffine(Function):
     """``dequantize(quantize(x))`` with a straight-through backward."""
 
+    _once_differentiable = True  # second derivatives through it are unverified
+
     @override
     @staticmethod
     def forward(  # type: ignore[override]

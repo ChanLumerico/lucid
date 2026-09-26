@@ -115,6 +115,8 @@ def checkpoint(
 
     @final
     class _CheckpointFn(Function):
+        _once_differentiable = True  # second derivatives through it are unverified
+
         @override
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor:

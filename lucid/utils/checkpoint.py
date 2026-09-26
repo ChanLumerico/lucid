@@ -82,6 +82,8 @@ def checkpoint(
     class CheckpointFunction(Function):
         """Custom autograd Function that runs the wrapped callable without saving intermediates, then re-executes it during backward to recompute the activations on demand."""
 
+        _once_differentiable = True  # second derivatives through it are unverified
+
         @override
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:

@@ -163,6 +163,8 @@ def _augmented_dynamics(
 class _AdjointSolve(Function):
     """Solve forwards without a graph, and recover gradients backwards."""
 
+    _once_differentiable = True  # second derivatives through it are unverified
+
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature by design

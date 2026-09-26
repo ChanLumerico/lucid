@@ -192,6 +192,13 @@ public:
     // Signature: (ctx: FunctionCtx, grad_output: Tensor) -> Tensor | tuple[Tensor]
     py::object py_backward_fn;
 
+    // Set for a Function whose backward is not itself differentiable — it
+    // leaves the graph (numpy, detach, a closed-form factor it does not
+    // record).  create_graph=True through it is refused rather than given
+    // a gradient with no path back, which a second derivative would read
+    // as zero.  The reference framework's ``once_differentiable``.
+    bool once_differentiable = false;
+
     // Metadata of the forward output tensor — used to reconstruct a
     // TensorImpl wrapper around the incoming gradient Storage.
     Shape out_shape;

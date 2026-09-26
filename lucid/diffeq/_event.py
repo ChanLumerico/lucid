@@ -396,6 +396,8 @@ class _EventTimeGradient(Function):
     derivative -- an arbitrarily small change can make the crossing disappear.
     """
 
+    _once_differentiable = True  # second derivatives through it are unverified
+
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature by design

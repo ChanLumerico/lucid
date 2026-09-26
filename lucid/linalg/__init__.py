@@ -260,6 +260,8 @@ class _CholeskyAutograd(_AutogradFunction):
     cholesky_op. Forward calls the engine; backward computes the input
     gradient via Murray (2016)."""
 
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
+
     @override
     @staticmethod
     def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:  # type: ignore[override]
@@ -833,11 +835,15 @@ class _QRCombinedGrad(_AutogradFunction):
     their contributions accumulate in A.grad.
     """
 
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
+
 
 @final
 class _QRRGrad(_AutogradFunction):
     """Backward: R contribution.  Uses Cholesky route for correctness with
     LAPACK's sign convention (negative diagonal R elements are allowed)."""
+
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
 
     @override
     @staticmethod
@@ -905,6 +911,8 @@ class _QRRGrad(_AutogradFunction):
 class _QRRGradWithA(_AutogradFunction):
     """Backward: R contribution to dA via Cholesky of A^T A."""
 
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
+
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -959,6 +967,8 @@ class _QRQGrad(_AutogradFunction):
     for square and tall (m >= n) reduced QR, so no separate off-range term is
     needed.
     """
+
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
 
     @override
     @staticmethod
@@ -1295,6 +1305,8 @@ class _EighWGrad(_AutogradFunction):
     skips them in the differentiable-input scan — only A gets a gradient edge.
     """
 
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
+
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -1316,6 +1328,8 @@ class _EighWGrad(_AutogradFunction):
 @final
 class _EighVGrad(_AutogradFunction):
     """Backward: eigenvector contribution  dA = sym(V (F ⊙ V^T G_V) V^T)."""
+
+    _once_differentiable = True  # the backward leaves the graph — CHA-8
 
     @override
     @staticmethod

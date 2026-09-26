@@ -447,6 +447,8 @@ def make_step(
         via the first positional argument.
         """
 
+        _once_differentiable = True  # second derivatives through it are unverified
+
         # forward's 1st positional is a non-Tensor ``entry_holder`` (the _StepEntry
         # holder), not a Tensor as Function.forward's *args base expects; a
         # documented exception per CompiledModule's design.
