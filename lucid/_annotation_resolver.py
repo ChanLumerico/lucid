@@ -17,8 +17,14 @@ writes (:mod:`lucid._annotation_names`).  How eagerly depends on when:
   ``import lucid`` pay for subpackages it deliberately defers (``lucid.nn``
   alone doubles it, 0.18 s to 0.39 s);
 * a module imported later — a subpackage the user asked for — also imports
-  its own Lucid and standard-library sources right after it, which that
-  import is paying for anyway.
+  its own Lucid and standard-library sources, which that import is paying
+  for anyway: once the outermost Lucid import in progress has finished, and
+  never inside one.  Importing a source while an enclosing Lucid module is
+  still executing reaches that module half-built — ``lucid.nn`` loading
+  ``lucid.utils`` loading the rollout driver, whose ``RSSM`` source needs
+  ``lucid.nn.GELU`` — and the failed import leaves ``lucid.models`` out of
+  ``sys.modules`` with its subpackages still in it, which the next plain
+  ``import`` of a model family trips over.
 
 A third-party source is never imported for an annotation.  numpy is a
 dependency of the bridge, not of the package, and making it required to
@@ -51,6 +57,12 @@ _eager = False
 #: ``lucid.nn``, which imports it.
 _done: set[str] = set()
 
+#: Lucid modules executing right now, one inside another.
+_depth = 0
+
+#: Sources to import once ``_depth`` is back to zero, in the order asked for.
+_deferred: dict[str, None] = {}
+
 
 def _importable(source: str) -> bool:
     top = source.split(".")[0]
@@ -76,14 +88,10 @@ def _bind(target: ModuleType, bound: str, source: str, attr: str | None) -> None
     if bound in target.__dict__:
         return
     module = _ready(source)
-    if module is None and _eager and _importable(source):
-        try:
-            importlib.import_module(source)
-        except Exception:  # noqa: BLE001 — an annotation must never break an import
-            pass
-        module = _ready(source)
     if module is None:
         _waiting.setdefault(source, []).append((target.__name__, bound, attr))
+        if _eager and _importable(source):
+            _deferred[source] = None
         return
     value: Any = module if attr is None else getattr(module, attr, _MISSING)
     if value is _MISSING:
@@ -104,6 +112,23 @@ def _resolve(module: ModuleType) -> None:
             _bind(target, bound, module.__name__, attr)
 
 
+def _import_deferred() -> None:
+    """Import the sources modules asked for, now that none is half-built.
+
+    Each import binds its waiting names as the source finishes; one that
+    asks for more sources adds them here, and they are taken in turn.
+    """
+    while _deferred:
+        source = next(iter(_deferred))
+        del _deferred[source]
+        if source in sys.modules:
+            continue
+        try:
+            importlib.import_module(source)
+        except Exception:  # noqa: BLE001 — an annotation must never break an import
+            pass
+
+
 class _ThenResolve(importlib.abc.Loader):
     """The module's own loader, followed by :func:`_resolve`.
 
@@ -121,9 +146,16 @@ class _ThenResolve(importlib.abc.Loader):
 
     @override
     def exec_module(self, module: ModuleType) -> None:
-        self._inner.exec_module(module)
+        global _depth
+        _depth += 1
+        try:
+            self._inner.exec_module(module)
+        finally:
+            _depth -= 1
         _done.add(module.__name__)
         _resolve(module)
+        if _depth == 0:
+            _import_deferred()
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)

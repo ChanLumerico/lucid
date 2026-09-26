@@ -24,8 +24,10 @@ here, not only the top level.
 
 import annotationlib
 import inspect
+import pkgutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -203,3 +205,48 @@ def test_binding_names_imports_nothing_the_package_defers() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, cwd=_REPO
     )
     assert result.returncode == 0, result.stderr[-2000:]
+
+
+def test_importing_any_subpackage_first_leaves_every_package_whole() -> None:
+    """Binding names never leaves a half-imported package behind.
+
+    The resolver imports a module's annotation sources for it — and once
+    did so while an enclosing module was still executing: ``import
+    lucid.nn`` loaded the rollout driver, whose ``RSSM`` source needed
+    ``lucid.nn.GELU`` before ``lucid.nn`` had it.  The failure was
+    swallowed, as an annotation must never break an import, but it took
+    ``lucid.models`` out of ``sys.modules`` and left thirteen of its
+    submodules in, and the next ``from lucid.models.generative.vjepa2_ac
+    import ...`` failed as a circular import.  Only a fresh interpreter
+    whose first import is the subpackage shows it — the nightly model-zoo
+    job, one process per file, found it in two files.  One interpreter
+    per subpackage, run side by side.
+    """
+    subpackages = sorted(
+        module.name
+        for module in pkgutil.iter_modules(lucid.__path__, "lucid.")
+        if module.ispkg and not module.name.startswith(("lucid._", "lucid.test"))
+    )
+
+    def first(name: str) -> str | None:
+        code = (
+            "import importlib, sys\n"
+            f"importlib.import_module({name!r})\n"
+            "orphans = sorted(\n"
+            "    n for n in sys.modules\n"
+            "    if n.startswith('lucid.') and n.rpartition('.')[0] not in sys.modules\n"
+            ")\n"
+            "assert not orphans, f'packages missing under {orphans}'\n"
+            "import lucid.models.generative.vjepa2_ac\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, cwd=_REPO
+        )
+        if result.returncode == 0:
+            return None
+        return f"import {name} first:\n{result.stderr[-1500:]}"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        broken = [why for why in pool.map(first, subpackages) if why]
+    assert len(subpackages) > 15, subpackages
+    assert not broken, "\n\n".join(broken)

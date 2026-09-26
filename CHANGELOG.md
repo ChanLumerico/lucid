@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - every public callable's signature is readable
 
+- import annotation sources only once no Lucid import is running
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does
