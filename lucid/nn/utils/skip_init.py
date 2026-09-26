@@ -8,9 +8,6 @@ overwrite the tensors a moment later.
 
 from typing import TYPE_CHECKING
 
-import lucid
-import lucid.nn as nn
-
 if TYPE_CHECKING:
     from lucid.nn.module import Module
 
@@ -18,13 +15,13 @@ if TYPE_CHECKING:
 def skip_init(module_cls: type, *args: object, **kwargs: object) -> Module:
     r"""Construct a module while skipping its parameter initialisation.
 
-    Instantiates ``module_cls(*args, **kwargs)`` and then immediately
-    replaces every learnable parameter with an *uninitialised* buffer
-    of the same shape / dtype / device.  The intended pattern is
-    "construct, then ``load_state_dict``": skipping the
-    :func:`xavier_uniform` / :func:`kaiming_normal` work that is about
-    to be overwritten saves measurable time on large models with many
-    layers.
+    Instantiates ``module_cls(*args, **kwargs)`` with every
+    :mod:`lucid.nn.init` initialiser turned into a no-op, so each
+    parameter keeps whatever its allocation left.  The intended pattern
+    is "construct, then ``load_state_dict``": skipping the
+    :func:`~lucid.nn.init.xavier_uniform_` /
+    :func:`~lucid.nn.init.kaiming_normal_` work that is about to be
+    overwritten saves measurable time on large models with many layers.
 
     Parameters
     ----------
@@ -45,9 +42,12 @@ def skip_init(module_cls: type, *args: object, **kwargs: object) -> Module:
 
     Notes
     -----
-    Lucid allocates each parameter normally, then swaps its underlying
-    storage for the output of :func:`lucid.empty` — semantically
-    equivalent to the reference framework's ``meta``-device trick.
+    The initialisers are skipped, not run and discarded: no random draw
+    and no fill happens while the module is built, and the global random
+    state is left where it was.  A module that fills its parameters some
+    other way — by assigning a freshly drawn tensor in ``__init__`` —
+    still pays for that.
+
     Callers **must not** inspect parameter values before loading a
     checkpoint; the contents are unspecified and may contain ``nan``
     or ``inf``.
@@ -59,22 +59,13 @@ def skip_init(module_cls: type, *args: object, **kwargs: object) -> Module:
     >>> model = skip_init(nn.Linear, 1024, 1024)
     >>> # ... immediately load a checkpoint ...
     """
-    module: Module = module_cls(*args, **kwargs)
+    # The initialisers are no-ops while the module is built, so its
+    # parameters keep whatever their allocation left and no random draw or
+    # fill runs.  It used to construct normally and then swap each
+    # parameter for fresh empty storage: every initialiser still ran, and
+    # the model was briefly allocated twice.
+    from lucid.nn.init import _skipping
 
-    # Walk every named parameter and swap its storage for an empty tensor.
-    for name, param in list(module.named_parameters()):
-        # Navigate to the immediate parent module of this leaf parameter.
-        parts: list[str] = name.split(".")
-        parent: Module = module
-        for part in parts[:-1]:
-            parent = getattr(parent, part)
-        leaf_name: str = parts[-1]
-
-        # Build a new Parameter with uninitialised (empty) data.
-        new_param = nn.Parameter(
-            lucid.empty(tuple(param.shape), dtype=param.dtype, device=param.device),
-            requires_grad=param.requires_grad,
-        )
-        setattr(parent, leaf_name, new_param)
-
+    with _skipping():
+        module: Module = module_cls(*args, **kwargs)
     return module

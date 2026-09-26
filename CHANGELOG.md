@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Identity takes any arguments; RMSNorm's default eps follows the dtype
 
+- skip_init skips the initialisers instead of running them
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

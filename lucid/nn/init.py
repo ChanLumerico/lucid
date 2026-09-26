@@ -3,14 +3,51 @@ nn.init: parameter initialization functions.
 All functions operate in-place and return the tensor.
 """
 
+import functools
 import math
-from typing import TYPE_CHECKING
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+# While positive, every initialiser below returns its tensor untouched.
+# Per thread, so a skip_init on one thread never skips another's.
+_skip = threading.local()
+
+
+@contextmanager
+def _skipping() -> Iterator[None]:
+    """Make the initialisers no-ops for the duration — what ``skip_init`` needs.
+
+    Construction then costs the allocation and nothing else: no random
+    draw, no fill.  ``skip_init`` used to construct normally and swap in
+    empty storage afterwards, which paid for every initialiser and then
+    for a second allocation.
+    """
+    _skip.depth = getattr(_skip, "depth", 0) + 1
+    try:
+        yield
+    finally:
+        _skip.depth -= 1
+
+
+def _skippable(fn: Callable[_P, _R]) -> Callable[_P, _R]:
+    @functools.wraps(fn)
+    def initialise(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        if getattr(_skip, "depth", 0):
+            return args[0] if args else kwargs["tensor"]  # type: ignore[return-value]
+        return fn(*args, **kwargs)
+
+    return initialise
 
 
 def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
@@ -43,6 +80,7 @@ def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
     return tensor
 
 
+@_skippable
 def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     r"""Initialise ``tensor`` in-place with samples from a uniform distribution.
 
@@ -95,6 +133,7 @@ def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     )
 
 
+@_skippable
 def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     r"""Initialise ``tensor`` in-place with samples from a Gaussian distribution.
 
@@ -150,6 +189,7 @@ def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     )
 
 
+@_skippable
 def constant_(tensor: Tensor, val: float) -> Tensor:
     r"""Fill ``tensor`` in-place with a single scalar value.
 
@@ -192,6 +232,7 @@ def constant_(tensor: Tensor, val: float) -> Tensor:
     )
 
 
+@_skippable
 def ones_(tensor: Tensor) -> Tensor:
     r"""Fill ``tensor`` in-place with ones.
 
@@ -229,6 +270,7 @@ def ones_(tensor: Tensor) -> Tensor:
     )
 
 
+@_skippable
 def zeros_(tensor: Tensor) -> Tensor:
     r"""Fill ``tensor`` in-place with zeros.
 
@@ -267,6 +309,7 @@ def zeros_(tensor: Tensor) -> Tensor:
     )
 
 
+@_skippable
 def eye_(tensor: Tensor) -> Tensor:
     r"""Fill a 2-D ``tensor`` in-place with the identity matrix.
 
@@ -316,6 +359,7 @@ def eye_(tensor: Tensor) -> Tensor:
     )
 
 
+@_skippable
 def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     r"""Initialise ``tensor`` in-place with Xavier (Glorot) uniform initialisation.
 
@@ -377,6 +421,7 @@ def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     return uniform_(tensor, -a, a)
 
 
+@_skippable
 def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     r"""Initialise ``tensor`` in-place with Xavier (Glorot) normal initialisation.
 
@@ -430,6 +475,7 @@ def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     return normal_(tensor, 0.0, std)
 
 
+@_skippable
 def kaiming_uniform_(
     tensor: Tensor,
     a: float = 0,
@@ -498,6 +544,7 @@ def kaiming_uniform_(
     return uniform_(tensor, -bound, bound)
 
 
+@_skippable
 def kaiming_normal_(
     tensor: Tensor,
     a: float = 0,
@@ -557,6 +604,7 @@ def kaiming_normal_(
     return normal_(tensor, 0.0, std)
 
 
+@_skippable
 def trunc_normal_(
     tensor: Tensor,
     mean: float = 0.0,
@@ -646,6 +694,7 @@ def trunc_normal_(
     return _fill_from_impl(tensor, result)
 
 
+@_skippable
 def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     r"""Initialise ``tensor`` in-place with a (semi-)orthogonal matrix.
 
@@ -716,6 +765,7 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     return _fill_from_impl(tensor, src_t._impl)
 
 
+@_skippable
 def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     r"""Initialise a 2-D ``tensor`` in-place with a sparse random matrix.
 
@@ -791,6 +841,7 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     return _fill_from_impl(tensor, src_t._impl)
 
 
+@_skippable
 def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
     r"""Initialise a 3/4/5-D convolution weight in-place as a Dirac delta.
 
