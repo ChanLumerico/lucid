@@ -303,6 +303,8 @@ void register_compile(py::module_& m) {
            const std::vector<lucid::TensorImplPtr>& inputs) -> std::vector<lucid::TensorImplPtr> {
             if (!wrapper)
                 throw std::invalid_argument("run_executable: null wrapper");
+            // The run waits for the GPU; other Python threads need not.
+            py::gil_scoped_release release;
             return lucid::compile::run_executable(wrapper->raw(), inputs);
         },
         py::arg("executable"), py::arg("inputs"),
@@ -316,6 +318,7 @@ void register_compile(py::module_& m) {
            const std::vector<lucid::TensorImplPtr>& output_targets) -> void {
             if (!wrapper)
                 throw std::invalid_argument("run_executable_inplace: null wrapper");
+            py::gil_scoped_release release;
             lucid::compile::run_executable_inplace(wrapper->raw(), inputs, output_targets);
         },
         py::arg("executable"), py::arg("inputs"), py::arg("output_targets"),

@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - an evicted executable stays alive for the module that holds it
 
+- waiting for the GPU releases the GIL
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

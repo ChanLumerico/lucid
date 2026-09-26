@@ -41,6 +41,18 @@ void note_host_read(const std::shared_ptr<lucid::TensorImpl>& t) {
     if (auto* trc = lucid::compile::current_tracer())
         trc->on_host_read(t.get());
 }
+
+// Run a GPU tensor's pending work without holding the GIL.  The wait is the
+// GPU's; holding the GIL through it stalled every other Python thread in the
+// process — a server thread froze for each 1.6-3 s model pass.  Reading the
+// values back afterwards (``item``, ``tolist``, ``numpy``) builds Python
+// objects, so it runs with the GIL again and finds the array evaluated.
+void evaluate_without_gil(const lucid::TensorImpl& t) {
+    if (t.device() != lucid::Device::GPU)
+        return;
+    py::gil_scoped_release release;
+    t.eval();
+}
 }  // namespace
 
 namespace lucid::bindings {
@@ -221,14 +233,20 @@ void register_tensor_impl(py::module_& m) {
         .def("data_as_python",
              [](const std::shared_ptr<TensorImpl>& self) {
                  note_host_read(self);
+                 evaluate_without_gil(*self);
                  return self->data_as_python();
              })
         .def("grad_as_python", &TensorImpl::grad_as_python)
         // NumPy-free interop — used by the Python serialization and repr
         // layers so ``import lucid`` works without numpy installed.
-        .def("to_bytes", &TensorImpl::to_bytes,
-             "Return the tensor data as a contiguous bytes blob "
-             "(row-major).  GPU tensors are downloaded to CPU first.")
+        .def(
+            "to_bytes",
+            [](TensorImpl& self) {
+                evaluate_without_gil(self);
+                return self.to_bytes();
+            },
+            "Return the tensor data as a contiguous bytes blob "
+            "(row-major).  GPU tensors are downloaded to CPU first.")
         .def_static("from_bytes", &TensorImpl::from_bytes, py::arg("data"), py::arg("shape"),
                     py::arg("dtype"), py::arg("device") = Device::CPU,
                     py::arg("requires_grad") = false,
@@ -246,6 +264,7 @@ void register_tensor_impl(py::module_& m) {
             "tolist",
             [](const std::shared_ptr<TensorImpl>& self) {
                 note_host_read(self);
+                evaluate_without_gil(*self);
                 return self->tolist();
             },
             "Convert the tensor to a nested Python list (or scalar for 0-d), "
@@ -268,6 +287,7 @@ void register_tensor_impl(py::module_& m) {
             "item",
             [](const std::shared_ptr<TensorImpl>& self) {
                 note_host_read(self);
+                evaluate_without_gil(*self);
                 return self->item();
             },
             "Extract a single-element tensor's value as a Python scalar "
@@ -280,10 +300,11 @@ void register_tensor_impl(py::module_& m) {
         .def("copy_from", &TensorImpl::copy_from)
         .def("assign_from", &TensorImpl::assign_from)
         .def("zero_grad", &TensorImpl::zero_grad)
-        .def("eval", &TensorImpl::eval,
-             "Force evaluation of this tensor's lazy MLX graph.\n"
-             "GPU tensors: calls mlx::core::eval() on the underlying array.\n"
-             "CPU tensors: no-op.")
+        .def(
+            "eval", [](TensorImpl& self) { evaluate_without_gil(self); },
+            "Force evaluation of this tensor's lazy MLX graph.\n"
+            "GPU tensors: calls mlx::core::eval() on the underlying array.\n"
+            "CPU tensors: no-op.")
         .def(
             "clone_with_grad",
             [](const std::shared_ptr<TensorImpl>& self,
@@ -456,8 +477,12 @@ void register_tensor_impl(py::module_& m) {
                 if (gpu_st.arr)
                     arrays.push_back(*gpu_st.arr);
             }
-            if (!arrays.empty())
+            // The wait is the GPU's, not Python's: release the GIL for it so
+            // other Python threads (a server, a data loader) keep running.
+            if (!arrays.empty()) {
+                py::gil_scoped_release release;
                 mlx::core::eval(arrays);
+            }
         },
         py::arg("tensors"),
         "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
@@ -506,8 +531,10 @@ void register_tensor_impl(py::module_& m) {
             if (!t || t->device() != Device::GPU)
                 return;
             const auto& gs = std::get<GpuStorage>(t->storage());
-            if (gs.arr)
+            if (gs.arr) {
+                py::gil_scoped_release release;
                 gs.arr->eval();
+            }
         },
         py::arg("tensor"),
         "Force evaluation of a single GPU tensor (no-op for CPU tensors).\n"
