@@ -10,6 +10,11 @@ about the build.
 The engine already says why. ``compile_trace`` writes a reason and the
 binding raises it; the Python layer caught that exception to fall back
 and dropped the message with it.
+
+Printed under ``LUCID_COMPILE_VERBOSE=1`` was still silent for anyone who
+did not know to set it — a bfloat16 model ran eagerly with nothing said.
+So a fallback now also warns, once per kind of reason in a process: the
+news is that it happened, and a warning on every call would be noise.
 """
 
 import subprocess
@@ -45,6 +50,9 @@ PROGRAM = textwrap.dedent("""
     _C_engine.compile.session_cache_clear()
     compiled = lucid.compile.compile(model)
     compiled(lucid.randn(4, 4).to("metal"))
+    compiled(lucid.randn(4, 4).to("metal"))
+    # Another model with the same gap: the same kind of reason, already told.
+    lucid.compile.compile(Inverse().eval().to("metal"))(lucid.randn(4, 4).to("metal"))
     print("CACHE", _C_engine.compile.session_cache_size())
     """)
 
@@ -76,11 +84,17 @@ class TestFallbackIsReported:
         assert "eager fallback" in done.stderr
         assert "inv" in done.stderr
 
-    def test_it_stays_quiet_by_default(self) -> None:
-        """A fallback is correct, so it is not a warning on every call."""
+    def test_by_default_it_warns_once(self) -> None:
+        """A fallback is correct, so it is one warning, not one per call."""
         done = _run(verbose=False)
         assert done.returncode == 0, done.stderr
-        assert "eager fallback" not in done.stderr
+        assert "CACHE 0" in done.stdout
+        # Not the verbose narration...
+        assert "[compile] eager fallback" not in done.stderr
+        # ...but said, once, naming the reason — for three fallbacks.
+        assert done.stderr.count("CompileFallbackWarning") == 1
+        assert "inv" in done.stderr
+        assert "running eagerly" in done.stderr
 
 
 class TestRegistrationIsNotCompilation:

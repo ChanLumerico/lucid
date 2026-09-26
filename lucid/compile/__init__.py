@@ -459,6 +459,19 @@ def compile[**P, R](
         ``parameters`` / ``state_dict`` / training mode; when it was a
         plain callable those return empty sequences.
 
+    Notes
+    -----
+    * A call the compiler cannot lower runs eagerly, with a one-time
+      ``UserWarning`` naming why; ``LUCID_COMPILE_VERBOSE=1`` reports every
+      occurrence.  bfloat16 graphs are not lowered yet and run eagerly.
+    * Attention lowers to a matmul-softmax-matmul decomposition, which
+      materialises the score matrix.  At long key lengths eager Metal's
+      fused attention kernel can be faster than the compiled block (a
+      diffusion-transformer block at 18 720 keys: 95 ms eager against
+      128 ms compiled on an M4 Max).  ``LUCID_COMPILE_FUSED_SDPA=1`` opts
+      into MPSGraph's fused attention instead; it is not the default until
+      it is measured to pay across hardware.
+
     Examples
     --------
     Module form::

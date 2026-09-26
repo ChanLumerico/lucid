@@ -61,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - exports compute writes into inputs, trace without autograd, fp16 I/O
 
+- an eager fallback says so once; fused attention is available
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

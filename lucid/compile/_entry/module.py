@@ -25,8 +25,6 @@ Acceptance gate (Plan §1.4):
     remembered in :class:`EagerFallbackSet` so we don't re-attempt.
 """
 
-import os
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import (
@@ -59,7 +57,13 @@ class _ExecutableLike(Protocol):
 
 from lucid._C import engine as _C_engine
 
-from lucid.compile._core.fallback import EagerFallbackSet, run_eager
+from lucid.compile._core.fallback import (
+    EagerFallbackSet,
+    _bfloat16_unlowered,
+    _fallback_notice,
+    _narrate,
+    run_eager,
+)
 from lucid.compile._core.signature import CacheKey, leaf_tensors, signature_of
 from lucid.nn.module import Module, _ModuleWrapper, _watch_tensors
 from lucid.nn.parameter import Parameter
@@ -890,8 +894,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
             except RuntimeError as why:
                 if "MPSGraph failed" not in str(why):
                     raise
-                if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
-                    print(f"[compile] eager fallback: {why}", file=sys.stderr)
+                _fallback_notice("first-run", str(why))
                 self._eager_only.add(key)
                 return run_eager(self._model, args, kwargs)
             self._cache[key] = entry
@@ -954,12 +957,16 @@ class CompiledModule[**P, R](_ModuleWrapper):
             # The engine says why it could not build the graph — an
             # emitter that declined the variant, an unresolved input, a
             # mixed-device trace — and dropping that here is what makes a
-            # fallback silent. It stays silent by default, because a
-            # fallback is correct and a warning on every call would be
-            # noise; under ``LUCID_COMPILE_VERBOSE=1``, which already
-            # narrates the build, the caller gets the reason.
-            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
-                print(f"[compile] eager fallback: {why}", file=sys.stderr)
+            # fallback silent. A fallback is correct and a warning on
+            # every call would be noise, so it warns once per kind of
+            # reason; ``LUCID_COMPILE_VERBOSE=1``, which already narrates
+            # the build, prints every one.  A symbolic lowering is not the
+            # last attempt — the caller retries per-shape — so its failure
+            # is narrated, not announced as a fallback it may not become.
+            if use_dynamic:
+                _narrate(f"symbolic lowering declined, retrying per shape: {why}")
+            else:
+                _fallback_notice("lowering", str(why))
             return None
         return cast(_ExecutableLike, exe) if exe is not None else None
 
@@ -1006,6 +1013,13 @@ class CompiledModule[**P, R](_ModuleWrapper):
         if self._model.training and model_has_tracking_bn(self._model):
             return None
 
+        # The MPSGraph emitters have no bfloat16 type, so such a call would
+        # be traced in full only for the lowering to refuse it.  Asked here
+        # instead, and said once, since the call still runs — eagerly.
+        if _bfloat16_unlowered(self._model, args, kwargs):
+            _fallback_notice("bfloat16", "bfloat16 is not lowered to MPSGraph yet")
+            return None
+
         # kwargs are traced as-is (line below) and their tensor values are
         # recorded as external feeds; the feed-binding step resolves each feed
         # to an arg index OR a kwarg name (non-tensor kwargs are baked into the
@@ -1038,8 +1052,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         arguments = {id(_unwrap(t)) for t in leaf_tensors(args, kwargs)}
         writes = outside_writes(tracer, arguments)
         if isinstance(writes, str):
-            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
-                print(f"[compile] eager fallback: {writes}", file=sys.stderr)
+            _fallback_notice("argument-write", writes)
             return None
         write_ids, written = writes
 

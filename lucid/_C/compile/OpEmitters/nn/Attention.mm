@@ -30,6 +30,7 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -70,6 +71,10 @@ public:
         NSUInteger nd_k = k.shape.count;
         if (nd_k < 2)
             return false;
+        if (MPSGraphTensor* fused = emit_fused(g, q, k, v, ctx, node, has_mask, is_causal, scale)) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)fused);
+            return true;
+        }
         MPSGraphTensor* k_t = [g transposeTensor:k
                                        dimension:(NSInteger)(nd_k - 1)
                                    withDimension:(NSInteger)(nd_k - 2)
@@ -196,6 +201,90 @@ public:
                                                                   name:@"sdpa_av"];
         ctx.bind(node.outputs[0].id, (__bridge void*)out);
         return true;
+    }
+
+private:
+    // MPSGraph's own fused attention (macOS 15+), opt-in, where it is known
+    // to be right.  The decomposition below materialises the full score matrix;
+    // at long key lengths that made a compiled attention block slower than
+    // eager MLX's fused kernel (a Wan DiT block, KV = 18 720: 128 ms against
+    // 95 ms).  Taken only when the capability probe has cleared this GPU of
+    // the attention miscompile — the probe compiles attention with the
+    // workaround off, so it exercises exactly this path on the known-bad
+    // shapes — and only for the plain shape the fused kernel takes: rank-4
+    // (B, H, L, D) operands, value and key heads of one width, a floating
+    // additive mask if any.  Everything else keeps the decomposition.
+    static MPSGraphTensor* emit_fused(MPSGraph* g,
+                                      MPSGraphTensor* q,
+                                      MPSGraphTensor* k,
+                                      MPSGraphTensor* v,
+                                      BuilderContext& ctx,
+                                      const OpNode& node,
+                                      bool has_mask,
+                                      bool is_causal,
+                                      double scale) {
+        // Opt-in (``LUCID_COMPILE_FUSED_SDPA=1``) until it is measured to
+        // pay: on an M1 Pro it matched the decomposition (3.47 against
+        // 3.32 ms at KV = 4096, fp16) and neither caught eager MLX, so it is
+        // not yet worth a second numeric path by default.  The gap the
+        // decomposition leaves at long key lengths is tracked as CHA-14.
+        static const bool enabled = [] {
+            const char* env = std::getenv("LUCID_COMPILE_FUSED_SDPA");
+            return env != nullptr && std::string_view(env) == "1";
+        }();
+        if (!enabled || apply_attention_workaround())
+            return nil;
+        if (q.shape.count != 4 || k.shape.count != 4 || v.shape.count != 4)
+            return nil;
+        if (q.shape[3].longLongValue != v.shape[3].longLongValue ||
+            q.shape[3].longLongValue != k.shape[3].longLongValue)
+            return nil;
+        if (q.dataType != k.dataType || q.dataType != v.dataType)
+            return nil;
+        double scale_val = scale;
+        if (scale_val == 0.0) {
+            const double Dk = (double)q.shape[3].longLongValue;
+            if (Dk <= 0.0)
+                return nil;
+            scale_val = 1.0 / std::sqrt(Dk);
+        }
+        MPSGraphTensor* mask = nil;
+        if (has_mask) {
+            if (node.inputs.size() < 4 || node.inputs[3] < 0)
+                return nil;
+            mask = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[3]);
+            if (mask == nil || (mask.dataType & MPSDataTypeFloatBit) == 0)
+                return nil;
+            if (mask.dataType != q.dataType)
+                mask = [g castTensor:mask toType:q.dataType name:nil];
+        } else if (is_causal) {
+            const long long Lq = q.shape[2].longLongValue;
+            const long long Lk = k.shape[2].longLongValue;
+            if (Lq <= 0 || Lk <= 0)
+                return nil;
+            const float neg_big = (q.dataType == MPSDataTypeFloat16) ? -6.0e4f : -1.0e30f;
+            const long long offset = Lk - Lq;
+            std::vector<float> mask_data((std::size_t)(Lq * Lk));
+            for (long long i = 0; i < Lq; ++i)
+                for (long long j = 0; j < Lk; ++j)
+                    mask_data[(std::size_t)(i * Lk + j)] = (j <= i + offset) ? 0.0f : neg_big;
+            NSData* bytes = [NSData dataWithBytes:mask_data.data()
+                                           length:mask_data.size() * sizeof(float)];
+            mask =
+                [g constantWithData:bytes
+                              shape:@[
+                                  [NSNumber numberWithLongLong:Lq], [NSNumber numberWithLongLong:Lk]
+                              ]
+                           dataType:MPSDataTypeFloat32];
+            if (mask.dataType != q.dataType)
+                mask = [g castTensor:mask toType:q.dataType name:nil];
+        }
+        return [g scaledDotProductAttentionWithQueryTensor:q
+                                                 keyTensor:k
+                                               valueTensor:v
+                                                maskTensor:mask
+                                                     scale:(float)scale_val
+                                                      name:@"sdpa_fused"];
     }
 };
 

@@ -8,7 +8,7 @@ eager forward.  This module factors the bookkeeping out of
 :class:`CompiledModule` so the wrapper stays focused on the cache /
 dispatch logic.
 
-Two responsibilities:
+Three responsibilities:
 
 1. Provide a :func:`run_eager` helper that calls ``model(*args,
    **kwargs)`` exactly the way the user would (no special arguments,
@@ -16,8 +16,15 @@ Two responsibilities:
 2. Maintain a per-:class:`CompiledModule` *blacklist* of signatures
    that already failed to compile, so we don't re-trace + re-attempt
    on every call.
+3. Say that a fallback happened (:func:`_fallback_notice`), once per
+   kind of reason, so a caller who asked for a compiled model and got
+   an eager one finds out without having to know about
+   ``LUCID_COMPILE_VERBOSE``.
 """
 
+import os
+import sys
+import warnings
 from typing import TYPE_CHECKING, Callable, cast
 
 from lucid._tensor.tensor import Tensor
@@ -27,6 +34,113 @@ if TYPE_CHECKING:
     from lucid.nn.module import Module
 
 __all__ = ["run_eager", "EagerFallbackSet"]
+
+
+class CompileFallbackWarning(UserWarning):
+    """A compiled call ran eagerly instead.
+
+    Its own category so a caller can filter it — or turn it into an error
+    in a test that must stay compiled — without touching every other
+    ``UserWarning``.  Not exported from :mod:`lucid.compile`, which
+    exports no warning classes; ``warnings.filterwarnings`` with a
+    message pattern reaches it all the same.
+    """
+
+
+#: Reason categories already announced in this process.  A fallback is
+#: correct, and a model that falls back falls back on every call, so a
+#: warning per call would be noise; one per kind of reason is the news.
+_NOTICED: set[str] = set()
+
+
+def _fallback_notice(reason_category: str, detail: str) -> None:
+    """Report that a compiled call is running eagerly, and why.
+
+    Under ``LUCID_COMPILE_VERBOSE=1`` every fallback is printed, as the
+    build is narrated there already.  Otherwise the first fallback of each
+    category warns, and later ones — the same model on the next call, or
+    another model hitting the same gap — stay quiet.
+
+    Parameters
+    ----------
+    reason_category : str
+        Short key for the kind of fallback (``"lowering"``,
+        ``"bfloat16"``, ...); the once-per-process bookkeeping is keyed
+        on it.
+    detail : str
+        The specific reason, as the engine or the check stated it.
+    """
+    if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+        print(f"[compile] eager fallback: {detail}", file=sys.stderr)
+        return
+    if reason_category in _NOTICED:
+        return
+    _NOTICED.add(reason_category)
+    # Attributed to the first frame outside ``lucid.compile`` — the
+    # caller's own call of the compiled model — however deep inside the
+    # package the fallback was decided: a forward's first run, a lowering
+    # and a training step reach this from different depths, so no one
+    # fixed level names the caller's line for all of them.
+    warnings.warn(
+        f"lucid.compile: {detail}; running eagerly. The result is correct; set "
+        "LUCID_COMPILE_VERBOSE=1 to see every fallback as it happens",
+        CompileFallbackWarning,
+        stacklevel=2,
+        skip_file_prefixes=(_PACKAGE_ROOT,),
+    )
+
+
+def _narrate(message: str) -> None:
+    """Print a step of the build under ``LUCID_COMPILE_VERBOSE=1`` only.
+
+    For a failure that is not yet a fallback — a symbolic lowering that
+    the per-shape one is about to retry — which a warning would misreport
+    as the call running eagerly.
+
+    Parameters
+    ----------
+    message : str
+        What happened, without the ``[compile]`` prefix.
+    """
+    if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+        print(f"[compile] {message}", file=sys.stderr)
+
+
+#: Directory of :mod:`lucid.compile`, whose frames a fallback warning
+#: skips on its way to the caller's.
+_PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
+
+
+def _bfloat16_unlowered(
+    model: Module, args: tuple[object, ...], kwargs: dict[str, object]
+) -> bool:
+    """Whether the call carries a bfloat16 tensor the MPSGraph path cannot take.
+
+    The compile emitters have no bfloat16 type, so such a call is traced
+    and then refused at lowering — a whole trace spent to learn it — and
+    runs eagerly.  Asked before the trace instead.  Kept to this one
+    predicate so that when the emitters learn bfloat16 the check is
+    removed in one place.
+
+    Parameters
+    ----------
+    model : Module
+        The wrapped model; its parameters and buffers are checked.
+    args, kwargs : tuple, dict
+        The call's arguments; every tensor in them, nested ones included.
+
+    Returns
+    -------
+    bool
+        ``True`` when any of them is ``lucid.bfloat16``.
+    """
+    import lucid
+    from lucid.compile._core.signature import leaf_tensors
+
+    if any(t.dtype == lucid.bfloat16 for t in leaf_tensors(args, kwargs)):
+        return True
+    held = [*model.parameters(), *model.buffers()]
+    return any(t is not None and t.dtype == lucid.bfloat16 for t in held)
 
 
 def run_eager(

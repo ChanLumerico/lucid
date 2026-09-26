@@ -28,8 +28,6 @@ Acceptance:
   eager + records the signature as ``eager-only``.
 """
 
-import os
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final, override
@@ -207,7 +205,7 @@ def make_step(
         bn_writeback_targets,
         model_has_cumulative_bn,
     )
-    from lucid.compile._core.fallback import EagerFallbackSet
+    from lucid.compile._core.fallback import EagerFallbackSet, _fallback_notice
     from lucid.compile._core.signature import leaf_tensors, signature_of
 
     # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
@@ -275,8 +273,7 @@ def make_step(
         arguments = {id(_unwrap(t)) for t in leaf_tensors(x_args, {})}
         writes = outside_writes(tracer, arguments)
         if isinstance(writes, str):
-            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
-                print(f"[compile] eager fallback: {writes}", file=sys.stderr)
+            _fallback_notice("argument-write", writes)
             return None
         write_ids, written = writes
         # The tensor ``loss_fn`` returned — not whatever op ran last.  A model
@@ -340,10 +337,9 @@ def make_step(
             # compile_trace_with_backward surfaces a RuntimeError when
             # an op has no emitter or another invariant fails.  Either
             # way it's an eager-only signature — and, as on the forward
-            # path, the reason is printed under LUCID_COMPILE_VERBOSE=1
-            # rather than dropped, since a fallback is otherwise silent.
-            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
-                print(f"[compile] eager fallback: {why}", file=sys.stderr)
+            # path, the reason is reported rather than dropped, since a
+            # fallback is otherwise silent.
+            _fallback_notice("lowering", str(why))
             return None
         if exe is None:
             return None
