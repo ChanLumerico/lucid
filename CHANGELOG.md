@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - checkpoint trains the parameters it wraps and replays its dropout
 
+- large CPU convolutions no longer overflow or exhaust memory
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

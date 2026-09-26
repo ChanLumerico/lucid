@@ -62,6 +62,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <numeric>
@@ -8313,19 +8314,17 @@ public:
         }
 
         const int N = opts.N;
-        int O_total = 1, K_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) {
-            O_total *= O[i];
-            K_total *= K[i];
-            S_total *= S[i];
-        }
+        const int O_total = checked_extent(O, N, "output positions");
+        const int K_total = checked_extent(K, N, "kernel taps");
+        const int S_total = checked_extent(S, N, "input positions");
 
         const int K_flat = Cin_g * K_total;
         const int M_out = O_total;
         const int W_per_group = Cout_g * K_flat;
 
         CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cout * O_total, dt);
-        CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * O_total, dt);
+        const int slab = column_slab(O, N, K_flat);
+        CpuStorage cols_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
         const auto& x_cpu = std::get<CpuStorage>(x);
         const auto& W_cpu = std::get<CpuStorage>(W);
         const auto& b_cpu = std::get<CpuStorage>(b);
@@ -8344,10 +8343,14 @@ public:
                                 (static_cast<std::size_t>(bi) * Cout +
                                  static_cast<std::size_t>(g) * Cout_g) *
                                     O_total;
-                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
-                                       N);
-                    cpu::sgemm(false, false, Cout_g, M_out, K_flat, 1.0f, wp, K_flat, cp, M_out,
-                               0.0f, yp, M_out);
+                    for_each_column_slab(
+                        O, opts, N, slab,
+                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
+                            conv_nd_im2col_f32(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                            cpu::sgemm(false, false, Cout_g, ms, K_flat, 1.0f, wp, K_flat, cp, ms,
+                                       0.0f, yp + begin, M_out);
+                        });
                 } else if (dt == Dtype::F64) {
                     const double* xp =
                         reinterpret_cast<const double*>(x_cpu.ptr.get()) +
@@ -8360,10 +8363,14 @@ public:
                                  (static_cast<std::size_t>(bi) * Cout +
                                   static_cast<std::size_t>(g) * Cout_g) *
                                      O_total;
-                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
-                                       N);
-                    cpu::dgemm(false, false, Cout_g, M_out, K_flat, 1.0, wp, K_flat, cp, M_out, 0.0,
-                               yp, M_out);
+                    for_each_column_slab(
+                        O, opts, N, slab,
+                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
+                            conv_nd_im2col_f64(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                            cpu::dgemm(false, false, Cout_g, ms, K_flat, 1.0, wp, K_flat, cp, ms,
+                                       0.0, yp + begin, M_out);
+                        });
                 } else {
                     ErrorBuilder("cpu_backend::conv_nd_forward")
                         .not_implemented("dtype not supported (F32/F64)");
@@ -8376,7 +8383,7 @@ public:
                 const float* bp = reinterpret_cast<const float*>(b_cpu.ptr.get());
                 for (int c = 0; c < Cout; ++c) {
                     const float bv = bp[c];
-                    float* row = yp + c * O_total;
+                    float* row = yp + static_cast<std::size_t>(c) * O_total;
                     for (int i = 0; i < O_total; ++i)
                         row[i] += bv;
                 }
@@ -8386,7 +8393,7 @@ public:
                 const double* bp = reinterpret_cast<const double*>(b_cpu.ptr.get());
                 for (int c = 0; c < Cout; ++c) {
                     const double bv = bp[c];
-                    double* row = yp + c * O_total;
+                    double* row = yp + static_cast<std::size_t>(c) * O_total;
                     for (int i = 0; i < O_total; ++i)
                         row[i] += bv;
                 }
@@ -8419,12 +8426,9 @@ public:
                                        dt);
         const int N = opts.N;
         const int G = opts.groups;
-        int O_total = 1, K_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) {
-            O_total *= O[i];
-            K_total *= K[i];
-            S_total *= S[i];
-        }
+        const int O_total = checked_extent(O, N, "output positions");
+        const int K_total = checked_extent(K, N, "kernel taps");
+        const int S_total = checked_extent(S, N, "input positions");
 
         const int K_flat = Cin_g * K_total;
         const int M_out = O_total;
@@ -8439,8 +8443,9 @@ public:
             std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
         if (db_cpu.nbytes)
             std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
-        CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * M_out, dt);
-        CpuStorage col_grad_cpu = alloc_cpu(static_cast<std::size_t>(K_flat) * M_out, dt);
+        const int slab = column_slab(O, N, K_flat);
+        CpuStorage cols_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
+        CpuStorage col_grad_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
 
         const auto& x_cpu = std::get<CpuStorage>(x);
         const auto& W_cpu = std::get<CpuStorage>(W);
@@ -8467,18 +8472,22 @@ public:
                                  static_cast<std::size_t>(g) * W_per_group;
                     float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
                     float* cgp = reinterpret_cast<float*>(col_grad_cpu.ptr.get());
-                    conv_nd_im2col_f32(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
-                                       N);
-                    cpu::sgemm(false, true, Cout_g, K_flat, M_out, 1.0f, gp, M_out, cp, M_out, 1.0f,
-                               dwp, K_flat);
-                    cpu::sgemm(true, false, K_flat, M_out, Cout_g, 1.0f, wp, K_flat, gp, M_out,
-                               0.0f, cgp, M_out);
-                    conv_nd_col2im_f32(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad,
-                                       opts.dilation, N);
+                    for_each_column_slab(
+                        O, opts, N, slab,
+                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
+                            conv_nd_im2col_f32(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                            cpu::sgemm(false, true, Cout_g, K_flat, ms, 1.0f, gp + begin, M_out, cp,
+                                       ms, 1.0f, dwp, K_flat);
+                            cpu::sgemm(true, false, K_flat, ms, Cout_g, 1.0f, wp, K_flat,
+                                       gp + begin, M_out, 0.0f, cgp, ms);
+                            conv_nd_col2im_f32(cgp, dxp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                        });
                     float* dbp = reinterpret_cast<float*>(db_cpu.ptr.get()) +
                                  static_cast<std::size_t>(g) * Cout_g;
                     for (int co = 0; co < Cout_g; ++co) {
-                        const float* row = gp + co * O_total;
+                        const float* row = gp + static_cast<std::size_t>(co) * O_total;
                         float s = 0.f;
                         for (int j = 0; j < O_total; ++j)
                             s += row[j];
@@ -8503,18 +8512,22 @@ public:
                                   static_cast<std::size_t>(g) * W_per_group;
                     double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
                     double* cgp = reinterpret_cast<double*>(col_grad_cpu.ptr.get());
-                    conv_nd_im2col_f64(xp, cp, Cin_g, S, K, O, opts.stride, opts.pad, opts.dilation,
-                                       N);
-                    cpu::dgemm(false, true, Cout_g, K_flat, M_out, 1.0, gp, M_out, cp, M_out, 1.0,
-                               dwp, K_flat);
-                    cpu::dgemm(true, false, K_flat, M_out, Cout_g, 1.0, wp, K_flat, gp, M_out, 0.0,
-                               cgp, M_out);
-                    conv_nd_col2im_f64(cgp, dxp, Cin_g, S, K, O, opts.stride, opts.pad,
-                                       opts.dilation, N);
+                    for_each_column_slab(
+                        O, opts, N, slab,
+                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
+                            conv_nd_im2col_f64(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                            cpu::dgemm(false, true, Cout_g, K_flat, ms, 1.0, gp + begin, M_out, cp,
+                                       ms, 1.0, dwp, K_flat);
+                            cpu::dgemm(true, false, K_flat, ms, Cout_g, 1.0, wp, K_flat, gp + begin,
+                                       M_out, 0.0, cgp, ms);
+                            conv_nd_col2im_f64(cgp, dxp, Cin_g, S, K, Os, opts.stride, pads,
+                                               opts.dilation, N);
+                        });
                     double* dbp = reinterpret_cast<double*>(db_cpu.ptr.get()) +
                                   static_cast<std::size_t>(g) * Cout_g;
                     for (int co = 0; co < Cout_g; ++co) {
-                        const double* row = gp + co * O_total;
+                        const double* row = gp + static_cast<std::size_t>(co) * O_total;
                         double s = 0.0;
                         for (int j = 0; j < O_total; ++j)
                             s += row[j];
@@ -10926,6 +10939,77 @@ public:
 private:
     // Dispatches im2col to the 1-D, 2-D, or 3-D variant based on N.
     // S/K/O are input spatial sizes, kernel sizes, and output sizes indexed 0..N-1.
+    // Output positions are lowered to columns a slab at a time along the
+    // first output axis, so the column matrix never holds more than
+    // kColumnBudget elements.  A slab is the whole problem with that axis cut
+    // to [o0, o0 + count): the same im2col with O[0] = count and the padding
+    // moved by o0 * stride, since an input position o * s - p + k * d is
+    // unchanged when o and p shift together.  Unsliced, a (1, 96, 6, 480, 832)
+    // conv3d asked for 4.1 G column elements — 16.5 GB for the forward and
+    // twice that for the backward.
+    static constexpr std::int64_t kColumnBudget = std::int64_t{1} << 27;
+
+    // ``LUCID_CONV_COLUMN_BUDGET`` lowers the budget so tests can drive the
+    // slab path on small inputs; it is not a tuning knob.
+    static std::int64_t column_budget() {
+        static const std::int64_t budget = [] {
+            const char* env = std::getenv("LUCID_CONV_COLUMN_BUDGET");
+            const long long v = env ? std::atoll(env) : 0;
+            return v > 0 ? static_cast<std::int64_t>(v) : kColumnBudget;
+        }();
+        return budget;
+    }
+
+    static int checked_extent(const int* dims, int n, const char* what) {
+        std::int64_t total = 1;
+        for (int i = 0; i < n; ++i)
+            total *= dims[i];
+        if (total > std::numeric_limits<int>::max())
+            ErrorBuilder("cpu_backend::conv_nd")
+                .fail(std::string("too many ") + what +
+                      " for one convolution: " + std::to_string(total));
+        return static_cast<int>(total);
+    }
+
+    static std::int64_t column_inner(const int* O, int N) {
+        std::int64_t inner = 1;
+        for (int i = 1; i < N; ++i)
+            inner *= O[i];
+        return inner;
+    }
+
+    static int column_slab(const int* O, int N, int K_flat) {
+        const std::int64_t per_step =
+            std::max<std::int64_t>(1, std::int64_t{K_flat} * column_inner(O, N));
+        const std::int64_t steps = std::max<std::int64_t>(1, column_budget() / per_step);
+        return static_cast<int>(std::min<std::int64_t>(steps, std::max(1, O[0])));
+    }
+
+    static std::size_t column_slab_elements(const int* O, int N, int K_flat, int slab) {
+        return static_cast<std::size_t>(K_flat) * static_cast<std::size_t>(slab) *
+               static_cast<std::size_t>(column_inner(O, N));
+    }
+
+    template <typename Fn>
+    static void
+    for_each_column_slab(const int* O, const IBackend::ConvNdOpts& opts, int N, int slab, Fn&& fn) {
+        const std::int64_t inner = column_inner(O, N);
+        for (int o0 = 0; o0 < O[0]; o0 += slab) {
+            const int count = std::min(slab, O[0] - o0);
+            int Os[3] = {0, 0, 0};
+            int pads[3] = {0, 0, 0};
+            for (int i = 0; i < N; ++i) {
+                Os[i] = O[i];
+                pads[i] = opts.pad[i];
+            }
+            Os[0] = count;
+            pads[0] = opts.pad[0] - o0 * opts.stride[0];
+            fn(static_cast<const int*>(Os), static_cast<const int*>(pads),
+               static_cast<std::size_t>(o0) * static_cast<std::size_t>(inner),
+               static_cast<int>(count * inner));
+        }
+    }
+
     static void conv_nd_im2col_f32(const float* x,
                                    float* cols,
                                    int C,

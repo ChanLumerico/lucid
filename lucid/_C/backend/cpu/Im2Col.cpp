@@ -8,8 +8,14 @@
 //
 // The public f32/f64 entry points are thin wrappers that instantiate the
 // corresponding template specialisation; no code is duplicated.
+//
+// Offsets into the column matrix and the input are 64-bit.  A row offset
+// ``row * M`` in int overflowed once K * M passed 2^31 — a (1, 96, 6, 480,
+// 832) conv3d wrote 8 GB before its buffer and died with SIGSEGV.
 
 #include "Im2Col.h"
+
+#include <cstddef>
 
 namespace lucid::backend::cpu {
 
@@ -24,10 +30,11 @@ void im2col_1d_typed(
     for (int c = 0; c < C; ++c) {
         for (int kl = 0; kl < KL; ++kl) {
             const int row = c * KL + kl;
-            T* col_row = cols + row * OL;
+            T* col_row = cols + static_cast<std::ptrdiff_t>(row) * OL;
             for (int ol = 0; ol < OL; ++ol) {
                 const int il = ol * stride_l - pad_l + kl * dilation_l;
-                col_row[ol] = (il >= 0 && il < L) ? x[c * L + il] : T{};
+                col_row[ol] =
+                    (il >= 0 && il < L) ? x[static_cast<std::ptrdiff_t>(c) * L + il] : T{};
             }
         }
     }
@@ -41,12 +48,12 @@ void col2im_1d_typed(
     for (int c = 0; c < C; ++c) {
         for (int kl = 0; kl < KL; ++kl) {
             const int row = c * KL + kl;
-            const T* col_row = cols + row * OL;
+            const T* col_row = cols + static_cast<std::ptrdiff_t>(row) * OL;
             for (int ol = 0; ol < OL; ++ol) {
                 const int il = ol * stride_l - pad_l + kl * dilation_l;
                 if (il < 0 || il >= L)
                     continue;
-                dx[c * L + il] += col_row[ol];
+                dx[static_cast<std::ptrdiff_t>(c) * L + il] += col_row[ol];
             }
         }
     }
@@ -71,12 +78,12 @@ void im2col_typed(const T* x,
                   int pad_w,
                   int dilation_h,
                   int dilation_w) {
-    const int M = OH * OW;
+    const std::ptrdiff_t M = static_cast<std::ptrdiff_t>(OH) * OW;
     for (int c = 0; c < C; ++c) {
         for (int kh = 0; kh < KH; ++kh) {
             for (int kw = 0; kw < KW; ++kw) {
                 const int row = (c * KH + kh) * KW + kw;
-                T* col_row = cols + row * M;
+                T* col_row = cols + static_cast<std::ptrdiff_t>(row) * M;
                 for (int oh = 0; oh < OH; ++oh) {
                     const int ih = oh * stride_h - pad_h + kh * dilation_h;
                     if (ih < 0 || ih >= H) {
@@ -87,7 +94,9 @@ void im2col_typed(const T* x,
                     for (int ow = 0; ow < OW; ++ow) {
                         const int iw = ow * stride_w - pad_w + kw * dilation_w;
                         col_row[oh * OW + ow] =
-                            (iw >= 0 && iw < W) ? x[(c * H + ih) * W + iw] : T{};
+                            (iw >= 0 && iw < W)
+                                ? x[(static_cast<std::ptrdiff_t>(c) * H + ih) * W + iw]
+                                : T{};
                     }
                 }
             }
@@ -113,12 +122,12 @@ void col2im_typed(const T* cols,
                   int pad_w,
                   int dilation_h,
                   int dilation_w) {
-    const int M = OH * OW;
+    const std::ptrdiff_t M = static_cast<std::ptrdiff_t>(OH) * OW;
     for (int c = 0; c < C; ++c) {
         for (int kh = 0; kh < KH; ++kh) {
             for (int kw = 0; kw < KW; ++kw) {
                 const int row = (c * KH + kh) * KW + kw;
-                const T* col_row = cols + row * M;
+                const T* col_row = cols + static_cast<std::ptrdiff_t>(row) * M;
                 for (int oh = 0; oh < OH; ++oh) {
                     const int ih = oh * stride_h - pad_h + kh * dilation_h;
                     if (ih < 0 || ih >= H)
@@ -127,7 +136,8 @@ void col2im_typed(const T* cols,
                         const int iw = ow * stride_w - pad_w + kw * dilation_w;
                         if (iw < 0 || iw >= W)
                             continue;
-                        dx[(c * H + ih) * W + iw] += col_row[oh * OW + ow];
+                        dx[(static_cast<std::ptrdiff_t>(c) * H + ih) * W + iw] +=
+                            col_row[oh * OW + ow];
                     }
                 }
             }
@@ -160,20 +170,20 @@ void im2col_3d_typed(const T* x,
                      int dd,
                      int dh,
                      int dw) {
-    const int M = OD * OH * OW;
+    const std::ptrdiff_t M = static_cast<std::ptrdiff_t>(OD) * OH * OW;
     for (int c = 0; c < C; ++c) {
         for (int kd = 0; kd < KD; ++kd) {
             for (int kh = 0; kh < KH; ++kh) {
                 for (int kw = 0; kw < KW; ++kw) {
                     const int row = ((c * KD + kd) * KH + kh) * KW + kw;
-                    T* col_row = cols + row * M;
+                    T* col_row = cols + static_cast<std::ptrdiff_t>(row) * M;
                     for (int od = 0; od < OD; ++od) {
                         const int id = od * sd - pd + kd * dd;
                         const bool d_in = (id >= 0 && id < D);
                         for (int oh = 0; oh < OH; ++oh) {
                             const int ih = oh * sh - ph + kh * dh;
                             const bool h_in = d_in && (ih >= 0 && ih < H);
-                            T* row_oh = col_row + (od * OH + oh) * OW;
+                            T* row_oh = col_row + (static_cast<std::ptrdiff_t>(od) * OH + oh) * OW;
                             if (!h_in) {
                                 for (int ow = 0; ow < OW; ++ow)
                                     row_oh[ow] = T{};
@@ -182,7 +192,11 @@ void im2col_3d_typed(const T* x,
                             for (int ow = 0; ow < OW; ++ow) {
                                 const int iw = ow * sw - pw + kw * dw;
                                 row_oh[ow] =
-                                    (iw >= 0 && iw < W) ? x[((c * D + id) * H + ih) * W + iw] : T{};
+                                    (iw >= 0 && iw < W)
+                                        ? x[((static_cast<std::ptrdiff_t>(c) * D + id) * H + ih) *
+                                                W +
+                                            iw]
+                                        : T{};
                             }
                         }
                     }
@@ -216,13 +230,13 @@ void col2im_3d_typed(const T* cols,
                      int dd,
                      int dh,
                      int dw) {
-    const int M = OD * OH * OW;
+    const std::ptrdiff_t M = static_cast<std::ptrdiff_t>(OD) * OH * OW;
     for (int c = 0; c < C; ++c) {
         for (int kd = 0; kd < KD; ++kd) {
             for (int kh = 0; kh < KH; ++kh) {
                 for (int kw = 0; kw < KW; ++kw) {
                     const int row = ((c * KD + kd) * KH + kh) * KW + kw;
-                    const T* col_row = cols + row * M;
+                    const T* col_row = cols + static_cast<std::ptrdiff_t>(row) * M;
                     for (int od = 0; od < OD; ++od) {
                         const int id = od * sd - pd + kd * dd;
                         if (id < 0 || id >= D)
@@ -231,12 +245,14 @@ void col2im_3d_typed(const T* cols,
                             const int ih = oh * sh - ph + kh * dh;
                             if (ih < 0 || ih >= H)
                                 continue;
-                            const T* row_oh = col_row + (od * OH + oh) * OW;
+                            const T* row_oh =
+                                col_row + (static_cast<std::ptrdiff_t>(od) * OH + oh) * OW;
                             for (int ow = 0; ow < OW; ++ow) {
                                 const int iw = ow * sw - pw + kw * dw;
                                 if (iw < 0 || iw >= W)
                                     continue;
-                                dx[((c * D + id) * H + ih) * W + iw] += row_oh[ow];
+                                dx[((static_cast<std::ptrdiff_t>(c) * D + id) * H + ih) * W + iw] +=
+                                    row_oh[ow];
                             }
                         }
                     }
