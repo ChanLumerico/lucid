@@ -292,6 +292,8 @@ def _to_impl(
         and type(data).__module__ == "numpy"
         and type(data).__name__ == "ndarray"
     ):
+        if data.dtype.kind == "u":  # type: ignore[attr-defined]
+            data = _widen_unsigned(data)
         if data.flags["C_CONTIGUOUS"]:  # type: ignore[attr-defined]
             return _C_engine.TensorImpl(data, _default_device_enum_cached(), False)
         # Non-contiguous → still hot, just one more numpy call.
@@ -354,6 +356,8 @@ def _to_impl(
             arr = data.astype(_engine_dtype_to_np(_dtype_eng), copy=False)  # type: ignore[attr-defined]
         else:
             arr = data
+            if arr.dtype.kind == "u":  # type: ignore[attr-defined]
+                arr = _widen_unsigned(arr)
             _dtype_eng = _np_dtype_to_engine(arr.dtype)  # type: ignore[attr-defined]
 
     arr = np.ascontiguousarray(arr)  # type: ignore[attr-defined]
@@ -585,6 +589,25 @@ def as_tensor(
     return tensor(data, dtype=dtype, device=device)
 
 
+def _widen_unsigned(arr: object) -> object:
+    """An unsigned integer array as the next signed width, losslessly.
+
+    Lucid has no unsigned dtypes.  Refusing them outright left no way in
+    for a uint8 image or a uint16 bit pattern short of the caller casting
+    by hand; every value of uint8/16/32 fits the next signed width, and
+    uint64 fits int64 unless it holds a value past int64's range.
+    """
+    np = _require_numpy("lucid.tensor() unsigned input")
+    size = arr.dtype.itemsize  # type: ignore[attr-defined]
+    target = {1: np.int16, 2: np.int32}.get(size, np.int64)  # type: ignore[attr-defined]
+    if size == 8 and arr.size and int(arr.max()) > np.iinfo(np.int64).max:  # type: ignore[attr-defined]
+        raise OverflowError(
+            "lucid.tensor: a uint64 array holds values past int64's range, "
+            "and Lucid has no unsigned dtype to keep them"
+        )
+    return arr.astype(target)  # type: ignore[attr-defined]
+
+
 def from_numpy(arr: np.ndarray) -> Tensor:
     r"""Copy a NumPy ``ndarray`` into an owned Lucid tensor.
 
@@ -610,11 +633,17 @@ def from_numpy(arr: np.ndarray) -> Tensor:
     ------
     RuntimeError
         If the array dtype has no corresponding Lucid dtype. The native
-        ``DtypeMismatch`` exception derives from ``RuntimeError``; for
-        example, object arrays and unsigned integer arrays are rejected.
+        ``DtypeMismatch`` exception derives from ``RuntimeError``; object
+        arrays, for example, are rejected.
+    OverflowError
+        If a ``uint64`` array holds a value past ``int64``'s range.
 
     Notes
     -----
+    Lucid has no unsigned integer dtypes, so unsigned arrays widen
+    losslessly to the next signed width: ``uint8`` to ``int16``, ``uint16``
+    to ``int32``, ``uint32`` and ``uint64`` to ``int64``.
+
     This is one of the documented **H4** bridge boundaries — the only places
     where Lucid is allowed to take a NumPy array as input.  To move the
     result onto a Metal device, chain :meth:`Tensor.to`::

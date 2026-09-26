@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - waiting for the GPU releases the GIL
 
+- SafeTensors loads and saves bfloat16, and unsigned arrays convert
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

@@ -518,17 +518,42 @@ def load_sharded(
     return result
 
 
-def _require_safetensors() -> object:
-    """Import safetensors.numpy, raising a helpful error if not installed."""
-    try:
-        import safetensors.numpy as _st
-
-        return _st
-    except ImportError:
-        raise ImportError(
-            "The 'safetensors' package is required for this operation.\n"
-            "Install it with:  pip install safetensors"
-        ) from None
+# SafeTensors dtype codes for the dtypes Lucid holds natively.  The file is
+# read and written here rather than through the ``safetensors`` package's
+# numpy backend, which has no bfloat16 — the default dtype of most language
+# and diffusion checkpoints — and failed on every such file.
+_ST_CODES: dict[str, str] = {
+    "float64": "F64",
+    "float32": "F32",
+    "float16": "F16",
+    "bfloat16": "BF16",
+    "int64": "I64",
+    "int32": "I32",
+    "int16": "I16",
+    "int8": "I8",
+    "bool": "BOOL",
+    "complex64": "C64",
+}
+_ST_ENGINE: dict[str, _C_engine.Dtype] = {
+    "F64": _C_engine.Dtype.F64,
+    "F32": _C_engine.Dtype.F32,
+    "F16": _C_engine.Dtype.F16,
+    "BF16": _C_engine.Dtype.BF16,
+    "I64": _C_engine.Dtype.I64,
+    "I32": _C_engine.Dtype.I32,
+    "I16": _C_engine.Dtype.I16,
+    "I8": _C_engine.Dtype.I8,
+    "BOOL": _C_engine.Dtype.Bool,
+    "C64": _C_engine.Dtype.C64,
+}
+# Unsigned integers have no Lucid dtype; each widens losslessly to the next
+# signed width, as :func:`lucid.from_numpy` does.
+_ST_UNSIGNED: dict[str, tuple[str, str]] = {
+    "U8": ("<u1", "int16"),
+    "U16": ("<u2", "int32"),
+    "U32": ("<u4", "int64"),
+    "U64": ("<u8", "int64"),
+}
 
 
 def save_safetensors(
@@ -563,11 +588,11 @@ def save_safetensors(
 
     Notes
     -----
-    Requires the optional ``safetensors`` Python package
-    (``pip install safetensors``). The numpy backend used here does not
-    accept bfloat16 — cast such tensors to float32 first. Zero-rank
-    scalars are promoted to shape ``(1,)`` on write and squeezed back to
-    ``()`` on load via a private metadata key.
+    Every Lucid dtype is written as itself, bfloat16 included, so a
+    checkpoint round-trips bit for bit and other SafeTensors readers see
+    the dtype it was trained in.  Zero-rank scalars are promoted to shape
+    ``(1,)`` on write and squeezed back to ``()`` on load via a private
+    metadata key.
 
     Examples
     --------
@@ -575,33 +600,60 @@ def save_safetensors(
     >>> sd = {"w": lucid.randn(3, 3)}
     >>> lucid.serialization.save_safetensors(sd, "/tmp/weights.safetensors")
     """
-    _st = _require_safetensors()
+    import json
+    import struct
 
-    np_tensors: dict[str, object] = {}
+    header: dict[str, object] = {}
+    blobs: list[bytes] = []
     scalar_keys: list[str] = []
+    offset = 0
     for name, value in state_dict.items():
         if not isinstance(value, _T):
             raise TypeError(
                 f"save_safetensors: state_dict[{name!r}] is "
                 f"{type(value).__name__}, expected Tensor"
             )
-        if value.dtype._name == "bfloat16":
+        code = _ST_CODES.get(value.dtype._name)
+        if code is None:
             raise TypeError(
-                f"save_safetensors: tensor {name!r} has dtype bfloat16, "
-                "which is not supported by the numpy safetensors backend. "
-                "Cast to float32 first: tensor.to(lucid.float32)"
+                f"save_safetensors: tensor {name!r} has dtype {value.dtype._name}, "
+                "which SafeTensors cannot store"
             )
-        arr = value.numpy()
-        if arr.ndim == 0:
-            # SafeTensors does not support 0-d tensors; promote to (1,) and tag.
-            arr = arr.reshape((1,))
+        shape = [int(d) for d in value.shape]
+        if not shape:
+            # Written as (1,) and tagged, so readers that predate zero-rank
+            # entries still load it.
+            shape = [1]
             scalar_keys.append(name)
-        np_tensors[name] = arr
+        blob = bytes(_host_bytes(value))
+        header[name] = {
+            "dtype": code,
+            "shape": shape,
+            "data_offsets": [offset, offset + len(blob)],
+        }
+        blobs.append(blob)
+        offset += len(blob)
 
     combined_meta: dict[str, str] = dict(metadata) if metadata else {}
     if scalar_keys:
         combined_meta["__lucid_scalar_keys__"] = ",".join(scalar_keys)
-    _st.save_file(np_tensors, path, metadata=combined_meta)  # type: ignore[attr-defined]
+    if combined_meta:
+        header["__metadata__"] = combined_meta
+    encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
+    # The data section starts 8-aligned, as the reference writer pads it.
+    encoded += b" " * (-len(encoded) % 8)
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<Q", len(encoded)))
+        fh.write(encoded)
+        for blob in blobs:
+            fh.write(blob)
+
+
+def _host_bytes(value: _T) -> bytes:
+    """A tensor's elements as contiguous row-major bytes, on the host."""
+    from lucid._dispatch import _unwrap
+
+    return bytes(_unwrap(value).to_bytes())
 
 
 def load_safetensors(
@@ -611,10 +663,11 @@ def load_safetensors(
 ) -> dict[str, object]:
     r"""Load a SafeTensors file into a flat state dict.
 
-    Reads the entire file lazily through the ``safetensors`` Python
-    package, converts each tensor to a Lucid :class:`Tensor`, optionally
-    relocates to the requested device, and restores any zero-rank
-    scalars that were promoted to shape ``(1,)`` during :func:`save_safetensors`.
+    Reads the header and each tensor's bytes directly, builds a Lucid
+    :class:`Tensor` of the stored dtype — bfloat16 included — optionally
+    relocates it to the requested device, and restores any zero-rank
+    scalars that were promoted to shape ``(1,)`` during
+    :func:`save_safetensors`.
 
     Parameters
     ----------
@@ -629,12 +682,17 @@ def load_safetensors(
     dict of str to Tensor
         Flat state dict suitable for ``model.load_state_dict()``.
 
+    Raises
+    ------
+    ValueError
+        If the file is not a well-formed SafeTensors file, or stores a
+        dtype Lucid cannot represent (the 8-bit floats).
+
     Notes
     -----
-    Requires the optional ``safetensors`` Python package
-    (``pip install safetensors``). The header metadata is consulted to
-    recover the original 0-d shape of scalar entries written through
-    :func:`save_safetensors`.
+    Unsigned integers have no Lucid dtype and widen losslessly: ``U8`` to
+    int16, ``U16`` to int32, ``U32`` to int64 (``U64`` to int64, refused
+    past its range).
 
     Examples
     --------
@@ -645,29 +703,71 @@ def load_safetensors(
     >>> loaded["w"].tolist()
     [1.0, 1.0, 1.0]
     """
-    from safetensors import safe_open as _safe_open
-    from lucid._factories.converters import from_numpy as _from_numpy
-
-    _require_safetensors()
+    import json
+    import mmap
+    import struct
 
     import lucid as _lucid
 
     result: dict[str, object] = {}
-    with _safe_open(path, framework="np") as _f:
-        meta: dict[str, str] = _f.metadata() or {}
-        scalar_keys: set[str] = set(
-            meta.get("__lucid_scalar_keys__", "").split(",")
-        ) - {""}
-        for name in _f.keys():
-            arr = _f.get_tensor(name)
-            t = _from_numpy(arr)
-            if name in scalar_keys:
-                # from_numpy can't produce 0-d tensors; squeeze (1,) → ()
-                t = _lucid.squeeze(t)
-            if device in ("metal", "gpu"):
-                t = t.to("metal")
-            result[name] = t
+    with open(path, "rb") as fh:
+        prefix = fh.read(8)
+        if len(prefix) != 8:
+            raise ValueError(
+                f"load_safetensors: {path!r} is too short to be SafeTensors"
+            )
+        (header_len,) = struct.unpack("<Q", prefix)
+        try:
+            header = json.loads(fh.read(header_len))
+        except ValueError as exc:
+            raise ValueError(
+                f"load_safetensors: {path!r} has no readable header"
+            ) from exc
+        base = 8 + header_len
+        meta: dict[str, str] = header.pop("__metadata__", None) or {}
+        scalar_keys = set(meta.get("__lucid_scalar_keys__", "").split(",")) - {""}
+        with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as data:
+            for name, info in header.items():
+                start, end = (int(v) for v in info["data_offsets"])
+                shape = [int(d) for d in info["shape"]]
+                raw = data[base + start : base + end]
+                t = _tensor_from_safetensors(name, str(info["dtype"]), shape, raw)
+                if name in scalar_keys:
+                    t = _lucid.squeeze(t)
+                if device in ("metal", "gpu"):
+                    t = t.to("metal")
+                result[name] = t
     return result
+
+
+def _tensor_from_safetensors(name: str, code: str, shape: list[int], raw: bytes) -> _T:
+    """One SafeTensors entry as a Lucid tensor of its own dtype."""
+    count = 1
+    for d in shape:
+        count *= d
+    engine_dtype = _ST_ENGINE.get(code)
+    if engine_dtype is not None:
+        impl = _C_engine.TensorImpl.from_bytes(
+            raw, shape, engine_dtype, _C_engine.Device.CPU, False
+        )
+        return _wrap(impl)
+    widening = _ST_UNSIGNED.get(code)
+    if widening is None:
+        raise ValueError(
+            f"load_safetensors: tensor {name!r} is stored as {code}, which Lucid "
+            "cannot represent"
+        )
+    import numpy as _np
+
+    from lucid._factories.converters import from_numpy as _from_numpy
+
+    stored, target = widening
+    arr = _np.frombuffer(raw, dtype=stored, count=count).reshape(shape)
+    if code == "U64" and count and int(arr.max()) > _np.iinfo(_np.int64).max:
+        raise ValueError(
+            f"load_safetensors: tensor {name!r} holds uint64 values past int64's range"
+        )
+    return _from_numpy(arr.astype(target))
 
 
 __all__ = [
