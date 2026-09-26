@@ -633,6 +633,14 @@ ci: enforce strict commit convention
 
 ---
 
+### Linking work to the backlog
+
+The backlog lives in Linear (team key `CHA`), connected to this repository.
+Name the issue in the commit body — `Refs CHA-5` for work toward it,
+`Fixes CHA-5` when the commit resolves it. The integration links the commit
+to the issue, and a `Fixes` reaching `main` closes it. A finding that does not
+fit the change at hand goes into a new issue rather than a TODO comment.
+
 ## 9. Pull request checklist
 
 Before opening a PR, verify every item:
