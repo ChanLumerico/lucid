@@ -689,6 +689,7 @@ class FunctionCtx:
 class _PythonBackwardNode:
     ctx: FunctionCtx
     backward_fn: object
+    once_differentiable: bool
 
 def _register_python_backward_node(
     outputs: list[TensorImpl],

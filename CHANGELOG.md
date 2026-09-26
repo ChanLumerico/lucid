@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - attention on Metal takes any rank, as on the CPU
 
+- the Python backward node declares once_differentiable
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does
