@@ -446,41 +446,119 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     Returns
     -------
     tuple
-        ``(graph, external_feeds, inputs, outputs)``, where ``inputs`` is
-        a list of ``(feature name, value id, tensor)`` and ``outputs`` a
-        list of ``(feature name, value id, tensor)``.
+        ``(graph, external_feeds, inputs, outputs, retained_values)``,
+        where ``inputs`` is a list of ``(feature name, value id, tensor)``
+        and ``outputs`` a list of ``(feature name, value id, tensor)``. An
+        input the forward wrote in place is bound to the value it arrived
+        with, so the program computes the write from what it is given.
 
     Raises
     ------
     ValueError
-        An input never reached an op, or an output is not in the trace.
+        An input never reached an op, the model replaced an input's
+        tensor instead of writing into it, or an output is not in the
+        trace.
     TypeError
         The return value carries no tensor, or lacks the named field.
+    StatefulModel
+        The trace changed one of the model's buffers.
+
+    Notes
+    -----
+    Whatever the forward writes in place — its own buffers, or one of the
+    example tensors — is put back to its value from before the trace,
+    whether the trace succeeded or not. An export runs the model once to
+    learn its shape; leaving that run's writes behind changed the caller's
+    tensors as a side effect of writing a file.
     """
     examples, by_keyword = _named_examples(example)
-    with _observers_paused(model):
-        before = _buffer_marks(model)
-        with _compile._tracing() as tracer:
-            # Draws stay ops in the recording: export lifts each one into a
-            # model input, where the compile path would turn it into a feed.
-            tracer.redraw_rng = False
-            if by_keyword:
-                result = model(**dict(examples))
-            else:
-                result = model(*(tensor for _, tensor in examples))
-            selected = _select_outputs(result, output_field)
+    # Captured before the call, because the call may change what the
+    # example tensors hold. An in-place write keeps the tensor's impl and
+    # moves the value id it resolves to; a write that replaces the impl
+    # leaves the original untouched and the tensor pointing elsewhere.
+    held = [_unwrap(tensor) for _name, tensor in examples]
+    tracer: Any = None
+    try:
+        with _observers_paused(model):
+            before = _buffer_marks(model)
+            with _compile._tracing() as tracer:
+                # Draws stay ops in the recording: export lifts each one into
+                # a model input, where the compile path would turn it into a
+                # feed.
+                tracer.redraw_rng = False
+                # The recorded operations are the same with autograd off —
+                # the tracer hooks fire before the grad-mode check, as the
+                # compile path relies on — and with it on, every activation
+                # is saved for a backward that never comes, for the whole
+                # build. At video resolutions that was gigabytes.
+                with lucid.no_grad():
+                    if by_keyword:
+                        result = model(**dict(examples))
+                    else:
+                        result = model(*(tensor for _, tensor in examples))
+                selected = _select_outputs(result, output_field)
 
-        after = _buffer_marks(model)
+            after = _buffer_marks(model)
+
+        # Held as a list so every impl stays alive while its ``id`` is the
+        # key it is matched by.
+        writes = list(tracer.outside_writes())
+        written = {id(impl) for _tid, impl in writes}
+        # An output is read after the trace — a lifted draw's reference
+        # answer — so one that is itself a written tensor keeps the value
+        # the trace gave it, not the one it is about to be put back to.
+        answered = {
+            name: tensor.clone()
+            for name, tensor in selected
+            if id(_unwrap(tensor)) in written
+        }
+    finally:
+        if tracer is not None:
+            tracer.restore_outside_writes()
+        replaced: list[tuple[str, bool]] = []
+        for (name, tensor), impl in zip(examples, held):
+            if _unwrap(tensor) is not impl:
+                replaced.append((name, bool(impl.requires_grad)))
+                tensor._impl = impl
 
     moved = sorted(
         name for name, mark in after.items() if before.get(name, mark) != mark
     )
     if moved:
         raise StatefulModel(moved)
+    if replaced:
+        # Refused rather than followed: the replacement is a Python-level
+        # rebinding the recording cannot see, so the program would read the
+        # example's values as a constant and the input would go unread.
+        name, grad = replaced[0]
+        why = (
+            " — an example that requires grad is replaced rather than written "
+            "into, so passing it detached (`x.detach()`) is enough"
+            if grad
+            else ""
+        )
+        raise ValueError(
+            f"lucid.coreml: forward writes into input {name!r} by replacing its "
+            "tensor rather than writing into it, so the program would read the "
+            "example's values as a constant instead of the input. Clone it "
+            "first (`x = x.clone()` at the top of forward) and write into the "
+            f"copy{why}"
+        )
 
+    feeds = tracer.external_feeds
+    feed_of = {id(impl): int(tid) for tid, impl in feeds.items()}
     inputs: list[tuple[str, int, Tensor]] = []
-    for name, tensor in examples:
-        value_id = tracer.lookup_id(_unwrap(tensor))
+    for (name, tensor), impl in zip(examples, held):
+        if id(impl) in written:
+            # Written in place: the tensor now resolves to the value the
+            # write produced, and the value it arrived with is the feed it
+            # was read as before that. Binding the input there makes the
+            # program compute the write from whatever the caller passes,
+            # as eager does; binding it to the written value left the feed
+            # to be baked in as a constant and the input read by nothing.
+            value_id = feed_of.get(id(impl))
+        else:
+            value_id = tracer.lookup_id(impl)
         if value_id is None:
             raise ValueError(
                 f"lucid.coreml: example input {name!r} never reached an op — the "
@@ -502,8 +580,8 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
                 "reads values has to become tensor operations before this "
                 "model can be exported."
             )
-        outputs.append((name, value_id, tensor))
-    return tracer.graph, tracer.external_feeds, inputs, outputs, tracer.retained_values
+        outputs.append((name, value_id, answered.get(name, tensor)))
+    return tracer.graph, feeds, inputs, outputs, tracer.retained_values
 
 
 def _flatten_ints(tensor: Tensor) -> list[int]:
@@ -2033,6 +2111,15 @@ def _named(names: dict[int, str], tid: int, consumer: str) -> str:
 #: that reopened the file.
 _DRAWN_KEY = "lucid.coreml.draws"
 
+#: Keys under which the package records the precision it was built at —
+#: the body's, and the interface's. Nothing else in the file states
+#: either as one fact: the body is a scatter of casts and typed
+#: constants, and a handle that reopened the package used to assume
+#: float32, then told the owner of a float16 program that float32 was
+#: why the Neural Engine took none of it.
+_PRECISION_KEY = "lucid.coreml.precision"
+_IO_PRECISION_KEY = "lucid.coreml.io_precision"
+
 #: Operations that make a fresh sample out of nothing. Core ML folds
 #: them at build time, so they are either refused or lifted to an input
 #: the caller fills — see :class:`~lucid.coreml.Draws`.
@@ -2677,6 +2764,7 @@ def build_package(
     draws: _spec.Draws = _spec.Draws.REFUSED,
     activations: _spec.Activations = _spec.Activations.SIMULATED,
     into: _Shared | None = None,
+    io_precision: Precision = Precision.FLOAT32,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
 
@@ -2691,7 +2779,14 @@ def build_package(
         Destination package. Replaced if it already exists.
     precision : Precision, optional, keyword-only, default=FLOAT32
         Body precision. ``FLOAT16`` is what the Neural Engine runs;
-        inputs and outputs stay float32 either way, bracketed by casts.
+        inputs and outputs stay float32 unless ``io_precision`` says
+        otherwise, bracketed by casts.
+    io_precision : Precision, optional, keyword-only, default=FLOAT32
+        Element type of the float inputs and outputs. ``FLOAT16`` needs
+        a float16 body and removes the casts around it, so the caller
+        hands over and receives half precision. An image input stays a
+        pixel buffer, and a classifier's scores stay float32 under its
+        labels.
     weights : WeightPrecision, optional, keyword-only, default=FLOAT
         How weights are stored. ``INT8`` keeps eight bits per weight plus
         a per-channel scale, halving the package against float16; the
@@ -2759,10 +2854,25 @@ def build_package(
     ------
     UnsupportedOp
         The trace contains an op with no MIL translation.
+    ValueError
+        A float16 interface was asked for around a float32 body.
     """
+    half_io = io_precision is Precision.FLOAT16
+    if half_io and precision is not Precision.FLOAT16:
+        # The casts a float16 interface removes are the ones that bracket
+        # a float16 body; around a float32 one there are none to remove,
+        # and adding the opposite pair would pay two conversions to hand
+        # the caller less precision than the program computed.
+        raise ValueError(
+            "lucid.coreml: io_precision=Precision.FLOAT16 declares float16 "
+            "inputs and outputs, and the body is float32 — the interface would "
+            "only round what the program computed. Pass "
+            "precision=Precision.FLOAT16 as well"
+        )
     # Settled before anything is written: a floor the package cannot
     # meet is the caller's mistake to hear about now, not a device's to
-    # report later.
+    # report later. A float16 interface does not move it: Core ML reads a
+    # float16 multi-array from iOS 16 on, below the oldest floor written.
     target = _settle_target(
         minimum_deployment_target,
         state=state,
@@ -2922,12 +3032,27 @@ def build_package(
     cm = _C_engine.coreml
     paths = into.paths if into is not None else cm.prepare_package(path)
 
+    def _half_interface(name: str, tensor: Tensor) -> bool:
+        """Whether this input is declared float16 and read without a cast.
+
+        Only a float multi-array. An image arrives as a pixel buffer, whose
+        normalisation is written at float32 ahead of the body's cast, and
+        an integer input is an index that no float type may carry.
+        """
+        is_image = image_input is not None and name not in lifted_names
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
+        return half_io and is_float and not is_image
+
     program = cm.MilProgram(
         [
             (
                 name,
                 (
-                    _spec.mil_dtype(tensor.dtype),
+                    (
+                        _spec.FLOAT16
+                        if _half_interface(name, tensor)
+                        else _spec.mil_dtype(tensor.dtype)
+                    ),
                     _flex([int(d) for d in tensor.shape], varying.get(tid)),
                 ),
             )
@@ -2948,8 +3073,9 @@ def build_package(
     # Neural Engine only runs float16, so an fp32 program silently lands
     # on CPU or GPU no matter what compute units are requested; fp16 is
     # what actually reaches it.  Inputs and outputs stay float32 either
-    # way, with casts bracketing the body, so callers are not asked to
-    # hand over half precision.
+    # way by default, with casts bracketing the body, so callers are not
+    # asked to hand over half precision; ``io_precision=FLOAT16`` is how a
+    # caller who already holds half precision skips both conversions.
     body_mil, body_blob = _spec.body_dtypes(precision)
     half = precision is Precision.FLOAT16
     for name, tid, tensor in inputs:
@@ -3171,7 +3297,10 @@ def build_package(
     for name, tid, tensor in plain_inputs:
         shape = [int(d) for d in tensor.shape]
         builder.shapes[name] = shape
-        builder.dtypes[name] = _spec.mil_dtype(tensor.dtype)
+        half_in = _half_interface(name, tensor)
+        builder.dtypes[name] = (
+            _spec.FLOAT16 if half_in else _spec.mil_dtype(tensor.dtype)
+        )
         source = name
         if image_input is not None and name not in lifted_names:
             # The caller's own input is the picture. A lifted draw is an
@@ -3182,8 +3311,9 @@ def build_package(
             names[tid] = source
         # Only a float interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
-        # half would turn indices into approximations of themselves.
-        if half and tensor.dtype in (lucid.float32, lucid.float16):
+        # half would turn indices into approximations of themselves.  A
+        # float16 interface is already what the body reads.
+        if half and not half_in and tensor.dtype in (lucid.float32, lucid.float16):
             cast_name = f"_cast_in_{name}"
             mil_type, raw = emit_cast(builder, source, "fp16")
             program.add_op(
@@ -3199,9 +3329,17 @@ def build_package(
     # producing op is emitted rather than by appending an identity to
     # rename it — an extra operation would land on the CPU and show up in
     # every compute plan.  Under fp16 the cast that follows takes the name
-    # instead, since it is what the interface actually returns.
+    # instead, since it is what the interface actually returns — unless
+    # the interface is fp16 too, and there is no cast.  A classifier's
+    # scores keep theirs: they are read into a label map, not handed over.
+    # An output that becomes state is never declared, so it keeps the
+    # value name it would have had.
+    carried_out = {spec.output for spec in (state or [])}
+    cast_out = half and not (half_io and classifier is None)
     wanted_name: dict[int, str] = (
-        {} if half else {tid: field for field, tid, _t in outputs}
+        {}
+        if cast_out
+        else {tid: field for field, tid, _t in outputs if field not in carried_out}
     )
     # A value the graph recomputes on every prediction although nothing
     # about it depends on the input is written down instead. See
@@ -3342,8 +3480,13 @@ def build_package(
             )
             continue
         value = _named(names, tid, f"output {field!r}")
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
         flexible_type = (
-            _spec.mil_dtype(tensor.dtype),
+            (
+                _spec.FLOAT16
+                if is_float and not cast_out and half_io
+                else _spec.mil_dtype(tensor.dtype)
+            ),
             _flex([int(d) for d in tensor.shape], varying.get(tid)),
         )
         # Only a float output needs bracketing back to fp32, and the
@@ -3351,7 +3494,7 @@ def build_package(
         # integer output — VQ-VAE returns its codebook indices — asks
         # Core ML for a cast whose named type is not the output's, and
         # the package will not parse.
-        if half and tensor.dtype in (lucid.float32, lucid.float16):
+        if cast_out and is_float:
             mil_type, raw = emit_cast(builder, value, "fp32")
             program.add_op(mil_type, _operands(raw), field, flexible_type)
             value = field
@@ -3377,6 +3520,11 @@ def build_package(
         program.set_metadata(
             metadata.description, metadata.author, metadata.license, metadata.version
         )
+    # Written on every package, so a handle that reopens one knows what it
+    # holds rather than assuming the default it was exported with — see
+    # ``_PRECISION_KEY``.
+    program.set_user_metadata(_PRECISION_KEY, precision.value)
+    program.set_user_metadata(_IO_PRECISION_KEY, io_precision.value)
     if lifted:
         # Which inputs stand in for a draw, and what each was drawn from.
         # Nothing else in the file says so — they are ordinary inputs to
@@ -3401,6 +3549,7 @@ def build_package(
         "outputs": declared,
         "ops": int(program.op_count),
         "precision": precision.value,
+        "io_precision": io_precision.value,
         # A name for the summary: the enum has one, and the two
         # parameterised forms are described by the parameter that makes
         # them different.

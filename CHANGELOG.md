@@ -59,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - synchronize runs the pending work it waits for
 
+- exports compute writes into inputs, trace without autograd, fp16 I/O
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

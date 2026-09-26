@@ -113,11 +113,12 @@ class PlacementSummary:
     >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
     >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
     >>> package = cml.export(model, x, f"{room}/half.mlpackage",
-    ...                      precision=cml.Precision.FLOAT16)
+    ...                      precision=cml.Precision.FLOAT16,
+    ...                      compute_units=cml.ComputeUnits.CPU_ONLY)
     >>> plan = package.compute_plan()
     >>> plan.constants > 0 and plan.total_compute > 0   # counted apart
     True
-    >>> plan.note                      # empty unless something is worth saying
+    >>> plan.note                      # the CPU was asked for: nothing to say
     ''
 
     A float32 program asked for the Neural Engine is the case it speaks up
@@ -182,16 +183,39 @@ class PlacementSummary:
         Nothing about that is an error, and Core ML reports no problem,
         so the only place it can surface is here — where somebody is
         already asking where the work went.
+
+        The float32 explanation is given only for a program known to be
+        float32. A float16 one that still lands elsewhere has another
+        cause, and so may a package that does not record its precision —
+        one Lucid did not write, or wrote before it recorded one — so
+        those get the causes Core ML leaves unsaid instead of advice
+        that would send the reader to a setting they already have.
         """
         wanted = self.units in (ComputeUnits.ALL, ComputeUnits.CPU_AND_NE)
         if not wanted or self.total_compute == 0 or self.ane_fraction > 0.0:
             return ""
-        if self.precision.upper() != "FLOAT32":
-            return ""
+        precision = self.precision.upper()
+        if precision == "FLOAT32":
+            return (
+                "no operation reached the Neural Engine because the program is "
+                "float32, which that device does not run — export with "
+                "precision=Precision.FLOAT16 to reach it"
+            )
+        unrecorded = (
+            ""
+            if precision == "FLOAT16"
+            else (
+                "; this package does not record its precision, and a float32 "
+                "program never reaches that device"
+            )
+        )
         return (
-            "no operation reached the Neural Engine because the program is "
-            "float32, which that device does not run — export with "
-            "precision=Precision.FLOAT16 to reach it"
+            "no operation reached the Neural Engine, and Core ML does not say "
+            "why — the usual causes are a program too small for its planner to "
+            "dispatch, one too large for the Neural Engine's compiler (splitting "
+            "it into smaller packages avoids that), operations or shapes that "
+            "device does not take, such as flexible shapes or tensors above "
+            f"rank 4, and a machine without one, as a virtual machine is{unrecorded}"
         )
 
     @override
@@ -279,7 +303,13 @@ class CoreMLModel:
         whatever the request, because Core ML's GPU path unpacks small
         palettes incorrectly.
     precision : str
-        ``"FLOAT32"`` or ``"FLOAT16"``, as the package was written.
+        ``"FLOAT32"`` or ``"FLOAT16"``, as the package was written — the
+        body's precision. ``"UNKNOWN"`` for a package that does not
+        record it: one Lucid did not write, or wrote before it did.
+    io_precision : str
+        Element type of the float inputs and outputs, in the same
+        spelling. ``"FLOAT16"`` makes :meth:`predict` convert float32
+        inputs on the way in and return float16 tensors.
     palettized : bool
         Whether the program reads a palette.
     image_input : ImageInput or None
@@ -321,6 +351,7 @@ class CoreMLModel:
         *,
         compute_units: ComputeUnits = ComputeUnits.ALL,
         precision: str = "FLOAT32",
+        io_precision: str = "FLOAT32",
         output_shapes: dict[str, tuple[int, ...]] | None = None,
         image_input: ImageInput | None = None,
         classifier: Classifier | None = None,
@@ -339,6 +370,10 @@ class CoreMLModel:
         self.compute_units = _palettized_units(compute_units, self.palettized)
         compute_units = self.compute_units
         self.precision = precision
+        # What the float features are declared as. Only a known float16
+        # interface changes what ``predict`` does; anything else is fed
+        # as it is given, which is what a foreign package has always had.
+        self.io_precision = io_precision
         # Core ML's multi-array has no rank-0 form, so a model whose output
         # is a scalar comes back shaped (1,).  Keeping the traced shapes
         # lets ``predict`` hand back what the eager model would.
@@ -443,6 +478,7 @@ class CoreMLModel:
                 )
             given.append((name, drawn))
 
+        images = {image for image, _color in self._images()}
         fed: list[tuple[str, TensorImpl]] = []
         for name, tensor in given:
             if name not in self.input_names:
@@ -463,6 +499,16 @@ class CoreMLModel:
                 tensor = (
                     tensor if tensor.dtype == lucid.int32 else tensor.to(lucid.int32)
                 )
+            elif (
+                tensor.dtype == lucid.float32
+                and self.io_precision == "FLOAT16"
+                and name not in images
+            ):
+                # The package reads half precision here, and the model the
+                # caller compares it with takes single — so the same tensor
+                # serves both, converted where the package needs it. A
+                # lifted draw is sampled at float32 and arrives this way.
+                tensor = tensor.half()
             fed.append((name, tensor._impl))
         return fed
 
@@ -670,6 +716,16 @@ class CoreMLModel:
                 (name, _apply_image_normalisation(tensor, self.image_normalisation))
                 for name, tensor in examples
             ]
+        # The package runs first. A model may write into its own input — a
+        # cache it fills in place — and running it eagerly first would
+        # hand the package an input the write had already been applied
+        # to, so the comparison measured the write twice.
+        fed = x
+        if self.noise_inputs:
+            feed = dict(_named_examples(x)[0])
+            feed.update(self._traced_noise)
+            fed = feed
+        got = self.predict(fed)
         if by_keyword:
             reference = model(**dict(examples))
         else:
@@ -684,7 +740,7 @@ class CoreMLModel:
             # so comparing them would measure two different draws. The
             # traced answer is what the package is being asked to
             # reproduce, and it was computed from exactly the numbers the
-            # package is about to be fed.
+            # package was fed.
             for name in self.output_names:
                 if name not in expected:
                     raise KeyError(
@@ -692,11 +748,7 @@ class CoreMLModel:
                         "which this package exports"
                     )
             expected = dict(self._traced_outputs)
-            feed = dict(_named_examples(x)[0])
-            feed.update(self._traced_noise)
-            x = feed
 
-        got = self.predict(x)
         produced = got if isinstance(got, dict) else {self.output_names[0]: got}
 
         worst = 0.0
@@ -717,7 +769,12 @@ class CoreMLModel:
                     "against NaN is NaN whatever the package computed"
                 )
             carries_signal = carries_signal or extreme > _COMPARABLE
-            gap = float((produced[name] - wanted).abs().max().item())
+            answer = produced[name]
+            if answer.dtype != wanted.dtype and answer.dtype == lucid.float16:
+                # A float16 interface answers in half precision; the gap is
+                # measured at the eager model's, where the reference is.
+                answer = answer.to(wanted.dtype)
+            gap = float((answer - wanted).abs().max().item())
             worst = max(worst, gap / max(extreme, 1.0) if relative else gap)
         if not carries_signal:
             # Comparing against a reference with no magnitude proves
@@ -869,7 +926,10 @@ class CoreMLModel:
 
     @override
     def __repr__(self) -> str:
+        # The interface is named only when it is not the float32 default,
+        # so the common case reads as it always has.
+        io = f", io={self.io_precision}" if self.io_precision == "FLOAT16" else ""
         return (
-            f"CoreMLModel({self.path!r}, precision={self.precision}, "
+            f"CoreMLModel({self.path!r}, precision={self.precision}{io}, "
             f"units={self.compute_units.value})"
         )

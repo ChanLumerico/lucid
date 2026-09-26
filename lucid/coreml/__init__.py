@@ -71,6 +71,8 @@ from typing import TYPE_CHECKING, cast
 
 from lucid.coreml._build import (
     _DRAWN_KEY,
+    _IO_PRECISION_KEY,
+    _PRECISION_KEY,
     _packed_linears_unpacked,
     commit_staging,
     discard_staging,
@@ -175,6 +177,7 @@ def export(
     minimum_deployment_target: DeploymentTarget | None = None,
     draws: Draws = Draws.REFUSED,
     activations: Activations = Activations.SIMULATED,
+    io_precision: Precision = Precision.FLOAT32,
 ) -> CoreMLModel:
     """Trace ``model``, write a ``.mlpackage`` at ``path``, and load it.
 
@@ -193,7 +196,8 @@ def export(
     precision : Precision, optional, keyword-only, default=FLOAT32
         Precision of the program body. ``FLOAT32`` keeps the export
         faithful to the model it came from; ``FLOAT16`` is what the
-        Neural Engine runs. Inputs and outputs stay float32 either way.
+        Neural Engine runs. Inputs and outputs stay float32 either way,
+        unless ``io_precision`` asks for float16.
     weights : WeightPrecision or Palettize or Sparsify, optional, keyword-only, default=WeightPrecision.FLOAT
         How weights are stored. ``INT8`` keeps eight bits per weight plus
         one scale per output channel and lets Core ML dequantize on the
@@ -254,6 +258,16 @@ def export(
         Single attribute to export when the model returns an output
         dataclass. ``None`` exports every tensor field it declares —
         a detector's boxes and objectness as well as its class scores.
+    io_precision : Precision, optional, keyword-only, default=FLOAT32
+        Element type of the package's float inputs and outputs. The
+        default keeps them float32 around any body, so a caller never
+        has to convert. ``FLOAT16`` — which needs
+        ``precision=Precision.FLOAT16`` — declares them half precision
+        and drops the two casts that bracket the body: an app that
+        already holds float16 buffers hands them over as they are, and
+        :meth:`~CoreMLModel.predict` returns float16 tensors (a float32
+        input is converted on the way in). An image input stays a pixel
+        buffer, and a classifier's scores stay behind its labels.
 
     Returns
     -------
@@ -263,7 +277,8 @@ def export(
     Raises
     ------
     ValueError
-        The model is in training mode.
+        The model is in training mode, or ``io_precision`` is float16
+        around a float32 body.
     UnsupportedOp
         The trace contains an operation with no MIL translation.
 
@@ -418,6 +433,7 @@ def export(
             minimum_deployment_target=minimum_deployment_target,
             draws=draws,
             activations=activations,
+            io_precision=io_precision,
         )
 
 
@@ -439,6 +455,7 @@ def _export_prepared(
     minimum_deployment_target: DeploymentTarget | None,
     draws: Draws,
     activations: Activations,
+    io_precision: Precision,
 ) -> CoreMLModel:
     """Write the package, once the model is in a shape the trace can follow.
 
@@ -455,7 +472,7 @@ def _export_prepared(
         Input the trace runs on.
     path : str
         Destination package.
-    precision, weights, shapes, shape_range, state, image_input, classifier, metadata, output_field, compute_units, minimum_deployment_target, draws, activations
+    precision, weights, shapes, shape_range, state, image_input, classifier, metadata, output_field, compute_units, minimum_deployment_target, draws, activations, io_precision
         As :func:`export` documents them.
 
     Returns
@@ -511,6 +528,7 @@ def _export_prepared(
             minimum_deployment_target=minimum_deployment_target,
             draws=draws,
             activations=activations,
+            io_precision=io_precision,
         )
     except BaseException:
         discard_staging(path)
@@ -524,6 +542,7 @@ def _export_prepared(
         [name for name, _shape in outputs],
         compute_units=compute_units,
         precision=precision.value,
+        io_precision=io_precision.value,
         # A flexible export's output shape follows the input, so the
         # traced one is not the shape to restore it to.
         output_shapes=None if info["flexible"] else dict(outputs),
@@ -546,6 +565,7 @@ def export_functions(
     weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT,
     metadata: Metadata | None = None,
     compute_units: ComputeUnits = ComputeUnits.ALL,
+    io_precision: Precision = Precision.FLOAT32,
 ) -> dict[str, CoreMLModel]:
     """Write several entry points into one package, sharing its weights.
 
@@ -573,6 +593,9 @@ def export_functions(
         What the package says about itself. One package, one set.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
+    io_precision : Precision, optional, keyword-only, default=FLOAT32
+        Element type of every function's float inputs and outputs, as
+        :func:`export` takes it.
 
     Returns
     -------
@@ -649,6 +672,7 @@ def export_functions(
                 weights=weights,
                 metadata=metadata if name == chosen else None,
                 into=shared,
+                io_precision=io_precision,
             )
             built[name] = info
             programs.append((name, info["program"]))
@@ -668,6 +692,7 @@ def export_functions(
             [feature for feature, _shape in outputs],
             compute_units=compute_units,
             precision=precision.value,
+            io_precision=io_precision.value,
             output_shapes=dict(outputs),
             function_name=name,
             # Several entry points is itself an IOS18 feature, whatever
@@ -771,7 +796,9 @@ def load(
     """Load an existing ``.mlpackage``.
 
     Feature names are read from the package, so this works on packages
-    Lucid did not write.
+    Lucid did not write. So is the precision a Lucid export recorded —
+    the body's and the interface's — which a package from elsewhere, or
+    from a release that did not record it, reports as ``"UNKNOWN"``.
 
     Parameters
     ----------
@@ -843,7 +870,14 @@ def load(
     # Which inputs stand in for a random draw, written by the export
     # into the creator-defined metadata because nothing else in the file
     # distinguishes them from an ordinary input.
-    declared_draws = dict(handle.user_metadata).get(_DRAWN_KEY, "")
+    declared = dict(handle.user_metadata)
+    declared_draws = declared.get(_DRAWN_KEY, "")
+    # The precision the export recorded. A package Lucid did not write —
+    # or wrote before it recorded one — says nothing, and a guess would
+    # be repeated back as a diagnosis: the float32 advice a compute plan
+    # gives is wrong for a float16 program.
+    precision = declared.get(_PRECISION_KEY, "UNKNOWN")
+    io_precision = declared.get(_IO_PRECISION_KEY, "UNKNOWN")
     handle.close()
     noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] = []
     for entry in declared_draws.split(","):
@@ -856,6 +890,8 @@ def load(
         list(input_names),
         list(output_names),
         compute_units=compute_units,
+        precision=precision,
+        io_precision=io_precision,
         image_input=ImageInput() if images else None,
         classifier=Classifier(labels=tuple(labels)) if labels else None,
         noise=noise,
