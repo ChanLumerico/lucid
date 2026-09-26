@@ -142,7 +142,7 @@ _SHIPPED = (
         "resnest101e.in1k",
         48_275_016,
         256,
-        293,
+        292,
         "bilinear",
     ),
     (

@@ -29,8 +29,8 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 _PRESET_T = ImageClassification(crop_size=224, resize_size=232, interpolation="bicubic")
 _PRESET_S = ImageClassification(crop_size=224, resize_size=246, interpolation="bicubic")
 _PRESET_B = ImageClassification(crop_size=224, resize_size=238, interpolation="bicubic")
-# timm Swin-L: crop_pct=0.9 → resize = round(224 / 0.9) = 249, bicubic.
-_PRESET_L = ImageClassification(crop_size=224, resize_size=249, interpolation="bicubic")
+# timm Swin-L: crop_pct=0.9 → resize = floor(224 / 0.9) = 248, bicubic.
+_PRESET_L = ImageClassification(crop_size=224, resize_size=248, interpolation="bicubic")
 
 
 @register_weights("swin_tiny_cls")

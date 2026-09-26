@@ -65,7 +65,7 @@ class ResNeSt101Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``resnest101e.in1k`` (Zhang et al., 2022; ~48.3M params, 82.8%
-    top-1).  Evaluated at 256 crop / 293 resize / bilinear.
+    top-1).  Evaluated at 256 crop / 292 resize / bilinear.
 
     Examples
     --------
@@ -87,7 +87,7 @@ class ResNeSt101Weights(WeightsEnum):
         sha256="b3403d554ee27612f25bd646c7202b0520f697e8150227538ae7ec5474a8479b",
         num_classes=1000,
         transforms=ImageClassification(
-            crop_size=256, resize_size=293, interpolation="bilinear"
+            crop_size=256, resize_size=292, interpolation="bilinear"
         ),
         meta={
             "tag": "IN1K",

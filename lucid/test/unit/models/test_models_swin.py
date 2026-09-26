@@ -205,7 +205,7 @@ _SHIPPED = (
         "MS_IN22K_FT_IN1K",
         "timm/swin_large_patch4_window7_224.ms_in22k_ft_in1k",
         196_532_476,
-        249,
+        248,
     ),
 )
 

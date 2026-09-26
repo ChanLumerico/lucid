@@ -6,14 +6,15 @@ zoo: :class:`PVTv2B0Weights`, :class:`PVTv2B1Weights`,
 :class:`PVTv2B2Weights`, :class:`PVTv2B3Weights`,
 :class:`PVTv2B4Weights`, :class:`PVTv2B5Weights`.
 
-Every checkpoint uses the timm PVT v2 eval pipeline: 224 crop / 249
-resize (``crop_pct = 0.9``) / bicubic interpolation / ImageNet stats.
+Every checkpoint uses the timm PVT v2 eval pipeline: 224 crop / 248
+resize (``crop_pct = 0.9``; timm floors 224 / 0.9 = 248.9) / bicubic
+interpolation / ImageNet stats.
 """
 
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = ImageClassification(crop_size=224, resize_size=249, interpolation="bicubic")
+_PRESET = ImageClassification(crop_size=224, resize_size=248, interpolation="bicubic")
 
 
 @register_weights("pvt_v2_b0_cls")

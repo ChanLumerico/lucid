@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a Function whose backward leaves the graph refuses create_graph
 
+- every classifier preset floors crop / crop_pct, as its source does
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

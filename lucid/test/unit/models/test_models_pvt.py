@@ -136,7 +136,7 @@ class TestPVTv2WeightsEnums(unittest.TestCase):
         for cls in self._enums():
             tf = cls.IN1K.transforms()
             self.assertEqual(tf.crop_size, 224)
-            self.assertEqual(tf.resize_size, 249)
+            self.assertEqual(tf.resize_size, 248)
             self.assertEqual(tf.interpolation, "bicubic")
 
     def test_registry_discoverable(self) -> None:
