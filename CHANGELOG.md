@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - follow tokenizer.json's pipeline and keep EOS when truncating
 
+- the checkpoint module imports Tensor for its runtime casts
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

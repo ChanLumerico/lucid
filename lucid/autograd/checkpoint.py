@@ -41,15 +41,13 @@ Notes
   same reason.
 """
 
-from typing import Callable, TYPE_CHECKING, cast, final, override
+from typing import Callable, cast, final, override
 
 from lucid._factories.creation import zeros
 from lucid._factories.random import get_rng_state, set_rng_state
+from lucid._tensor.tensor import Tensor
 from lucid.autograd._grad_mode import no_grad, enable_grad
 from lucid.autograd.function import Function, FunctionCtx
-
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
 
 
 def checkpoint(
