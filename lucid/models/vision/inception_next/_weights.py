@@ -15,7 +15,7 @@ timm's ``sail_in1k`` weights (Yu et al., "InceptionNeXt: When Inception
 Meets ConvNeXt", CVPR 2024 — :class:`InceptionNeXtTinyWeights`,
 :class:`InceptionNeXtSmallWeights`, :class:`InceptionNeXtBaseWeights`).
 Tiny / Small use the standard 224-crop / 256-resize bicubic pipeline
-(``crop_pct=0.875``); Base uses a tighter 224-crop / 236-resize bicubic
+(``crop_pct=0.875``); Base uses a tighter 224-crop / 235-resize bicubic
 pipeline (``crop_pct=0.95``), all with ImageNet stats.
 """
 
@@ -26,9 +26,10 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 _PRESET_875 = ImageClassification(
     crop_size=224, resize_size=256, interpolation="bicubic"
 )
-# Base: crop_pct=0.95 → resize round(224/0.95)=236, crop 224.
+# Base: crop_pct=0.95 → resize 235, crop 224.  timm truncates 224 / 0.95 =
+# 235.8, and rounding it to 236 moved the crop window by a pixel.
 _PRESET_95 = ImageClassification(
-    crop_size=224, resize_size=236, interpolation="bicubic"
+    crop_size=224, resize_size=235, interpolation="bicubic"
 )
 
 
@@ -117,7 +118,7 @@ class InceptionNeXtBaseWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`SAIL_IN1K`) converted
     from timm's ``inception_next_base.sail_in1k`` weights and re-hosted
     under ``huggingface.co/lucid-dl/inception-next-base``.  Uses a
-    tighter ``crop_pct=0.95`` eval pipeline (236 resize / 224 crop).
+    tighter ``crop_pct=0.95`` eval pipeline (235 resize / 224 crop).
 
     Examples
     --------

@@ -6,7 +6,8 @@ checkpoints converted from timm's snapshot-distilled model zoo:
 :class:`EfficientFormerL7Weights`.
 
 Every checkpoint uses the timm EfficientFormer eval pipeline: 224 crop /
-236 resize (``crop_pct = 0.95``) / bicubic interpolation / ImageNet stats.
+235 resize (``crop_pct = 0.95``, and timm truncates 224 / 0.95 = 235.8) /
+bicubic interpolation / ImageNet stats.
 The published checkpoints are *distilled* (DeiT-style hard distillation),
 so the Lucid classifier keeps both ``head`` and ``head_dist`` and averages
 their logits at inference to reproduce the reported top-1 accuracy.
@@ -15,7 +16,7 @@ their logits at inference to reproduce the reported top-1 accuracy.
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = ImageClassification(crop_size=224, resize_size=236, interpolation="bicubic")
+_PRESET = ImageClassification(crop_size=224, resize_size=235, interpolation="bicubic")
 
 
 @register_weights("efficientformer_l1_cls")

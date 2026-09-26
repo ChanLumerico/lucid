@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - import annotation sources only once no Lucid import is running
 
+- resize to 235 where timm truncates 224 / 0.95
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does
