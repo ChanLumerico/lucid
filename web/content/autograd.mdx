@@ -33,6 +33,20 @@ loss.backward(retain_graph=True)
 loss.backward()   # second pass — works because graph is still alive
 ```
 
+## Higher-order gradients
+
+Pass `create_graph=True` to build the backward pass itself out of differentiable ops, then differentiate the gradient again — gradient penalties, meta-learning, Hessian-vector products:
+
+```python
+from lucid.autograd import grad
+
+(dx,) = grad(loss, [x], create_graph=True)
+penalty = (dx * dx).sum()
+penalty.backward()   # second derivative of loss, into every leaf
+```
+
+Every op reachable from the public API supports this — convolutions and their transposes, interpolation, `unfold` / `fold`, `grid_sample`, `embedding_bag`, cumulative max / min, and the `lucid.linalg` decompositions (`cholesky`, `qr`, `eigh`) included. Each is checked against central differences of its first gradient. `tensor.grad_fn.name()` names the node that produced a tensor.
+
 ## Gradient accumulation
 
 Gradients **accumulate** into `.grad`. Call `optimizer.zero_grad()` (or `tensor.grad = None`) before each backward pass to reset them.

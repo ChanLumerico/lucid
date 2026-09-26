@@ -102,6 +102,8 @@ for op in report.registered:
 
 Run `diagnose` first when a model compiles slower than expected — an unregistered op in the hot path forces a fallback and explains the gap.
 
+A call the compiler cannot lower runs eagerly, and says so: the first fallback of each kind raises a one-time `UserWarning` naming the reason (set `LUCID_COMPILE_VERBOSE=1` to see every occurrence). bfloat16 graphs are not lowered to MPSGraph yet, so a bfloat16 model is detected up front and runs eagerly without a failed trace.
+
 ## Ahead-of-time export
 
 A compiled forward graph can be serialised to disk and reloaded without re-tracing — useful for deployment or warm starts:
@@ -125,6 +127,8 @@ y = restored(x)                                # no trace cost
 | Best fit | dynamic / research code | fixed-shape training loops |
 
 The compiled path is most effective on deep models with many small ops, where per-op dispatch dominates. For a handful of large matmuls the eager and compiled paths converge.
+
+Attention is the exception to watch. The compiled graph lowers it to matmul, softmax and matmul, which materialises the score matrix; at long key lengths eager Metal's fused attention kernel can be faster (a diffusion-transformer block at 18 720 keys: 95 ms eager against 128 ms compiled on an M4 Max). `LUCID_COMPILE_FUSED_SDPA=1` opts into MPSGraph's fused attention instead. Measure both on long-context models before committing to the compiled path.
 
 <Callout variant="note">
 See the [API reference](/api/lucid.compile) for the full surface, and [Training Loop](/docs/training-loop) for where a fused step slots into a real loop.

@@ -70,6 +70,8 @@ for step in range(steps):
         print(loss.item())   # forces flush — keep this
 ```
 
+To wait for queued work without reading a value — timing a step, or handing a buffer to another framework — call `lucid.metal.synchronize()`. It runs everything still pending and blocks until the GPU finishes. Every wait on the GPU (`synchronize`, `.item()`, `.numpy()`, `lucid.eval`, a compiled executable) releases the Python GIL, so other threads keep running meanwhile.
+
 ## Linear algebra on CPU
 
 `lucid.linalg` dispatches through MLX even on the CPU backend, because MLX's LAPACK bindings are available CPU-side. All other CPU ops use Apple Accelerate (vDSP / vForce / BLAS).

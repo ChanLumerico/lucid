@@ -100,9 +100,11 @@ state = lucid.load("ckpt.lucid", map_location={"metal": "cpu"})
 `map_location` is the right tool for portability: save once on whatever device you trained on, then load anywhere by remapping at load time. See [Metal Device](/docs/metal-device) for how the `cpu` and `metal` streams differ.
 </Callout>
 
-## SafeTensors: safe, zero-copy interchange
+## SafeTensors: safe, portable interchange
 
-`save_safetensors` / `load_safetensors` use the **SafeTensors** format — a tiny JSON header followed by raw tensor bytes. There is no pickle stream anywhere in the file, so loading carries **zero code-execution surface**, is fast, and is zero-copy where possible. This is the format to reach for whenever a checkpoint may be shared with, or downloaded from, an untrusted party.
+`save_safetensors` / `load_safetensors` use the **SafeTensors** format — a tiny JSON header followed by raw tensor bytes. There is no pickle stream anywhere in the file, so loading carries **zero code-execution surface**. Lucid reads and writes the format itself: the file is memory-mapped and each tensor is copied once into its storage. This is the format to reach for whenever a checkpoint may be shared with, or downloaded from, an untrusted party.
+
+Every tensor comes back in the dtype it was stored in, bit for bit — `bfloat16` included, which is the default dtype of most language and diffusion checkpoints on the Hub. Lucid has no unsigned dtypes, so `U8` / `U16` / `U32` entries widen losslessly to `int16` / `int32` / `int64`; a `U64` value past the `int64` range and 8-bit float entries (`F8_*`) raise an error that names them.
 
 ```python
 # Save a flat {name: Tensor} dict.
@@ -124,7 +126,7 @@ lucid.save_safetensors(
 ```
 
 <Callout variant="warning">
-SafeTensors stores **only tensors**. The `state_dict` must be a flat mapping of names to `Tensor` — nested dicts, optimizer state, or arbitrary Python objects raise `TypeError`. Bundle those with `lucid.save` instead. SafeTensors support also needs the optional `safetensors` package (`pip install safetensors`).
+SafeTensors stores **only tensors**. The `state_dict` must be a flat mapping of names to `Tensor` — nested dicts, optimizer state, or arbitrary Python objects raise `TypeError`. Bundle those with `lucid.save` instead.
 </Callout>
 
 ## Sharded checkpoints for large models
@@ -150,7 +152,7 @@ big.load_state_dict(state)
 | Function pair | Stores | Code-exec safe | Best for |
 |---|---|---|---|
 | `save` / `load` | Any picklable object (state dicts, optimizer state, scalars) | Restricted by default (`weights_only=True`) | Resumable training checkpoints with mixed contents |
-| `save_safetensors` / `load_safetensors` | Tensors only, flat dict | Yes — no pickle stream | Sharing weights, untrusted sources, fast zero-copy loads |
+| `save_safetensors` / `load_safetensors` | Tensors only, flat dict | Yes — no pickle stream | Sharing weights, untrusted sources, Hub checkpoints |
 | `save_sharded` / `load_sharded` | State dicts split across files + index | Restricted by default | Very large models, partial / resumable loads |
 
 ## Best practices

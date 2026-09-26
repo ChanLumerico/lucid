@@ -128,6 +128,12 @@ y = checkpoint(model.block_3, x)
 A 30-40% memory drop is typical on transformer-style models, traded
 against a ~30% wall-time hit on the affected segments.
 
+The recomputed segment is differentiated in full: parameters inside it
+receive gradients, and the random state is saved on the way in and
+restored for the recomputation (`preserve_rng_state=True`, the default),
+so a dropout inside the segment sees the same mask twice.  A segment may
+return a tuple of tensors.
+
 ## See also
 
 - [Autograd](/docs/autograd) — how `loss.backward()` actually traverses the graph
