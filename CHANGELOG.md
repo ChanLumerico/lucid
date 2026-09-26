@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - transposed-conv input gradient when output_padding reaches the stride
 
+- a scalar power keeps its second derivative
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does
