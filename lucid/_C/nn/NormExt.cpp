@@ -34,9 +34,20 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Div.h"
+#include "../ops/bfunc/Maximum.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Arith.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/ScalarParam.h"
+#include "../ops/utils/Layout.h"
 #include "../ops/utils/Promote.h"
+#include "../ops/utils/Select.h"
 
 namespace lucid {
 
@@ -175,6 +186,31 @@ std::vector<Storage> LpNormalizeBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(this->device_);
     return {be.lp_normalize_backward(this->saved_inputs_[0], this->saved_norm_, grad_out,
                                      this->out_shape_, ord_, axis_, this->dtype_)};
+}
+
+std::vector<TensorImplPtr> LpNormalizeBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // y = x / d, d = max(n, eps), n = (sum |x|^p)^(1/p) along the axis.
+    //   dx = g / d - x * sum(g * x) / d^2 * dn/dx,  dn/dx = sign(x) |x|^(p-1) / n^(p-1)
+    // where the norm is above eps; below it d is the constant eps and the
+    // second term vanishes.  Everything is recomputed from x so the second
+    // derivative sees its dependence on the input.
+    const auto& x = this->saved_impl_inputs_[0];
+    if (!x)
+        ErrorBuilder("lp_normalize").fail("graph-mode backward is missing its saved input");
+    if (!std::isfinite(ord_) || ord_ < 1.0)
+        ErrorBuilder("lp_normalize")
+            .not_implemented("create_graph=True needs a finite ord of at least 1");
+    const std::vector<int> axis{axis_};
+    auto magnitude = abs_op(x);
+    auto norm = pow_scalar_op(sum_op(pow_scalar_op(magnitude, ord_), axis, true), 1.0 / ord_);
+    auto floor = full_like_op(norm, eps_);
+    auto denom = maximum_op(norm, floor);
+    auto active = greater_op(norm, floor);
+    auto dnorm = div_op(mul_op(sign_op(x), pow_scalar_op(magnitude, ord_ - 1.0)),
+                        pow_scalar_op(norm, ord_ - 1.0));
+    dnorm = where_op(broadcast_to_op(active, x->shape()), dnorm, zeros_like_op(dnorm));
+    auto along = div_op(sum_op(mul_op(grad_out, x), axis, true), mul_op(denom, denom));
+    return {sub_op(div_op(grad_out, denom), mul_op(dnorm, along))};
 }
 
 TensorImplPtr lp_normalize_op(const TensorImplPtr& x, double ord, int axis, double eps) {

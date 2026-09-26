@@ -32,8 +32,15 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Arith.h"
+#include "../ops/utils/Layout.h"
 #include "../ops/utils/Promote.h"
+#include "../ops/utils/Select.h"
 
 namespace lucid {
 
@@ -45,6 +52,21 @@ Shape reduced_shape(const Shape& in, Reduction red) {
     if (red == Reduction::None)
         return in;
     return Shape{};
+}
+
+// The upstream gradient of a reduced loss, spread back over the elements:
+// as is for None, broadcast for Sum, broadcast and divided by the count for
+// Mean.  Recorded, for the graph-mode backwards below.
+TensorImplPtr
+spread_loss_grad(const TensorImplPtr& grad_out, const TensorImplPtr& like, Reduction red) {
+    if (red == Reduction::None)
+        return grad_out;
+    auto spread = broadcast_to_op(grad_out, like->shape());
+    if (red == Reduction::Mean) {
+        const double count = static_cast<double>(shape_numel(like->shape()));
+        spread = mul_op(spread, full_like_op(like, count > 0 ? 1.0 / count : 0.0));
+    }
+    return spread;
 }
 
 }  // namespace
@@ -88,6 +110,19 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input0,
         kernel::NaryKernel<MseLossBackward, 2>::wire_autograd(std::move(bwd), {input, target}, out);
     }
     return out;
+}
+
+std::vector<TensorImplPtr> MseLossBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // d/dx = 2 (x - t) g and d/dt its negative, recorded, so the residual
+    // keeps its dependence on both operands.
+    const auto& x = saved_impl_inputs_[0];
+    const auto& t = saved_impl_inputs_[1];
+    if (!x || !t)
+        ErrorBuilder("mse_loss").fail("graph-mode backward is missing its saved inputs");
+    auto residual = sub_op(x, t);
+    auto dx = mul_op(mul_op(residual, full_like_op(residual, 2.0)),
+                     spread_loss_grad(grad_out, x, reduction_));
+    return {dx, neg_op(dx)};
 }
 
 std::vector<Storage> MseLossBackward::apply(Storage grad_out) {
@@ -419,6 +454,22 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input0,
                                                                 out);
     }
     return out;
+}
+
+std::vector<TensorImplPtr> HuberLossBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // d/dx = r inside the band |r| < delta and delta * sign(r) outside it,
+    // r = x - t; d/dt its negative.  Recorded, so the quadratic part keeps
+    // its unit curvature and the linear part none.
+    const auto& x = saved_impl_inputs_[0];
+    const auto& t = saved_impl_inputs_[1];
+    if (!x || !t)
+        ErrorBuilder("huber_loss").fail("graph-mode backward is missing its saved inputs");
+    auto residual = sub_op(x, t);
+    auto delta = full_like_op(residual, delta_);
+    auto inside = less_op(abs_op(residual), delta);
+    auto slope = where_op(inside, residual, mul_op(sign_op(residual), delta));
+    auto dx = mul_op(slope, spread_loss_grad(grad_out, x, reduction_));
+    return {dx, neg_op(dx)};
 }
 
 std::vector<Storage> HuberLossBackward::apply(Storage grad_out) {

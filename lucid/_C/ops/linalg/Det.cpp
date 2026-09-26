@@ -87,6 +87,18 @@ std::vector<Storage> DetBackward::apply(Storage grad_out) {
     return {dA->storage()};
 }
 
+std::vector<TensorImplPtr> DetBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& a = saved_impl_inputs_[0];
+    if (!a)
+        ErrorBuilder("det").fail("graph-mode backward is missing its saved input");
+    auto scale = mul_op(det_op(a), grad_out);
+    Shape kept = scale->shape();
+    kept.push_back(1);
+    kept.push_back(1);
+    auto spread = broadcast_to_op(reshape_op(scale, kept), input_shapes_[0]);
+    return {mul_op(spread, mT_op(inv_op(a)))};
+}
+
 // Register DetBackward so the autograd engine can deserialise it by name.
 LUCID_REGISTER_OP(DetBackward)
 

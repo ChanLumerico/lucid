@@ -20,6 +20,7 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
+#include "Mul.h"
 #include "_BinaryOp.h"
 #include "_Detail.h"
 
@@ -54,6 +55,17 @@ public:
         Storage da = be.mul(saved_b_, scaled_grad, vec_shape, dtype_);
         Storage db = be.mul(saved_a_, scaled_grad, vec_shape, dtype_);
         return {std::move(da), std::move(db)};
+    }
+
+    // The same two products, recorded: each operand's gradient is the other
+    // operand, so the second derivative of a dot is its cross term — the
+    // one the storage path above cannot carry.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const auto& a = saved_impl_inputs_[0];
+        const auto& b = saved_impl_inputs_[1];
+        if (!a || !b)
+            ErrorBuilder("dot").fail("graph-mode backward is missing its saved inputs");
+        return {mul_op(grad_out, b), mul_op(grad_out, a)};
     }
 };
 

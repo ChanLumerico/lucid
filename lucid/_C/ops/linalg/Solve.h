@@ -116,6 +116,9 @@ public:
     // The transpose solve ``solve(Aᵀ, G)`` performs a fresh LU
     // factorisation of $A^\top$ — the forward factors are not cached.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same adjoint solve, recorded, with X recomputed from A and B.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Solve the linear system $AX = B$ for $X$.

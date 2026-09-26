@@ -38,6 +38,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../gfunc/Gfunc.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -92,6 +93,15 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {scatter_axis_add_storage(grad_out, indices_, input_shapes_[0], grad_shape_, axis_,
                                          dtype_, device_)};
+    }
+
+    // The same scatter-add, recorded: each selected element's gradient goes
+    // back to the position it was taken from.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        auto index = std::make_shared<TensorImpl>(indices_, grad_shape_, storage_dtype(indices_),
+                                                  device_, false);
+        auto base = zeros_op(input_shapes_[0], dtype_, device_);
+        return {scatter_add_op(base, index, grad_out, axis_)};
     }
 };
 

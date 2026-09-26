@@ -100,6 +100,9 @@ public:
 
     // Backward pass: gradient w.r.t. the affine matrices ``theta``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same contraction, recorded: dtheta = sum over the grid of g^T [x, y, 1].
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for differentiable image resampling (grid sample).

@@ -52,6 +52,21 @@ Storage extract_storage(py::object obj) {
     return Storage{CpuStorage{}};
 }
 
+// The tensor a Python return value holds, or null for ``None``.
+TensorImplPtr extract_impl(const py::object& obj) {
+    if (obj.is_none())
+        return nullptr;
+    try {
+        return obj.cast<std::shared_ptr<TensorImpl>>();
+    } catch (...) {
+    }
+    try {
+        return obj.attr("impl").cast<std::shared_ptr<TensorImpl>>();
+    } catch (...) {
+    }
+    return nullptr;
+}
+
 }  // namespace
 
 // Invoke the Python backward function and collect the resulting gradients.
@@ -91,6 +106,30 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     py::tuple grads(1);
     grads[0] = py::cast(grad_impl);
     return invoke_backward(grads);
+}
+
+std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplPtr& grad_out) {
+    py::gil_scoped_acquire gil;
+    if (!py_backward_fn || py_backward_fn.is_none())
+        ErrorBuilder("PythonBackwardNode::apply_for_graph").fail("backward function is not set");
+    if (out_shapes.size() > 1)
+        ErrorBuilder("custom Function")
+            .not_implemented("create_graph=True through a Function with several outputs");
+
+    py::object result;
+    try {
+        result = py_backward_fn(py_ctx, py::cast(grad_out));
+    } catch (py::error_already_set& e) {
+        throw std::runtime_error(std::string("PythonBackward raised: ") + e.what());
+    }
+    std::vector<TensorImplPtr> grads;
+    if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
+        for (auto item : result)
+            grads.push_back(extract_impl(item.cast<py::object>()));
+    } else {
+        grads.push_back(extract_impl(result));
+    }
+    return grads;
 }
 
 void PythonBackwardNode::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) {

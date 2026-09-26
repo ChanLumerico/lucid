@@ -39,7 +39,10 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../utils/Select.h"
 #include "Astype.h"
 #include "_Detail.h"
 
@@ -100,6 +103,11 @@ public:
         Storage dx = reverse_along_axis_storage(cs, input_shape_, axis_, dtype_, device_);
         return {std::move(dx)};
     }
+
+    // The same reverse-cumsum-reverse, recorded.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {flip_op(cumsum_op(flip_op(grad_out, {axis_}), axis_), {axis_})};
+    }
 };
 
 // Private backward node for cumprod.
@@ -131,6 +139,18 @@ public:
         Storage q = reverse_along_axis_storage(cs, input_shape_, axis_, dtype_, device_);
         Storage dx = divide_storages(q, saved_x_, total, dtype_, device_);
         return {std::move(dx)};
+    }
+
+    // The same formula, recorded, with the product recomputed from the input
+    // so it carries its own dependence on x — the saved one is data only.
+    // Divides by x exactly as the storage path does.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const auto& x = saved_impl_inputs_[0];
+        if (!x)
+            ErrorBuilder("cumprod").fail("graph-mode backward is missing its saved input");
+        auto weighted = mul_op(grad_out, cumprod_op(x, axis_));
+        auto suffix = flip_op(cumsum_op(flip_op(weighted, {axis_}), axis_), {axis_});
+        return {div_op(suffix, x)};
     }
 };
 

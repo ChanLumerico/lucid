@@ -128,6 +128,9 @@ public:
     // std::vector<Storage>
     //     ``{grad_input, grad_target}`` of the same shape as the originals.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradients, recorded, for create_graph=True.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for binary cross-entropy on probability inputs.
@@ -541,6 +544,9 @@ public:
 
     // Backward pass: gradients w.r.t. ``input`` and ``target``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradients, recorded, for create_graph=True.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public mean-squared-error entry point.

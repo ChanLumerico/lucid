@@ -145,6 +145,10 @@ public:
     // std::vector<Storage>
     //     Single-element ``{dW}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same scatter-add, recorded, so a gradient of the weight gradient
+    // reaches the upstream gradient.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for Rotary Position Embedding (RoPE, Su et al. 2021).

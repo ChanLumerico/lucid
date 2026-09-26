@@ -249,6 +249,18 @@ public:
     //     during execution (the original message is preserved).
     std::vector<Storage> apply(Storage grad_out) override;
 
+    // create_graph=True: the user's backward, run on the live gradient.
+    //
+    // The same Python ``backward`` is called, but handed the upstream
+    // gradient as the tensor the engine holds — ``grad_fn`` and all — and
+    // its results are returned as tensors rather than storages.  Written in
+    // Lucid ops, as a backward is, it records its own graph the way any
+    // other code does when grad mode is on, so a custom Function
+    // differentiates twice without saying anything about it.  One output
+    // only: several outputs' gradients arrive separately, which the graph
+    // engine does not yet collect per output.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
     // Whether this node stands behind several forward outputs.
     //
     // Returns

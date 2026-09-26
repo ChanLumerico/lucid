@@ -271,6 +271,9 @@ public:
     // std::vector<Storage>
     //     Single-element vector ``{dx}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradient, recorded, with the norm recomputed from x.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for Lp normalisation.

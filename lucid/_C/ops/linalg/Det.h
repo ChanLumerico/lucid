@@ -102,6 +102,9 @@ public:
     //     Single-entry vector ``{∂L/∂A}`` aligned with the one
     //     differentiable input slot.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same det(A) G A^-T, recorded, with both factors recomputed from A.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Compute $\det(A)$ for a square float tensor.

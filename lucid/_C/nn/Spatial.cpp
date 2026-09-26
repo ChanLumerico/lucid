@@ -33,8 +33,13 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Matmul.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/Concat.h"
 #include "../ops/utils/Promote.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -85,6 +90,27 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
 std::vector<Storage> AffineGridBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.affine_grid_backward(grad_out, N_, H_, W_, align_corners_, dtype_)};
+}
+
+std::vector<TensorImplPtr> AffineGridBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // grid[n, h, w] = theta[n] @ [x_w, y_h, 1], so dtheta[n] is the grid's
+    // gradient contracted with those base coordinates.  The coordinates come
+    // from this op's own forward on the identity transform — the one way to
+    // be sure they follow the same align_corners rule.  Linear in theta: the
+    // gradient does not depend on it, only on g.
+    auto identity = reshape_op(eye_op(2, 3, 0, dtype_, device_), {1, 2, 3});
+    TensorImplPtr xy;
+    {
+        NoGradGuard constant;
+        xy = affine_grid_op(identity, 1, H_, W_, align_corners_);  // (1, H, W, 2)
+    }
+    auto ones = ones_op(Shape{1, H_, W_, 1}, dtype_, device_);
+    const std::int64_t points = static_cast<std::int64_t>(H_) * W_;
+    auto base = reshape_op(concatenate_op({xy, ones}, 3), {points, 3});
+    auto g = permute_op(reshape_op(grad_out, {N_, points, 2}), {0, 2, 1});  // (N, 2, HW)
+    auto dtheta = matmul_op(g, base);                                       // (N, 2, 3)
+    return {reshape_op(
+        dtheta, std::vector<std::int64_t>(orig_theta_shape_.begin(), orig_theta_shape_.end()))};
 }
 
 TensorImplPtr affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bool align_corners) {

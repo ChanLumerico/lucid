@@ -90,8 +90,23 @@ std::vector<TensorImplPtr> AccumulateGrad::apply_for_graph(const TensorImplPtr& 
     if (!t || !t->requires_grad()) {
         return {};
     }
-    t->accumulate_grad_impl(grad_out);
+    t->accumulate_grad_impl(gradient_in_dtype_of(grad_out, t));
     return {};
+}
+
+TensorImplPtr gradient_in_dtype_of(const TensorImplPtr& grad, const TensorImplPtr& like) {
+    if (!grad || !like || grad->dtype() == like->dtype())
+        return grad;
+    // The ops layer sits above this one; declared here the way
+    // TensorImpl.cpp declares add_op, rather than included.
+    extern TensorImplPtr real_op(const TensorImplPtr&);
+    extern TensorImplPtr astype_op(const TensorImplPtr&, Dtype);
+    TensorImplPtr out = grad;
+    if (is_complex(out->dtype()) && !is_complex(like->dtype()))
+        out = real_op(out);
+    if (out->dtype() != like->dtype())
+        out = astype_op(out, like->dtype());
+    return out;
 }
 
 }  // namespace lucid

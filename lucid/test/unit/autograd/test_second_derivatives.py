@@ -227,12 +227,17 @@ class TestUnsupportedOpIsNamed:
     @pytest.mark.parametrize(
         "label,build",
         [
-            # ``lucid::DetBackward`` — the plain namespaced case.
-            ("det", lambda x: lucid.linalg.det(x)),
+            # ``lucid::GridSampleBackward`` — the plain namespaced case.
+            (
+                "grid_sample",
+                lambda x: F.grid_sample(
+                    x.reshape(1, 1, 2, 2), lucid.zeros(1, 1, 1, 2, dtype=x.dtype)
+                ),
+            ),
             # These live in an anonymous namespace inside ``lucid``, which
             # mangles differently again and was the worse of the two.
-            ("diagonal", lambda x: lucid.diagonal(x)),
-            ("sort", lambda x: lucid.sort(x, dim=1)[0]),
+            ("cummax", lambda x: lucid.cummax(x, dim=1)[0]),
+            ("cummin", lambda x: lucid.cummin(x, dim=1)[0]),
         ],
     )
     def test_the_message_names_the_op_not_its_mangling(self, label, build) -> None:

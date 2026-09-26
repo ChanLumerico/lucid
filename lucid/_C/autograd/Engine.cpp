@@ -439,7 +439,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
 
             const std::size_t slot = capture_slot(node.get(), targets);
             if (slot != kNoSlot)
-                results[slot] = grad_in;
+                results[slot] = gradient_in_dtype_of(grad_in, inputs[slot]);
             // Executing an AccumulateGrad is precisely what writes a leaf's
             // .grad, so this path never does — captured or not, stop here.
             if (dynamic_cast<const AccumulateGrad*>(node.get()) != nullptr)

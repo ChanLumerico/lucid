@@ -29,6 +29,8 @@
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../ufunc/Reductions.h"
+#include "View.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -83,6 +85,17 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {meshgrid_backward_storage(grad_out, input_shapes_[0], out_shape_, carry_axis_,
                                           dtype_, device_)};
+    }
+
+    // The same sum over every axis the input was spread along, recorded.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        std::vector<int> spread;
+        for (int d = 0; d < static_cast<int>(out_shape_.size()); ++d)
+            if (d != carry_axis_)
+                spread.push_back(d);
+        auto summed = spread.empty() ? grad_out : sum_op(grad_out, spread, false);
+        const Shape& in = input_shapes_[0];
+        return {reshape_op(summed, std::vector<std::int64_t>(in.begin(), in.end()))};
     }
 };
 

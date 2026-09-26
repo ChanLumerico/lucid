@@ -89,6 +89,8 @@ public:
     std::size_t outer_ = 0;
     // Product of normalised (trailing) dims of ``x`` (== numel(gamma)).
     std::size_t N_ = 0;
+    // The forward's epsilon: the graph-mode backward recomputes rstd from x.
+    double eps_ = 0.0;
 
     // Run the forward pass.
     //
@@ -146,6 +148,10 @@ public:
     // std::vector<Storage>
     //     Two-element vector ``{dx, d_gamma}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradients, recorded, with rstd recomputed from x so it keeps
+    // its dependence on the input — the saved one is data only.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for RMS Normalization.

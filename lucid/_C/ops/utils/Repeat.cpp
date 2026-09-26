@@ -29,6 +29,8 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../ufunc/Reductions.h"
+#include "View.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -57,6 +59,17 @@ public:
         return {backend::Dispatcher::for_device(device_).repeat_backward(
             grad_out, input_shapes_[0], out_shape_, axis_, repeats_, dtype_)};
     }
+
+    // The same sum, recorded: split the repeated axis into (n, repeats) and
+    // sum the copies away.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const Shape& in = input_shapes_[0];
+        const int nd = static_cast<int>(in.size());
+        const int axis = axis_ < 0 ? axis_ + nd : axis_;
+        std::vector<std::int64_t> split(in.begin(), in.end());
+        split.insert(split.begin() + axis + 1, repeats_);
+        return {sum_op(reshape_op(grad_out, split), {axis + 1}, false)};
+    }
 };
 
 const OpSchema RepeatBackward::schema_v1{"repeat", 1, AmpPolicy::KeepInput, true};
@@ -81,6 +94,22 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {backend::Dispatcher::for_device(device_).tile_backward(
             grad_out, input_shapes_[0], padded_shape_, out_shape_, reps_, dtype_)};
+    }
+
+    // The same sum, recorded: each tiled axis of length reps * size splits
+    // into (reps, size) — copy t of element j sits at t * size + j — and the
+    // copies are summed away.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        std::vector<std::int64_t> split;
+        std::vector<int> copies;
+        for (std::size_t d = 0; d < reps_.size(); ++d) {
+            copies.push_back(static_cast<int>(split.size()));
+            split.push_back(reps_[d]);
+            split.push_back(padded_shape_[d]);
+        }
+        auto summed = sum_op(reshape_op(grad_out, split), copies, false);
+        const Shape& in = input_shapes_[0];
+        return {reshape_op(summed, std::vector<std::int64_t>(in.begin(), in.end()))};
     }
 };
 

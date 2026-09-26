@@ -48,10 +48,14 @@
 #include "../../core/Validate.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
+#include "../ufunc/Astype.h"
 #include "../ufunc/Reductions.h"
+#include "../ufunc/Transpose.h"
 #include "Layout.h"  // broadcast_to_op
+#include "Pad.h"
 #include "View.h"
 #include "_Detail.h"
 
@@ -211,6 +215,7 @@ public:
     static const OpSchema schema_v1;
 
     Storage mask_;
+    Dtype mask_dtype_ = Dtype::Bool;
     Shape shape_;
     std::weak_ptr<TensorImpl> input_tensor_;
     std::weak_ptr<TensorImpl> mask_tensor_;
@@ -218,6 +223,16 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         // false_branch passes gradient through where mask is false.
         return {where_branch_storage(grad_out, mask_, shape_, dtype_, device_, false)};
+    }
+
+    // where(mask, 0, g), recorded: the filled positions took a constant and
+    // pass nothing back, at any order.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        TensorImplPtr mask =
+            std::make_shared<TensorImpl>(mask_, shape_, mask_dtype_, device_, false);
+        if (mask_dtype_ != Dtype::Bool)
+            mask = astype_op(mask, Dtype::Bool);
+        return {where_op(mask, zeros_like_op(grad_out), grad_out)};
     }
 
     void validate_versions() override {
@@ -336,6 +351,41 @@ public:
                                           axis2_, dtype_, device_)};
     }
 
+    // The same placement, recorded.  The diagonal's k-th element sits in
+    // column k + max(offset, 0) of the (axis1, axis2) plane, so the gradient
+    // is padded out to a full row indexed by column, broadcast down the
+    // rows, and kept only where the offset identity has its ones; then the
+    // two axes go back where the input had them.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const Shape& in = input_shapes_[0];
+        const int nd = static_cast<int>(in.size());
+        const std::int64_t rows = in[static_cast<std::size_t>(axis1_)];
+        const std::int64_t cols = in[static_cast<std::size_t>(axis2_)];
+        const std::int64_t length = grad_out->shape().back();
+        const std::int64_t lead = offset_ > 0 ? offset_ : 0;
+
+        std::vector<std::pair<std::int64_t, std::int64_t>> widths(grad_out->shape().size(), {0, 0});
+        widths.back() = {lead, cols - lead - length};
+        auto by_column = pad_op(grad_out, widths, 0.0);  // (..., cols)
+        Shape plane(grad_out->shape().begin(), grad_out->shape().end() - 1);
+        plane.push_back(rows);
+        plane.push_back(cols);
+        auto spread = broadcast_to_op(unsqueeze_op(by_column, nd - 2), plane);
+        auto placed = mul_op(spread, eye_op(rows, cols, offset_, dtype_, device_));
+
+        // ``placed`` holds the input's other axes in order, then axis1, axis2.
+        std::vector<int> order;
+        for (int d = 0; d < nd; ++d)
+            if (d != axis1_ && d != axis2_)
+                order.push_back(d);
+        order.push_back(axis1_);
+        order.push_back(axis2_);
+        std::vector<int> back(static_cast<std::size_t>(nd));
+        for (int i = 0; i < nd; ++i)
+            back[static_cast<std::size_t>(order[static_cast<std::size_t>(i)])] = i;
+        return {permute_op(placed, back)};
+    }
+
     // The gradient never reads the input's values, and on the CPU the
     // diagonal is a view of it: a write through that view moves the version
     // it would otherwise refuse.
@@ -388,6 +438,7 @@ attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, Tenso
 
     auto bwd = std::make_shared<MaskedFillBackward>();
     bwd->mask_ = mask->storage();
+    bwd->mask_dtype_ = mask->dtype();
     bwd->shape_ = out->shape();
     bwd->dtype_ = out->dtype();
     bwd->device_ = out->device();

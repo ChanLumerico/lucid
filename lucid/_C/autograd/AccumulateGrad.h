@@ -116,4 +116,27 @@ private:
     std::weak_ptr<TensorImpl> leaf_;
 };
 
+// A graph-mode gradient in the dtype of the tensor it is for.
+//
+// A complex gradient reaching a real tensor keeps its real part — ``fft`` of
+// a real input answers complex, and ``d/dx`` of a real x is real — and any
+// other difference is a cast.  :meth:`AccumulateGrad::apply` does this to a
+// storage; the graph-mode paths (``backward(create_graph=True)`` and
+// ``grad(create_graph=True)``) returned the gradient as it came, complex
+// where the storage path was real.
+//
+// Parameters
+// ----------
+// grad : const TensorImplPtr&
+//     The gradient, possibly null.
+// like : const TensorImplPtr&
+//     The tensor it is the gradient of.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     ``grad`` itself when the dtypes already agree, else a recorded
+//     projection or cast of it.
+TensorImplPtr gradient_in_dtype_of(const TensorImplPtr& grad, const TensorImplPtr& like);
+
 }  // namespace lucid

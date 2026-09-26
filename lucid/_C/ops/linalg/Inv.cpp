@@ -74,6 +74,14 @@ std::vector<Storage> InvBackward::apply(Storage grad_out) {
     return {dA->storage()};
 }
 
+std::vector<TensorImplPtr> InvBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& a = saved_impl_inputs_[0];
+    if (!a)
+        ErrorBuilder("inv").fail("graph-mode backward is missing its saved input");
+    auto Bt = mT_op(inv_op(a));
+    return {neg_op(matmul_op(matmul_op(Bt, grad_out), Bt))};
+}
+
 // Register InvBackward with the global op registry so that the autograd
 // engine can look it up by schema name when replaying a saved graph.
 LUCID_REGISTER_OP(InvBackward)

@@ -35,7 +35,12 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Compare.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/gfunc/Gfunc.h"
+#include "../ops/utils/Layout.h"
+#include "../ops/utils/Select.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -92,6 +97,29 @@ std::vector<Storage> EmbeddingBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.embedding_backward(grad_out, saved_indices_, weight_shape_, saved_indices_shape_,
                                   padding_idx_, dtype_)};
+}
+
+std::vector<TensorImplPtr> EmbeddingBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // dW[r] = sum of g over the positions that looked row r up, except the
+    // padding row, which takes none: a scatter-add of g's rows by index.
+    const std::int64_t rows = weight_shape_[0];
+    const std::int64_t width = weight_shape_[1];
+    std::int64_t looked = 1;
+    for (auto d : saved_indices_shape_)
+        looked *= d;
+    auto indices = std::make_shared<TensorImpl>(saved_indices_, saved_indices_shape_,
+                                                saved_indices_dtype_, device_, false);
+    auto index = broadcast_to_op(reshape_op(indices, {looked, 1}), Shape{looked, width});
+    auto src = reshape_op(grad_out, {looked, width});
+    auto base = zeros_op(weight_shape_, dtype_, device_);
+    TensorImplPtr dw = scatter_add_op(base, index, src, 0);
+    if (padding_idx_ >= 0 && padding_idx_ < rows) {
+        auto row = arange_op(0.0, static_cast<double>(rows), 1.0, Dtype::I64, device_);
+        auto padding = equal_op(row, full_like_op(row, static_cast<double>(padding_idx_)));
+        auto keep = broadcast_to_op(reshape_op(padding, {rows, 1}), weight_shape_);
+        dw = where_op(keep, zeros_like_op(dw), dw);
+    }
+    return {dw};
 }
 
 TensorImplPtr

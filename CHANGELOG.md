@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - count every host read of an evaluated array (ABI 15)
 
+- second derivatives through 24 more ops
+
 ### Performance
 
 - check_weight_fit builds in shadow and reads headers in parallel

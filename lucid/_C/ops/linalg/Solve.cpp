@@ -81,6 +81,16 @@ std::vector<Storage> SolveBackward::apply(Storage grad_out) {
     return {dA->storage(), dB->storage()};
 }
 
+std::vector<TensorImplPtr> SolveBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& a = saved_impl_inputs_[0];
+    const auto& b = saved_impl_inputs_[1];
+    if (!a || !b)
+        ErrorBuilder("solve").fail("graph-mode backward is missing its saved inputs");
+    auto dB = solve_op(mT_op(a), grad_out);
+    auto dA = neg_op(matmul_op(dB, mT_op(solve_op(a, b))));
+    return {dA, dB};
+}
+
 // Register SolveBackward for graph serialisation and engine lookup.
 LUCID_REGISTER_OP(SolveBackward)
 

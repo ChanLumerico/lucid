@@ -24,7 +24,13 @@
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Add.h"
+#include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
+#include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Exponential.h"
+#include "../ops/ufunc/Reductions.h"
 
 namespace lucid {
 
@@ -85,6 +91,7 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
     bwd->saved_rstd_ = std::move(forward.second);
     bwd->outer_ = outer;
     bwd->N_ = N;
+    bwd->eps_ = eps;
     // saved_inputs_[0..1] hold {x, gamma} at eff_dt.
     kernel::NaryKernel<RMSNormBackward, 2>::wire_autograd(std::move(bwd), {x_eff, gamma_eff}, out);
     return out;
@@ -96,6 +103,32 @@ std::vector<Storage> RMSNormBackward::apply(Storage grad_out) {
         saved_inputs_[0], saved_inputs_[1], saved_rstd_, grad_out, outer_, N_, input_shapes_[0],
         input_shapes_[1], dtype_);
     return {std::move(grads.first), std::move(grads.second)};
+}
+
+std::vector<TensorImplPtr> RMSNormBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // y = x * rstd * gamma, rstd = 1 / sqrt(mean(x^2) + eps) over gamma's
+    // trailing axes.  With xhat = x * rstd and gg = g * gamma:
+    //   dx     = rstd * (gg - xhat * mean(gg * xhat))
+    //   dgamma = sum over the leading axes of g * xhat
+    const auto& x = saved_impl_inputs_[0];
+    const auto& gamma = saved_impl_inputs_[1];
+    if (!x || !gamma)
+        ErrorBuilder("rms_norm").fail("graph-mode backward is missing its saved inputs");
+    const int nd = static_cast<int>(x->shape().size());
+    const int dn = static_cast<int>(gamma->shape().size());
+    std::vector<int> normed, leading;
+    for (int d = 0; d < nd; ++d)
+        (d < nd - dn ? leading : normed).push_back(d);
+
+    auto mean_sq = mean_op(mul_op(x, x), normed, true);
+    auto rstd = rsqrt_op(add_op(mean_sq, full_like_op(mean_sq, eps_)));
+    auto xhat = mul_op(x, rstd);
+    auto gg = mul_op(grad_out, gamma);
+    auto dx = mul_op(rstd, sub_op(gg, mul_op(xhat, mean_op(mul_op(gg, xhat), normed, true))));
+    TensorImplPtr dgamma = mul_op(grad_out, xhat);
+    if (!leading.empty())
+        dgamma = sum_op(dgamma, leading, false);
+    return {dx, dgamma};
 }
 
 TensorImplPtr rms_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps) {

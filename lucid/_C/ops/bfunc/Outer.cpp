@@ -21,6 +21,9 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
+#include "../ufunc/Reductions.h"
+#include "../utils/View.h"
+#include "Mul.h"
 #include "_BinaryOp.h"
 #include "_Detail.h"
 
@@ -78,6 +81,19 @@ public:
         Storage da = be.reshape(da_col, da_col_shape, Shape{M_}, dtype_);
         Storage db = be.reshape(db_row, db_row_shape, Shape{N_}, dtype_);
         return {std::move(da), std::move(db)};
+    }
+
+    // dA = sum_j g[i, j] b[j] and dB = sum_i g[i, j] a[i], recorded, so each
+    // keeps its dependence on the other operand.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const auto& a = saved_impl_inputs_[0];
+        const auto& b = saved_impl_inputs_[1];
+        if (!a || !b)
+            ErrorBuilder("outer").fail("graph-mode backward is missing its saved inputs");
+        auto b_row = reshape_op(b, {1, N_});
+        auto a_col = reshape_op(a, {M_, 1});
+        return {sum_op(mul_op(grad_out, b_row), {1}, false),
+                sum_op(mul_op(grad_out, a_col), {0}, false)};
     }
 };
 

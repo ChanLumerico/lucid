@@ -98,6 +98,9 @@ public:
     //     Single-entry vector ``{∂L/∂A}`` aligned with the one
     //     differentiable input slot.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same -B^T G B^T, recorded, with B = A^-1 recomputed from A.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Compute $A^{-1}$ for a square float tensor.

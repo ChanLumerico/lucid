@@ -31,7 +31,10 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../gfunc/Gfunc.h"
+#include "../utils/Layout.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -56,6 +59,14 @@ public:
     std::vector<Storage> apply(Storage grad_out) override {
         return {backend::Dispatcher::for_device(device_).trace_backward(grad_out, input_shape_,
                                                                         dtype_)};
+    }
+
+    // g on the diagonal, zero elsewhere — g times the identity — recorded.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const std::int64_t rows = input_shape_[0];
+        const std::int64_t cols = input_shape_[1];
+        return {mul_op(broadcast_to_op(grad_out, input_shape_),
+                       eye_op(rows, cols, 0, dtype_, device_))};
     }
 };
 
