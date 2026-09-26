@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - an eager fallback says so once; fused attention is available
 
+- follow tokenizer.json's pipeline and keep EOS when truncating
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

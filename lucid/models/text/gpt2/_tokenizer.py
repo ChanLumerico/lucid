@@ -9,7 +9,9 @@ two key defaults:
 
 * ``<|endoftext|>`` is the canonical document-boundary token.  GPT-2
   uses it for **bos**, **eos**, *and* **unk** at once (the same id
-  in all three slots).
+  in all three slots).  It is *registered*, not *inserted*: encoding
+  adds no special tokens, so a prompt is exactly the text's ids and
+  callers place ``<|endoftext|>`` themselves between documents.
 * ``add_prefix_space=False`` — matches the published GPT-2 vocab.
   Set ``True`` to mimic RoBERTa's space-prepended convention.
 
@@ -57,6 +59,8 @@ class GPT2Tokenizer(ByteLevelBPETokenizer):
     A thin convenience subclass of
     :class:`~lucid.utils.tokenizer.ByteLevelBPETokenizer` with
     ``<|endoftext|>`` pre-registered as the bos / eos / unk marker.
+    Encoding adds no special tokens, as the reference GPT-2 tokenizer
+    adds none.
 
     Parameters
     ----------
@@ -91,6 +95,12 @@ class GPT2Tokenizer(ByteLevelBPETokenizer):
     than one because the merge is only applied when both halves are
     present as written, and the pretokeniser split this differently.
     """
+
+    # GPT-2 frames nothing.  The registry names <|endoftext|> as bos and
+    # eos, and the base's BOS/EOS layout used to wrap every prompt in it —
+    # a model continuing "Hello" was handed "<|endoftext|>Hello<|endoftext|>"
+    # and asked what follows the end of a document.
+    _special_layout = "none"
 
     def __init__(
         self,
@@ -134,6 +144,8 @@ class GPT2TokenizerFast(ByteLevelBPETokenizerFast):
     are looked up, not from a different segmentation, and the two must
     not disagree.
     """
+
+    _special_layout = "none"
 
     def __init__(
         self,

@@ -89,8 +89,16 @@ class RoFormerTokenizer(WordPieceTokenizer):
     [1, 2]
 
     WordPiece: the longest prefix in the vocabulary wins, and what is
-    left continues with the ``##`` marker.
+    left continues with the ``##`` marker.  With ``[CLS]`` and ``[SEP]``
+    in the vocabulary the sequence is framed as BERT frames it:
+
+    >>> vocab = {"[UNK]": 0, "[CLS]": 1, "[SEP]": 2, "he": 3, "##llo": 4}
+    >>> RoFormerTokenizer(vocab=vocab).encode("hello")
+    [1, 3, 4, 2]
     """
+
+    # BERT's framing, for BERT's reason: [CLS] is what the pooler reads.
+    _special_layout = "cls_sep"
 
     def __init__(
         self,
@@ -112,7 +120,9 @@ class RoFormerTokenizer(WordPieceTokenizer):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BERTNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(
+                    lowercase=do_lower_case, strip_accents=do_lower_case
+                )
             ),
             pre_tokenizer=(
                 pre_tokenizer
@@ -148,6 +158,8 @@ class RoFormerTokenizerFast(WordPieceTokenizerFast):
     [1, 2]
     """
 
+    _special_layout = "cls_sep"
+
     def __init__(
         self,
         vocab: dict[str, int],
@@ -168,7 +180,9 @@ class RoFormerTokenizerFast(WordPieceTokenizerFast):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BERTNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(
+                    lowercase=do_lower_case, strip_accents=do_lower_case
+                )
             ),
             pre_tokenizer=(
                 pre_tokenizer

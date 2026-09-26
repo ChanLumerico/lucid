@@ -61,7 +61,7 @@ class GPTTokenizer(BPETokenizer):
         ``BasicTokenizer`` role in the reference's no-spaCy fallback.
     special_tokens : SpecialTokens, optional
         GPT-1 trained without bos/eos; pass them only if downstream code
-        needs them.
+        needs them.  They are registered, never inserted by ``encode``.
 
     Examples
     --------
@@ -73,6 +73,12 @@ class GPTTokenizer(BPETokenizer):
     >>> tok.decode(tok.encode("lo"))
     'lo'
     """
+
+    # No automatic framing, whatever the registry names.  GPT-1's start,
+    # delimiter and extract tokens belong to the task-specific input
+    # transformations of §3.3, which place them per task; a blanket BOS/EOS
+    # from ``encode`` would be a framing the paper never used.
+    _special_layout = "none"
 
     def __init__(
         self,

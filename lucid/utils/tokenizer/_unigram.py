@@ -32,18 +32,51 @@ can perfectly reconstruct the original whitespace without
 ambiguity.  The default :class:`SentencePiecePreTokenizer`
 applies this remapping; pass a different :class:`PreTokenizer` to
 disable (matches plain "non-SentencePiece" Unigram behaviour).
+
+**Loading a published checkpoint.**  A Hugging Face ``tokenizer.json``
+describes the whole pipeline, not just the pieces: its ``normalizer``,
+``pre_tokenizer``, ``post_processor`` and ``decoder`` blocks and its
+``added_tokens``.  ``from_file`` builds every one of them, because each
+changes the ids — T5 normalises with a compiled SentencePiece map rather
+than NFKC, frames with ``… </s>`` and no BOS, and cuts ``</s>`` out of
+the raw text before anything else sees it.  Files Lucid wrote before it
+read these blocks carry none of them and load exactly as they did.
 """
 
 import json
 import os
+from abc import abstractmethod
+from dataclasses import dataclass
 from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
+from lucid.utils.tokenizer._added_tokens import (
+    AddedToken,
+    AddedVocabulary,
+    added_tokens_from_config,
+)
 from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
 from lucid.utils.tokenizer._bpe import _special_tokens_from_map
-from lucid.utils.tokenizer._normalizers import NFKC, Normalizer
-from lucid.utils.tokenizer._pre_tokenizers import PreTokenizer
+from lucid.utils.tokenizer._decoders import Decoder, decoder_from_config
+from lucid.utils.tokenizer._normalizers import (
+    NFKC,
+    Normalizer,
+    normalizer_from_config,
+)
+from lucid.utils.tokenizer._post_processors import post_processor_from_config
+from lucid.utils.tokenizer._pre_tokenizers import (
+    PreTokenizer,
+    pre_tokenizer_from_config,
+)
+
+#: Hugging Face scores an unknown character at the lowest piece score
+#: minus this, so an unknown is always the costliest step on a path.
+_UNK_PENALTY = 10.0
+
+#: The ``tokenizer.json`` pipeline blocks ``from_file`` reads and ``save``
+#: writes back.
+_PIPELINE_BLOCKS = ("normalizer", "pre_tokenizer", "decoder")
 
 # ── SentencePiece-style pre-tokenizer ──────────────────────────────
 
@@ -127,8 +160,16 @@ def _load_unigram_pieces_json(path: str) -> list[tuple[str, float]]:
     ``model.vocab`` block.  Returns ``[(piece, log_prob), ...]``."""
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    model = data.get("model", {})
+    return _pieces_from_model(data.get("model", {}), path)
+
+
+def _pieces_from_model(model: dict[str, object], path: str) -> list[tuple[str, float]]:
+    """Read ``[(piece, log_prob), ...]`` out of a parsed ``model`` block."""
     vocab = model.get("vocab", [])
+    if not isinstance(vocab, list):
+        raise ValueError(
+            f"_load_unigram_pieces_json: model.vocab is not a list in {path}"
+        )
     out: list[tuple[str, float]] = []
     for entry in vocab:
         if isinstance(entry, list) and len(entry) == 2:
@@ -163,24 +204,352 @@ def _save_unigram_pieces_json(
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+# ── Loading a tokenizer.json ───────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class _UnigramFileConfig:
+    """Everything ``from_file`` reads out of a checkpoint directory."""
+
+    pieces: list[tuple[str, float]]
+    unk_token: str
+    unk_log_prob: float
+    fuse_unk: bool
+    byte_fallback: bool
+    special_tokens: SpecialTokens
+    added_tokens: list[AddedToken]
+    data: dict[str, object]
+
+
+def _read_json_object(path: str) -> dict[str, object]:
+    """Load a JSON file that must hold an object."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected a JSON object at the top level")
+    return {str(k): v for k, v in data.items()}
+
+
+def _read_unigram_config(directory: str, who: str) -> _UnigramFileConfig:
+    """Parse ``tokenizer.json`` (and the special-token files beside it).
+
+    Parameters
+    ----------
+    directory : str
+        The checkpoint directory.
+    who : str
+        Class name for error messages.
+
+    Returns
+    -------
+    _UnigramFileConfig
+        Pieces, unknown-token handling, the special-token registry and the
+        raw file for the pipeline blocks.
+
+    Notes
+    -----
+    Two dialects are read.  Lucid's own files name the unknown piece
+    (``unk_token``) and its score (``unk_log_prob``).  Hugging Face files
+    give the unknown piece's *index* (``unk_id``) and no score — the model
+    scores an unknown at the lowest piece score minus ten and fuses runs of
+    unknown characters into one token, so both are reproduced for them.
+    """
+    path = os.path.join(directory, "tokenizer.json")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"{who}.from_file: tokenizer.json not found in {directory}"
+        )
+    data = _read_json_object(path)
+    raw_model = data.get("model", {})
+    if not isinstance(raw_model, dict):
+        raise ValueError(f"{who}.from_file: 'model' is not an object in {path}")
+    model: dict[str, object] = {str(k): v for k, v in raw_model.items()}
+    pieces = _pieces_from_model(model, path)
+    lucid_dialect = "unk_log_prob" in model
+
+    unk_id = model.get("unk_id")
+    if "unk_token" in model:
+        unk_token = str(model["unk_token"])
+    elif isinstance(unk_id, int) and 0 <= unk_id < len(pieces):
+        unk_token = pieces[unk_id][0]
+    else:
+        unk_token = "<unk>"
+    if lucid_dialect:
+        raw_score = model["unk_log_prob"]
+        if not isinstance(raw_score, (int, float)):
+            raise ValueError(f"{who}.from_file: unk_log_prob is not a number in {path}")
+        unk_log_prob = float(raw_score)
+    elif pieces:
+        unk_log_prob = min(score for _, score in pieces) - _UNK_PENALTY
+    else:
+        unk_log_prob = -100.0
+    fuse_unk = bool(model.get("fuse_unk", not lucid_dialect))
+    byte_fallback = bool(model.get("byte_fallback", False))
+
+    added = added_tokens_from_config(data.get("added_tokens"))
+
+    # The registry decides which ids count as special (masks, skipping on
+    # decode); it does not decide framing when the file has a
+    # post-processor.  special_tokens_map.json is the usual source;
+    # tokenizer_config.json carries the same keys when it is absent.
+    special = SpecialTokens()
+    for name in ("special_tokens_map.json", "tokenizer_config.json"):
+        side = os.path.join(directory, name)
+        if os.path.isfile(side):
+            special = _special_tokens_from_map(_read_json_object(side))
+            break
+    if special.unk is None and any(p == unk_token for p, _ in pieces):
+        special.unk = unk_token
+    known = set(special.all_tokens())
+    for token in added:
+        if token.special and token.content not in known:
+            special.extra[token.content] = token.content
+            known.add(token.content)
+
+    return _UnigramFileConfig(
+        pieces=pieces,
+        unk_token=unk_token,
+        unk_log_prob=unk_log_prob,
+        fuse_unk=fuse_unk,
+        byte_fallback=byte_fallback,
+        special_tokens=special,
+        added_tokens=added,
+        data=data,
+    )
+
+
 # ── Shared mixin ───────────────────────────────────────────────────
 
 
-class _UnigramCommonMixin:
-    """Shared normalizer + pre-tokenizer chain for both flavours.
+class _UnigramCommonMixin(Tokenizer):
+    """Shared text pipeline for both flavours.
 
-    Subclasses still implement their own ``_encode_one`` (Python
-    Viterbi vs C++ call) but the surface preprocessing is shared.
+    Subclasses supply the per-chunk Viterbi (Python or C++) through
+    :meth:`_encode_chunk_ids`; everything around it — added-token
+    splitting, normalization, pre-tokenization, unknown-token handling and
+    decoding — is shared, so the two flavours cannot drift apart.
     """
 
     _normalizer: Normalizer | None
     _pre_tokenizer: PreTokenizer
+    _pieces: list[tuple[str, float]]
+    _id_to_piece: dict[int, str]
+    _unk_token: str
+    _unk_log_prob: float
+    _decoder: Decoder | None
+    _decoder_null: bool
+    _added: AddedVocabulary
+    _fuse_unk: bool
+    _byte_fallback: bool
+    _unk_piece_id: int | None
+    _byte_piece_ids: dict[int, int]
+    _hf_blocks: dict[str, object]
+
+    def _init_pipeline(self) -> None:
+        """Reset the ``tokenizer.json``-driven state to Lucid's defaults.
+
+        Must run before ``Tokenizer.__init__``, whose special-id refresh
+        reads :meth:`get_vocab` and so the added tokens.
+        """
+        self._decoder = None
+        self._decoder_null = False
+        self._added = AddedVocabulary([])
+        self._fuse_unk = False
+        self._byte_fallback = False
+        self._unk_piece_id = None
+        self._byte_piece_ids = {}
+        self._hf_blocks = {}
+
+    def _index_unk(self) -> None:
+        """Cache the unknown piece's id and the byte pieces' ids.
+
+        Rebuilt whenever the pieces change; looking them up per chunk
+        would mean a pass over the vocabulary for every word encoded.
+        """
+        self._unk_piece_id = None
+        self._byte_piece_ids = {}
+        for i, (piece, _) in enumerate(self._pieces):
+            if piece == self._unk_token and self._unk_piece_id is None:
+                self._unk_piece_id = i
+            if self._byte_fallback and len(piece) == 6 and piece.startswith("<0x"):
+                digits = piece[3:5]
+                if piece.endswith(">") and all(
+                    c in "0123456789ABCDEFabcdef" for c in digits
+                ):
+                    self._byte_piece_ids.setdefault(int(digits, 16), i)
+
+    @abstractmethod
+    def _encode_chunk_ids(self, chunk: str) -> list[int]:
+        """Viterbi-segment one pre-tokenized chunk (flavour-specific)."""
 
     def _prepare_chunks(self, text: str) -> list[str]:
         """Apply normalizer + pre-tokenizer, return chunk strings."""
         if self._normalizer is not None:
             text = self._normalizer(text)
         return [chunk for chunk, _ in self._pre_tokenizer(text)]
+
+    def _encode_text(self, text: str) -> list[int]:
+        """The full encode pipeline, minus special-token framing.
+
+        Added tokens are cut out of the raw text first; each remaining
+        piece is normalized, searched again for normalized added tokens,
+        pre-tokenized at its position in the input, and Viterbi-segmented.
+        """
+        out: list[int] = []
+        normalizer = self._normalizer
+        for segment, token_id, start in self._added.split_raw(text):
+            if token_id is not None:
+                out.append(token_id)
+                continue
+            normalized = normalizer(segment) if normalizer is not None else segment
+            for piece, piece_id, piece_start in self._added.split_normalized(
+                normalized
+            ):
+                if piece_id is not None:
+                    out.append(piece_id)
+                    continue
+                chunks = self._pre_tokenizer._pre_tokenize_at(
+                    piece, start + piece_start
+                )
+                for chunk, _ in chunks:
+                    out.extend(
+                        self._handle_unknowns(chunk, self._encode_chunk_ids(chunk))
+                    )
+        return out
+
+    def _handle_unknowns(self, chunk: str, ids: list[int]) -> list[int]:
+        """Fuse runs of unknowns, or spell them as byte pieces.
+
+        Hugging Face's Unigram merges consecutive unknown characters into
+        one ``<unk>`` (``fuse_unk``), and with ``byte_fallback`` replaces an
+        unknown span by its UTF-8 bytes when every ``<0x..>`` piece exists.
+        Lucid-trained vocabularies do neither unless told to.
+        """
+        unk = self._unk_piece_id
+        if unk is None or unk not in ids or not (self._fuse_unk or self._byte_fallback):
+            return ids
+        if not self._byte_fallback:
+            fused: list[int] = []
+            for tid in ids:
+                if not (tid == unk and fused and fused[-1] == unk):
+                    fused.append(tid)
+            return fused
+        # Recover each id's span of the chunk.  A Viterbi unknown covers one
+        # character; a *literal* ``<unk>`` in the text matched as a piece
+        # covers its own length and must not be spelled out as bytes.
+        spans: list[tuple[int, int, int]] = []
+        pos = 0
+        for tid in ids:
+            if tid == unk:
+                width = (
+                    len(self._unk_token)
+                    if chunk.startswith(self._unk_token, pos)
+                    else 1
+                )
+            else:
+                width = len(self._id_to_piece.get(tid, ""))
+            spans.append((tid, pos, pos + width))
+            pos += width
+        out: list[int] = []
+        k = 0
+        while k < len(spans):
+            tid, begin, end = spans[k]
+            k += 1
+            if tid != unk:
+                out.append(tid)
+                continue
+            if self._fuse_unk:
+                while k < len(spans) and spans[k][0] == unk:
+                    end = spans[k][2]
+                    k += 1
+            text = chunk[begin:end]
+            raw = text.encode("utf-8")
+            if text != self._unk_token and all(b in self._byte_piece_ids for b in raw):
+                out.extend(self._byte_piece_ids[b] for b in raw)
+            else:
+                out.append(unk)
+        return out
+
+    def _token_for_id(self, token_id: int) -> str | None:
+        """Surface of a piece or an added token."""
+        piece = self._id_to_piece.get(token_id)
+        return piece if piece is not None else self._added.content_for(token_id)
+
+    def _with_added(self, vocab: dict[str, int]) -> dict[str, int]:
+        """Add the added tokens a vocabulary does not already hold."""
+        for token in self._added.tokens:
+            vocab.setdefault(token.content, token.id)
+        return vocab
+
+    def _decode_with_pipeline(self, ids: list[int]) -> str | None:
+        """Decode through the file's decoder; ``None`` means use Lucid's."""
+        if self._decoder is None and not self._decoder_null:
+            return None
+        tokens = [t for t in map(self._token_for_id, ids) if t is not None]
+        if self._decoder is None:
+            # ``"decoder": null`` — Hugging Face joins the tokens with spaces.
+            return " ".join(tokens)
+        return self._decoder.decode(tokens)
+
+    def _apply_file_config(
+        self,
+        config: _UnigramFileConfig,
+        *,
+        normalizer_given: bool,
+        pre_tokenizer_given: bool,
+    ) -> None:
+        """Install the pipeline a ``tokenizer.json`` describes.
+
+        A block the file does not contain leaves Lucid's default in place —
+        that is what keeps older Lucid saves loading as they did.  A block
+        present as ``null`` means "no such stage", which is different from
+        absent.  Explicit ``normalizer`` / ``pre_tokenizer`` arguments win
+        over the file.
+        """
+        data = config.data
+        blocks: dict[str, object] = {}
+        if "normalizer" in data and not normalizer_given:
+            self._normalizer = normalizer_from_config(data["normalizer"])
+            blocks["normalizer"] = data["normalizer"]
+        if "pre_tokenizer" in data and not pre_tokenizer_given:
+            self._pre_tokenizer = pre_tokenizer_from_config(data["pre_tokenizer"])
+            blocks["pre_tokenizer"] = data["pre_tokenizer"]
+        if "post_processor" in data:
+            self._post_processor = post_processor_from_config(data["post_processor"])
+        if "decoder" in data:
+            self._decoder = decoder_from_config(data["decoder"])
+            self._decoder_null = data["decoder"] is None
+            blocks["decoder"] = data["decoder"]
+        self._added = AddedVocabulary(config.added_tokens, self._normalizer)
+        self._fuse_unk = config.fuse_unk
+        self._byte_fallback = config.byte_fallback
+        self._hf_blocks = blocks
+        self._index_unk()
+        self._refresh_special_ids()
+
+    def _unigram_extras(self) -> dict[str, object]:
+        """The ``tokenizer.json`` content both flavours save."""
+        extras: dict[str, object] = {
+            "model": {
+                "type": "Unigram",
+                "vocab": [list(p) for p in self._pieces],
+                "unk_token": self._unk_token,
+                "unk_id": self._unk_piece_id,
+                "unk_log_prob": self._unk_log_prob,
+                "fuse_unk": self._fuse_unk,
+                "byte_fallback": self._byte_fallback,
+            }
+        }
+        # Only what was loaded is written back, verbatim: a stage that came
+        # from Lucid's defaults has no block, so it reloads as the default.
+        for name in _PIPELINE_BLOCKS:
+            if name in self._hf_blocks:
+                extras[name] = self._hf_blocks[name]
+        if self._post_processor is not None:
+            extras["post_processor"] = self._post_processor.to_config()
+        if self._added.tokens:
+            extras["added_tokens"] = [t.to_config() for t in self._added.tokens]
+        return extras
 
 
 # ── Pure-Python Unigram ────────────────────────────────────────────
@@ -293,9 +662,10 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         Builds piece-id maps and caches the longest piece in bytes
         for the Viterbi DP via :meth:`_rebuild_tables`.
         """
-        self._pieces: list[tuple[str, float]] = list(pieces)
+        self._pieces = list(pieces)
         self._unk_token = unk_token
         self._unk_log_prob = unk_log_prob
+        self._init_pipeline()
         self._normalizer = normalizer if normalizer is not None else NFKC()
         self._pre_tokenizer = (
             pre_tokenizer if pre_tokenizer is not None else SentencePiecePreTokenizer()
@@ -315,6 +685,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         self._max_piece_bytes = max(
             (len(p.encode("utf-8")) for p, _ in self._pieces), default=0
         )
+        self._index_unk()
 
     @override
     @property
@@ -348,8 +719,10 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         -------
         dict[str, int]
             Shallow copy; mutating it does not affect the tokenizer.
+            Added tokens a ``tokenizer.json`` declares outside the piece
+            list are included.
         """
-        return dict(self._piece_to_id)
+        return self._with_added(dict(self._piece_to_id))
 
     @override
     def id_to_token(self, token_id: int) -> str | None:
@@ -365,7 +738,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         str or None
             The piece string, or ``None`` if ``token_id`` is unknown.
         """
-        return self._id_to_piece.get(token_id)
+        return self._token_for_id(token_id)
 
     @property
     def pieces(self) -> list[tuple[str, float]]:
@@ -462,16 +835,21 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         return ids
 
     @override
+    def _encode_chunk_ids(self, chunk: str) -> list[int]:
+        """Python Viterbi over one chunk."""
+        return self._viterbi_encode_chunk(chunk)
+
+    @override
     def _encode_one(self, text: str) -> list[int]:
-        """Normalize + pre-tokenize + per-chunk Viterbi encode."""
-        out: list[int] = []
-        for chunk in self._prepare_chunks(text):
-            out.extend(self._viterbi_encode_chunk(chunk))
-        return out
+        """Split added tokens, normalize, pre-tokenize, Viterbi-encode."""
+        return self._encode_text(text)
 
     @override
     def _decode_one(self, ids: list[int]) -> str:
         """Concatenate pieces and convert ``▁`` markers back to spaces."""
+        decoded = self._decode_with_pipeline(ids)
+        if decoded is not None:
+            return decoded
         # Standard SentencePiece decode: join surface forms, replace
         # the ▁ marker with a space.
         raw = "".join(self._id_to_piece[i] for i in ids if i in self._id_to_piece)
@@ -543,15 +921,8 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
 
     @override
     def _save_extras(self) -> dict[str, object]:
-        """Add the ``model`` block to the unified ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "Unigram",
-                "vocab": [list(p) for p in self._pieces],
-                "unk_token": self._unk_token,
-                "unk_log_prob": self._unk_log_prob,
-            }
-        }
+        """Add the ``model`` block and any loaded pipeline blocks."""
+        return self._unigram_extras()
 
     @classmethod
     def from_file(
@@ -570,50 +941,50 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
             Directory holding the unified ``tokenizer.json`` (and
             optionally ``special_tokens_map.json``).
         normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain.  Defaults
-            to :class:`~lucid.utils.tokenizer._normalizers.NFKC`
-            when omitted (matches LLaMA / Mistral / T5).
+            Override the encode-time normalisation chain.  When omitted,
+            the file's ``normalizer`` block is used; a file without one
+            (an older Lucid save) gets
+            :class:`~lucid.utils.tokenizer._normalizers.NFKC`.
         pre_tokenizer : PreTokenizer, optional, keyword-only
             Override the chunk splitter applied after normalisation.
-            Defaults to :class:`SentencePiecePreTokenizer` for
-            canonical SentencePiece behaviour.
+            When omitted, the file's ``pre_tokenizer`` block is used, or
+            :class:`SentencePiecePreTokenizer` if it has none.
         special_tokens : SpecialTokens, optional, keyword-only
             Override the special-token registry.  When ``None`` (the
-            default), parsed from ``special_tokens_map.json`` if
-            present.
+            default), it is read from ``special_tokens_map.json`` (or
+            ``tokenizer_config.json``), completed with the model's
+            unknown piece and every special ``added_tokens`` entry.
 
         Returns
         -------
         UnigramTokenizer
             Freshly-constructed instance ready for encode / decode.
+
+        Notes
+        -----
+        The file's ``post_processor`` decides framing: T5's appends
+        ``</s>`` and adds no BOS even when ``special_tokens_map.json`` names
+        one.  Without that block the registry's BOS/EOS frame the sequence,
+        as they always have.  The ``decoder`` block and ``added_tokens`` are
+        honoured too; :meth:`save` writes all of them back.
         """
-        path = os.path.join(directory, "tokenizer.json")
-        if not os.path.isfile(path):
-            raise FileNotFoundError(
-                f"UnigramTokenizer.from_file: tokenizer.json not found in "
-                f"{directory}"
-            )
-        pieces = _load_unigram_pieces_json(path)
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        model = data.get("model", {})
-        unk_token = str(model.get("unk_token", "<unk>"))
-        unk_log_prob = float(model.get("unk_log_prob", -100.0))
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            pieces,
-            unk_token=unk_token,
-            unk_log_prob=unk_log_prob,
+        config = _read_unigram_config(directory, cls.__name__)
+        tok = cls(
+            config.pieces,
+            unk_token=config.unk_token,
+            unk_log_prob=config.unk_log_prob,
             normalizer=normalizer,
             pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
+            special_tokens=(
+                special_tokens if special_tokens is not None else config.special_tokens
+            ),
         )
+        tok._apply_file_config(
+            config,
+            normalizer_given=normalizer is not None,
+            pre_tokenizer_given=pre_tokenizer is not None,
+        )
+        return tok
 
     from_pretrained = from_file
 
@@ -690,15 +1061,15 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         on `_cpp`; the Python-side `_id_to_piece` reverse map mirrors
         the pieces list for fast decode.
         """
-        self._pieces: list[tuple[str, float]] = list(pieces)
+        self._pieces = list(pieces)
         self._unk_token = unk_token
         self._unk_log_prob = unk_log_prob
+        self._init_pipeline()
         self._cpp = _C_engine.utils.tokenizer.Unigram(
             [(p, lp) for p, lp in self._pieces], unk_token, unk_log_prob
         )
-        self._id_to_piece: dict[int, str] = {
-            i: p for i, (p, _) in enumerate(self._pieces)
-        }
+        self._id_to_piece = {i: p for i, (p, _) in enumerate(self._pieces)}
+        self._index_unk()
         self._normalizer = normalizer if normalizer is not None else NFKC()
         self._pre_tokenizer = (
             pre_tokenizer if pre_tokenizer is not None else SentencePiecePreTokenizer()
@@ -738,9 +1109,10 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         Returns
         -------
         dict[str, int]
-            Fresh dict built from ``self._cpp.get_vocab()``.
+            Fresh dict built from ``self._cpp.get_vocab()``, plus any
+            added tokens declared outside the piece list.
         """
-        return dict(self._cpp.get_vocab())
+        return self._with_added(dict(self._cpp.get_vocab()))
 
     @override
     def id_to_token(self, token_id: int) -> str | None:
@@ -756,7 +1128,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         str or None
             The piece string, or ``None`` if unknown.
         """
-        return self._id_to_piece.get(token_id)
+        return self._token_for_id(token_id)
 
     @property
     def pieces(self) -> list[tuple[str, float]]:
@@ -771,16 +1143,21 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         return list(self._pieces)
 
     @override
+    def _encode_chunk_ids(self, chunk: str) -> list[int]:
+        """C++ Viterbi over one chunk."""
+        return list(self._cpp.encode(chunk))
+
+    @override
     def _encode_one(self, text: str) -> list[int]:
-        """Normalize + pre-tokenize in Python, per-chunk Viterbi in C++."""
-        out: list[int] = []
-        for chunk in self._prepare_chunks(text):
-            out.extend(self._cpp.encode(chunk))
-        return out
+        """Pipeline in Python, per-chunk Viterbi in C++."""
+        return self._encode_text(text)
 
     @override
     def _decode_one(self, ids: list[int]) -> str:
         """C++ decode + ``▁`` → space replacement for parity."""
+        decoded = self._decode_with_pipeline(ids)
+        if decoded is not None:
+            return decoded
         raw = self._cpp.decode(list(ids))
         return raw.replace(SentencePiecePreTokenizer.SP_SPACE, " ")
 
@@ -812,6 +1189,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         self._cpp.train(prepared, vocab_size)
         self._pieces = [(p, lp) for p, lp in self._cpp.pieces()]
         self._id_to_piece = {i: p for i, (p, _) in enumerate(self._pieces)}
+        self._index_unk()
         self._refresh_special_ids()
 
     @override
@@ -828,15 +1206,8 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
 
     @override
     def _save_extras(self) -> dict[str, object]:
-        """Add the ``model`` block to the unified ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "Unigram",
-                "vocab": [list(p) for p in self._pieces],
-                "unk_token": self._unk_token,
-                "unk_log_prob": self._unk_log_prob,
-            }
-        }
+        """Add the ``model`` block and any loaded pipeline blocks."""
+        return self._unigram_extras()
 
     @classmethod
     def from_file(
@@ -858,15 +1229,16 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
             Directory holding the unified ``tokenizer.json`` (and
             optionally ``special_tokens_map.json``).
         normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain.  Defaults
-            to :class:`~lucid.utils.tokenizer._normalizers.NFKC`.
+            Override the encode-time normalisation chain; the file's
+            ``normalizer`` block otherwise, or
+            :class:`~lucid.utils.tokenizer._normalizers.NFKC` without one.
         pre_tokenizer : PreTokenizer, optional, keyword-only
-            Override the chunk splitter applied after normalisation.
-            Defaults to :class:`SentencePiecePreTokenizer`.
+            Override the chunk splitter applied after normalisation; the
+            file's ``pre_tokenizer`` block otherwise, or
+            :class:`SentencePiecePreTokenizer` without one.
         special_tokens : SpecialTokens, optional, keyword-only
             Override the special-token registry.  When ``None`` (the
-            default), parsed from ``special_tokens_map.json`` if
-            present.
+            default), read as :meth:`UnigramTokenizer.from_file` reads it.
 
         Returns
         -------
@@ -874,32 +1246,22 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
             Freshly-constructed C++-backed instance ready for
             encode / decode.
         """
-        path = os.path.join(directory, "tokenizer.json")
-        if not os.path.isfile(path):
-            raise FileNotFoundError(
-                f"UnigramTokenizerFast.from_file: tokenizer.json not found "
-                f"in {directory}"
-            )
-        pieces = _load_unigram_pieces_json(path)
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        model = data.get("model", {})
-        unk_token = str(model.get("unk_token", "<unk>"))
-        unk_log_prob = float(model.get("unk_log_prob", -100.0))
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            pieces,
-            unk_token=unk_token,
-            unk_log_prob=unk_log_prob,
+        config = _read_unigram_config(directory, cls.__name__)
+        tok = cls(
+            config.pieces,
+            unk_token=config.unk_token,
+            unk_log_prob=config.unk_log_prob,
             normalizer=normalizer,
             pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
+            special_tokens=(
+                special_tokens if special_tokens is not None else config.special_tokens
+            ),
         )
+        tok._apply_file_config(
+            config,
+            normalizer_given=normalizer is not None,
+            pre_tokenizer_given=pre_tokenizer is not None,
+        )
+        return tok
 
     from_pretrained = from_file

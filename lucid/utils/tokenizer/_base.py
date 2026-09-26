@@ -26,7 +26,14 @@ one-line code change with bit-identical encode outputs.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Callable, ClassVar, Iterable, Literal
+
+from lucid.utils.tokenizer._post_processors import (
+    PostProcessor,
+    Sequence,
+    TemplateProcessing,
+    _Piece,
+)
 
 # Canonical special-token slot names.  Every algorithm honours this
 # scheme so attention-mask / special-token-mask computation can stay
@@ -133,6 +140,22 @@ class Tokenizer(ABC):
     # Subclasses populate at construction time.
     _special: SpecialTokens
     _special_ids: dict[str, int]
+
+    #: An explicitly configured post-processor — read from a
+    #: ``tokenizer.json`` or assigned through :attr:`post_processor`.  When
+    #: ``None`` the class's :attr:`_special_layout` frames the sequence.
+    #: A class attribute rather than one set in ``__init__`` so a subclass
+    #: may assign it before calling ``super().__init__``.
+    _post_processor: PostProcessor | None = None
+
+    #: How ``encode(add_special_tokens=True)`` frames a sequence when no
+    #: post-processor is configured, using whatever the special-token
+    #: registry resolves at that moment: ``"bos_eos"`` wraps in BOS/EOS,
+    #: ``"cls_sep"`` gives BERT's ``[CLS] … [SEP]``, ``"none"`` adds
+    #: nothing (GPT-2).  Resolved per call rather than frozen at
+    #: construction, so framing follows the ids the vocabulary resolves now
+    #: — after ``train`` as well as before it.
+    _special_layout: ClassVar[Literal["bos_eos", "cls_sep", "none"]] = "bos_eos"
 
     def __init__(self, special_tokens: SpecialTokens | None = None) -> None:
         """Initialise the special-token registry; subclasses must
@@ -302,11 +325,11 @@ class Tokenizer(ABC):
     ) -> list[int]:
         """Encode a single string to a list of token ids.
 
-        When ``add_special_tokens=True`` the canonical wrappers
-        (BOS/EOS for autoregressive, CLS/SEP for BERT-style) are
-        injected around the algorithm output — subclasses with
-        non-standard wrapping (e.g. T5's ``</s>`` only at the end)
-        override :meth:`_build_inputs_with_special_tokens`.
+        When ``add_special_tokens=True`` the sequence is framed by the
+        tokenizer's :attr:`post_processor` if one is configured (a
+        ``tokenizer.json`` carries it — T5's appends only ``</s>``),
+        and otherwise by the class's default layout: BOS/EOS, BERT's
+        ``[CLS] … [SEP]``, or nothing for GPT-2.
 
         Parameters
         ----------
@@ -316,9 +339,8 @@ class Tokenizer(ABC):
             :meth:`_encode_one` hook before the BPE / WordPiece /
             Unigram merge loop runs.
         add_special_tokens : bool, optional, keyword-only, default=True
-            When ``True``, prepend / append the algorithm's special
-            tokens (BOS/EOS for autoregressive families, CLS/SEP for
-            BERT-style) via
+            When ``True``, frame the ids with special tokens as
+            described above, via
             :meth:`_build_inputs_with_special_tokens`.  Pass ``False``
             to return the raw merge-loop output untouched (useful for
             offline analysis, alignment, or batching pipelines that
@@ -409,19 +431,128 @@ class Tokenizer(ABC):
             for ids in batch_ids
         ]
 
-    def _build_inputs_with_special_tokens(self, ids: list[int]) -> list[int]:
-        """Wrap a raw id sequence with the algorithm's special tokens.
+    @property
+    def post_processor(self) -> PostProcessor | None:
+        """The configured post-processor, or ``None`` for the class default.
 
-        Default: prepend ``bos_token_id`` and append ``eos_token_id``
-        when they're defined.  Subclasses with a different layout
-        (e.g. BERT's ``[CLS] ids [SEP]``) override this.
+        Assign a :class:`~lucid.utils.tokenizer._post_processors.PostProcessor`
+        to change how :meth:`encode` frames sequences — for example a
+        :class:`~lucid.utils.tokenizer._post_processors.TemplateProcessing`
+        reproducing a checkpoint's template — or ``None`` to go back to
+        the class's default layout.
+
+        Returns
+        -------
+        PostProcessor or None
+            The processor loaded from ``tokenizer.json`` or assigned here.
+
+        Examples
+        --------
+        >>> from lucid.utils.tokenizer import SpecialTokens, WordTokenizer
+        >>> from lucid.utils.tokenizer._post_processors import TemplateProcessing
+        >>> tok = WordTokenizer(
+        ...     {"<unk>": 0, "</s>": 1, "hi": 2},
+        ...     special_tokens=SpecialTokens(unk="<unk>", eos="</s>"),
+        ... )
+        >>> tok.encode("hi")
+        [2, 1]
+        >>> tok.post_processor = TemplateProcessing("$A", special_tokens={})
+        >>> tok.encode("hi")
+        [2]
         """
-        out = list(ids)
-        if self.bos_token_id is not None:
-            out.insert(0, self.bos_token_id)
-        if self.eos_token_id is not None:
-            out.append(self.eos_token_id)
-        return out
+        return self._post_processor
+
+    @post_processor.setter
+    def post_processor(self, value: PostProcessor | None) -> None:
+        """Install ``value`` (or clear it with ``None``)."""
+        self._post_processor = value
+
+    def num_special_tokens_to_add(self, pair: bool = False) -> int:
+        """Count the special tokens ``encode(add_special_tokens=True)`` adds.
+
+        Parameters
+        ----------
+        pair : bool, default False
+            Count for a pair of sequences instead of one.
+
+        Returns
+        -------
+        int
+            How many ids framing adds around the content — the amount
+            :meth:`__call__` reserves out of ``max_length`` when it
+            truncates.
+
+        Examples
+        --------
+        >>> from lucid.utils.tokenizer import SpecialTokens, WordTokenizer
+        >>> tok = WordTokenizer(
+        ...     {"<unk>": 0, "<s>": 1, "</s>": 2},
+        ...     special_tokens=SpecialTokens(unk="<unk>", bos="<s>", eos="</s>"),
+        ... )
+        >>> tok.num_special_tokens_to_add()
+        2
+        """
+        return len(self._build_inputs_with_special_tokens([], [] if pair else None))
+
+    def _special_slot(self, name: str) -> tuple[str, int] | None:
+        """``(surface, id)`` of a canonical special token, if it resolves."""
+        surface = getattr(self._special, name)
+        tid = self._special_ids.get(name)
+        if surface is None or tid is None:
+            return None
+        return surface, tid
+
+    def _default_post_processor(self) -> PostProcessor:
+        """The framing :attr:`_special_layout` describes, from the live registry.
+
+        Each framing token is added only if it resolves to an id, so a
+        vocabulary without ``[CLS]`` — one trained from a corpus that never
+        contained it, say — is left unframed at that end rather than
+        failing.
+        """
+        if self._special_layout == "none":
+            return Sequence([])
+        if self._special_layout == "cls_sep":
+            head, tail = self._special_slot("cls"), self._special_slot("sep")
+            # BERT's pair: [CLS] A [SEP] B [SEP] — no second [CLS].
+            pair_head = None
+        else:
+            head, tail = self._special_slot("bos"), self._special_slot("eos")
+            # Each sequence of a pair framed alike: BOS A EOS BOS B EOS.
+            pair_head = head
+        specials: dict[str, list[int]] = {}
+        for slot in (head, tail):
+            if slot is not None:
+                specials[slot[0]] = [slot[1]]
+
+        # Pieces rather than a template string: a surface such as "$x" or
+        # "<t>:1" would otherwise be read as template syntax.
+        def framed(seq: str, first: tuple[str, int] | None) -> list[_Piece]:
+            return [
+                *([_Piece("special", first[0], 0)] if first else []),
+                _Piece(seq, "", 0),
+                *([_Piece("special", tail[0], 0)] if tail else []),
+            ]
+
+        single = framed("A", head)
+        return TemplateProcessing._from_pieces(
+            single, single + framed("B", pair_head), specials
+        )
+
+    def _build_inputs_with_special_tokens(
+        self, ids: list[int], pair_ids: list[int] | None = None
+    ) -> list[int]:
+        """Frame a raw id sequence (or pair) with special tokens.
+
+        Uses the configured :attr:`post_processor` when there is one and
+        the class's :attr:`_special_layout` otherwise.  Subclasses with a
+        layout of their own override this; :meth:`num_special_tokens_to_add`
+        measures whatever it returns, so truncation stays correct.
+        """
+        processor = self._post_processor
+        if processor is None:
+            processor = self._default_post_processor()
+        return processor.process(ids, pair_ids)
 
     # ── HF-style __call__ ───────────────────────────────────────────
 
@@ -451,8 +582,10 @@ class Tokenizer(ABC):
             every sequence to the longest in the batch.
             ``"max_length"`` — pad every sequence to ``max_length``.
         truncation : bool, default False
-            When ``True``, truncate each sequence past
-            ``max_length`` (no-op if ``max_length`` is ``None``).
+            When ``True``, truncate each sequence to ``max_length``
+            (no-op if ``max_length`` is ``None``).  The content is cut,
+            never the framing: ``max_length`` counts the special tokens
+            and they stay, so an ``EOS`` survives truncation.
         max_length : int, optional
             Bound for both truncation + ``padding="max_length"``.
         return_tensors : {"lucid"} or None
@@ -484,14 +617,29 @@ class Tokenizer(ABC):
                 f"got {type(text).__name__}"
             )
 
-        # Encode each.
-        encoded: list[list[int]] = self.encode_batch(
-            texts, add_special_tokens=add_special_tokens
-        )
-
-        # Truncation.
+        # Encode each; truncate the content, then frame it.  Cutting the
+        # framed sequence instead is how ``</s>`` used to fall off the end:
+        # the special tokens are part of the length budget, not of what
+        # gets cut.
+        encoded: list[list[int]]
         if truncation and max_length is not None:
-            encoded = [ids[:max_length] for ids in encoded]
+            content = self.encode_batch(texts, add_special_tokens=False)
+            if add_special_tokens:
+                budget = max_length - self.num_special_tokens_to_add()
+                if budget < 0:
+                    raise ValueError(
+                        f"Tokenizer.__call__: max_length={max_length} leaves "
+                        f"no room for the {self.num_special_tokens_to_add()} "
+                        f"special tokens this tokenizer adds."
+                    )
+                encoded = [
+                    self._build_inputs_with_special_tokens(ids[:budget])
+                    for ids in content
+                ]
+            else:
+                encoded = [ids[:max_length] for ids in content]
+        else:
+            encoded = self.encode_batch(texts, add_special_tokens=add_special_tokens)
 
         # Padding.
         pad_id = self.pad_token_id

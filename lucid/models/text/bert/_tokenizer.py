@@ -95,9 +95,11 @@ class BERTTokenizer(WordPieceTokenizer):
         Words longer than this skip the longest-match loop and emit
         the ``unk_token`` directly (mirrors BERT ``BasicTokenizer``).
     do_lower_case : bool, default ``True``
-        Forwarded to :class:`BERTNormalizer`.  Set to ``False`` for
-        cased checkpoints (``bert-base-cased``, multilingual models).
-        Ignored if ``normalizer`` is given explicitly.
+        Forwarded to :class:`BERTNormalizer` as both ``lowercase`` and
+        ``strip_accents``.  Set to ``False`` for cased checkpoints
+        (``bert-base-cased``, multilingual models), which keep their
+        accents as well as their case.  Ignored if ``normalizer`` is
+        given explicitly.
     normalizer : Normalizer, optional
         Override the default :class:`BERTNormalizer`.
     pre_tokenizer : PreTokenizer, optional
@@ -117,10 +119,24 @@ class BERTTokenizer(WordPieceTokenizer):
     >>> tok.decode(ids, skip_special_tokens=False)
     'hello world'
 
+    Encoding with ``add_special_tokens=True`` (the default) frames the
+    sequence as ``[CLS] … [SEP]``, the input every BERT head was trained
+    on; ``[CLS]`` is the position the pooler reads.
+
+    >>> vocab = {"[UNK]": 0, "[CLS]": 1, "[SEP]": 2, "hello": 3}
+    >>> BERTTokenizer(vocab=vocab).encode("hello")
+    [1, 3, 2]
+
     See Also
     --------
     BERTTokenizerFast : C++-backed variant with identical output.
     """
+
+    # [CLS] A [SEP] — and [CLS] A [SEP] B [SEP] for a pair.  The registry
+    # has always named both tokens; without this the base framed with BOS
+    # and EOS, which BERT does not define, so nothing was added at all and
+    # the pooler read the first word instead of [CLS].
+    _special_layout = "cls_sep"
 
     def __init__(
         self,
@@ -142,7 +158,9 @@ class BERTTokenizer(WordPieceTokenizer):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BERTNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(
+                    lowercase=do_lower_case, strip_accents=do_lower_case
+                )
             ),
             pre_tokenizer=(
                 pre_tokenizer
@@ -176,8 +194,12 @@ class BERTTokenizerFast(WordPieceTokenizerFast):
 
     The same ids the plain tokenizer produces. The speed is in the
     lookup, and a pair that segmented differently would be a bug no type
-    can catch.
+    can catch.  No ``[CLS]`` / ``[SEP]`` appear only because this toy
+    vocabulary has neither; with them it frames as :class:`BERTTokenizer`
+    does.
     """
+
+    _special_layout = "cls_sep"
 
     def __init__(
         self,
@@ -199,7 +221,9 @@ class BERTTokenizerFast(WordPieceTokenizerFast):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BERTNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(
+                    lowercase=do_lower_case, strip_accents=do_lower_case
+                )
             ),
             pre_tokenizer=(
                 pre_tokenizer

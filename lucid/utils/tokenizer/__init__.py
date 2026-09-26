@@ -33,6 +33,17 @@ Each is exported from this package with a ``Fast`` variant beside it —
 :class:`ByteLevelBPETokenizer`, :class:`WordPieceTokenizer`,
 :class:`UnigramTokenizer`.
 
+Pipeline stages
+---------------
+
+A Hugging Face ``tokenizer.json`` names four stages besides the model, and
+each has a sub-module here with a ``*_from_config`` factory that reads its
+block: :mod:`normalizers` (text clean-up, including SentencePiece's
+compiled ``Precompiled`` map), :mod:`pre_tokenizers` (splitting, including
+``Metaspace``), :mod:`post_processors` (the special tokens that frame a
+sequence — assign one to :attr:`Tokenizer.post_processor`) and
+:mod:`decoders` (ids back to text).
+
 Per-model wrappers live in each ``lucid.models.text.<family>``
 package's ``_tokenizer/`` directory and subclass the algorithm
 matching that family (e.g. ``BERTTokenizer`` ←
@@ -61,7 +72,9 @@ from lucid.utils.tokenizer._wordpiece import (
     WordPieceTokenizer,
     WordPieceTokenizerFast,
 )
+from lucid.utils.tokenizer import _decoders as decoders
 from lucid.utils.tokenizer import _normalizers as normalizers
+from lucid.utils.tokenizer import _post_processors as post_processors
 from lucid.utils.tokenizer import _pre_tokenizers as pre_tokenizers
 
 __all__ = [
@@ -89,7 +102,9 @@ __all__ = [
     "WordPieceTokenizerFast",
     "UnigramTokenizer",
     "UnigramTokenizerFast",
-    # Sub-modules
+    # Sub-modules — the four ``tokenizer.json`` pipeline stages
     "normalizers",
     "pre_tokenizers",
+    "post_processors",
+    "decoders",
 ]
