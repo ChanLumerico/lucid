@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a compiled module stays in its parent's tree and recompiles on new weights
 
+- transposed-conv input gradient when output_padding reaches the stride
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

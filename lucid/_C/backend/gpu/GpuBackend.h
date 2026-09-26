@@ -4324,6 +4324,24 @@ public:
             ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
         auto W_dx_nhwc = ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, w_dx_perm));
         auto dx_nhwc = gpu_mlx_conv_grouped(grad_nhwc, W_dx_nhwc, sv, pv, dv, G, N);
+        // An output_padding of a stride or more — allowed while the dilation
+        // is larger — lets that convolution fit a window past the input's
+        // end.  Left in, the extra row was read back as x's shape and every
+        // row after the first came out shifted by one.
+        {
+            using SE = ::mlx::core::ShapeElem;
+            ::mlx::core::Shape lo(N + 2, 0);
+            ::mlx::core::Shape hi = dx_nhwc.shape();
+            bool longer = false;
+            for (int i = 0; i < N; ++i) {
+                if (hi[1 + i] != static_cast<SE>(S[i])) {
+                    hi[1 + i] = static_cast<SE>(S[i]);
+                    longer = true;
+                }
+            }
+            if (longer)
+                dx_nhwc = ::mlx::core::slice(dx_nhwc, lo, hi);
+        }
         // PERF: see conv_transpose_nd_forward — strided view returned, MLX
         // ops handle strides natively. Materialization is deferred to the
         // final mx.eval() or to ops that genuinely need contiguous memory.
