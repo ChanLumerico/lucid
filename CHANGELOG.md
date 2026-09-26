@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - transpose takes two axes, as the reference framework's does
 
+### Performance
+
+- check_weight_fit builds in shadow and reads headers in parallel
+
 ---
 
 ## [3.15.2] — 2026-09-26

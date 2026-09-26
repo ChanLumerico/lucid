@@ -31,6 +31,14 @@ passed.  Here ``load_weight_entry`` is intercepted instead — the factory
 runs its real path and hands over the very module the load targets, then
 the download is skipped.
 
+**Nothing is allocated either.**  Only names and shapes are compared, so
+the factory runs under :func:`lucid.nn._shadow.shadow_alloc`, where every
+tensor is shape metadata.  Building the real weights was nearly all of
+this check's time — 67 minutes of a nightly run, BERT-large alone 16 s,
+against milliseconds in shadow.  A factory shadow mode cannot follow is
+built for real instead, and the run says which.  The headers are then
+read over parallel connections.
+
 What a pass does *not* mean
 ---------------------------
 Structure, not identity.  This reads the header and compares names and
@@ -66,10 +74,12 @@ import argparse
 import json
 import struct
 import sys
+import time
 import urllib.error
 import urllib.request
 import warnings
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager, nullcontext
 from typing import Iterator
 
 warnings.filterwarnings("ignore")
@@ -80,9 +90,17 @@ from lucid.models import create_model
 from lucid.nn import Module
 from lucid.weights import WeightEntry, WeightsEnum
 from lucid.models._registry import _REGISTRY
+from lucid.nn._shadow import shadow_alloc
 from lucid.weights._registry import _WEIGHTS_BY_MODEL
 
 _TIMEOUT = 90
+
+#: Connections reading headers at once.  Each read is two small range
+#: requests, so the run waits on round trips, not on bandwidth.
+_CONNECTIONS = 16
+
+#: Tries per header before a network error counts as unreachable.
+_ATTEMPTS = 3
 
 
 def _normalise(shape: object) -> tuple[int, ...]:
@@ -101,11 +119,29 @@ def _header(url: str) -> dict[str, object]:
     request = urllib.request.Request(url, headers={"Range": "bytes=0-7"})
     with urllib.request.urlopen(request, timeout=_TIMEOUT) as response:
         size = struct.unpack("<Q", response.read(8))[0]
-    request = urllib.request.Request(
-        url, headers={"Range": f"bytes=8-{8 + size - 1}"}
-    )
+    request = urllib.request.Request(url, headers={"Range": f"bytes=8-{8 + size - 1}"})
     with urllib.request.urlopen(request, timeout=_TIMEOUT) as response:
         return json.loads(response.read(size).decode())
+
+
+def _header_retried(url: str) -> dict[str, object]:
+    """:func:`_header`, tried again after a network error.
+
+    Sixteen connections at once meet the odd dropped one: a first run
+    reported a V-JEPA 2 checkpoint unreachable on a single connect timeout
+    that the next request did not repeat.  An HTTP error is an answer, not
+    a dropped connection, and is not retried.
+    """
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            return _header(url)
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError, OSError:
+            if attempt == _ATTEMPTS:
+                raise
+            time.sleep(2**attempt)
+    raise AssertionError("unreachable")
 
 
 @contextmanager
@@ -142,11 +178,20 @@ def _tags(enum: type[WeightsEnum]) -> list[str]:
     return [tag for tag in enum.__members__ if tag != "DEFAULT"]
 
 
-def _fit(model_name: str, tag: str) -> dict[str, object]:
-    """Compare one checkpoint against the module the factory loads it into."""
+def _target(model_name: str, tag: str, *, shadow: bool) -> dict[str, object]:
+    """What the factory loads for ``tag``, and the shapes it loads it into."""
     with _load_intercepted() as seen:
         try:
-            create_model(model_name, pretrained=tag)
+            with shadow_alloc() if shadow else nullcontext():
+                create_model(model_name, pretrained=tag)
+                if not seen:
+                    return {
+                        "error": "the factory did not load any weights for this tag"
+                    }
+                target, entry = seen[-1]
+                wanted = {
+                    k: _normalise(v.shape) for k, v in target.state_dict().items()
+                }
         except ValueError as exc:
             if not seen:
                 # A factory may share an enum with a sibling and refuse the
@@ -159,22 +204,52 @@ def _fit(model_name: str, tag: str) -> dict[str, object]:
             return {"error": f"ValueError: {exc}"[:200]}
         except Exception as exc:
             return {"error": f"{type(exc).__name__}: {exc}"[:200]}
-    if not seen:
-        return {"error": "the factory did not load any weights for this tag"}
-    target, entry = seen[-1]
+    return {"entry": entry, "wanted": wanted}
 
-    try:
-        header = _header(entry.url)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        return {"unreachable": f"{type(exc).__name__}: {exc}"[:160]}
 
+def _build(model_name: str, tag: str) -> dict[str, object]:
+    """:func:`_target` in shadow, or for real where shadow mode cannot follow.
+
+    A refusal is retried for real too: shadow mode raising inside a
+    factory would otherwise pass for the factory declining the tag.
+    """
+    built = _target(model_name, tag, shadow=True)
+    if "entry" in built:
+        return built
+    built = _target(model_name, tag, shadow=False)
+    if "entry" in built:
+        built["real"] = True
+    return built
+
+
+def _read_headers(urls: list[str]) -> dict[str, dict[str, object] | str]:
+    """Every URL's header, or why it could not be read, over parallel connections."""
+    found: dict[str, dict[str, object] | str] = {}
+    with ThreadPoolExecutor(max_workers=_CONNECTIONS) as pool:
+        futures = {pool.submit(_header_retried, url): url for url in urls}
+        for done, future in enumerate(as_completed(futures), 1):
+            url = futures[future]
+            try:
+                found[url] = future.result()
+            except (urllib.error.URLError, OSError, ValueError) as exc:
+                found[url] = f"{type(exc).__name__}: {exc}"[:160]
+            if done % 25 == 0 or done == len(urls):
+                # A line now and then, so a slow run can be told from a
+                # hung one in CI, where nobody can look at the process.
+                print(f"  {done}/{len(urls)} headers read", flush=True)
+    return found
+
+
+def _fit(built: dict[str, object], header: dict[str, object]) -> dict[str, object]:
+    """Compare a checkpoint's header against the module it loads into."""
+    entry = built["entry"]
+    wanted = built["wanted"]
+    assert isinstance(entry, WeightEntry) and isinstance(wanted, dict)
     stored = {
         entry.key_map.get(key, key): _normalise(value["shape"])  # type: ignore[index]
         for key, value in header.items()
         if key != "__metadata__"
     }
-    wanted = {k: _normalise(v.shape) for k, v in target.state_dict().items()}
-
     return {
         "tensors": len(stored),
         "shape_mismatch": sorted(
@@ -268,30 +343,45 @@ def main() -> int:
     fitted: set[str] = set()
     offered: set[str] = set()
 
+    builds: list[tuple[str, str, dict[str, object]]] = []
+    built_for_real: list[str] = []
     for index, (name, enum) in enumerate(targets, 1):
-        # A run over every checkpoint takes tens of minutes, nearly all of
-        # it waiting on range requests.  Without a line per factory there
-        # is no way to tell a slow run from a hung one, which matters most
-        # in CI, where nobody can look at the process.
         print(f"  [{index}/{len(targets)}] {name}", flush=True)
         for tag in _tags(enum):
-            offered.add(tag)
-            report = _fit(name, tag)
-            if "declined" in report:
-                declined += 1
-                continue
-            if "unreachable" in report:
-                unreachable.append(f"  {name} [{tag}]: {report['unreachable']}")
-                fitted.add(tag)  # unknown, not orphaned
-                continue
-            if "error" in report:
-                bad.append(f"  {name} [{tag}]: {report['error']}")
-                continue
-            checked += 1
-            problems = _describe(name, tag, report)
-            if not problems:
-                fitted.add(tag)
-            bad.extend(problems)
+            built = _build(name, tag)
+            builds.append((name, tag, built))
+            if built.get("real"):
+                built_for_real.append(f"{name} [{tag}]")
+    if built_for_real:
+        print(
+            f"built for real, shadow mode could not follow: {', '.join(built_for_real)}"
+        )
+
+    urls = sorted(
+        {e.url for *_, b in builds if isinstance(e := b.get("entry"), WeightEntry)}
+    )
+    headers = _read_headers(urls)
+
+    for name, tag, built in builds:
+        offered.add(tag)
+        if "declined" in built:
+            declined += 1
+            continue
+        if "error" in built:
+            bad.append(f"  {name} [{tag}]: {built['error']}")
+            continue
+        entry = built["entry"]
+        assert isinstance(entry, WeightEntry)
+        header = headers[entry.url]
+        if isinstance(header, str):
+            unreachable.append(f"  {name} [{tag}]: {header}")
+            fitted.add(tag)  # unknown, not orphaned
+            continue
+        checked += 1
+        problems = _describe(name, tag, _fit(built, header))
+        if not problems:
+            fitted.add(tag)
+        bad.extend(problems)
 
     for tag in sorted(offered - fitted):
         bad.append(f"  [{tag}]: no factory in this run could load this checkpoint")
