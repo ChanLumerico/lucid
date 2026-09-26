@@ -29,27 +29,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # scripts/ci_full.sh in parts, one job each, side by side.  As a single
+  # job it was 21 minutes on a push and 137 with the slow stages, every
+  # stage waiting on the one before it for no reason but order; the longest
+  # part is now under 20.  Pushes run the fast parts; the schedule, manual
+  # runs, pull requests and tags add the slow ones.
   phase-gate:
-    name: Phase gate / Python ${{ matrix.python-version }}
+    name: Phase gate / ${{ matrix.part }}
     runs-on: macos-26
-    # Measured: 15 min on a push, 125 min when the slow stages are on
-    # (below).  Without a cap a hung run burns GitHub's 6-hour default
-    # before anyone finds out — one sat at 94 minutes here before it was
-    # noticed, and only because someone was watching.
-    timeout-minutes: ${{ github.event_name == 'push' && 45 || 210 }}
+    # Without a cap a hung run burns GitHub's 6-hour default before anyone
+    # finds out — one sat at 94 minutes here before it was noticed, and
+    # only because someone was watching.  Every part is well under this.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        # Lucid is Python 3.14 only: TYPE_CHECKING annotations rely on
-        # PEP 649 lazy evaluation (H1 + H7 forbid the alternatives).
-        python-version: ["3.14"]
+        part: ${{ fromJSON(github.event_name == 'push' && '["core", "coreml", "checks"]' || '["core", "coreml", "checks", "native", "zoo:1/2", "zoo:2/2"]') }}
 
     steps:
       - uses: actions/checkout@v4
 
+      # Lucid is Python 3.14 only: TYPE_CHECKING annotations rely on PEP 649
+      # lazy evaluation (H1 + H7 forbid the alternatives).
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.14"
 
       - name: Enforce Apple Silicon runner
         run: |
@@ -65,11 +69,16 @@ jobs:
 
       # ccache caches C++ object files across runs.  setup.py auto-enables it
       # via shutil.which("ccache") (-DCMAKE_CXX_COMPILER_LAUNCHER), so the
-      # editable build below picks it up with no further config.
+      # editable build below picks it up with no further config.  Every part
+      # but native builds the same release engine, so one of them saves it;
+      # native adds a test tree and a sanitizer build, kept under its own key
+      # and started from the release objects.
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: phase-gate-py${{ matrix.python-version }}
+          key: ${{ matrix.part == 'native' && 'phase-gate-native' || 'phase-gate-py3.14' }}
+          restore-keys: phase-gate-py3.14
+          save: ${{ matrix.part == 'core' || matrix.part == 'native' }}
           max-size: 600M
 
       - name: Install test dependencies
@@ -84,14 +93,8 @@ jobs:
               "clang-format>=22,<23"
           python -m pip install --no-build-isolation -e ".[test]"
 
-      - name: Run full local gate
-        run: ./scripts/ci_full.sh
-        env:
-          # Pushes skip the UBSan build (warn-only) and the published
-          # checkpoint fit (downloads every checkpoint) — together most of
-          # the gate's wall clock, and neither changes with an ordinary
-          # push. The nightly schedule and manual runs keep both.
-          LUCID_CI_SLOW_STAGES: ${{ github.event_name == 'push' && '0' || '1' }}
+      - name: Run the gate's ${{ matrix.part }} part
+        run: ./scripts/ci_full.sh "${{ matrix.part }}"
 
       # A test that dies by signal inside Core ML leaves no Python traceback,
       # and pytest's capture discards whatever the framework printed along
@@ -125,11 +128,12 @@ jobs:
               print(f"  {image:36s} {frame.get('symbol', hex(frame.get('imageOffset', 0)))}")
           PY
 
-      # `ci_full.sh` step 9 (`scripts/ci_publish.sh`) already builds + verifies
-      # the wheel into `dist/`, so we just upload the artifact here.
+      # The checks part's publish gate (`scripts/ci_publish.sh`) already
+      # builds + verifies the wheel into `dist/`, so we just upload it here.
       - uses: actions/upload-artifact@v4
+        if: matrix.part == 'checks'
         with:
-          name: lucid-wheel-py${{ matrix.python-version }}
+          name: lucid-wheel-py3.14
           path: dist/*.whl
 
   coverage:

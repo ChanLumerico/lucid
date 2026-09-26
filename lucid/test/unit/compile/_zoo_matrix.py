@@ -804,29 +804,48 @@ def _details(rec: Mapping[str, Any]) -> str:
     )
 
 
-def sweep(tasks: tuple[str, ...] = TASKS) -> int:
-    """Every family of every task, one process each.  Returns the failures."""
+def sweep(tasks: tuple[str, ...] = TASKS, shard: tuple[int, int] = (1, 1)) -> int:
+    """Every family of every task, one process each.  Returns the failures.
+
+    ``shard=(k, n)`` runs every n-th pair from the k-th, so n CI jobs split
+    the sweep between them; only shard 1 checks that every :data:`EXPECTED`
+    entry still names a factory, so that failure is counted once.
+    """
+    k, n = shard
+    pairs = [(family, task) for task in tasks for family in families(task)]
+    mine = pairs[k - 1 :: n]
     failures = 0
-    seen: set[tuple[str, str]] = set()
-    for task in tasks:
-        for family in families(task):
-            seen.add((family, task))
-            rec = run_isolated(family, task)
-            why = verdict(rec)
-            failures += why is not None
-            mark = "FAIL" if why else rec["status"]
-            print(f"{mark:8s} {task:24s} {family:18s} {why or ''}", flush=True)
-    for key in sorted(set(EXPECTED) - seen):
-        if key[1] in tasks:
-            failures += 1
-            print(f"FAIL     {key[1]:24s} {key[0]:18s} EXPECTED names no factory")
-    print(f"{len(seen)} pairs, {failures} failing")
+    for family, task in mine:
+        rec = run_isolated(family, task)
+        why = verdict(rec)
+        failures += why is not None
+        mark = "FAIL" if why else rec["status"]
+        print(f"{mark:8s} {task:24s} {family:18s} {why or ''}", flush=True)
+    if k == 1:
+        for key in sorted(set(EXPECTED) - set(pairs)):
+            if key[1] in tasks:
+                failures += 1
+                print(f"FAIL     {key[1]:24s} {key[0]:18s} EXPECTED names no factory")
+    of = f" (shard {k}/{n} of {len(pairs)})" if n > 1 else ""
+    print(f"{len(mine)} pairs{of}, {failures} failing")
     return failures
 
 
+def _shard(text: str) -> tuple[int, int]:
+    k, _, n = text.partition("/")
+    if not (k.isdigit() and n.isdigit() and 1 <= int(k) <= int(n)):
+        raise SystemExit(f"--shard wants K/N with 1 <= K <= N, got {text!r}")
+    return int(k), int(n)
+
+
 def main() -> None:  # pragma: no cover — triage driver
-    if sys.argv[1:2] == ["--sweep"]:
-        sys.exit(1 if sweep(tuple(sys.argv[2:]) or TASKS) else 0)
+    args = sys.argv[1:]
+    if args[:1] == ["--sweep"]:
+        args = args[1:]
+        shard = (1, 1)
+        if args[:1] == ["--shard"]:
+            shard, args = _shard(args[1]), args[2:]
+        sys.exit(1 if sweep(tuple(args) or TASKS, shard) else 0)
     os.environ["LUCID_COMPILE_VERBOSE"] = "1"
     family, task = sys.argv[1], sys.argv[2]
     rec = run_family(family, task)

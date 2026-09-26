@@ -558,6 +558,13 @@ bash   tools/check_format.sh      # clang-format + clang-tidy
 bash   scripts/ci_full.sh         # full CI gate
 ```
 
+Before a push, `scripts/ci_local.sh` runs what CI's push gate runs — the
+`core`, `coreml` and `checks` parts of `ci_full.sh`, side by side — in
+interpreters held to the packages CI installs (`scripts/ci_mirror/`), so a
+test that would skip on the runner skips here too. `ci_full.sh` takes the
+same parts (`core coreml checks zoo native`, or `zoo:K/N` for one shard);
+with none it runs all of them in sequence.
+
 ---
 
 ## 8. Changelog and commits
