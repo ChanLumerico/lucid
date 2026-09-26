@@ -24,12 +24,14 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/Helpers.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Matmul.h"
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/utils/Promote.h"
@@ -92,10 +94,76 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input0,
     return out;
 }
 
+namespace {
+
+// The 1-D linear resampling map as a constant matrix: row ``o`` holds the
+// two weights the forward kernel gives output ``o`` — the same source
+// coordinate, computed in the same type and clamped the same way — so the
+// matrix is exactly the map the kernel applies along one axis.  Returned
+// as ``(in, out)`` when ``transposed``, else ``(out, in)``.
+template <typename T>
+void fill_resample(double* m, int in_dim, int out_dim, bool align, bool transposed) {
+    for (int o = 0; o < out_dim; ++o) {
+        T src;
+        if (align)
+            src = out_dim <= 1 ? T{0}
+                               : static_cast<T>(o) * static_cast<T>(in_dim - 1) /
+                                     static_cast<T>(out_dim - 1);
+        else
+            src = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_dim) / static_cast<T>(out_dim) -
+                  T{0.5};
+        if (src < T{0})
+            src = T{0};
+        if (src > static_cast<T>(in_dim - 1))
+            src = static_cast<T>(in_dim - 1);
+        const int i0 = static_cast<int>(std::floor(src));
+        const int i1 = std::min(i0 + 1, in_dim - 1);
+        const T frac = src - static_cast<T>(i0);
+        const auto at = [&](int i) -> double& {
+            return transposed ? m[static_cast<std::size_t>(i) * out_dim + o]
+                              : m[static_cast<std::size_t>(o) * in_dim + i];
+        };
+        at(i0) += static_cast<double>(T{1} - frac);
+        at(i1) += static_cast<double>(frac);
+    }
+}
+
+TensorImplPtr
+resample_matrix(int in_dim, int out_dim, bool align, bool transposed, Dtype dt, Device device) {
+    const Shape shape = transposed ? Shape{in_dim, out_dim} : Shape{out_dim, in_dim};
+    CpuStorage cpu = helpers::allocate_cpu(shape, Dtype::F64);
+    auto* m = reinterpret_cast<double*>(cpu.ptr.get());
+    if (dt == Dtype::F64)
+        fill_resample<double>(m, in_dim, out_dim, align, transposed);
+    else
+        fill_resample<float>(m, in_dim, out_dim, align, transposed);
+    Storage host{std::move(cpu)};
+    if (dt != Dtype::F64)
+        host = backend::Dispatcher::for_device(Device::CPU).astype(host, shape, Dtype::F64, dt);
+    Storage placed = backend::Dispatcher::for_device(device).from_cpu(
+        std::get<CpuStorage>(std::move(host)), shape);
+    return std::make_shared<TensorImpl>(std::move(placed), shape, dt, device, false);
+}
+
+}  // namespace
+
 std::vector<Storage> InterpolateBilinearBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.interpolate_bilinear_backward(grad_out, orig_shape_, H_out_, W_out_, align_corners_,
                                              dtype_)};
+}
+
+std::vector<TensorImplPtr>
+InterpolateBilinearBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Bilinear resampling is linear in its input and separable: each channel
+    // becomes M_h x M_w^T, with M the 1-D resampling matrices its weights
+    // come from.  The adjoint is M_h^T g M_w — two matmuls against
+    // constants, differentiable in g and, rightly, not in x.
+    auto rows =
+        resample_matrix(H_in_, H_out_, align_corners_, /*transposed=*/true, dtype_, device_);
+    auto cols =
+        resample_matrix(W_in_, W_out_, align_corners_, /*transposed=*/false, dtype_, device_);
+    return {matmul_op(matmul_op(rows, grad_out), cols)};
 }
 
 TensorImplPtr
@@ -155,6 +223,25 @@ std::vector<Storage> InterpolateTrilinearBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.interpolate_trilinear_backward(grad_out, orig_shape_, D_out_, H_out_, W_out_,
                                               align_corners_, dtype_)};
+}
+
+std::vector<TensorImplPtr>
+InterpolateTrilinearBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The trilinear adjoint axis by axis, as the bilinear one: width and
+    // height are matmuls on the trailing two axes, depth one more after
+    // folding height and width together.
+    auto cols =
+        resample_matrix(W_in_, W_out_, align_corners_, /*transposed=*/false, dtype_, device_);
+    auto rows =
+        resample_matrix(H_in_, H_out_, align_corners_, /*transposed=*/true, dtype_, device_);
+    auto deep =
+        resample_matrix(D_in_, D_out_, align_corners_, /*transposed=*/true, dtype_, device_);
+    auto g = matmul_op(rows, matmul_op(grad_out, cols));
+    const std::int64_t n = orig_shape_[0];
+    const std::int64_t ch = orig_shape_[1];
+    g = reshape_op(g, {n, ch, D_out_, static_cast<std::int64_t>(H_in_) * W_in_});
+    g = matmul_op(deep, g);
+    return {reshape_op(g, {n, ch, D_in_, H_in_, W_in_})};
 }
 
 TensorImplPtr interpolate_trilinear_op(

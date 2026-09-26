@@ -1005,8 +1005,18 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
         std::string node_name() const override { return "unfold_dim"; }
 
         std::vector<Storage> apply(Storage g) override {
-            const int ndim = static_cast<int>(in_shape_.size());
             auto g_impl = std::make_shared<TensorImpl>(g, out_shape_, dtype_, device_, false);
+            return {adjoint(g_impl)->storage()};
+        }
+
+        // Every step below is an op, so in graph mode the same adjoint
+        // records itself and can be differentiated again.
+        std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+            return {adjoint(grad_out)};
+        }
+
+        TensorImplPtr adjoint(const TensorImplPtr& g_impl) const {
+            const int ndim = static_cast<int>(in_shape_.size());
 
             // Incoming grad axes are [pre..., L (at dim), post..., size (last)].
             // Move the window axis next to L: [pre..., L, size, post...].
@@ -1031,8 +1041,7 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
 
             auto idx = make_unfold_scatter_index(flat_shape, dim_, size_, step_, device_);
             auto base = zeros_op(in_shape_, dtype_, device_);
-            auto grad_in = scatter_add_op(base, idx, src, dim_);
-            return {grad_in->storage()};
+            return scatter_add_op(base, idx, src, dim_);
         }
     };
 

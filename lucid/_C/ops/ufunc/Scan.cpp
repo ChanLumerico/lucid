@@ -32,6 +32,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/Helpers.h"
 #include "../../core/MemoryStats.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
@@ -42,6 +43,7 @@
 #include "../bfunc/Div.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../gfunc/Gfunc.h"
 #include "../utils/Select.h"
 #include "Astype.h"
 #include "_Detail.h"
@@ -329,6 +331,75 @@ Storage cummin_backward_cpu(
     return Storage{CpuStorage{ptr, nb, dt}};
 }
 
+// Where each running extreme came from: ``src[k]`` is the last position
+// j <= k at which the extreme changed, the element y[k] is a copy of and so
+// the one its gradient belongs to.  The same strict comparison as the
+// eager loop above, so a tie keeps crediting the earlier position.
+template <bool IsMax, typename T>
+void scan_ext_sources(const T* y, std::int32_t* src, const Shape& shape, int axis) {
+    const int ndim = static_cast<int>(shape.size());
+    std::size_t outer = 1, inner = 1;
+    for (int d = 0; d < axis; ++d)
+        outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+    for (int d = axis + 1; d < ndim; ++d)
+        inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+    const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+    for (std::size_t o = 0; o < outer; ++o)
+        for (std::size_t j = 0; j < inner; ++j) {
+            std::int32_t last = 0;
+            for (std::size_t k = 0; k < L; ++k) {
+                const std::size_t idx = (o * L + k) * inner + j;
+                if (k > 0) {
+                    const std::size_t prev = (o * L + k - 1) * inner + j;
+                    if (IsMax ? y[idx] > y[prev] : y[idx] < y[prev])
+                        last = static_cast<std::int32_t>(k);
+                }
+                src[idx] = last;
+            }
+        }
+}
+
+// Graph-mode backward of cummax / cummin: a scatter-add of the gradient onto
+// the positions the extremes came from.  The positions are data (read from
+// the saved output, on the host, as the eager backward reads it); the
+// scatter-add is an op, so the result is differentiable in the gradient —
+// and, rightly, not in the input, on which it depends piecewise-constantly.
+template <bool IsMax>
+TensorImplPtr scan_ext_graph_backward(const TensorImplPtr& grad_out,
+                                      const Storage& saved_y,
+                                      const Shape& shape,
+                                      int axis,
+                                      Dtype dt,
+                                      Device device,
+                                      const char* name) {
+    CpuStorage sources = helpers::allocate_cpu(shape, Dtype::I32);
+    auto* src = reinterpret_cast<std::int32_t*>(sources.ptr.get());
+    const auto fill = [&](const auto* y) { scan_ext_sources<IsMax>(y, src, shape, axis); };
+    if (device == Device::GPU) {
+        auto y = ::mlx::core::contiguous(*std::get<GpuStorage>(saved_y).arr);
+        y.eval();
+        MemoryTracker::track_host_sync(y.nbytes());
+        if (dt == Dtype::F32)
+            fill(y.data<float>());
+        else if (dt == Dtype::F64)
+            fill(y.data<double>());
+        else
+            ErrorBuilder(name).not_implemented("dtype");
+    } else {
+        const auto* y = std::get<CpuStorage>(saved_y).ptr.get();
+        if (dt == Dtype::F32)
+            fill(reinterpret_cast<const float*>(y));
+        else if (dt == Dtype::F64)
+            fill(reinterpret_cast<const double*>(y));
+        else
+            ErrorBuilder(name).not_implemented("dtype");
+    }
+    auto index = std::make_shared<TensorImpl>(
+        backend::Dispatcher::for_device(device).from_cpu(std::move(sources), shape), shape,
+        Dtype::I32, device, false);
+    return scatter_add_op(zeros_op(shape, dt, device), index, grad_out, axis);
+}
+
 // Backward node for cummax.
 class CummaxBackward : public AutogradNode<CummaxBackward, 1> {
 public:
@@ -378,6 +449,11 @@ public:
         // CPU path
         return {cummax_backward_cpu(grad_out, saved_y_, input_shape_, axis_, dtype_)};
     }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {scan_ext_graph_backward<true>(grad_out, saved_y_, input_shape_, axis_, dtype_,
+                                              device_, "cummax_backward")};
+    }
 };
 
 // Backward node for cummin.
@@ -426,6 +502,11 @@ public:
             }
         }
         return {cummin_backward_cpu(grad_out, saved_y_, input_shape_, axis_, dtype_)};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {scan_ext_graph_backward<false>(grad_out, saved_y_, input_shape_, axis_, dtype_,
+                                               device_, "cummin_backward")};
     }
 };
 

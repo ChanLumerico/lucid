@@ -93,6 +93,10 @@ public:
     // Backward pass: gradients w.r.t. ``x1``, ``x2``, ``weight``, and
     // (optionally) ``bias``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the same three contractions as matmuls, so they
+    // can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Encode integer indices into one-hot float vectors.

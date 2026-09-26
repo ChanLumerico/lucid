@@ -145,6 +145,10 @@ public:
     // vector<Storage>
     //     Gradients in declaration order: ``dx``, ``dW``, ``db``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward (``create_graph=True``): the same three gradients
+    // built from differentiable ops, so they can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 using ConvTranspose1dBackward = ConvTransposeNdBackward<1>;

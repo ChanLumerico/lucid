@@ -234,10 +234,11 @@ class TestUnsupportedOpIsNamed:
                     x.reshape(1, 1, 2, 2), lucid.zeros(1, 1, 1, 2, dtype=x.dtype)
                 ),
             ),
-            # These live in an anonymous namespace inside ``lucid``, which
-            # mangles differently again and was the worse of the two.
-            ("cummax", lambda x: lucid.cummax(x, dim=1)[0]),
-            ("cummin", lambda x: lucid.cummin(x, dim=1)[0]),
+            # ``Dot2DBackward`` lives in an anonymous namespace inside
+            # ``lucid``, which mangles differently again and was the worse of
+            # the two.  (cummax and cummin stood here until they gained a
+            # graph-mode backward.)
+            ("dot 2-D", lambda x: x.dot(x)),
         ],
     )
     def test_the_message_names_the_op_not_its_mangling(self, label, build) -> None:

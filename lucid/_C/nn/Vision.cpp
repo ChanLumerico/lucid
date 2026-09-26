@@ -37,7 +37,11 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Matmul.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Reductions.h"
+#include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -181,6 +185,32 @@ std::vector<Storage> BilinearLayerBackward::apply(Storage grad_out) {
     return be.bilinear_layer_backward(grad_out, saved_inputs_[0], saved_inputs_[1],
                                       saved_inputs_[2], orig_x1_shape_, orig_x2_shape_,
                                       input_shapes_[2], has_bias, dtype_);
+}
+
+std::vector<TensorImplPtr> BilinearLayerBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // y[n, o] = x1[n, i] W[o, i, j] x2[n, j] + b[o], with n every leading
+    // axis flattened.  Each gradient is the same form with one factor
+    // replaced by g: dx1 = (g W) x2, dx2 = (g W)^T x1, dW = g^T (x1 x2^T),
+    // db = the sum of g over n.
+    const auto& x1 = saved_impl_inputs_[0];
+    const auto& x2 = saved_impl_inputs_[1];
+    const auto& W = saved_impl_inputs_[2];
+    if (!x1 || !x2 || !W)
+        ErrorBuilder("bilinear_layer").fail("graph-mode backward is missing a saved input");
+    const Shape& ws = input_shapes_[2];
+    const std::int64_t o = ws[0], i = ws[1], j = ws[2];
+    const std::int64_t n = x1->numel() / i;
+
+    auto g = reshape_op(grad_out, {n, o});
+    auto a = reshape_op(x1, {n, i, 1});
+    auto b = reshape_op(x2, {n, j, 1});
+    auto gw = reshape_op(matmul_op(g, reshape_op(W, {o, i * j})), {n, i, j});
+    auto dx1 = reshape_op(matmul_op(gw, b), orig_x1_shape_);
+    auto dx2 = reshape_op(matmul_op(permute_op(gw, {0, 2, 1}), a), orig_x2_shape_);
+    auto outer = reshape_op(matmul_op(a, permute_op(b, {0, 2, 1})), {n, i * j});
+    auto dW = reshape_op(matmul_op(permute_op(g, {1, 0}), outer), {o, i, j});
+    auto db = sum_op(g, std::vector<int>{0}, /*keepdims=*/false);
+    return {dx1, dx2, dW, db};
 }
 
 TensorImplPtr bilinear_layer_op(const TensorImplPtr& x1,

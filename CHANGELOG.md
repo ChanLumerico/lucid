@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - second derivatives through 24 more ops
 
+- second derivatives through convolutions, resizes, windows and scans
+
 ### Performance
 
 - check_weight_fit builds in shadow and reads headers in parallel

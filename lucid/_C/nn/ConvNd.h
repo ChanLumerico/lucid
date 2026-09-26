@@ -144,6 +144,38 @@ using Conv1dBackward = ConvNdBackward<1>;
 using Conv2dBackward = ConvNdBackward<2>;
 using Conv3dBackward = ConvNdBackward<3>;
 
+// The weight gradient of a convolution, built from differentiable ops.
+//
+// Used by the graph-mode backward of both ``ConvNd`` and ``ConvTransposeNd``
+// — for the latter with ``input`` and ``grad`` trading roles, since a
+// transposed convolution's weight gradient is its adjoint convolution's.
+//
+// Parameters
+// ----------
+// input : TensorImplPtr
+//     The convolution's input, ``(B, C_in, S...)``.
+// grad : TensorImplPtr
+//     The gradient of its output, ``(B, C_out, O...)``.
+// stride, pad, dilation : const int (&)[N]
+//     The convolution's own settings.
+// groups : int
+//     Channel groups; ``C_in`` and ``C_out`` are both divisible by it.
+// weight_shape : const Shape&
+//     ``(C_out, C_in / groups, K...)`` — the result's shape.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     ``dW`` with ``weight_shape``, recorded on the graph.
+template <int N>
+TensorImplPtr conv_weight_grad(const TensorImplPtr& input,
+                               const TensorImplPtr& grad,
+                               const int (&stride)[N],
+                               const int (&pad)[N],
+                               const int (&dilation)[N],
+                               int groups,
+                               const Shape& weight_shape);
+
 // One-dimensional cross-correlation over a batch of signals.
 //
 // Computes the autograd-aware op
@@ -348,6 +380,10 @@ public:
     //     Single-element vector containing ``dx`` with the original
     //     input shape.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the adjoint is the other op of the pair (fold for
+    // unfold, unfold for fold), recorded so it can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for Fold (col2im), the adjoint of Unfold.
@@ -384,6 +420,10 @@ public:
     //     Single-element vector containing ``dx`` shaped
     //     ``(B, C * prod(K), prod(O))``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the adjoint is the other op of the pair (fold for
+    // unfold, unfold for fold), recorded so it can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public entry point for Unfold (im2col).

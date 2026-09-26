@@ -106,6 +106,10 @@ public:
     // Backward pass: scatters ``grad_out`` to source pixels using the same
     // bilinear weights as the forward.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: the same adjoint as two matmuls against the 1-D
+    // resampling matrices, so it can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for 3-D trilinear interpolation.
@@ -182,6 +186,10 @@ public:
     // Backward pass: scatters ``grad_out`` to source voxels using the same
     // trilinear weights as the forward.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward: one matmul per axis against the 1-D resampling
+    // matrices, so it can be differentiated again.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for 2-D nearest-neighbour interpolation.

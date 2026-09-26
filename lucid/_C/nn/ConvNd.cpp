@@ -34,10 +34,12 @@
 #include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/composite/Indexing.h"
 #include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/View.h"
 #include "ConvTransposeNd.h"
 
 namespace lucid {
@@ -234,57 +236,107 @@ std::vector<Storage> ConvNdBackward<N>::apply(Storage grad_out) {
 }
 
 template <int N>
-std::vector<TensorImplPtr> ConvNdBackward<N>::apply_for_graph(const TensorImplPtr& grad_out) {
-    // A convolution's adjoint is two more convolutions.  dx is the
-    // transposed convolution of the gradient with the same weights; dW is a
-    // correlation of the input against the gradient with batch and channel
-    // swapped, so the batch axis plays the role of the reduction; db is the
-    // gradient summed over everything but the output channel.
+TensorImplPtr conv_weight_grad(const TensorImplPtr& input,
+                               const TensorImplPtr& grad,
+                               const int (&stride)[N],
+                               const int (&pad)[N],
+                               const int (&dilation)[N],
+                               int groups,
+                               const Shape& weight_shape) {
+    // dW[co, ci, k] = sum over batch b and output position o of
+    // grad[b, co, o] * input[b, ci, o * stride + k * dilation - pad].  With
+    // batch and channel swapped that is an ordinary convolution in which the
+    // batch is the reduction axis and stride and dilation trade places.
     //
-    // Restricted to the ungrouped, undilated 2-D case, which is what
-    // conv_transpose2d_op itself accepts — it takes neither groups nor
-    // dilation.  Anything else is refused rather than answered wrongly.
+    // Groups ride along as groups.  Each group's input channels go into the
+    // swapped convolution's batch and the groups stack along its channel
+    // axis, so a grouped convolution pairs every group's input with that
+    // group's gradient and nothing else.
+    const Shape& is = input->shape();
+    const std::int64_t batch = is[0];
+    const std::int64_t per_group = is[1] / groups;
+    const std::int64_t cout = grad->shape()[1];
+
+    std::vector<std::int64_t> split{batch, groups, per_group};
+    std::vector<int> to_front{2, 1, 0};
+    std::vector<std::int64_t> stacked{per_group, groups * batch};
+    std::vector<int> swap{1, 0};
+    for (int i = 0; i < N; ++i) {
+        split.push_back(is[2 + i]);
+        to_front.push_back(3 + i);
+        stacked.push_back(is[2 + i]);
+        swap.push_back(2 + i);
+    }
+    auto lhs = reshape_op(permute_op(reshape_op(input, split), to_front), stacked);
+    auto rhs = permute_op(grad, swap);
+
+    auto no_bias = zeros_op(Shape{cout}, input->dtype(), input->device());
+    auto dW = ConvNdBackward<N>::forward(lhs, rhs, no_bias, dilation, pad, stride, groups);
+    // When the forward's last window stopped short of the padded input, the
+    // swapped convolution runs on past the kernel's extent.  Those taps are
+    // not weights.
+    for (int i = 0; i < N; ++i) {
+        const std::int64_t k = weight_shape[2 + i];
+        if (dW->shape()[2 + i] != k)
+            dW = narrow_op(dW, 2 + i, 0, k);
+    }
+    return permute_op(dW, swap);
+}
+
+template TensorImplPtr conv_weight_grad<1>(const TensorImplPtr&,
+                                           const TensorImplPtr&,
+                                           const int (&)[1],
+                                           const int (&)[1],
+                                           const int (&)[1],
+                                           int,
+                                           const Shape&);
+template TensorImplPtr conv_weight_grad<2>(const TensorImplPtr&,
+                                           const TensorImplPtr&,
+                                           const int (&)[2],
+                                           const int (&)[2],
+                                           const int (&)[2],
+                                           int,
+                                           const Shape&);
+template TensorImplPtr conv_weight_grad<3>(const TensorImplPtr&,
+                                           const TensorImplPtr&,
+                                           const int (&)[3],
+                                           const int (&)[3],
+                                           const int (&)[3],
+                                           int,
+                                           const Shape&);
+
+template <int N>
+std::vector<TensorImplPtr> ConvNdBackward<N>::apply_for_graph(const TensorImplPtr& grad_out) {
+    // A convolution's adjoint is two more convolutions: dx is the transposed
+    // convolution of the gradient with the same weights, dW the correlation
+    // of the input against the gradient (``conv_weight_grad``), and db the
+    // gradient summed over everything but the output channel.
     const auto& x = this->saved_impl_inputs_[0];
     const auto& W = this->saved_impl_inputs_[1];
     if (!x || !W)
         ErrorBuilder("conv").fail("graph-mode backward is missing a saved input");
-    if constexpr (N != 2) {
-        ErrorBuilder("conv").not_implemented("create_graph=True is 2-D only for now");
-        return {};
-    } else {
-        if (this->groups_ != 1 || this->dilation_[0] != 1 || this->dilation_[1] != 1)
-            ErrorBuilder("conv").not_implemented(
-                "create_graph=True needs groups == 1 and dilation == 1");
 
-        const Shape& xs = this->input_shapes_[0];
-        const Shape& ws = this->input_shapes_[1];
-        const std::int64_t cout = ws[0];
-        const int sh = this->stride_[0], sw = this->stride_[1];
-        const int ph = this->pad_[0], pw = this->pad_[1];
+    const Shape& xs = this->input_shapes_[0];
+    const Shape& ws = this->input_shapes_[1];
+    // A transposed convolution grows each axis to (O - 1) * s - 2p +
+    // d * (K - 1) + 1; what the forward's floor division dropped is what
+    // output_padding restores.
+    int opad[N];
+    for (int i = 0; i < N; ++i)
+        opad[i] = static_cast<int>(xs[2 + i] -
+                                   ((this->out_shape_[2 + i] - 1) * this->stride_[i] -
+                                    2 * this->pad_[i] + this->dilation_[i] * (ws[2 + i] - 1) + 1));
 
-        // conv_transpose grows the spatial extent to (O-1)*s - 2p + K; the
-        // remainder is what output_padding exists to recover.
-        const int opad_h =
-            static_cast<int>(xs[2] - ((this->out_shape_[2] - 1) * sh - 2 * ph + ws[2]));
-        const int opad_w =
-            static_cast<int>(xs[3] - ((this->out_shape_[3] - 1) * sw - 2 * pw + ws[3]));
-
-        auto no_bias_x = zeros_op(Shape{xs[1]}, this->dtype_, this->device_);
-        auto dx = conv_transpose2d_op(grad_out, W, no_bias_x, sh, sw, ph, pw, opad_h, opad_w);
-
-        // Swapping batch with channel turns the weight gradient into an
-        // ordinary correlation: stride and dilation trade places.
-        const std::vector<int> swap{1, 0, 2, 3};
-        // With batch and channel swapped the kernel is the gradient, so this
-        // convolution's output channel count is Cout, not Cin.
-        auto no_bias_w = zeros_op(Shape{cout}, this->dtype_, this->device_);
-        auto dW = conv2d_op(permute_op(x, swap), permute_op(grad_out, swap), no_bias_w,
-                            /*stride*/ 1, 1, ph, pw, /*dilation*/ sh, sw);
-        dW = permute_op(dW, swap);
-
-        auto db = sum_op(grad_out, std::vector<int>{0, 2, 3}, /*keepdims=*/false);
-        return {dx, dW, db};
-    }
+    auto no_bias = zeros_op(Shape{xs[1]}, this->dtype_, this->device_);
+    auto dx = ConvTransposeNdBackward<N>::forward(grad_out, W, no_bias, this->stride_, this->pad_,
+                                                  opad, this->dilation_, this->groups_);
+    auto dW = conv_weight_grad<N>(x, grad_out, this->stride_, this->pad_, this->dilation_,
+                                  this->groups_, ws);
+    std::vector<int> not_channel{0};
+    for (int i = 0; i < N; ++i)
+        not_channel.push_back(2 + i);
+    auto db = sum_op(grad_out, not_channel, /*keepdims=*/false);
+    return {dx, dW, db};
 }
 
 template class ConvNdBackward<1>;
@@ -430,6 +482,16 @@ std::vector<Storage> UnfoldBackward::apply(Storage grad_out) {
     return {be.unfold_backward(grad_out, B, C, S, K, O, stride_, pad_, dilation_, this->dtype_)};
 }
 
+std::vector<TensorImplPtr> UnfoldBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Unfold copies windows out; its adjoint adds them back where they came
+    // from, which is fold onto the input's spatial extent.
+    const int n = static_cast<int>(kernel_.size());
+    std::vector<int> extent(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i)
+        extent[static_cast<std::size_t>(i)] = static_cast<int>(this->input_shapes_[0][2 + i]);
+    return {fold_op(grad_out, extent, kernel_, stride_, pad_, dilation_)};
+}
+
 TensorImplPtr unfold_op(const TensorImplPtr& x,
                         const std::vector<int>& kernel,
                         const std::vector<int>& stride,
@@ -525,6 +587,11 @@ std::vector<Storage> FoldBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(this->device_);
     return {be.unfold_forward(grad_out, B, C, S, K, O, stride_, pad_, dilation_, out_shape,
                               this->dtype_)};
+}
+
+std::vector<TensorImplPtr> FoldBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Fold adds windows into place; its adjoint reads them back out.
+    return {unfold_op(grad_out, kernel_, stride_, pad_, dilation_)};
 }
 
 const OpSchema FoldBackward::schema_v1{"fold", 1, AmpPolicy::KeepInput, true};
