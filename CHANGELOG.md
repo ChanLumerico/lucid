@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - check_weight_fit builds in shadow and reads headers in parallel
+- broadcast in runs, and thread the loops Accelerate does not
 
 ---
 

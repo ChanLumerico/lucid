@@ -69,6 +69,7 @@
 #include <vector>
 
 #include "../../core/Allocator.h"
+#include "../../core/BroadcastPlan.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Half.h"
 #include "../../core/Shape.h"
@@ -78,6 +79,7 @@
 #include "Im2Col.h"
 #include "Lapack.h"
 #include "Norm.h"
+#include "Parallel.h"
 #include "Pool.h"
 #include "Reduce.h"
 #include "Shape.h"
@@ -446,6 +448,11 @@ inline StoragePair back_to_f16(const StoragePair& p) {
 }
 
 }  // namespace detail
+
+// Elements of a scalar transcendental loop (``std::erf``, ``std::exp``) worth
+// a core of their own: at ~5 ns an element, 16k of them are ~80 us, far past
+// the few microseconds a dispatch costs.  See cpu::parallel_for.
+inline constexpr std::size_t kTranscendentalGrain = 16384;
 
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
@@ -1663,17 +1670,24 @@ public:
             const float* p = reinterpret_cast<const float*>(cs.ptr.get());
             float* q = reinterpret_cast<float*>(ptr.get());
             const float k = static_cast<float>(kInvSqrt2);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                q[i] = 0.5f * x * (1.f + std::erf(x * k));
-            }
+            // std::erf, not an approximation: the reference's own erf is as
+            // exact, and the GPT training parity holds to 1.3e-7 over 3,000
+            // steps on it.  The speed comes from the cores instead.
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                for (std::size_t i = lo; i < hi; ++i) {
+                    const float x = p[i];
+                    q[i] = 0.5f * x * (1.f + std::erf(x * k));
+                }
+            });
         } else if (dt == Dtype::F64) {
             const double* p = reinterpret_cast<const double*>(cs.ptr.get());
             double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                q[i] = 0.5 * x * (1.0 + std::erf(x * kInvSqrt2));
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                for (std::size_t i = lo; i < hi; ++i) {
+                    const double x = p[i];
+                    q[i] = 0.5 * x * (1.0 + std::erf(x * kInvSqrt2));
+                }
+            });
         } else {
             ErrorBuilder("cpu_backend::gelu_exact").not_implemented("dtype not supported");
         }
@@ -1706,22 +1720,26 @@ public:
             float* q = reinterpret_cast<float*>(ptr.get());
             const float k1 = static_cast<float>(kInvSqrt2);
             const float k2 = static_cast<float>(kInvSqrt2Pi);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float xi = x[i];
-                const float cdf = 0.5f * (1.f + std::erf(xi * k1));
-                const float pdf = k2 * std::exp(-0.5f * xi * xi);
-                q[i] = (cdf + xi * pdf) * g[i];
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                for (std::size_t i = lo; i < hi; ++i) {
+                    const float xi = x[i];
+                    const float cdf = 0.5f * (1.f + std::erf(xi * k1));
+                    const float pdf = k2 * std::exp(-0.5f * xi * xi);
+                    q[i] = (cdf + xi * pdf) * g[i];
+                }
+            });
         } else if (dt == Dtype::F64) {
             const double* x = reinterpret_cast<const double*>(cs.ptr.get());
             const double* g = reinterpret_cast<const double*>(gs.ptr.get());
             double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double xi = x[i];
-                const double cdf = 0.5 * (1.0 + std::erf(xi * kInvSqrt2));
-                const double pdf = kInvSqrt2Pi * std::exp(-0.5 * xi * xi);
-                q[i] = (cdf + xi * pdf) * g[i];
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                for (std::size_t i = lo; i < hi; ++i) {
+                    const double xi = x[i];
+                    const double cdf = 0.5 * (1.0 + std::erf(xi * kInvSqrt2));
+                    const double pdf = kInvSqrt2Pi * std::exp(-0.5 * xi * xi);
+                    q[i] = (cdf + xi * pdf) * g[i];
+                }
+            });
         } else {
             ErrorBuilder("cpu_backend::gelu_exact_backward").not_implemented("dtype not supported");
         }
@@ -6628,37 +6646,15 @@ public:
     Storage
     broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t ndim_out = dst_shape.size();
-        const std::size_t ndim_in = src_shape.size();
-        Shape padded(ndim_out, 1);
-        for (std::size_t i = 0; i < ndim_in; ++i)
-            padded[ndim_out - ndim_in + i] = src_shape[i];
-        std::vector<std::size_t> in_str(ndim_out, 0);
-        std::size_t s = 1;
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim_out) - 1; d >= 0; --d) {
-            in_str[d] = (padded[d] == 1) ? 0 : s;
-            s *= static_cast<std::size_t>(padded[d]);
-        }
         const std::size_t out_n = shape_numel(dst_shape);
         std::size_t nb = out_n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const BroadcastPlan plan = plan_broadcast(src_shape, dst_shape);
 
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* sp = reinterpret_cast<const T*>(cs.ptr.get());
-            T* dp = reinterpret_cast<T*>(ptr.get());
-            std::vector<std::size_t> coord(ndim_out, 0);
-            for (std::size_t f = 0; f < out_n; ++f) {
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim_out; ++d)
-                    in_flat += coord[d] * in_str[d];
-                dp[f] = sp[in_flat];
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim_out) - 1; d >= 0; --d) {
-                    if (++coord[d] < static_cast<std::size_t>(dst_shape[d]))
-                        break;
-                    coord[d] = 0;
-                }
-            }
+            broadcast_runs(plan, reinterpret_cast<const T*>(cs.ptr.get()),
+                           reinterpret_cast<T*>(ptr.get()));
         };
 
         switch (dt) {
@@ -7801,6 +7797,34 @@ public:
             }
         };
 
+        // The same masks, for slice ``b`` alone — what one parallel task may
+        // touch.  A mask of one slice's size is shared by every slice.
+        auto apply_masks_to = [&](float* Wb, std::size_t b) {
+            const float neg_inf = -std::numeric_limits<float>::infinity();
+            const std::size_t pb = Lq * Lk;
+            if (attn_mask) {
+                const auto& ms = std::get<CpuStorage>(*attn_mask);
+                const std::size_t offset = mask_numel == pb ? 0 : b * pb;
+                if (mask_dtype == Dtype::Bool) {
+                    const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get()) + offset;
+                    for (std::size_t i = 0; i < pb; ++i)
+                        if (!mp[i])
+                            Wb[i] = neg_inf;
+                } else {
+                    const auto* mp = reinterpret_cast<const float*>(ms.ptr.get()) + offset;
+                    for (std::size_t i = 0; i < pb; ++i)
+                        Wb[i] += mp[i];
+                }
+            }
+            if (is_causal) {
+                for (std::size_t i = 0; i < Lq; ++i) {
+                    float* row = Wb + i * Lk;
+                    for (std::size_t j = i + 1; j < Lk; ++j)
+                        row[j] = neg_inf;
+                }
+            }
+        };
+
         if (dt == Dtype::F32) {
             const float* Qp = reinterpret_cast<const float*>(qs.ptr.get());
             const float* Kp = reinterpret_cast<const float*>(ks.ptr.get());
@@ -7809,31 +7833,37 @@ public:
             float* Op = reinterpret_cast<float*>(output_cpu.ptr.get());
             const float sc = static_cast<float>(scale);
 
-            for (std::size_t b = 0; b < B; ++b)
-                cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                           static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
-                           Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0f, Wp + b * Lq * Lk,
-                           static_cast<int>(Lk));
-            apply_masks(Wp);
-
-            for (std::size_t r = 0; r < B * Lq; ++r) {
-                float* row = Wp + r * Lk;
-                const float m = cpu::vmaxval_f32(row, Lk);
-                if (!std::isfinite(m)) {
-                    std::memset(row, 0, Lk * sizeof(float));
-                    continue;
+            // One task per (batch x head) slice, which owns its rows of W and
+            // O outright: a small transformer's 128 heads ran one after
+            // another, each GEMM too small for Accelerate to thread, 3 ms a
+            // call.  Each slice does exactly what the serial loop did, so the
+            // result is the same bits.
+            cpu::parallel_for(B, 1, [&](std::size_t lo, std::size_t hi) {
+                for (std::size_t b = lo; b < hi; ++b) {
+                    float* Wb = Wp + b * Lq * Lk;
+                    cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                               static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
+                               Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0f, Wb,
+                               static_cast<int>(Lk));
+                    apply_masks_to(Wb, b);
+                    for (std::size_t r = 0; r < Lq; ++r) {
+                        float* row = Wb + r * Lk;
+                        const float m = cpu::vmaxval_f32(row, Lk);
+                        if (!std::isfinite(m)) {
+                            std::memset(row, 0, Lk * sizeof(float));
+                            continue;
+                        }
+                        cpu::vsadd_f32(row, -m, row, Lk);
+                        cpu::vexp_f32(row, row, Lk);
+                        const float s = cpu::vsum_f32(row, Lk);
+                        cpu::vsmul_f32(row, s > 0.f ? 1.f / s : 0.f, row, Lk);
+                    }
+                    cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
+                               static_cast<int>(Lk), 1.0f, Wb, static_cast<int>(Lk),
+                               Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0f, Op + b * Lq * Dv,
+                               static_cast<int>(Dv));
                 }
-                cpu::vsadd_f32(row, -m, row, Lk);
-                cpu::vexp_f32(row, row, Lk);
-                const float s = cpu::vsum_f32(row, Lk);
-                cpu::vsmul_f32(row, s > 0.f ? 1.f / s : 0.f, row, Lk);
-            }
-
-            for (std::size_t b = 0; b < B; ++b)
-                cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
-                           static_cast<int>(Lk), 1.0f, Wp + b * Lq * Lk, static_cast<int>(Lk),
-                           Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0f, Op + b * Lq * Dv,
-                           static_cast<int>(Dv));
+            });
         } else if (dt == Dtype::F64) {
             const double* Qp = reinterpret_cast<const double*>(qs.ptr.get());
             const double* Kp = reinterpret_cast<const double*>(ks.ptr.get());
@@ -7960,73 +7990,79 @@ public:
             T* dKp = reinterpret_cast<T*>(dK_cpu.ptr.get());
             T* dVp = reinterpret_cast<T*>(dV_cpu.ptr.get());
             T* dMp = want_mask_grad ? reinterpret_cast<T*>(dM_cpu.ptr.get()) : nullptr;
-            std::vector<T> dweights(Lq * Lk), dscores(Lq * Lk);
 
-            for (std::size_t b = 0; b < B; ++b) {
-                const T* Qb = Qp + b * Lq * Dk;
-                const T* Kb = Kp + b * Lk * Dk;
-                const T* Vb = Vp + b * Lk * Dv;
-                const T* Wb = Wp + b * Lq * Lk;
-                const T* Gb = Gp + b * Lq * Dv;
-                T* dQb = dQp + b * Lq * Dk;
-                T* dKb = dKp + b * Lk * Dk;
-                T* dVb = dVp + b * Lk * Dv;
+            // One task per chunk of (batch x head) slices, as in the forward;
+            // the two scratch matrices are the chunk's own.
+            cpu::parallel_for(B, 1, [&](std::size_t lo, std::size_t hi) {
+                std::vector<T> dweights(Lq * Lk), dscores(Lq * Lk);
+                for (std::size_t b = lo; b < hi; ++b) {
+                    const T* Qb = Qp + b * Lq * Dk;
+                    const T* Kb = Kp + b * Lk * Dk;
+                    const T* Vb = Vp + b * Lk * Dv;
+                    const T* Wb = Wp + b * Lq * Lk;
+                    const T* Gb = Gp + b * Lq * Dv;
+                    T* dQb = dQp + b * Lq * Dk;
+                    T* dKb = dKp + b * Lk * Dk;
+                    T* dVb = dVp + b * Lk * Dv;
 
-                if constexpr (std::is_same_v<T, float>) {
-                    cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
-                               static_cast<int>(Lq), 1.0f, Wb, static_cast<int>(Lk), Gb,
-                               static_cast<int>(Dv), 0.0f, dVb, static_cast<int>(Dv));
+                    if constexpr (std::is_same_v<T, float>) {
+                        cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
+                                   static_cast<int>(Lq), 1.0f, Wb, static_cast<int>(Lk), Gb,
+                                   static_cast<int>(Dv), 0.0f, dVb, static_cast<int>(Dv));
 
-                    cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                               static_cast<int>(Dv), 1.0f, Gb, static_cast<int>(Dv), Vb,
-                               static_cast<int>(Dv), 0.0f, dweights.data(), static_cast<int>(Lk));
+                        cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                                   static_cast<int>(Dv), 1.0f, Gb, static_cast<int>(Dv), Vb,
+                                   static_cast<int>(Dv), 0.0f, dweights.data(),
+                                   static_cast<int>(Lk));
 
-                    for (std::size_t r = 0; r < Lq; ++r) {
-                        const float* wr = Wb + r * Lk;
-                        const float* dwr = dweights.data() + r * Lk;
-                        float sum = 0.f;
-                        for (std::size_t j = 0; j < Lk; ++j)
-                            sum += wr[j] * dwr[j];
-                        float* dr = dscores.data() + r * Lk;
-                        for (std::size_t j = 0; j < Lk; ++j)
-                            dr[j] = wr[j] * (dwr[j] - sum);
+                        for (std::size_t r = 0; r < Lq; ++r) {
+                            const float* wr = Wb + r * Lk;
+                            const float* dwr = dweights.data() + r * Lk;
+                            float sum = 0.f;
+                            for (std::size_t j = 0; j < Lk; ++j)
+                                sum += wr[j] * dwr[j];
+                            float* dr = dscores.data() + r * Lk;
+                            for (std::size_t j = 0; j < Lk; ++j)
+                                dr[j] = wr[j] * (dwr[j] - sum);
+                        }
+
+                        cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
+                                   static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk),
+                                   Kb, static_cast<int>(Dk), 0.0f, dQb, static_cast<int>(Dk));
+
+                        cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
+                                   static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk),
+                                   Qb, static_cast<int>(Dk), 0.0f, dKb, static_cast<int>(Dk));
+                    } else {
+                        cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
+                                   static_cast<int>(Lq), 1.0, Wb, static_cast<int>(Lk), Gb,
+                                   static_cast<int>(Dv), 0.0, dVb, static_cast<int>(Dv));
+                        cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
+                                   static_cast<int>(Dv), 1.0, Gb, static_cast<int>(Dv), Vb,
+                                   static_cast<int>(Dv), 0.0, dweights.data(),
+                                   static_cast<int>(Lk));
+                        for (std::size_t r = 0; r < Lq; ++r) {
+                            const double* wr = Wb + r * Lk;
+                            const double* dwr = dweights.data() + r * Lk;
+                            double sum = 0.0;
+                            for (std::size_t j = 0; j < Lk; ++j)
+                                sum += wr[j] * dwr[j];
+                            double* dr = dscores.data() + r * Lk;
+                            for (std::size_t j = 0; j < Lk; ++j)
+                                dr[j] = wr[j] * (dwr[j] - sum);
+                        }
+                        cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
+                                   static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk),
+                                   Kb, static_cast<int>(Dk), 0.0, dQb, static_cast<int>(Dk));
+                        cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
+                                   static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk),
+                                   Qb, static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
                     }
 
-                    cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
-                               static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk), Kb,
-                               static_cast<int>(Dk), 0.0f, dQb, static_cast<int>(Dk));
-
-                    cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
-                               static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk), Qb,
-                               static_cast<int>(Dk), 0.0f, dKb, static_cast<int>(Dk));
-                } else {
-                    cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
-                               static_cast<int>(Lq), 1.0, Wb, static_cast<int>(Lk), Gb,
-                               static_cast<int>(Dv), 0.0, dVb, static_cast<int>(Dv));
-                    cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                               static_cast<int>(Dv), 1.0, Gb, static_cast<int>(Dv), Vb,
-                               static_cast<int>(Dv), 0.0, dweights.data(), static_cast<int>(Lk));
-                    for (std::size_t r = 0; r < Lq; ++r) {
-                        const double* wr = Wb + r * Lk;
-                        const double* dwr = dweights.data() + r * Lk;
-                        double sum = 0.0;
-                        for (std::size_t j = 0; j < Lk; ++j)
-                            sum += wr[j] * dwr[j];
-                        double* dr = dscores.data() + r * Lk;
-                        for (std::size_t j = 0; j < Lk; ++j)
-                            dr[j] = wr[j] * (dwr[j] - sum);
-                    }
-                    cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
-                               static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk), Kb,
-                               static_cast<int>(Dk), 0.0, dQb, static_cast<int>(Dk));
-                    cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
-                               static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk), Qb,
-                               static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
+                    if (dMp != nullptr)
+                        std::copy(dscores.begin(), dscores.end(), dMp + b * Lq * Lk);
                 }
-
-                if (dMp != nullptr)
-                    std::copy(dscores.begin(), dscores.end(), dMp + b * Lq * Lk);
-            }
+            });
         };
 
         if (dt == Dtype::F32)
@@ -12850,53 +12886,22 @@ private:
             return Storage{CpuStorage{ptr, nb, dt}};
         }
 
-        std::vector<std::size_t> axes;
-        const std::size_t lead = gn - tn;
-        for (std::size_t i = 0; i < lead; ++i)
-            axes.push_back(i);
-        for (std::size_t i = 0; i < tn; ++i) {
-            if (grad_shape[lead + i] != target_shape[i] && target_shape[i] == 1)
-                axes.push_back(lead + i);
-        }
+        (void)gn;
+        (void)tn;
         const auto& src = std::get<CpuStorage>(grad);
         std::size_t tnumel = shape_numel(target_shape);
         std::size_t nb = tnumel * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const BroadcastPlan plan = plan_broadcast(target_shape, grad_shape);
 
-        Stride grad_stride(gn);
-        if (gn > 0) {
-            grad_stride[gn - 1] = 1;
-            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(gn) - 2; i >= 0; --i)
-                grad_stride[i] = grad_stride[i + 1] * grad_shape[i + 1];
-        }
-        Stride target_stride(tn);
-        if (tn > 0) {
-            target_stride[tn - 1] = 1;
-            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(tn) - 2; i >= 0; --i)
-                target_stride[i] = target_stride[i + 1] * target_shape[i + 1];
-        }
-        std::vector<bool> reduce_mask(gn, false);
-        for (auto a : axes)
-            reduce_mask[a] = true;
-
+        // The same sum as reduce_broadcast, in runs: the per-element walk
+        // divided every flat index back into coordinates, and this sits on
+        // the backward of every broadcasting binary op — each bias add.
         auto do_reduce = [&](auto type_tag) {
             using T = decltype(type_tag);
-            const T* src_p = reinterpret_cast<const T*>(src.ptr.get());
             T* dst_p = reinterpret_cast<T*>(ptr.get());
             std::fill_n(dst_p, tnumel, T{});
-            const std::size_t gnumel = shape_numel(grad_shape);
-            for (std::size_t flat = 0; flat < gnumel; ++flat) {
-                std::size_t rem = flat;
-                std::size_t target_flat = 0;
-                for (std::size_t d = 0; d < gn; ++d) {
-                    const std::size_t coord = rem / static_cast<std::size_t>(grad_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(grad_stride[d]);
-                    if (d < lead || reduce_mask[d])
-                        continue;
-                    target_flat += coord * static_cast<std::size_t>(target_stride[d - lead]);
-                }
-                dst_p[target_flat] += src_p[flat];
-            }
+            sum_broadcast_runs(plan, reinterpret_cast<const T*>(src.ptr.get()), dst_p);
         };
         if (dt == Dtype::F32)
             do_reduce(float{});
@@ -12951,30 +12956,16 @@ private:
         std::size_t nb = in_numel * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
 
+        // The reduced gradient, shaped as the input with the reduced axes
+        // kept at 1, broadcast back out: a reduction's backward is exactly a
+        // broadcast.  The walk this replaced recomputed every coordinate of
+        // every element with a division and a modulo per axis — on the
+        // backward of every sum and mean.
+        const BroadcastPlan plan = plan_broadcast(kept_shape, input_shape);
         auto do_bcast = [&](auto type_tag) {
             using T = decltype(type_tag);
-            const T* gp = reinterpret_cast<const T*>(g_cpu.ptr.get());
-            T* dst = reinterpret_cast<T*>(ptr.get());
-
-            const std::size_t nd = input_shape.size();
-            for (std::size_t flat = 0; flat < in_numel; ++flat) {
-                std::size_t kept_flat = 0;
-                std::size_t stride = 1;
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nd) - 1; d >= 0; --d) {
-                    std::size_t di = static_cast<std::size_t>(d);
-
-                    std::size_t dstride = 1;
-                    for (std::size_t e = di + 1; e < nd; ++e)
-                        dstride *= static_cast<std::size_t>(input_shape[e]);
-                    std::size_t coord =
-                        (flat / dstride) % static_cast<std::size_t>(input_shape[di]);
-                    std::int64_t kd = kept_shape[di];
-                    std::int64_t ii = (kd == 1) ? 0 : static_cast<std::int64_t>(coord);
-                    kept_flat += static_cast<std::size_t>(ii) * stride;
-                    stride *= static_cast<std::size_t>(kd);
-                }
-                dst[flat] = gp[kept_flat];
-            }
+            broadcast_runs(plan, reinterpret_cast<const T*>(g_cpu.ptr.get()),
+                           reinterpret_cast<T*>(ptr.get()));
         };
         if (dt == Dtype::F32)
             do_bcast(float{});
@@ -13477,39 +13468,19 @@ private:
         if (detail::is_half_like(dt))
             return detail::back_to_f16(
                 reduce_broadcast(detail::as_f32(grad), input_shape, output_shape, Dtype::F32), dt);
-        const std::size_t nout = output_shape.size();
-        const std::size_t nin = input_shape.size();
-        Shape padded(nout, 1);
-        std::copy(input_shape.begin(), input_shape.end(), padded.begin() + (nout - nin));
         const auto& gc = std::get<CpuStorage>(grad);
         std::size_t in_numel = shape_numel(input_shape);
         std::size_t nb = in_numel * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         std::memset(ptr.get(), 0, nb);
+        const BroadcastPlan plan = plan_broadcast(input_shape, output_shape);
 
-        std::vector<std::size_t> in_str(nout, 0);
-        std::size_t s = 1;
-        for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-            in_str[d] = (padded[d] == 1) ? 0 : s;
-            s *= static_cast<std::size_t>(padded[d]);
-        }
-        const std::size_t out_numel = shape_numel(output_shape);
+        // The broadcast's runs, read backwards; see sum_broadcast_runs for
+        // why the sums are the same bits the element walk produced.
         auto run = [&](auto type_tag) {
             using T = decltype(type_tag);
-            const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
-            T* dp = reinterpret_cast<T*>(ptr.get());
-            std::vector<std::size_t> coord(nout, 0);
-            for (std::size_t f = 0; f < out_numel; ++f) {
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < nout; ++d)
-                    in_flat += coord[d] * in_str[d];
-                dp[in_flat] += gp[f];
-                for (std::ptrdiff_t d = (std::ptrdiff_t)nout - 1; d >= 0; --d) {
-                    if (++coord[d] < static_cast<std::size_t>(output_shape[d]))
-                        break;
-                    coord[d] = 0;
-                }
-            }
+            sum_broadcast_runs(plan, reinterpret_cast<const T*>(gc.ptr.get()),
+                               reinterpret_cast<T*>(ptr.get()));
         };
         if (dt == Dtype::F32)
             run(float{});

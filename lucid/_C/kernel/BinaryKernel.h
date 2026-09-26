@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <complex>
 #include <memory>
 #include <string>
@@ -41,6 +42,7 @@
 #include "../compile/Tracer.h"  // 3.5 Phase 1.2 step 2: trace I/O wiring at forward
 #include "../core/Allocator.h"
 #include "../core/AmpPolicy.h"
+#include "../core/BroadcastPlan.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -185,9 +187,9 @@ inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
 //
 // Notes
 // -----
-// Uses a stride-based mapping where size-1 source dimensions get
-// stride 0, so every position along that axis reads the same source
-// element.  This is the pure-CPU analogue of :func:`mlx::core::broadcast_to`.
+// Walks the output in runs (:func:`plan_broadcast`): a contiguous copy
+// where the source holds the axis, a fill where it repeats one element.
+// This is the pure-CPU analogue of :func:`mlx::core::broadcast_to`.
 //
 // Raises
 // ------
@@ -196,38 +198,18 @@ inline Shape broadcast_shapes(const Shape& a, const Shape& b) {
 //     ``Bool``.
 inline CpuStorage
 broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_shape, Dtype dt) {
-    const std::size_t ndim_out = out_shape.size();
-    const std::size_t ndim_in = src_shape.size();
-    Shape padded(ndim_out, 1);
-    for (std::size_t i = 0; i < ndim_in; ++i)
-        padded[ndim_out - ndim_in + i] = src_shape[i];
-    std::vector<std::size_t> in_str(ndim_out, 0);
-    std::size_t s = 1;
-    for (std::ptrdiff_t d = (std::ptrdiff_t)ndim_out - 1; d >= 0; --d) {
-        in_str[d] = (padded[d] == 1) ? 0 : s;
-        s *= static_cast<std::size_t>(padded[d]);
-    }
     const std::size_t out_numel = shape_numel(out_shape);
     CpuStorage out;
     out.dtype = dt;
     out.nbytes = out_numel * dtype_size(dt);
     out.ptr = allocate_aligned_bytes(out.nbytes);
+    const BroadcastPlan plan = plan_broadcast(src_shape, out_shape);
+    // Runs, not elements: a scalar is one fill, a row one copy per row, a
+    // column one fill per row.  See core/BroadcastPlan.h.
     auto run = [&](auto type_tag) {
         using T = decltype(type_tag);
-        const T* sp = reinterpret_cast<const T*>(src.ptr.get());
-        T* dp = reinterpret_cast<T*>(out.ptr.get());
-        std::vector<std::size_t> coord(ndim_out, 0);
-        for (std::size_t f = 0; f < out_numel; ++f) {
-            std::size_t in_flat = 0;
-            for (std::size_t d = 0; d < ndim_out; ++d)
-                in_flat += coord[d] * in_str[d];
-            dp[f] = sp[in_flat];
-            for (std::ptrdiff_t d = (std::ptrdiff_t)ndim_out - 1; d >= 0; --d) {
-                if (++coord[d] < static_cast<std::size_t>(out_shape[d]))
-                    break;
-                coord[d] = 0;
-            }
-        }
+        broadcast_runs(plan, reinterpret_cast<const T*>(src.ptr.get()),
+                       reinterpret_cast<T*>(out.ptr.get()));
     };
     switch (dt) {
     case Dtype::F32:
