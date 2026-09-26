@@ -227,7 +227,7 @@ public:
 // $$
 //   y = \max_{i \in \text{axes}} x_i, \qquad
 //   \frac{\partial \mathcal{L}}{\partial x_i} =
-//   \mathbb{1}[x_i = y]\cdot
+//   \frac{\mathbb{1}[x_i = y]}{\#\{j : x_j = y\}}\cdot
 //   \mathrm{broadcast}\!\left(\frac{\partial \mathcal{L}}{\partial y}
 //   \right).
 // $$
@@ -281,7 +281,7 @@ public:
 // $$
 //   y = \min_{i \in \text{axes}} x_i, \qquad
 //   \frac{\partial \mathcal{L}}{\partial x_i} =
-//   \mathbb{1}[x_i = y]\cdot
+//   \frac{\mathbb{1}[x_i = y]}{\#\{j : x_j = y\}}\cdot
 //   \mathrm{broadcast}\!\left(\frac{\partial \mathcal{L}}{\partial y}
 //   \right).
 // $$

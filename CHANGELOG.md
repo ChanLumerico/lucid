@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the checkpoint module imports Tensor for its runtime casts
 
+- max and min split a tie's gradient instead of repeating it
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

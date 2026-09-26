@@ -26,9 +26,11 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Half.h"
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Add.h"
 #include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
 #include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
 #include "Astype.h"
@@ -270,6 +272,40 @@ double reduced_count(const Shape& in_shape, const std::vector<int>& axes) {
         n *= static_cast<double>(in_shape[ax]);
     return n;
 }
+
+// The share of a slice's gradient each position gets under max / min:
+// ``mask / (ties + 1 - mask)``.  Where ``mask`` is 1 the denominator is
+// the number of positions tied for the extremum, so the shares sum to one
+// — a subgradient, as the reference framework's amax gives.  Where it is
+// 0 the denominator is at least 1, so a slice nothing matches (a NaN
+// extremum) gets zeros rather than 0 / 0.
+Storage share_among_ties(const Storage& mask,
+                         const Shape& in_shape,
+                         const std::vector<int>& axes,
+                         Dtype dt,
+                         Device device) {
+    const std::size_t n = shape_numel(in_shape);
+    Shape kept = in_shape;
+    for (int ax : axes)
+        kept[static_cast<std::size_t>(ax)] = 1;
+    Storage ties =
+        backend::Dispatcher::for_device(device).reduce_sum(mask, in_shape, {axes, true}, dt);
+    Storage ties_b = broadcast_back_for_reduce(ties, kept, in_shape, axes, true, dt, device);
+    Storage denom =
+        subtract_storages(add_scalar_storage(ties_b, 1.0, n, dt, device), mask, n, dt, device);
+    return divide_storages(mask, denom, n, dt, device);
+}
+
+// Graph-mode counterpart of :func:`share_among_ties`, built from ops so a
+// second derivative passes through it (the shares are piecewise constant
+// in ``x``, so they contribute nothing of their own).
+TensorImplPtr share_among_ties_graph(const TensorImplPtr& mask,
+                                     const Shape& in_shape,
+                                     const std::vector<int>& axes) {
+    auto ties = broadcast_to_op(sum_op(mask, axes, /*keepdims=*/true), in_shape);
+    auto denom = sub_op(add_op(ties, ones_like_op(mask)), mask);
+    return div_op(mask, denom);
+}
 }  // namespace
 
 // dL/dx = broadcast(dL/dy) / N  where N is the number of reduced elements.
@@ -364,22 +400,22 @@ Storage MaxBackward::grad_formula(const Storage& grad_out) {
                                        this->device_);
         mask_eq = multiply_storages(ge_a, ge_b, in_numel, this->dtype_, this->device_);
     }
+    Storage share = share_among_ties(mask_eq, this->full_input_shape_, this->reduce_axes_,
+                                     this->dtype_, this->device_);
 
     Storage g_bcast =
         broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
                                   this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
-    return multiply_storages(g_bcast, mask_eq, in_numel, this->dtype_, this->device_);
+    return multiply_storages(g_bcast, share, in_numel, this->dtype_, this->device_);
 }
 
-// Graph-mode max backward: route the gradient to every position holding
-// the maximum, matching ``grad_formula``'s ``(x >= y) * (y >= x)`` mask.
-// Ties therefore each receive the full gradient, in both modes.
+// Graph-mode max backward: the same shares as ``grad_formula``, from ops.
 TensorImplPtr MaxBackward::scale_graph_grad(const TensorImplPtr& g) {
     const auto& x = this->saved_impl_inputs_[0];
     auto out = max_op(x, this->reduce_axes_, /*keepdims=*/true);
     auto out_b = broadcast_to_op(out, this->full_input_shape_);
     auto mask = astype_op(equal_op(x, out_b), this->dtype_);
-    return mul_op(g, mask);
+    return mul_op(g, share_among_ties_graph(mask, this->full_input_shape_, this->reduce_axes_));
 }
 
 TensorImplPtr max_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
@@ -404,10 +440,12 @@ Storage MinBackward::grad_formula(const Storage& grad_out) {
                                        this->device_);
         mask_eq = multiply_storages(ge_a, ge_b, in_numel, this->dtype_, this->device_);
     }
+    Storage share = share_among_ties(mask_eq, this->full_input_shape_, this->reduce_axes_,
+                                     this->dtype_, this->device_);
     Storage g_bcast =
         broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
                                   this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
-    return multiply_storages(g_bcast, mask_eq, in_numel, this->dtype_, this->device_);
+    return multiply_storages(g_bcast, share, in_numel, this->dtype_, this->device_);
 }
 
 // Graph-mode min backward — the mirror of :meth:`MaxBackward::scale_graph_grad`.
@@ -416,7 +454,7 @@ TensorImplPtr MinBackward::scale_graph_grad(const TensorImplPtr& g) {
     auto out = min_op(x, this->reduce_axes_, /*keepdims=*/true);
     auto out_b = broadcast_to_op(out, this->full_input_shape_);
     auto mask = astype_op(equal_op(x, out_b), this->dtype_);
-    return mul_op(g, mask);
+    return mul_op(g, share_among_ties_graph(mask, this->full_input_shape_, this->reduce_axes_));
 }
 
 TensorImplPtr min_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
