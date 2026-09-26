@@ -488,6 +488,21 @@ void register_tensor_impl(py::module_& m) {
         "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
         "CPU tensors are silently ignored.  No-op when all tensors are on CPU.");
 
+    // synchronize_gpu() — run every GPU array still waiting to run, then wait
+    // for the device.  ``mlx::core::synchronize`` alone waits only for work
+    // already submitted; with Lucid's lazy Metal path nothing is submitted
+    // until a value is read, so a timing bracketed by it measured nothing.
+    m.def(
+        "synchronize_gpu",
+        [] {
+            py::gil_scoped_release release;
+            const std::size_t ran = lucid::gpu::evaluate_pending();
+            mlx::core::synchronize();
+            return ran;
+        },
+        "Evaluate every pending (lazy) GPU array, then block until the GPU is idle.\n"
+        "Returns how many arrays had pending work.");
+
     // eval_tensors_async(list[TensorImpl]) — schedule batched evaluation on
     // the GPU stream **without blocking** the CPU thread.  The lazy MLX
     // expression graph is still finalised (so the parent activation chain is

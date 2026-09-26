@@ -30,13 +30,18 @@
 
 #include "MlxBridge.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <mlx/allocator.h>
 #include <mlx/ops.h>
+#include <mlx/transforms.h>
 
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -197,6 +202,36 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     return out;
 }
 
+namespace {
+
+// Arrays that may still be unevaluated graphs, for evaluate_pending().
+// Weak references, pruned whenever the list doubles, so tracking neither
+// keeps an array alive nor grows without bound.
+constexpr std::size_t kPruneFloor = 4096;
+std::mutex g_pending_mu;
+std::vector<std::weak_ptr<::mlx::core::array>> g_pending;
+std::size_t g_prune_at = kPruneFloor;
+
+bool is_pending(const ::mlx::core::array& arr) {
+    return arr.status() == ::mlx::core::array::Status::unscheduled;
+}
+
+void note_pending(const std::shared_ptr<::mlx::core::array>& arr) {
+    if (!arr || !is_pending(*arr))
+        return;
+    std::lock_guard<std::mutex> lock(g_pending_mu);
+    g_pending.push_back(arr);
+    if (g_pending.size() >= g_prune_at) {
+        std::erase_if(g_pending, [](const std::weak_ptr<::mlx::core::array>& weak) {
+            const auto held = weak.lock();
+            return !held || !is_pending(*held);
+        });
+        g_prune_at = std::max(kPruneFloor, 2 * g_pending.size());
+    }
+}
+
+}  // namespace
+
 GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     // Reconcile, never relabel.
     //
@@ -219,7 +254,23 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     out.dtype = dtype;
     out.nbytes = held.nbytes();
     out.arr = make_tracked(new ::mlx::core::array(std::move(held)), out.nbytes);
+    note_pending(out.arr);
     return out;
+}
+
+std::size_t evaluate_pending() {
+    std::vector<::mlx::core::array> arrays;
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        for (const auto& weak : g_pending)
+            if (auto arr = weak.lock(); arr && is_pending(*arr))
+                arrays.push_back(*arr);
+        g_pending.clear();
+        g_prune_at = kPruneFloor;
+    }
+    if (!arrays.empty())
+        ::mlx::core::eval(arrays);
+    return arrays.size();
 }
 
 namespace {

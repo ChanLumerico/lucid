@@ -202,6 +202,16 @@ LUCID_API CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& sha
 //     The wrapped array tracked by Python-side memory accounting.
 GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype);
 
+// Evaluate every GPU array still waiting to run, and return how many.
+//
+// Lucid's Metal path is lazy: an op records a graph node and returns, and
+// nothing runs until a value is read.  ``lucid.metal.synchronize()``
+// promises the queued work is done, but MLX keeps no list of unevaluated
+// arrays, so :func:`wrap_mlx_array` notes each one it wraps (as a weak
+// reference that never keeps it alive) and this runs whichever are still
+// alive and unevaluated.
+std::size_t evaluate_pending();
+
 // Convert a Lucid :class:`Shape` (int64) to an ``mlx::core::Shape`` (int32).
 //
 // Parameters

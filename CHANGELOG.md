@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - skip_init skips the initialisers instead of running them
 
+- synchronize runs the pending work it waits for
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

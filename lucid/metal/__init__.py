@@ -39,18 +39,24 @@ def is_available() -> bool:
 def synchronize() -> None:
     """Block until every pending Metal GPU operation has completed.
 
-    MLX kernels dispatch asynchronously — calling ``synchronize`` makes
-    the calling thread wait until the GPU command queue drains.  Use
-    sparingly: it stalls the pipeline.  Typical places to call it are
-    *before* timing measurements and *before* device→host transfers
-    that read the result of recent kernels.
+    Lucid's Metal path is lazy: an operation records a graph node and
+    returns, and nothing runs until a value is read.  ``synchronize``
+    first runs every tensor whose work is still pending, then waits for
+    the GPU to finish, so a timing bracketed by it measures the work.
+    It used to wait only for work already submitted — none, under lazy
+    evaluation — and returned at once: a matmul loop timed with it
+    reported 219 TFLOPS.
+
+    Use sparingly: it stalls the pipeline.  To run specific tensors,
+    :func:`lucid.eval` is cheaper, since it evaluates only those.
 
     See Also
     --------
+    lucid.eval : evaluate specific tensors.
     MetalStream.synchronize : sync a specific stream rather than the
         default device-wide stream.
     """
-    _mx.synchronize()
+    _C_engine.synchronize_gpu()
 
 
 def empty_cache() -> None:
@@ -215,7 +221,8 @@ class MetalStream:
         self.synchronize()
 
     def synchronize(self) -> None:
-        """Wait for all commands submitted to this stream to complete."""
+        """Run pending work, then wait for this stream's commands to complete."""
+        _C_engine.synchronize_gpu()
         _mx.synchronize(self._stream)
 
 
@@ -244,16 +251,17 @@ class MetalEvent:
 
     def record(self, stream: MetalStream | None = None) -> None:
         """Mark this event on the current stream (and snapshot wall clock)."""
+        # Pending lazy work runs first, or the event would mark a point
+        # before work that has not started.
+        _C_engine.synchronize_gpu()
         if stream is not None:
             _mx.synchronize(stream._stream)
-        else:
-            _mx.synchronize()
         if self._enable_timing:
             self._t = time.perf_counter()
 
     def synchronize(self) -> None:
         """Block until all GPU work preceding this event has completed."""
-        _mx.synchronize()
+        _C_engine.synchronize_gpu()
 
     def elapsed_time(self, end_event: MetalEvent) -> float:
         """Return wall-clock milliseconds between this event and *end_event*.
