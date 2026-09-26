@@ -260,8 +260,6 @@ class _CholeskyAutograd(_AutogradFunction):
     cholesky_op. Forward calls the engine; backward computes the input
     gradient via Murray (2016)."""
 
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
     @override
     @staticmethod
     def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:  # type: ignore[override]
@@ -911,8 +909,6 @@ class _QRRGrad(_AutogradFunction):
 class _QRRGradWithA(_AutogradFunction):
     """Backward: R contribution to dA via Cholesky of A^T A."""
 
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -938,7 +934,9 @@ class _QRRGradWithA(_AutogradFunction):
         D = lucid.diag_embed(sign_d)
         # L = R.mT @ D  (lower triangular, positive diagonal)
         # Derivation: R_pos = D @ R (sign-normalised), L = R_pos^T = R^T D = R.mT @ D
-        L = (R.mT @ D).detach()
+        # Kept on the graph: detached, L froze R's dependence on A and the
+        # second derivative through R lost that term.
+        L = R.mT @ D
         # G_L = G_R_pos^T = (D @ G_R)^T = G_R^T @ D  (since D is symmetric)
         G_L = G_R.mT @ D
         # Murray's Cholesky backward → G_B = sym(L^{-T} Phi(L^T G_L) L^{-1})
@@ -967,8 +965,6 @@ class _QRQGrad(_AutogradFunction):
     for square and tall (m >= n) reduced QR, so no separate off-range term is
     needed.
     """
-
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
 
     @override
     @staticmethod
@@ -1305,8 +1301,6 @@ class _EighWGrad(_AutogradFunction):
     skips them in the differentiable-input scan — only A gets a gradient edge.
     """
 
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -1329,8 +1323,6 @@ class _EighWGrad(_AutogradFunction):
 class _EighVGrad(_AutogradFunction):
     """Backward: eigenvector contribution  dA = sym(V (F ⊙ V^T G_V) V^T)."""
 
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
     @override
     @staticmethod
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -1351,7 +1343,10 @@ class _EighVGrad(_AutogradFunction):
         k = int(w.shape[-1])
         Wi = w.unsqueeze(-1)
         Wj = w.unsqueeze(-2)
-        denom = Wi - Wj
+        # F[i, j] = 1 / (w[j] - w[i]).  The difference ran the other way,
+        # so every eigenvector gradient came out negated — a wrong-signed
+        # gradient in training, where eigenvalue-only losses hid it.
+        denom = Wj - Wi
         eye_k = lucid.eye(k, dtype=w.dtype, device=w.device)
         safe_denom = denom + eye_k
         F = (1.0 / safe_denom) * (1.0 - eye_k)
@@ -1838,13 +1833,84 @@ def solve_triangular(
     """
     if not left:
         # X A = B  ⟺  Aᵀ Xᵀ = Bᵀ — solve the transposed system, transpose result.
-        AT = _wrap(_C_engine.mT(_unwrap(A)))
-        BT = _wrap(_C_engine.mT(_unwrap(B)))
-        XT = _wrap(
-            _la.solve_triangular(_unwrap(AT), _unwrap(BT), not upper, unitriangular)
+        XT = _SolveTriangular.apply(A.mT, B.mT, not upper, unitriangular)
+        return cast(Tensor, XT).mT
+    return cast(Tensor, _SolveTriangular.apply(A, B, upper, unitriangular))
+
+
+def _broadcast_batch(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
+    """The batch shape two batched operands broadcast to."""
+    width = max(len(a), len(b))
+    a = (1,) * (width - len(a)) + a
+    b = (1,) * (width - len(b)) + b
+    out = []
+    for x, y in zip(a, b):
+        if x != y and 1 not in (x, y):
+            raise ValueError(
+                f"solve_triangular: batch shapes {a} and {b} do not broadcast"
+            )
+        out.append(max(x, y))
+    return tuple(out)
+
+
+def _sum_to(t: Tensor, shape: tuple[int, ...]) -> Tensor:
+    """Reduce a broadcast gradient back to the operand's own shape."""
+    while t.ndim > len(shape):
+        t = t.sum(0)
+    for axis, size in enumerate(shape):
+        if size == 1 and t.shape[axis] != 1:
+            t = t.sum(axis, keepdim=True)
+    return t
+
+
+class _SolveTriangular(_AutogradFunction):
+    """``X = A⁻¹ B`` for triangular ``A``, differentiable in ``A`` and ``B``.
+
+    The engine's solve records no gradient, so a loss through it lost the
+    solve's contribution without a word — and ``cholesky``'s backward, two
+    of these solves, came back detached under ``create_graph=True``.  The
+    backward is one more triangular solve and a product, both through this
+    Function, so it differentiates again.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]
+        ctx: FunctionCtx, A: Tensor, B: Tensor, upper: bool, unitriangular: bool
+    ) -> Tensor:
+        ctx.shapes = (tuple(A.shape), tuple(B.shape))
+        # The engine pairs batches one to one, so a single triangle against
+        # a batch of right-hand sides — or any other broadcast — is spelled
+        # out first.  Left to the engine it returned the wrong values.
+        batch = _broadcast_batch(tuple(A.shape[:-2]), tuple(B.shape[:-2]))
+        A = A.expand(*batch, *A.shape[-2:])
+        B = B.expand(*batch, *B.shape[-2:])
+        X = _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
+        ctx.save_for_backward(A, X)
+        ctx.upper = bool(upper)
+        ctx.unitriangular = bool(unitriangular)
+        return X
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]
+        ctx: FunctionCtx, grad_out: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        A, X = ctx.saved_tensors
+        upper = cast(bool, ctx.upper)
+        unit = cast(bool, ctx.unitriangular)
+        a_shape, b_shape = cast(tuple[tuple[int, ...], tuple[int, ...]], ctx.shapes)
+        # dB = A⁻ᵀ G — Aᵀ is triangular the other way round.
+        grad_B = cast(Tensor, _SolveTriangular.apply(A.mT, grad_out, not upper, unit))
+        # dA = −dB Xᵀ, on the triangle the solve read; a unit diagonal is
+        # assumed rather than read, so it takes no gradient either.
+        grad_A = -lucid.matmul(grad_B, X.mT)
+        grad_A = (
+            lucid.triu(grad_A, 1 if unit else 0)
+            if upper
+            else lucid.tril(grad_A, -1 if unit else 0)
         )
-        return _wrap(_C_engine.mT(_unwrap(XT)))
-    return _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
+        return _sum_to(grad_A, a_shape), _sum_to(grad_B, b_shape)
 
 
 def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:

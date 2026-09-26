@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a scalar power keeps its second derivative
 
+- eigh's eigenvector gradient sign, a differentiable triangular solve
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

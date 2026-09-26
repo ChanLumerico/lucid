@@ -833,6 +833,30 @@ class GradientAxis(_DifferenceAxis):
         )
 
 
+def _fold_onto_read_triangle(
+    analytic: np.ndarray, fd: np.ndarray, shape: tuple[int, ...]
+) -> np.ndarray | None:
+    """The symmetric gradient of a one-triangle input, as that triangle sees it.
+
+    ``None`` unless the input is square and one strict triangle's
+    differences are exactly zero — the op never reads it.  Then each read
+    off-diagonal coordinate carries its own and its mirror's share, the
+    diagonal its own, and the unread triangle nothing.
+    """
+    if len(shape) < 2 or shape[-1] != shape[-2]:
+        return None
+    n = shape[-1]
+    a = analytic.reshape(shape)
+    d = fd.reshape(shape)
+    diagonal = np.eye(n, dtype=bool)
+    mirrored = a + np.swapaxes(a, -1, -2)
+    for read in (np.tril(np.ones((n, n), bool), -1), np.triu(np.ones((n, n), bool), 1)):
+        unread = ~(read | diagonal)
+        if np.all(d[..., unread] == 0.0):
+            return np.where(read, mirrored, np.where(diagonal, a, 0.0)).reshape(-1)
+    return None
+
+
 class SecondGradientAxis(_DifferenceAxis):
     """Second derivative against finite differences of the first.
 
@@ -1006,6 +1030,25 @@ class SecondGradientAxis(_DifferenceAxis):
             return self._finding(
                 symbol, Status.PASS, f"{domain}: rel {rel:.2e}", rel=rel
             )
+        # A symmetric input read from one triangle — ``eigh``,
+        # ``eigvalsh``.  The op never sees the other triangle, so those
+        # coordinates difference to exactly zero, while the gradient is
+        # stated symmetrically, half the sensitivity on each of a mirrored
+        # pair: rel 0.5 between two right answers.  The first-derivative
+        # axis sets such inputs aside; here the analytic answer is folded
+        # onto the triangle the op reads and compared there, so it is still
+        # checked.
+        folded = _fold_onto_read_triangle(analytic, fd, tuple(np.shape(base)))
+        if folded is not None:
+            rel_folded = _probe.relative(folded, fd.reshape(folded.shape))
+            if rel_folded < 1e-4:
+                return self._finding(
+                    symbol,
+                    Status.PASS,
+                    f"{domain}: rel {rel_folded:.2e} on the triangle the symmetric "
+                    "input is read from",
+                    rel=rel_folded,
+                )
 
         fine: np.ndarray | None = None
         try:
