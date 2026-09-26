@@ -215,11 +215,29 @@ jobs:
   # one process per file, with the oracles installed and LUCID_TEST_NETWORK
   # on; scripts/ci_nightly_suite.py fails on a skip as well as a failure,
   # so a test that silently stops running is caught the next night.
+  #
+  # The long-training parity — 3,000 steps against the reference, on both
+  # devices — is 41 of this tier's 59 minutes on a hosted runner and half
+  # that on an M4 Max, so it is a job of its own: on the Mac Studio's
+  # self-hosted runner while the repository variable STUDIO_RUNNER is "on",
+  # on a hosted runner otherwise.  Turn the variable off when the Studio is
+  # away, or the job waits for it.  Only the schedule and manual runs reach
+  # this job, never a pull request, and the repository requires approval
+  # before any outside contributor's workflow runs at all: a self-hosted
+  # runner is a real machine.
   nightly-parity:
-    name: Nightly parity (every oracle)
+    name: Nightly parity (${{ matrix.part }})
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-26
+    runs-on: ${{ matrix.part == 'long training' && vars.STUDIO_RUNNER == 'on' && fromJSON('["self-hosted", "studio"]') || 'macos-26' }}
     timeout-minutes: 210
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: every oracle
+            files: lucid/test/parity --exclude lucid/test/parity/test_long_training_parity.py
+          - part: long training
+            files: lucid/test/parity/test_long_training_parity.py
 
     steps:
       - uses: actions/checkout@v4
@@ -228,13 +246,18 @@ jobs:
         with:
           python-version: "3.14"
 
+      # A self-hosted runner keeps its own ccache on disk and has the
+      # checkpoints in its home already; uploading either to the Actions
+      # cache would only spend its bandwidth.
       - name: Set up ccache
+        if: runner.environment == 'github-hosted'
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: nightly-parity-py3.14
           max-size: 600M
 
       - name: Cache published checkpoints
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v4
         with:
           path: ~/.cache/lucid
@@ -261,8 +284,8 @@ jobs:
           print("every oracle present")
           PY
 
-      - name: Parity tier, every file
-        run: python scripts/ci_nightly_suite.py lucid/test/parity
+      - name: Parity tier, ${{ matrix.part }}
+        run: python scripts/ci_nightly_suite.py ${{ matrix.files }}
 
   nightly-models:
     name: Nightly model zoo (every file)

@@ -11,8 +11,10 @@ should assert what it can instead.
 One child process per file, because a single interpreter carrying the model
 zoo or the parity tier from file to file outgrows a hosted runner's memory.
 
-usage: python scripts/ci_nightly_suite.py PATH [PATH ...]
-       (a directory is expanded to its ``test_*.py`` files)
+usage: python scripts/ci_nightly_suite.py PATH [PATH ...] [--exclude PATH ...]
+       (a directory is expanded to its ``test_*.py`` files; ``--exclude``
+       drops files so another job can run them — ci.yml gives the long
+       training parity its own)
 """
 
 import os
@@ -77,7 +79,17 @@ def _run(path: Path) -> tuple[str, list[str], float]:
 
 
 def main() -> int:
-    files = _files(sys.argv[1:])
+    args = sys.argv[1:]
+    excluded: set[Path] = set()
+    if "--exclude" in args:
+        cut = args.index("--exclude")
+        args, excluded = args[:cut], {p.resolve() for p in _files(args[cut + 1 :])}
+    files = [p for p in _files(args) if p.resolve() not in excluded]
+    if not files:
+        # An empty selection reporting "0 not clean" would pass a job that
+        # ran nothing.
+        print("no test files selected", file=sys.stderr)
+        return 1
     bad: list[tuple[Path, str, list[str]]] = []
     started = time.time()
     flaky: list[Path] = []
