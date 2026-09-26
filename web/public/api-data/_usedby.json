@@ -421,10 +421,6 @@
     {
       "kind": "module",
       "module": "lucid.quantization._functional"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd._anomaly.detect_anomaly": [
@@ -449,6 +445,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.autograd.checkpoint"
     }
   ],
   "lucid.autograd._backward.grad": [
@@ -513,10 +513,6 @@
     {
       "kind": "module",
       "module": "lucid.func"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd._grad_mode.inference_mode": [
@@ -583,10 +579,6 @@
     {
       "kind": "module",
       "module": "lucid.compile._optim.compiler"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd._grad_mode.set_grad_enabled": [
@@ -613,6 +605,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd.function.Function": [
@@ -647,10 +643,6 @@
     {
       "kind": "module",
       "module": "lucid.linalg"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd.function.FunctionCtx": [
@@ -689,10 +681,6 @@
     {
       "kind": "module",
       "module": "lucid.nn.module"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.checkpoint"
     }
   ],
   "lucid.autograd.gradcheck.gradcheck": [
@@ -11892,10 +11880,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn.utils.skip_init"
-    },
-    {
-      "kind": "module",
       "module": "lucid.quantization._fake_quantize"
     },
     {
@@ -13695,6 +13679,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.utils.skip_init"
     }
   ],
   "lucid.nn.intrinsic": [
