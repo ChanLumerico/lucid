@@ -15,6 +15,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- _Pending the next release._
+
+---
+
+## [3.15.3] — 2026-09-27
+
+A correctness release. Most of it comes from porting Self-Forcing, an
+autoregressive video-diffusion model, onto 3.15.2, which turned up twenty
+defects and gaps; the rest finishes second derivatives across the op
+surface. The engine is 0.15.0 and its ABI is 15 (it was 14 in 3.15.2), so
+a C++ extension built against 3.15.2 has to be rebuilt.
+
+- **Activation checkpointing trained nothing inside it.**
+  `lucid.utils.checkpoint` took gradients for its explicit inputs only, so
+  every parameter in the segment stayed frozen, and both checkpoint entry
+  points ignored `preserve_rng_state` — a dropout was differentiated
+  through a different mask than the forward drew.
+- **bfloat16 SafeTensors files would not load**, and they are the default
+  on the Hub. Lucid now reads and writes the format itself, every dtype
+  bit for bit; the `safetensors` package is no longer needed.
+- **Large CPU convolutions segfaulted** on 32-bit offsets in im2col, or
+  ran out of memory; they now run in bounded column slabs.
+- **`max` / `min` gave every tied position the whole gradient**, the CPU
+  sort was not stable although documented so, and `skip_init` ran the
+  initialisers it was meant to skip.
+- **`lucid.metal.synchronize()` returned before the work it waited for**,
+  every wait on the GPU held the GIL, and an evicted compiled executable
+  could be freed under the module still running it.
+- **Core ML**: a forward that writes into its inputs exports correctly,
+  `io_precision="float16"` skips the casts, and a package's state can be
+  seeded, read and restored.
+- **Second derivatives** now pass through every op in the public API —
+  convolutions, resizes, `grid_sample`, `embedding_bag`, the `linalg`
+  decompositions and the rest; nothing refuses `create_graph` any longer.
+
+Behaviour that changes: `RMSNorm` and `F.rms_norm` default `eps` to the
+input dtype's machine epsilon (it was `1e-8`, which is zero in float16);
+the BERT and RoFormer tokenizer wrappers add `[CLS]` / `[SEP]` as their
+checkpoints expect; `from_numpy` widens unsigned arrays to the next signed
+width instead of refusing them; `split` and `chunk` accept sizes that do
+not divide the dimension. `max`, `min`, `sort`, `kthvalue` and `cummax`
+still return values only — the docstrings now say so and where the
+indices come from. From this release on, CI holds each release to the
+previous one's public surface.
 
 ### Fixed
 
@@ -89,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - check_weight_fit builds in shadow and reads headers in parallel
 - broadcast in runs, and thread the loops Accelerate does not
+
 
 ---
 
@@ -4399,7 +4445,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.13.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.15.3...HEAD
+[3.15.3]: https://github.com/ChanLumerico/lucid/releases/tag/v3.15.3
 [3.13.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.13.0
 [3.12.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.12.0
 [3.11.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.1
