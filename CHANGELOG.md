@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - every classifier preset floors crop / crop_pct, as its source does
 
+- attention on Metal takes any rank, as on the CPU
+
 ### Added
 
 - transpose takes two axes, as the reference framework's does

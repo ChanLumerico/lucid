@@ -92,6 +92,40 @@ def scaled_dot_product_attention(
 
     import lucid as _lucid
 
+    if query.is_metal and query.ndim != 4 and key.ndim == value.ndim == query.ndim:
+        # Metal's fused attention takes (B, H, L, D) and nothing else, and
+        # raised "expected to be rank 4" on the (B, L, D) that MobileNet-v4's
+        # hybrid attention hands it — the CPU takes any leading shape.  Fold
+        # the leading axes into those four with views, attend, and unfold;
+        # the views carry every gradient back, at any order.
+        leading = tuple(query.shape[:-2])
+
+        def fold(t: Tensor) -> Tensor:
+            if t.ndim <= 3:
+                while t.ndim < 4:
+                    t = t.unsqueeze(-3)
+                return t
+            return t.reshape(-1, *t.shape[-3:])
+
+        folded_mask = attn_mask
+        if folded_mask is not None:
+            while folded_mask.ndim < query.ndim:
+                folded_mask = folded_mask.unsqueeze(0)
+            if query.ndim > 4:
+                # Folding merges the leading axes, so each must be real.
+                folded_mask = folded_mask.expand(*leading, *folded_mask.shape[-2:])
+            folded_mask = fold(folded_mask)
+        out = scaled_dot_product_attention(
+            fold(query),
+            fold(key),
+            fold(value),
+            attn_mask=folded_mask,
+            dropout_p=dropout_p,
+            is_causal=is_causal,
+            scale=scale,
+        )
+        return out.reshape(*leading, *out.shape[-2:])
+
     if attn_mask is not None and attn_mask.dtype == _lucid.bool_:
         # Normalise a boolean mask to the additive form *once*, before
         # either path can form its own opinion about what ``True`` means.
