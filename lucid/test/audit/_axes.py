@@ -35,7 +35,7 @@ from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._result import Finding, Status
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from lucid.test.audit._specs import Call
     from lucid.test.audit._surface import Symbol
@@ -844,6 +844,43 @@ class SecondGradientAxis(_DifferenceAxis):
     name = "grad2"
     summary = "d2/dx2 vs finite differences of the analytic gradient"
 
+    def _unreachable_second(
+        self,
+        symbol: "Symbol",
+        directional: Callable[[np.ndarray], tuple[Any, Any, Any]],
+        base: np.ndarray,
+        ctx: Context,
+        detail: str,
+        call: "Call",
+    ) -> Finding:
+        """Judge a first gradient with no path back to its input."""
+        try:
+            fd = _probe.finite_difference(
+                lambda a: float(directional(a)[1]), base, ctx.step
+            )
+        except Exception:  # noqa: BLE001
+            return self._refusal(symbol, detail, call)
+        if not np.isfinite(fd).all():
+            return self._finding(
+                symbol, Status.SKIP, "the second difference left the op's domain"
+            )
+        largest = float(np.abs(fd).max(initial=0.0))
+        if largest == 0.0:
+            return self._finding(
+                symbol,
+                Status.PASS,
+                "second derivative is zero: the gradient does not depend on the "
+                "input, and create_graph=True rightly leaves no path to it",
+            )
+        return self._finding(
+            symbol,
+            Status.FAIL,
+            f"create_graph=True returned a gradient detached from the input, "
+            f"but the gradient moves with it (second difference up to "
+            f"{largest:.2e}) — double backward is missing",
+            second_difference=fd[:8].tolist(),
+        )
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
@@ -875,7 +912,6 @@ class SecondGradientAxis(_DifferenceAxis):
             )
 
         w1 = _probe.covector(64, _probe.SEED_A)
-        w2 = _probe.covector(64, _probe.SEED_B)
 
         def directional(array: np.ndarray) -> "tuple[Any, Any]":
             probe = call.with_primary(array)
@@ -884,19 +920,38 @@ class SecondGradientAxis(_DifferenceAxis):
             loss = _probe.contract(fn(*probe.args, **probe.kwargs), w1)
             (g,) = lucid.autograd.grad(loss, [x], create_graph=True)
             n = int(g.reshape(-1).shape[0])
-            return x, (g.reshape(-1) * _probe.as_f64(w2[:n])).sum()
+            # As long as the gradient: a fixed 64 was shorter than any
+            # operand over 64 elements, and ``w2[:n]`` then failed the
+            # multiply — 49 cells reported as the op's refusal.
+            w2 = _probe.covector(n, _probe.SEED_B)
+            return x, (g.reshape(-1) * _probe.as_f64(w2)).sum(), g
 
         try:
-            x, scalar = directional(base)
+            x, scalar, first = directional(base)
+            first_scale = float(
+                np.abs(np.asarray(first.numpy(), dtype=np.float64)).max()
+            )
         except Exception as exc:  # noqa: BLE001
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:80]}", call)
         try:
             (second,) = lucid.autograd.grad(scalar, [x])
             analytic = np.asarray(second.numpy(), dtype=np.float64).reshape(-1)
         except Exception as exc:  # noqa: BLE001
-            # Unreachable input is the standard case for a piecewise-constant
-            # gradient — sum, mean, max and min all land here legitimately.
-            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:80]}", call)
+            detail = f"{type(exc).__name__}: {str(exc)[:80]}"
+            if "not reachable" not in str(exc):
+                return self._refusal(symbol, detail, call)
+            # The first gradient came back with no path to the input.  That
+            # is right exactly when it does not depend on the input — a
+            # linear op, or a piecewise-constant gradient (sum, max, relu)
+            # away from its kinks — and then its difference is zero to the
+            # bit.  Otherwise create_graph=True returned a detached
+            # gradient: a second derivative asked for with
+            # ``allow_unused=True`` comes back as zero, silently.  Every
+            # one of these was once filed as the op's refusal, 351 cells,
+            # the right answers and the wrong ones together.
+            return self._unreachable_second(
+                symbol, directional, base, ctx, detail, call
+            )
 
         try:
             fd = _probe.finite_difference(
@@ -915,6 +970,21 @@ class SecondGradientAxis(_DifferenceAxis):
                 symbol,
                 Status.PASS,
                 f"{domain}: second derivative is zero (op is linear)",
+            )
+        # Zero, but not to the bit: both sides are rounding residue of a
+        # derivative that vanishes, and their ratio is noise against noise.
+        # adjust_hue — a round trip whose pieces are each exact — came back
+        # "rel 1.00" from 1e-10 against 3e-9, the first cell of its kind
+        # once the covector stopped truncating larger operands.
+        negligible = 1e-6 * max(1.0, first_scale)
+        if (
+            max(np.abs(analytic).max(initial=0.0), np.abs(fd).max(initial=0.0))
+            <= negligible
+        ):
+            return self._finding(
+                symbol,
+                Status.PASS,
+                f"{domain}: second derivative is zero to the difference's resolution",
             )
 
         # Same guard the first-derivative axis carries: differencing the
@@ -937,6 +1007,7 @@ class SecondGradientAxis(_DifferenceAxis):
                 symbol, Status.PASS, f"{domain}: rel {rel:.2e}", rel=rel
             )
 
+        fine: np.ndarray | None = None
         try:
             fine = _probe.finite_difference(
                 lambda a: float(directional(a)[1]), base, ctx.step / 10.0
@@ -950,6 +1021,23 @@ class SecondGradientAxis(_DifferenceAxis):
                 Status.TRUNCATION,
                 f"{domain}: rel {rel:.2e} -> {rel_fine:.2e} at h/10",
             )
+        if self._too_coarse_for_a_difference(call) and fine is not None:
+            # Rounding, not truncation: a float32 first derivative carries
+            # ~1e-7 of its own size as noise, and differencing it divides
+            # that by h — so the difference *grows* as h shrinks, where a
+            # real second derivative holds still.  adjust_hue: analytic
+            # 1e-7 (it is zero), differences 0.09 at h and ten times that
+            # at h/10.
+            coarse_size = float(np.abs(fd).max(initial=0.0))
+            fine_size = float(np.abs(fine).max(initial=0.0))
+            if coarse_size > 0.0 and fine_size >= 3.0 * coarse_size:
+                return self._finding(
+                    symbol,
+                    Status.TRUNCATION,
+                    f"{domain}: the difference grows as h shrinks ({coarse_size:.2e} -> "
+                    f"{fine_size:.2e}) — float32 rounding, not a derivative",
+                    rel=rel,
+                )
         if self._too_coarse_for_a_difference(call) and rel < 1e-1:
             # A float32 operand and a disagreement inside float32's own
             # cancellation error.  TRUNCATION is what this status is
@@ -966,6 +1054,9 @@ class SecondGradientAxis(_DifferenceAxis):
             Status.FAIL,
             f"{domain}: rel {rel:.2e}, still {rel_fine:.2e} at h/10",
             rel=rel,
+            analytic=analytic[:8].tolist(),
+            finite_difference=fd[:8].tolist(),
+            first_derivative_scale=first_scale,
         )
 
 
