@@ -195,29 +195,50 @@ class TestWholeTensorAssignmentKeepsGrad:
     ``parameters()`` and ``state_dict()``, and never trained again. The
     general path (``x[0] = v``) always kept the flag, which is what the
     fast path now matches.
+
+    The assignments sit under ``no_grad`` — the way a parameter is
+    overwritten.  Outside it, writing into a leaf that requires grad is
+    refused, as the reference framework refuses it; before, the write went
+    through and turned the parameter into a non-leaf that never received
+    ``.grad``.
     """
 
     def test_slice_assignment_preserves_requires_grad(self) -> None:
         p = lucid.nn.Linear(4, 4).weight
-        p[:] = lucid.randn((4, 4))
-        assert p.requires_grad
+        with lucid.no_grad():
+            p[:] = lucid.randn((4, 4))
+        assert p.requires_grad and p.is_leaf
 
     def test_ellipsis_assignment_preserves_requires_grad(self) -> None:
         p = lucid.nn.Linear(4, 4).weight
-        p[...] = lucid.zeros((4, 4))
-        assert p.requires_grad
+        with lucid.no_grad():
+            p[...] = lucid.zeros((4, 4))
+        assert p.requires_grad and p.is_leaf
 
     def test_scalar_assignment_preserves_requires_grad(self) -> None:
         p = lucid.nn.Linear(4, 4).weight
-        p[:] = 0.5
-        assert p.requires_grad
+        with lucid.no_grad():
+            p[:] = 0.5
+        assert p.requires_grad and p.is_leaf
 
     def test_the_parameter_still_trains(self) -> None:
         layer = lucid.nn.Linear(4, 4)
-        layer.weight[:] = lucid.randn((4, 4))
+        with lucid.no_grad():
+            layer.weight[:] = lucid.randn((4, 4))
         layer(lucid.randn((3, 4))).sum().backward()
         assert layer.weight.grad is not None
         assert float(abs(layer.weight.grad).sum()) > 0.0
+
+    def test_assignment_outside_no_grad_is_refused(self) -> None:
+        layer = lucid.nn.Linear(4, 4)
+        layer(lucid.randn((3, 4)))  # a used parameter is still a leaf
+        for write in (
+            lambda p: p.__setitem__(slice(None), 0.0),
+            lambda p: p.__setitem__(0, lucid.randn((4,))),
+        ):
+            with pytest.raises(RuntimeError, match="leaf tensor that requires grad"):
+                write(layer.weight)
+        assert layer.weight.is_leaf
 
     def test_a_plain_tensor_is_unaffected(self) -> None:
         x = lucid.randn((3, 3))
@@ -227,5 +248,6 @@ class TestWholeTensorAssignmentKeepsGrad:
 
     def test_the_general_path_still_agrees(self) -> None:
         p = lucid.nn.Linear(4, 4).weight
-        p[0] = lucid.randn((4,))
+        with lucid.no_grad():
+            p[0] = lucid.randn((4,))
         assert p.requires_grad

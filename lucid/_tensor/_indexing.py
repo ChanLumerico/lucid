@@ -728,6 +728,16 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     into whatever comes back, so assignment can never name a different set
     of elements than the same key would have read.
     """
+    if t._impl.requires_grad and t._impl.is_leaf and _C_engine.grad_enabled():
+        # Both paths below rebind ``t`` to the written result, which under
+        # autograd carries a grad_fn: a Parameter assigned this way stopped
+        # being a leaf and never received ``.grad`` again, so the optimiser
+        # silently left it alone.  The reference refuses the same write.
+        raise RuntimeError(
+            "__setitem__: a leaf tensor that requires grad cannot be assigned "
+            "in place — wrap the assignment in lucid.no_grad(), or build a new "
+            "tensor"
+        )
     device = t._impl.device
     shape = list(t._impl.shape)
     ndim = len(shape)

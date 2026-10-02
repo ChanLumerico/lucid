@@ -119,6 +119,13 @@ def backward(
     """
     if not isinstance(tensors, (list, tuple)):
         tensors = [tensors]
+    for i, t in enumerate(tensors):
+        if not t.requires_grad:
+            raise RuntimeError(
+                f"backward(): element {i} of tensors does not require grad "
+                "and has no grad_fn, so nothing upstream of it can receive "
+                "a gradient"
+            )
 
     if grad_tensors is None:
         for t in tensors:

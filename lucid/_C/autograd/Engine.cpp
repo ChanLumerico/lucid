@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -27,6 +28,107 @@
 namespace lucid {
 
 namespace {
+
+constexpr const char* kSecondPass =
+    "trying to backward through the graph a second time: the first backward() or "
+    "autograd.grad() freed the tensors it saved — pass retain_graph=True to that call "
+    "if the graph is needed again";
+
+// Refuse a node whose saved tensors an earlier pass already freed.  Running
+// it read released storage: two losses sharing a graph, each given its own
+// backward() without retain_graph, took the process down with a
+// segmentation fault.
+void refuse_released(const Node& node) {
+    if (node.saved_released())
+        ErrorBuilder("backward").fail(std::string(kSecondPass) + " (" + node.node_name() + ")");
+}
+
+// What a root keeps once its graph has been spent.  Clearing its grad_fn
+// instead made it look like a leaf, and a second backward() on the same
+// loss quietly wrote the seed into the loss's own .grad.
+class SpentGraphNode final : public Node {
+public:
+    std::vector<Storage> apply(Storage /*grad_out*/) override {
+        refuse();
+        return {};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& /*grad_out*/) override {
+        refuse();
+        return {};
+    }
+
+    void validate_versions() override { refuse(); }
+
+    std::string node_name() const override { return "SpentGraph"; }
+
+private:
+    static void refuse() { ErrorBuilder("backward").fail(kSecondPass); }
+};
+
+// Sever the root from the graph it just ran so the nodes can be freed.
+void release_root(const std::shared_ptr<TensorImpl>& root) {
+    if (root->is_leaf()) {
+        root->clear_grad_fn();
+        return;
+    }
+    root->set_grad_fn(std::make_shared<SpentGraphNode>());
+}
+
+// A gradient with a zero derivative of its own.
+//
+// Many graph-mode formulas build an input's gradient from the incoming
+// gradient and a comparison on the saved input — relu6, hardtanh, clamp
+// and max/min mask the seed by where x falls.  A comparison carries no
+// graph, so when the seed is itself a constant the result came back
+// detached: its derivative with respect to x is zero almost everywhere,
+// but autograd.grad on it raised "not reachable" and backward() refused
+// it, where the reference framework answers zeros (its node still lists
+// x as an input).  This node restores that connection with the derivative
+// the result actually has — zero, emitted directly rather than as
+// ``grad * 0``, which an infinite upstream gradient would turn into NaN.
+class ZeroDerivativeNode final : public Node {
+public:
+    ZeroDerivativeNode(Edge edge, Shape shape, Dtype dtype, Device device)
+        : shape_(std::move(shape)), dtype_(dtype), device_(device) {
+        set_next_edges({std::move(edge)});
+    }
+
+    std::vector<Storage> apply(Storage /*grad_out*/) override {
+        return {make_zero_storage(shape_, dtype_, device_)};
+    }
+
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        return {zeros_like_op(grad_out)};
+    }
+
+    std::string node_name() const override { return "ZeroDerivativeBackward"; }
+
+private:
+    Shape shape_;
+    Dtype dtype_;
+    Device device_;
+};
+
+// Attach every detached gradient in ``grads`` to the edge it is about to
+// travel, so the gradient stays part of the graph create_graph is building.
+std::vector<TensorImplPtr> keep_in_graph(std::vector<TensorImplPtr> grads,
+                                         const std::vector<Edge>& edges) {
+    for (std::size_t i = 0; i < grads.size() && i < edges.size(); ++i) {
+        const auto& g = grads[i];
+        if (!g || g->requires_grad() || !edges[i].node)
+            continue;
+        auto node =
+            std::make_shared<ZeroDerivativeNode>(edges[i], g->shape(), g->dtype(), g->device());
+        auto alias = TensorImpl::make_view(g, g->shape(), g->stride(), 0, /*join_family=*/false);
+        alias->set_grad_fn(std::move(node));
+        alias->set_grad_output_nr(0);
+        alias->set_leaf(false);
+        alias->set_requires_grad(true);
+        grads[i] = std::move(alias);
+    }
+    return grads;
+}
 
 // Returns true when s carries no data (zero nbytes and null pointer/array).
 // Used to decide whether to synthesise a ones-valued grad_seed.
@@ -120,14 +222,17 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         TensorImplPtr grad_in = std::move(it->second);
         pending.erase(it);
 
+        refuse_released(*node);
         node->validate_versions();
 
         // apply_for_graph throws NotImplementedError if the op doesn't support
         // graph mode — gives the user a clear, actionable message.
-        const auto input_grads = node->apply_for_graph(grad_in);
+        const auto input_grads = keep_in_graph(node->apply_for_graph(grad_in), node->next_edges());
 
-        if (!retain_graph)
+        if (!retain_graph) {
             node->release_saved();
+            node->forget_saved_versions();
+        }
 
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
@@ -146,7 +251,7 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
     }
 
     if (!retain_graph)
-        root->clear_grad_fn();
+        release_root(root);
 }
 
 void Engine::backward(const std::shared_ptr<TensorImpl>& root,
@@ -227,6 +332,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         pending.erase(it);
 
         // Detect in-place mutations that would corrupt the backward pass.
+        refuse_released(*node);
         node->validate_versions();
 
         // Execute the backward formula for this node.
@@ -238,8 +344,10 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
 
         // Free saved forward tensors immediately unless the caller needs the
         // graph intact for a second backward call.
-        if (!retain_graph)
+        if (!retain_graph) {
             node->release_saved();
+            node->forget_saved_versions();
+        }
 
         // Validate size consistency: the number of returned gradients should
         // equal the number of outgoing edges.  A mismatch is only an error
@@ -296,7 +404,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     // Sever the reference from root back into the graph so the nodes can be
     // garbage-collected.  Skipped when retain_graph is true.
     if (!retain_graph) {
-        root->clear_grad_fn();
+        release_root(root);
     }
 }
 
@@ -447,8 +555,10 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             if (!propagates(node.get(), reaching))
                 continue;
 
+            refuse_released(*node);
             node->validate_versions();
-            const auto input_grads = node->apply_for_graph(grad_in);
+            const auto input_grads =
+                keep_in_graph(node->apply_for_graph(grad_in), node->next_edges());
 
             const auto& edges = node->next_edges();
             for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
@@ -499,12 +609,15 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         if (!propagates(node.get(), reaching))
             continue;
 
+        refuse_released(*node);
         node->validate_versions();
         const auto input_grads =
             node->is_barrier() ? node->apply_barrier() : node->apply(std::move(grad_in));
 
-        if (!retain_graph)
+        if (!retain_graph) {
             node->release_saved();
+            node->forget_saved_versions();
+        }
 
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
@@ -527,7 +640,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
     }
 
     if (!retain_graph)
-        root->clear_grad_fn();
+        release_root(root);
 
     return results;
 }

@@ -1445,7 +1445,9 @@ void TensorImpl::copy_from(const TensorImpl& other) {
 }
 
 void TensorImpl::assign_from(const TensorImpl& other, const char* name) {
-    if (GradMode::is_enabled() && requires_grad() && !grad_fn())
+    // is_leaf(), not !grad_fn(): a used leaf carries its accumulator as
+    // grad_fn (see inplace::refuse_on_leaf).
+    if (GradMode::is_enabled() && requires_grad() && is_leaf())
         ErrorBuilder(name).fail("a leaf tensor that requires grad cannot be assigned in place — "
                                 "wrap the call in no_grad, or build a new tensor");
     // A write through a detached alias (``.data``) is untracked by design:

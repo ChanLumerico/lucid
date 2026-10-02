@@ -499,9 +499,10 @@ class TestCheckpointNonReentrant:
 
     The reentrant form takes the output's ``requires_grad`` from its
     positional inputs.  Feed it constants — raw data into a first layer, a
-    block behind a frozen stem — and backward never runs, so the segment is
-    never recomputed and the parameters it closed over get no gradient at
-    all.  Nothing raises; the layer simply stops training.
+    block behind a frozen stem — and the output carries no graph, so the
+    parameters it closed over can get no gradient.  ``backward()`` used to
+    return quietly on such an output and the layer simply stopped
+    training; it now refuses, as the reference framework does.
     """
 
     @staticmethod
@@ -526,11 +527,12 @@ class TestCheckpointNonReentrant:
         assert non_reentrant is not None
         assert np.allclose(non_reentrant, direct, atol=1e-6)
 
-    def test_the_reentrant_default_still_behaves_as_it_did(self) -> None:
-        """Recorded, not endorsed.  Changing the default would silently
-        alter existing training runs, so the old behaviour stays reachable
-        and this pins it."""
-        assert self._run(True) is None
+    def test_the_reentrant_form_refuses_rather_than_training_nothing(self) -> None:
+        """Its semantics are kept — the output takes ``requires_grad`` from
+        the positional inputs — but the silent part is gone: backward on
+        that output raises instead of leaving the parameters untouched."""
+        with pytest.raises(RuntimeError, match="does not require grad"):
+            self._run(True)
 
     def test_it_matches_the_reentrant_result_when_inputs_do_require_grad(
         self,

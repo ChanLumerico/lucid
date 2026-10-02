@@ -29,8 +29,14 @@ namespace lucid::inplace {
 // when it is asked.  The reference refuses the same setup for the same
 // reason.  Callers that mean to overwrite say so with ``no_grad``, which
 // is what every optimiser step already does.
+//
+// ``is_leaf()``, not ``!grad_fn()``: a leaf that has taken part in a
+// forward carries its gradient accumulator as ``grad_fn``, so the old test
+// stopped refusing the moment a parameter was first used — every in-place
+// op on a trained parameter then went through, and the ones that rebind
+// turned the parameter into a non-leaf that never received ``.grad``.
 inline void refuse_on_leaf(const TensorImplPtr& a, const char* name) {
-    if (GradMode::is_enabled() && a->requires_grad() && !a->grad_fn())
+    if (GradMode::is_enabled() && a->requires_grad() && a->is_leaf())
         ErrorBuilder(name).fail("a leaf tensor that requires grad cannot be modified in place — "
                                 "wrap the call in no_grad, or use the out-of-place form");
 }

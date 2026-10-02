@@ -137,7 +137,13 @@ def test_a_different_input_size_afterwards_is_refused(name, kw, shape):
 @pytest.mark.parametrize("name,kw,shape", ALL_LAZY, ids=IDS)
 def test_gradients_reach_every_inferred_parameter(name, kw, shape):
     layer = getattr(nn, name)(**kw)
-    layer(_noisy(shape)).sum().backward()
+    out = layer(_noisy(shape))
+    if not any(p.requires_grad for p in layer.parameters()):
+        # InstanceNorm defaults to affine=False: nothing to train, so the
+        # output carries no graph and backward() refuses it.
+        assert not out.requires_grad
+        return
+    out.sum().backward()
     for param_name, param in layer.named_parameters():
         assert param.grad is not None, param_name
 

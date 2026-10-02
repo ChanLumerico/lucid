@@ -1095,6 +1095,10 @@ class Tensor:
         Raises
         ------
         RuntimeError
+            If ``self`` does not require grad — it has no ``grad_fn``, so
+            no leaf could receive a gradient (a loss computed under
+            :func:`lucid.no_grad`, for instance).
+        RuntimeError
             If ``self`` has more than one element and ``gradient`` is not
             provided.
         RuntimeError
@@ -1172,6 +1176,19 @@ class Tensor:
         >>> x.grad                          # 3*x^2 + 3*x^2 = 2 * 12 = 24
         tensor([24.])
         """
+        if not self.requires_grad:
+            # The reference framework raises here too.  Returning quietly
+            # turned "this loss is not connected to anything trainable" -
+            # a loss computed under no_grad(), or through an op that does
+            # not track gradients - into a training loop that ran without
+            # error and never moved a parameter.
+            raise RuntimeError(
+                "backward(): this tensor does not require grad and has no "
+                "grad_fn, so nothing upstream of it can receive a gradient. "
+                "If it is a loss, check that it was not computed under "
+                "lucid.no_grad() and that every op on its path tracks "
+                "gradients (requires_grad is True on its inputs)."
+            )
         # NOTE: a pre-backward ``self._impl.eval()`` was here historically
         # ("evaluate forward graph before backward → ~2× faster").  Profiling
         # on M4 Max (May 2026) showed the opposite: forcing a sync point
@@ -3076,6 +3093,17 @@ class Tensor:
         filled = _C_engine.full(
             list(self._impl.shape), value, self._impl.dtype, self._impl.device
         )
+        if (
+            self._impl.requires_grad
+            and not self._impl.is_leaf
+            and _C_engine.grad_enabled()
+        ):
+            # The result no longer depends on the old values, but it stays in
+            # the graph with that zero derivative, as the reference keeps it:
+            # detached, a loss built from it could not be differentiated.
+            from lucid.autograd._overwritten import overwritten
+
+            filled = overwritten(self, _wrap(filled))._impl
         # ``assign_from``, not ``copy_from``: the values are overwritten, so
         # the tensor no longer depends on what it was.  Written through the
         # raw buffer copy, the graph position stayed put and the gradient

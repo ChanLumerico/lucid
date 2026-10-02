@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
-
 ### Added
-- _Pending the next release._
+
+### Fixed
+
+- a loss with no graph, a write into a used parameter and a second pass all raise
 
 ---
 

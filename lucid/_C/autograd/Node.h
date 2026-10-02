@@ -430,6 +430,20 @@ public:
     //     One counter per forward input.  Moved into the node.
     void set_saved_versions(std::vector<std::int64_t> v) { saved_versions_ = std::move(v); }
 
+    // Called by the engine right after :meth:`release_saved`.  Clearing the
+    // counters while keeping their capacity records that this node held
+    // tensors from forward which are now gone, so a second pass can be
+    // refused instead of reading freed storage — without a new member,
+    // which would change ``Node``'s layout and with it the engine ABI.
+    void forget_saved_versions() noexcept { saved_versions_.clear(); }
+
+    // Whether :meth:`release_saved` has freed what this node saved at
+    // forward.  A node that saved nothing never captured versions
+    // (capacity 0) and may be traversed again, as the reference allows.
+    bool saved_released() const noexcept {
+        return saved_versions_.empty() && saved_versions_.capacity() > 0;
+    }
+
 protected:
     std::uint64_t sequence_nr_;
     std::vector<Edge> next_edges_;

@@ -596,7 +596,8 @@ def test_casting_to_a_discrete_dtype_ends_the_graph(name: str) -> None:
     x.requires_grad_(True)
     out = getattr(x, name)()
     assert not out.requires_grad, f"{name}() stayed in the graph"
-    out.sum().backward()
+    with pytest.raises(RuntimeError, match="does not require grad"):
+        out.sum().backward()
     assert x.grad is None
 
 
