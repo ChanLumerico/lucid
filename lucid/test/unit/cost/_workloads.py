@@ -10,6 +10,7 @@ with ``step_cost.json`` and fails on any difference, up or down.
 """
 
 import collections
+import gc
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -156,15 +157,28 @@ def measure(workload: Workload, device: str) -> dict[str, object]:
     for _ in range(WARMUP):
         step()
     here = _DEVICE[device]
-    _C_engine.reset_peak_memory_stats(here)
-    before = _C_engine.memory_stats(here)
-    host_before = _C_engine.memory_stats(_C_engine.Device.CPU)
-    syncs_before = _C_engine.host_sync_count()
-    with lucid.profiler.profile() as prof:
-        step()
-    after = _C_engine.memory_stats(here)
-    host_after = _C_engine.memory_stats(_C_engine.Device.CPU)
-    syncs_after = _C_engine.host_sync_count()
+    # The cycle collector runs when its allocation counters say so, and
+    # they depend on everything the process did before — so in a long test
+    # run it sometimes swept the earlier steps' garbage *during* the
+    # measured one: 71 extra frees and a peak below the starting point,
+    # once in five nightly runs.  Collect first, and keep it out of the
+    # step.
+    gc.collect()
+    collecting = gc.isenabled()
+    gc.disable()
+    try:
+        _C_engine.reset_peak_memory_stats(here)
+        before = _C_engine.memory_stats(here)
+        host_before = _C_engine.memory_stats(_C_engine.Device.CPU)
+        syncs_before = _C_engine.host_sync_count()
+        with lucid.profiler.profile() as prof:
+            step()
+        after = _C_engine.memory_stats(here)
+        host_after = _C_engine.memory_stats(_C_engine.Device.CPU)
+        syncs_after = _C_engine.host_sync_count()
+    finally:
+        if collecting:
+            gc.enable()
     ops = collections.Counter(event.name for event in prof.events())
     cost: dict[str, object] = {
         "allocations": after.alloc_count - before.alloc_count,
