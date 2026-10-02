@@ -191,12 +191,17 @@ TensorImplPtr dlpack_to_metal(DLManagedTensor* managed) {
             managed->deleter(managed);
     };
 
+    // ``t`` lives inside ``managed``, and ``release()`` runs the producer's
+    // deleter, which may free it — so a refusal reads what its message
+    // needs *before* releasing.  (The device and offset messages read ``t``
+    // after the release and printed freed memory.)
     const DLTensor& t = managed->dl_tensor;
     if (t.device.device_type != kDLMetal) {
+        const auto device_type = static_cast<int>(t.device.device_type);
         release();
         throw std::invalid_argument(
             "dlpack_to_metal: expected a Metal (device type 8) capsule, got device type " +
-            std::to_string(t.device.device_type) +
+            std::to_string(device_type) +
             " — host capsules are imported through lucid.from_dlpack's NumPy path");
     }
     if (t.ndim < 0) {
@@ -253,10 +258,11 @@ TensorImplPtr dlpack_to_metal(DLManagedTensor* managed) {
     // position for the same reason.  A refusal is recoverable and a
     // silently shifted tensor is not.
     if (t.byte_offset != 0) {
+        const std::uint64_t byte_offset = t.byte_offset;
         release();
         throw std::invalid_argument(
             "dlpack_to_metal: this capsule's data begins at byte_offset " +
-            std::to_string(t.byte_offset) +
+            std::to_string(byte_offset) +
             ", and adopting it without a copy would read from the start of the "
             "buffer instead — offset views are not supported yet. Make the "
             "producer hand over a capsule whose data begins at its buffer, or "

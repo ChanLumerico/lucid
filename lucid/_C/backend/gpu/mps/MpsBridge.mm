@@ -88,12 +88,31 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
         mutable_arr.wait();
     }
 
+    // A row-contiguous array can still begin past the start of its buffer:
+    // a leading-axis slice ``x[3:]`` is one.  Every caller hands the buffer
+    // to MPSGraph, whose tensor data takes a buffer and no offset, so such
+    // an array was read from the buffer's start — a compiled module fed
+    // ``x[3:]`` computed on ``x[:n]``, with no error.  Give it a buffer of
+    // its own.  Not ``copy`` or ``contiguous``: both return a contiguous
+    // input as it is, sharing the buffer and its offset.  Not ``add`` of
+    // zero, which turns -0.0 into +0.0; multiplying by one changes no value.
+    if (mutable_arr.offset() != 0) {
+        mutable_arr =
+            ::mlx::core::multiply(mutable_arr, ::mlx::core::array(1, mutable_arr.dtype()));
+        mutable_arr.eval();
+        mutable_arr.wait();
+    }
+
     const auto& buf = arr.buffer();
     // Buffer::ptr() on a const Buffer returns const void*; cast away const
     // because the underlying MTLBuffer is mutable and we hand it to
     // MPSGraph which expects id<MTLBuffer>.
     void* mtl_buffer_raw = const_cast<void*>(buf.ptr());
-    const std::size_t offset_bytes = static_cast<std::size_t>(arr.offset()) * arr.itemsize();
+    // MLX keeps the offset in bytes (``data()`` adds it to a ``char*``).
+    // It was multiplied by the item size here as well, so the DLPack export
+    // of a float32 slice three elements in claimed byte_offset 48.  Zero
+    // after the block above, but stated in the right unit.
+    const std::size_t offset_bytes = static_cast<std::size_t>(arr.offset());
     const std::size_t nbytes = arr.nbytes();
     return BufferView{mtl_buffer_raw, offset_bytes, nbytes};
 }

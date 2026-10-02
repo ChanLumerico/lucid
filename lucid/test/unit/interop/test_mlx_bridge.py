@@ -195,6 +195,23 @@ class TestACapsuleThatBeginsPastItsBuffer:
             lucid.from_dlpack(whole[4:])
         assert "16" in str(refusal.value)  # four float32 elements in
 
+    def test_lucids_own_slice_round_trips(self) -> None:
+        """Lucid's export of a slice used to claim four times its offset.
+
+        MLX keeps an array's offset in bytes and the export multiplied it by
+        the item size again, so ``x[3:]`` of float32 claimed byte_offset 48
+        and the import refused it — while reading that number from a capsule
+        it had already released.  A slice is now exported from a buffer of
+        its own.
+        """
+        x = lucid.arange(12.0).to("metal")
+        back = lucid.from_dlpack(x[3:])
+        assert back.tolist() == [float(v) for v in range(3, 12)]
+        # And MLX, which honours byte_offset, read 36 bytes too far in.
+        np.testing.assert_array_equal(
+            _host_view(mx.from_dlpack(x[3:])), np.arange(3, 12, dtype=np.float32)
+        )
+
     def test_a_capsule_that_starts_at_its_buffer_is_still_adopted(self) -> None:
         """As narrow as the defect: the ordinary case is untouched."""
         import mlx.core as mx

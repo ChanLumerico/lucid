@@ -51,6 +51,14 @@ rebuilt.
   other than the least-squares solution.
 - **Indexing a metal tensor with a CPU index** — the usual case — failed
   with `bad_variant_access` in every path; it works now.
+- **A compiled module fed a sliced Metal input computed on the wrong
+  rows.** `x[3:]` is contiguous but begins part-way into its buffer, and
+  the compiled executable handed MPSGraph the buffer without its offset,
+  so `compiled(x[3:])` returned `model(x[:5])` — a minibatch loop over a
+  Metal tensor trained on its first batch every step, with no error.
+- **`embedding_bag` miscounted bags under `include_last_offset=True`**
+  (an extra empty row, and every bag but the last running to the end of
+  the indices), and silently ignored `per_sample_weights`.
 - **Compiled attention over a long key cache ran slower than eager** (a
   Wan DiT block at 18,720 keys: 120.8 ms against 87.5 on an M4 Max).
   Such calls now run eagerly, at eager speed, with a one-time notice.
@@ -70,8 +78,10 @@ a tensor in the graph with a zero derivative; a gradient that depends
 only on comparisons stays connected with a zero derivative (relu6's
 second derivative is 0, not "unreachable"); `lstsq` returns `(n, k)` for
 an `(m, k)` right-hand side (it returned `(n,)` for `k = 1`);
-`parameters_to_vector` is part of the graph; and integer pixels given to
-an evaluation preset are treated as 8-bit.
+`parameters_to_vector` is part of the graph; `embedding_bag(...,
+include_last_offset=True)` returns `len(offsets) - 1` rows and honours
+`per_sample_weights` (refusing them outside `mode="sum"`); and integer
+pixels given to an evaluation preset are treated as 8-bit.
 
 ### Added
 
@@ -82,6 +92,9 @@ an evaluation preset are treated as 8-bit.
 - a CPU index addresses a metal tensor, and index ops check devices
 - evaluation presets resize 8-bit pixels the way PIL does
 - BERT and RoFormer question answering: a batch whose answers all fall outside the window gives a zero loss that `backward()` accepts
+- a compiled module reads a sliced Metal input (`x[3:]`) from where the slice begins, not from the start of its buffer
+- `embedding_bag` with `include_last_offset=True` returns one bag per offset pair, and `per_sample_weights` weight the sum (#86)
+- a Metal slice exported through DLPack reports its true offset, and an import refusal no longer reads the released capsule
 
 ### Performance
 
