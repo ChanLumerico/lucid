@@ -92,9 +92,11 @@ class CSPNetConfig(ModelConfig):
         Bottleneck reduction inside each block.
     block_ratio : float, optional, default=1.0
         Branch-output reduction inside CrossStage transitions.
-    cross_linear : tuple of bool, optional, default=(False, True, True, False)
-        Whether the ``conv_exp`` of CrossStage skips its activation
-        (paper-cited variants do skip).
+    cross_linear : tuple of bool, optional, default=(True, True, True, True)
+        Whether the ``conv_exp`` of each CrossStage skips its activation.
+        The released CSPResNet-50 / CSPResNeXt-50 weights are linear in
+        every stage, though darknet's cfg files make stages 1 and 4 leaky;
+        CSPDarknet-53 is leaky throughout and sets its own.
     down_growth : bool, optional, default=False
         CSPDarknet only — whether the down-conv at each stage already
         applies the channel expansion.

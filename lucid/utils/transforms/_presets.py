@@ -358,9 +358,7 @@ class _ReferenceStretch(Resize):
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         if not img.is_floating_point():
-            return _resize_eight_bit(
-                img, (self.height, self.width), self.interpolation
-            )
+            return _resize_eight_bit(img, (self.height, self.width), self.interpolation)
         return resize(
             img,
             (self.height, self.width),
@@ -509,7 +507,8 @@ class VideoClassification(TransformsPreset):
         or 384 for the high-resolution ViT-g.
     resize_size : int or None, optional
         Shortest side before the crop.  Defaults to the released rule,
-        ``round(crop_size * 256 / 224)`` — 292 for a 256 crop.
+        ``int(crop_size * 256 / 224)`` — 292 for a 256 crop; it
+        truncates, where rounding would give 293.
     mean, std : tuple of float, optional
         Channel statistics; ImageNet's by default.
     interpolation : str or Interpolation, optional
