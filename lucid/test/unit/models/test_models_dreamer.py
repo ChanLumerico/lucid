@@ -880,8 +880,9 @@ class TestDiscreteControl:
         logits = model.actor.logits(feature)
         index = logits.argmax(dim=-1)
         hard = lucid.nn.functional.one_hot(index, num_classes=4).to(lucid.float32)
-        hard.sum().backward()
-        assert feature.grad is None or float(feature.grad.abs().sum().item()) == 0.0
+        assert not hard.requires_grad
+        with pytest.raises(RuntimeError, match="does not require grad"):
+            hard.sum().backward()
 
     def test_the_two_parameterisations_are_exclusive(self) -> None:
         """Each raises on the other's accessor rather than returning nonsense."""

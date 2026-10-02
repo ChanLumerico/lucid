@@ -869,22 +869,17 @@ class TestTheDynamicsGradientCanLearn:
         """Guards the test above by breaking the one thing it tests.
 
         With the sample detached the loss is a constant as far as the
-        actor is concerned. If the policy still arrived at the optimum,
-        the climb above would be proving something else.
+        actor is concerned — it has no graph at all, so ``backward()``
+        refuses it rather than training nothing.  The climb above is
+        therefore measuring the pathwise gradient and nothing else.
         """
         actor = self._actor()
-        opt = optim.Adam(actor.parameters(), lr=3e-3)
         feature = lucid.ones((64, 1, 4))
-        for _ in range(150):
-            action = actor.distribution(feature).rsample().detach()
-            loss = -action[..., 0].mean()
-            actor.zero_grad()
+        action = actor.distribution(feature).rsample().detach()
+        loss = -action[..., 0].mean()
+        assert not loss.requires_grad
+        with pytest.raises(RuntimeError, match="does not require grad"):
             loss.backward()
-            opt.step()
-        assert self._mode(actor, feature) < 0.9, (
-            "reached the optimum with the sample detached — the climb "
-            "above is not measuring the pathwise gradient"
-        )
 
 
 class TestTheActorObjectiveCanLearn:
