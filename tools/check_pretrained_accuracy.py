@@ -120,7 +120,11 @@ def _lucid_top1(name: str, tag: str, images: list[object], device: str) -> np.nd
         for start in range(0, len(images), BATCH):
             batch = []
             for image in images[start : start + BATCH]:
-                pixels = np.asarray(image, dtype=np.float32) / 255.0
+                # The decoded 8-bit pixels, as a user's image hands them
+                # over; the preset resizes them the way PIL does.  Scaled to
+                # float first, they were resized with the fractions PIL
+                # rounds away, and convnext_xlarge agreed on 96.4% (CHA-13).
+                pixels = np.asarray(image)
                 batch.append(preset(lucid.tensor(pixels).permute(2, 0, 1)))
             out = model(lucid.stack(batch).to(device))
             logits = getattr(out, "logits", out)

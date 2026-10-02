@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - masked_select, ctc_loss and seven linalg ops keep their gradients
 - a CPU index addresses a metal tensor, and index ops check devices
 
+- evaluation presets resize 8-bit pixels the way PIL does
+
 ### Performance
 
 - attention over a long key cache runs eagerly, where it is faster

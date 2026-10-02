@@ -294,6 +294,31 @@ class AutoTransformsPreset:
 # ── concrete presets ────────────────────────────────────────────────
 
 
+def _resize_eight_bit(
+    img: Tensor, size: tuple[int, int], interpolation: str | Interpolation
+) -> Tensor:
+    """8-bit pixels resized the way PIL resizes them, returned in ``[0, 1]``.
+
+    The checkpoints these presets reproduce were evaluated on PIL images:
+    an 8-bit resize, horizontal pass then vertical, each rounded and clipped
+    back to 0..255.  Resizing the same pixels in float keeps fractions PIL
+    throws away, and some models notice — ``convnext_xlarge`` agreed with
+    its source on 96.4% of ImageNet-V2 that way and on 100% of the images
+    once its numerics were fed the source's own preprocessing.  Spelled as
+    PIL does it, the pixels match PIL's to the last level.
+    """
+    h, w = int(img.shape[-2]), int(img.shape[-1])
+    th, tw = size
+    x = img.to(lucid.float32)
+    if tw != w:
+        x = resize(x, (h, tw), interpolation=interpolation, antialias=True)
+        x = x.round().clamp(0.0, 255.0)
+    if th != h:
+        x = resize(x, (th, tw), interpolation=interpolation, antialias=True)
+        x = x.round().clamp(0.0, 255.0)
+    return x / 255.0
+
+
 class _ReferenceShorterSide(SmallestMaxSize):
     """``SmallestMaxSize`` sized the way the reference's ``Resize(int)`` is.
 
@@ -314,6 +339,8 @@ class _ReferenceShorterSide(SmallestMaxSize):
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = int(img.shape[-2]), int(img.shape[-1])
+        if not img.is_floating_point():
+            return _resize_eight_bit(img, self._target(h, w), self.interpolation)
         return resize(
             img, self._target(h, w), interpolation=self.interpolation, antialias=True
         )
@@ -330,6 +357,10 @@ class _ReferenceStretch(Resize):
 
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        if not img.is_floating_point():
+            return _resize_eight_bit(
+                img, (self.height, self.width), self.interpolation
+            )
         return resize(
             img,
             (self.height, self.width),
