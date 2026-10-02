@@ -311,6 +311,29 @@ def _coordinate_select(
 # ── main advanced getitem ─────────────────────────────────────────────────────
 
 
+def _index_on_device_of(impl: _C_engine.TensorImpl, item: object) -> object:
+    """``item`` moved to ``impl``'s device when it is a CPU index tensor.
+
+    Index tensors are built on the CPU far more often than not — a list
+    turned into a tensor, a mask from ``nonzero`` — and the reference
+    framework accepts them against a tensor on any device.  Lucid handed
+    them to the engine as they were, and a metal source with a CPU index
+    failed with ``bad_variant_access`` in every indexing path, assignment
+    included.  The other direction is refused, as the reference refuses
+    it: a metal index cannot address a CPU tensor without a round trip the
+    caller did not ask for.
+    """
+    item_impl = getattr(item, "_impl", None)
+    if item_impl is None or item_impl.device == impl.device:
+        return item
+    if impl.device == _C_engine.Device.GPU:
+        return _wrap(_C_engine.to_device(item_impl, _C_engine.Device.GPU))
+    raise RuntimeError(
+        "indexing: the index is on metal but the indexed tensor is on the CPU "
+        "— move the index to the CPU first"
+    )
+
+
 def _advanced_getitem(
     impl: _C_engine.TensorImpl, idx_list: list[object]
 ) -> _C_engine.TensorImpl:
@@ -319,6 +342,7 @@ def _advanced_getitem(
     Contains a mix of int, slice, None, and Tensor elements.
     """
     len(impl.shape)
+    idx_list = [_index_on_device_of(impl, item) for item in idx_list]
 
     # Phase 1: expand any bool Tensors to int index lists, replacing each
     # bool Tensor at position p with one or more int tensors.

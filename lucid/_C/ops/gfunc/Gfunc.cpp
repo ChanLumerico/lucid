@@ -434,6 +434,8 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     Validator::input(base, "scatter_add.base").non_null();
     Validator::input(indices, "scatter_add.indices").non_null();
     Validator::input(src, "scatter_add.src").non_null();
+    Validator::pair(base, indices, "scatter_add").same_device();
+    Validator::pair(base, src, "scatter_add").same_device();
 
     const Dtype dt = base->dtype();
     const Device dv = base->device();

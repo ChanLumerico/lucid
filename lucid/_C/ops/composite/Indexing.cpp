@@ -14,6 +14,7 @@
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Concat.h"
@@ -60,6 +61,7 @@ TensorImplPtr take_op(const TensorImplPtr& a, const TensorImplPtr& indices) {
 TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplPtr& indices) {
     if (!a || !indices)
         ErrorBuilder("index_select").fail("null input");
+    Validator::pair(a, indices, "index_select").same_device();
     require_index_dtype(indices, "index_select");
     if (indices->shape().size() != 1)
         ErrorBuilder("index_select").fail("indices must be 1-D");

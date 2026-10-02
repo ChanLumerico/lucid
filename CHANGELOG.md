@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a loss with no graph, a write into a used parameter and a second pass all raise
 - masked_select, ctc_loss and seven linalg ops keep their gradients
+- a CPU index addresses a metal tensor, and index ops check devices
 
 ---
 

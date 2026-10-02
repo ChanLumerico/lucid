@@ -603,6 +603,9 @@ roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<in
 TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, int axis) {
     if (!a || !indices)
         ErrorBuilder("gather").fail("null input");
+    // Checked, not assumed: a CPU index beside a metal source reached a
+    // backend that read the wrong storage kind and threw bad_variant_access.
+    Validator::pair(a, indices, "gather").same_device();
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"gather", device, dt, indices->shape()};
