@@ -47,9 +47,15 @@ a C++ extension built against 3.15.2 has to be rebuilt.
 - **Core ML**: a forward that writes into its inputs exports correctly,
   `io_precision="float16"` skips the casts, and a package's state can be
   seeded, read and restored.
-- **Second derivatives** now pass through every op in the public API —
-  convolutions, resizes, `grid_sample`, `embedding_bag`, the `linalg`
-  decompositions and the rest; nothing refuses `create_graph` any longer.
+- **Second derivatives** now pass through convolutions, resizes,
+  `grid_sample`, `embedding_bag`, the `linalg` decompositions and the
+  rest; no op refuses `create_graph` any longer. *Correction (2026-10-02):
+  this first said "every op in the public API", but a few ops return
+  outputs that do not track gradients at all — `masked_select`,
+  `F.ctc_loss`, `linalg.lstsq` / `lu` / `lu_factor` /
+  `householder_product` / `eigvals`, a non-square `pinv` and
+  `nn.utils.parameters_to_vector` — and `backward()` on such a result
+  returned without an error. 3.15.4 fixes both.*
 
 Behaviour that changes: `RMSNorm` and `F.rms_norm` default `eps` to the
 input dtype's machine epsilon (it was `1e-8`, which is zero in float16);
