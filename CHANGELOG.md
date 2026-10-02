@@ -14,6 +14,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+### Added
+- _Pending the next release._
+
+---
+
+## [3.15.4] — 2026-10-02
+
+A release about losses that train nothing without saying so.  Briefing
+on 3.15.3 turned up public ops whose outputs tracked no gradient, and a
+`backward()` that returned quietly on such a loss; fixing those exposed
+the rest.  The engine is 0.16.0 and its ABI 16 (the backend interface
+gained a method), so a C++ extension built against 3.15.3 has to be
+rebuilt.
+
+- **`backward()` on a tensor with no graph raises**, as the reference
+  does — a loss built under `no_grad()` or through an untracked op used
+  to train nothing in silence.
+- **A parameter that had taken part in a forward accepted in-place
+  writes**: the guard read "no `grad_fn`" for "leaf", and a used leaf
+  carries its gradient accumulator there, so `p.mul_(2)` or `p[0] = 0`
+  went through and could turn the parameter into a non-leaf that never
+  received `.grad` again.  They raise now outside `no_grad()`.
+- **A second backward through a freed graph crashed the process** (two
+  losses sharing a forward, each with its own `backward()`).  It raises
+  now; `retain_graph=True` still allows it.
+- **Nine ops returned outputs detached from their inputs**:
+  `masked_select`, `F.ctc_loss`, `linalg.lstsq` / `lu` / `lu_factor` /
+  `householder_product` / `eig` / `eigvals`, a non-square `pinv` and
+  `nn.utils.parameters_to_vector`.  All differentiate.  Several were
+  wrong in the forward too: `masked_select` ignored broadcasting,
+  `ctc_loss` misread padded targets, averaged without dividing by target
+  length and reported an impossible alignment as 1e30 rather than inf,
+  and `lstsq` answered wide and rank-deficient systems with something
+  other than the least-squares solution.
+- **Indexing a metal tensor with a CPU index** — the usual case — failed
+  with `bad_variant_access` in every path; it works now.
+- **Compiled attention over a long key cache ran slower than eager** (a
+  Wan DiT block at 18,720 keys: 120.8 ms against 87.5 on an M4 Max).
+  Such calls now run eagerly, at eager speed, with a one-time notice.
+- **Evaluation presets resize 8-bit pixels the way PIL does**, which is
+  how published accuracies were measured; `convnext_xlarge`'s agreement
+  with its source on ImageNet-V2 traced to this and nothing else.
+
+The audit now counts a detached float output as a defect unless the op
+is listed with a reason, and proves it can see one.  Beyond
+classification, Lucid's GPT-2 small / medium match their source's
+WikiText-2 perplexity (24.350 / 17.767) and DETR-R50 matches its source's
+COCO AP on 300 val images (45.57), detection for detection.
+
+Behaviour that changes: the three refusals above; `fill_` / `zero_` keep
+a tensor in the graph with a zero derivative; a gradient that depends
+only on comparisons stays connected with a zero derivative (relu6's
+second derivative is 0, not "unreachable"); `lstsq` returns `(n, k)` for
+an `(m, k)` right-hand side (it returned `(n,)` for `k = 1`);
+`parameters_to_vector` is part of the graph; and integer pixels given to
+an evaluation preset are treated as 8-bit.
+
 ### Added
 
 ### Fixed
@@ -27,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - attention over a long key cache runs eagerly, where it is faster
+
 
 ---
 
@@ -4461,7 +4520,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.15.3...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.15.4...HEAD
+[3.15.4]: https://github.com/ChanLumerico/lucid/releases/tag/v3.15.4
 [3.15.3]: https://github.com/ChanLumerico/lucid/releases/tag/v3.15.3
 [3.13.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.13.0
 [3.12.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.12.0
