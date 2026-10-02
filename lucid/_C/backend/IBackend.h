@@ -1641,6 +1641,23 @@ public:
                                      bool zero_infinity,
                                      Dtype dt) = 0;
 
+    // Gradient of each sample's CTC loss with respect to log_probs, (T, N, C).
+    // grad_out: (N,) upstream gradient of every per-sample loss.  Follows the
+    // reference framework's formula, exp(lp) - exp(log(alpha * beta) + nll - lp):
+    // the true gradient with respect to the logits once a log_softmax's
+    // backward is applied, which is the only way the loss is meant to be fed.
+    // Time steps past a sample's input length get zero; an infeasible
+    // alignment gets zero under zero_infinity.
+    virtual Storage ctc_loss_backward(const Storage& log_probs,
+                                      const Storage& targets,
+                                      const Storage& input_lengths,
+                                      const Storage& target_lengths,
+                                      const Storage& grad_out,
+                                      const Shape& lp_shape,
+                                      int blank,
+                                      bool zero_infinity,
+                                      Dtype dt) = 0;
+
     // Generates a fixed sinusoidal positional encoding of shape
     // (seq_len, embed_dim) following the original Transformer paper formula.
     virtual Storage

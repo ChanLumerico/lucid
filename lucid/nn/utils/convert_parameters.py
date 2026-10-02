@@ -33,8 +33,10 @@ def parameters_to_vector(parameters: Iterable[Parameter]) -> Tensor:
     -------
     Tensor
         1-D tensor of length :math:`\sum_k \text{numel}(p_k)` on the same
-        device / dtype as the first parameter.  ``requires_grad`` is
-        ``False`` — the result is a detached snapshot, not a graph node.
+        device / dtype as the first parameter.  It is part of
+        the autograd graph, as in the reference framework — a gradient
+        taken through it reaches every parameter.  Call ``.detach()`` for a
+        snapshot.
 
     Notes
     -----
@@ -78,7 +80,7 @@ def parameters_to_vector(parameters: Iterable[Parameter]) -> Tensor:
             raise ValueError(
                 f"all parameters must share dtype; saw {target_dtype} then {p.dtype}"
             )
-        flats.append(p.detach().reshape(-1))
+        flats.append(p.reshape(-1))
     if not flats:
         return lucid.zeros(0)
     return lucid.cat(flats)

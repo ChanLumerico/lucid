@@ -320,6 +320,45 @@ def _scatter_adapter(
     )
 
 
+def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
+    """masked_select(a, mask) — ``a``'s elements where ``mask`` holds, as 1-D.
+
+    Both operands broadcast to their common shape first, as the reference
+    framework's do.  The engine kernel did not: given a mask of a different
+    shape it walked the two buffers side by side, so a row mask returned
+    the first row's picks only and a broadcast input read past its end.
+    The kernel also records no graph, so an input that tracks gradients
+    goes through boolean indexing instead, which scatters the gradient
+    back to the selected positions.
+    """
+    a_shape = list(a_impl.shape)
+    m_shape = list(mask.shape)
+    rank = max(len(a_shape), len(m_shape))
+    a_full = [1] * (rank - len(a_shape)) + a_shape
+    m_full = [1] * (rank - len(m_shape)) + m_shape
+    shape: list[int] = []
+    for i, (x, y) in enumerate(zip(a_full, m_full)):
+        if x != y and 1 not in (x, y):
+            raise ValueError(
+                f"masked_select: input shape {tuple(a_shape)} and mask shape "
+                f"{tuple(m_shape)} do not broadcast (dimension {i}: {x} vs {y})"
+            )
+        shape.append(max(x, y))
+    if a_shape != shape:
+        a_impl = _C_engine.broadcast_to(a_impl, shape)
+    if m_shape != shape:
+        mask = _C_engine.broadcast_to(mask, shape)
+    if mask.dtype != _C_engine.Bool:
+        mask = _C_engine.astype(mask, _C_engine.Bool)
+    if a_impl.requires_grad and _C_engine.grad_enabled():
+        from lucid._dispatch import _wrap
+
+        return _unwrap(_wrap(a_impl)[_wrap(mask)])
+    return _C_engine.masked_select(
+        _C_engine.contiguous(a_impl), _C_engine.contiguous(mask)
+    )
+
+
 def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
     """sort(a, dim=-1, descending=False) — the sorted values along ``dim``."""
     out = _C_engine.sort(a_impl, int(dim))

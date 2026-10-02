@@ -3577,6 +3577,35 @@ public:
         return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
     }
 
+    // The backward recursion runs where the forward's does, on the CPU, for
+    // the same reason: alpha and beta are a sequential walk over time.
+    Storage ctc_loss_backward(const Storage& log_probs,
+                              const Storage& targets,
+                              const Storage& input_lengths,
+                              const Storage& target_lengths,
+                              const Storage& grad_out,
+                              const Shape& lp_shape,
+                              int blank,
+                              bool zero_infinity,
+                              Dtype dt) override {
+        auto dl = [](const Storage& s, Dtype as) -> CpuStorage {
+            const auto& g = std::get<GpuStorage>(s);
+            auto c = ::mlx::core::contiguous(*g.arr);
+            c.eval();
+            auto p = allocate_aligned_bytes(c.nbytes(), Device::CPU);
+            MemoryTracker::track_host_sync(c.nbytes());
+            std::memcpy(p.get(), c.data<void>(), c.nbytes());
+            return CpuStorage{p, c.nbytes(), as};
+        };
+        auto grad =
+            Dispatcher::for_device(Device::CPU)
+                .ctc_loss_backward(Storage{dl(log_probs, dt)}, Storage{dl(targets, Dtype::I32)},
+                                   Storage{dl(input_lengths, Dtype::I32)},
+                                   Storage{dl(target_lengths, Dtype::I32)},
+                                   Storage{dl(grad_out, dt)}, lp_shape, blank, zero_infinity, dt);
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(grad), lp_shape)};
+    }
+
     Storage
     broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);

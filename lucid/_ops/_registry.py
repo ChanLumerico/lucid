@@ -435,7 +435,7 @@ _REGISTRY: list[OpEntry] = [
 
     # masked_select: engine kernel returns a flat 1-D tensor of selected
     # elements.  Both inputs are tensors so n_tensor_args=2.
-    OpEntry("masked_select", _R.masked_select, 2,
+    OpEntry("masked_select", A._masked_select_adapter, 2,
             method_name="masked_select", free_fn_name="masked_select"),
 
     # isclose: composite op with rtol/atol/equal_nan keyword arguments.

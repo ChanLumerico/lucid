@@ -1172,10 +1172,11 @@ def pinv(x: Tensor) -> Tensor:
 
     Notes
     -----
-    For square, full-rank matrices ``pinv`` is equivalent to :func:`inv`
-    — Lucid routes that case through ``inv`` to keep autograd active.
-    For rectangular or rank-deficient inputs the SVD-based engine
-    kernel is invoked (no backward).
+    Every shape goes through the SVD-based kernel, a singular square
+    matrix included (routing square input through :func:`inv` answered
+    a singular one with a non-finite matrix).  The gradient follows the
+    reference framework's closed form for a matrix of constant rank,
+    which needs no singular-value gaps, and differentiates again.
 
     The pseudo-inverse provides the least-squares solution of
     :math:`Ax = b` even when :math:`A` is singular: :math:`x = A^+ b`.
@@ -1188,15 +1189,65 @@ def pinv(x: Tensor) -> Tensor:
     >>> lucid.allclose(pinv(A) @ A, lucid.eye(2), atol=1e-5)
     True
     """
-    sh: tuple[int, ...] = tuple(_unwrap(x).shape)
-    if len(sh) >= 2 and sh[-1] == sh[-2]:
-        # Square matrix → ``pinv ≡ inv`` for full-rank input. Falling back to
-        # the engine pinv would lose autograd; ``inv`` keeps it.
-        return cast(Tensor, inv(x))
+    if x.requires_grad and lucid.is_grad_enabled():
+        return cast(Tensor, _Pinv.apply(x))
     return _wrap(_la.pinv(_unwrap(x)))
 
 
-@_linalg_op
+@final
+class _Pinv(_AutogradFunction):
+    """``A⁺`` with the reference framework's backward.
+
+    The kernel recorded no gradient, so a loss through a rectangular
+    ``pinv`` trained nothing.  For ``P = A⁺`` and an incoming ``G``, with
+    ``K`` chosen to keep the products at the smaller dimension::
+
+        m <= n:  K = Gᵀ P
+                 dA = -(P K)ᵀ + K Pᵀ - (A P) K Pᵀ + (Pᵀ P)(Gᵀ - K A)
+        m >  n:  K = P Gᵀ
+                 dA = -(K P)ᵀ + (Gᵀ - A K) P Pᵀ + Pᵀ K - Pᵀ K P A
+
+    Built from differentiable ops on the saved ``A`` and ``P``, so it
+    differentiates again.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, A: Tensor
+    ) -> Tensor:
+        P = _wrap(_la.pinv(_unwrap(A)))
+        ctx.save_for_backward(A, P)
+        return P
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, grad_out: Tensor
+    ) -> Tensor:
+        A, P = ctx.saved_tensors
+        m, n = int(A.shape[-2]), int(A.shape[-1])
+        Gt = grad_out.mT
+        Pt = P.mT
+        if m <= n:
+            K = lucid.matmul(Gt, P)
+            KPt = lucid.matmul(K, Pt)
+            return (
+                -lucid.matmul(P, K).mT
+                + KPt
+                - lucid.matmul(lucid.matmul(A, P), KPt)
+                + lucid.matmul(lucid.matmul(Pt, P), Gt - lucid.matmul(K, A))
+            )
+        K = lucid.matmul(P, Gt)
+        PtK = lucid.matmul(Pt, K)
+        return (
+            -lucid.matmul(K, P).mT
+            + lucid.matmul(lucid.matmul(Gt - lucid.matmul(A, K), P), Pt)
+            + PtK
+            - lucid.matmul(lucid.matmul(PtK, P), A)
+        )
+
+
 def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     r"""Eigenvalue decomposition of a general square matrix.
 
@@ -1244,8 +1295,10 @@ def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     >>> w
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
-    vals, vecs = _la.eig(_unwrap(x))
-    return _wrap(vals), _wrap(vecs)
+    if x.requires_grad and lucid.is_grad_enabled():
+        return cast(tuple[Tensor, Tensor], _Eig.apply(x))
+    raw_vals, raw_vecs = _la.eig(_unwrap(x))
+    return _wrap(raw_vals), _wrap(raw_vecs)
 
 
 def eigvals(x: Tensor) -> Tensor:
@@ -1279,8 +1332,90 @@ def eigvals(x: Tensor) -> Tensor:
     >>> eigvals(lucid.tensor([[2.0, 0.0], [0.0, 3.0]]))
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
+    if x.requires_grad and lucid.is_grad_enabled():
+        return cast(tuple[Tensor, Tensor], _Eig.apply(x))[0]
     vals, _ = _la.eig(_unwrap(x))
     return _wrap(vals)
+
+
+def _complex_matmul(a: Tensor, b: Tensor) -> Tensor:
+    """``a @ b`` for complex operands, from four real products.
+
+    The CPU matmul has no complex kernel; spelled in real parts it runs on
+    both devices and differentiates like any other product.
+    """
+    ar, ai = lucid.real(a), lucid.imag(a)
+    br, bi = lucid.real(b), lucid.imag(b)
+    return lucid.complex(
+        lucid.matmul(ar, br) - lucid.matmul(ai, bi),
+        lucid.matmul(ar, bi) + lucid.matmul(ai, br),
+    )
+
+
+def _complex_solve(A: Tensor, B: Tensor) -> Tensor:
+    """``A⁻¹ B`` for complex operands, as the real system of twice the size.
+
+    ``(Ar + i Ai)(Xr + i Xi) = Br + i Bi`` is ``[[Ar, -Ai], [Ai, Ar]]`` times
+    ``[Xr; Xi]`` equal to ``[Br; Bi]``.
+    """
+    n = int(A.shape[-1])
+    Ar, Ai = lucid.real(A), lucid.imag(A)
+    M = lucid.cat([lucid.cat([Ar, -Ai], dim=-1), lucid.cat([Ai, Ar], dim=-1)], dim=-2)
+    rhs = lucid.cat([lucid.real(B), lucid.imag(B)], dim=-2)
+    X = solve(M, rhs)
+    return lucid.complex(X[..., :n, :], X[..., n:, :])
+
+
+@final
+class _Eig(_AutogradFunction):
+    """``eig`` with the reference framework's backward.
+
+    The kernel recorded no gradient, so a loss through ``eig`` or
+    ``eigvals`` trained nothing.  For ``A = V diag(w) V⁻¹`` and incoming
+    ``gw``, ``gV``, with ``E[i, j] = conj(w_j - w_i)``::
+
+        dA = V⁻ᴴ (diag(gw) + offdiag((Vᴴ gV − Vᴴ V diag(Re diag(Vᴴ gV))) / E)) Vᴴ
+
+    — the middle term removes the part of ``gV`` that only rescales an
+    eigenvector, which the unit-norm convention does not let move.  A real
+    input takes the real part.  Eigenvectors are defined up to a phase, so
+    only a loss that does not depend on it (``abs``, ``V diag(w) V⁻¹``) has
+    a meaningful gradient, as with the reference.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, A: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        vals, vecs = _la.eig(_unwrap(A))
+        w, V = _wrap(vals), _wrap(vecs)
+        ctx.save_for_backward(w, V)
+        ctx.real_input = not A.is_complex()
+        return w, V
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, gw: Tensor, gV: Tensor
+    ) -> Tensor:
+        w, V = ctx.saved_tensors
+        n = int(V.shape[-1])
+        real_dtype = lucid.float64 if V.dtype == lucid.complex128 else lucid.float32
+        eye = lucid.eye(n, dtype=real_dtype, device=V.device)
+        eye_c = lucid.complex(eye, lucid.zeros_like(eye))
+        Vh = lucid.conj(V).mT
+        VhgV = _complex_matmul(Vh, gV)
+        scale = lucid.real(lucid.diagonal(VhgV, 0, -2, -1))
+        scale_c = lucid.complex(scale, lucid.zeros_like(scale))
+        inner = VhgV - _complex_matmul(Vh, V * scale_c.unsqueeze(-2))
+        wc = lucid.conj(w)
+        E = wc.unsqueeze(-2) - wc.unsqueeze(-1) + eye_c
+        inner = inner / E * (1 - eye_c) + eye_c * gw.unsqueeze(-2)
+        gA = _complex_solve(Vh, _complex_matmul(inner, Vh))
+        if cast(bool, ctx.real_input):
+            return lucid.real(gA)
+        return gA
 
 
 # ── Eigh with backward ────────────────────────────────────────────────────────
@@ -1466,7 +1601,6 @@ def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
     return _wrap(vals)
 
 
-@_linalg_op
 def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     r"""LU factorization with partial pivoting (packed form).
 
@@ -1524,7 +1658,61 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     tensor([[0.8], [1.4]])
     """
     lu, pivots = _la.lu_factor(_unwrap(A))
-    return _wrap(lu), _wrap(pivots)
+    LU, piv = _wrap(lu), _wrap(pivots)
+    if A.requires_grad and lucid.is_grad_enabled():
+        n = int(A.shape[-1])
+        if int(A.shape[-2]) != n:
+            raise NotImplementedError(
+                "lu_factor: the gradient of a non-square factorization is not "
+                "implemented — factor a square matrix, or call it under "
+                "lucid.no_grad()"
+            )
+        P = _build_permutation_matrix(piv, n, A.dtype, A.device)
+        LU = cast(Tensor, _LUFactorGrad.apply(A, LU, P))
+    return LU, piv
+
+
+@final
+class _LUFactorGrad(_AutogradFunction):
+    """The packed factor of ``A = P L U``, differentiable in square ``A``.
+
+    The kernel recorded no gradient, so a loss through ``lu_factor`` — or
+    through ``lu``, ``det`` written by hand from it — trained nothing.  With
+    ``dL = tril(G, -1)`` and ``dU = triu(G)`` read off the packed gradient,
+    the reference framework's backward is::
+
+        dA = P · L⁻ᵀ · (tril(Lᵀ dL, -1) + triu(dU Uᵀ)) · U⁻ᵀ
+
+    Both triangular solves go through the differentiable solve, and ``L``
+    and ``U`` are read from this Function's own output, so the result
+    differentiates again.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, A: Tensor, LU: Tensor, P: Tensor
+    ) -> Tensor:
+        out = LU.detach()
+        ctx.save_for_backward(out, P)
+        return out
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, grad_out: Tensor
+    ) -> tuple[Tensor, None, None]:
+        LU, P = ctx.saved_tensors
+        n = int(LU.shape[-1])
+        eye = lucid.eye(n, dtype=LU.dtype, device=LU.device)
+        L = lucid.tril(LU, -1) + eye
+        U = lucid.triu(LU)
+        M = lucid.tril(lucid.matmul(L.mT, lucid.tril(grad_out, -1)), -1) + lucid.triu(
+            lucid.matmul(lucid.triu(grad_out), U.mT)
+        )
+        X = solve_triangular(U.mT, M, upper=False, left=False)
+        Y = solve_triangular(L.mT, X, upper=True, unitriangular=True)
+        return lucid.matmul(P, Y), None, None
 
 
 # ── Pure-Python compositions ───────────────────────────────────────────────────
@@ -2512,10 +2700,11 @@ def lstsq(
 
     Notes
     -----
-    Backed by LAPACK ``gels`` / ``gelsd`` on the CPU stream; GPU calls
-    fall back to CPU.  Only ``solution`` is fully populated in the
-    current implementation; the remaining outputs exist for shape
-    compatibility with the reference API.
+    The solution is :math:`A^+ B`, the minimum-norm least-squares
+    solution, for every shape and rank — tall, wide or rank-deficient —
+    and it differentiates in ``A`` and ``B`` (twice).  Only ``solution``
+    is populated; the remaining outputs exist for shape compatibility
+    with the reference API.
 
     Examples
     --------
@@ -2557,7 +2746,14 @@ def lstsq(
             f"({int(B.shape[0])} rows)"
         )
 
-    sol = _wrap(_la.lstsq(_unwrap(A), _unwrap(B)))
+    # The minimum-norm least-squares solution is A⁺ B, from the SVD.  The
+    # engine's lstsq kernel answered correctly only for a tall matrix of
+    # full column rank: a wide system came back with an x that did not even
+    # satisfy A x = b, a rank-deficient one with a residual above the
+    # least-squares minimum — and none of it recorded a gradient.  The
+    # pseudo-inverse is right for every shape and rank and differentiates
+    # (twice).
+    sol = lucid.matmul(pinv(A), B)
     dev = _unwrap(A).device
     dt = _unwrap(A).dtype
     empty = _wrap(_C_engine.zeros([0], dt, dev))
@@ -2685,7 +2881,30 @@ def householder_product(H: Tensor, tau: Tensor) -> Tensor:
             f"householder_product: tau must hold at least min(m, n) = {k} "
             f"reflectors for H of shape {tuple(H.shape)}, got {int(tau.shape[0])}"
         )
+    if (H.requires_grad or tau.requires_grad) and lucid.is_grad_enabled():
+        return _householder_product_differentiable(H, tau)
     return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
+
+
+def _householder_product_differentiable(H: Tensor, tau: Tensor) -> Tensor:
+    """``H_1 ... H_k`` applied to the first ``n`` columns of ``I``, in ops.
+
+    The kernel records no gradient, so a loss through it trained nothing.
+    The product is short — one rank-one update per reflector — so it is
+    spelled out here, right to left, and differentiates in both ``H`` and
+    ``tau`` (twice).
+    """
+    m, n = int(H.shape[-2]), int(H.shape[-1])
+    k = min(m, n)
+    # Column i of V is the reflector v_i: zero above row i, one at row i,
+    # the packed entries below.
+    eye = lucid.eye(m, n, dtype=H.dtype, device=H.device)
+    V = lucid.tril(H, -1) + eye
+    Q = eye
+    for i in range(k - 1, -1, -1):
+        v = V[:, i : i + 1]
+        Q = Q - tau[i] * lucid.matmul(v, lucid.matmul(v.mT, Q))
+    return Q
 
 
 def ldl_factor(
@@ -3018,8 +3237,7 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
         raise ValueError(f"lu requires a square matrix in the last two dims, got {sh}")
     n = int(sh[-1])
 
-    _lu_result = cast(tuple["Tensor", "Tensor"], lu_factor(A))
-    LU, pivots = _lu_result
+    LU, pivots = lu_factor(A)
 
     # Split the packed LU into L (unit-lower) and U (upper).
     eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)

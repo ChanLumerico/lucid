@@ -6631,7 +6631,10 @@ public:
             double end = at(T_b - 1, L - 1);
             if (L >= 2)
                 end = logaddexp(end, at(T_b - 1, L - 2));
-            double v = -end;
+            // ``end`` stays at the sentinel when no alignment fits (the input
+            // is shorter than the target needs): the loss is infinite, not
+            // 1e30, or zero_infinity could never recognise it.
+            double v = end <= NEG_INF / 2 ? std::numeric_limits<double>::infinity() : -end;
             if (zero_infinity && (!std::isfinite(v)))
                 v = 0.0;
 
@@ -6642,6 +6645,129 @@ public:
             }
         }
         return Storage{CpuStorage{out_ptr, out_nb, dt}};
+    }
+
+    Storage ctc_loss_backward(const Storage& log_probs,
+                              const Storage& targets,
+                              const Storage& input_lengths,
+                              const Storage& target_lengths,
+                              const Storage& grad_out,
+                              const Shape& lp_shape,
+                              int blank,
+                              bool zero_infinity,
+                              Dtype dt) override {
+        const int T = static_cast<int>(lp_shape[0]);
+        const int N = static_cast<int>(lp_shape[1]);
+        const int C = static_cast<int>(lp_shape[2]);
+        const auto& clp = std::get<CpuStorage>(log_probs);
+        const auto& ctgt = std::get<CpuStorage>(targets);
+        const auto& cil = std::get<CpuStorage>(input_lengths);
+        const auto& ctl = std::get<CpuStorage>(target_lengths);
+        const auto& cgo = std::get<CpuStorage>(grad_out);
+        auto get_i32 = [](const CpuStorage& s, int b) -> int {
+            return static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[b]);
+        };
+        auto read = [dt](const CpuStorage& s, std::size_t i) -> double {
+            if (dt == Dtype::F32)
+                return static_cast<double>(reinterpret_cast<const float*>(s.ptr.get())[i]);
+            return reinterpret_cast<const double*>(s.ptr.get())[i];
+        };
+        auto lp = [&](int t, int b, int c) -> double {
+            return read(clp, static_cast<std::size_t>(t) * N * C + static_cast<std::size_t>(b) * C +
+                                 static_cast<std::size_t>(c));
+        };
+        auto tgt_ptr = reinterpret_cast<const std::int32_t*>(ctgt.ptr.get());
+        constexpr double NEG_INF = -1e30;
+        auto logaddexp = [](double a, double b) -> double {
+            if (a <= NEG_INF / 2)
+                return b;
+            if (b <= NEG_INF / 2)
+                return a;
+            double hi = std::max(a, b);
+            return hi + std::log1p(std::exp(std::min(a, b) - hi));
+        };
+        const std::size_t total = static_cast<std::size_t>(T) * N * C;
+        const std::size_t nb = total * dtype_size(dt);
+        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
+        std::memset(out_ptr.get(), 0, nb);
+        auto put = [&](int t, int b, int c, double v) {
+            const std::size_t i = static_cast<std::size_t>(t) * N * C +
+                                  static_cast<std::size_t>(b) * C + static_cast<std::size_t>(c);
+            if (dt == Dtype::F32)
+                reinterpret_cast<float*>(out_ptr.get())[i] = static_cast<float>(v);
+            else
+                reinterpret_cast<double*>(out_ptr.get())[i] = v;
+        };
+        int tgt_offset = 0;
+        for (int b = 0; b < N; ++b) {
+            const int T_b = get_i32(cil, b);
+            const int S = get_i32(ctl, b);
+            const int L = 2 * S + 1;
+            std::vector<int> ext(L, blank);
+            for (int s = 0; s < S; ++s)
+                ext[2 * s + 1] = static_cast<int>(tgt_ptr[tgt_offset + s]);
+            tgt_offset += S;
+            if (T_b <= 0)
+                continue;
+            // alpha and beta in the log domain, each including the emission
+            // at its own time step, as the forward's alpha does.
+            std::vector<double> alpha(static_cast<std::size_t>(T_b) * L, NEG_INF);
+            std::vector<double> beta(static_cast<std::size_t>(T_b) * L, NEG_INF);
+            auto al = [&](int t, int s) -> double& { return alpha[t * L + s]; };
+            auto be = [&](int t, int s) -> double& { return beta[t * L + s]; };
+            al(0, 0) = lp(0, b, ext[0]);
+            if (L > 1)
+                al(0, 1) = lp(0, b, ext[1]);
+            for (int t = 1; t < T_b; ++t) {
+                for (int s = 0; s < L; ++s) {
+                    double a = al(t - 1, s);
+                    if (s > 0)
+                        a = logaddexp(a, al(t - 1, s - 1));
+                    if (s > 1 && ext[s] != ext[s - 2])
+                        a = logaddexp(a, al(t - 1, s - 2));
+                    al(t, s) = a <= NEG_INF / 2 ? NEG_INF : a + lp(t, b, ext[s]);
+                }
+            }
+            be(T_b - 1, L - 1) = lp(T_b - 1, b, ext[L - 1]);
+            if (L > 1)
+                be(T_b - 1, L - 2) = lp(T_b - 1, b, ext[L - 2]);
+            for (int t = T_b - 2; t >= 0; --t) {
+                for (int s = 0; s < L; ++s) {
+                    double v = be(t + 1, s);
+                    if (s + 1 < L)
+                        v = logaddexp(v, be(t + 1, s + 1));
+                    if (s + 2 < L && ext[s + 2] != ext[s])
+                        v = logaddexp(v, be(t + 1, s + 2));
+                    be(t, s) = v <= NEG_INF / 2 ? NEG_INF : v + lp(t, b, ext[s]);
+                }
+            }
+            double ll = al(T_b - 1, L - 1);
+            if (L >= 2)
+                ll = logaddexp(ll, al(T_b - 1, L - 2));
+            const bool infeasible = ll <= NEG_INF / 2;
+            if (infeasible && zero_infinity)
+                continue;
+            const double nll = infeasible ? std::numeric_limits<double>::infinity() : -ll;
+            const double gr = read(cgo, static_cast<std::size_t>(b));
+            std::vector<double> lcab(static_cast<std::size_t>(C), NEG_INF);
+            for (int t = 0; t < T_b; ++t) {
+                std::fill(lcab.begin(), lcab.end(), NEG_INF);
+                for (int s = 0; s < L; ++s) {
+                    const double ab = al(t, s) + be(t, s);
+                    if (ab > NEG_INF / 2)
+                        lcab[ext[s]] = logaddexp(lcab[ext[s]], ab);
+                }
+                for (int c = 0; c < C; ++c) {
+                    const double l = lp(t, b, c);
+                    // Expected occupancy of label c at step t, over every
+                    // alignment that emits the target.
+                    const double occupancy =
+                        lcab[c] <= NEG_INF / 2 ? 0.0 : std::exp(lcab[c] + nll - l);
+                    put(t, b, c, (std::exp(l) - occupancy) * gr);
+                }
+            }
+        }
+        return Storage{CpuStorage{out_ptr, nb, dt}};
     }
 
     Storage

@@ -3,7 +3,7 @@ nn.functional loss functions.
 """
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence, cast
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -1426,8 +1426,8 @@ def gaussian_nll_loss(
 def ctc_loss(
     log_probs: Tensor,
     targets: Tensor,
-    input_lengths: Tensor,
-    target_lengths: Tensor,
+    input_lengths: Tensor | Sequence[int],
+    target_lengths: Tensor | Sequence[int],
     blank: int = 0,
     reduction: Reduction = "mean",
     zero_infinity: bool = False,
@@ -1468,8 +1468,9 @@ def ctc_loss(
         Index of the blank symbol (default ``0``).
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.  Under
-        ``"mean"``, the per-sample loss is averaged across the
-        batch.
+        ``"mean"``, each sample's loss is divided by its target
+        length (at least 1) and the results are averaged across the
+        batch, as the reference framework defines it.
     zero_infinity : bool, optional
         When ``True``, infinite losses (which arise when a target
         cannot fit in the available input frames) and their
@@ -1493,9 +1494,13 @@ def ctc_loss(
             \prod_{t=1}^{T} p_t(\pi_t),
 
     where :math:`\mathcal{B}` is the "many-to-one" alignment map
-    that collapses repeats and removes blanks.  The forward DP runs
-    in log-domain (Accelerate arithmetic on CPU); the GPU stream
-    currently falls back to CPU.
+    that collapses repeats and removes blanks.  The forward and
+    backward recursions run in the log domain on the CPU; on metal
+    the inputs make a round trip.  The gradient with respect to
+    ``log_probs`` follows the reference framework's formula, which is
+    the true gradient with respect to the logits once a
+    :func:`~lucid.nn.functional.log_softmax` sits in front — the way
+    the loss is meant to be fed.  It is differentiable once.
 
     Examples
     --------
@@ -1510,12 +1515,26 @@ def ctc_loss(
     >>> ctc_loss(log_p, targets, il, tl)  # doctest: +SKIP
     Tensor(...)
     """
-    from lucid._dispatch import _unwrap
 
-    # Flatten targets to 1-D int32 if needed.
+    def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
+        if isinstance(v, _lucid.Tensor):
+            return v
+        return _lucid.tensor(list(v), dtype=_lucid.int64)
+
+    input_lengths = _as_lengths(input_lengths)
+    target_lengths = _as_lengths(target_lengths)
+
     tgt_impl = _unwrap(targets)
     if len(list(tgt_impl.shape)) > 1:
-        tgt_impl = _C_engine.reshape(tgt_impl, [-1])
+        # Padded (N, S): row b's first target_lengths[b] entries are its
+        # target.  The kernel reads one concatenated list, so the rows are
+        # gathered into one — flattening the padding in with them made every
+        # sample after a short one read the padding as its target.
+        width = int(tgt_impl.shape[1])
+        rows = [int(n) for n in cast(list[int], target_lengths.tolist())]
+        keep = [b * width + i for b, n in enumerate(rows) for i in range(n)]
+        flat = _wrap(_C_engine.reshape(tgt_impl, [-1]))
+        tgt_impl = _unwrap(flat[_lucid.tensor(keep, dtype=_lucid.int64)])
 
     # Ensure integer dtype for lengths and targets.
     def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
@@ -1526,10 +1545,21 @@ def ctc_loss(
     tgt_impl = _to_i32(tgt_impl)
     il_impl = _to_i32(_unwrap(input_lengths))
     tl_impl = _to_i32(_unwrap(target_lengths))
+    # Targets and lengths usually live on the CPU whatever the device of
+    # log_probs; the kernel reads all four from one device, and a metal
+    # log_probs beside CPU integers failed with a bad_variant_access.
+    device = log_probs.device
+    tgt_impl, il_impl, tl_impl = (
+        _unwrap(_wrap(t).to(device)) for t in (tgt_impl, il_impl, tl_impl)
+    )
 
     loss_t = _C_engine.nn.ctc_loss(
         _unwrap(log_probs), tgt_impl, il_impl, tl_impl, blank, zero_infinity
     )
+    if reduction == "mean":
+        per_sample = _wrap(loss_t)
+        lengths = target_lengths.to(per_sample.dtype).to(per_sample.device)
+        return (per_sample / lengths.clamp(min=1.0)).mean()
     return _apply_reduction(loss_t, reduction)
 
 

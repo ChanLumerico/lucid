@@ -739,6 +739,27 @@ LUCID_API TensorImplPtr huber_loss_op(const TensorImplPtr& input,
 // ----------
 // Graves et al., "Connectionist Temporal Classification: Labelling
 // Unsegmented Sequence Data with Recurrent Neural Networks" (ICML 2006).
+// Autograd node for the CTC loss — one per-sample loss per batch entry,
+// differentiable in ``log_probs`` only (targets and lengths are integers).
+//
+// The backward reruns the alpha / beta recursion rather than keeping the
+// forward's lattices, which are per-sample and as large as T * (2S + 1).
+// Like the reference framework, it is differentiable once:
+// ``create_graph=True`` through it raises.
+class LUCID_API CtcLossBackward : public FuncOp<CtcLossBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Shape lp_shape_;
+    int blank_ = 0;
+    bool zero_infinity_ = false;
+    Storage saved_log_probs_;
+    Storage saved_targets_;
+    Storage saved_input_lengths_;
+    Storage saved_target_lengths_;
+
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+
 LUCID_API TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs,
                                     const TensorImplPtr& targets,
                                     const TensorImplPtr& input_lengths,
