@@ -3372,8 +3372,8 @@ public:
         if (padding_idx >= 0) {
             valid = mx::multiply(
                 valid,
-                mx::astype(mx::not_equal(idx_i, mx::array(static_cast<std::int32_t>(padding_idx),
-                                                          mx::int32)),
+                mx::astype(mx::not_equal(
+                               idx_i, mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
                            mdt));
         }
         // Rows outside every bag are zeroed through ``valid`` below; clamp

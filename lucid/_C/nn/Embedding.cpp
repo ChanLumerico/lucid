@@ -320,8 +320,7 @@ std::vector<TensorImplPtr> EmbeddingBagBackward::apply_for_graph(const TensorImp
     std::vector<std::size_t> starts(n_bags), ends(n_bags);
     for (std::size_t b = 0; b < n_bags; ++b) {
         starts[b] = static_cast<std::size_t>(read_index(offsets, b));
-        ends[b] =
-            b + 1 < n_offsets ? static_cast<std::size_t>(read_index(offsets, b + 1)) : n_idx;
+        ends[b] = b + 1 < n_offsets ? static_cast<std::size_t>(read_index(offsets, b + 1)) : n_idx;
     }
     const auto usable = [&](std::int64_t emb) {
         return emb != padding_idx_ && emb >= 0 && emb < num_emb;
