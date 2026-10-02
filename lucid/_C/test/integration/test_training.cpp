@@ -18,8 +18,14 @@ using namespace lucid::test;
 namespace {
 
 /// Simple SGD step: param ← param − lr * grad
+///
+/// The update runs without grad, as an optimizer's does.  With grad on,
+/// ``sub_op`` gives the new parameter a ``grad_fn`` back to the old one —
+/// ``set_leaf`` does not remove it — so every step's backward walked into
+/// the previous step's graph, which that step's backward had already freed.
 void sgd_step(TensorImplPtr& param, float lr) {
     if (!has_grad(param)) return;
+    NoGradGuard no_grad;
     // Wrap grad_storage into a TensorImpl for arithmetic.
     const auto& g_st   = param->grad_storage();
     auto        g_impl = std::make_shared<TensorImpl>(
