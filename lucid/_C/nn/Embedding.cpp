@@ -228,7 +228,15 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
         throw ShapeMismatch(weight->shape(), Shape{},
                             "embedding_bag: weight must be 2-D (num_embeddings, dim)");
 
-    const int B = static_cast<int>(offsets->shape()[0]);
+    // With ``include_last_offset`` the final offset is a sentinel — where
+    // the last bag ends — so there is one bag fewer than offsets.  Counting
+    // it as a bag added an empty output row and, below, ran every other bag
+    // to the end of the index buffer.
+    const std::int64_t n_offsets = offsets->shape().empty() ? 0 : offsets->shape()[0];
+    if (include_last_offset && n_offsets < 1)
+        ErrorBuilder("embedding_bag")
+            .fail("include_last_offset=True needs at least one offset (the end of the last bag)");
+    const int B = static_cast<int>(n_offsets - (include_last_offset ? 1 : 0));
     const int D = static_cast<int>(weight->shape()[1]);
     Shape out_shape = {static_cast<std::int64_t>(B), static_cast<std::int64_t>(D)};
     OpScopeFull scope{"embedding_bag", weight->device(), weight->dtype(), out_shape};
@@ -301,18 +309,20 @@ std::vector<TensorImplPtr> EmbeddingBagBackward::apply_for_graph(const TensorImp
     const std::size_t off_elem = std::holds_alternative<CpuStorage>(saved_offsets_)
                                      ? dtype_size(std::get<CpuStorage>(saved_offsets_).dtype)
                                      : dtype_size(std::get<GpuStorage>(saved_offsets_).dtype);
-    const std::size_t n_bags = storage_nbytes(saved_offsets_) / off_elem;
-    const CpuStorage offsets = host_copy(saved_offsets_, Shape{static_cast<std::int64_t>(n_bags)});
+    const std::size_t n_offsets = storage_nbytes(saved_offsets_) / off_elem;
+    const CpuStorage offsets =
+        host_copy(saved_offsets_, Shape{static_cast<std::int64_t>(n_offsets)});
 
+    // Bag b is [offsets[b], offsets[b + 1]); the last one ends at the
+    // sentinel offset under ``include_last_offset``, else at the end of the
+    // indices — the boundaries the forward used.
+    const std::size_t n_bags = n_offsets - (include_last_offset_ ? 1 : 0);
     std::vector<std::size_t> starts(n_bags), ends(n_bags);
     for (std::size_t b = 0; b < n_bags; ++b) {
         starts[b] = static_cast<std::size_t>(read_index(offsets, b));
-        ends[b] = (b + 1 < n_bags && !include_last_offset_)
-                      ? static_cast<std::size_t>(read_index(offsets, b + 1))
-                      : n_idx;
+        ends[b] =
+            b + 1 < n_offsets ? static_cast<std::size_t>(read_index(offsets, b + 1)) : n_idx;
     }
-    if (include_last_offset_ && n_bags > 0)
-        ends[n_bags - 1] = static_cast<std::size_t>(read_index(offsets, n_bags - 1));
     const auto usable = [&](std::int64_t emb) {
         return emb != padding_idx_ && emb >= 0 && emb < num_emb;
     };

@@ -3342,29 +3342,43 @@ public:
         // each gathered row belongs to, then reduce: matmul for sum/mean, a
         // masked max for max.  Stays on the GPU; correct for all modes.
         namespace mx = ::mlx::core;
-        const int B = static_cast<int>(go.arr->shape(0));
+        // Under include_last_offset the final offset is a sentinel that ends
+        // the last bag: one bag fewer than offsets, and an index at or past
+        // the sentinel belongs to no bag.
+        const int n_offsets = static_cast<int>(go.arr->shape(0));
+        const int B = n_offsets - (include_last_offset ? 1 : 0);
         const int D = static_cast<int>(weight_shape[1]);
         const int n_idx = static_cast<int>(indices_shape[0]);
         const auto mdt = gpu::to_mlx_dtype(dt);
+        if (B <= 0 || n_idx == 0)
+            return Storage{gpu::wrap_mlx_array(mx::zeros({std::max(B, 0), D}, mdt), dt)};
 
         auto idx_i = mx::astype(*gi.arr, mx::int32);
         auto emb = mx::take(*gw.arr, idx_i, 0);  // (n_idx, D)
 
-        // seg[k] = (#offsets <= k) - 1  — the bag position k falls in.
+        // seg[k] = (#offsets <= k) - 1  — the bag position k falls in.  The
+        // sentinel counts here, so a position past it lands on bag B.
         auto off_i = mx::astype(*go.arr, mx::int32);
         auto kcol = mx::reshape(mx::arange(0, n_idx, 1, mx::int32), {n_idx, 1});
-        auto orow = mx::reshape(off_i, {1, B});
-        auto ge = mx::astype(mx::greater_equal(kcol, orow), mx::int32);  // (n_idx, B)
+        auto orow = mx::reshape(off_i, {1, n_offsets});
+        auto ge = mx::astype(mx::greater_equal(kcol, orow), mx::int32);  // (n_idx, n_offsets)
         auto seg = mx::subtract(mx::sum(ge, std::vector<int>{1}, false),
                                 mx::array(static_cast<std::int32_t>(1), mx::int32));
 
-        // valid[k] (float): 1 unless the index equals padding_idx.
-        mx::array valid = mx::full({n_idx}, 1.0f, mdt);
+        // valid[k] (float): 1 unless the index equals padding_idx or k lies
+        // past the sentinel.
+        auto in_bag = mx::less(seg, mx::array(static_cast<std::int32_t>(B), mx::int32));
+        mx::array valid = mx::astype(in_bag, mdt);
         if (padding_idx >= 0) {
-            valid = mx::astype(
-                mx::not_equal(idx_i, mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
-                mdt);
+            valid = mx::multiply(
+                valid,
+                mx::astype(mx::not_equal(idx_i, mx::array(static_cast<std::int32_t>(padding_idx),
+                                                          mx::int32)),
+                           mdt));
         }
+        // Rows outside every bag are zeroed through ``valid`` below; clamp
+        // their segment so the scatter stays in bounds.
+        seg = mx::minimum(seg, mx::array(static_cast<std::int32_t>(B - 1), mx::int32));
 
         // one-hot membership (B, n_idx): oh[b,k] = (seg[k]==b) * valid[k]
         auto brow = mx::reshape(mx::arange(0, B, 1, mx::int32), {B, 1});
@@ -3431,8 +3445,8 @@ public:
         // an EmbeddingBag backward is bounded by the bag contents, not by
         // the vocabulary.  The device axis compares the two paths, so if
         // this ever diverges the audit says so.
-        const Shape grad_shape = {static_cast<std::int64_t>(offsets_count(offsets)),
-                                  weight_shape[1]};
+        const std::int64_t n_bags = offsets_count(offsets) - (include_last_offset ? 1 : 0);
+        const Shape grad_shape = {n_bags, weight_shape[1]};
         const Shape offsets_shape = {static_cast<std::int64_t>(offsets_count(offsets))};
         Storage grad_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(grad_out), grad_shape)};
         Storage weight_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(weight), weight_shape)};
@@ -3446,7 +3460,8 @@ public:
         return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), weight_shape)};
     }
 
-    // How many bags an offsets buffer describes.
+    // How many offsets a buffer holds — the bag count, or one more under
+    // include_last_offset, whose final offset only ends the last bag.
     static std::int64_t offsets_count(const Storage& offsets) {
         return static_cast<std::int64_t>(std::get<GpuStorage>(offsets).arr->shape(0));
     }

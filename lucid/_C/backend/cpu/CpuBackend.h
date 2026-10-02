@@ -6087,18 +6087,20 @@ public:
                        ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
                        : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
         };
-        const int B = static_cast<int>(co.nbytes / dtype_size(co.dtype));
+        const int n_offsets = static_cast<int>(co.nbytes / dtype_size(co.dtype));
 
-        // Determine bag boundaries
+        // Bag b is [offsets[b], offsets[b + 1]).  Under include_last_offset
+        // the final offset is a sentinel that ends the last bag, so there is
+        // one bag fewer than offsets; otherwise the last bag runs to the end
+        // of the indices.  (This used to count the sentinel as a bag and end
+        // every other bag at n_idx.)
+        const int B = n_offsets - (include_last_offset ? 1 : 0);
         std::vector<int> starts(static_cast<std::size_t>(B));
         std::vector<int> ends(static_cast<std::size_t>(B));
         for (int b = 0; b < B; ++b) {
             starts[static_cast<std::size_t>(b)] = read_int(co, b);
-            ends[static_cast<std::size_t>(b)] =
-                (b + 1 < B && !include_last_offset) ? read_int(co, b + 1) : n_idx;
+            ends[static_cast<std::size_t>(b)] = b + 1 < n_offsets ? read_int(co, b + 1) : n_idx;
         }
-        if (include_last_offset && B > 0)
-            ends[static_cast<std::size_t>(B - 1)] = read_int(co, B - 1);
 
         std::size_t out_nb = static_cast<std::size_t>(B) * D * dtype_size(dt);
         auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
@@ -6187,19 +6189,17 @@ public:
                        ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
                        : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
         };
-        const int B = static_cast<int>(co.nbytes / dtype_size(co.dtype));
+        const int n_offsets = static_cast<int>(co.nbytes / dtype_size(co.dtype));
 
         // The same bag boundaries the forward computed, derived the same
         // way so the two cannot disagree about which rows a bag owns.
+        const int B = n_offsets - (include_last_offset ? 1 : 0);
         std::vector<int> starts(static_cast<std::size_t>(B));
         std::vector<int> ends(static_cast<std::size_t>(B));
         for (int b = 0; b < B; ++b) {
             starts[static_cast<std::size_t>(b)] = read_int(co, b);
-            ends[static_cast<std::size_t>(b)] =
-                (b + 1 < B && !include_last_offset) ? read_int(co, b + 1) : n_idx;
+            ends[static_cast<std::size_t>(b)] = b + 1 < n_offsets ? read_int(co, b + 1) : n_idx;
         }
-        if (include_last_offset && B > 0)
-            ends[static_cast<std::size_t>(B - 1)] = read_int(co, B - 1);
 
         const std::size_t gw_nb = static_cast<std::size_t>(num_emb) * D * dtype_size(dt);
         auto gw_ptr = allocate_aligned_bytes(gw_nb, Device::CPU);
