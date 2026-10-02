@@ -171,6 +171,20 @@ class TestBERTForQuestionAnswering:
         assert tuple(out.end_logits.shape) == (2, 8)
         assert out.loss is not None
 
+    def test_a_batch_with_no_answer_in_any_window_trains_to_zero(self) -> None:
+        # Every span outside the window is clamped to the ignored sentinel;
+        # the zero loss must still accept backward(), or one such batch
+        # stops a SQuAD run.
+        cfg = _tiny_config()
+        m = BERTForQuestionAnswering(cfg)
+        ids, attn, tt = _ids(B=2, T=8)
+        outside = lucid.tensor([20, 30]).long()
+        out = m(ids, attn, tt, start_positions=outside, end_positions=outside)
+        assert out.loss is not None and float(out.loss.item()) == 0.0
+        out.loss.backward()
+        grad = m.qa_outputs.weight.grad
+        assert grad is not None and float(grad.abs().sum().item()) == 0.0
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sequence-classification head loads the pretrained encoder into .bert (random

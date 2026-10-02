@@ -159,6 +159,38 @@ def _flat(cfg: Any, seed: int) -> tuple[tuple[Any, ...], dict[str, Any]]:
     return (lucid.randn(BATCH, int(cfg.input_dim)).to(DEV),), {}
 
 
+def _regions(cfg: Any, seed: int) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """R-CNN: images, their proposals, and the boxes the proposals are scored on.
+
+    R-CNN runs its CNN on proposal crops only, so without proposals the
+    forward touches no parameter and there is nothing to train.  Of the four
+    proposals per image one is the object itself, one overlaps it past the
+    regression threshold, and two are background.
+    """
+    lucid.manual_seed(seed)
+    x = lucid.randn(BATCH, int(cfg.in_channels), 64, 64)
+    box = [8.0, 8.0, 40.0, 40.0]
+    proposals = [
+        lucid.tensor(
+            [
+                box,
+                [10.0, 10.0, 42.0, 42.0],
+                [44.0, 44.0, 63.0, 63.0],
+                [0.0, 40.0, 20.0, 63.0],
+            ]
+        ).to(DEV)
+        for _ in range(BATCH)
+    ]
+    targets = [
+        {
+            "boxes": lucid.tensor([box]).to(DEV),
+            "labels": lucid.tensor([1 + (seed + b) % int(cfg.num_classes)]).to(DEV),
+        }
+        for b in range(BATCH)
+    ]
+    return (x.to(DEV), proposals, targets), {}
+
+
 _T = 4  # sequence length for the world models
 
 
@@ -219,6 +251,8 @@ SPECS: dict[str, Spec] = {
     "flow_matching": Spec({"base_channels": 32}),
     # Flat samples, (B, 784).
     "nice": Spec(inputs=_flat),
+    # Proposals and their targets: the CNN sees nothing else.
+    "rcnn": Spec(inputs=_regions),
     "dreamer": Spec(inputs=_episodes),
     "dreamer_v2": Spec(inputs=_episodes),
     "dreamer_v3": Spec(inputs=_episodes),
@@ -731,8 +765,8 @@ EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
     # Proposal sampling and NMS read scores back to the host.
     ("faster_rcnn", "object-detection"): ("fallback", "fallback", "read on the host"),
     ("mask_rcnn", "object-detection"): ("fallback", "fallback", "read on the host"),
-    # Selective-search proposals come from outside the graph.
-    ("rcnn", "object-detection"): ("fallback", "fallback", "eager fallback"),
+    # Stage 3 picks the proposals it regresses by their overlap, on the host.
+    ("rcnn", "object-detection"): ("fallback", "fallback", "read on the host"),
     # An image without proposals leaves a zero-length box tensor.
     ("fast_rcnn", "object-detection"): ("fallback", "fallback", "zero-size tensor"),
     # The loss is built from a JVP, which is a backward pass.

@@ -1067,9 +1067,11 @@ class BERTForQuestionAnswering(SequenceClassificationModel):
             # A batch in which *every* window is unanswerable leaves the mean
             # with no terms to average, which surfaces as NaN and would poison
             # the whole step.  Zero is the honest value: nothing was asked.
+            # It stays in the graph, with a zero gradient, so the step that
+            # calls ``backward()`` on it runs like any other.
             n_valid = float((start_t != ignored).float().sum().item())
             if n_valid == 0.0:
-                loss = lucid.zeros((), device=start_logits.device.type)
+                loss = (start_logits.sum() + end_logits.sum()) * 0.0
             else:
                 loss = (
                     F.cross_entropy(start_logits, start_t, ignore_index=ignored)

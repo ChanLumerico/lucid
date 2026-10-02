@@ -250,6 +250,18 @@ class TestRoFormerExtras:
         assert tuple(out.end_logits.shape) == (1, 6)
         assert out.loss is not None
 
+    def test_question_answering_with_no_answer_in_the_window(self) -> None:
+        cfg = _tiny_config()
+        m = RoFormerForQuestionAnswering(cfg)
+        outside = lucid.tensor([40]).long()
+        out = m(
+            lucid.tensor([[1, 2, 3, 4, 5, 6]]).long(),
+            start_positions=outside,
+            end_positions=outside,
+        )
+        assert out.loss is not None and float(out.loss.item()) == 0.0
+        out.loss.backward()  # a zero that trains nothing, not a refusal
+
 
 class TestRoFormerWeightsEnums:
     """Static contract of the RoFormer Weights enums — no network."""

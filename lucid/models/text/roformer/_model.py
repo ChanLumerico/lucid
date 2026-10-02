@@ -1071,9 +1071,10 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
             start_t = start_positions.long().clip(min=0, max=ignored)
             end_t = end_positions.long().clip(min=0, max=ignored)
             # A batch where *every* window is unanswerable leaves the mean
-            # with no terms and surfaces as NaN, poisoning the step.
+            # with no terms and surfaces as NaN, poisoning the step; zero
+            # stays in the graph so ``backward()`` on it still runs.
             if float((start_t != ignored).float().sum().item()) == 0.0:
-                loss = lucid.zeros((), device=start_logits.device.type)
+                loss = (start_logits.sum() + end_logits.sum()) * 0.0
             else:
                 loss = (
                     F.cross_entropy(start_logits, start_t, ignore_index=ignored)

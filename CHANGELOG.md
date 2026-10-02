@@ -61,8 +61,9 @@ rebuilt.
 The audit now counts a detached float output as a defect unless the op
 is listed with a reason, and proves it can see one.  Beyond
 classification, Lucid's GPT-2 small / medium match their source's
-WikiText-2 perplexity (24.350 / 17.767) and DETR-R50 matches its source's
-COCO AP on 300 val images (45.57), detection for detection.
+WikiText-2 perplexity (24.350 / 17.767), and DETR-R50 / R101 match their
+source's COCO AP on 300 val images (45.57 / 47.45), detection for
+detection.
 
 Behaviour that changes: the three refusals above; `fill_` / `zero_` keep
 a tensor in the graph with a zero derivative; a gradient that depends
@@ -79,8 +80,8 @@ an evaluation preset are treated as 8-bit.
 - a loss with no graph, a write into a used parameter and a second pass all raise
 - masked_select, ctc_loss and seven linalg ops keep their gradients
 - a CPU index addresses a metal tensor, and index ops check devices
-
 - evaluation presets resize 8-bit pixels the way PIL does
+- BERT and RoFormer question answering: a batch whose answers all fall outside the window gives a zero loss that `backward()` accepts
 
 ### Performance
 
