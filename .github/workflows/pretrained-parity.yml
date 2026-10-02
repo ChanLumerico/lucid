@@ -37,6 +37,11 @@ on:
       - "tools/check_pretrained_parity.py"
       - ".github/workflows/pretrained-parity.yml"
 
+# Read-only: the comparison step holds the job's token and runs code it
+# downloads (the reference hub's entry points, every oracle package).
+permissions:
+  contents: read
+
 concurrency:
   group: pretrained-parity-${{ github.ref }}
   cancel-in-progress: true
@@ -97,7 +102,17 @@ jobs:
       # --clean-downloads: a full run otherwise keeps both sides of every
       # checkpoint until it ends — 81 GB on 2026-09-13, leaving 13 GB of
       # the runner's 94 free. Each comparison now removes what it fetched.
+      #
+      # GITHUB_TOKEN: DETR's original is loaded through the reference hub at
+      # a pinned commit, and the hub first lists the repository's branches
+      # and tags through the GitHub API to confirm the commit is not a
+      # fork's.  Unauthenticated, a shared runner's address hits the API's
+      # rate limit, and the hub's retry then deletes an Authorization header
+      # it never set — KeyError: 'Authorization' for both DETRs on
+      # 2026-10-02.  The job's read-only token lifts the limit.
       - name: Compare published checkpoints against their sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python -m tools.check_pretrained_parity --clean-downloads \
             ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
