@@ -2714,7 +2714,7 @@ def lstsq(
     >>> b = lucid.tensor([[6.0], [9.0], [12.0]])
     >>> sol, *_ = lstsq(A, b)
     >>> sol
-    tensor([3., 3.])
+    tensor([[3.], [3.]])
     """
     unsupported_if(rcond is not None, "lstsq", "rcond", rcond)
     unsupported_if(driver is not None, "lstsq", "driver", driver)
