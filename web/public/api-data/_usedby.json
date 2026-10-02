@@ -122,6 +122,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._core.attention_cost"
+    },
+    {
+      "kind": "module",
       "module": "lucid.compile._core.attention_probe"
     },
     {
@@ -618,6 +622,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.autograd._overwritten"
+    },
+    {
+      "kind": "module",
       "module": "lucid.autograd.checkpoint"
     },
     {
@@ -649,6 +657,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.autograd._overwritten"
     },
     {
       "kind": "module",
@@ -13555,6 +13567,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional.sampling"
     },
     {
       "kind": "module",
