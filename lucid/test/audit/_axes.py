@@ -543,6 +543,87 @@ class _DifferenceAxis(Axis):
         return True
 
 
+#: Float-valued ops whose output rightly carries no gradient to the
+#: argument the gradient axis varies, each with the reason.
+#:
+#: Anything else that returns a float tensor detached from an input that
+#: requires grad is a defect: a loss through it trains nothing.  Until
+#: 2026-10-02 this axis filed every such case under UNSUPPORTED — "no
+#: gradient reached the input" — and nine differentiable ops hid among the
+#: comparisons and factories (``masked_select``, ``F.ctc_loss``,
+#: ``linalg.lstsq`` / ``lu`` / ``lu_factor`` / ``householder_product`` /
+#: ``eigvals``, ``pinv``, ``parameters_to_vector``).  An entry here has
+#: to say why the reference framework does not differentiate it either.
+#: Integer, bool and non-tensor outputs need no entry.
+NOT_DIFFERENTIABLE: dict[str, str] = {
+    "Tensor.data": "a detached alias by definition",
+    "Tensor.detach": "detached by definition",
+    "Tensor.new_empty": "a new tensor that reads only shape, dtype and device",
+    "Tensor.new_full": "a new tensor that reads only shape, dtype and device",
+    "Tensor.new_ones": "a new tensor that reads only shape, dtype and device",
+    "Tensor.new_tensor": "copies the given data into a new leaf",
+    "Tensor.new_zeros": "a new tensor that reads only shape, dtype and device",
+    "Tensor.histc": "a count per bin: piecewise constant, no derivative in the reference",
+    "lucid.histc": "a count per bin: piecewise constant, no derivative in the reference",
+    "lucid.arange": "a factory: its arguments are endpoints and a step",
+    "lucid.eye": "a factory: its arguments are sizes",
+    "lucid.linspace": "a factory: its arguments are endpoints and a count",
+    "lucid.logspace": "a factory: its arguments are endpoints and a count",
+    "lucid.empty_like": "reads only the input's shape, dtype and device",
+    "lucid.full_like": "reads only the input's shape, dtype and device",
+    "lucid.ones_like": "reads only the input's shape, dtype and device",
+    "lucid.zeros_like": "reads only the input's shape, dtype and device",
+    "lucid.fft.fftfreq": "sample frequencies of a length, not a function of data",
+    "lucid.fft.rfftfreq": "sample frequencies of a length, not a function of data",
+    "lucid.from_dlpack": "constructs a new leaf from foreign memory",
+    "lucid.from_numpy": "constructs a new leaf from an array",
+    "lucid.tensor": "constructs a new leaf from data",
+    "lucid.heaviside": "a step function the reference defines no derivative for",
+    "lucid.unique": "deduplicated, reordered values: no derivative in the reference",
+    "lucid.linalg.ldl_factor": "the reference defines no derivative for LDLᵀ",
+    "lucid.nn.utils.clip_grad_norm": "rescales .grad in place; the norm is bookkeeping",
+    "lucid.nn.utils.get_total_norm": "a norm of .grad tensors, read after backward",
+    "lucid.utils.transforms.functional.posterize": "bit-level quantisation of pixel values",
+    "lucid.utils.transforms.functional.rotation_matrix": (
+        "built from Python floats — an angle, a centre and a scale"
+    ),
+    "F.accuracy": "a share of correct predictions: piecewise constant",
+    "F.correct_count": "a count of correct predictions: piecewise constant",
+    "F.straight_through": (
+        "the gradient goes to ``soft``, the second argument; the probe varies "
+        "``hard``, the first, which the estimator deliberately ignores"
+    ),
+}
+
+#: Window functions take a length and shape parameters, never data.
+_NOT_DIFFERENTIABLE_PREFIXES = ("lucid.signal.windows.",)
+
+
+def _untracked_output(produced: Any) -> str | None:
+    """How an op's output fails to carry a gradient, or None when it does.
+
+    ``"integer"`` when every tensor it returned is integer or bool — there
+    is no derivative to take — and ``"float"`` when a floating output came
+    back detached although the input required grad.
+    """
+    outs = produced if isinstance(produced, (tuple, list)) else (produced,)
+    tensors = [o for o in outs if hasattr(o, "requires_grad") and hasattr(o, "dtype")]
+    if not tensors or any(t.requires_grad for t in tensors):
+        return None
+    if all(not (t.is_floating_point() or t.is_complex()) for t in tensors):
+        return "integer"
+    return "float"
+
+
+def _why_not_differentiable(qualname: str) -> str | None:
+    """The recorded reason ``qualname`` has no derivative, if it has one."""
+    if qualname in NOT_DIFFERENTIABLE:
+        return NOT_DIFFERENTIABLE[qualname]
+    if qualname.startswith(_NOT_DIFFERENTIABLE_PREFIXES):
+        return "a window of a length and shape parameters, not a function of data"
+    return None
+
+
 class GradientAxis(_DifferenceAxis):
     """Analytic gradient against central finite differences, in float64.
 
@@ -637,10 +718,28 @@ class GradientAxis(_DifferenceAxis):
             # the op returned ``x``, so asking later always answers "it
             # has one".
             returned_itself = produced is x and x._impl.grad_fn is None
-            loss = _probe.contract(produced, weights)
-            loss.backward()
+            untracked = _untracked_output(produced)
+            if untracked is None:
+                loss = _probe.contract(produced, weights)
+                loss.backward()
         except Exception as exc:  # noqa: BLE001
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:70]}", call)
+        if untracked == "integer":
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the output is integer or bool — there is no derivative to take",
+            )
+        if untracked == "float":
+            why = _why_not_differentiable(symbol.qualname)
+            if why is not None:
+                return self._finding(symbol, Status.UNSUPPORTED, why)
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                "the input requires grad but the float output carries no graph "
+                "— a loss through this op trains nothing",
+            )
         if x.grad is None:
             return self._finding(
                 symbol, Status.UNSUPPORTED, "no gradient reached the input"
@@ -2377,6 +2476,18 @@ class ModuleAxis(Axis):
             )
 
         if params:
+            trainable = [p for p in params if p.requires_grad]
+            if trainable and not out.requires_grad and lucid.is_grad_enabled():
+                # backward() refuses an output with no graph, which would
+                # file this under "the op refused" — but nothing refused:
+                # the module has trainable parameters and its forward
+                # detached them.
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    "forward ran but its output carries no graph — no "
+                    "parameter can receive a gradient",
+                )
             try:
                 loss = (out * out).mean()
                 module.zero_grad()

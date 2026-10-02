@@ -333,6 +333,11 @@ def _linalg(name: str, domain: str) -> "Iterator[Call]":
     square = _probe.rng(_probe.SEED_X).standard_normal((n, n)) * 0.4 + np.eye(n) * 2.0
     rect = _probe.sample(domain, (n, 3))
     psd = square @ square.T + np.eye(n) * 0.5
+    if name == "pinv":
+        # Rectangular first: the axes read the first call, and a square
+        # input is the one case a pseudo-inverse shares with ``inv`` — the
+        # rectangular path dropped its gradient for months behind it.
+        yield Call([_probe.as_f64(rect)], {}, 0, "pinv(rectangular)")
     if any(k in name for k in ("cholesky", "eigh", "inv_psd")):
         yield Call([_probe.as_f64(psd)], {}, 0, "linalg(PSD)")
     if any(k in name for k in ("solve", "lstsq")):

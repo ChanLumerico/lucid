@@ -342,6 +342,14 @@ def _smoke_arguments(
     if "thread" in name:
         out.insert(0, ((1,), {}, "1"))
 
+    if name == "backward":
+        # ``backward()`` refuses a tensor with no graph, as the reference
+        # does, so the plain tensors below are all refused; it is called on
+        # a loss that has one.
+        leaf = _probe.as_f64(_probe.sample("positive", (2, 3)))
+        leaf.requires_grad_(True)
+        out.insert(0, (((leaf * leaf).sum(),), {}, "a scalar loss with a graph"))
+
     tensor = _probe.as_f64(_probe.sample("positive", (2, 3)))
     out.extend(
         [
@@ -1591,8 +1599,12 @@ class CompiledAxis(Axis):
             compiled_opt.step()
             stepper = None
         elif name == "compiled_step":
+            # It runs the backward itself and fills ``.grad``; the loss it
+            # returns carries no graph.  Calling ``backward()`` on it was a
+            # silent no-op until ``backward()`` started refusing tensors
+            # without one.
             optimiser.zero_grad()
-            obj(model, probe, loss_fn).backward()
+            obj(model, probe, loss_fn)
             optimiser.step()
             stepper = None
         else:

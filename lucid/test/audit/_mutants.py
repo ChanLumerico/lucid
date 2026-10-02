@@ -138,6 +138,13 @@ def _wrong_second_derivative(x: Any) -> Any:
     return x * x * x.detach()
 
 
+def _drops_the_graph(x: Any) -> Any:
+    # The right values, detached from the input: a loss through it trains
+    # nothing.  ``masked_select``, ``F.ctc_loss`` and five ``linalg`` ops
+    # did exactly this, and the axis filed them under "unsupported".
+    return (x * x).detach()
+
+
 def _unstable_at_scale(x: Any) -> Any:
     return lucid.where(lucid.abs(x) > 1e3, x * float("nan"), x)
 
@@ -535,6 +542,12 @@ MUTANTS: "tuple[Mutant, ...]" = (
         "wrong_gradient",
         "forward is x**2 and the backward pass reports x",
         lambda: _wrong_gradient,
+    ),
+    Mutant(
+        "grad",
+        "drops_the_graph",
+        "the output is right and carries no graph back to the input",
+        lambda: _drops_the_graph,
     ),
     Mutant(
         "grad2",
