@@ -33,6 +33,10 @@ loss.backward(retain_graph=True)
 loss.backward()   # second pass — works because graph is still alive
 ```
 
+Without it, a second pass through the same graph raises — two losses that share a forward each need `retain_graph=True` on every backward but the last, or one backward of their sum. So does `backward()` on a tensor that does not require grad: a loss computed under `no_grad()`, or through an op that does not track gradients, raises instead of returning quietly with every parameter untouched.
+
+A leaf that requires grad — every parameter — cannot be written in place while autograd records: `p.mul_(2)`, `p[0] = 0` and `F.relu_(p)` raise. Wrap such writes in `lucid.no_grad()`, as every optimizer step does.
+
 ## Higher-order gradients
 
 Pass `create_graph=True` to build the backward pass itself out of differentiable ops, then differentiate the gradient again — gradient penalties, meta-learning, Hessian-vector products:
