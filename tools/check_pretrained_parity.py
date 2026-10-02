@@ -1000,6 +1000,8 @@ def _files_under(roots: list[Path]) -> set[Path]:
     for root in roots:
         if root.is_dir():
             found.update(p for p in root.rglob("*") if p.is_file() or p.is_symlink())
+            # Directories too, so a directory that appeared can go as well.
+            found.update(p for p in root.rglob("*") if p.is_dir() and not p.is_symlink())
     return found
 
 
@@ -1010,12 +1012,24 @@ def _remove_new(before: set[Path], roots: list[Path]) -> int:
     where another process could have created the newly observed files.
     """
     freed = 0
-    for path in _files_under(roots) - before:
+    new = _files_under(roots) - before
+    for path in new:
+        if path.is_dir() and not path.is_symlink():
+            continue
         try:
             if not path.is_symlink():
                 freed += path.stat().st_size
             path.unlink()
         except FileNotFoundError:
+            continue
+    # Then the directories that appeared, deepest first.  Left behind empty,
+    # a hub repository's directory told the next load "cached" and it read
+    # a hubconf.py that had just been deleted — the second DETR checkpoint
+    # failed with FileNotFoundError every week.
+    for path in sorted((p for p in new if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+        try:
+            path.rmdir()
+        except OSError:
             continue
     return freed
 
