@@ -1056,6 +1056,15 @@ class CompiledModule[**P, R](_ModuleWrapper):
             return None
         write_ids, written = writes
 
+        # Long attention is faster eagerly (CHA-14); the signature is then
+        # remembered as eager-only, so only this first call paid the trace.
+        from lucid.compile._core.attention_cost import long_attention
+
+        slow_attention = long_attention(tracer)
+        if slow_attention is not None:
+            _fallback_notice("long-attention", slow_attention)
+            return None
+
         # Extract the user's return value structure into:
         #   * return_spec: a tree that mirrors ``return_value`` but
         #     with every Tensor swapped for a slot index;

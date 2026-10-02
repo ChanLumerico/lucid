@@ -465,12 +465,13 @@ def compile[**P, R](
       ``UserWarning`` naming why; ``LUCID_COMPILE_VERBOSE=1`` reports every
       occurrence.  bfloat16 graphs are not lowered yet and run eagerly.
     * Attention lowers to a matmul-softmax-matmul decomposition, which
-      materialises the score matrix.  At long key lengths eager Metal's
-      fused attention kernel can be faster than the compiled block (a
-      diffusion-transformer block at 18 720 keys: 95 ms eager against
-      128 ms compiled on an M4 Max).  ``LUCID_COMPILE_FUSED_SDPA=1`` opts
-      into MPSGraph's fused attention instead; it is not the default until
-      it is measured to pay across hardware.
+      materialises the score matrix; eager Metal's fused kernel never
+      does.  A call whose attention would write more than 512 MiB of
+      scores therefore runs eagerly, with a one-time notice — on an M4 Max
+      a diffusion-transformer block at 18 720 keys took 120.8 ms compiled
+      and 87.5 ms eager, and MPSGraph's own fused attention
+      (``LUCID_COMPILE_FUSED_SDPA=1``) did not close the gap.
+      ``LUCID_COMPILE_LONG_ATTENTION=compile`` keeps such calls compiled.
 
     Examples
     --------

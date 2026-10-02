@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - masked_select, ctc_loss and seven linalg ops keep their gradients
 - a CPU index addresses a metal tensor, and index ops check devices
 
+### Performance
+
+- attention over a long key cache runs eagerly, where it is faster
+
 ---
 
 ## [3.15.3] — 2026-09-27
