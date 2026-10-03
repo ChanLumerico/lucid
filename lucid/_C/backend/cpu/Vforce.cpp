@@ -21,6 +21,7 @@
 #include <Accelerate/Accelerate.h>
 
 #include "ErfPoly.h"
+#include "Parallel.h"
 
 namespace lucid::backend::cpu {
 
@@ -30,76 +31,80 @@ namespace {
 inline int N(std::size_t n) {
     return static_cast<int>(n);
 }
+
+// Elements of a vForce call worth a core of their own: at a few ns an
+// element, 16k of them are tens of microseconds, well past a dispatch.
+constexpr std::size_t kGrain = 16384;
+
+// Runs ``fn(out, in, &count)`` over [0, n) in chunks across cores.  Every
+// vForce function here is element-wise, so a chunk computes exactly what the
+// whole call would have — the bits do not change.  One call on one core was
+// what kept ``lucid.exp`` at twice the reference and ``lucid.erf`` at 14x.
+// A call from inside a parallel chunk (GELU's tiles) is below the grain and
+// runs inline.
+template <class T, class F>
+inline void split(const T* in, T* out, std::size_t n, F&& fn) {
+    parallel_for(n, kGrain, [&](std::size_t lo, std::size_t hi) {
+        int count = N(hi - lo);
+        fn(out + lo, in + lo, &count);
+    });
+}
 }  // namespace
 
 void vexp_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvexpf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvexpf(o, i, c); });
 }
 
 void vlog_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvlogf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvlogf(o, i, c); });
 }
 
 void vsqrt_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvsqrtf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsqrtf(o, i, c); });
 }
 
 void vtanh_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvtanhf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanhf(o, i, c); });
 }
 
 void vsin_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvsinf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsinf(o, i, c); });
 }
 
 void vcos_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvcosf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvcosf(o, i, c); });
 }
 
 void vtan_f32(const float* in, float* out, std::size_t n) {
-    int count = N(n);
-    vvtanf(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanf(o, i, c); });
 }
 
 void vexp_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvexp(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvexp(o, i, c); });
 }
 
 void vlog_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvlog(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvlog(o, i, c); });
 }
 
 void vsqrt_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvsqrt(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsqrt(o, i, c); });
 }
 
 void vtanh_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvtanh(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanh(o, i, c); });
 }
 
 void vsin_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvsin(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsin(o, i, c); });
 }
 
 void vcos_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvcos(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvcos(o, i, c); });
 }
 
 void vtan_f64(const double* in, double* out, std::size_t n) {
-    int count = N(n);
-    vvtan(out, in, &count);
+    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtan(o, i, c); });
 }
 
 void vpow_f32(const float* base, const float* expo, float* out, std::size_t n) {
@@ -117,12 +122,10 @@ void vpow_f64(const double* base, const double* expo, double* out, std::size_t n
 // follows the (output_ptr, input_ptr, &count) calling convention.
 #define LUCID_VFORCE_UNARY(NAME, F32, F64)                                                         \
     void NAME##_f32(const float* in, float* out, std::size_t n) {                                  \
-        int c = N(n);                                                                              \
-        F32(out, in, &c);                                                                          \
+        split(in, out, n, [](float* o, const float* i, int* c) { F32(o, i, c); });                 \
     }                                                                                              \
     void NAME##_f64(const double* in, double* out, std::size_t n) {                                \
-        int c = N(n);                                                                              \
-        F64(out, in, &c);                                                                          \
+        split(in, out, n, [](double* o, const double* i, int* c) { F64(o, i, c); });               \
     }
 
 LUCID_VFORCE_UNARY(vasin, vvasinf, vvasin)
@@ -144,12 +147,18 @@ LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)
 // branch-free, so this loop vectorises, which a loop over libm's erff did
 // not.  float64 keeps std::erf.
 void verf_f32(const float* in, float* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i)
-        out[i] = erf_f32(in[i]);
+    parallel_for(n, kGrain, [&](std::size_t lo, std::size_t hi) {
+        const float* __restrict x = in;
+        float* __restrict y = out;
+        for (std::size_t i = lo; i < hi; ++i)
+            y[i] = erf_f32(x[i]);
+    });
 }
 void verf_f64(const double* in, double* out, std::size_t n) {
-    for (std::size_t i = 0; i < n; ++i)
-        out[i] = std::erf(in[i]);
+    parallel_for(n, kGrain, [&](std::size_t lo, std::size_t hi) {
+        for (std::size_t i = lo; i < hi; ++i)
+            out[i] = std::erf(in[i]);
+    });
 }
 
 }  // namespace lucid::backend::cpu

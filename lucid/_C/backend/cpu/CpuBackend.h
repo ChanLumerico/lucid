@@ -1206,21 +1206,36 @@ public:
             const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
             return detail::narrow_half(sigmoid(wide, shape, Dtype::F32), half_n, dt);
         }
-        auto neg_a = neg(a, shape, dt);
-        auto exp_neg = exp(neg_a, shape, dt);
-        auto one = ones(shape, dt);
-        auto denom = add(one, exp_neg, shape, dt);
-
-        const auto& cs = std::get<CpuStorage>(denom);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
+        // One pass over L1 tiles, split across cores.  The chain this replaces
+        // — neg, exp, ones, add, reciprocal — wrote three full-size
+        // temporaries and ran on one core, 2.4 times the reference.  Each
+        // element still takes the same operations in the same order (vForce
+        // exp of -x, plus one, vForce reciprocal), so the bits are unchanged.
+        const auto& ca = std::get<CpuStorage>(a);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        auto run = [&](const auto* in, auto* out, auto vexp, auto vrec) {
+            using T = std::remove_cv_t<std::remove_pointer_t<decltype(in)>>;
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                T tile[kTanhTile];
+                for (std::size_t s = lo; s < hi; s += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - s);
+                    for (std::size_t i = 0; i < m; ++i)
+                        tile[i] = -in[s + i];
+                    vexp(tile, tile, m);
+                    for (std::size_t i = 0; i < m; ++i)
+                        tile[i] = T(1) + tile[i];
+                    vrec(tile, out + s, m);
+                }
+            });
+        };
         if (dt == Dtype::F32) {
-            cpu::vrec_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                          reinterpret_cast<float*>(ptr.get()), n);
+            run(reinterpret_cast<const float*>(ca.ptr.get()), reinterpret_cast<float*>(ptr.get()),
+                &cpu::vexp_f32, &cpu::vrec_f32);
         } else if (dt == Dtype::F64) {
-            cpu::vrec_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                          reinterpret_cast<double*>(ptr.get()), n);
+            run(reinterpret_cast<const double*>(ca.ptr.get()), reinterpret_cast<double*>(ptr.get()),
+                &cpu::vexp_f64, &cpu::vrec_f64);
         } else {
             ErrorBuilder("cpu_backend::sigmoid").not_implemented("dtype not supported");
         }

@@ -225,3 +225,20 @@ def test_count_nonzero_is_an_exact_int64() -> None:
     assert lucid.count_nonzero(x).item() == 3
     assert lucid.count_nonzero(x, dim=1).tolist() == [1, 2]
     assert lucid.count_nonzero(x, dim=[0, 1]).item() == 3
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["exp", "log", "sqrt", "tanh", "sin", "cos", "erf", "sigmoid", "arctan", "sinh"],
+)
+def test_transcendentals_split_across_cores_give_the_same_bits(op: str) -> None:
+    # vForce calls (and erf, and the fused sigmoid) run in chunks across
+    # cores now; a chunk computes exactly what the whole call would, so an
+    # element's answer cannot depend on how large an array it came in.
+    x = np.random.default_rng(3).standard_normal(300_001).astype(np.float32)
+    if op in ("log", "sqrt"):
+        x = np.abs(x) + 0.1
+    fn = getattr(lucid, op)
+    whole = fn(lucid.tensor(x)).numpy()
+    for lo, hi in ((0, 17), (65_530, 65_545), (299_990, 300_001)):
+        np.testing.assert_array_equal(fn(lucid.tensor(x[lo:hi])).numpy(), whole[lo:hi])

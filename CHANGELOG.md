@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CPU element-wise kernels that ran scalar now vectorize: x ** 2 70x, max 25x, argmax 11x, masked_fill 16x, comparisons 5x, where 2x, bitwise 27x, float-to-int casts 4x, and the ReLU/where/hardsigmoid backward 19x; .to(dtype) no longer copies before it casts, and count_nonzero sums its bool mask
 
+- CPU transcendentals split across cores: erf 5x (it was 14x the reference), exp, log, tanh, sin, cos, arctan and the other vForce ops now ahead of the reference; sigmoid runs as one tiled pass, 2.5x — the same bits as before
+
 ### Fixed
 
 - bfloat16 on the CPU: linear, pow_scalar, rpow_scalar, add_scalar, mul_scalar and the reduction backward wrote float16 bits under a bfloat16 label — linear was off by 1.8e5 and the gradient of x ** 3 128 times too small.  bfloat16 // returned int64 with NaN as 0, and Metal's bfloat16 argmax skipped NaN
