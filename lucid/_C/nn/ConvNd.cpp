@@ -83,7 +83,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (b->shape().size() != 1)
         throw ShapeMismatch(b->shape(), Shape{}, "conv: b must be 1-D (C_out,)");
     if (groups < 1)
-        ErrorBuilder("conv").fail("groups must be >= 1");
+        ErrorBuilder("conv").invalid_argument("groups must be >= 1");
 
     // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under an
     // ``AutocastGuard(F16)`` scope, SchemaGuard resolves ``eff_dt`` to
@@ -140,7 +140,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         K[i] = static_cast<int>(W_eff->shape()[2 + i]);
         if (dilation[i] < 1)
-            ErrorBuilder("conv").fail("dilation must be >= 1");
+            ErrorBuilder("conv").invalid_argument("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
             throw ShapeMismatch(x_eff->shape(), W_eff->shape(), "conv: output shape non-positive");

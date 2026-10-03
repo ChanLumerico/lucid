@@ -47,7 +47,7 @@ std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
     Validator::input(a, "svd.a").non_null();
     require_float(a->dtype(), "svd");
     if (a->shape().size() < 2)
-        ErrorBuilder("svd").fail("input must be at least 2-D");
+        ErrorBuilder("svd").invalid_argument("input must be at least 2-D");
     OpScopeFull scope{"svd", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

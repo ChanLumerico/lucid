@@ -26,7 +26,7 @@ namespace {
 // Throws not_implemented with a diagnostic message if the constraint fails.
 inline void check_uniform(int S, int O, int axis, const char* op) {
     if (O <= 0)
-        ErrorBuilder(op).fail("output_size must be > 0");
+        ErrorBuilder(op).invalid_argument("output_size must be > 0");
     if (S % O != 0) {
         ErrorBuilder(op).not_implemented("non-uniform adaptive pooling not supported (axis" +
                                          std::to_string(axis) + ": input " + std::to_string(S) +

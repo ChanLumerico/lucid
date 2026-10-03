@@ -22,7 +22,7 @@ std::vector<TensorImplPtr> lu_factor_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "lu_factor.a").float_only();
     if (a->shape().size() < 2)
-        ErrorBuilder("lu_factor.a").fail("input must be at least 2-D");
+        ErrorBuilder("lu_factor.a").invalid_argument("input must be at least 2-D");
 
     const auto& sh = a->shape();
     const int m = static_cast<int>(sh[sh.size() - 2]);

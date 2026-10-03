@@ -45,7 +45,7 @@ std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
     Validator::input(a, "qr.a").non_null();
     require_float(a->dtype(), "qr");
     if (a->shape().size() < 2)
-        ErrorBuilder("qr").fail("input must be at least 2-D");
+        ErrorBuilder("qr").invalid_argument("input must be at least 2-D");
     OpScopeFull scope{"qr", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

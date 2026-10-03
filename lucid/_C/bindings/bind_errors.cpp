@@ -52,15 +52,25 @@ void register_errors(py::module_& m) {
         return cls;
     };
 
+    // A refusal of one kind is catchable as the builtin a caller would reach
+    // for, whichever layer raised it: a shape or device mismatch is a
+    // ``ValueError`` (the Python layer raised that for the same refusal), a
+    // dtype mismatch a ``TypeError``.  Each stays a ``LucidError``, and so a
+    // ``RuntimeError``, as the reference framework raises them.
     static py::object oom_cls = make_subclass("OutOfMemory");
-    static py::object shape_mismatch_cls = make_subclass("ShapeMismatch");
-    static py::object dtype_mismatch_cls = make_subclass("DtypeMismatch");
-    static py::object device_mismatch_cls = make_subclass("DeviceMismatch");
+    static py::object shape_mismatch_cls =
+        make_subclass("ShapeMismatch", builtins.attr("ValueError"));
+    static py::object dtype_mismatch_cls =
+        make_subclass("DtypeMismatch", builtins.attr("TypeError"));
+    static py::object device_mismatch_cls =
+        make_subclass("DeviceMismatch", builtins.attr("ValueError"));
     static py::object version_mismatch_cls = make_subclass("VersionMismatch");
     static py::object gpu_unavailable_cls = make_subclass("GpuNotAvailable");
     static py::object index_error_cls = make_subclass("IndexError", builtins.attr("IndexError"));
     static py::object not_implemented_cls =
         make_subclass("NotImplementedError", builtins.attr("NotImplementedError"));
+    static py::object invalid_argument_cls =
+        make_subclass("InvalidArgument", builtins.attr("ValueError"));
 
     // The translator is called for every active exception that crosses the
     // C++/Python boundary.  More-derived types are checked first so that they
@@ -86,6 +96,8 @@ void register_errors(py::module_& m) {
             PyErr_SetString(index_error_cls.ptr(), e.what());
         } catch (const NotImplementedError& e) {
             PyErr_SetString(not_implemented_cls.ptr(), e.what());
+        } catch (const InvalidArgument& e) {
+            PyErr_SetString(invalid_argument_cls.ptr(), e.what());
         } catch (const LucidError& e) {
             PyErr_SetString(lucid_error_cls.ptr(), e.what());
         }

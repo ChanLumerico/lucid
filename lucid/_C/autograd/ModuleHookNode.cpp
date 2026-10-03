@@ -277,7 +277,8 @@ void register_module_hook_nodes(py::module_& m) {
 
             for (const auto& [out_idx, impl] : outputs) {
                 if (out_idx >= n_outputs) {
-                    ErrorBuilder("_wrap_module_backward_outputs").fail("output index out of range");
+                    ErrorBuilder("_wrap_module_backward_outputs")
+                        .index_error("output index out of range");
                 }
                 edges.push_back(edge_for(impl));
                 state->output_metas[out_idx] = {impl->shape(), impl->dtype(), impl->device()};

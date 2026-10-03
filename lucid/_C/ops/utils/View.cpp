@@ -65,7 +65,7 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
             wildcard_pos = static_cast<int>(i);
             resolved.push_back(0);  // placeholder; filled in below
         } else if (new_shape[i] < 0) {
-            ErrorBuilder("reshape").fail("negative dim other than -1 is invalid");
+            ErrorBuilder("reshape").invalid_argument("negative dim other than -1 is invalid");
         } else {
             known_product *= new_shape[i];
             resolved.push_back(new_shape[i]);
@@ -298,7 +298,7 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     bool empty = false;
     for (std::size_t d = 0; d < size.size(); ++d) {
         if (size[d] < 0 || stride[d] < 0)
-            ErrorBuilder("as_strided").fail("size and stride must be non-negative");
+            ErrorBuilder("as_strided").invalid_argument("size and stride must be non-negative");
         if (size[d] == 0)
             empty = true;
         else

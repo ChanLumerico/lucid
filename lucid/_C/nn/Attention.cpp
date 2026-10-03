@@ -110,7 +110,7 @@ ForwardCore run_forward(const TensorImplPtr& q,
         throw DtypeMismatch(std::string(dtype_name(q->dtype())),
                             std::string(dtype_name(k->dtype())), "attention: Q/K/V dtype mismatch");
     if (q->shape().size() < 2 || k->shape().size() < 2 || v->shape().size() < 2)
-        ErrorBuilder("attention").fail("Q/K/V must be at least 2-D");
+        ErrorBuilder("attention").invalid_argument("Q/K/V must be at least 2-D");
 
     const auto fq = flatten_qkv(q->shape(), "Q");
     const auto fk = flatten_qkv(k->shape(), "K");

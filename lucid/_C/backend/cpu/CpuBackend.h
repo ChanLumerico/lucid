@@ -3535,7 +3535,7 @@ public:
                                 k += axis_extent;
                             if (k < 0 || k >= axis_extent)
                                 ErrorBuilder("cpu_backend::gather")
-                                    .fail("index out of range for the gathered axis");
+                                    .index_error("index out of range for the gathered axis");
                             dst[row + i] =
                                 src[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
                                     i];
@@ -3589,7 +3589,7 @@ public:
             // shape as scatter_add above, on the reading side.
             if (k < 0 || k >= axis_extent)
                 ErrorBuilder("cpu_backend::gather")
-                    .fail("index out of range for the gathered axis");
+                    .index_error("index out of range for the gathered axis");
             std::size_t a_flat = 0;
             for (std::size_t d = 0; d < ndim; ++d) {
                 std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -3679,7 +3679,7 @@ public:
                                 k += axis_extent;
                             if (k < 0 || k >= axis_extent)
                                 ErrorBuilder("cpu_backend::gather_backward")
-                                    .fail("index out of range for the gathered axis");
+                                    .index_error("index out of range for the gathered axis");
                             dst[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
                                 i] += gp[row + i];
                         }
@@ -3714,7 +3714,7 @@ public:
                     k += input_shape[static_cast<std::size_t>(axis)];
                 if (k < 0 || k >= axis_extent)
                     ErrorBuilder("cpu_backend::gather_backward")
-                        .fail("index out of range for the gathered axis");
+                        .index_error("index out of range for the gathered axis");
                 std::size_t input_flat = 0;
                 for (std::size_t d = 0; d < ndim; ++d) {
                     const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -3739,7 +3739,7 @@ public:
                     k += input_shape[static_cast<std::size_t>(axis)];
                 if (k < 0 || k >= axis_extent)
                     ErrorBuilder("cpu_backend::gather_backward")
-                        .fail("index out of range for the gathered axis");
+                        .index_error("index out of range for the gathered axis");
                 std::size_t input_flat = 0;
                 for (std::size_t d = 0; d < ndim; ++d) {
                     const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -4687,7 +4687,7 @@ public:
                         // and the previous behaviour was to corrupt memory.
                         if (tgt < 0 || static_cast<std::size_t>(tgt) >= base_dim)
                             ErrorBuilder("cpu_backend::scatter_add")
-                                .fail("index out of range for the scattered axis");
+                                .index_error("index out of range for the scattered axis");
                         const std::size_t dst_flat = outer_off[o] +
                                                      static_cast<std::size_t>(tgt) * dim_stride +
                                                      inner_off[j];
@@ -6075,7 +6075,8 @@ public:
         if (dt != Dtype::F32 && dt != Dtype::F64)
             ErrorBuilder("cpu_backend::linalg_lu_factor").not_implemented("only F32/F64 supported");
         if (shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_lu_factor").fail("input must be at least 2-D");
+            ErrorBuilder("cpu_backend::linalg_lu_factor")
+                .invalid_argument("input must be at least 2-D");
         const auto& cs = std::get<CpuStorage>(a);
         const int m = static_cast<int>(shape[shape.size() - 2]);
         const int n = static_cast<int>(shape[shape.size() - 1]);
@@ -6174,7 +6175,7 @@ public:
         // which then sizes every buffer here.  Seen as both a 1.8e19-byte allocation
         // request and a SIGSEGV, depending on what the garbage happened to be.
         if (a_shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_lstsq").fail("A must be at least 2-D");
+            ErrorBuilder("cpu_backend::linalg_lstsq").invalid_argument("A must be at least 2-D");
         const auto& a_cpu = std::get<CpuStorage>(a);
         const auto& b_cpu = std::get<CpuStorage>(b);
         const int m = static_cast<int>(a_shape[a_shape.size() - 2]);
@@ -6274,7 +6275,8 @@ public:
         // ``size() - 2`` reads past the shape, and what it finds becomes the row
         // count every buffer here is sized from.
         if (h_shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_householder_product").fail("H must be at least 2-D");
+            ErrorBuilder("cpu_backend::linalg_householder_product")
+                .invalid_argument("H must be at least 2-D");
         const auto& h_cpu = std::get<CpuStorage>(H);
         const auto& tau_cpu = std::get<CpuStorage>(tau);
         const int m = static_cast<int>(h_shape[h_shape.size() - 2]);

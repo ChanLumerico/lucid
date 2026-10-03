@@ -103,9 +103,9 @@ std::vector<TensorImplPtr>
 histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
     Validator::input(a, "histogram.a").non_null();
     if (bins <= 0)
-        ErrorBuilder("histogram").fail("bins must be > 0");
+        ErrorBuilder("histogram").invalid_argument("bins must be > 0");
     if (hi <= lo)
-        ErrorBuilder("histogram").fail("hi must be > lo");
+        ErrorBuilder("histogram").invalid_argument("hi must be > lo");
     OpScopeFull scope{"histogram", a->device(), a->dtype(), a->shape()};
 
     const auto cpu = to_cpu(a);
@@ -163,7 +163,7 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     if (a->shape() != b->shape())
         throw ShapeMismatch(a->shape(), b->shape(), "histogram2d");
     if (bins_a <= 0 || bins_b <= 0)
-        ErrorBuilder("histogram2d").fail("bins must be > 0");
+        ErrorBuilder("histogram2d").invalid_argument("bins must be > 0");
     OpScopeFull scope{"histogram2d", a->device(), a->dtype(), a->shape()};
 
     const auto ca = to_cpu(a);
@@ -255,7 +255,7 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     std::vector<double> step(D);
     for (std::int64_t d = 0; d < D; ++d) {
         if (ranges[d].second <= ranges[d].first)
-            ErrorBuilder("histogramdd").fail("each range hi must be > lo");
+            ErrorBuilder("histogramdd").invalid_argument("each range hi must be > lo");
         step[d] = (ranges[d].second - ranges[d].first) / static_cast<double>(bins[d]);
     }
 

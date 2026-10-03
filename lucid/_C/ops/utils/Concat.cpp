@@ -533,7 +533,7 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     OpScopeFull scope{"split", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (num_splits <= 0)
-        ErrorBuilder("split").fail("num_splits must be positive");
+        ErrorBuilder("split").invalid_argument("num_splits must be positive");
     if (a->shape()[ax] % num_splits != 0)
         ErrorBuilder("split").fail("dimension not divisible by num_splits");
     const std::int64_t piece = a->shape()[ax] / num_splits;

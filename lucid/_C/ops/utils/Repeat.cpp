@@ -180,7 +180,7 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     scope.set_attr("reps", reps);
     const std::size_t nout = reps.size();
     if (nout < a->shape().size())
-        ErrorBuilder("tile").fail("reps must be at least as long as ndim");
+        ErrorBuilder("tile").invalid_argument("reps must be at least as long as ndim");
 
     // Build padded: align the input dimensions against the right of reps by
     // prepending 1s for every extra leading repetition dimension.

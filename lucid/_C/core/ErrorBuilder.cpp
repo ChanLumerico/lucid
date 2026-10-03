@@ -84,6 +84,10 @@ void ErrorBuilder::index_error(const std::string& msg) const {
     throw IndexError(format_with_context(msg));
 }
 
+void ErrorBuilder::invalid_argument(const std::string& msg) const {
+    throw InvalidArgument(format_with_context(msg));
+}
+
 // For typed mismatch throws, the context string is built separately so the
 // ShapeMismatch / DtypeMismatch / DeviceMismatch constructors receive a fully
 // qualified context (op + detail + trace) as their context argument.

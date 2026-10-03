@@ -50,7 +50,7 @@ struct FlatX {
 // Throws if x is 0-D (scalar).
 FlatX flatten_x(const Shape& x_shape) {
     if (x_shape.empty()) {
-        ErrorBuilder("linear").fail("x must be at least 1-D");
+        ErrorBuilder("linear").invalid_argument("x must be at least 1-D");
     }
     std::size_t m = 1;
     for (std::size_t d = 0; d + 1 < x_shape.size(); ++d) {

@@ -48,7 +48,7 @@ namespace lucid {
 TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_dtype) {
     Validator::input(input, "one_hot.input").non_null();
     if (num_classes <= 0)
-        ErrorBuilder("one_hot").fail("num_classes must be > 0");
+        ErrorBuilder("one_hot").invalid_argument("num_classes must be > 0");
     Shape out_shape = input->shape();
     out_shape.push_back(num_classes);
     OpScopeFull scope{"one_hot", input->device(), out_dtype, out_shape};

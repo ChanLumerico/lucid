@@ -67,7 +67,8 @@ TensorImplPtr dispatch_reduce(const TensorImplPtr& x, const std::vector<int>& ax
     case 5:
         return prod_op(x, axes, false);
     default:
-        ErrorBuilder("reduce").fail("unknown reduction code " + std::to_string(reduction));
+        ErrorBuilder("reduce").invalid_argument("unknown reduction code " +
+                                                std::to_string(reduction));
     }
 }
 

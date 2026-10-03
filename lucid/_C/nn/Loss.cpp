@@ -430,7 +430,7 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input0,
         throw ShapeMismatch(input->shape(), target->shape(),
                             "huber_loss: input/target shape mismatch");
     if (delta <= 0.0)
-        ErrorBuilder("huber_loss").fail("delta must be positive");
+        ErrorBuilder("huber_loss").invalid_argument("delta must be positive");
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};

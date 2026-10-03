@@ -162,7 +162,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         for (auto ax : axes_contract) {
             int p = ax < 0 ? ax + (int)nd : ax;
             if (p < 0 || p >= (int)nd)
-                ErrorBuilder("tensordot").fail("axis out of range");
+                ErrorBuilder("tensordot").index_error("axis out of range");
             is_c[p] = true;
         }
         std::vector<int> perm;

@@ -123,7 +123,7 @@ inline int wrap_axis(int axis, int ndim) {
     if (a < 0)
         a += ndim;
     if (a < 0 || a >= ndim)
-        ErrorBuilder("axis").fail("out of range");
+        ErrorBuilder("axis").index_error("out of range");
     return a;
 }
 

@@ -37,7 +37,7 @@ void LRScheduler::set_epoch(std::int64_t epoch) {
 StepLR::StepLR(Optimizer& opt, std::int64_t step_size, double gamma)
     : LRScheduler(opt), step_size_(step_size), gamma_(gamma) {
     if (step_size_ <= 0)
-        ErrorBuilder("StepLR").fail("step_size must be > 0");
+        ErrorBuilder("StepLR").invalid_argument("step_size must be > 0");
 }
 
 // Decay lr by gamma to the power of (epoch / step_size), so every
@@ -77,7 +77,7 @@ double MultiStepLR::compute_lr_at(std::int64_t epoch) const {
 CosineAnnealingLR::CosineAnnealingLR(Optimizer& opt, std::int64_t T_max, double eta_min)
     : LRScheduler(opt), T_max_(T_max), eta_min_(eta_min) {
     if (T_max_ <= 0)
-        ErrorBuilder("CosineAnnealingLR").fail("T_max must be > 0");
+        ErrorBuilder("CosineAnnealingLR").invalid_argument("T_max must be > 0");
 }
 
 // Cosine half-period: starts at base_lr_ when epoch=0, reaches eta_min_
@@ -189,7 +189,7 @@ CyclicLR::CyclicLR(Optimizer& opt,
     if (base_lr >= max_lr)
         ErrorBuilder("CyclicLR").fail("base_lr must be < max_lr");
     if (step_size_up <= 0)
-        ErrorBuilder("CyclicLR").fail("step_size_up must be > 0");
+        ErrorBuilder("CyclicLR").invalid_argument("step_size_up must be > 0");
 }
 
 // Compute the triangular wave position x in [0, 1] and then scale
@@ -223,11 +223,11 @@ NoamScheduler::NoamScheduler(Optimizer& opt,
                              double factor)
     : LRScheduler(opt), model_size_(model_size), warmup_steps_(warmup_steps), factor_(factor) {
     if (model_size <= 0)
-        ErrorBuilder("NoamScheduler").fail("model_size must be > 0");
+        ErrorBuilder("NoamScheduler").invalid_argument("model_size must be > 0");
     if (warmup_steps <= 0)
-        ErrorBuilder("NoamScheduler").fail("warmup_steps must be > 0");
+        ErrorBuilder("NoamScheduler").invalid_argument("warmup_steps must be > 0");
     if (factor <= 0)
-        ErrorBuilder("NoamScheduler").fail("factor must be > 0");
+        ErrorBuilder("NoamScheduler").invalid_argument("factor must be > 0");
 }
 
 // The Noam (transformer) schedule linearly increases lr during warmup then

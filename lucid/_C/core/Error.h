@@ -5,9 +5,13 @@
 // catch(std::exception&) still see a meaningful message.
 //
 // Exception types are purposely granular so that Python bindings can map them
-// to distinct Python exception types (e.g. ShapeMismatch → ValueError) and
-// so that C++ callers can selectively catch specific error conditions without
-// relying on string-matching what().
+// to distinct Python exception types and so that C++ callers can selectively
+// catch specific error conditions without relying on string-matching what().
+// On the Python side every class is a ``LucidError`` (so a ``RuntimeError``),
+// and each kind also derives from the builtin a caller would reach for:
+// ShapeMismatch and DeviceMismatch from ``ValueError``, DtypeMismatch from
+// ``TypeError``, IndexError, NotImplementedError and InvalidArgument from the
+// builtin of their name or ``ValueError`` — see bind_errors.cpp.
 //
 // Error messages are formatted at construction time and stored in msg_; what()
 // is therefore allocation-free at catch sites.
@@ -454,10 +458,9 @@ public:
 // Thrown by indexing and slicing operations when an index falls outside the
 // valid range of its dimension.
 //
-// Mapped to ``lucid._C.engine.IndexError`` on the Python side, which itself
-// inherits from ``LucidError`` (not from the built-in Python
-// ``IndexError``).  Callers wanting to catch both Lucid and native index
-// errors should match on ``LookupError`` or both classes explicitly.
+// Mapped to ``lucid._C.engine.IndexError`` on the Python side, which
+// inherits from both ``LucidError`` and the built-in ``IndexError`` — so
+// ``except IndexError`` and ``except LucidError`` both catch it.
 //
 // Parameters
 // ----------
@@ -498,6 +501,28 @@ public:
     // call site built describing the unsupported dtype / device / config
     // combination.  Passed through unchanged to the :class:`LucidError` base.
     explicit NotImplementedError(std::string msg) : LucidError(std::move(msg)) {}
+};
+
+// Thrown when an argument's *value* is out of what the op accepts — a
+// negative size, a step of zero, a probability outside [0, 1], a group
+// count that does not divide the channels.
+//
+// The caller passed the right types and shapes and a value that cannot be
+// right.  Mapped to ``lucid._C.engine.InvalidArgument``, which derives from
+// ``LucidError`` and the built-in ``ValueError``: the same kind of refusal
+// raised ``ValueError`` from Python and a bare ``LucidError`` from the
+// engine, so neither ``except`` caught both.
+//
+// Parameters
+// ----------
+// msg : std::string
+//     Fully formatted message; passed through unchanged to the
+//     :class:`LucidError` base.
+class InvalidArgument : public LucidError {
+public:
+    // Construct an ``InvalidArgument`` from the call site's message naming
+    // the argument and the value it was given.
+    explicit InvalidArgument(std::string msg) : LucidError(std::move(msg)) {}
 };
 
 }  // namespace lucid

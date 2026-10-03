@@ -139,7 +139,7 @@ TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
     if (seq_len < 0)
         ErrorBuilder("sinusoidal_pos_embedding").fail("seq_len < 0");
     if (embed_dim <= 0)
-        ErrorBuilder("sinusoidal_pos_embedding").fail("embed_dim must be > 0");
+        ErrorBuilder("sinusoidal_pos_embedding").invalid_argument("embed_dim must be > 0");
 
     Shape out_shape{seq_len, embed_dim};
     OpScopeFull scope{"sinusoidal_pos_embedding", device, dtype, out_shape};
@@ -161,7 +161,8 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
                              std::string(device_name(position_ids_or_null->device())),
                              "rotary_pos_embedding: input/position_ids");
     if (input->shape().size() < 2)
-        ErrorBuilder("rotary_pos_embedding").fail("input must be at least 2-D ([..., L, D])");
+        ErrorBuilder("rotary_pos_embedding")
+            .invalid_argument("input must be at least 2-D ([..., L, D])");
 
     const std::size_t ndim = input->shape().size();
     const std::size_t D = static_cast<std::size_t>(input->shape()[ndim - 1]);

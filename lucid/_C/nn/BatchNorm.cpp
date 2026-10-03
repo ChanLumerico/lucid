@@ -465,7 +465,7 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     int n_total = 1;
     for (int d : reduce_axes) {
         if (d < 0 || d >= static_cast<int>(x_shape.size())) {
-            ErrorBuilder("batch_norm_update_running_stats").fail("reduce axis out of range");
+            ErrorBuilder("batch_norm_update_running_stats").index_error("reduce axis out of range");
         }
         n_total *= static_cast<int>(x_shape[d]);
     }

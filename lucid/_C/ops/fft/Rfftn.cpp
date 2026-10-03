@@ -25,7 +25,7 @@ TensorImplPtr rfftn_op(const TensorImplPtr& a,
     const Dtype out_dtype = fft_detail::dtype_for_rfft(a->dtype());
     const int rank = static_cast<int>(a->shape().size());
     if (rank == 0)
-        ErrorBuilder("rfftn").fail("input must be at least 1-D");
+        ErrorBuilder("rfftn").invalid_argument("input must be at least 1-D");
 
     std::vector<int> axes = axes_in;
     fft_detail::default_axes_all(axes, rank);

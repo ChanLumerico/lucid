@@ -66,7 +66,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     if (b->shape().size() != 1)
         throw ShapeMismatch(b->shape(), Shape{}, "conv_transpose: b must be 1-D");
     if (groups < 1)
-        ErrorBuilder("conv_transpose").fail("groups must be >= 1");
+        ErrorBuilder("conv_transpose").invalid_argument("groups must be >= 1");
 
     const int B = static_cast<int>(x->shape()[0]);
     const int Cin = static_cast<int>(x->shape()[1]);
@@ -88,7 +88,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         S[i] = static_cast<int>(x->shape()[2 + i]);
         K[i] = static_cast<int>(W->shape()[2 + i]);
         if (dilation[i] < 1)
-            ErrorBuilder("conv_transpose").fail("dilation must be >= 1");
+            ErrorBuilder("conv_transpose").invalid_argument("dilation must be >= 1");
         // Transposed-conv output formula (the inverse of the forward
         // convolution's, with ``opad`` picking one of the ``stride``
         // input extents that map to this output extent).

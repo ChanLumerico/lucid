@@ -175,7 +175,7 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
     if (ax < 0)
         ax += static_cast<int>(sh.size());
     if (ax < 0 || ax >= (int)sh.size())
-        ErrorBuilder(name).fail("axis out of range");
+        ErrorBuilder(name).index_error("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
 
@@ -240,7 +240,7 @@ TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis, bool is_max, c
     if (ax < 0)
         ax += static_cast<int>(sh.size());
     if (ax < 0 || ax >= (int)sh.size())
-        ErrorBuilder(name).fail("axis out of range");
+        ErrorBuilder(name).index_error("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
 

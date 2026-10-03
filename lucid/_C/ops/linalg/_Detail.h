@@ -221,7 +221,7 @@ inline void require_float(Dtype dt, const char* op) {
 //     If the last two dimensions of ``sh`` are not equal.
 inline void require_square_2d(const Shape& sh, const char* op) {
     if (sh.size() < 2)
-        ErrorBuilder(op).fail("input must be at least 2-D");
+        ErrorBuilder(op).invalid_argument("input must be at least 2-D");
     if (sh[sh.size() - 1] != sh[sh.size() - 2])
         ErrorBuilder(op).fail("last two dims must be equal (square)");
 }

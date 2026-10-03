@@ -30,7 +30,7 @@ lu_solve_op(const TensorImplPtr& LU, const TensorImplPtr& pivots, const TensorIm
     // that had fewer and answered ``[nan, nan, -inf]``.
     const auto& lu_sh = LU->shape();
     if (lu_sh.size() < 2)
-        ErrorBuilder("lu_solve.LU").fail("LU must be at least 2-D");
+        ErrorBuilder("lu_solve.LU").invalid_argument("LU must be at least 2-D");
     if (lu_sh[lu_sh.size() - 1] != lu_sh[lu_sh.size() - 2])
         ErrorBuilder("lu_solve.LU")
             .fail("LU must be square to solve with — lu_factor accepts a "

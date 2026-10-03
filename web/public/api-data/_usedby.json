@@ -218,6 +218,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._mixins"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.multimodal.clip._tokenizer"
     },
     {

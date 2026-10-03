@@ -66,7 +66,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input0,
         ErrorBuilder("interpolate_bilinear")
             .fail("cannot interpolate from an image with a zero spatial extent");
     if (H_out <= 0 || W_out <= 0)
-        ErrorBuilder("interpolate_bilinear").fail("output extent must be positive");
+        ErrorBuilder("interpolate_bilinear").invalid_argument("output extent must be positive");
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
     scope.set_attr("H_out", static_cast<std::int64_t>(H_out));

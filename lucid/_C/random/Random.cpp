@@ -93,7 +93,7 @@ TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device, Generator* ge
 TensorImplPtr
 uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device, Generator* gen) {
     if (high <= low)
-        ErrorBuilder("uniform").fail("high must be > low");
+        ErrorBuilder("uniform").invalid_argument("high must be > low");
     OpScopeFull scope{"uniform", device, dt, shape};
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("low", low);
@@ -119,7 +119,7 @@ TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device, Generator* g
 TensorImplPtr
 normal_op(const Shape& shape, double mean, double std, Dtype dt, Device device, Generator* gen) {
     if (std < 0.0)
-        ErrorBuilder("normal").fail("std must be >= 0");
+        ErrorBuilder("normal").invalid_argument("std must be >= 0");
     OpScopeFull scope{"normal", device, dt, shape};
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("mean", mean);

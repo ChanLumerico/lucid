@@ -474,7 +474,7 @@ std::uint64_t gpu_random_key_seed(Generator& gen) {
 Storage bernoulli_mask_storage_shape(
     double keep_prob, const Shape& shape, Dtype dt, Device device, Generator& gen) {
     if (keep_prob < 0.0 || keep_prob > 1.0) {
-        ErrorBuilder("bernoulli_mask").fail("keep_prob must be in [0, 1]");
+        ErrorBuilder("bernoulli_mask").invalid_argument("keep_prob must be in [0, 1]");
     }
     // GPU: draw the whole mask on-device via MLX RNG instead of the per-element
     // CPU Philox loop + host->device upload below (which dominated Dropout's
@@ -726,7 +726,7 @@ Storage random_normal_storage(
 Storage
 random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
     if (p < 0.0 || p > 1.0)
-        ErrorBuilder("random_bernoulli").fail("p must be in [0, 1]");
+        ErrorBuilder("random_bernoulli").invalid_argument("p must be in [0, 1]");
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_bernoulli(shape, p, dt,
                                                                         gpu_random_key_seed(gen));
@@ -766,7 +766,7 @@ Storage random_randint_storage(const Shape& shape,
                                Device device,
                                Generator& gen) {
     if (high <= low)
-        ErrorBuilder("random_randint").fail("high must be > low");
+        ErrorBuilder("random_randint").invalid_argument("high must be > low");
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_randint(shape, low, high, dt,
                                                                       gpu_random_key_seed(gen));

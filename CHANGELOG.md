@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - clahe raised ZeroDivisionError on an image smaller than its tile grid (a 1 x 1 image, say) and failed on an empty one; the grid is capped at the image and an empty image comes back as it is
 - lucid.compile(..., dynamic=True) answered later batches with the traced one baked in — std over the batch axis scaled by the traced n/(n-1); permute, diagonal and batch_norm_eval returned the traced shape; split and roll along the batch were wrong — and aborted the process in MPSGraph for .mT.contiguous(), conv1d, the transposed convolutions, nearest resize, and a gather or scatter whose index is shorter than its input (on the static path too). Such graphs now compile per shape, or run eagerly
 
+### Changed
+
+- A refusal is catchable by its kind from either layer: ShapeMismatch and DeviceMismatch are also ValueError, DtypeMismatch also TypeError, and a new InvalidArgument (also ValueError) carries the engine's argument-value refusals — groups=0, dropout(p=1.5), bins=0 — which were bare LucidError. An axis or index out of range is IndexError throughout. Every class stays a LucidError, so a RuntimeError
+
 ---
 
 ## [3.15.5] — 2026-10-03

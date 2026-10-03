@@ -38,7 +38,7 @@ int parse_einops_reduction(const std::string& reduction) {
         return 4;
     if (reduction == "prod")
         return 5;
-    ErrorBuilder("einops.reduce").fail("unknown reduction '" + reduction + "'");
+    ErrorBuilder("einops.reduce").invalid_argument("unknown reduction '" + reduction + "'");
 }
 
 }  // namespace

@@ -68,7 +68,7 @@ TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     int s = start_axis < 0 ? start_axis + ndim : start_axis;
     int e = end_axis < 0 ? end_axis + ndim : end_axis;
     if (s < 0 || e >= ndim || s > e)
-        ErrorBuilder("flatten").fail("invalid axis range");
+        ErrorBuilder("flatten").invalid_argument("invalid axis range");
 
     std::vector<std::int64_t> new_shape;
     for (int d = 0; d < s; ++d)

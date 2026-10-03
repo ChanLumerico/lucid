@@ -36,15 +36,15 @@ SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
       weight_decay_(weight_decay),
       nesterov_(nesterov) {
     if (lr_ < 0.0)
-        ErrorBuilder("SGD").fail("lr must be >= 0");
+        ErrorBuilder("SGD").invalid_argument("lr must be >= 0");
     if (momentum_ < 0.0)
-        ErrorBuilder("SGD").fail("momentum must be >= 0");
+        ErrorBuilder("SGD").invalid_argument("momentum must be >= 0");
     if (weight_decay_ < 0.0)
-        ErrorBuilder("SGD").fail("weight_decay must be >= 0");
+        ErrorBuilder("SGD").invalid_argument("weight_decay must be >= 0");
     // Nesterov momentum requires a pure momentum term (no dampening) so
     // that the gradient look-ahead is well-defined.
     if (nesterov_ && (momentum_ <= 0.0 || dampening_ != 0.0)) {
-        ErrorBuilder("SGD").fail("nesterov requires momentum > 0 and dampening = 0");
+        ErrorBuilder("SGD").invalid_argument("nesterov requires momentum > 0 and dampening = 0");
     }
 }
 
@@ -255,7 +255,7 @@ ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
       t0_(t0),
       lambd_(lambd) {
     if (lr_ < 0.0)
-        ErrorBuilder("ASGD").fail("lr must be >= 0");
+        ErrorBuilder("ASGD").invalid_argument("lr must be >= 0");
 }
 
 // Initialize velocity and running-average buffers for this slot.

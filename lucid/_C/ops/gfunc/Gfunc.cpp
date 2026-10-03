@@ -160,7 +160,7 @@ TensorImplPtr eye_op(
     if (M < 0)
         M = N;
     if (N < 0)
-        ErrorBuilder("eye").fail("N and M must be >= 0");
+        ErrorBuilder("eye").invalid_argument("N and M must be >= 0");
     Shape shape{N, M};
     OpScopeFull scope{"eye", device, dt, shape};
     auto s = backend::Dispatcher::for_device(device).eye(N, M, k, dt);
@@ -280,7 +280,7 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
 TensorImplPtr linspace_op(
     double start, double stop, std::int64_t num, Dtype dt, Device device, bool requires_grad) {
     if (num < 0)
-        ErrorBuilder("linspace").fail("num must be >= 0");
+        ErrorBuilder("linspace").invalid_argument("num must be >= 0");
     Shape shape{num};
     OpScopeFull scope{"linspace", device, dt, shape};
     // The compile emitter bakes the same sequence as a constant; the length
@@ -390,7 +390,7 @@ TensorImplPtr logspace_op(double start,
                           Device device,
                           bool requires_grad) {
     if (num < 0)
-        ErrorBuilder("logspace").fail("num must be >= 0");
+        ErrorBuilder("logspace").invalid_argument("num must be >= 0");
     Shape shape{num};
     OpScopeFull scope{"logspace", device, dt, shape};
 
@@ -983,7 +983,7 @@ make_unfold_scatter_index(const Shape& flat_shape, int dim, int size, int step, 
 TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step) {
     Validator::input(a, "unfold_dim.a").non_null();
     if (size <= 0 || step <= 0)
-        ErrorBuilder("unfold_dim").fail("size and step must be positive");
+        ErrorBuilder("unfold_dim").invalid_argument("size and step must be positive");
 
     const Shape& in_shape = a->shape();
     const int ndim = static_cast<int>(in_shape.size());
@@ -995,7 +995,7 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     // above it sailed through and became the output shape.  Same call,
     // two different answers on two runs.
     if (d < 0 || d >= ndim)
-        ErrorBuilder("unfold_dim").fail("dim is out of range for the operand's rank");
+        ErrorBuilder("unfold_dim").index_error("dim is out of range for the operand's rank");
     const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(d)]);
     if (size > dim_size)
         ErrorBuilder("unfold_dim").fail("size > dimension size");

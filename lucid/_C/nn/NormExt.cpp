@@ -155,7 +155,7 @@ LpNormalizeBackward::forward(const TensorImplPtr& x0, double ord, int axis, doub
     if (axis < 0)
         axis += rank;
     if (axis < 0 || axis >= rank)
-        ErrorBuilder("lp_normalize").fail("axis out of range");
+        ErrorBuilder("lp_normalize").index_error("axis out of range");
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     scope.set_attr("ord", ord);

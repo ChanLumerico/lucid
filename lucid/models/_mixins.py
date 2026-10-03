@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 import lucid
+from lucid._C import engine as _C_engine
 import lucid.nn as nn
 import lucid.nn.functional as F
 
@@ -622,7 +623,12 @@ class CausalLMMixin:
             if past is not None:
                 try:
                     outputs = model(model_input, use_cache=True, past_key_values=past)
-                except TypeError:
+                except TypeError as exc:
+                    # An engine refusal is a TypeError too (a dtype mismatch
+                    # derives from it) and is a real error in the forward,
+                    # not a model without the keywords — let it through.
+                    if isinstance(exc, _C_engine.LucidError):
+                        raise
                     # Host model has no cache support — degrade to re-encoding.
                     past = None
                     outputs = model(lucid.stack(out_tokens, dim=1))

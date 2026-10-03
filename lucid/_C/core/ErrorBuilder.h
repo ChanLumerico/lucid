@@ -241,6 +241,19 @@ public:
     //     Always.  This function does not return.
     [[noreturn]] void index_error(const std::string& msg) const;
 
+    // Throws an :class:`InvalidArgument` with the op name and trace.
+    //
+    // Parameters
+    // ----------
+    // msg : const std::string&
+    //     Which argument and the value it may not have.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     Always.  This function does not return.
+    [[noreturn]] void invalid_argument(const std::string& msg) const;
+
     // Throws a :class:`ShapeMismatch` with the op name, optional detail,
     // and current trace combined as the exception's ``context`` field.
     //

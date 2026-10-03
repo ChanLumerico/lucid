@@ -211,15 +211,15 @@ Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
       amsgrad_(amsgrad),
       step_count_(0) {
     if (lr_ < 0.0)
-        ErrorBuilder("Adam").fail("lr must be >= 0");
+        ErrorBuilder("Adam").invalid_argument("lr must be >= 0");
     if (beta1_ < 0.0 || beta1_ >= 1.0)
-        ErrorBuilder("Adam").fail("beta1 must be in [0, 1)");
+        ErrorBuilder("Adam").invalid_argument("beta1 must be in [0, 1)");
     if (beta2_ < 0.0 || beta2_ >= 1.0)
-        ErrorBuilder("Adam").fail("beta2 must be in [0, 1)");
+        ErrorBuilder("Adam").invalid_argument("beta2 must be in [0, 1)");
     if (eps_ < 0.0)
-        ErrorBuilder("Adam").fail("eps must be >= 0");
+        ErrorBuilder("Adam").invalid_argument("eps must be >= 0");
     if (weight_decay_ < 0.0)
-        ErrorBuilder("Adam").fail("weight_decay must be >= 0");
+        ErrorBuilder("Adam").invalid_argument("weight_decay must be >= 0");
 }
 
 // Allocate zero-initialized first- and second-moment buffers.
@@ -373,15 +373,15 @@ AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
       amsgrad_(amsgrad),
       step_count_(0) {
     if (lr_ < 0.0)
-        ErrorBuilder("AdamW").fail("lr must be >= 0");
+        ErrorBuilder("AdamW").invalid_argument("lr must be >= 0");
     if (beta1_ < 0.0 || beta1_ >= 1.0)
-        ErrorBuilder("AdamW").fail("beta1 must be in [0, 1)");
+        ErrorBuilder("AdamW").invalid_argument("beta1 must be in [0, 1)");
     if (beta2_ < 0.0 || beta2_ >= 1.0)
-        ErrorBuilder("AdamW").fail("beta2 must be in [0, 1)");
+        ErrorBuilder("AdamW").invalid_argument("beta2 must be in [0, 1)");
     if (eps_ < 0.0)
-        ErrorBuilder("AdamW").fail("eps must be >= 0");
+        ErrorBuilder("AdamW").invalid_argument("eps must be >= 0");
     if (weight_decay_ < 0.0)
-        ErrorBuilder("AdamW").fail("weight_decay must be >= 0");
+        ErrorBuilder("AdamW").invalid_argument("weight_decay must be >= 0");
 }
 
 // Allocate zero-initialized first- and second-moment buffers.

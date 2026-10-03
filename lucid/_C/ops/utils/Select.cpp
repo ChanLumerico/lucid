@@ -787,7 +787,7 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
         if (d < 0)
             d += ndim;
         if (d < 0 || d >= ndim)
-            ErrorBuilder("flip").fail("dim out of range");
+            ErrorBuilder("flip").index_error("dim out of range");
     }
 
     const Dtype dt = a->dtype();

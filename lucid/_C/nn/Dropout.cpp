@@ -52,7 +52,7 @@ TensorImplPtr
 DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("dropout").fail("p must be in [0, 1)");
+        ErrorBuilder("dropout").invalid_argument("p must be in [0, 1)");
 
     // Under deterministic mode an explicit generator is required.
     if (training && p > 0.0 && gen == nullptr)
@@ -154,7 +154,7 @@ std::pair<TensorImplPtr, TensorImplPtr> dropout_stateful_op(const TensorImplPtr&
     Validator::input(x, "dropout_stateful.x").non_null();
     Validator::input(state_in, "dropout_stateful.state_in").non_null();
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("dropout_stateful").fail("p must be in [0, 1)");
+        ErrorBuilder("dropout_stateful").invalid_argument("p must be in [0, 1)");
 
     OpScopeFull scope{"dropout_stateful", x->device(), x->dtype(), x->shape()};
     scope.set_attr("training", training);
@@ -262,7 +262,7 @@ TensorImplPtr
 DropoutNdBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "dropoutnd.a").non_null();
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("dropoutnd").fail("p must be in [0, 1)");
+        ErrorBuilder("dropoutnd").invalid_argument("p must be in [0, 1)");
 
     if (training && p > 0.0 && gen == nullptr)
         check_schema_determinism(schema_v1);
@@ -352,7 +352,7 @@ TensorImplPtr
 AlphaDropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     Validator::input(a, "alpha_dropout.a").non_null();
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("alpha_dropout").fail("p must be in [0, 1)");
+        ErrorBuilder("alpha_dropout").invalid_argument("p must be in [0, 1)");
 
     if (training && p > 0.0 && gen == nullptr)
         check_schema_determinism(schema_v1);
@@ -446,9 +446,9 @@ TensorImplPtr DropBlockBackward::forward(
     if (a->shape().size() != 4)
         ErrorBuilder("drop_block").fail("input must be 4-D (N, C, H, W)");
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("drop_block").fail("p must be in [0, 1)");
+        ErrorBuilder("drop_block").invalid_argument("p must be in [0, 1)");
     if (block_size <= 0)
-        ErrorBuilder("drop_block").fail("block_size must be > 0");
+        ErrorBuilder("drop_block").invalid_argument("block_size must be > 0");
 
     if (p > 0.0 && gen == nullptr)
         check_schema_determinism(schema_v1);
@@ -504,7 +504,7 @@ TensorImplPtr
 DropPathBackward::forward(const TensorImplPtr& a, double p, bool scale_by_keep, Generator* gen) {
     Validator::input(a, "drop_path.a").non_null();
     if (p < 0.0 || p >= 1.0)
-        ErrorBuilder("drop_path").fail("p must be in [0, 1)");
+        ErrorBuilder("drop_path").invalid_argument("p must be in [0, 1)");
 
     if (p > 0.0 && gen == nullptr)
         check_schema_determinism(schema_v1);

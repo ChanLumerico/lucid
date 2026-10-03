@@ -152,7 +152,7 @@ TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool 
     const int d = wrap_dim(a, dim, "kthvalue");
     const std::int64_t size = a->shape()[static_cast<std::size_t>(d)];
     if (k < 1 || k > size)
-        ErrorBuilder("kthvalue").fail("k out of range");
+        ErrorBuilder("kthvalue").invalid_argument("k out of range");
 
     auto sorted = sort_op(a, d);
 
