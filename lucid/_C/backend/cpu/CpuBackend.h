@@ -156,7 +156,7 @@ inline CpuStorage widen_half(const CpuStorage& in, std::size_t n) {
     return CpuStorage{p, n * sizeof(float), Dtype::F32};
 }
 
-inline Storage narrow_half(const Storage& wide, std::size_t n, Dtype to = Dtype::F16) {
+inline Storage narrow_half(const Storage& wide, std::size_t n, Dtype to) {
     const auto& w = std::get<CpuStorage>(wide);
     auto p = allocate_aligned_bytes(n * sizeof(std::uint16_t), Device::CPU);
     const auto* src = reinterpret_cast<const float*>(w.ptr.get());
@@ -441,7 +441,7 @@ inline Storage as_f32(const Storage& s) {
 
 // The inverse, equally dtype-driven: a float result rounds back to half, and
 // a result that is a mask (bool) or an index (int64) is returned as it is.
-inline Storage back_to_f16(const Storage& s, Dtype to = Dtype::F16) {
+inline Storage back_to_f16(const Storage& s, Dtype to) {
     const auto* c = std::get_if<CpuStorage>(&s);
     if (c == nullptr || c->dtype != Dtype::F32)
         return s;
@@ -462,22 +462,6 @@ inline std::pair<Storage, Storage> back_to_f16(const std::pair<Storage, Storage>
 
 inline StoragePair back_to_f16(const StoragePair& p, Dtype to) {
     return {back_to_f16(p.first, to), back_to_f16(p.second, to)};
-}
-
-inline std::vector<Storage> back_to_f16(const std::vector<Storage>& v) {
-    std::vector<Storage> out;
-    out.reserve(v.size());
-    for (const auto& s : v)
-        out.push_back(back_to_f16(s));
-    return out;
-}
-
-inline std::pair<Storage, Storage> back_to_f16(const std::pair<Storage, Storage>& p) {
-    return {back_to_f16(p.first), back_to_f16(p.second)};
-}
-
-inline StoragePair back_to_f16(const StoragePair& p) {
-    return {back_to_f16(p.first), back_to_f16(p.second)};
 }
 
 }  // namespace detail
@@ -4793,7 +4777,7 @@ public:
                        has_bias ? Storage{detail::widen_half(cb, cb.nbytes / sizeof(std::uint16_t))}
                                 : bias,
                        x_shape, weight_shape, out_shape, Dtype::F32);
-            return detail::narrow_half(wide, shape_numel(out_shape));
+            return detail::narrow_half(wide, shape_numel(out_shape), dt);
         }
         const auto [M, K] = flatten_linear_x(x_shape);
         const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
@@ -7213,7 +7197,7 @@ public:
             return detail::narrow_half(
                 pow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
                            Dtype::F32, exp),
-                half_n);
+                half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         const std::size_t numel = shape_numel(shape);
@@ -7247,7 +7231,7 @@ public:
             return detail::narrow_half(
                 rpow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
                             Dtype::F32, base),
-                half_n);
+                half_n, dt);
         }
         const auto& cs = std::get<CpuStorage>(a);
         const std::size_t numel = shape_numel(shape);
@@ -13084,7 +13068,7 @@ private:
             return detail::narrow_half(
                 add_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
                            Dtype::F32, scalar),
-                half_n);
+                half_n, dt);
         }
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -13110,7 +13094,7 @@ private:
             return detail::narrow_half(
                 mul_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
                            Dtype::F32, scalar),
-                half_n);
+                half_n, dt);
         }
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -13321,7 +13305,7 @@ private:
             const Storage wide = broadcast_back_for_reduce(
                 Storage{detail::widen_half(std::get<CpuStorage>(grad), shape_numel(grad_shape))},
                 grad_shape, input_shape, axes, keepdims, Dtype::F32);
-            return detail::narrow_half(wide, shape_numel(input_shape));
+            return detail::narrow_half(wide, shape_numel(input_shape), dt);
         }
         Shape kept_shape = input_shape;
         for (int a : axes)

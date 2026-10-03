@@ -45,8 +45,9 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     // ``inf // 1`` as INT64_MAX.  A poisoned tensor turned into ordinary
     // numbers with nothing to show for it, which is the failure mode a
     // NaN is supposed to make loud.  floor(a / b) has neither problem and
-    // carries NaN and Inf through untouched.
-    if (dt == Dtype::F16 || dt == Dtype::F32 || dt == Dtype::F64) {
+    // carries NaN and Inf through untouched.  bfloat16 is one of them; left
+    // off this list, it took the integer path and came back int64.
+    if (dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32 || dt == Dtype::F64) {
         return floor_op(div_op(a, b));
     }
 

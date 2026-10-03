@@ -1435,8 +1435,9 @@ public:
         // The reference framework returns the index of the first NaN, and
         // MLX has no flag for it, so it is composed: ``argmax`` of the NaN
         // mask is the first NaN's position, and ``any`` says whether to use
-        // it.  Only floats can carry one.
-        if (dt == Dtype::F32 || dt == Dtype::F64 || dt == Dtype::F16) {
+        // it.  Only floats can carry one — bfloat16 among them, which this
+        // list once left out, so its argmax skipped the NaN.
+        if (dt == Dtype::F32 || dt == Dtype::F64 || dt == Dtype::F16 || dt == Dtype::BF16) {
             auto nan_mask = ::mlx::core::isnan(*ga.arr);
             auto has_nan = ::mlx::core::any(nan_mask, axis, keepdims);
             auto first_nan = ::mlx::core::argmax(nan_mask, axis, keepdims);

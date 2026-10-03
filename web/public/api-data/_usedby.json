@@ -66,6 +66,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid._tensor._metal_views"
+    },
+    {
+      "kind": "module",
       "module": "lucid._tensor._to"
     },
     {
