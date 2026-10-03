@@ -78,6 +78,7 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "Blas.h"
+#include "ErfPoly.h"
 #include "Im2Col.h"
 #include "Lapack.h"
 #include "Norm.h"
@@ -484,6 +485,10 @@ inline StoragePair back_to_f16(const StoragePair& p) {
 // a core of their own: at ~5 ns an element, 16k of them are ~80 us, far past
 // the few microseconds a dispatch costs.  See cpu::parallel_for.
 inline constexpr std::size_t kTranscendentalGrain = 16384;
+
+// Elements per vForce call inside a parallel chunk: the tile lives on the
+// stack and stays in L1 (8 KiB of double) between the passes over it.
+inline constexpr std::size_t kTanhTile = 1024;
 
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
@@ -1574,22 +1579,44 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         constexpr double kC1 = 0.7978845608028654;
         constexpr double kC2 = 0.044715;
+        // The tanh runs through vForce a tile at a time, on every core.
+        // This was one scalar ``tanhf`` call per element on one core —
+        // 4.1 ms on 524k elements, ten times the exact GELU it is meant to
+        // be a cheaper stand-in for.
         if (dt == Dtype::F32) {
             const float* p = reinterpret_cast<const float*>(cs.ptr.get());
             float* q = reinterpret_cast<float*>(ptr.get());
             const float c1 = static_cast<float>(kC1);
             const float c2 = static_cast<float>(kC2);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                q[i] = 0.5f * x * (1.f + std::tanh(c1 * (x + c2 * x * x * x)));
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                float tile[kTanhTile];
+                for (std::size_t base = lo; base < hi; base += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - base);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const float x = p[base + i];
+                        tile[i] = c1 * (x + c2 * x * x * x);
+                    }
+                    cpu::vtanh_f32(tile, tile, m);
+                    for (std::size_t i = 0; i < m; ++i)
+                        q[base + i] = 0.5f * p[base + i] * (1.f + tile[i]);
+                }
+            });
         } else if (dt == Dtype::F64) {
             const double* p = reinterpret_cast<const double*>(cs.ptr.get());
             double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                q[i] = 0.5 * x * (1.0 + std::tanh(kC1 * (x + kC2 * x * x * x)));
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                double tile[kTanhTile];
+                for (std::size_t base = lo; base < hi; base += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - base);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const double x = p[base + i];
+                        tile[i] = kC1 * (x + kC2 * x * x * x);
+                    }
+                    cpu::vtanh_f64(tile, tile, m);
+                    for (std::size_t i = 0; i < m; ++i)
+                        q[base + i] = 0.5 * p[base + i] * (1.0 + tile[i]);
+                }
+            });
         } else {
             ErrorBuilder("cpu_backend::gelu").not_implemented("dtype not supported");
         }
@@ -1618,26 +1645,47 @@ public:
             float* q = reinterpret_cast<float*>(ptr.get());
             const float c1 = static_cast<float>(kC1);
             const float c2 = static_cast<float>(kC2);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float xi = x[i];
-                const float inner = c1 * (xi + c2 * xi * xi * xi);
-                const float t = std::tanh(inner);
-                const float dinner = c1 * (1.f + 3.f * c2 * xi * xi);
-                const float dx = 0.5f * (1.f + t) + 0.5f * xi * (1.f - t * t) * dinner;
-                q[i] = dx * g[i];
-            }
+            // As the forward: vForce tanh a tile at a time, on every core.
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                float tile[kTanhTile];
+                for (std::size_t base = lo; base < hi; base += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - base);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const float xi = x[base + i];
+                        tile[i] = c1 * (xi + c2 * xi * xi * xi);
+                    }
+                    cpu::vtanh_f32(tile, tile, m);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const float xi = x[base + i];
+                        const float t = tile[i];
+                        const float dinner = c1 * (1.f + 3.f * c2 * xi * xi);
+                        const float dx = 0.5f * (1.f + t) + 0.5f * xi * (1.f - t * t) * dinner;
+                        q[base + i] = dx * g[base + i];
+                    }
+                }
+            });
         } else if (dt == Dtype::F64) {
             const double* x = reinterpret_cast<const double*>(cs.ptr.get());
             const double* g = reinterpret_cast<const double*>(gs.ptr.get());
             double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double xi = x[i];
-                const double inner = kC1 * (xi + kC2 * xi * xi * xi);
-                const double t = std::tanh(inner);
-                const double dinner = kC1 * (1.0 + 3.0 * kC2 * xi * xi);
-                const double dx = 0.5 * (1.0 + t) + 0.5 * xi * (1.0 - t * t) * dinner;
-                q[i] = dx * g[i];
-            }
+            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                double tile[kTanhTile];
+                for (std::size_t base = lo; base < hi; base += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - base);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const double xi = x[base + i];
+                        tile[i] = kC1 * (xi + kC2 * xi * xi * xi);
+                    }
+                    cpu::vtanh_f64(tile, tile, m);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const double xi = x[base + i];
+                        const double t = tile[i];
+                        const double dinner = kC1 * (1.0 + 3.0 * kC2 * xi * xi);
+                        const double dx = 0.5 * (1.0 + t) + 0.5 * xi * (1.0 - t * t) * dinner;
+                        q[base + i] = dx * g[base + i];
+                    }
+                }
+            });
         } else {
             ErrorBuilder("cpu_backend::gelu_backward").not_implemented("dtype not supported");
         }
@@ -1701,13 +1749,15 @@ public:
             const float* p = reinterpret_cast<const float*>(cs.ptr.get());
             float* q = reinterpret_cast<float*>(ptr.get());
             const float k = static_cast<float>(kInvSqrt2);
-            // std::erf, not an approximation: the reference's own erf is as
-            // exact, and the GPT training parity holds to 1.3e-7 over 3,000
-            // steps on it.  The speed comes from the cores instead.
+            // Not an approximation: erf_f32 is within 1 ulp of the correctly
+            // rounded erf (see ErfPoly.h) — the GPT training parity holds to
+            // 1.3e-7 over 3,000 steps on an exact erf, and an Abramowitz-
+            // Stegun-class one (1.5e-7) would not do.  Unlike libm's erff
+            // it is branch-free, so this loop vectorises.
             cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
                 for (std::size_t i = lo; i < hi; ++i) {
                     const float x = p[i];
-                    q[i] = 0.5f * x * (1.f + std::erf(x * k));
+                    q[i] = 0.5f * x * (1.f + cpu::erf_f32(x * k));
                 }
             });
         } else if (dt == Dtype::F64) {
@@ -1751,12 +1801,23 @@ public:
             float* q = reinterpret_cast<float*>(ptr.get());
             const float k1 = static_cast<float>(kInvSqrt2);
             const float k2 = static_cast<float>(kInvSqrt2Pi);
+            // The exp goes through vForce a tile at a time, so no scalar libm
+            // call is left in the loop; the erf is branch-free (ErfPoly.h)
+            // and stays inline.
             cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                for (std::size_t i = lo; i < hi; ++i) {
-                    const float xi = x[i];
-                    const float cdf = 0.5f * (1.f + std::erf(xi * k1));
-                    const float pdf = k2 * std::exp(-0.5f * xi * xi);
-                    q[i] = (cdf + xi * pdf) * g[i];
+                float pdf[kTanhTile];
+                for (std::size_t base = lo; base < hi; base += kTanhTile) {
+                    const std::size_t m = std::min(kTanhTile, hi - base);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const float xi = x[base + i];
+                        pdf[i] = -0.5f * xi * xi;
+                    }
+                    cpu::vexp_f32(pdf, pdf, m);
+                    for (std::size_t i = 0; i < m; ++i) {
+                        const float xi = x[base + i];
+                        const float cdf = 0.5f * (1.f + cpu::erf_f32(xi * k1));
+                        q[base + i] = (cdf + xi * (k2 * pdf[i])) * g[base + i];
+                    }
                 }
             });
         } else if (dt == Dtype::F64) {

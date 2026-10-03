@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - gather and index_select read whole rows; bicubic resize is 4x faster
+- tanh GELU is 34x faster, exact GELU 34%, and parallel loops balance cores
 
 ---
 

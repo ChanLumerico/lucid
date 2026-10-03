@@ -57,11 +57,20 @@ inline std::size_t parallel_workers() {
 // -----
 // Chunks are ``n * i / chunks`` to ``n * (i + 1) / chunks``, so they differ
 // in size by at most one iteration and together cover ``[0, n)`` exactly.
+//
+// There are up to four chunks per worker, not one.  Apple silicon mixes
+// performance and efficiency cores — an M1 Pro is 6 + 2 — and an efficiency
+// core runs this kind of loop about three times slower.  With one chunk per
+// core, the wall time was the efficiency cores' share: the exact GELU on
+// 524k elements took 0.40 ms where the performance cores alone finish in
+// half that.  Smaller chunks let libdispatch hand the fast cores more of
+// them.  A chunk is never smaller than ``grain``.
 template <class F>
 void parallel_for(std::size_t n, std::size_t grain, F&& fn) {
     if (n == 0)
         return;
-    const std::size_t chunks = std::min(n / std::max<std::size_t>(grain, 1), parallel_workers());
+    const std::size_t chunks =
+        std::min(n / std::max<std::size_t>(grain, 1), 4 * parallel_workers());
     if (chunks <= 1) {
         fn(std::size_t{0}, n);
         return;

@@ -20,6 +20,8 @@
 
 #include <Accelerate/Accelerate.h>
 
+#include "ErfPoly.h"
+
 namespace lucid::backend::cpu {
 
 namespace {
@@ -137,12 +139,13 @@ LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)
 
 #undef LUCID_VFORCE_UNARY
 
-// erf — Apple Accelerate does not expose a vForce erf symbol, so we fall
-// back to a scalar loop over std::erf.  The function is still vectorised by
-// the compiler's auto-vectoriser in practice.
+// erf — Apple Accelerate does not expose a vForce erf symbol.  float32 uses
+// erf_f32 (ErfPoly.h): within 1 ulp of the correctly rounded value and
+// branch-free, so this loop vectorises, which a loop over libm's erff did
+// not.  float64 keeps std::erf.
 void verf_f32(const float* in, float* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
-        out[i] = std::erf(in[i]);
+        out[i] = erf_f32(in[i]);
 }
 void verf_f64(const double* in, double* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
