@@ -96,6 +96,42 @@ def zoo_module() -> ModuleType | None:
         return None
 
 
+@functools.lru_cache(maxsize=1)
+def ref_ode_module() -> ModuleType | None:
+    """Return the reference framework's ODE-solver package, or ``None``.
+
+    A fourth independent install, used by the ``lucid.diffeq`` parity tests
+    as a second opinion on tableau coefficients and event-time gradients.
+    Its name contains the reference framework's, so it is spelled here and
+    nowhere else.
+    """
+    try:
+        import torchdiffeq  # noqa: PLC0415 — lazy import is the whole point
+
+        return torchdiffeq
+    except ImportError:
+        return None
+
+
+def require_ref_ode(submodule: str = "") -> ModuleType:
+    """The ODE-solver package, or one of its submodules, or skip the test.
+
+    Parameters
+    ----------
+    submodule : str, optional
+        A dotted path inside the package, e.g. ``"_impl.dopri8"``.
+
+    Returns
+    -------
+    ModuleType
+        The imported module.
+    """
+    name = "torchdiffeq" + (f".{submodule}" if submodule else "")
+    return pytest.importorskip(
+        name, reason="the reference ODE package is not installed"
+    )
+
+
 def require_ref(*, module_level: bool = False) -> ModuleType:
     """Return the reference module or skip when it's unavailable.
 

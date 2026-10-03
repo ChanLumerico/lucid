@@ -13,8 +13,8 @@ computation. Two things had to be right for that:
   rescales everything inside it;
 * the centre crop places an **odd** margin *down*, not to nearest.
   A 292x519 frame cropped to 256 starts at column 131 under Hugging
-  Face's fast processors and 132 under the rounding that torchvision
-  and Albumentations use. These weights are published through the
+  Face's fast processors and 132 under the rounding that the reference
+  framework's vision package and Albumentations use. These weights are published through the
   former. A square frame cannot see the difference — its margin is
   even — which is why the first version of this file missed it.
 

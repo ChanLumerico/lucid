@@ -4,8 +4,9 @@ Two independent references are used.  The first is a hand-written RK loop
 built from reference-framework tensor ops — it pins Lucid's fused
 ``rk_combine`` against the same arithmetic done the unfused way, which is
 exactly what the fusion is supposed to be equivalent to.  The second is
-``torchdiffeq`` when it happens to be installed, which pins the tableau
-coefficients themselves against the established implementation.
+the reference framework's ODE package when it happens to be installed,
+which pins the tableau coefficients themselves against the established
+implementation.
 """
 
 from typing import Any, Callable, Sequence
@@ -17,6 +18,7 @@ import lucid
 import lucid.diffeq as diffeq
 from lucid.diffeq import _adaptive, _fused
 from lucid.diffeq._tableau import _METHODS
+from lucid.test._fixtures.ref_framework import require_ref_ode
 from lucid.test._helpers.compare import assert_close
 
 METHODS = ["euler", "midpoint", "heun2", "heun3", "rk4"]
@@ -161,16 +163,16 @@ class TestOdeintParity:
 
 
 @pytest.mark.parity
-class TestTorchdiffeqParity:
+class TestReferenceOdeParity:
     """Cross-check the tableau coefficients against the established library.
 
-    Skipped unless ``torchdiffeq`` is installed — it is not a Lucid test
-    dependency, only an opportunistic second opinion.
+    Skipped unless the reference ODE package is installed — it is not a
+    Lucid test dependency, only an opportunistic second opinion.
     """
 
     @pytest.mark.parametrize("method", ["euler", "midpoint", "rk4"])
-    def test_matches_torchdiffeq(self, method: str, ref: Any) -> None:
-        torchdiffeq = pytest.importorskip("torchdiffeq")
+    def test_matches_the_reference_solver(self, method: str, ref: Any) -> None:
+        ref_ode = require_ref_ode()
 
         rng = np.random.default_rng(2)
         raw = rng.standard_normal(size=(5,)).astype(np.float64)
@@ -183,7 +185,7 @@ class TestTorchdiffeqParity:
             grid,
             method=method,
         )
-        ref_out = torchdiffeq.odeint(
+        ref_out = ref_ode.odeint(
             lambda t, y: -y + ref.sin(t),
             ref.tensor(raw.copy(), dtype=ref.float64),
             ref.tensor(grid, dtype=ref.float64),
@@ -193,7 +195,7 @@ class TestTorchdiffeqParity:
         assert_close(lucid_out, ref_out, atol=1e-10, rtol=1e-9)
 
     @pytest.mark.parametrize("reverse", [False, True])
-    def test_event_time_gradient_matches_torchdiffeq(
+    def test_event_time_gradient_matches_the_reference_solver(
         self, reverse: bool, ref: Any
     ) -> None:
         """The implicit-function rerouting has to agree, not merely exist.
@@ -203,7 +205,7 @@ class TestTorchdiffeqParity:
         a finite, believable number.  The event function used here depends on
         both arguments so neither term can be dropped unnoticed.
         """
-        torchdiffeq = pytest.importorskip("torchdiffeq")
+        ref_ode = require_ref_ode()
         target = 2.0 if reverse else 0.5
 
         k = lucid.tensor([2.0], dtype=lucid.float64, requires_grad=True)
@@ -219,7 +221,7 @@ class TestTorchdiffeqParity:
         event_t.backward()
 
         ref_k = ref.tensor([2.0], dtype=ref.float64, requires_grad=True)
-        ref_event_t, _ = torchdiffeq.odeint_event(
+        ref_event_t, _ = ref_ode.odeint_event(
             lambda t, y: -ref_k * y,
             ref.tensor([1.0], dtype=ref.float64),
             ref.tensor(0.0, dtype=ref.float64),
@@ -248,7 +250,7 @@ class TestTorchdiffeqParity:
         the strongest statement available and the reason transcribing it was
         safe to do at all.
         """
-        dopri8 = pytest.importorskip("torchdiffeq._impl.dopri8")
+        dopri8 = require_ref_ode("_impl.dopri8")
         tab = diffeq.DOPRI8
         ref_tab, ref_mid = dopri8._DOPRI8_TABLEAU, dopri8._C_mid
 
@@ -758,8 +760,8 @@ class TestMultistepParity:
         )
         assert float((got - want).abs().max().item()) == 0.0
 
-    def test_matches_torchdiffeq(self, ref: Any) -> None:
-        torchdiffeq = pytest.importorskip("torchdiffeq")
+    def test_matches_the_reference_solver(self, ref: Any) -> None:
+        ref_ode = require_ref_ode()
         grid = _grid(60)
         y0_val = [1.0, -2.0]
         got = diffeq.odeint(
@@ -769,7 +771,7 @@ class TestMultistepParity:
             method="implicit_adams",
             options={"max_order": 5},
         )
-        ref_out = torchdiffeq.odeint(
+        ref_out = ref_ode.odeint(
             lambda t, y: -y,
             ref.tensor(y0_val, dtype=ref.float64),
             ref.tensor(grid, dtype=ref.float64),
