@@ -14,9 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
-
 ### Added
-- _Pending the next release._
+
+### Performance
+
+- gather and index_select read whole rows; bicubic resize is 4x faster
 
 ---
 

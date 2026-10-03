@@ -71,14 +71,18 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
     const std::int64_t k = indices->shape()[0];
 
     // Reshape the 1-D index list to rank ``a`` with size ``k`` along ``d``
-    // and 1 elsewhere; expand to the source shape so ``gather_op``'s same-
-    // rank-as-input contract holds.
+    // and 1 elsewhere; broadcast it to the source shape so ``gather_op``'s
+    // same-rank-as-input contract holds.  ``broadcast_to``, not ``expand``:
+    // on the CPU ``expand`` is a zero-stride view, which the gather then
+    // copied element by element to make contiguous — 2.4 ms of a 4 ms
+    // select of a (3, 375, 500) image.  ``broadcast_to`` materialises it in
+    // runs.  The index carries no gradient, so nothing is lost.
     Shape idx_reshaped(static_cast<std::size_t>(ndim), 1);
     idx_reshaped[static_cast<std::size_t>(d)] = k;
     auto idx_r = reshape_op(indices, idx_reshaped);
     Shape idx_target = a->shape();
     idx_target[static_cast<std::size_t>(d)] = k;
-    auto idx_full = expand_op(idx_r, idx_target);
+    auto idx_full = broadcast_to_op(idx_r, idx_target);
     return gather_op(a, idx_full, d);
 }
 

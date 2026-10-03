@@ -66,6 +66,7 @@
 #include <cstring>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -110,6 +111,35 @@ namespace detail {
 //: differ only in how the sixteen bits are read.  The predicate itself
 //: lives in core beside ``is_floating_point``, because the random
 //: generators need it too and they are not part of this backend.
+// The layout ``gather`` can walk as (outer, taken, inner) blocks: every
+// non-gathered axis of the output is as wide as the input's.  ``extent`` is
+// the input's length along the gathered axis.  Empty when any other axis
+// differs, which leaves the general coordinate walk to handle it.
+struct GatherRows {
+    std::size_t outer = 1;
+    std::size_t taken = 0;
+    std::size_t inner = 1;
+    std::size_t extent = 0;
+
+    static std::optional<GatherRows> of(const Shape& in, const Shape& out, int axis) {
+        if (in.empty() || in.size() != out.size() || axis < 0 ||
+            axis >= static_cast<int>(in.size()))
+            return std::nullopt;
+        GatherRows rows;
+        for (std::size_t d = 0; d < in.size(); ++d) {
+            if (static_cast<int>(d) == axis)
+                continue;
+            if (out[d] != in[d])
+                return std::nullopt;
+            (static_cast<int>(d) < axis ? rows.outer : rows.inner) *=
+                static_cast<std::size_t>(in[d]);
+        }
+        rows.taken = static_cast<std::size_t>(out[static_cast<std::size_t>(axis)]);
+        rows.extent = static_cast<std::size_t>(in[static_cast<std::size_t>(axis)]);
+        return rows;
+    }
+};
+
 inline bool is_half_like(Dtype dt) {
     return is_half_float(dt);
 }
@@ -3311,6 +3341,67 @@ public:
                 ErrorBuilder("cpu_backend::gather")
                     .fail("index is larger than the operand on a non-gathered axis");
         }
+
+        // When every non-gathered axis of the output is as wide as the
+        // input's — the usual case, and the only one ``index_select``
+        // produces — output element (o, j, i) reads input (o, index, i).
+        // That is two multiplies and an add on typed elements, instead of an
+        // ndim-long coordinate walk and a memcpy call per element.  Through
+        // the walk an index_select of a (3, 375, 500) image took 11 ms, and a
+        // bicubic resize is eight of them (CHA-5).
+        if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis)) {
+            auto run = [&](auto* dst, const auto* src, const auto* ix) {
+                for (std::size_t o = 0; o < rows->outer; ++o) {
+                    for (std::size_t j = 0; j < rows->taken; ++j) {
+                        const std::size_t row = (o * rows->taken + j) * rows->inner;
+                        for (std::size_t i = 0; i < rows->inner; ++i) {
+                            std::int64_t k = static_cast<std::int64_t>(ix[row + i]);
+                            if (k < 0)
+                                k += axis_extent;
+                            if (k < 0 || k >= axis_extent)
+                                ErrorBuilder("cpu_backend::gather")
+                                    .fail("index out of range for the gathered axis");
+                            dst[row + i] =
+                                src[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
+                                    i];
+                        }
+                    }
+                }
+            };
+            auto with_index = [&](auto* dst, const auto* src) {
+                if (index_dtype == Dtype::I64)
+                    run(dst, src, reinterpret_cast<const std::int64_t*>(is.ptr.get()));
+                else if (index_dtype == Dtype::I32)
+                    run(dst, src, reinterpret_cast<const std::int32_t*>(is.ptr.get()));
+                else
+                    ErrorBuilder("cpu_backend::gather")
+                        .not_implemented("indices dtype must be I32 or I64");
+            };
+            bool copied = true;
+            switch (elem) {
+            case 1:
+                with_index(reinterpret_cast<std::uint8_t*>(ptr.get()),
+                           reinterpret_cast<const std::uint8_t*>(as.ptr.get()));
+                break;
+            case 2:
+                with_index(reinterpret_cast<std::uint16_t*>(ptr.get()),
+                           reinterpret_cast<const std::uint16_t*>(as.ptr.get()));
+                break;
+            case 4:
+                with_index(reinterpret_cast<std::uint32_t*>(ptr.get()),
+                           reinterpret_cast<const std::uint32_t*>(as.ptr.get()));
+                break;
+            case 8:
+                with_index(reinterpret_cast<std::uint64_t*>(ptr.get()),
+                           reinterpret_cast<const std::uint64_t*>(as.ptr.get()));
+                break;
+            default:
+                copied = false;  // complex128: the walk below handles any width
+            }
+            if (copied)
+                return Storage{CpuStorage{ptr, nb, dt}};
+        }
+
         std::vector<std::int64_t> coord(ndim, 0);
         for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
             std::int64_t k = load_idx(out_flat);
@@ -3399,6 +3490,45 @@ public:
                 ErrorBuilder("cpu_backend::gather_backward")
                     .fail("index is larger than the operand on a non-gathered axis");
         }
+
+        // The forward pass's fast case, accumulating instead of reading.
+        if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis);
+            rows && (dt == Dtype::F32 || dt == Dtype::F64)) {
+            auto run = [&](auto* dst, const auto* gp, const auto* ix) {
+                for (std::size_t o = 0; o < rows->outer; ++o) {
+                    for (std::size_t j = 0; j < rows->taken; ++j) {
+                        const std::size_t row = (o * rows->taken + j) * rows->inner;
+                        for (std::size_t i = 0; i < rows->inner; ++i) {
+                            std::int64_t k = static_cast<std::int64_t>(ix[row + i]);
+                            if (k < 0)
+                                k += axis_extent;
+                            if (k < 0 || k >= axis_extent)
+                                ErrorBuilder("cpu_backend::gather_backward")
+                                    .fail("index out of range for the gathered axis");
+                            dst[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
+                                i] += gp[row + i];
+                        }
+                    }
+                }
+            };
+            auto with_index = [&](auto* dst, const auto* gp) {
+                if (index_dtype == Dtype::I64)
+                    run(dst, gp, reinterpret_cast<const std::int64_t*>(idx.ptr.get()));
+                else if (index_dtype == Dtype::I32)
+                    run(dst, gp, reinterpret_cast<const std::int32_t*>(idx.ptr.get()));
+                else
+                    ErrorBuilder("cpu_backend::gather_backward")
+                        .not_implemented("indices dtype must be I32 or I64");
+            };
+            if (dt == Dtype::F32)
+                with_index(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
+                           reinterpret_cast<const float*>(g.ptr.get()));
+            else
+                with_index(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
+                           reinterpret_cast<const double*>(g.ptr.get()));
+            return out;
+        }
+
         std::vector<std::int64_t> coord(ndim, 0);
         if (dt == Dtype::F32) {
             const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
