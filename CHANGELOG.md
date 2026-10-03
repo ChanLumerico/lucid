@@ -14,7 +14,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
 ### Added
+- _Pending the next release._
+
+---
+
+## [3.15.5] — 2026-10-03
+
+A release about writes that went nowhere, and the CPU kernels that were
+slower than they had to be.  The engine is 0.16.1 with ABI 16 unchanged,
+so a C++ extension built against 3.15.4 keeps working.
+
+- **On Metal, an in-place write through a view reached nothing but the
+  view.**  `x[0].add_(1)`, `x[:, 0].zero_()`, `x.t()[1].mul_(2)`,
+  `r[1][0] = v`, `p.data.sub_(lr * g)`, `x.detach().add_(...)` and
+  `p.grad.mul_(s)` all left the tensor they came from unchanged, with no
+  error, while the CPU and the reference wrote through.  A hand-written
+  optimizer step on Metal trained nothing.  Writes now go back to the
+  base, a view of a view all the way up, with gradients identical to the
+  CPU's.  Overlapping views and views of a leaf that requires grad are
+  refused, as on the CPU.  A view taken *before* its base is written
+  still does not see that write on Metal.
+- **`with no_grad(): weight[i] = v` after a forward lost the weight's
+  gradient** on both devices.  The assignment swapped a new tensor under
+  the Parameter while the graph kept the old one.  It now writes in place,
+  so backward reports that the saved weight changed, as the reference
+  does.
+- **CPU `gather` and `index_select` are 8 to 14 times faster**, and a
+  bicubic resize is 4 times faster (375×500 → 600×800: 132 → 33 ms on an
+  M1 Pro).
+- **The tanh-approximate GELU is 34 times faster on the CPU** (4.1 →
+  0.12 ms on 524k elements).  It had been ten times slower than the exact
+  form it approximates.  The exact GELU is 34% faster: float32 `erf` is now
+  a vectorised polynomial within one ulp of the correctly rounded value,
+  and parallel CPU loops now balance across performance and efficiency
+  cores instead of waiting on the slowest.
+
+Behaviour that changes: on Metal, a write through a view now changes the
+base, as it always did on the CPU; `weight[i] = v` under `no_grad` after
+a forward makes the next backward raise instead of silently dropping the
+weight's gradient; a Core ML export accepts an input that requires grad
+and is written by the forward; and float32 `erf` on the CPU can differ
+from the previous build by one ulp.
 
 ### Performance
 
@@ -25,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - assigning into a tensor that requires grad writes in place
 - an in-place write through a view reaches the tensor it views
+
+### Tooling
+
+- the reference ODE package is reached through the ref fixture, and a test holds H5–H7 across the tree
 
 ---
 
