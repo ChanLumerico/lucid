@@ -1129,11 +1129,16 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
 
     # Standard binary exponentiation: result starts at base if the lowest
     # bit is set, otherwise it gets multiplied in on the first set bit.
+    #
+    # Each factor joins on the left.  Powers of one matrix commute, so the
+    # value is the same either way; the order is for Core ML, whose CPU graph
+    # compiler never finishes on ``x @ (x @ x)`` — the right-multiplied n = 3
+    # — and loads ``(x @ x) @ x`` and every other power tried (CHA-20).
     result: Tensor | None = None
     cur: Tensor = base
     while exponent > 0:
         if exponent & 1:
-            result = cur if result is None else lucid.matmul(result, cur)
+            result = cur if result is None else lucid.matmul(cur, result)
         exponent >>= 1
         if exponent:
             cur = lucid.matmul(cur, cur)

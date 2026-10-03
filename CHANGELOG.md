@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - bfloat16 on the CPU: linear, pow_scalar, rpow_scalar, add_scalar, mul_scalar and the reduction backward wrote float16 bits under a bfloat16 label — linear was off by 1.8e5 and the gradient of x ** 3 128 times too small.  bfloat16 // returned int64 with NaN as 0, and Metal's bfloat16 argmax skipped NaN
+- Core ML export answered 2.0 ** x as x ** 2 (Core ML's optimizer squares a pow whose constant operand is 2, base or exponent); refused one_hot of float indices at parse time; and froze a CPU tensordot into a constant, which the tracer never recorded. matrix_power multiplies on the left, since Core ML's CPU compiler never finishes loading x @ (x @ x). Sixteen more ops export: isnan, isinf, all, any, var/std, dot, inner, outer, tensordot, mse_loss, huber_loss, trace, sort, argsort, topk, unbind
 
 ---
 

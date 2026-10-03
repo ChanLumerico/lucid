@@ -243,7 +243,15 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     else
         ErrorBuilder("tensordot").not_implemented("dtype not supported");
 
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    auto result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, device);
+    // Recorded as the GPU path is.  Without it a CPU trace never saw the
+    // contraction: a Core ML export took its result for a constant — the
+    // example's answer, frozen — or, with nothing else reading the input,
+    // refused it as unread.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a, b}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

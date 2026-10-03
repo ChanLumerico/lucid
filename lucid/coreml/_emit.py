@@ -31,6 +31,8 @@ _LN2 = 0.6931471805599453
 
 # MIL's element type for a comparison's result.
 _MIL_BOOL = 1
+# ... and for a shape, an index or a count.
+_MIL_INT32 = 23
 
 __all__ = ["EMITTERS", "MIL_OPS", "Bound", "Constant", "MultiOutput"]
 
@@ -448,6 +450,21 @@ _COMPARISONS = frozenset(
 )
 
 
+def _runtime_base(b: Builder, op: TracedOp, base: str, exponent: str) -> str:
+    """A constant base of ``pow``, made a value computed at run time.
+
+    Core ML's optimizer rewrites a ``pow`` whose constant operand is 2 into a
+    square — and does it for a constant *base* too, so ``2.0 ** x`` came back
+    as ``x ** 2``: the right shape, the wrong numbers, every other base fine
+    (macOS 27).  Multiplying the base by ones shaped like the exponent at run
+    time leaves nothing for that rewrite to match; ``1 * base`` is exact.
+    """
+    shape = b.shape_of(exponent)
+    dims = b.emit("shape", [("x", exponent)], [len(shape)], dtype=_MIL_INT32)
+    ones = b.emit("fill", [("shape", dims), ("value", b.const_float(1.0))], shape)
+    return b.emit("mul", [("x", ones), ("y", base)], b.result_shape(op))
+
+
 def _register_binary(lucid_name: str, mil_name: str) -> None:
     """Bind one Lucid binary op to the MIL op of the same meaning."""
 
@@ -457,6 +474,8 @@ def _register_binary(lucid_name: str, mil_name: str) -> None:
         # operands as a matter of course.
         target = None if lucid_name in _COMPARISONS else b.result_mil_dtype(op)
         x, y = b.agree_on_dtype([ins[0], ins[1]], target)
+        if lucid_name == "pow" and b.is_const(x) and not b.is_const(y):
+            x = _runtime_base(b, op, x, y)
         return mil_name, [("x", x), ("y", y)]
 
     EMITTERS[lucid_name] = emit
@@ -653,8 +672,10 @@ def _one_hot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     floating = b.result_is_float(op)
     on = b.const_float(1.0) if floating else b.const_int(1)
     off = b.const_float(0.0) if floating else b.const_int(0)
+    # Lucid takes float indices that hold whole numbers; MIL takes int32
+    # and refused the package at parse time.  A no-op when already int32.
     return "one_hot", [
-        ("indices", ins[0]),
+        ("indices", b.narrow_to_int32(ins[0])),
         ("one_hot_vector_size", b.const_int(int(size))),
         ("axis", b.const_int(-1)),
         ("on_value", on),
@@ -1408,6 +1429,325 @@ def _register_reduce(lucid_name: str, mil_name: str) -> None:
 
 for _lucid_name, _mil_name in {"sum": "reduce_sum", "prod": "reduce_prod"}.items():
     _register_reduce(_lucid_name, _mil_name)
+
+
+def _reduce_every_axis(b: Builder, value: str, mil_name: str) -> EmitResult:
+    """``mil_name`` over every axis of ``value``, to a scalar."""
+    axes = list(range(len(b.shape_of(value))))
+    return mil_name, [
+        ("x", value),
+        ("axes", b.const_ints(axes)),
+        ("keep_dims", b.const_bool(False)),
+    ]
+
+
+def _zero_like(b: Builder, value: str) -> str:
+    """A scalar zero of ``value``'s element type."""
+    if b.dtype_of(value) in (_MIL_INT32, _MIL_BOOL):
+        return b.const_int(0)
+    return b.const_float(0.0)
+
+
+@_emitter("isnan")
+def _isnan(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """NaN is the one value unequal to itself."""
+    return "not_equal", [("x", ins[0]), ("y", ins[0])]
+
+
+@_emitter("isinf")
+def _isinf(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    magnitude = b.emit("abs", [("x", ins[0])], b.shape_of(ins[0]))
+    return "equal", [("x", magnitude), ("y", b.const_float(math.inf))]
+
+
+def _truth_reduce(b: Builder, ins: list[str], mil_name: str) -> EmitResult:
+    """``all`` / ``any`` over the whole tensor: min / max of the truth values.
+
+    MIL reduces numbers, not booleans, so the truth of each element is
+    counted as an int32 first and the reduced count compared back to zero.
+    """
+    shape = b.shape_of(ins[0])
+    truth = ins[0]
+    if b.dtype_of(truth) != _MIL_BOOL:
+        truth = b.emit(
+            "not_equal",
+            [("x", truth), ("y", _zero_like(b, truth))],
+            shape,
+            dtype=_MIL_BOOL,
+        )
+    counted = b.emit(
+        "cast", [("x", truth), ("dtype", b.const_str("int32"))], shape, dtype=_MIL_INT32
+    )
+    name, bindings = _reduce_every_axis(b, counted, mil_name)
+    reduced = b.emit(name, bindings, [], dtype=_MIL_INT32)
+    return "not_equal", [("x", reduced), ("y", b.const_int(0))]
+
+
+@_emitter("all")
+def _all(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _truth_reduce(b, ins, "reduce_min")
+
+
+@_emitter("any")
+def _any(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _truth_reduce(b, ins, "reduce_max")
+
+
+@_emitter("var")
+def _var(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Mean squared deviation from the mean, over ``dims``.
+
+    MIL has no variance.  The divisor is the count (``unbiased`` false is
+    what the engine records; a Bessel correction, when asked for, is applied
+    outside the op) — or the count less one when the trace says so.
+    """
+    x = ins[0]
+    shape = b.shape_of(x)
+    rank = len(shape)
+    dims = [_as_int(d) % rank for d in _as_seq(_attr(op, "dims"))]
+    keep = bool(_attr(op, "keepdim"))
+    kept = [1 if i in dims else s for i, s in enumerate(shape)]
+    axes = b.const_ints(dims)
+    mean = b.emit(
+        "reduce_mean",
+        [("x", x), ("axes", axes), ("keep_dims", b.const_bool(True))],
+        kept,
+    )
+    deviation = b.emit("sub", [("x", x), ("y", mean)], shape)
+    squared = b.emit("mul", [("x", deviation), ("y", deviation)], shape)
+    bindings: Bindings = [
+        ("x", squared),
+        ("axes", b.const_ints(dims)),
+        ("keep_dims", b.const_bool(keep)),
+    ]
+    if not bool(op.attrs.get("unbiased", False)):
+        return "reduce_mean", bindings
+    count = math.prod(shape[i] for i in dims)
+    biased = b.emit("reduce_mean", bindings, _out_shape(op))
+    return "mul", [("x", biased), ("y", b.const_float(count / max(count - 1, 1)))]
+
+
+def _dot_product(b: Builder, left: str, right: str) -> EmitResult:
+    product = b.emit("mul", [("x", left), ("y", right)], b.shape_of(left))
+    return "reduce_sum", [
+        ("x", product),
+        ("axes", b.const_ints([0])),
+        ("keep_dims", b.const_bool(False)),
+    ]
+
+
+@_emitter("dot")
+def _dot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _dot_product(b, ins[0], ins[1])
+
+
+def _as_matrix(b: Builder, value: str, rows: int, cols: int) -> str:
+    if b.shape_of(value) == [rows, cols]:
+        return value
+    return b.emit(
+        "reshape", [("x", value), ("shape", b.const_ints([rows, cols]))], [rows, cols]
+    )
+
+
+@_emitter("inner")
+def _inner(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Contraction of the last axes: ``a (..., n) · b (..., n)``."""
+    sa, sb = b.shape_of(ins[0]), b.shape_of(ins[1])
+    if len(sa) == 1 and len(sb) == 1:
+        return _dot_product(b, ins[0], ins[1])
+    n = sa[-1]
+    left = _as_matrix(b, ins[0], math.prod(sa[:-1]), n)
+    right = _as_matrix(b, ins[1], math.prod(sb[:-1]), n)
+    rows, cols = math.prod(sa[:-1]), math.prod(sb[:-1])
+    product = b.emit(
+        "matmul",
+        [
+            ("x", left),
+            ("y", right),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(True)),
+        ],
+        [rows, cols],
+    )
+    return "reshape", [("x", product), ("shape", b.const_ints(_out_shape(op)))]
+
+
+@_emitter("outer")
+def _outer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    n, m = b.shape_of(ins[0])[0], b.shape_of(ins[1])[0]
+    column = _as_matrix(b, ins[0], n, 1)
+    row = _as_matrix(b, ins[1], 1, m)
+    return "mul", [("x", column), ("y", row)]
+
+
+@_emitter("tensordot")
+def _tensordot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Both operands laid out as matrices, one matmul, the free axes restored."""
+    sa, sb = b.shape_of(ins[0]), b.shape_of(ins[1])
+    axes_a = [_as_int(a) % len(sa) for a in _as_seq(_attr(op, "axes_a"))]
+    axes_b = [_as_int(a) % len(sb) for a in _as_seq(_attr(op, "axes_b"))]
+    free_a = [i for i in range(len(sa)) if i not in axes_a]
+    free_b = [i for i in range(len(sb)) if i not in axes_b]
+
+    def arranged(
+        value: str, shape: list[int], perm: list[int], rows: int, cols: int
+    ) -> str:
+        if perm != list(range(len(shape))):
+            value = b.emit(
+                "transpose",
+                [("x", value), ("perm", b.const_ints(perm))],
+                [shape[i] for i in perm],
+            )
+        return _as_matrix(b, value, rows, cols)
+
+    m = math.prod(sa[i] for i in free_a)
+    k = math.prod(sa[i] for i in axes_a)
+    n = math.prod(sb[i] for i in free_b)
+    left = arranged(ins[0], sa, free_a + axes_a, m, k)
+    right = arranged(ins[1], sb, axes_b + free_b, k, n)
+    product = b.emit(
+        "matmul",
+        [
+            ("x", left),
+            ("y", right),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(False)),
+        ],
+        [m, n],
+    )
+    out = [sa[i] for i in free_a] + [sb[i] for i in free_b]
+    return "reshape", [("x", product), ("shape", b.const_ints(out))]
+
+
+def _loss_reduction(b: Builder, op: TracedOp, loss: str) -> EmitResult:
+    """Lucid's loss ``reduction``: 0 none, 1 mean, 2 sum (``nn/Loss.h``)."""
+    reduction = _as_int(_attr(op, "reduction"))
+    if reduction == 0:
+        return "identity", [("x", loss)]
+    return _reduce_every_axis(
+        b, loss, "reduce_mean" if reduction == 1 else "reduce_sum"
+    )
+
+
+@_emitter("mse_loss")
+def _mse_loss(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    shape = b.shape_of(ins[0])
+    diff = b.emit("sub", [("x", ins[0]), ("y", ins[1])], shape)
+    squared = b.emit("mul", [("x", diff), ("y", diff)], shape)
+    return _loss_reduction(b, op, squared)
+
+
+@_emitter("huber_loss")
+def _huber_loss(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Quadratic within ``delta`` of the target, linear beyond it."""
+    delta = _as_float(_attr(op, "delta"))
+    shape = b.shape_of(ins[0])
+    diff = b.emit("sub", [("x", ins[0]), ("y", ins[1])], shape)
+    size = b.emit("abs", [("x", diff)], shape)
+    squared = b.emit("mul", [("x", diff), ("y", diff)], shape)
+    quadratic = b.emit("mul", [("x", squared), ("y", b.const_float(0.5))], shape)
+    beyond = b.emit("sub", [("x", size), ("y", b.const_float(0.5 * delta))], shape)
+    linear = b.emit("mul", [("x", beyond), ("y", b.const_float(delta))], shape)
+    near = b.emit(
+        "less", [("x", size), ("y", b.const_float(delta))], shape, dtype=_MIL_BOOL
+    )
+    loss = b.emit("select", [("cond", near), ("a", quadratic), ("b", linear)], shape)
+    return _loss_reduction(b, op, loss)
+
+
+@_emitter("trace")
+def _trace(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """The diagonal read from the flattened matrix, every ``cols + 1``-th value."""
+    rows, cols = b.shape_of(ins[0])
+    flat = b.emit(
+        "reshape",
+        [("x", ins[0]), ("shape", b.const_ints([rows * cols]))],
+        [rows * cols],
+    )
+    steps = [i * (cols + 1) for i in range(min(rows, cols))]
+    diagonal = b.emit(
+        "gather",
+        [
+            ("x", flat),
+            ("indices", b.const_ints(steps)),
+            ("axis", b.const_int(0)),
+            ("validate_indices", b.const_bool(False)),
+        ],
+        [len(steps)],
+    )
+    return "reduce_sum", [
+        ("x", diagonal),
+        ("axes", b.const_ints([0])),
+        ("keep_dims", b.const_bool(False)),
+    ]
+
+
+def _ascending_order(b: Builder, op: TracedOp, x: str) -> tuple[str, int]:
+    axis = _as_int(_attr(op, "axis")) % len(b.shape_of(x))
+    order = b.emit(
+        "argsort",
+        [("x", x), ("axis", b.const_int(axis)), ("ascending", b.const_bool(True))],
+        b.shape_of(x),
+        dtype=_MIL_INT32,
+    )
+    return order, axis
+
+
+@_emitter("argsort")
+def _argsort(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
+    return "argsort", [
+        ("x", ins[0]),
+        ("axis", b.const_int(axis)),
+        ("ascending", b.const_bool(True)),
+    ]
+
+
+@_emitter("sort")
+def _sort(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    order, axis = _ascending_order(b, op, ins[0])
+    return "gather_along_axis", [
+        ("x", ins[0]),
+        ("indices", order),
+        ("axis", b.const_int(axis)),
+        ("validate_indices", b.const_bool(False)),
+    ]
+
+
+@_emitter("topk")
+def _topk(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
+    """The ``k`` largest along ``axis``, values then indices, as MIL's own."""
+    axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
+    return MultiOutput(
+        "topk",
+        [
+            ("x", ins[0]),
+            ("k", b.const_int(_as_int(_attr(op, "k")))),
+            ("axis", b.const_int(axis)),
+            ("ascending", b.const_bool(False)),
+        ],
+    )
+
+
+@_emitter("unbind")
+def _unbind(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+    """One ``gather`` per slice: a scalar index drops the axis, as unbind does."""
+    axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
+    slices = []
+    for i, out in enumerate(op.outputs):
+        slices.append(
+            b.emit(
+                "gather",
+                [
+                    ("x", ins[0]),
+                    ("indices", b.const_int(i)),
+                    ("axis", b.const_int(axis)),
+                    ("validate_indices", b.const_bool(False)),
+                ],
+                [int(d) for d in out.shape],
+            )
+        )
+    return Bound(slices)
 
 
 # ── shape ────────────────────────────────────────────────────────────────────
