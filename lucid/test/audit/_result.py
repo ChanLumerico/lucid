@@ -222,7 +222,7 @@ class Report:
             "findings": [f.as_dict() for f in self.findings],
         }
 
-    def write_json(self, path: "Path") -> None:
+    def write_json(self, path: Path) -> None:
         path.write_text(json.dumps(self.as_dict(), indent=2, sort_keys=False) + "\n")
 
 
@@ -241,13 +241,13 @@ class Baseline:
         self.entries = dict(entries or {})
 
     @classmethod
-    def load(cls, path: "Path | None") -> "Baseline":
+    def load(cls, path: Path | None) -> Baseline:
         if path is None or not path.exists():
             return cls()
         raw = json.loads(path.read_text())
         return cls({k: str(v) for k, v in raw.get("accepted", {}).items()})
 
-    def save(self, path: "Path", findings: "Iterable[Finding]") -> None:
+    def save(self, path: Path, findings: Iterable[Finding]) -> None:
         merged = dict(self.entries)
         for f in findings:
             merged.setdefault(f.key, f.detail or "accepted by --update-known")

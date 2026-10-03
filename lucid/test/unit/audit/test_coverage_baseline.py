@@ -33,7 +33,7 @@ from lucid.test.audit._console import Console
 from lucid.test.audit._result import Finding, Report, Status
 
 
-def _report(*cells: "tuple[str, str, Status]") -> Report:
+def _report(*cells: tuple[str, str, Status]) -> Report:
     report = Report()
     for axis, symbol, status in cells:
         report.add(Finding(axis, symbol, status, "detail"))

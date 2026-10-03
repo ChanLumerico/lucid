@@ -131,7 +131,7 @@ class Axis:
     #: is the one shape of change this file must never make.
     varies_a_tensor: bool = True
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.kind not in self.kinds:
             return False
         if not symbol.inert:
@@ -141,18 +141,18 @@ class Axis:
         return True
 
     def run(
-        self, symbol: "Symbol", ctx: Context
+        self, symbol: Symbol, ctx: Context
     ) -> Finding:  # pragma: no cover - abstract
         raise NotImplementedError
 
     # ── shared helpers ───────────────────────────────────────────────────────
 
     def _finding(
-        self, symbol: "Symbol", status: Status, detail: str = "", **evidence: Any
+        self, symbol: Symbol, status: Status, detail: str = "", **evidence: Any
     ) -> Finding:
         return Finding(self.name, symbol.qualname, status, detail, evidence)
 
-    def _draws_randomly(self, fn: Any, call: "Call") -> bool:
+    def _draws_randomly(self, fn: Any, call: Call) -> bool:
         """Whether two identical calls disagree.
 
         The definition of stochastic, asked rather than looked up.  It was
@@ -233,7 +233,7 @@ class Axis:
             )
         )
 
-    def _ignores_its_values(self, fn: Any, call: "Call") -> bool:
+    def _ignores_its_values(self, fn: Any, call: Call) -> bool:
         """Whether the answer is the same for two different inputs.
 
         Consulted only once the two devices have already disagreed, where
@@ -276,7 +276,7 @@ class Axis:
     _NO_TENSOR_OUTPUT = "op did not return a tensor"
 
     def _refusal(
-        self, symbol: "Symbol", detail: str, call: "Call | None" = None
+        self, symbol: Symbol, detail: str, call: Call | None = None
     ) -> Finding:
         """UNSUPPORTED, unless the op had nothing this axis could use."""
         if (
@@ -311,7 +311,7 @@ class Axis:
         return self._finding(symbol, Status.UNSUPPORTED, detail)
 
     @staticmethod
-    def _too_coarse_for_a_difference(call: "Call") -> bool:
+    def _too_coarse_for_a_difference(call: Call) -> bool:
         """Whether the operand's precision is below what the probe needs.
 
         The sweep's working precision is float64 and the step is 1e-5, so
@@ -335,7 +335,7 @@ class Axis:
         return str(getattr(primary, "dtype", "")).endswith(("float32", "float16"))
 
     @staticmethod
-    def _primary_is_a_tensor(call: "Call") -> bool:
+    def _primary_is_a_tensor(call: Call) -> bool:
         """Whether the argument these axes substitute into is a tensor.
 
         ``zeros((2, 4))`` takes a *shape*, and ``Call.base`` reads it as
@@ -351,7 +351,7 @@ class Axis:
             return False
         return hasattr(primary, "dtype") and hasattr(primary, "shape")
 
-    def _no_call(self, symbol: "Symbol", why: str) -> Finding:
+    def _no_call(self, symbol: Symbol, why: str) -> Finding:
         """The finding for "no invocation ran", classified honestly."""
         if "NotImplementedError" in why:
             # The op said so itself.  ``F.fused_linear_gelu`` raises
@@ -365,8 +365,8 @@ class Axis:
         return self._finding(symbol, Status.SKIP, why)
 
     def _working_call(
-        self, fn: Any, symbol: "Symbol", ctx: Context
-    ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
+        self, fn: Any, symbol: Symbol, ctx: Context
+    ) -> tuple[Call, str, Any] | tuple[None, None, str]:
         """The first candidate invocation that runs, and its domain.
 
         Returns ``(call, domain, output)`` or ``(None, None, reason)``.
@@ -382,10 +382,10 @@ class Axis:
         something that is not broken.  The derived candidate's failure is
         the one that says what the op actually refused.
         """
-        derived: "str | None" = None
-        first: "str | None" = None
+        derived: str | None = None
+        first: str | None = None
 
-        def note(call: "Call", detail: str) -> None:
+        def note(call: Call, detail: str) -> None:
             nonlocal derived, first
             text = f"{call.note}: {detail}"
             if first is None:
@@ -437,7 +437,7 @@ class _DifferenceAxis(Axis):
     #: measure does not exist to be compared against.
     _FACTORED_ARGUMENTS = frozenset({"LU", "LD"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if "stochastic" in symbol.flags:
             return False
         return super().applies(symbol)
@@ -453,8 +453,8 @@ class _DifferenceAxis(Axis):
         return first in self._FACTORED_ARGUMENTS
 
     def _differentiable_call(
-        self, fn: Any, symbol: "Symbol", ctx: Context
-    ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
+        self, fn: Any, symbol: Symbol, ctx: Context
+    ) -> tuple[Call, str, Any] | tuple[None, None, str]:
         """The first invocation whose analytic gradient is **finite**.
 
         ``_working_call`` keeps the first domain on which the *forward*
@@ -473,14 +473,14 @@ class _DifferenceAxis(Axis):
         is still returned when no domain gives a finite gradient, so the
         report stays truthful about ops that genuinely have none.
         """
-        first: "tuple[Call, str, Any] | None" = None
+        first: tuple[Call, str, Any] | None = None
         # The same two-slot reason as ``_working_call``: the derived
         # candidate's failure beats the blind ladder's, which is always
         # ``op([x, x]): AttributeError`` and names nothing.
-        derived: "str | None" = None
-        earliest: "str | None" = None
+        derived: str | None = None
+        earliest: str | None = None
 
-        def note(call: "Call", detail: str) -> None:
+        def note(call: Call, detail: str) -> None:
             nonlocal derived, earliest
             text = f"{call.note}: {detail}"
             if earliest is None:
@@ -507,7 +507,7 @@ class _DifferenceAxis(Axis):
         return None, None, derived or earliest or "no candidate invocation ran"
 
     @staticmethod
-    def _gradient_is_finite(fn: Any, call: "Call", step: float = 1e-5) -> bool:
+    def _gradient_is_finite(fn: Any, call: Call, step: float = 1e-5) -> bool:
         """Whether *both* methods can be evaluated on this domain.
 
         The analytic gradient being finite is half of it.  A central
@@ -635,7 +635,7 @@ class GradientAxis(_DifferenceAxis):
     name = "grad"
     summary = "d/dx vs central finite differences (float64)"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -969,12 +969,12 @@ class SecondGradientAxis(_DifferenceAxis):
 
     def _unreachable_second(
         self,
-        symbol: "Symbol",
+        symbol: Symbol,
         directional: Callable[[np.ndarray], tuple[Any, Any, Any]],
         base: np.ndarray,
         ctx: Context,
         detail: str,
-        call: "Call",
+        call: Call,
     ) -> Finding:
         """Judge a first gradient with no path back to its input."""
         try:
@@ -1004,7 +1004,7 @@ class SecondGradientAxis(_DifferenceAxis):
             second_difference=fd[:8].tolist(),
         )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -1036,7 +1036,7 @@ class SecondGradientAxis(_DifferenceAxis):
 
         w1 = _probe.covector(64, _probe.SEED_A)
 
-        def directional(array: np.ndarray) -> "tuple[Any, Any]":
+        def directional(array: np.ndarray) -> tuple[Any, Any]:
             probe = call.with_primary(array)
             x = probe.args[probe.primary]
             x.requires_grad_(True)
@@ -1213,7 +1213,7 @@ class CreateGraphAxis(Axis):
     name = "creategraph"
     summary = "autograd.grad(create_graph=True) vs backward()"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -1240,7 +1240,7 @@ class CreateGraphAxis(Axis):
 
         weights = _probe.covector(64, _probe.SEED_A)
 
-        def loss_of(array: np.ndarray) -> "tuple[Any, Any]":
+        def loss_of(array: np.ndarray) -> tuple[Any, Any]:
             probe = call.with_primary(array)
             x = probe.args[probe.primary]
             x.requires_grad_(True)
@@ -1416,7 +1416,7 @@ class EntryPointAxis(Axis):
     name = "entry"
     summary = "lucid.f(x) vs x.f() vs F.f(x)"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         routes = list(_surface.counterparts(symbol))
         if len(routes) < 2:
             return self._finding(
@@ -1518,7 +1518,7 @@ class DeviceAxis(Axis):
     name = "device"
     summary = "cpu vs metal, finite and non-finite inputs"
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
     @staticmethod
@@ -1534,7 +1534,7 @@ class DeviceAxis(Axis):
         except Exception:  # noqa: BLE001
             return False
 
-    def _device_kwarg_check(self, symbol: "Symbol", fn: Any, call: Any) -> Finding:
+    def _device_kwarg_check(self, symbol: Symbol, fn: Any, call: Any) -> Finding:
         """Does a factory put its output where ``device=`` says?
 
         ``zeros``, ``arange``, ``eye``, ``linspace`` and the signal
@@ -1575,7 +1575,7 @@ class DeviceAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "honours its device argument")
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         if not ctx.metal:
             return self._finding(symbol, Status.SKIP, "metal unavailable")
         fn = _surface.resolve(symbol)
@@ -1835,12 +1835,12 @@ class NonFiniteAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if not super().applies(symbol):
             return False
         return symbol.short not in self._CONSUMERS and "stochastic" not in symbol.flags
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -1957,7 +1957,7 @@ class BroadcastAxis(Axis):
         ((2, 1, 4), (3, 4)),
     )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -2106,9 +2106,9 @@ class DtypeAxis(Axis):
     summary = "dtype coverage and cpu/metal symmetry"
 
     @staticmethod
-    def _complex_check(fn: Any, call: Any) -> "list[str]":
+    def _complex_check(fn: Any, call: Any) -> list[str]:
         """Which complex dtypes the op accepts, for the ops that need one."""
-        accepted: "list[str]" = []
+        accepted: list[str] = []
         for name in _probe.COMPLEX_DTYPES:
             dtype = _probe.dtype_of(name)
             if dtype is None:
@@ -2129,9 +2129,7 @@ class DtypeAxis(Axis):
                 continue
         return accepted
 
-    def _dtype_kwarg_check(
-        self, symbol: "Symbol", fn: Any, call: Any
-    ) -> "Finding | None":
+    def _dtype_kwarg_check(self, symbol: Symbol, fn: Any, call: Any) -> Finding | None:
         """A factory decides its own dtype, so ask it to.
 
         ``zeros``, ``ones``, ``full``, ``empty``, ``rand`` and ``randn``
@@ -2153,7 +2151,7 @@ class DtypeAxis(Axis):
         if "dtype" not in signature.parameters:
             return None
 
-        honoured: "list[str]" = []
+        honoured: list[str] = []
         for name in _probe.DTYPES:
             dtype = _probe.dtype_of(name)
             if dtype is None:
@@ -2178,7 +2176,7 @@ class DtypeAxis(Axis):
             symbol, Status.PASS, f"honours dtype= for {len(honoured)} dtypes"
         )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -2279,7 +2277,7 @@ class EdgeAxis(Axis):
     name = "edge"
     summary = "empty, 0-d and size-1 inputs"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -2373,7 +2371,7 @@ class ModuleAxis(Axis):
     kinds = frozenset({"module"})
     varies_a_tensor = False
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         cls = symbol.obj
 
         # The first construction that can also *forward*, not the first
@@ -2518,7 +2516,7 @@ class OptimAxis(Axis):
     kinds = frozenset({"optim"})
     varies_a_tensor = False
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         cls = symbol.obj
         target = _probe.as_f64(np.array([1.5, -0.5, 2.0]))
         weight = lucid.nn.Parameter(_probe.as_f64(np.zeros(3)))
@@ -2586,7 +2584,7 @@ class OptimAxis(Axis):
 # ── construction helpers ─────────────────────────────────────────────────────
 
 
-def _produces_float64(fn: Any, call: "Call") -> bool:
+def _produces_float64(fn: Any, call: Call) -> bool:
     """Whether the op answers in float64 from a float32 input.
 
     The discriminator for "this op cannot exist on Metal".  Asked by
@@ -2610,7 +2608,7 @@ def _produces_float64(fn: Any, call: "Call") -> bool:
 
 
 @functools.lru_cache(maxsize=1)
-def _contract() -> "dict[str, list[str]]":
+def _contract() -> dict[str, list[str]]:
     """The measured reference dtype table, or empty when absent.
 
     Checked in, so it is available without the reference framework
@@ -2626,9 +2624,7 @@ def _contract() -> "dict[str, list[str]]":
     return symbols if isinstance(symbols, dict) else {}
 
 
-def _contract_verdict(
-    qualname: str, only_cpu: "list[str]", only_metal: "list[str]"
-) -> str:
+def _contract_verdict(qualname: str, only_cpu: list[str], only_metal: list[str]) -> str:
     """Which device is wrong, when the reference has an opinion.
 
     A disagreement between the two devices says they differ, never which
@@ -2672,7 +2668,7 @@ _CTOR_ARGS: tuple[tuple[tuple[Any, ...], dict[str, Any]], ...] = (
 )
 
 
-def _ctor_args_with_qconfig() -> "list[tuple[tuple[Any, ...], dict[str, Any]]]":
+def _ctor_args_with_qconfig() -> list[tuple[tuple[Any, ...], dict[str, Any]]]:
     """The ladder again, each rung carrying a qconfig.
 
     ``qat.Conv1d`` / ``2d`` / ``3d`` and their fused ReLU variants
@@ -2694,7 +2690,7 @@ def _ctor_args_with_qconfig() -> "list[tuple[tuple[Any, ...], dict[str, Any]]]":
 #: self-describing names, which is what makes deriving them possible at
 #: all.  Sizes agree with :data:`_FORWARD_SHAPES` so that a module built
 #: here has a chance of accepting one of the inputs tried against it.
-_CTOR_BY_NAME: "dict[str, Any]" = {
+_CTOR_BY_NAME: dict[str, Any] = {
     # widths, all agreeing with the (2, 4) / (2, 3, 6, 6) probe inputs
     "in_features": 4,
     "out_features": 4,
@@ -2824,7 +2820,7 @@ def _default_submodule(name: str, rank: int = 2) -> Any:
 #: on the parameter name.  Kept separate from :data:`_CTOR_BY_NAME` so
 #: that table stays a table of constants and nothing is constructed at
 #: import time.
-_CTOR_FACTORY: "dict[str, Any]" = {
+_CTOR_FACTORY: dict[str, Any] = {
     "qconfig": _default_qconfig,
     "module": lambda: _default_submodule("module"),
     "parametrization": lambda: _default_submodule("parametrization"),
@@ -2851,7 +2847,7 @@ _CTOR_FACTORY: "dict[str, Any]" = {
 #: and 4 is out of range on the probe — the layer reported ``'int' object
 #: is not iterable`` and went unreached.  Kept as narrow as it looks:
 #: one entry per genuine collision, not a per-class table.
-_CTOR_BY_CLASS: "dict[str, dict[str, Any]]" = {
+_CTOR_BY_CLASS: dict[str, dict[str, Any]] = {
     "Unflatten": {"dim": 1, "unflattened_size": (2, 2)},
     # ``output_size`` is a *canvas* here, and the table's 2 is smaller
     # than the 3x3 kernel it has to reassemble into.
@@ -2877,7 +2873,7 @@ def _default_compression() -> Any:
 #: ``model`` and ``weights`` are generic enough names that answering them
 #: in :data:`_CTOR_FACTORY` would change how every other class taking one
 #: is built.
-_CTOR_FACTORY_BY_CLASS: "dict[str, dict[str, Any]]" = {
+_CTOR_FACTORY_BY_CLASS: dict[str, dict[str, Any]] = {
     "CompressionAware": {
         "model": lambda: _default_submodule("compressible"),
         "weights": _default_compression,
@@ -2981,7 +2977,7 @@ def _construct_module(cls: Any, depth: int = 0, fill_optional: bool = False) -> 
     except Exception:  # noqa: BLE001 - an unreadable signature is not a finding
         return None
 
-    kwargs: "dict[str, Any]" = {}
+    kwargs: dict[str, Any] = {}
     for parameter in signature.parameters.values():
         if parameter.kind in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD):
             continue
@@ -3076,7 +3072,7 @@ def _from_float(cls: Any) -> Any:
         return None
 
 
-def _module_candidates(cls: Any) -> "Iterator[Any]":
+def _module_candidates(cls: Any) -> Iterator[Any]:
     """Every way ``cls`` might be built, most faithful first.
 
     A class has more than one plausible construction and only one of them
@@ -3113,7 +3109,7 @@ _FORWARD_SHAPES: tuple[tuple[int, ...], ...] = (
 )
 
 
-def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
+def _module_input_shapes(module: Any) -> list[tuple[int, ...]]:
     """Shapes this particular module might accept, its own answer first.
 
     A constructed module knows its input width — ``Linear(4, 4)`` wants
@@ -3128,7 +3124,7 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
     rank 2 is ``(out, in)`` and one of rank 4 is ``(out, in, kh, kw)``,
     so in both the second axis is what the input must supply.
     """
-    widths: "list[int]" = []
+    widths: list[int] = []
     for attribute in ("in_features", "in_channels", "num_features", "embedding_dim"):
         value = getattr(module, attribute, None)
         if isinstance(value, int) and 0 < value <= 64:
@@ -3139,7 +3135,7 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
     elif isinstance(normalized, (tuple, list)) and normalized:
         widths.append(int(normalized[-1]))
 
-    shapes: "list[tuple[int, ...]]" = []
+    shapes: list[tuple[int, ...]] = []
     for width in widths:
         shapes += [(2, width), (2, width, 6), (2, width, 6, 6), (2, 6, width)]
 
@@ -3208,7 +3204,7 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
         # canvas admits.  Both halves have to be derived from the layer's
         # own arguments: a guessed ``L`` is rejected just as firmly as a
         # guessed channel count, and by a message about the other one.
-        def _pair(value: Any, fallback: int) -> "tuple[int, int]":
+        def _pair(value: Any, fallback: int) -> tuple[int, int]:
             if isinstance(value, (tuple, list)) and len(value) >= 2:
                 return int(value[0]), int(value[1])
             if isinstance(value, int):
@@ -3222,11 +3218,11 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
         if positions > 0:
             shapes.insert(0, (2, 2 * kh * kw, positions))
 
-    seen: "set[tuple[int, ...]]" = set()
+    seen: set[tuple[int, ...]] = set()
     return [sh for sh in shapes if not (sh in seen or seen.add(sh))]
 
 
-def _forward_parameters(module: Any) -> "list[inspect.Parameter] | None":
+def _forward_parameters(module: Any) -> list[inspect.Parameter] | None:
     """``forward``'s parameters after ``self``, or ``None`` if unreadable."""
     forward = getattr(type(module), "forward", None)
     if forward is None:
@@ -3244,7 +3240,7 @@ def _forward_parameters(module: Any) -> "list[inspect.Parameter] | None":
     ]
 
 
-def _unpool_indices(module: Any, shape: "tuple[int, ...]", rank: int) -> Any:
+def _unpool_indices(module: Any, shape: tuple[int, ...], rank: int) -> Any:
     """Valid ``MaxUnpool`` indices, built rather than measured.
 
     Each input element addresses one position in the unpooled output,
@@ -3266,7 +3262,7 @@ def _unpool_indices(module: Any, shape: "tuple[int, ...]", rank: int) -> Any:
     return _probe.as_int(np.broadcast_to(flat, shape).copy())
 
 
-def _per_dim(value: Any, rank: int) -> "tuple[int, ...]":
+def _per_dim(value: Any, rank: int) -> tuple[int, ...]:
     """A pooling hyperparameter as one int per spatial dimension."""
     if isinstance(value, (tuple, list)):
         return tuple(int(v) for v in value)
@@ -3274,8 +3270,8 @@ def _per_dim(value: Any, rank: int) -> "tuple[int, ...]":
 
 
 def _forward_companion(
-    name: str, module: Any, primary: Any, shape: "tuple[int, ...]", cast: Any
-) -> "list[Any]":
+    name: str, module: Any, primary: Any, shape: tuple[int, ...], cast: Any
+) -> list[Any]:
     """Values for one forward argument that is not the input, by name.
 
     A list because a name can mean more than one thing and the module is
@@ -3350,7 +3346,7 @@ def _forward_companion(
     return [cast(_probe.sample("moderate", shape, 1))]
 
 
-def _ctc_arguments(cast: Any) -> "list[list[Any]]":
+def _ctc_arguments(cast: Any) -> list[list[Any]]:
     """The four tensors ``ctc_loss`` takes, agreeing with each other.
 
     They are not four independent arguments.  ``targets`` has to hold
@@ -3388,7 +3384,7 @@ def _ctc_arguments(cast: Any) -> "list[list[Any]]":
 #: exists — deriving one name at a time is right for everything else and
 #: is what keeps this from becoming the hand-maintained table the rest of
 #: this module exists to avoid.
-_JOINT_FORWARDS: "dict[frozenset[str], Any]" = {
+_JOINT_FORWARDS: dict[frozenset[str], Any] = {
     frozenset(
         {"log_probs", "targets", "input_lengths", "target_lengths"}
     ): _ctc_arguments,
@@ -3396,8 +3392,8 @@ _JOINT_FORWARDS: "dict[frozenset[str], Any]" = {
 
 
 def _forward_from_signature(
-    module: Any, shape: "tuple[int, ...]", cast: Any
-) -> "list[list[Any]]":
+    module: Any, shape: tuple[int, ...], cast: Any
+) -> list[list[Any]]:
     """Argument lists derived from ``forward``'s own parameter list.
 
     The fixed ladder below tries one, two and three tensors of the probe
@@ -3426,12 +3422,12 @@ def _forward_from_signature(
         )
 
     primary = cast(_probe.sample("moderate", shape))
-    candidates: "list[list[Any]]" = [[primary]]
+    candidates: list[list[Any]] = [[primary]]
     # An optional parameter worth passing.  ``MaxUnpool`` once took
     # ``output_size=None`` and raised "output_size is required" on the
     # default; it now infers the size, and the explicit form keeps the
     # path that honours a caller's size reached as well.
-    trailing: "list[Any]" = []
+    trailing: list[Any] = []
     if type(module).__name__.startswith("MaxUnpool") and any(
         p.name == "output_size" for p in parameters
     ):
@@ -3451,7 +3447,7 @@ def _forward_from_signature(
     return candidates
 
 
-def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
+def _forward_inputs(module: Any, shape: tuple[int, ...]) -> list[list[Any]]:
     """Argument lists to try for one shape.
 
     Three things the single float64 tensor could not reach: a module
@@ -3484,7 +3480,7 @@ def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
     except Exception:  # noqa: BLE001
         pass
 
-    out: "list[list[Any]]" = []
+    out: list[list[Any]] = []
     for cast in dtypes:
         out += _forward_from_signature(module, shape, cast)
     for cast in dtypes:
@@ -3509,7 +3505,7 @@ def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
     return out
 
 
-def _try_forward(module: Any) -> "tuple[Any, str]":
+def _try_forward(module: Any) -> tuple[Any, str]:
     # The *first* failure, not the last.
     #
     # ``_module_input_shapes`` puts the module's own answer first and the

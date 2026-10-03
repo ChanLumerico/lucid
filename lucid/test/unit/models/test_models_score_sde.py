@@ -295,7 +295,7 @@ class TestExactLikelihood:
     """
 
     @staticmethod
-    def _tiny() -> "object":
+    def _tiny() -> object:
         return create_model("score_sde_vp_gen", **_TINY).eval()
 
     def _analytic(self, model: object, x: lucid.Tensor) -> float:

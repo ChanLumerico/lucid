@@ -142,7 +142,7 @@ def regressions(
     result: DoctestResult, floor: dict[str, int]
 ) -> list[tuple[str, int, int]]:
     """``(module, was, now)`` for every module that got worse."""
-    out: "list[tuple[str, int, int]]" = []
+    out: list[tuple[str, int, int]] = []
     for name, now in sorted(result.per_module.items()):
         was = floor.get(name, 0)
         if now > was:

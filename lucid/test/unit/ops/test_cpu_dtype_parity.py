@@ -313,7 +313,7 @@ def test_scatter_add_still_scatters() -> None:
 # SIGBUS, and the last symbol it printed was the one before this op.
 
 
-def _pivoting_system() -> "tuple[lucid.Tensor, lucid.Tensor]":
+def _pivoting_system() -> tuple[lucid.Tensor, lucid.Tensor]:
     """A system whose factorization genuinely permutes rows.
 
     A near-identity matrix pivots trivially, and every wrong pivot width

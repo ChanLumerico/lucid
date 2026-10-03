@@ -199,7 +199,7 @@ class _LyingDataset:
     def __len__(self) -> int:
         return 99
 
-    def __getitem__(self, index: int) -> "tuple[Any, int]":
+    def __getitem__(self, index: int) -> tuple[Any, int]:
         if index >= 6:
             raise IndexError(index)
         return lucid.tensor(np.zeros(2, np.float32)), index % 2
@@ -224,7 +224,7 @@ class _MutatesItsInput:
 
 
 @contextlib.contextmanager
-def _patched(owner: Any, name: str, value: Any) -> "Iterator[None]":
+def _patched(owner: Any, name: str, value: Any) -> Iterator[None]:
     """Install ``value`` at ``owner.name`` and put the original back."""
     missing = object()
     before = getattr(owner, name, missing)
@@ -240,20 +240,20 @@ def _patched(owner: Any, name: str, value: Any) -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _deaf_setter() -> "Iterator[None]":
+def _deaf_setter() -> Iterator[None]:
     """``set_num_threads`` accepts the value and the getter never sees it."""
     with _patched(lucid, "set_num_threads", lambda _n: None):
         yield
 
 
 @contextlib.contextmanager
-def _seed_that_does_nothing() -> "Iterator[None]":
+def _seed_that_does_nothing() -> Iterator[None]:
     with _patched(lucid, "manual_seed", lambda _n: None):
         yield
 
 
 @contextlib.contextmanager
-def _asymmetric_promotion() -> "Iterator[None]":
+def _asymmetric_promotion() -> Iterator[None]:
     real = lucid.promote_types
 
     def broken(a: Any, b: Any) -> Any:
@@ -268,7 +268,7 @@ def _asymmetric_promotion() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _leaky_hook_handle() -> "Iterator[None]":
+def _leaky_hook_handle() -> Iterator[None]:
     real = lucid.nn.register_module_forward_hook
 
     class _Handle:
@@ -298,7 +298,7 @@ def _leaky_hook_handle() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _lossy_round_trip() -> "Iterator[None]":
+def _lossy_round_trip() -> Iterator[None]:
     real = lucid.load
 
     def broken(path: str, *args: Any, **kwargs: Any) -> Any:
@@ -310,7 +310,7 @@ def _lossy_round_trip() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _compiler_that_disagrees() -> "Iterator[None]":
+def _compiler_that_disagrees() -> Iterator[None]:
     real = lucid.compile.compile
 
     def broken(fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -322,7 +322,7 @@ def _compiler_that_disagrees() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _slice_that_takes_the_wrong_stride() -> "Iterator[None]":
+def _slice_that_takes_the_wrong_stride() -> Iterator[None]:
     """``x[..., ::2]`` comes back holding ``x[..., 1::2]``.
 
     The failure a *materialised* view can actually have: the right shape
@@ -349,7 +349,7 @@ def _slice_that_takes_the_wrong_stride() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _prune_that_misses_its_target() -> "Iterator[None]":
+def _prune_that_misses_its_target() -> Iterator[None]:
     real = lucid.nn.utils.prune.l1_unstructured
 
     def broken(module: Any, name: str = "weight", amount: float = 0.5) -> Any:
@@ -360,13 +360,13 @@ def _prune_that_misses_its_target() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _registry_that_forgets() -> "Iterator[None]":
+def _registry_that_forgets() -> Iterator[None]:
     with _patched(lucid.weights, "weights_for", lambda _name: None):
         yield
 
 
 @contextlib.contextmanager
-def _entry_points_that_disagree() -> "Iterator[None]":
+def _entry_points_that_disagree() -> Iterator[None]:
     """The free function and the method compute different things."""
     import lucid._tensor.tensor as tensor_module
 
@@ -376,7 +376,7 @@ def _entry_points_that_disagree() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _functional_grad_that_is_wrong() -> "Iterator[None]":
+def _functional_grad_that_is_wrong() -> Iterator[None]:
     real = lucid.func.grad
 
     def broken(fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -388,7 +388,7 @@ def _functional_grad_that_is_wrong() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _tableau_that_is_inconsistent() -> "Iterator[None]":
+def _tableau_that_is_inconsistent() -> Iterator[None]:
     real = lucid.diffeq.RK4
 
     # ``ButcherTableau`` validates its own weights — "b must sum to 1" —
@@ -404,7 +404,7 @@ def _tableau_that_is_inconsistent() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _scheduler_that_goes_nan() -> "Iterator[None]":
+def _scheduler_that_goes_nan() -> Iterator[None]:
     real = lucid.optim.lr_scheduler.StepLR
 
     class _Broken(real):  # type: ignore[misc, valid-type]
@@ -416,7 +416,7 @@ def _scheduler_that_goes_nan() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _tokenizer_that_loses_text() -> "Iterator[None]":
+def _tokenizer_that_loses_text() -> Iterator[None]:
     real = lucid.utils.tokenizer.CharTokenizer
 
     class _Broken(real):  # type: ignore[misc, valid-type]
@@ -429,7 +429,7 @@ def _tokenizer_that_loses_text() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _distribution_with_an_impossible_sample() -> "Iterator[None]":
+def _distribution_with_an_impossible_sample() -> Iterator[None]:
     real = lucid.distributions.Normal
 
     class _Broken(real):  # type: ignore[misc, valid-type]
@@ -441,7 +441,7 @@ def _distribution_with_an_impossible_sample() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _create_graph_that_disagrees() -> "Iterator[None]":
+def _create_graph_that_disagrees() -> Iterator[None]:
     """``grad(create_graph=True)`` returns something ``backward()`` does not.
 
     The defect class this axis exists for: ``prod`` / ``max`` / ``min``
@@ -462,7 +462,7 @@ def _create_graph_that_disagrees() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
-def _observer_that_ignores_its_input() -> "Iterator[None]":
+def _observer_that_ignores_its_input() -> Iterator[None]:
     real = lucid.quantization.MinMaxObserver
 
     class _Deaf(real):  # type: ignore[misc, valid-type]
@@ -478,7 +478,7 @@ def _observer_that_ignores_its_input() -> "Iterator[None]":
 
 #: One entry per axis that has a mutant.  Order follows ``ALL_AXES`` so a
 #: reader can see the gaps.
-MUTANTS: "tuple[Mutant, ...]" = (
+MUTANTS: tuple[Mutant, ...] = (
     Mutant(
         "smoke",
         "fatal_callable",
@@ -781,7 +781,7 @@ class Verdict:
         self.detail = detail
 
 
-def _symbol_for(mutant: Mutant) -> "_surface.Symbol":
+def _symbol_for(mutant: Mutant) -> _surface.Symbol:
     obj = mutant.build()
     if mutant.qualname:
         return _surface.Symbol(mutant.qualname, mutant.subsystem, mutant.kind, obj)
@@ -789,10 +789,10 @@ def _symbol_for(mutant: Mutant) -> "_surface.Symbol":
     return _surface.Symbol(f"{prefix}{mutant.name}", mutant.subsystem, mutant.kind, obj)
 
 
-def verify(ctx: "_axes.Context | None" = None) -> "list[Verdict]":
+def verify(ctx: _axes.Context | None = None) -> list[Verdict]:
     """Run every mutant against the axis that must catch it."""
     context = ctx if ctx is not None else _axes.Context()
-    out: "list[Verdict]" = []
+    out: list[Verdict] = []
     for mutant in MUTANTS:
         if mutant.isolated_exit is not None:
             code = (
@@ -890,7 +890,7 @@ def verify(ctx: "_axes.Context | None" = None) -> "list[Verdict]":
 UNPROVEN_REASONS: dict[str, str] = {}
 
 
-def unproven_axes() -> "list[str]":
+def unproven_axes() -> list[str]:
     """Axes no mutant exercises — reported, never omitted."""
     covered = {mutant.axis for mutant in MUTANTS}
     return [axis.name for axis in _axes.ALL_AXES if axis.name not in covered]

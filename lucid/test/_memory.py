@@ -97,7 +97,7 @@ _MACH_TASK_BASIC_INFO = 20
 _INFO_COUNT = ctypes.sizeof(_MachTaskBasicInfo) // ctypes.sizeof(ctypes.c_uint)
 
 try:
-    _libc: "ctypes.CDLL | None" = ctypes.CDLL(
+    _libc: ctypes.CDLL | None = ctypes.CDLL(
         ctypes.util.find_library("c"), use_errno=True
     )
     _task_self = _libc.mach_task_self()  # type: ignore[union-attr]
@@ -144,7 +144,7 @@ def cache_mb() -> float:
         return 0.0
 
 
-_last_sample: "tuple[float, float]" = (0.0, -1.0)
+_last_sample: tuple[float, float] = (0.0, -1.0)
 
 
 def available_mb(force: bool = False) -> float:
@@ -172,7 +172,7 @@ def available_mb(force: bool = False) -> float:
         first = vm.stdout.splitlines()[0] if vm.stdout else ""
         if "page size of" in first:
             page = int(first.split("page size of")[1].split()[0])
-        counts: "dict[str, int]" = {}
+        counts: dict[str, int] = {}
         for line in vm.stdout.splitlines()[1:]:
             if ":" not in line:
                 continue
@@ -226,10 +226,10 @@ class Governor:
     def __init__(self) -> None:
         self.reclaimed_mb = 0.0
         self.reclaims = 0
-        self.skipped: "list[tuple[str, float]]" = []
+        self.skipped: list[tuple[str, float]] = []
         self.peak_mb = 0.0
 
-    def before_test(self, nodeid: str) -> "str | None":
+    def before_test(self, nodeid: str) -> str | None:
         """Return a skip reason, or ``None`` to let the test run."""
         if not ENABLED or FLOOR_MB <= 0:
             return None
@@ -259,11 +259,11 @@ class Governor:
             self.reclaimed_mb += reclaim()
             self.reclaims += 1
 
-    def summary(self) -> "list[str]":
+    def summary(self) -> list[str]:
         """Lines for the terminal summary, or empty when nothing happened."""
         if not ENABLED:
             return []
-        lines: "list[str]" = []
+        lines: list[str] = []
         if self.reclaims:
             lines.append(
                 f"memory governor: reclaimed {self.reclaimed_mb / 1024:.1f} GB "

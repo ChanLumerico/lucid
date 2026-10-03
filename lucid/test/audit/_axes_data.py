@@ -59,7 +59,7 @@ def _image() -> Any:
 class _ToyIterableDataset(lucid.utils.data.IterableDataset):
     """Three samples, reachable only by iterating — what ``ChainDataset`` takes."""
 
-    def __iter__(self) -> "Any":
+    def __iter__(self) -> Any:
         for index in range(3):
             yield lucid.tensor(np.full((2,), float(index), np.float32)), index % 2
 
@@ -73,11 +73,11 @@ class _ToyDataset:
     def __len__(self) -> int:
         return self.n
 
-    def __getitem__(self, index: int) -> "tuple[Any, int]":
+    def __getitem__(self, index: int) -> tuple[Any, int]:
         return lucid.tensor(np.full((2,), float(index), np.float32)), index % 2
 
 
-def _tiny_vocab() -> "dict[str, int]":
+def _tiny_vocab() -> dict[str, int]:
     """A vocabulary the probe sentence can be spelled in three ways.
 
     Single characters for a byte-level or character model, the whole
@@ -114,7 +114,7 @@ def _tiny_vocab() -> "dict[str, int]":
 #: Checked before the annotation, because a name says more than ``int``
 #: does — ``height`` and ``num_classes`` are both ints and want very
 #: different values.
-_BY_NAME: "dict[str, Any]" = {
+_BY_NAME: dict[str, Any] = {
     "height": _SIDE // 2,
     "width": _SIDE // 2,
     "size": _SIDE // 2,
@@ -165,7 +165,7 @@ _BY_NAME: "dict[str, Any]" = {
 
 #: What to pass for a ``*args`` parameter, keyed by its name.  Built by a
 #: lambda so no tensor is allocated at import time.
-_VARIADIC: "dict[str, Any]" = {
+_VARIADIC: dict[str, Any] = {
     "tensors": lambda: (
         lucid.tensor(np.arange(12, dtype=np.float32).reshape(6, 2)),
         lucid.tensor(np.arange(6, dtype=np.float32)),
@@ -186,7 +186,7 @@ _VARIADIC: "dict[str, Any]" = {
 #: constructed object that no annotation describes, and each was
 #: reported as "no value for required parameter" on both the contract
 #: axis and its own subsystem axis — the same gap counted twice.
-_BUILD_BY_NAME: "dict[str, Any]" = {
+_BUILD_BY_NAME: dict[str, Any] = {
     "data": lambda: lucid.tensor(np.linspace(0.1, 0.9, 12, dtype=np.float32)),
     # ``SequentialLR`` and ``ChainedScheduler`` compose real schedulers.
     # ``None`` here passed only while their constructors never looked at
@@ -308,13 +308,13 @@ _BUILD_BY_NAME: "dict[str, Any]" = {
 #: Optional parameters of which a class accepts **exactly one**.  Stated
 #: because the class states it — every one of these raises "pass exactly
 #: one of ..." naming its own group.
-_EXCLUSIVE: "tuple[frozenset[str], ...]" = (
+_EXCLUSIVE: tuple[frozenset[str], ...] = (
     frozenset({"probs", "logits"}),
     frozenset({"covariance_matrix", "precision_matrix", "scale_tril"}),
 )
 
 #: Fallback by annotation when the name is not recognised.
-_BY_ANNOTATION: "tuple[tuple[str, Any], ...]" = (
+_BY_ANNOTATION: tuple[tuple[str, Any], ...] = (
     ("bool", False),
     ("int", 2),
     ("float", 1.0),
@@ -326,15 +326,15 @@ _BY_ANNOTATION: "tuple[tuple[str, Any], ...]" = (
 #: keyed on the class.  ``finfo`` and ``iinfo`` spell their argument
 #: identically and accept disjoint dtypes, so the name alone cannot
 #: decide — ``iinfo`` correctly refused the float the table supplies.
-_BY_CLASS: "dict[str, dict[str, Any]]" = {
+_BY_CLASS: dict[str, dict[str, Any]] = {
     "iinfo": {"dt": "int32"},
     "dtype": {"engine_dtype": lucid.float32._engine, "itemsize": 4},
 }
 
 
 def _value_for(
-    param: "inspect.Parameter", extra: "dict[str, Any]", cls_name: str = ""
-) -> "tuple[bool, Any]":
+    param: inspect.Parameter, extra: dict[str, Any], cls_name: str = ""
+) -> tuple[bool, Any]:
     """``(found, value)`` for one required parameter."""
     override = _BY_CLASS.get(cls_name, {})
     if param.name in override:
@@ -356,7 +356,7 @@ def _value_for(
     return False, None
 
 
-def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
+def _construct(cls: Any, **extra: Any) -> tuple[Any, str]:
     """Build ``cls`` by reading its signature, or say why not.
 
     Returns ``(instance, "")`` or ``(None, reason)``.  Only parameters
@@ -387,9 +387,9 @@ def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
     except (TypeError, ValueError, NameError) as exc:
         return None, f"no signature: {type(exc).__name__}: {exc}"
 
-    kwargs: "dict[str, Any]" = {}
-    args: "list[Any]" = []
-    optional: "list[inspect.Parameter]" = []
+    kwargs: dict[str, Any] = {}
+    args: list[Any] = []
+    optional: list[inspect.Parameter] = []
     for name, param in signature.parameters.items():
         if name == "self" or param.kind is param.VAR_KEYWORD:
             continue
@@ -429,7 +429,7 @@ def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
     # gets it.
     extra_kwargs = dict(kwargs)
     added = False
-    claimed: "set[int]" = set()
+    claimed: set[int] = set()
     for param in optional:
         # At most one member of a mutually exclusive group.  Filling both
         # is not a smaller mistake than filling neither: ``Wishart`` and
@@ -488,7 +488,7 @@ class TransformAxis(Axis):
     kinds = frozenset({"transform"})
     varies_a_tensor = False
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         if not isinstance(obj, type):
             return self._finding(symbol, Status.SKIP, "not a class")
@@ -606,7 +606,7 @@ class DataAxis(Axis):
     kinds = frozenset({"data"})
     varies_a_tensor = False
 
-    def _collation(self, symbol: "Symbol", fn: Any) -> Finding:
+    def _collation(self, symbol: Symbol, fn: Any) -> Finding:
         """The five module-level functions, which are not classes.
 
         ``collate``, ``default_collate``, ``default_convert``,
@@ -678,7 +678,7 @@ class DataAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "three samples become one batch of 3")
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         if not isinstance(obj, type):
             return self._collation(symbol, obj)
@@ -765,7 +765,7 @@ def _sequential_over(dataset: Any) -> Any:
     return list(range(len(dataset)))
 
 
-def _bounded(iterable: Any, limit: int) -> "Any":
+def _bounded(iterable: Any, limit: int) -> Any:
     """Yield at most ``limit`` items.
 
     An ``IterableDataset`` may be infinite by design; an audit that calls
@@ -777,7 +777,7 @@ def _bounded(iterable: Any, limit: int) -> "Any":
         yield item
 
 
-def _call_if_collator(axis: Axis, symbol: "Symbol", instance: Any) -> Finding:
+def _call_if_collator(axis: Axis, symbol: Symbol, instance: Any) -> Finding:
     """Collators are neither sized nor iterable — they are called on a batch."""
     if not callable(instance):
         return axis._finding(
@@ -821,7 +821,7 @@ class TokenizerAxis(Axis):
     #: both have a chance of representing it exactly.
     _TEXT = " ".join(_PROBE_WORDS)
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         if not isinstance(obj, type):
             return self._finding(symbol, Status.SKIP, "not a class")
@@ -943,7 +943,7 @@ class SchedulerAxis(Axis):
 
     _EPOCHS = 6
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         if not isinstance(obj, type):
             return self._finding(symbol, Status.SKIP, "not a class")
@@ -1047,9 +1047,9 @@ def _constant_scheduler() -> Any:
         return None
 
 
-def _walk(scheduler: Any, optimizer: Any, epochs: int) -> "list[float] | None":
+def _walk(scheduler: Any, optimizer: Any, epochs: int) -> list[float] | None:
     """Step ``epochs`` times, returning the rate seen at each one."""
-    rates: "list[float]" = []
+    rates: list[float] = []
     for _ in range(epochs):
         try:
             optimizer.step()
@@ -1064,7 +1064,7 @@ def _walk(scheduler: Any, optimizer: Any, epochs: int) -> "list[float] | None":
 
 
 #: Registered into ``ALL_AXES`` beside the other subsystem axes.
-DATA_AXES: "tuple[Axis, ...]" = (
+DATA_AXES: tuple[Axis, ...] = (
     TransformAxis(),
     DataAxis(),
     TokenizerAxis(),

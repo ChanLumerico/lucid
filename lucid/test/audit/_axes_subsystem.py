@@ -88,7 +88,7 @@ class StateGuard:
     _NAMESPACES = ("lucid", "lucid.autograd", "lucid.metal")
 
     @classmethod
-    def _namespaces(cls) -> "list[Any]":
+    def _namespaces(cls) -> list[Any]:
         import importlib  # noqa: PLC0415
 
         out = []
@@ -108,7 +108,7 @@ class StateGuard:
         return None
 
     @classmethod
-    def _discovered_pairs(cls) -> "tuple[tuple[str, str], ...]":
+    def _discovered_pairs(cls) -> tuple[tuple[str, str], ...]:
         """Every ``is_/get_X`` with a matching ``set_X``, found not listed.
 
         The named pairs above stay as documentation and as the ordering
@@ -119,7 +119,7 @@ class StateGuard:
         a table of process state that a human maintains is a table that
         is one entry short.
         """
-        found: "list[tuple[str, str]]" = []
+        found: list[tuple[str, str]] = []
         known = {reader for reader, _ in cls._KEYS}
         for namespace in cls._namespaces():
             for name in dir(namespace):
@@ -166,7 +166,7 @@ class StateGuard:
         self._saved: list[tuple[Any, Any]] = []
         self._registries: list[tuple[Any, Any]] = []
 
-    def __enter__(self) -> "StateGuard":
+    def __enter__(self) -> StateGuard:
         import lucid.nn.hooks as hooks  # noqa: PLC0415 - avoids an import cycle
 
         for name in self._REGISTRIES:
@@ -186,9 +186,9 @@ class StateGuard:
 
     def __exit__(
         self,
-        exc_type: "type[BaseException] | None",
-        exc: "BaseException | None",
-        tb: "TracebackType | None",
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         for setter, value in reversed(self._saved):
             try:
@@ -235,7 +235,7 @@ class SmokeAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.kind in ("module", "optim"):
             return False  # ModuleAxis / OptimAxis do this properly
         if symbol.kind == "declaration":
@@ -246,7 +246,7 @@ class SmokeAxis(Axis):
             return False
         return callable(_surface.resolve(symbol))
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -308,7 +308,7 @@ class SmokeAxis(Axis):
 
 
 class _NullGuard:
-    def __enter__(self) -> "_NullGuard":
+    def __enter__(self) -> _NullGuard:
         return self
 
     def __exit__(self, *_: Any) -> None:
@@ -316,8 +316,8 @@ class _NullGuard:
 
 
 def _smoke_arguments(
-    symbol: "Symbol",
-) -> "list[tuple[tuple[Any, ...], dict[str, Any], str]]":
+    symbol: Symbol,
+) -> list[tuple[tuple[Any, ...], dict[str, Any], str]]:
     """Plausible calls for a symbol with no numeric spec.
 
     Stateful setters are handed back the value their own getter reports,
@@ -410,7 +410,7 @@ class DistributionAxis(Axis):
         ((3, 0.5), {}),
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.subsystem != "distributions":
             return False
         if symbol.short == "kl_divergence":
@@ -439,7 +439,7 @@ class DistributionAxis(Axis):
             and not hasattr(obj, "sample")
         )
 
-    def _check_transform(self, symbol: "Symbol", transform: Any) -> Finding:
+    def _check_transform(self, symbol: Symbol, transform: Any) -> Finding:
         """``inv(f(x))`` must be ``x``, on the transform's own codomain.
 
         The probe is pushed through the forward map first and inverted
@@ -447,7 +447,7 @@ class DistributionAxis(Axis):
         inverse asked about a point its forward never produces is being
         asked the wrong question.
         """
-        problems: "list[str]" = []
+        problems: list[str] = []
         source = _probe.as_f64(_probe.rng(19).uniform(0.15, 0.85, (2, 3)))
         try:
             forward = transform(source)
@@ -513,7 +513,7 @@ class DistributionAxis(Axis):
             symbol, Status.PASS, "forward is finite and inv round trips"
         )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         if symbol.short == "kl_divergence":
             return self._check_kl(symbol)
         dist = None
@@ -702,7 +702,7 @@ class DistributionAxis(Axis):
             symbol, Status.PASS, f"checked {', '.join(sorted(set(checked)))}"
         )
 
-    def _check_kl(self, symbol: "Symbol") -> Finding:
+    def _check_kl(self, symbol: Symbol) -> Finding:
         """A divergence from a distribution to itself is zero, and never negative."""
         normal = getattr(lucid.distributions, "Normal", None)
         if normal is None:
@@ -750,13 +750,13 @@ class DiffeqAxis(Axis):
     summary = "solver convergence order and tableau consistency"
     kinds = frozenset({"diffeq", "value"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         # The published tableaux (DOPRI5, GL4, ...) are module-level
         # *instances*, so they enumerate as values rather than as
         # callables — 21 symbols that no axis reached until this said so.
         return symbol.subsystem == "diffeq"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         tableau = _as_tableau(obj)
         if tableau is not None:
@@ -767,7 +767,7 @@ class DiffeqAxis(Axis):
             return self._check_variant(symbol, obj)
         return self._finding(symbol, Status.NOT_APPLICABLE, "not a solver or a tableau")
 
-    def _check_variant(self, symbol: "Symbol", solver: Any) -> Finding:
+    def _check_variant(self, symbol: Symbol, solver: Any) -> Finding:
         """The dense and event solvers, against ``odeint`` on the same problem.
 
         Neither takes a time grid the way ``odeint`` does — one returns
@@ -811,7 +811,7 @@ class DiffeqAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, f"agrees to {abs(value - want):.2e}")
 
-    def _check_tableau(self, symbol: "Symbol", tableau: Any) -> Finding:
+    def _check_tableau(self, symbol: Symbol, tableau: Any) -> Finding:
         a = np.asarray(tableau[0], dtype=np.float64)
         b = np.asarray(tableau[1], dtype=np.float64)
         c = np.asarray(tableau[2], dtype=np.float64)
@@ -827,7 +827,7 @@ class DiffeqAxis(Axis):
             return self._finding(symbol, Status.FAIL, "; ".join(problems))
         return self._finding(symbol, Status.PASS, f"{len(b)} stages, consistent")
 
-    def _check_convergence(self, symbol: "Symbol", solver: Any) -> Finding:
+    def _check_convergence(self, symbol: Symbol, solver: Any) -> Finding:
         # y' = -y, y(0) = 1 is deliberately *not* the test problem: every
         # four-stage fourth-order explicit method collapses onto the same
         # stability polynomial there and the check passes for the wrong
@@ -843,7 +843,7 @@ class DiffeqAxis(Axis):
             # does not — passing it unconditionally made the adjoint
             # solver, the one whose gradients are the reason it exists,
             # report UNSUPPORTED on a keyword rather than run.
-            options: "dict[str, Any]" = {"method": "rk4"}
+            options: dict[str, Any] = {"method": "rk4"}
             if symbol.short == "odeint":
                 options["return_trajectory"] = False
             try:
@@ -884,7 +884,7 @@ class DiffeqAxis(Axis):
         return self._finding(symbol, Status.PASS, f"observed order {observed:.2f}")
 
 
-def _as_tableau(obj: Any) -> "tuple[Any, Any, Any] | None":
+def _as_tableau(obj: Any) -> tuple[Any, Any, Any] | None:
     """``(A, b, c)`` if ``obj`` looks like a Butcher tableau.
 
     ``A`` is stored the way the method is written on paper: strictly
@@ -977,7 +977,7 @@ class QuantizationAxis(Axis):
         }
     )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         obj = symbol.obj
         if not callable(obj):
             return self._finding(symbol, Status.SKIP, "not callable")
@@ -1035,7 +1035,7 @@ class QuantizationAxis(Axis):
 
     # ── the other three kinds of entry point ─────────────────────────────────
 
-    def _tensor_level(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _tensor_level(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         """The four functions that take a tensor and explicit qparams.
 
         Their required arguments are a scale, a zero point and a qdtype,
@@ -1110,7 +1110,7 @@ class QuantizationAxis(Axis):
             symbol, Status.PASS, f"within one step: {error:.3g} <= {step:.3g}"
         )
 
-    def _qconfig_factory(self, symbol: "Symbol", obj: Any) -> Finding:
+    def _qconfig_factory(self, symbol: Symbol, obj: Any) -> Finding:
         try:
             config = obj()
         except Exception as exc:  # noqa: BLE001
@@ -1162,7 +1162,7 @@ class QuantizationAxis(Axis):
                 )
         return self._finding(symbol, Status.PASS, f"{len(factories)} observers build")
 
-    def _observer(self, symbol: "Symbol", cls: Any) -> Finding:
+    def _observer(self, symbol: Symbol, cls: Any) -> Finding:
         try:
             observer = cls()
         except Exception as exc:  # noqa: BLE001
@@ -1205,7 +1205,7 @@ class QuantizationAxis(Axis):
             f"scale tracks the range: {scales[0]:.3g} -> {scales[1]:.3g}",
         )
 
-    def _flow(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _flow(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         model = _float_model()
         model.eval()
         probe = _calibration()
@@ -1214,7 +1214,7 @@ class QuantizationAxis(Axis):
         with contextlib.suppress(Exception):
             qconfig = lucid.quantization.get_default_qconfig()
 
-        attempts: "list[tuple[tuple[Any, ...], dict[str, Any]]]" = []
+        attempts: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
         if name.startswith("fuse"):
             attempts = [((model, [["0", "1"]]), {}), ((model, ["0", "1"]), {})]
         elif name == "quantize_dynamic":
@@ -1287,23 +1287,23 @@ class SerializationAxis(Axis):
     #: ``applies`` named ``save``/``load`` literally, so the safetensors
     #: and sharded writers — four public symbols and the two formats a
     #: checkpoint actually ships in — had no axis at all.
-    _PAIRS: "tuple[tuple[str, str, str, bool], ...]" = (
+    _PAIRS: tuple[tuple[str, str, str, bool], ...] = (
         ("save", "load", ".lct", False),
         ("save_safetensors", "load_safetensors", ".safetensors", True),
         ("save_sharded", "load_sharded", "", True),
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         # ``save`` and ``load`` touch the filesystem, so they are flagged
         # stateful and the base class would refuse them.  This axis calls
         # them on purpose, inside a temporary directory it owns.
         names = {name for pair in self._PAIRS for name in pair[:2]}
         return symbol.kind == "serialize" and symbol.short in names
 
-    def _pair_for(self, short: str) -> "tuple[str, str, str, bool] | None":
+    def _pair_for(self, short: str) -> tuple[str, str, str, bool] | None:
         return next((p for p in self._PAIRS if short in p[:2]), None)
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         pair = self._pair_for(symbol.short)
         if pair is None:
             return self._finding(symbol, Status.SKIP, "not a save/load pair")
@@ -1390,7 +1390,7 @@ class CompiledAxis(Axis):
     kinds = frozenset({"compiled"})
     varies_a_tensor = False
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         # Stateful and checked anyway, exactly as ``save``/``load`` are.
         #
         # ``compile``, ``compile_optimizer``, ``compiled_step`` and the
@@ -1402,7 +1402,7 @@ class CompiledAxis(Axis):
         # reported on four classes that are not entry points at all.
         return symbol.kind == "compiled"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         name = symbol.short
         obj = symbol.obj
         if not callable(obj):
@@ -1430,7 +1430,7 @@ class CompiledAxis(Axis):
             )
         return self._finding(symbol, Status.NOT_APPLICABLE, "not a compile entry point")
 
-    def _function(self, symbol: "Symbol", compile_fn: Any, x: Any) -> Finding:
+    def _function(self, symbol: Symbol, compile_fn: Any, x: Any) -> Finding:
         try:
             compiled = compile_fn(_eager)
             got = _probe.to_numpy(compiled(x))
@@ -1450,7 +1450,7 @@ class CompiledAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "compiled matches eager")
 
-    def _artefact(self, symbol: "Symbol", x: Any) -> Finding:
+    def _artefact(self, symbol: Symbol, x: Any) -> Finding:
         save = getattr(lucid.compile, "save_compiled", None)
         load = getattr(lucid.compile, "load_compiled", None)
         if save is None or load is None:
@@ -1543,7 +1543,7 @@ class CompiledAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "the artefact survives a round trip")
 
-    def _diagnose(self, symbol: "Symbol", obj: Any, x: Any) -> Finding:
+    def _diagnose(self, symbol: Symbol, obj: Any, x: Any) -> Finding:
         report = obj(_eager, x)
         if report is None:
             return self._finding(symbol, Status.FAIL, "reported nothing")
@@ -1552,7 +1552,7 @@ class CompiledAxis(Axis):
             return self._finding(symbol, Status.FAIL, "the report has an empty repr")
         return self._finding(symbol, Status.PASS, f"reports {type(report).__name__}")
 
-    def _step(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _step(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         """A compiled training step must land where the eager one lands.
 
         Both routes start from the same weights and see the same batch,
@@ -1567,7 +1567,7 @@ class CompiledAxis(Axis):
         probe = _probe.as_f32(_probe.rng(11).uniform(-1.0, 1.0, (4, 6)), device)
         target = _probe.as_f32(_probe.rng(12).uniform(-1.0, 1.0, (4, 3)), device)
 
-        def build() -> "tuple[Any, Any]":
+        def build() -> tuple[Any, Any]:
             lucid.manual_seed(17)
             model = lucid.nn.Linear(6, 3)
             if device != "cpu":
@@ -1679,10 +1679,10 @@ class ClassContractAxis(Axis):
     summary = "plain classes construct and repr without raising"
     kinds = frozenset({"class", "distribution", "quant", "util", "diffeq"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.kind in self.kinds and isinstance(symbol.obj, type)
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         # Signature-driven first, and only then the blind ladder.
         #
         # ``_try_construct`` tries a fixed list of argument tuples — ``(4,)``,
@@ -1732,10 +1732,10 @@ class ConstantAxis(Axis):
     summary = "dtypes build tensors, scheme constants are distinct, aliases resolve"
     kinds = frozenset({"value"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.kind == "value"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         value = symbol.obj
         if value is None:
             return self._finding(symbol, Status.FAIL, "the exported value is None")

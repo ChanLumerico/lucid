@@ -433,7 +433,7 @@ def _report_coverage(console: Console) -> int:
 # ── the run ──────────────────────────────────────────────────────────────────
 
 
-def _selected_axes(spec: str) -> "list[_axes.Axis]":
+def _selected_axes(spec: str) -> list[_axes.Axis]:
     if spec.strip() in ("all", ""):
         return list(_axes.ALL_AXES)
     wanted = [s.strip() for s in spec.split(",") if s.strip()]
@@ -448,7 +448,7 @@ def _selected_axes(spec: str) -> "list[_axes.Axis]":
     return out
 
 
-def _selected_symbols(args: argparse.Namespace) -> "list[_surface.Symbol]":
+def _selected_symbols(args: argparse.Namespace) -> list[_surface.Symbol]:
     subsystems = (
         None
         if args.subsystem.strip() in ("all", "")
@@ -463,7 +463,7 @@ def _selected_symbols(args: argparse.Namespace) -> "list[_surface.Symbol]":
     return symbols
 
 
-def _tally(counts: "dict[Status, int]", console: Console) -> str:
+def _tally(counts: dict[Status, int], console: Console) -> str:
     order = (
         Status.PASS,
         Status.FAIL,
@@ -630,7 +630,7 @@ def run(args: argparse.Namespace, console: Console) -> Report:
 # ── reporting ────────────────────────────────────────────────────────────────
 
 
-def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
+def summarise(report: Report, console: Console, show: Sequence[str]) -> None:
     console.always("")
     console.rule("summary", "cyan")
 
@@ -723,21 +723,21 @@ def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
 # ── coverage baseline ────────────────────────────────────────────────────────
 
 
-def _answered(report: Report) -> "dict[str, str]":
+def _answered(report: Report) -> dict[str, str]:
     """``axis::symbol -> status`` for every cell that produced a verdict.
 
     Only the verdicts.  ``skip`` and ``unsupported`` move around with
     probe details that have nothing to do with the framework, and a
     baseline that churns is a baseline nobody re-reads.
     """
-    out: "dict[str, str]" = {}
+    out: dict[str, str] = {}
     for finding in report.findings:
         if finding.status in (Status.PASS, Status.FAIL, Status.ERROR, Status.VACUOUS):
             out[f"{finding.axis}::{finding.symbol}"] = finding.status.value
     return out
 
 
-def load_coverage(path: Path) -> "dict[str, str] | None":
+def load_coverage(path: Path) -> dict[str, str] | None:
     """The recorded set, or ``None`` when there is nothing to compare to."""
     if not path.exists():
         return None
@@ -800,7 +800,7 @@ def _scoped_coverage(
 
 
 def report_coverage_diff(
-    report: Report, recorded: "dict[str, str]", console: Console
+    report: Report, recorded: dict[str, str], console: Console
 ) -> int:
     """Print what moved since the baseline.  Returns the regression count.
 
@@ -938,7 +938,7 @@ def report_uncovered(console: Console, args: argparse.Namespace) -> int:
 # ── entry point ──────────────────────────────────────────────────────────────
 
 
-def _run_audit_stage(args: argparse.Namespace, console: Console) -> "tuple[int, int]":
+def _run_audit_stage(args: argparse.Namespace, console: Console) -> tuple[int, int]:
     """The probe sweep.  Returns ``(defects, coverage-cell regressions)``.
 
     The record-a-new-baseline modes return zero for whatever they just
@@ -998,7 +998,7 @@ def _run_audit_stage(args: argparse.Namespace, console: Console) -> "tuple[int, 
     return len(report.defects), regressions
 
 
-def _run_suite_stage(args: argparse.Namespace, console: Console) -> "tuple[int, int]":
+def _run_suite_stage(args: argparse.Namespace, console: Console) -> tuple[int, int]:
     """The test suite and its line-coverage floor.
 
     Returns ``(broken tests, line-coverage regressions)``.
@@ -1153,7 +1153,7 @@ def _run_self_check_stage(console: Console) -> int:
     return len(missed)
 
 
-def _verdict(console: Console, tallies: "dict[str, int]") -> int:
+def _verdict(console: Console, tallies: dict[str, int]) -> int:
     """One line per stage, then the answer.
 
     The whole point of folding the two stages together is that a single
@@ -1180,7 +1180,7 @@ def _verdict(console: Console, tallies: "dict[str, int]") -> int:
     return 1 if total else 0
 
 
-def main(argv: "Sequence[str] | None" = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     # The informational modes answer a question about the harness rather

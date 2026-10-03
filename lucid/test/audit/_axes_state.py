@@ -75,7 +75,7 @@ class StateAxis(Axis):
     #: *different from the current one* — writing back what is already
     #: there passes whatever the setter does, which is the vacuous pass
     #: this whole tool is built to refuse.
-    _PAIRS: "tuple[tuple[str, str, tuple[Any, ...]], ...]" = (
+    _PAIRS: tuple[tuple[str, str, tuple[Any, ...]], ...] = (
         ("get_default_dtype", "set_default_dtype", (lucid.float64, lucid.float32)),
         ("get_num_threads", "set_num_threads", (1, 2)),
         # Two values, like every other pair.  It was one, which is the
@@ -92,11 +92,11 @@ class StateAxis(Axis):
         ("is_grad_enabled", "set_grad_enabled", (False, True)),
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.short in self._reachable()
 
     @classmethod
-    def _reachable(cls) -> "frozenset[str]":
+    def _reachable(cls) -> frozenset[str]:
         names = {name for pair in cls._PAIRS for name in pair[:2]}
         names |= {
             "manual_seed",
@@ -123,7 +123,7 @@ class StateAxis(Axis):
         }
         return frozenset(names)
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         name = symbol.short
         obj = _surface.resolve(symbol)
         if obj is None or not callable(obj):
@@ -147,7 +147,7 @@ class StateAxis(Axis):
     # ── the checks ───────────────────────────────────────────────────────────
 
     def _round_trip(
-        self, symbol: "Symbol", reader: str, writer: str, values: "tuple[Any, ...]"
+        self, symbol: Symbol, reader: str, writer: str, values: tuple[Any, ...]
     ) -> Finding:
         get = getattr(lucid, reader, None)
         set_ = getattr(lucid, writer, None)
@@ -158,7 +158,7 @@ class StateAxis(Axis):
         except Exception as exc:  # noqa: BLE001
             return self._finding(symbol, Status.SKIP, f"{reader}: {type(exc).__name__}")
 
-        seen: "list[str]" = []
+        seen: list[str] = []
         try:
             for value in values:
                 try:
@@ -204,7 +204,7 @@ class StateAxis(Axis):
             symbol, Status.PASS, f"{reader} follows {writer} for {seen}"
         )
 
-    def _seed(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _seed(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         # ``lucid.metal.manual_seed`` seeds the GPU stream, ``lucid.manual_seed``
         # the CPU one.  Which stream the symbol belongs to is in its
         # qualname, and asking the wrong one measures an RNG the call
@@ -272,7 +272,7 @@ class StateAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "reproducible and seed-sensitive")
 
-    def _rng_state(self, symbol: "Symbol") -> Finding:
+    def _rng_state(self, symbol: Symbol) -> Finding:
         get = getattr(lucid, "get_rng_state", None)
         set_ = getattr(lucid, "set_rng_state", None)
         if get is None or set_ is None:
@@ -296,7 +296,7 @@ class StateAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "the captured state replays the draw")
 
-    def _default_device(self, symbol: "Symbol") -> Finding:
+    def _default_device(self, symbol: Symbol) -> Finding:
         get = getattr(lucid, "get_default_device", None)
         set_ = getattr(lucid, "set_default_device", None)
         if get is None or set_ is None:
@@ -327,7 +327,7 @@ class StateAxis(Axis):
             symbol, Status.PASS, "new tensors follow the default device"
         )
 
-    def _grad_context(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _grad_context(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         x = lucid.tensor(np.ones((2, 2)), requires_grad=True)
         wanted = name == "enable_grad"
         try:
@@ -352,7 +352,7 @@ class StateAxis(Axis):
             symbol, Status.PASS, f"grad is {wanted} inside and restored after"
         )
 
-    def _detect_anomaly(self, symbol: "Symbol", obj: Any) -> Finding:
+    def _detect_anomaly(self, symbol: Symbol, obj: Any) -> Finding:
         reader = getattr(lucid.autograd, "is_anomaly_enabled", None)
         try:
             obj(True)
@@ -376,7 +376,7 @@ class StateAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "the flag is readable and follows")
 
-    def _read_only(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+    def _read_only(self, symbol: Symbol, obj: Any, name: str) -> Finding:
         """A query about the process or the device: call it, twice.
 
         The weakest check here and still not the smoke axis's: a reader
@@ -429,10 +429,10 @@ class HookAxis(Axis):
         "register_module_load_state_dict_pre_hook",
     }
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.short in self._GLOBAL or symbol.qualname == "Tensor.register_hook"
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         register = _surface.resolve(symbol)
         if register is None or not callable(register):
             return self._finding(symbol, Status.SKIP, "not callable")
@@ -440,8 +440,8 @@ class HookAxis(Axis):
             return self._tensor_hook(symbol, register)
         return self._module_hook(symbol, register)
 
-    def _tensor_hook(self, symbol: "Symbol", register: Any) -> Finding:
-        fired: "list[Any]" = []
+    def _tensor_hook(self, symbol: Symbol, register: Any) -> Finding:
+        fired: list[Any] = []
         x = lucid.tensor(np.ones((2, 2)), requires_grad=True)
         try:
             handle = register(x, lambda grad: fired.append(grad))
@@ -457,15 +457,15 @@ class HookAxis(Axis):
         return self._removes(symbol, handle, fired, self._backward_again(x))
 
     @staticmethod
-    def _backward_again(x: Any) -> "Any":
+    def _backward_again(x: Any) -> Any:
         def again() -> None:
             x.grad = None
             (x * x).sum().backward()
 
         return again
 
-    def _module_hook(self, symbol: "Symbol", register: Any) -> Finding:
-        fired: "list[Any]" = []
+    def _module_hook(self, symbol: Symbol, register: Any) -> Finding:
+        fired: list[Any] = []
         module = lucid.nn.Linear(3, 3)
         probe = _probe.as_f32(_probe.sample("moderate", (2, 3)))
 
@@ -504,7 +504,7 @@ class HookAxis(Axis):
         return self._removes(symbol, handle, fired, exercise)
 
     def _removes(
-        self, symbol: "Symbol", handle: Any, fired: "list[Any]", exercise: Any
+        self, symbol: Symbol, handle: Any, fired: list[Any], exercise: Any
     ) -> Finding:
         remove = getattr(handle, "remove", None)
         if remove is None:
@@ -574,14 +574,14 @@ class MetadataAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.short not in self._NAMES:
             return False
         # ``get_default_*`` belong to the state axis, which checks them
         # against their setters; here they would only be called.
         return symbol.short not in ("get_default_dtype", "get_default_device")
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None or not callable(fn):
             return self._finding(symbol, Status.SKIP, "not callable")
@@ -594,7 +594,7 @@ class MetadataAxis(Axis):
             return self._engine_dtype(symbol, fn)
         return self._describes(symbol, fn, name)
 
-    def _promotion(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _promotion(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         def operand(dtype: Any) -> Any:
             if name == "result_type":
                 return lucid.zeros((2,), dtype=dtype)
@@ -629,7 +629,7 @@ class MetadataAxis(Axis):
                 )
         return self._finding(symbol, Status.PASS, "commutative and widening")
 
-    def _limits(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _limits(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         dtype = lucid.float32 if name == "finfo" else lucid.int32
         try:
             info = fn(dtype)
@@ -651,8 +651,8 @@ class MetadataAxis(Axis):
                 return self._finding(symbol, Status.FAIL, f"eps is {eps}")
         return self._finding(symbol, Status.PASS, f"{low} .. {high}")
 
-    def _engine_dtype(self, symbol: "Symbol", fn: Any) -> Finding:
-        seen: "dict[str, Any]" = {}
+    def _engine_dtype(self, symbol: Symbol, fn: Any) -> Finding:
+        seen: dict[str, Any] = {}
         for name in ("float32", "float64", "int32", "int64"):
             dtype = getattr(lucid, name, None)
             if dtype is None:
@@ -677,7 +677,7 @@ class MetadataAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, f"{len(seen)} dtypes map one-to-one")
 
-    def _describes(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _describes(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         """The query has to agree with the tensor it is asked about."""
         for dtype, itemsize in ((lucid.float32, 4), (lucid.float64, 8)):
             tensor = lucid.zeros((2, 3), dtype=dtype)
@@ -771,7 +771,7 @@ class FunctionalTransformAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.short not in self._NAMES:
             return False
         # ``lucid.autograd.grad`` is the eager entry point and takes
@@ -787,7 +787,7 @@ class FunctionalTransformAxis(Axis):
     def _square(*operands: Any) -> Any:
         return (operands[0] * operands[0]).sum()
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None or not callable(fn):
             return self._finding(symbol, Status.SKIP, "not callable")
@@ -906,13 +906,13 @@ class NnUtilsAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return (
             symbol.qualname.startswith("lucid.nn.utils.")
             and symbol.short in self._NAMES
         )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None or not callable(fn):
             return self._finding(symbol, Status.SKIP, "not callable")
@@ -952,7 +952,7 @@ class NnUtilsAxis(Axis):
     def _linear() -> Any:
         return lucid.nn.Linear(4, 3)
 
-    def _parametrise(self, symbol: "Symbol", fn: Any, name: str, probe: Any) -> Finding:
+    def _parametrise(self, symbol: Symbol, fn: Any, name: str, probe: Any) -> Finding:
         module = self._linear()
         before = _probe.to_numpy(module(probe))
         if name == "register_parametrization":
@@ -983,9 +983,7 @@ class NnUtilsAxis(Axis):
             symbol, Status.PASS, "forward keeps its shape and stays trainable"
         )
 
-    def _unparametrise(
-        self, symbol: "Symbol", fn: Any, name: str, probe: Any
-    ) -> Finding:
+    def _unparametrise(self, symbol: Symbol, fn: Any, name: str, probe: Any) -> Finding:
         if name == "remove_spectral_norm":
             return self._unparametrise_spectral(symbol, fn, probe)
 
@@ -1015,7 +1013,7 @@ class NnUtilsAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "removed without changing the output")
 
-    def _unparametrise_spectral(self, symbol: "Symbol", fn: Any, probe: Any) -> Finding:
+    def _unparametrise_spectral(self, symbol: Symbol, fn: Any, probe: Any) -> Finding:
         """Check ``remove_spectral_norm`` against what it actually promises.
 
         The sibling removals put the *effective* weight back, so the
@@ -1076,7 +1074,7 @@ class NnUtilsAxis(Axis):
             symbol, Status.PASS, "weight_orig restored and the buffers are gone"
         )
 
-    def _prune(self, symbol: "Symbol", fn: Any, name: str, probe: Any) -> Finding:
+    def _prune(self, symbol: Symbol, fn: Any, name: str, probe: Any) -> Finding:
         module = self._linear()
         if name == "remove":
             lucid.nn.utils.prune.l1_unstructured(module, "weight", amount=0.5)
@@ -1122,7 +1120,7 @@ class NnUtilsAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, f"zeroed {zeros} of {weight.size}")
 
-    def _prune_bernoulli(self, symbol: "Symbol", fn: Any) -> Finding:
+    def _prune_bernoulli(self, symbol: Symbol, fn: Any) -> Finding:
         """Check ``random_unstructured``, which is not a count-based prune.
 
         Its documented contract samples every element independently and
@@ -1180,7 +1178,7 @@ class NnUtilsAxis(Axis):
             symbol, Status.PASS, f"endpoints exact, zeroed {zeros} of {size} at 0.5"
         )
 
-    def _fuse(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _fuse(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         if name == "fuse_conv_bn_eval":
             first = lucid.nn.Conv2d(3, 4, 3, padding=1)
             norm = lucid.nn.BatchNorm2d(4)
@@ -1207,7 +1205,7 @@ class NnUtilsAxis(Axis):
             symbol, Status.PASS, "the fused layer matches the sequence"
         )
 
-    def _skip_init(self, symbol: "Symbol", fn: Any, probe: Any) -> Finding:
+    def _skip_init(self, symbol: Symbol, fn: Any, probe: Any) -> Finding:
         module = fn(lucid.nn.Linear, 4, 3)
         if not isinstance(module, lucid.nn.Module):
             return self._finding(
@@ -1220,7 +1218,7 @@ class NnUtilsAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "builds a usable module")
 
-    def _vector(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _vector(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         module = self._linear()
         flat = lucid.nn.utils.parameters_to_vector(module.parameters())
         if name == "parameters_to_vector":
@@ -1242,7 +1240,7 @@ class NnUtilsAxis(Axis):
                 )
         return self._finding(symbol, Status.PASS, "vector -> parameters round trips")
 
-    def _copy(self, symbol: "Symbol", fn: Any, probe: Any) -> Finding:
+    def _copy(self, symbol: Symbol, fn: Any, probe: Any) -> Finding:
         source, dest = self._linear(), self._linear()
         fn(source, dest)
         a, b = _probe.to_numpy(source(probe)), _probe.to_numpy(dest(probe))
@@ -1256,7 +1254,7 @@ class NnUtilsAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "the copy computes the same thing")
 
-    def _pack(self, symbol: "Symbol", fn: Any) -> Finding:
+    def _pack(self, symbol: Symbol, fn: Any) -> Finding:
         padded = _probe.as_f32(_probe.sample("moderate", (2, 4, 3)))
         packed = fn(padded, [4, 2], batch_first=True, enforce_sorted=True)
         restored, lengths = lucid.nn.utils.rnn.pad_packed_sequence(
@@ -1276,7 +1274,7 @@ class NnUtilsAxis(Axis):
             symbol, Status.PASS, "packs and unpacks the valid timesteps"
         )
 
-    def _grad_norm(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
+    def _grad_norm(self, symbol: Symbol, fn: Any, name: str) -> Finding:
         module = self._linear()
         module(_probe.as_f32(_probe.sample("moderate", (2, 4)))).sum().backward()
         grads = [p.grad for p in module.parameters() if p.grad is not None]
@@ -1347,12 +1345,12 @@ class WeightsAxis(Axis):
         }
     )
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.qualname.startswith("lucid.weights.") and (
             symbol.short in self._NAMES
         )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         import lucid.weights as weights  # noqa: PLC0415 - optional subsystem
 
         model_name = "_audit_probe_net"
@@ -1370,7 +1368,7 @@ class WeightsAxis(Axis):
                 symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
             )
 
-        problems: "list[str]" = []
+        problems: list[str] = []
         if weights.weights_for(model_name) is not registered:
             problems.append("weights_for did not return the enum that was registered")
         tags = weights.list_pretrained(model_name)
@@ -1408,7 +1406,7 @@ class WeightsAxis(Axis):
         )
 
 
-STATE_AXES: "tuple[Axis, ...]" = (
+STATE_AXES: tuple[Axis, ...] = (
     StateAxis(),
     HookAxis(),
     MetadataAxis(),

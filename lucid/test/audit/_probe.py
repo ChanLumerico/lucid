@@ -49,7 +49,7 @@ def rng(seed: int) -> np.random.Generator:
 #: Each takes the shape and a seed.  The seed is a parameter rather than
 #: a closed-over constant so a second operand can be given a *different*
 #: fixed draw — see :func:`sample`.
-DOMAINS: dict[str, "Callable[[Sequence[int], int], np.ndarray]"] = {
+DOMAINS: dict[str, Callable[[Sequence[int], int], np.ndarray]] = {
     "moderate": lambda s, k: rng(k).uniform(-1.2, 1.2, s) + 0.15,
     "positive": lambda s, k: rng(k).uniform(0.35, 1.75, s),
     "unit": lambda s, k: rng(k).uniform(-0.75, 0.75, s),
@@ -144,7 +144,7 @@ def covector(n: int, seed: int = SEED_A) -> np.ndarray:
     return rng(seed).standard_normal(max(n, 1))
 
 
-def sample(domain: str, shape: "Sequence[int]" = SHAPE, variant: int = 0) -> np.ndarray:
+def sample(domain: str, shape: Sequence[int] = SHAPE, variant: int = 0) -> np.ndarray:
     """A probe from ``domain``.  ``variant`` picks a different draw.
 
     The seed is fixed so a run is reproducible and a finding can be
@@ -266,7 +266,7 @@ def quadratic_shrink(coarse: float, fine: float, ratio: float = 10.0) -> bool:
 
 
 def finite_difference(
-    evaluate: "Callable[[np.ndarray], float]",
+    evaluate: Callable[[np.ndarray], float],
     base: np.ndarray,
     step: float,
 ) -> np.ndarray:
@@ -293,7 +293,7 @@ def metal_available() -> bool:
 
 
 @contextlib.contextmanager
-def preserved_globals() -> "Iterator[None]":
+def preserved_globals() -> Iterator[None]:
     """Restore the process-wide switches around one probe.
 
     The survey calls every public symbol, and three of them write state
@@ -336,7 +336,7 @@ def numpy_of(name: str) -> Any:
     }[name]
 
 
-def dtype_args(call: Any, name: str, build: "Callable[..., Any]") -> list[Any]:
+def dtype_args(call: Any, name: str, build: Callable[..., Any]) -> list[Any]:
     """One call's arguments, rebuilt at the dtype ``name``.
 
     Shared by the dtype axis and by the contract generator so the two
@@ -367,7 +367,7 @@ def dtype_args(call: Any, name: str, build: "Callable[..., Any]") -> list[Any]:
     return args
 
 
-def _rebuild(value: Any, build: "Callable[..., Any]") -> Any:
+def _rebuild(value: Any, build: Callable[..., Any]) -> Any:
     """One companion argument, at the dtype under test.
 
     Recurses into lists and tuples.  ``vjp(f, primals, cotangents)`` takes
@@ -387,7 +387,7 @@ def _rebuild(value: Any, build: "Callable[..., Any]") -> Any:
     return build(companion, companion.dtype.kind in "fc")
 
 
-def dtype_kwargs(call: Any, build: "Callable[..., Any]") -> "dict[str, Any]":
+def dtype_kwargs(call: Any, build: Callable[..., Any]) -> dict[str, Any]:
     """The same rebuild, for the keyword arguments.
 
     They were left where they were.  A tensor passed by keyword stayed on

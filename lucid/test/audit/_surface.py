@@ -139,7 +139,6 @@ STATEFUL_EXACT: frozenset[str] = frozenset(
         "to_shared",
         "cpu",
         "metal",
-        "cuda",
         "pin_memory",
         "share_memory_",
         "record_stream",
@@ -341,14 +340,14 @@ def _declaring_module(obj: Any, found_in: str) -> str:
     return found_in
 
 
-def _longest_prefix(path: str) -> "tuple[str, str] | None":
+def _longest_prefix(path: str) -> tuple[str, str] | None:
     """The most specific ``SUBSYSTEMS`` entry covering ``path``.
 
     ``lucid.utils.transforms.functional`` is a module of functions living
     under a package of classes, so the most specific declaration has to
     win or its 33 functions get run through the transform lifecycle.
     """
-    best: "tuple[str, str] | None" = None
+    best: tuple[str, str] | None = None
     best_len = -1
     for key, (mod_path, kind) in SUBSYSTEMS.items():
         if (path == mod_path or path.startswith(mod_path + ".")) and len(
@@ -369,7 +368,7 @@ def _subsystem_for(path: str) -> str:
     return match[0] if match else "lucid"
 
 
-def enumerate_surface(subsystems: "list[str] | None" = None) -> list[Symbol]:
+def enumerate_surface(subsystems: list[str] | None = None) -> list[Symbol]:
     """Every public symbol in scope, in a stable order.
 
     Parameters
@@ -485,7 +484,7 @@ def _is_nn_module(obj: type) -> bool:
         return False
 
 
-def independent_walk() -> "dict[int, str]":
+def independent_walk() -> dict[int, str]:
     """Every public Lucid-owned object, found without using the surface.
 
     The check on :func:`enumerate_surface`, and deliberately not sharing
@@ -503,7 +502,7 @@ def independent_walk() -> "dict[int, str]":
     dict
         ``id(object) -> the first dotted path it was found at``.
     """
-    found: "dict[int, str]" = {}
+    found: dict[int, str] = {}
     for path in _walkable_modules():
         try:
             module = importlib.import_module(path)
@@ -544,7 +543,7 @@ def resolve(symbol: Symbol) -> Any:
     return None
 
 
-def counterparts(symbol: Symbol) -> "Iterator[tuple[str, Any]]":
+def counterparts(symbol: Symbol) -> Iterator[tuple[str, Any]]:
     """Every entry point the same operation is reachable through.
 
     One op with three spellings is one op with three chances to drift —

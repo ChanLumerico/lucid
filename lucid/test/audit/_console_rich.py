@@ -107,9 +107,9 @@ class RichReporter:
     cannot drift from what actually runs.
     """
 
-    def __init__(self, axes: "Sequence[Axis]", symbols: "Sequence[Symbol]") -> None:
-        self._counts: "dict[str, dict[str, int]]" = {}
-        totals: "dict[str, int]" = {}
+    def __init__(self, axes: Sequence[Axis], symbols: Sequence[Symbol]) -> None:
+        self._counts: dict[str, dict[str, int]] = {}
+        totals: dict[str, int] = {}
         for symbol in symbols:
             applicable = sum(1 for axis in axes if axis.applies(symbol))
             if applicable:
@@ -160,7 +160,7 @@ class RichReporter:
         self._shown = set(list(self._totals)[:room])
         self._hidden = len(self._totals) - len(self._shown)
 
-        self._tasks: "dict[str, Any]" = {}
+        self._tasks: dict[str, Any] = {}
         width = max(len(k) for k in self._totals) if self._totals else 0
         for name, total in self._totals.items():
             self._counts[name] = {"pass": 0, "fail": 0, "other": 0}
@@ -194,15 +194,15 @@ class RichReporter:
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
-    def __enter__(self) -> "RichReporter":
+    def __enter__(self) -> RichReporter:
         self._live.__enter__()
         return self
 
     def __exit__(
         self,
-        exc_type: "type[BaseException] | None",
-        exc: "BaseException | None",
-        tb: "TracebackType | None",
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         self._live.__exit__(exc_type, exc, tb)
         self.print_tally()
@@ -224,7 +224,7 @@ class RichReporter:
 
     # ── updates ──────────────────────────────────────────────────────────────
 
-    def record(self, symbol: "Symbol", axis_name: str, finding: "Finding") -> None:
+    def record(self, symbol: Symbol, axis_name: str, finding: Finding) -> None:
         """Advance the bars for one completed cell."""
         bucket = self._counts.get(symbol.subsystem)
         if bucket is None:  # a subsystem with no applicable axis
@@ -260,7 +260,7 @@ class RichReporter:
     # ── rendering ────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _tally(bucket: "dict[str, int]") -> "Text":
+    def _tally(bucket: dict[str, int]) -> Text:
         out = Text()
         out.append(f"  {bucket['pass']:>4} ok", style="green")
         if bucket["fail"]:
@@ -269,7 +269,7 @@ class RichReporter:
             out.append(f"  {bucket['other']:>4} –", style="dim")
         return out
 
-    def _footer_text(self, axis_name: str, qualname: str) -> "Text":
+    def _footer_text(self, axis_name: str, qualname: str) -> Text:
         """What is in flight, and how many defects so far.
 
         A running count and nothing else while the sweep is going.  Each
@@ -286,8 +286,8 @@ class RichReporter:
             line.append(f"    {self._defects} defect(s)", style="bold red")
         return line
 
-    def _render(self) -> "Group":
-        parts: "list[Any]" = [self._overall, Text(""), self._per_subsystem]
+    def _render(self) -> Group:
+        parts: list[Any] = [self._overall, Text(""), self._per_subsystem]
         if self._hidden:
             parts.append(Text(f"  … {self._hidden} more, tallied below", style="dim"))
         parts.append(self._footer)
@@ -295,8 +295,8 @@ class RichReporter:
 
 
 def build(
-    console: "Console", axes: "Sequence[Axis]", symbols: "Sequence[Symbol]"
-) -> "RichReporter | None":
+    console: Console, axes: Sequence[Axis], symbols: Sequence[Symbol]
+) -> RichReporter | None:
     """A live reporter, or ``None`` to keep the stdlib display.
 
     ``console.live`` already encodes "a terminal that can be animated and

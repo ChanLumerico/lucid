@@ -29,7 +29,7 @@ from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._axes import Context
 
 
-def _chosen_call(symbol: "_surface.Symbol") -> object | None:
+def _chosen_call(symbol: _surface.Symbol) -> object | None:
     """The invocation the audit would actually use for ``symbol``."""
     fn = _surface.resolve(symbol)
     if fn is None:
@@ -47,7 +47,7 @@ def _chosen_call(symbol: "_surface.Symbol") -> object | None:
     return None
 
 
-def _by_name(qualname: str) -> "_surface.Symbol | None":
+def _by_name(qualname: str) -> _surface.Symbol | None:
     for symbol in _surface.enumerate_surface():
         if symbol.qualname == qualname:
             return symbol

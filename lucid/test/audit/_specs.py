@@ -63,7 +63,7 @@ class Call:
         self.primary = primary
         self.note = note
 
-    def with_primary(self, array: np.ndarray) -> "Call":
+    def with_primary(self, array: np.ndarray) -> Call:
         """A copy whose differentiated argument is replaced by ``array``.
 
         At the *original argument's* dtype, not unconditionally float64.
@@ -119,10 +119,10 @@ _D = 4
 
 #: How many times each ``(shape, domain)`` has been drawn while building
 #: the current invocation.  Reset by :func:`invocations`.
-_DRAWN: "dict[tuple[Any, ...], int]" = {}
+_DRAWN: dict[tuple[Any, ...], int] = {}
 
 
-def _f(shape: "tuple[int, ...]", domain: str = "moderate") -> Any:
+def _f(shape: tuple[int, ...], domain: str = "moderate") -> Any:
     """One float operand.  Repeat draws of the same shape differ.
 
     Two operands built the same way used to be the *same numbers*, and
@@ -153,11 +153,11 @@ def _f(shape: "tuple[int, ...]", domain: str = "moderate") -> Any:
     return _probe.as_f64(_probe.sample(domain, shape, variant))
 
 
-def _int(shape: "tuple[int, ...]", high: int) -> Any:
+def _int(shape: tuple[int, ...], high: int) -> Any:
     return _probe.as_int(_probe.rng(_probe.SEED_B).integers(0, high, shape))
 
 
-def _spatial(rank: int) -> "tuple[int, ...]":
+def _spatial(rank: int) -> tuple[int, ...]:
     return {1: (_L,), 2: (_H, _W), 3: (_D, _H, _W)}[rank]
 
 
@@ -169,7 +169,7 @@ def _rank_of(name: str) -> int:
 # ── family builders ──────────────────────────────────────────────────────────
 
 
-def _conv(name: str, domain: str) -> "Iterator[Call]":
+def _conv(name: str, domain: str) -> Iterator[Call]:
     rank = _rank_of(name)
     spatial = _spatial(rank)
     k = (3,) * rank
@@ -183,7 +183,7 @@ def _conv(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x, w], {}, 0, "conv(x, weight)")
 
 
-def _pool(name: str, domain: str) -> "Iterator[Call]":
+def _pool(name: str, domain: str) -> Iterator[Call]:
     rank = _rank_of(name)
     x = _f((_N, _CIN, *_spatial(rank)), domain)
     yield Call([x, 2], {}, 0, "pool(x, kernel_size=2)")
@@ -191,7 +191,7 @@ def _pool(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x, (2,) * rank], {}, 0, "pool(x, kernel_size tuple)")
 
 
-def _adaptive_pool(name: str, domain: str) -> "Iterator[Call]":
+def _adaptive_pool(name: str, domain: str) -> Iterator[Call]:
     rank = _rank_of(name)
     x = _f((_N, _CIN, *_spatial(rank)), domain)
     out = (2,) * rank if rank > 1 else 2
@@ -199,7 +199,7 @@ def _adaptive_pool(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x], {"output_size": out}, 0, "adaptive_pool kw")
 
 
-def _fractional_pool(name: str, domain: str) -> "Iterator[Call]":
+def _fractional_pool(name: str, domain: str) -> Iterator[Call]:
     rank = _rank_of(name)
     x = _f((_N, _CIN, *_spatial(rank)), domain)
     yield Call([x, 2], {"output_ratio": 0.5}, 0, "fractional_pool(x, k, output_ratio)")
@@ -208,7 +208,7 @@ def _fractional_pool(name: str, domain: str) -> "Iterator[Call]":
     )
 
 
-def _norm(name: str, domain: str) -> "Iterator[Call]":
+def _norm(name: str, domain: str) -> Iterator[Call]:
     x = _f((_N, _CIN, _H, _W), domain)
     weight, bias = _f((_CIN,), "positive"), _f((_CIN,), domain)
     if "batch" in name:
@@ -248,7 +248,7 @@ _PROB_LOSSES = ("binary_cross_entropy", "bce", "kl_div", "poisson_nll")
 _PAIR_LOSSES = ("cosine_embedding", "margin_ranking", "hinge_embedding", "triplet")
 
 
-def _loss(name: str, domain: str) -> "Iterator[Call]":
+def _loss(name: str, domain: str) -> Iterator[Call]:
     classes = 4
     logits = _f((_N, classes), "moderate")
     target_idx = _int((_N,), classes)
@@ -273,7 +273,7 @@ def _loss(name: str, domain: str) -> "Iterator[Call]":
     yield Call([logits, target_idx], {}, 0, "loss(logits, class index)")
 
 
-def _embedding(name: str, domain: str) -> "Iterator[Call]":
+def _embedding(name: str, domain: str) -> Iterator[Call]:
     vocab, dim = 6, 4
     weight = _f((vocab, dim), domain)
     idx = _int((_N, 3), vocab)
@@ -290,7 +290,7 @@ def _embedding(name: str, domain: str) -> "Iterator[Call]":
         yield Call([idx, weight], {}, 1, "embedding(idx, weight)")
 
 
-def _attention(name: str, domain: str) -> "Iterator[Call]":
+def _attention(name: str, domain: str) -> Iterator[Call]:
     heads, seq, head_dim = 2, 4, 4
     q = _f((_N, heads, seq, head_dim), domain)
     k = _f((_N, heads, seq, head_dim), domain)
@@ -299,7 +299,7 @@ def _attention(name: str, domain: str) -> "Iterator[Call]":
     yield Call([q, k, v], {"is_causal": True}, 0, "sdpa causal")
 
 
-def _resample(name: str, domain: str) -> "Iterator[Call]":
+def _resample(name: str, domain: str) -> Iterator[Call]:
     x = _f((_N, _CIN, _H, _W), domain)
     if "grid_sample" in name:
         grid = _f((_N, _H, _W, 2), "unit")
@@ -328,7 +328,7 @@ def _resample(name: str, domain: str) -> "Iterator[Call]":
         yield Call([x, (1, 1)], {}, 0, "pad(x, padding pair)")
 
 
-def _linalg(name: str, domain: str) -> "Iterator[Call]":
+def _linalg(name: str, domain: str) -> Iterator[Call]:
     n = 4
     square = _probe.rng(_probe.SEED_X).standard_normal((n, n)) * 0.4 + np.eye(n) * 2.0
     rect = _probe.sample(domain, (n, 3))
@@ -357,7 +357,7 @@ def _linalg(name: str, domain: str) -> "Iterator[Call]":
     yield Call([_probe.as_f64(rect)], {}, 0, "linalg(rectangular)")
 
 
-def _fft(name: str, domain: str) -> "Iterator[Call]":
+def _fft(name: str, domain: str) -> Iterator[Call]:
     x = _probe.as_f64(_probe.sample(domain, (_N, 8)))
     if name.endswith(("shift",)):
         yield Call([x], {}, 0, "fftshift(x)")
@@ -368,7 +368,7 @@ def _fft(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x], {"n": 8}, 0, "fft(x, n)")
 
 
-def _einops(name: str, domain: str) -> "Iterator[Call]":
+def _einops(name: str, domain: str) -> Iterator[Call]:
     x = _f((_N, _CIN, _H, _W), domain)
     if "rearrange" in name:
         yield Call([x, "b c h w -> b h w c"], {}, 0, "rearrange")
@@ -388,20 +388,20 @@ def _einops(name: str, domain: str) -> "Iterator[Call]":
         yield Call([[x, x], "b c h *"], {}, 0, "pack")
 
 
-def _reduction(name: str, domain: str) -> "Iterator[Call]":
+def _reduction(name: str, domain: str) -> Iterator[Call]:
     x = _f(_probe.SHAPE, domain)
     yield Call([x], {}, 0, "reduce(x)")
     yield Call([x], {"dim": -1}, 0, "reduce(x, dim=-1)")
     yield Call([x, -1], {}, 0, "reduce(x, -1)")
 
 
-def _binary(name: str, domain: str) -> "Iterator[Call]":
+def _binary(name: str, domain: str) -> Iterator[Call]:
     a = _f(_probe.SHAPE, domain)
     b = _f(_probe.SHAPE, "positive")
     yield Call([a, b], {}, 0, "binary(a, b)")
 
 
-def _unary(name: str, domain: str) -> "Iterator[Call]":
+def _unary(name: str, domain: str) -> Iterator[Call]:
     yield Call([_f(_probe.SHAPE, domain)], {}, 0, "unary(x)")
 
 
@@ -413,7 +413,7 @@ def _unary(name: str, domain: str) -> "Iterator[Call]":
 # is never checked.
 
 
-def _ternary(name: str, domain: str) -> "Iterator[Call]":
+def _ternary(name: str, domain: str) -> Iterator[Call]:
     """``add*`` fused forms: an accumulator plus two operands."""
     v = _f((_COUT,), domain)
     m = _f((_COUT, _CIN), domain)
@@ -450,7 +450,7 @@ def _ternary(name: str, domain: str) -> "Iterator[Call]":
         yield Call([same, _f(_probe.SHAPE, domain), 0.3], {}, 0, "lerp(a, b, weight)")
 
 
-def _bitwise(name: str, domain: str) -> "Iterator[Call]":
+def _bitwise(name: str, domain: str) -> Iterator[Call]:
     """Integer-only ops.  A float probe is rejected before the op is reached."""
     a = _probe.as_int(_probe.rng(1).integers(1, 30, _probe.SHAPE))
     b = _probe.as_int(_probe.rng(2).integers(1, 6, _probe.SHAPE))
@@ -461,7 +461,7 @@ def _bitwise(name: str, domain: str) -> "Iterator[Call]":
     yield Call([a, 2], {}, 0, "bitwise(int, scalar)")
 
 
-def _factory(name: str, domain: str) -> "Iterator[Call]":
+def _factory(name: str, domain: str) -> Iterator[Call]:
     """Constructors take a shape or a range, never an input tensor.
 
     ``primary`` still points at argument zero, so the numeric axes will
@@ -508,7 +508,7 @@ def _factory(name: str, domain: str) -> "Iterator[Call]":
         yield Call([2, 3], {}, 0, "factory(*shape)")
 
 
-def _indexing(name: str, domain: str) -> "Iterator[Call]":
+def _indexing(name: str, domain: str) -> Iterator[Call]:
     """Gather / scatter shapes, which need an index tensor of the right rank."""
     x = _f((4, 5), domain)
     idx_full = _probe.as_int(_probe.rng(3).integers(0, 5, (4, 5)))
@@ -543,7 +543,7 @@ def _indexing(name: str, domain: str) -> "Iterator[Call]":
         yield Call([cond, x, src], {}, 1, "where(cond, a, b)")
 
 
-def _shape_with_args(name: str, domain: str) -> "Iterator[Call]":
+def _shape_with_args(name: str, domain: str) -> Iterator[Call]:
     """Reshapes and permutations whose target has to be spelled out."""
     x = _f((2, 3, 4), domain)
     flat = _f((2, 3), domain)
@@ -582,7 +582,7 @@ def _shape_with_args(name: str, domain: str) -> "Iterator[Call]":
         yield Call([x], {}, 0, "flatten(x)")
 
 
-def _matmul(name: str, domain: str) -> "Iterator[Call]":
+def _matmul(name: str, domain: str) -> Iterator[Call]:
     """Products, each with its own rank convention."""
     vec = _f((4,), domain)
     mat = _f((3, 4), domain)
@@ -607,7 +607,7 @@ def _matmul(name: str, domain: str) -> "Iterator[Call]":
         yield Call([mat, other], {}, 0, "matmul(a, b)")
 
 
-def _sequences(name: str, domain: str) -> "Iterator[Call]":
+def _sequences(name: str, domain: str) -> Iterator[Call]:
     """Ops whose argument is a *list* of tensors, not a tensor.
 
     The signature says ``list[Tensor]`` and the autospec builds one
@@ -638,7 +638,7 @@ def _sequences(name: str, domain: str) -> "Iterator[Call]":
         yield Call([packed], {"batch_first": True}, 0, "pad_packed_sequence(packed)")
 
 
-def _fused_linear(name: str, domain: str) -> "Iterator[Call]":
+def _fused_linear(name: str, domain: str) -> Iterator[Call]:
     """``fused_linear_*`` takes the three operands a Linear layer holds."""
     x = _f((_N, _CIN), domain)
     w = _f((_COUT, _CIN), domain)
@@ -646,7 +646,7 @@ def _fused_linear(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x, w, b], {}, 0, "fused_linear(x, weight, bias)")
 
 
-def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
+def _linalg_extra(name: str, domain: str) -> Iterator[Call]:
     """Decompositions, each with the matrix property it requires."""
     n = 4
     gen = _probe.rng(_probe.SEED_X)
@@ -708,7 +708,7 @@ def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
         yield Call([_probe.as_f64(gen.uniform(0.5, 1.5, (4,)))], {}, 0, "vander(1-D)")
 
 
-def _fft_full(name: str, domain: str) -> "Iterator[Call]":
+def _fft_full(name: str, domain: str) -> Iterator[Call]:
     """Every transform in the family, at the precision the engine accepts.
 
     The transforms reject float64 outright (``fftn requires F16/F32/C64``),
@@ -748,7 +748,7 @@ def _fft_full(name: str, domain: str) -> "Iterator[Call]":
         yield Call([source], {"n": 8}, 0, f"{name}(x, n=8)")
 
 
-def _complex(name: str, domain: str) -> "Iterator[Call]":
+def _complex(name: str, domain: str) -> Iterator[Call]:
     """Ops that only mean anything on a complex tensor."""
     real = _probe.as_f64(_probe.sample(domain, (2, 4)))
     pair = _probe.as_f64(_probe.sample(domain, (2, 4)))
@@ -772,7 +772,7 @@ def _complex(name: str, domain: str) -> "Iterator[Call]":
     yield Call([real], {}, 0, f"{name}(real)")
 
 
-def _dtype_util(name: str, domain: str) -> "Iterator[Call]":
+def _dtype_util(name: str, domain: str) -> Iterator[Call]:
     """Type-system helpers: they take dtypes, not tensors."""
     if name in ("can_cast", "promote_types"):
         yield Call([lucid.float32, lucid.float64], {}, 0, f"{name}(dtype, dtype)")
@@ -789,7 +789,7 @@ def _dtype_util(name: str, domain: str) -> "Iterator[Call]":
         yield Call([_f(_probe.SHAPE, domain), lucid.float32], {}, 0, "astype(x, dtype)")
 
 
-def _nn_leftover(name: str, domain: str) -> "Iterator[Call]":
+def _nn_leftover(name: str, domain: str) -> Iterator[Call]:
     """The functional entries with signatures no other family covers."""
     if name in ("lp_pool1d", "lp_pool2d", "lp_pool3d"):
         rank = _rank_of(name)
@@ -890,7 +890,7 @@ def _nn_leftover(name: str, domain: str) -> "Iterator[Call]":
         yield Call([_int((_N,), 4), 4], {}, 0, "one_hot(idx, n)")
 
 
-def _accessor(name: str, domain: str) -> "Iterator[Call]":
+def _accessor(name: str, domain: str) -> Iterator[Call]:
     """Shape, dtype and residency predicates — they answer with a scalar."""
     if name in ("grad", "grad_fn"):
         # Both are ``None`` on a fresh tensor, so the probe has to make a
@@ -910,7 +910,7 @@ def _accessor(name: str, domain: str) -> "Iterator[Call]":
 # against the short name, so ``F.conv2d`` and ``lucid.conv2d`` share a
 # builder.
 
-_FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
+_FAMILIES: list[tuple[str, Callable[[str, str], Iterator[Call]]]] = [
     (r"^conv(_transpose)?[123]d$", _conv),
     (r"^max_unpool[123]d$|^lp_pool[123]d$", _nn_leftover),
     (
@@ -1000,7 +1000,7 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
 ]
 
 #: Exact overrides, for the handful whose family cannot be inferred.
-_EXACT: dict[str, "Callable[[str, str], Iterator[Call]]"] = {
+_EXACT: dict[str, Callable[[str, str], Iterator[Call]]] = {
     "one_hot": lambda n, d: iter([Call([_int((_N,), 4), 4], {}, 0, "one_hot(idx, n)")]),
     # Class scores against class indices.  The blind ladder's ``op(x, dim)``
     # used to be the first call that ran; once ``==`` promoted its operands
@@ -1084,7 +1084,7 @@ _EXACT: dict[str, "Callable[[str, str], Iterator[Call]]"] = {
 #: a repeat count, and ``Tensor.unfold`` slides a window while
 #: ``F.unfold`` extracts image patches.  Matching on the short name alone
 #: sent four of these to the wrong builder.
-_QUALIFIED: dict[str, "Callable[[str], Iterator[Call]]"] = {
+_QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
     "lucid.einops.repeat": lambda d: iter(
         [
             Call(
@@ -1178,7 +1178,7 @@ def invocations(
     domain: str,
     qualname: str | None = None,
     fn: Any = None,
-) -> "Iterator[Call]":
+) -> Iterator[Call]:
     """Every candidate call for ``name``, best guess first.
 
     Four tiers, narrowing from "someone wrote this down for this exact

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 @functools.lru_cache(maxsize=1)
-def _stability_contract() -> "dict[str, list[str]]":
+def _stability_contract() -> dict[str, list[str]]:
     """Where the reference answers finitely, per symbol.
 
     Checked in, so the audit reads it without the reference installed.
@@ -63,10 +63,10 @@ class StabilityAxis(Axis):
 
     _SCALES = (1e-30, 1e-15, 1e-6, 1.0, 1e6, 1e15, 1e30)
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -188,10 +188,10 @@ class ExtremeValueAxis(Axis):
     summary = "known-hard limits: saturated softmax, tiny log1p, huge logsumexp"
     kinds = frozenset({"op"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return symbol.short in _EXTREME_CASES and symbol.inert
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -224,7 +224,7 @@ def _f64(values: Any) -> Any:
     return _probe.as_f64(np.asarray(values, dtype=np.float64))
 
 
-def _finite(name: str) -> "Any":
+def _finite(name: str) -> Any:
     def check(out: np.ndarray) -> str:
         if not np.isfinite(out).all():
             return f"{name} is not finite: {out.reshape(-1)[:4]}"
@@ -233,7 +233,7 @@ def _finite(name: str) -> "Any":
     return check
 
 
-def _close_to(want: float, tol: float = 1e-6) -> "Any":
+def _close_to(want: float, tol: float = 1e-6) -> Any:
     def check(out: np.ndarray) -> str:
         got = float(np.asarray(out).reshape(-1)[0])
         if not np.isfinite(got) or abs(got - want) > tol * max(abs(want), 1.0):
@@ -368,7 +368,7 @@ class ContiguityAxis(Axis):
     summary = "strided (non-contiguous) inputs agree with packed ones"
     kinds = frozenset({"op", "method"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
     # These answer with the layout itself, or read the storage through it,
@@ -384,7 +384,7 @@ class ContiguityAxis(Axis):
         }
     )
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         if symbol.qualname in self._REPORTS_LAYOUT:
             return self._finding(
                 symbol, Status.NOT_APPLICABLE, "reports the layout itself"
@@ -523,12 +523,12 @@ class DeterminismAxis(Axis):
     summary = "stochastic ops reproduce under a fixed seed"
     kinds = frozenset({"op", "method"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         if symbol.kind not in self.kinds or not symbol.inert:
             return False
         return "stochastic" in symbol.flags
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -632,10 +632,10 @@ class RankAxis(Axis):
     summary = "an unusable rank is refused, not answered with a degenerate result"
     kinds = frozenset({"op", "method"})
 
-    def applies(self, symbol: "Symbol") -> bool:
+    def applies(self, symbol: Symbol) -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
-    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+    def run(self, symbol: Symbol, ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")

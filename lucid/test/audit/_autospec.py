@@ -81,7 +81,7 @@ _F32_PARAMS = frozenset(
 
 
 def _tensor(
-    shape: "tuple[int, ...]", domain: str, variant: int = 0, name: str = ""
+    shape: tuple[int, ...], domain: str, variant: int = 0, name: str = ""
 ) -> Any:
     """One tensor argument.
 
@@ -95,7 +95,7 @@ def _tensor(
     return build(_probe.sample(domain, shape, variant))
 
 
-def _factorization(kind: str, order: int) -> "tuple[Any, Any] | None":
+def _factorization(kind: str, order: int) -> tuple[Any, Any] | None:
     """A **real** ``(factor, pivots)`` pair from the framework's own factoriser.
 
     ``lu_solve`` and ``ldl_solve`` document that they take a
@@ -131,7 +131,7 @@ class _AuditToyDataset:
     def __len__(self) -> int:
         return 6
 
-    def __getitem__(self, index: int) -> "tuple[Any, int]":
+    def __getitem__(self, index: int) -> tuple[Any, int]:
         if index >= 6:
             raise IndexError(index)
         return _probe.as_f32(np.full((2,), float(index))), index % 2
@@ -141,11 +141,11 @@ def _toy_dataset() -> Any:
     return _AuditToyDataset()
 
 
-def _indices(shape: "tuple[int, ...]", high: int) -> Any:
+def _indices(shape: tuple[int, ...], high: int) -> Any:
     return _probe.as_int(_probe.rng(_probe.SEED_B).integers(0, high, shape))
 
 
-def _mask(shape: "tuple[int, ...]") -> Any:
+def _mask(shape: tuple[int, ...]) -> Any:
     """An all-true boolean mask — masking everything out hides the op."""
     return lucid.tensor(np.ones(shape, dtype=bool), dtype=lucid.bool)
 
@@ -183,7 +183,7 @@ def _is_tensor_sequence(text: str) -> bool:
 #: Parameters that want a live module.  ``fuse_conv_bn_eval`` needs a
 #: convolution and a norm layer specifically, so the name picks the class
 #: rather than everything getting a ``Linear``.
-_MODULE_BY_NAME: "dict[str, Any]" = {
+_MODULE_BY_NAME: dict[str, Any] = {
     # ``fuse_modules(model, [["0", "1"]])`` names children by index, so
     # the model it is handed has to *have* children — a bare ``Linear``
     # answered "'Linear' has no attribute '0'".
@@ -255,7 +255,7 @@ _PATH_NAMES: frozenset[str] = frozenset(
     }
 )
 
-_SCRATCH: "tempfile.TemporaryDirectory[str] | None" = None
+_SCRATCH: tempfile.TemporaryDirectory[str] | None = None
 
 
 def _scratch_dir() -> Path:
@@ -306,7 +306,7 @@ def _scratch_path(op_name: str, name: str) -> str:
     return str(folder / f"{op_name}.{name}")
 
 
-def _literal_choice(text: str) -> "str | None":
+def _literal_choice(text: str) -> str | None:
     """The first option of a ``Literal[...]`` annotation, if it is one."""
     match = re.search(r"Literal\[([^\]]+)\]", text)
     if match is None:
@@ -335,7 +335,7 @@ _TENSOR_PARAMS = frozenset(
 #: Values keyed on the parameter *name*, tried before the annotation.
 #: ``int`` describes ``dim``, ``groups``, ``num_classes`` and
 #: ``kernel_size`` equally badly.
-_BY_NAME: "dict[str, Any]" = {
+_BY_NAME: dict[str, Any] = {
     "dim": -1,
     "M": 8,
     "nonlinearity": "relu",
@@ -470,16 +470,16 @@ class _Plan:
     __slots__ = ("args", "kwargs", "primary", "unknown", "note")
 
     def __init__(self) -> None:
-        self.args: "list[Any]" = []
-        self.kwargs: "dict[str, Any]" = {}
+        self.args: list[Any] = []
+        self.kwargs: dict[str, Any] = {}
         self.primary: int = 0
-        self.unknown: "list[str]" = []
+        self.unknown: list[str] = []
         self.note: str = ""
 
 
 def _related_value(
     name: str, text: str, reference: Any, op_name: str, domain: str
-) -> "tuple[bool, Any]":
+) -> tuple[bool, Any]:
     """A value for ``name`` that agrees with the tensor already chosen."""
     if reference is None:
         return False, None
@@ -602,7 +602,7 @@ def _rank_from(op_name: str, tensor_rank: int) -> int:
 #: numbers, and ``(2, 4)`` is neither — the whole of
 #: ``utils.transforms.functional`` was probed with it and answered
 #: ShapeMismatch, which reads as a defect in nine working functions.
-_SHAPE_BY_FIRST_PARAM: "dict[str, tuple[tuple[int, ...], ...]]" = {
+_SHAPE_BY_FIRST_PARAM: dict[str, tuple[tuple[int, ...], ...]] = {
     "img": ((_CIN, _L, _L), (_N, _CIN, _L, _L)),
     "image": ((_CIN, _L, _L), (_N, _CIN, _L, _L)),
     "pts": ((3, 2),),
@@ -627,7 +627,7 @@ def _first_parameter(fn: Any) -> str:
 _SINGLE_ELEMENT_OPS = frozenset({"item", "__index__", "__float__", "__int__"})
 
 
-def _tensor_shapes(op_name: str, fn: Any = None) -> "tuple[tuple[int, ...], ...]":
+def _tensor_shapes(op_name: str, fn: Any = None) -> tuple[tuple[int, ...], ...]:
     """Candidate shapes for the first tensor, most likely first."""
     if op_name in _SINGLE_ELEMENT_OPS:
         return ((1,), (1, 1))
@@ -653,13 +653,13 @@ def _tensor_shapes(op_name: str, fn: Any = None) -> "tuple[tuple[int, ...], ...]
 
 
 def _value_for(
-    param: "inspect.Parameter",
+    param: inspect.Parameter,
     op_name: str,
     domain: str,
     reference: Any,
-    shape: "tuple[int, ...]",
+    shape: tuple[int, ...],
     variant: int = 0,
-) -> "tuple[bool, Any, bool]":
+) -> tuple[bool, Any, bool]:
     """``(found, value, is_tensor)`` for one required parameter.
 
     ``variant`` is how many tensor arguments have already been built, so
@@ -876,16 +876,14 @@ def _value_for(
     return False, None, False
 
 
-def _build(
-    fn: Any, op_name: str, domain: str, shape: "tuple[int, ...]"
-) -> "_Plan | None":
+def _build(fn: Any, op_name: str, domain: str, shape: tuple[int, ...]) -> _Plan | None:
     try:
         signature = inspect.signature(fn, annotation_format=annotationlib.Format.STRING)
     except TypeError, ValueError, NameError:
         return None
 
     plan = _Plan()
-    first_tensor: "int | None" = None
+    first_tensor: int | None = None
     reference: Any = None
     tensors_built = 0
     for name, param in signature.parameters.items():
@@ -956,7 +954,7 @@ def _build(
     return plan
 
 
-def invocations(fn: Any, op_name: str, domain: str) -> "Iterator[Call]":
+def invocations(fn: Any, op_name: str, domain: str) -> Iterator[Call]:
     """Candidate calls for ``fn``, derived from its signature.
 
     Yields nothing when the signature cannot be read or leaves a required

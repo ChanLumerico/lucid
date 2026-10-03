@@ -71,23 +71,23 @@ class SuiteResult:
     ran: bool = False
     returncode: int = 0
     duration: float = 0.0
-    counts: "dict[str, int]" = field(default_factory=dict)
-    failures: "list[str]" = field(default_factory=list)
-    line_covered: "int | None" = None
-    line_total: "int | None" = None
-    per_file: "dict[str, tuple[int, int]]" = field(default_factory=dict)
-    unavailable: "str | None" = None
+    counts: dict[str, int] = field(default_factory=dict)
+    failures: list[str] = field(default_factory=list)
+    line_covered: int | None = None
+    line_total: int | None = None
+    per_file: dict[str, tuple[int, int]] = field(default_factory=dict)
+    unavailable: str | None = None
     #: Chunks that ended without reporting a summary — killed, crashed, or
     #: otherwise unable to say what they found.  Named rather than
     #: counted: "one chunk died" is only actionable with the name of it.
-    unfinished: "list[str]" = field(default_factory=list)
+    unfinished: list[str] = field(default_factory=list)
     #: Chunks not started because the machine was out of memory, with the
     #: reading that decided it.  A run that skipped these checked less
     #: than a full one and has to say so.
-    skipped_chunks: "list[tuple[str, str]]" = field(default_factory=list)
+    skipped_chunks: list[tuple[str, str]] = field(default_factory=list)
 
     @property
-    def percent(self) -> "float | None":
+    def percent(self) -> float | None:
         """Line coverage as a percentage, or ``None`` if not measured."""
         if self.line_total in (None, 0) or self.line_covered is None:
             return None
@@ -145,7 +145,7 @@ class SuiteResult:
         )
 
 
-def chunks_for(root: Path, path: str, ignore: "Sequence[str]" = ()) -> "list[str]":
+def chunks_for(root: Path, path: str, ignore: Sequence[str] = ()) -> list[str]:
     """Split ``path`` into subtrees, each run in its own interpreter.
 
     One process cannot finish this suite on a 16 GB machine.  Resident
@@ -177,17 +177,17 @@ def chunks_for(root: Path, path: str, ignore: "Sequence[str]" = ()) -> "list[str
             return False
         return any(folder.rglob("test_*.py"))
 
-    def subdirs(folder: Path) -> "list[Path]":
+    def subdirs(folder: Path) -> list[Path]:
         return [d for d in sorted(folder.iterdir()) if d.is_dir() and usable(d)]
 
-    def files(folder: Path) -> "list[str]":
+    def files(folder: Path) -> list[str]:
         return [str(f.relative_to(root)) for f in sorted(folder.glob("test_*.py"))]
 
     # Chunks must partition the tree, never overlap: naming a directory
     # *and* one of its descendants would run the descendant twice and
     # double its counts.  So a directory that gets split contributes its
     # subdirectories plus its own loose files — never itself.
-    out: "list[str]" = []
+    out: list[str] = []
     for child in subdirs(base):
         grand = subdirs(child)
         if grand:
@@ -200,12 +200,12 @@ def chunks_for(root: Path, path: str, ignore: "Sequence[str]" = ()) -> "list[str
 
 
 def run_suite(
-    console: "Console",
+    console: Console,
     path: str = "lucid/test",
     *,
     with_coverage: bool = True,
-    root: "Path | None" = None,
-    ignore: "Sequence[str] | None" = None,
+    root: Path | None = None,
+    ignore: Sequence[str] | None = None,
 ) -> SuiteResult:
     """Run the suite in a subprocess and return what it established.
 
@@ -266,7 +266,7 @@ def run_suite(
     # writes ``<data-file>.<host>.<pid>.<random>`` siblings that deleting
     # one known name would miss; a directory takes all of them with it.
     scratch = contextlib.ExitStack()
-    folder: "Path | None" = None
+    folder: Path | None = None
     if with_coverage:
         folder = Path(scratch.enter_context(tempfile.TemporaryDirectory()))
     prefix = list(argv)
@@ -297,7 +297,7 @@ def run_suite(
     started = time.time()
     result = SuiteResult(ran=True)
     with scratch:
-        data_files: "list[Path]" = []
+        data_files: list[Path] = []
         for index, chunk in enumerate(chunks):
             reason = _afford(chunk, console)
             if reason is not None:
@@ -324,7 +324,7 @@ def run_suite(
 _SETTLE_S = 2.0
 
 
-def _afford(chunk: str, console: "Console") -> "str | None":
+def _afford(chunk: str, console: Console) -> str | None:
     """Decide whether the machine can afford ``chunk``.
 
     The same three steps the per-test governor uses, at the level that
@@ -360,11 +360,11 @@ def _afford(chunk: str, console: "Console") -> "str | None":
 
 
 def _run_chunk(
-    argv: "list[str]",
+    argv: list[str],
     root: Path,
     chunk: str,
     result: SuiteResult,
-    console: "Console",
+    console: Console,
 ) -> None:
     """Run one chunk and fold what it reported into ``result``.
 
@@ -381,7 +381,7 @@ def _run_chunk(
         bufsize=1,
     )
     assert proc.stdout is not None
-    counts: "dict[str, int]" = {}
+    counts: dict[str, int] = {}
     ended = False
     for line in proc.stdout:
         line = line.rstrip("\n")
@@ -429,8 +429,8 @@ def _read_coverage(
     result: SuiteResult,
     root: Path,
     folder: Path,
-    data_files: "Sequence[Path]",
-    console: "Console",
+    data_files: Sequence[Path],
+    console: Console,
 ) -> None:
     """Combine the per-chunk data and turn it into covered/total counts.
 
@@ -495,7 +495,7 @@ def _read_coverage(
 # ── the recorded floor ───────────────────────────────────────────────────────
 
 
-def load_floor(path: Path) -> "dict[str, object] | None":
+def load_floor(path: Path) -> dict[str, object] | None:
     """Read the recorded line-coverage floor, or ``None`` when absent."""
     if not path.exists():
         return None
@@ -521,7 +521,7 @@ def save_floor(path: Path, result: SuiteResult) -> None:
 
 
 def report_line_coverage_diff(
-    result: SuiteResult, floor: "dict[str, object]", console: "Console"
+    result: SuiteResult, floor: dict[str, object], console: Console
 ) -> int:
     """Compare against the floor and report what moved.
 
@@ -597,7 +597,7 @@ def report_line_coverage_diff(
     return len(lost) or 1
 
 
-def report_suite(result: SuiteResult, console: "Console") -> None:
+def report_suite(result: SuiteResult, console: Console) -> None:
     """Print what the suite established, defects first."""
     if not result.ran:
         console.always(console.paint(f"  suite not run: {result.unavailable}", "grey"))

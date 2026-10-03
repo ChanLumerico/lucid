@@ -62,7 +62,7 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
         pytest.skip(reason)
 
 
-def pytest_runtest_teardown(item: pytest.Item, nextitem: "pytest.Item | None") -> None:
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
     _GOVERNOR.after_test()
 
 

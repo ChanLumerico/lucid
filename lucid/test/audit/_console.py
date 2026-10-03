@@ -80,7 +80,7 @@ class Console:
         colour: bool | None = None,
         width: int | None = None,
         quiet: bool = False,
-        log: "Path | None" = None,
+        log: Path | None = None,
     ) -> None:
         self.colour = supports_colour(colour)
         self.live = self.colour and sys.stdout.isatty()
@@ -88,7 +88,7 @@ class Console:
         self.quiet = quiet
         self._live_lines = 0
         self.log_path = log
-        self._log: "TextIO | None" = None
+        self._log: TextIO | None = None
         if log is not None:
             try:
                 log.parent.mkdir(parents=True, exist_ok=True)
@@ -208,9 +208,9 @@ class Console:
 
     def table(
         self,
-        headers: "Sequence[str]",
-        rows: "Sequence[Sequence[str]]",
-        aligns: "Sequence[str] | None" = None,
+        headers: Sequence[str],
+        rows: Sequence[Sequence[str]],
+        aligns: Sequence[str] | None = None,
         always: bool = False,
     ) -> None:
         """A box-drawn table sized to its contents.
@@ -288,7 +288,7 @@ class Console:
     def spinner(self, tick: int) -> str:
         return _SPINNER[tick % len(_SPINNER)]
 
-    def live_block(self, lines: "Sequence[str]") -> None:
+    def live_block(self, lines: Sequence[str]) -> None:
         """Rewrite an in-place region.
 
         Falls back to nothing when the terminal cannot move the cursor —
@@ -353,7 +353,7 @@ def fmt_duration(seconds: float) -> str:
     return f"{int(seconds // 3600):d}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}"
 
 
-def iter_ticks() -> "Iterator[int]":
+def iter_ticks() -> Iterator[int]:
     """An endless counter for spinner frames."""
     tick = 0
     while True:
@@ -412,7 +412,7 @@ class Suppress:
         self._saved: tuple[object, object] | None = None
         self._saved_fds: tuple[int, int] | None = None
 
-    def __enter__(self) -> "Suppress":
+    def __enter__(self) -> Suppress:
         if not self.enabled:
             return self
         sys.stdout.flush()
@@ -429,9 +429,9 @@ class Suppress:
 
     def __exit__(
         self,
-        exc_type: "type[BaseException] | None",
-        exc: "BaseException | None",
-        tb: "TracebackType | None",
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
     ) -> None:
         if not self.enabled:
             return
