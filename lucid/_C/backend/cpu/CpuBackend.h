@@ -75,6 +75,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Half.h"
 #include "../../core/Shape.h"
+#include "../../core/StridedCopy.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "Blas.h"
@@ -605,22 +606,9 @@ public:
             return Storage{CpuStorage{ptr, nbytes, dt}};
         }
 
-        const int ndim = static_cast<int>(shape.size());
-        const auto* base = reinterpret_cast<const std::uint8_t*>(cs.ptr.get()) + storage_offset;
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        std::vector<std::size_t> coord(static_cast<std::size_t>(ndim), 0);
-        for (std::size_t f = 0; f < n; ++f) {
-            std::ptrdiff_t byte_offset = 0;
-            for (int d = 0; d < ndim; ++d)
-                byte_offset +=
-                    static_cast<std::ptrdiff_t>(coord[d]) * static_cast<std::ptrdiff_t>(stride[d]);
-            std::memcpy(dst + f * elem, base + byte_offset, elem);
-            for (int d = ndim - 1; d >= 0; --d) {
-                if (++coord[d] < static_cast<std::size_t>(shape[d]))
-                    break;
-                coord[d] = 0;
-            }
-        }
+        // Axes merged, runs memcpy'd, a 2-D transpose tiled (core/StridedCopy.h)
+        // — this walked every element with a coordinate step and a memcpy.
+        strided::pack(cs.ptr.get() + storage_offset, ptr.get(), shape, stride, elem);
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 

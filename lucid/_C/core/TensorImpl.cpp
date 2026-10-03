@@ -37,6 +37,7 @@
 #include "ErrorBuilder.h"
 #include "GradMode.h"
 #include "MemoryStats.h"
+#include "StridedCopy.h"
 
 namespace lucid {
 
@@ -335,14 +336,18 @@ const Storage& TensorImpl::storage() const {
     std::lock_guard<std::mutex> lock(packed_mu_);
     const std::int64_t v = version();
     if (!packed_ || packed_version_ != v) {
-        const auto bytes =
-            contig_snapshot_cpu(std::get<CpuStorage>(storage_), meta_.shape, meta_.stride, offset_);
+        // Straight into the aligned allocation: this went through a zeroed
+        // vector and a second memcpy.
+        const auto& src = std::get<CpuStorage>(storage_);
+        const std::size_t elem = dtype_size(meta_.dtype);
+        const std::size_t nbytes = shape_numel(meta_.shape) * elem;
         CpuStorage packed;
-        packed.ptr = allocate_aligned_bytes(bytes.size());
-        packed.nbytes = bytes.size();
+        packed.ptr = allocate_aligned_bytes(nbytes);
+        packed.nbytes = nbytes;
         packed.dtype = meta_.dtype;
-        if (!bytes.empty())
-            std::memcpy(packed.ptr.get(), bytes.data(), bytes.size());
+        if (nbytes > 0)
+            strided::pack(src.ptr.get() + offset_, packed.ptr.get(), meta_.shape, meta_.stride,
+                          elem);
         packed_ = Storage{std::move(packed)};
         packed_version_ = v;
     }
@@ -554,33 +559,7 @@ py::object TensorImpl::grad_as_python() const {
 
 namespace {
 
-// Walks a strided source buffer in row-major order, copying each element
-// into a packed contiguous destination.  Used when the source storage's
-// stride doesn't match the canonical contiguous stride (e.g. transposed
-// or sliced views).
-void walk_strided_to_contig(const std::byte* src,
-                            std::byte* dst,
-                            const Shape& shape,
-                            const Stride& stride,
-                            std::size_t depth,
-                            std::size_t src_off,
-                            std::size_t& dst_off,
-                            std::size_t elem_size) {
-    if (depth == shape.size()) {
-        std::memcpy(dst + dst_off, src + src_off, elem_size);
-        dst_off += elem_size;
-        return;
-    }
-    for (std::int64_t i = 0; i < shape[depth]; ++i) {
-        walk_strided_to_contig(src, dst, shape, stride, depth + 1,
-                               src_off + static_cast<std::size_t>(i * stride[depth]), dst_off,
-                               elem_size);
-    }
-}
-
-// Materialises a contiguous byte snapshot of a CpuStorage view.  When the
-// stride is already canonical we return a borrow of the underlying buffer
-// (no copy); otherwise we walk the strides into a freshly allocated vector.
+// Materialises a contiguous byte snapshot of a CpuStorage view.
 std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
                                            const Shape& shape,
                                            const Stride& stride,
@@ -590,44 +569,24 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
     std::vector<std::byte> out(total);
     if (total == 0)
         return out;
-
-    Stride contig = contiguous_stride(shape, elem);
-    if (contig == stride && storage_offset == 0) {
-        std::memcpy(out.data(), s.ptr.get(), total);
-        return out;
-    }
-    std::size_t dst_off = 0;
-    walk_strided_to_contig(s.ptr.get() + storage_offset, out.data(), shape, stride, 0, 0, dst_off,
-                           elem);
+    strided::pack(s.ptr.get() + storage_offset, out.data(), shape, stride, elem);
     return out;
 }
 
 // Lays ``packed`` — ``shape``'s elements, dense and row-major — into ``dst``
 // through ``stride`` from ``storage_offset``: the inverse of
 // :func:`contig_snapshot_cpu`, which is how a write reaches a view's own
-// elements rather than the buffer's first bytes.
+// elements rather than the buffer's first bytes.  Runs move as a memcpy
+// when the inner axis is contiguous and as typed stores otherwise; a view
+// written through has no repeated element (``overlaps_itself`` refuses one).
 void scatter_contig_to_strided(const std::byte* packed,
                                CpuStorage& dst,
                                const Shape& shape,
                                const Stride& stride,
                                std::size_t storage_offset) {
-    const std::size_t elem = dtype_size(dst.dtype);
-    const std::size_t n = shape_numel(shape);
-    if (n == 0)
+    if (shape_numel(shape) == 0)
         return;
-    std::vector<std::int64_t> idx(shape.size(), 0);
-    std::byte* first = dst.ptr.get() + storage_offset;
-    for (std::size_t i = 0; i < n; ++i) {
-        std::int64_t at = 0;
-        for (std::size_t d = 0; d < shape.size(); ++d)
-            at += idx[d] * stride[d];
-        std::memcpy(first + at, packed + i * elem, elem);
-        for (std::size_t d = shape.size(); d-- > 0;) {
-            if (++idx[d] < shape[d])
-                break;
-            idx[d] = 0;
-        }
-    }
+    strided::scatter(packed, dst.ptr.get() + storage_offset, shape, stride, dtype_size(dst.dtype));
 }
 
 // Whether two of a view's elements are the same byte.  A zero stride on an
