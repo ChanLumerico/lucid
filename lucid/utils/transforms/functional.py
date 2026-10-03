@@ -1260,6 +1260,10 @@ def _clahe_channel(ch: Tensor, clip_limit: float, grid_h: int, grid_w: int) -> T
     finding that CLAHE is ~30× slower than cv2.
     """
     h, w = int(ch.shape[0]), int(ch.shape[1])
+    # No more tiles than pixels per side: a grid finer than the image cut
+    # tiles with no pixels in them, and their histogram divided by a pixel
+    # count of zero (a 1 x 1 image raised ZeroDivisionError).
+    grid_h, grid_w = min(grid_h, h), min(grid_w, w)
     luts = []
     for ty in range(grid_h):
         r0, r1 = ty * h // grid_h, (ty + 1) * h // grid_h
@@ -1342,6 +1346,11 @@ def clahe(
     (3, 64, 64)
     """
     grid_h, grid_w = tile_grid_size
+    # Nothing to equalize: an image with no pixels (or no channels) comes back
+    # as it is.  It reached the colour conversion, whose channel ``max`` has
+    # no answer for zero channels.
+    if img.numel() == 0:
+        return img.clone()
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     b, c = int(x.shape[0]), int(x.shape[1])

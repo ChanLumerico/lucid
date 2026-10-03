@@ -12,7 +12,7 @@
     "Regenerate with:  lucid-audit --update-coverage",
     "Do that only when the new state is the intended one."
   ],
-  "cells": 8833,
+  "cells": 8831,
   "answered": {
     "broadcast::F.gumbel_softmax": "pass",
     "broadcast::F.straight_through": "pass",
@@ -2717,7 +2717,6 @@
     "edge::Tensor.round": "pass",
     "edge::Tensor.round_": "pass",
     "edge::Tensor.rsqrt": "pass",
-    "edge::Tensor.scatter_add": "pass",
     "edge::Tensor.selu": "pass",
     "edge::Tensor.shape": "pass",
     "edge::Tensor.sigmoid": "pass",
@@ -3035,7 +3034,6 @@
     "edge::lucid.row_stack": "pass",
     "edge::lucid.rsqrt": "pass",
     "edge::lucid.rsub": "pass",
-    "edge::lucid.scatter_add": "pass",
     "edge::lucid.searchsorted": "pass",
     "edge::lucid.sigmoid": "pass",
     "edge::lucid.sign": "pass",
