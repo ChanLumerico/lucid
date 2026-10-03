@@ -45,6 +45,11 @@ if [[ "${LUCID_SKIP_CHANGELOG_CHECK:-0}" == "1" ]]; then
     exit 0
 fi
 
+# Agent worktrees leave CHANGELOG.md to ``tools/agent_ws.py land``.
+if [[ -f "${REPO_ROOT_CM}/.git" ]]; then
+    exit 0
+fi
+
 # Conventional-commit prefix detection (user-facing types only).
 USER_FACING_RE='^(feat|fix|perf|refactor|revert|remove|deprecate|security)(\([^)]*\))?!?:[[:space:]]'
 if ! [[ "${SUBJECT}" =~ ${USER_FACING_RE} ]]; then

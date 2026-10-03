@@ -36,6 +36,21 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# ── Parallel-agent worktrees ────────────────────────────────────────────────
+# A linked worktree (``.git`` is a file there) belongs to an agent working on
+# its own branch — see CLAUDE.md "병렬 에이전트 워크스페이스".  The writers of
+# shared generated files stand down there: the api-data rebuild and the LOC
+# badge below, the CHANGELOG amend in post-commit.  Run on every branch they
+# would make each one touch the same files and conflict at land;
+# ``tools/agent_ws.py land`` folds CHANGELOG in under a lock, and the next
+# main-checkout commit or the nightly workflow catches api-data and the badge
+# up.  MAIN_ROOT is the main checkout, where the shared venv lives.
+MAIN_ROOT="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
+if [[ -f "${REPO_ROOT}/.git" ]]; then
+    LUCID_SKIP_API_DATA=1
+    LUCID_SKIP_LOC_BADGE=1
+fi
+
 # ── Python guard ────────────────────────────────────────────────────────────
 # Prefer the repository's virtualenv over whatever ``python3`` resolves to
 # on PATH.  These gates import the project's own dependencies — Griffe for
@@ -54,9 +69,17 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # hooks without Python at all — detected here so the Python-based gates
 # skip with a warning and the commit still goes through.  The hooks are
 # advisory at that point; CI's full lint catches what the local skip missed.
+#
+# A worktree normally has its own light .venv (agent_ws.py bootstrap) that
+# resolves ``lucid`` to the worktree.  Without one, fall back to the main
+# checkout's venv with this worktree first on PYTHONPATH — the main venv's
+# editable install would otherwise check the main checkout's code instead.
 PY=""
 if [[ -x "${REPO_ROOT}/.venv/bin/python3" ]]; then
     PY="${REPO_ROOT}/.venv/bin/python3"
+elif [[ -x "${MAIN_ROOT}/.venv/bin/python3" ]]; then
+    PY="${MAIN_ROOT}/.venv/bin/python3"
+    export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 elif command -v python3 &>/dev/null; then
     PY="python3"
 fi
@@ -65,6 +88,20 @@ if [[ -z "${PY}" ]]; then
     LUCID_SKIP_H4_GUARD=1
     LUCID_SKIP_DOCSTRING=1
     LUCID_SKIP_API_DATA=1
+fi
+
+# ── 0. Parallel-agent claim gate ────────────────────────────────────────────
+# Hard-fail.  Refuses staged files that another in-flight worktree (or the
+# main checkout's uncommitted work) has also changed — the one condition under
+# which a later land could conflict.  Free when no linked worktree exists.
+# The script is the main checkout's copy, so every worktree runs the latest.
+# Override (breaks the no-conflict guarantee for that file):
+#     LUCID_SKIP_CLAIMS=1 git commit ...
+CLAIMS_SCRIPT="${MAIN_ROOT}/tools/agent_ws.py"
+if [[ -n "${PY}" && -f "${CLAIMS_SCRIPT}" ]]; then
+    if ! "${PY}" "${CLAIMS_SCRIPT}" check-commit; then
+        exit 1
+    fi
 fi
 
 # ── 1. H4 numpy guard ───────────────────────────────────────────────────────

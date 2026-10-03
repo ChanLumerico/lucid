@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- parallel-agent workspace with worktree claims and fast-forward land
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

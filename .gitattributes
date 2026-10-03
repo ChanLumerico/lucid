@@ -1,0 +1,11 @@
+# Generated files: a merge or rebase keeps one side and the generator runs
+# again (`tools/gen_pyi.py`, `lucid-audit --update-*`); they are never merged
+# by hand.  The `lucid-generated` driver is git config, not tracked — set it
+# with `python3 tools/agent_ws.py setup`.  Without it git falls back to an
+# ordinary text merge.
+lucid/_C/engine.pyi            merge=lucid-generated
+lucid/_tensor/tensor.pyi       merge=lucid-generated
+lucid/__init__.pyi             merge=lucid-generated
+lucid/test/audit/coverage.json merge=lucid-generated
+lucid/test/audit/doctest.json  merge=lucid-generated
+lucid/test/audit/suite.json    merge=lucid-generated

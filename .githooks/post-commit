@@ -43,6 +43,13 @@ if [[ "${LUCID_CHANGELOG_AMEND_IN_PROGRESS:-0}" == "1" ]]; then
     exit 0
 fi
 
+# Agent worktrees (``.git`` is a file in a linked worktree): every branch
+# amending CHANGELOG.md would conflict with every other.  ``tools/agent_ws.py
+# land`` folds the entries in after rebasing onto main, under a lock.
+if [[ -f "$(git rev-parse --show-toplevel)/.git" ]]; then
+    exit 0
+fi
+
 SUBJECT="$(git log -1 --format=%s)"
 
 # Skip merges / fixups / reverts.
