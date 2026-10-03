@@ -185,6 +185,11 @@ argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, co
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    // An empty axis has no extreme to point at.  The CPU read index 0 of an
+    // empty row and answered with it; Metal raised MLX's message.
+    if (a->shape()[static_cast<std::size_t>(ax)] == 0)
+        ErrorBuilder(name).index_error("Expected reduction dim " + std::to_string(ax) +
+                                       " to have non-zero size.");
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("keepdim", keepdims);
     Shape out_shape = a->shape();

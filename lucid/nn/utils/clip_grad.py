@@ -27,6 +27,10 @@ def _total_norm(
     if norm_type == math.inf:
         max_val = _C_engine.full([1], float("-inf"), dt, dev)
         for impl in impls:
+            # An empty gradient adds nothing to the largest magnitude, and
+            # ``max`` of nothing is refused — it has no identity.
+            if math.prod(impl.shape) == 0:
+                continue
             m = _C_engine.reshape(_C_engine.max(_C_engine.abs(impl), [], False), [1])
             mv = _C_engine.reshape(max_val, [1])
             max_val = _C_engine.max(_C_engine.stack([mv, m], 0), [0], False)

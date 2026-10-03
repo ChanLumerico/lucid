@@ -57,6 +57,7 @@
 #include "../../ops/bfunc/Compare.h"
 #include "../../ops/bfunc/Div.h"
 #include "../../ops/bfunc/Mul.h"
+#include "../../ops/composite/Indexing.h"
 #include "../../ops/ufunc/Transpose.h"
 #include "../../ops/utils/Select.h"
 #include "../../ops/utils/View.h"
@@ -154,9 +155,11 @@ TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool require
 // Both N and M must be non-negative.  IBackend::eye handles the actual fill.
 TensorImplPtr eye_op(
     std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt, Device device, bool requires_grad) {
-    if (M <= 0)
+    // Negative means "not given" (the binding's default); 0 is a width, and
+    // ``eye(3, 0)`` is 3 x 0 — it came back 3 x 3 when 0 counted as unset.
+    if (M < 0)
         M = N;
-    if (N < 0 || M < 0)
+    if (N < 0)
         ErrorBuilder("eye").fail("N and M must be >= 0");
     Shape shape{N, M};
     OpScopeFull scope{"eye", device, dt, shape};
@@ -449,24 +452,59 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     int d = dim < 0 ? dim + ndim : dim;
     scope.set_attr("dim", static_cast<std::int64_t>(d));
 
+    // The index walks src and lands in base, so it may be no larger than src
+    // on any axis, nor than base on any but ``dim`` — the reference's rule.
+    // Unchecked, a larger index read src and wrote base past their ends: an
+    // answer on the CPU, a crash on Metal, heap corruption either way.
+    const Shape& ss = src->shape();
+    auto shape_str = [](const Shape& sh) {
+        std::string out = "[";
+        for (std::size_t i = 0; i < sh.size(); ++i)
+            out += (i ? ", " : "") + std::to_string(sh[i]);
+        return out + "]";
+    };
+    if (is.size() != bs.size() || ss.size() != bs.size())
+        ErrorBuilder("scatter_add")
+            .fail("index " + shape_str(is) + ", self " + shape_str(bs) + " and src " +
+                  shape_str(ss) + " must have the same number of dimensions");
+    if (d < 0 || d >= ndim)
+        ErrorBuilder("scatter_add").index_error("dim " + std::to_string(dim) + " out of range");
+    for (int i = 0; i < ndim; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (is[k] > ss[k] || (i != d && is[k] > bs[k]))
+            ErrorBuilder("scatter_add")
+                .fail("Expected index " + shape_str(is) + " to be no larger than self " +
+                      shape_str(bs) + " apart from dimension " + std::to_string(d) +
+                      " and to be no larger than src " + shape_str(ss));
+    }
+
+    // Only the corner of src the index covers is scattered; cut it to that
+    // corner so every backend reads src with the index's own layout.
+    TensorImplPtr values = src;
+    for (int i = 0; i < ndim; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (ss[k] > is[k])
+            values = narrow_op(values, i, 0, is[k]);
+    }
+
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
-        be.scatter_add(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
+        be.scatter_add(base->storage(), indices->storage(), values->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({base, indices, src}, out);
+        trc->on_op_io({base, indices, values}, out);
     }
 
     // Autograd wiring
     const bool needs_grad =
-        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+        GradMode::is_enabled() && (base->requires_grad() || values->requires_grad());
     if (!needs_grad)
         return out;
 
     // base_edge: gradient = grad_out  (identity)
     // src_edge:  gradient = gather(grad_out, indices, dim)
     auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge = lucid::detail::ensure_grad_fn(src);
+    auto src_edge = lucid::detail::ensure_grad_fn(values);
 
     struct ScatterAddNode : Node {
         int dim_;
@@ -503,8 +541,8 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     bwd->dtype_ = dt;
     bwd->device_ = dv;
     bwd->set_next_edges(
-        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), src->version()});
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, values->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), values->version()});
 
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -535,6 +573,18 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
     const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     scope.set_attr("dim", static_cast<std::int64_t>(d));
+
+    // The kernels place src by base's layout off ``dim``, so index and src
+    // must have one shape, equal to base's on every other axis — what
+    // ``index_copy`` documents and never checked.  A source of the wrong
+    // width was read and written out of bounds.
+    bool fits = is == ss && is.size() == bs.size() && d >= 0 && d < ndim;
+    for (int i = 0; fits && i < ndim; ++i)
+        fits = i == d || is[static_cast<std::size_t>(i)] == bs[static_cast<std::size_t>(i)];
+    if (!fits)
+        throw ShapeMismatch(bs, ss,
+                            "scatter_set: source must match self on every axis but dim " +
+                                std::to_string(d) + ", and the index must match the source");
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =

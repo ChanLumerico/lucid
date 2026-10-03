@@ -370,6 +370,25 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     const auto axes = normalize_axes(axes_user, static_cast<int>(a_ptr->shape().size()));
     Shape out_shape = reduce_output_shape(a_ptr->shape(), axes, keepdims);
 
+    // max and min have no identity element, so an empty reduced axis has no
+    // answer: refused as the reference refuses it.  The CPU answered -inf
+    // (or +inf, or an int's limit) as if it were a value, and Metal raised
+    // MLX's own message.  A *non*-empty reduced axis of an empty tensor is
+    // fine — the result is empty too.
+    if constexpr (requires { Derived::kNoIdentity; }) {
+        for (int ax : axes) {
+            if (a_ptr->shape()[static_cast<std::size_t>(ax)] != 0)
+                continue;
+            if (axes_user.empty())
+                ErrorBuilder(Derived::schema_v1.name)
+                    .fail("Expected reduction dim to be specified for input.numel() == 0. "
+                          "Specify the reduction dim with the 'dim' argument.");
+            ErrorBuilder(Derived::schema_v1.name)
+                .index_error("Expected reduction dim " + std::to_string(ax) +
+                             " to have non-zero size.");
+        }
+    }
+
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, out_shape};
 
     Storage out_storage;

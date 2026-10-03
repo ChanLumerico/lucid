@@ -99,6 +99,56 @@
 namespace lucid {
 namespace backend {
 
+// MLX refuses max, min, argmax and argmin of an empty array — "Cannot max
+// reduce zero size array" — even along axes that are not empty, where the
+// answer is as empty as the input: the max over channels of a batch of zero
+// images.  The sum has the same result shape and holds no values, so it
+// stands in.  (A zero-length *reduced* axis has no answer at all; the op
+// refuses that before it reaches a backend.)
+inline ::mlx::core::array empty_extreme(const ::mlx::core::array& x,
+                                        const std::vector<int>& axes,
+                                        bool keepdims,
+                                        ::mlx::core::Dtype dtype) {
+    return ::mlx::core::astype(::mlx::core::sum(x, axes, keepdims), dtype);
+}
+
+// ``eye`` that takes an empty side.  MLX refuses ``eye(0, n)`` — "N and M
+// must be positive integers" — where the identity of an empty matrix is just
+// an empty matrix, and ``matrix_exp`` of a 0 x 0 input reached it.
+inline ::mlx::core::array eye_or_empty(int n, int m, int k, ::mlx::core::Dtype dtype) {
+    if (n == 0 || m == 0)
+        return ::mlx::core::zeros({n, m}, dtype);
+    return ::mlx::core::eye(n, m, k, dtype);
+}
+
+// An axis scatter over the corner of ``base`` that ``idx`` covers.
+//
+// The index may be shorter than ``base`` on every axis but ``dim`` and
+// shorter than ``src`` on every axis — the reference's rule, and the CPU's.
+// MLX's axis scatters want all three to agree off ``dim`` and raised
+// "[broadcast_shapes] Shapes (4) and (2) cannot be broadcast" for a valid
+// call.  So ``src`` is cut to the index's extent, the scatter runs on the
+// matching corner of ``base``, and the corner is written back.
+template <class Scatter>
+::mlx::core::array scatter_on_index_corner(const ::mlx::core::array& base,
+                                           const ::mlx::core::array& idx,
+                                           const ::mlx::core::array& src,
+                                           int dim,
+                                           Scatter&& scatter) {
+    const int ndim = static_cast<int>(base.ndim());
+    ::mlx::core::Shape start(static_cast<std::size_t>(ndim), 0);
+    ::mlx::core::Shape src_stop = idx.shape();
+    ::mlx::core::Shape corner = idx.shape();
+    corner[static_cast<std::size_t>(dim)] = base.shape(dim);
+    const bool cut_src = src.shape() != src_stop;
+    const bool cut_base = base.shape() != corner;
+    auto updates = cut_src ? ::mlx::core::slice(src, start, src_stop) : src;
+    if (!cut_base)
+        return scatter(base, idx, updates);
+    auto region = ::mlx::core::slice(base, start, corner);
+    return ::mlx::core::slice_update(base, scatter(region, idx, updates), start, corner);
+}
+
 // Concrete GPU backend routing every Lucid op through Apple's MLX library.
 //
 // Inherits :class:`IBackend` and overrides each per-op virtual to call
@@ -951,6 +1001,8 @@ public:
     Storage
     reduce_max(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
         return mlx_reduce(a, in_shape, opts, dt, [](auto& x, auto& axes, bool keepdims) {
+            if (x.size() == 0)
+                return empty_extreme(x, axes, keepdims, x.dtype());
             return ::mlx::core::max(x, axes, keepdims);
         });
     }
@@ -958,6 +1010,8 @@ public:
     Storage
     reduce_min(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
         return mlx_reduce(a, in_shape, opts, dt, [](auto& x, auto& axes, bool keepdims) {
+            if (x.size() == 0)
+                return empty_extreme(x, axes, keepdims, x.dtype());
             return ::mlx::core::min(x, axes, keepdims);
         });
     }
@@ -1090,8 +1144,7 @@ public:
         const auto& gg = std::get<GpuStorage>(grad_out);
         const std::int64_t M = input_shape[0];
         const std::int64_t N = input_shape[1];
-        auto eye =
-            ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0, gpu::to_mlx_dtype(dt));
+        auto eye = eye_or_empty(static_cast<int>(M), static_cast<int>(N), 0, gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::multiply(eye, *gg.arr);
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
@@ -1149,7 +1202,16 @@ public:
                    Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gi = std::get<GpuStorage>(indices);
-        auto result = ::mlx::core::take_along_axis(*ga.arr, *gi.arr, axis);
+        // The index may be shorter than the input off ``axis`` (the reference's
+        // rule, and the CPU's); MLX wants them to agree, and raised a broadcast
+        // error for a valid gather.  Read from the corner the index covers.
+        auto source = *ga.arr;
+        ::mlx::core::Shape corner = gi.arr->shape();
+        corner[static_cast<std::size_t>(axis)] = source.shape(axis);
+        if (source.shape() != corner)
+            source = ::mlx::core::slice(
+                source, ::mlx::core::Shape(static_cast<std::size_t>(source.ndim()), 0), corner);
+        auto result = ::mlx::core::take_along_axis(source, *gi.arr, axis);
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
@@ -1169,7 +1231,10 @@ public:
         auto fixed =
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
-        auto result = ::mlx::core::scatter_add_axis(base, fixed, *gg.arr, axis);
+        auto result = scatter_on_index_corner(
+            base, fixed, *gg.arr, axis, [axis](const auto& b, const auto& i, const auto& v) {
+                return ::mlx::core::scatter_add_axis(b, i, v, axis);
+            });
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
@@ -1425,6 +1490,9 @@ public:
             ErrorBuilder("gpu_backend::arg_reduce_index")
                 .not_implemented("argmax / argmin do not accept bool — cast to an integer dtype");
         const auto& ga = std::get<GpuStorage>(a);
+        if (ga.arr->size() == 0)
+            return Storage{gpu::wrap_mlx_array(
+                empty_extreme(*ga.arr, {axis}, keepdims, ::mlx::core::int64), Dtype::I64)};
         auto out = is_min ? ::mlx::core::argmin(*ga.arr, axis, keepdims)
                           : ::mlx::core::argmax(*ga.arr, axis, keepdims);
         // MLX's argmax and argmin skip NaN, so they answer with the index
@@ -1505,7 +1573,10 @@ public:
         auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
         auto fixed =
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
-        auto out = ::mlx::core::scatter_add_axis(*gb.arr, fixed, *gs.arr, d);
+        auto out = scatter_on_index_corner(*gb.arr, fixed, *gs.arr, d,
+                                           [d](const auto& b, const auto& i, const auto& v) {
+                                               return ::mlx::core::scatter_add_axis(b, i, v, d);
+                                           });
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
@@ -1536,7 +1607,10 @@ public:
         auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
         auto fixed =
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
-        auto out = ::mlx::core::put_along_axis(*gb.arr, fixed, *gs.arr, d);
+        auto out = scatter_on_index_corner(*gb.arr, fixed, *gs.arr, d,
+                                           [d](const auto& b, const auto& i, const auto& v) {
+                                               return ::mlx::core::put_along_axis(b, i, v, d);
+                                           });
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
@@ -4804,7 +4878,8 @@ public:
         std::vector<int> kernel_axes;
         for (int i = 0; i < N; ++i)
             kernel_axes.push_back(2 + N + i);
-        auto y = ::mlx::core::max(wins, kernel_axes, false);
+        auto y = wins.size() == 0 ? empty_extreme(wins, kernel_axes, false, wins.dtype())
+                                  : ::mlx::core::max(wins, kernel_axes, false);
         ::mlx::core::Shape flat_win;
         flat_win.push_back(B);
         flat_win.push_back(C);
@@ -4845,8 +4920,10 @@ public:
                 best = ::mlx::core::maximum(best, ek);
             }
         } else {
-            argmax = ::mlx::core::astype(::mlx::core::argmax(wins_flat, amax_axis, false),
-                                         ::mlx::core::int32);
+            argmax = wins_flat.size() == 0
+                         ? empty_extreme(wins_flat, {amax_axis}, false, ::mlx::core::int32)
+                         : ::mlx::core::astype(::mlx::core::argmax(wins_flat, amax_axis, false),
+                                               ::mlx::core::int32);
         }
         return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(argmax), Dtype::I32)}};
@@ -7974,8 +8051,8 @@ private:
         // holds there: a complex identity is a float32 one with zero
         // imaginary parts.
         const Dtype build = dt == Dtype::I64 ? Dtype::I32 : dt == Dtype::C64 ? Dtype::F32 : dt;
-        auto out = ::mlx::core::eye(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
-                                    gpu::to_mlx_dtype(build));
+        auto out = eye_or_empty(static_cast<int>(N), static_cast<int>(M), static_cast<int>(k),
+                                gpu::to_mlx_dtype(build));
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 

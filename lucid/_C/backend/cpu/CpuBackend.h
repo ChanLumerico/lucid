@@ -2735,6 +2735,11 @@ public:
         for (int d = axis + 1; d < ndim; ++d)
             inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
         const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        // An empty scan axis has nothing to seed the running value with; the
+        // loop below read element 0 of every row anyway, past the end of an
+        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
+        if (L == 0)
+            return Storage{CpuStorage{ptr, nb, dt}};
 
         auto run = [&](auto* dst, const auto* src) {
             using T = std::remove_pointer_t<decltype(dst)>;
@@ -2783,6 +2788,11 @@ public:
         for (int d = axis + 1; d < ndim; ++d)
             inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
         const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        // An empty scan axis has nothing to seed the running value with; the
+        // loop below read element 0 of every row anyway, past the end of an
+        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
+        if (L == 0)
+            return Storage{CpuStorage{ptr, nb, dt}};
 
         auto run = [&](auto* dst, const auto* src) {
             using T = std::remove_pointer_t<decltype(dst)>;
@@ -2840,6 +2850,11 @@ public:
         for (int d = axis + 1; d < ndim; ++d)
             inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
         const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        // An empty scan axis has nothing to seed the running value with; the
+        // loop below read element 0 of every row anyway, past the end of an
+        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
+        if (L == 0)
+            return Storage{CpuStorage{ptr, nb, dt}};
 
         auto run = [&](auto* dst, const auto* src) {
             using T = std::remove_pointer_t<decltype(dst)>;
@@ -2914,6 +2929,11 @@ public:
         for (int d = axis + 1; d < ndim; ++d)
             inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
         const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+        // An empty scan axis has nothing to seed the running value with; the
+        // loop below read element 0 of every row anyway, past the end of an
+        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
+        if (L == 0)
+            return Storage{CpuStorage{ptr, nb, dt}};
 
         auto run = [&](auto* dst, const auto* src) {
             using T = std::remove_pointer_t<decltype(dst)>;
@@ -4597,18 +4617,43 @@ public:
         if (dim < 0)
             dim += ndim;
 
-        // outer = product of dims before dim
-        std::size_t outer = 1;
-        for (int d = 0; d < dim; ++d)
-            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
-        // inner = product of dims after dim
-        std::size_t inner = 1;
-        for (int d = dim + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
-        const std::size_t base_dim =
-            static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dim)]);
-        const std::size_t idx_dim =
-            static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(dim)]);
+        // The walk is over the *index's* extents, which may be shorter than
+        // base's on any axis but ``dim`` (src arrives cut to the index's
+        // shape).  It used base's, and read past the end of an index and a
+        // src shorter than base — out-of-range reads written into the
+        // answer.  Each outer and inner coordinate of the index is placed by
+        // base's strides instead; when the shapes agree this is the old
+        // ``(o * base_dim + tgt) * inner + j`` exactly.
+        const auto ext = [](const Shape& sh, int a) {
+            return static_cast<std::size_t>(sh[static_cast<std::size_t>(a)]);
+        };
+        std::vector<std::size_t> base_stride(static_cast<std::size_t>(ndim), 1);
+        for (int a = ndim - 2; a >= 0; --a)
+            base_stride[static_cast<std::size_t>(a)] =
+                base_stride[static_cast<std::size_t>(a + 1)] * ext(base_shape, a + 1);
+        // Base offset of every outer (before ``dim``) and inner (after) index
+        // coordinate, by mixed-radix decomposition over the index's extents.
+        const auto offsets = [&](int lo, int hi) {
+            std::size_t count = 1;
+            for (int a = lo; a < hi; ++a)
+                count *= ext(idx_shape, a);
+            std::vector<std::size_t> off(count, 0);
+            for (std::size_t f = 0; f < count; ++f) {
+                std::size_t rem = f;
+                for (int a = hi - 1; a >= lo; --a) {
+                    off[f] += (rem % ext(idx_shape, a)) * base_stride[static_cast<std::size_t>(a)];
+                    rem /= ext(idx_shape, a);
+                }
+            }
+            return off;
+        };
+        const std::vector<std::size_t> outer_off = offsets(0, dim);
+        const std::vector<std::size_t> inner_off = offsets(dim + 1, ndim);
+        const std::size_t outer = outer_off.size();
+        const std::size_t inner = inner_off.size();
+        const std::size_t base_dim = ext(base_shape, dim);
+        const std::size_t dim_stride = base_stride[static_cast<std::size_t>(dim)];
+        const std::size_t idx_dim = ext(idx_shape, dim);
         // The index buffer used to be read as ``int32`` whatever its actual
         // dtype.  An int16 index tensor therefore had two of its values
         // read as one, giving a silently wrong result; an int8 one had
@@ -4643,8 +4688,9 @@ public:
                         if (tgt < 0 || static_cast<std::size_t>(tgt) >= base_dim)
                             ErrorBuilder("cpu_backend::scatter_add")
                                 .fail("index out of range for the scattered axis");
-                        const std::size_t dst_flat =
-                            (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
+                        const std::size_t dst_flat = outer_off[o] +
+                                                     static_cast<std::size_t>(tgt) * dim_stride +
+                                                     inner_off[j];
                         dst[dst_flat] += sp[src_flat];
                     }
                 }

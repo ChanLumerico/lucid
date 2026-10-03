@@ -247,6 +247,8 @@ public:
 class LUCID_API MaxBackward : public ReduceOp<MaxBackward> {
 public:
     static constexpr bool kSavesOutput = true;
+    // No identity element: an empty reduced axis has no maximum.
+    static constexpr bool kNoIdentity = true;
     static const OpSchema schema_v1;
     // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_max``.
     static Storage dispatch(backend::IBackend& be,
@@ -295,6 +297,8 @@ public:
 class LUCID_API MinBackward : public ReduceOp<MinBackward> {
 public:
     static constexpr bool kSavesOutput = true;
+    // No identity element: an empty reduced axis has no minimum.
+    static constexpr bool kNoIdentity = true;
     static const OpSchema schema_v1;
     // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_min``.
     static Storage dispatch(backend::IBackend& be,

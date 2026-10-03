@@ -628,6 +628,13 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     }
     const std::size_t ndim = a->shape().size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
+    // Any index into an empty axis is out of range, and saying so needs only
+    // the shapes — no read of the indices, so no host sync on Metal, which
+    // otherwise answered with whatever MLX gathers from nothing.  The CPU
+    // bounds-checks every index and already refused.
+    if (a->shape()[static_cast<std::size_t>(ax)] == 0 && shape_numel(indices->shape()) > 0)
+        ErrorBuilder("gather").index_error("index out of range: dimension " + std::to_string(ax) +
+                                           " has size 0");
     Shape out_shape = indices->shape();
     auto out_storage = backend::Dispatcher::for_device(device).gather(
         a->storage(), indices->storage(), a->shape(), out_shape, ax, indices->dtype(), dt);

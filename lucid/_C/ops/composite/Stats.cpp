@@ -60,7 +60,12 @@ TensorImplPtr histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, dou
 
     double effective_lo = lo;
     double effective_hi = hi;
-    if (effective_lo == effective_hi) {
+    if (effective_lo == effective_hi && a->numel() == 0) {
+        // Nothing to take a range from — and ``min`` / ``max`` of nothing are
+        // refused.  Every bin is empty whatever the range; the reference
+        // answers ``bins`` zeros the same way.
+        effective_hi = effective_lo + 1.0;
+    } else if (effective_lo == effective_hi) {
         // Auto-range: collapse all axes to scalars and read the bounds back.
         // ``min == max`` is a degenerate range; bump ``hi`` so the bins are
         // well-defined (matches the reference framework).

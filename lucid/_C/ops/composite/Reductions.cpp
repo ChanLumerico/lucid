@@ -19,6 +19,19 @@
 namespace lucid {
 
 TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
+    // An empty reduced axis has no maximum to shift by — ``max`` refuses it,
+    // having no identity — and needs none: the sum of nothing is 0 and its
+    // log is -inf, which is logsumexp's identity and the reference's answer.
+    const int ndim = static_cast<int>(a->shape().size());
+    bool empty_axis = axes.empty() && a->numel() == 0;
+    for (int ax : axes) {
+        const int w = ax < 0 ? ax + ndim : ax;
+        if (w >= 0 && w < ndim && a->shape()[static_cast<std::size_t>(w)] == 0)
+            empty_axis = true;
+    }
+    if (empty_axis)
+        return log_op(sum_op(exp_op(a), axes, keepdims));
+
     // Reduce with keepdims=true so the subtraction broadcasts naturally.
     auto m_keep = max_op(a, axes, true);
     auto shifted = sub_op(a, m_keep);

@@ -683,13 +683,36 @@ def _std_adapter(
     return _C_engine.sqrt(v)
 
 
+def _flat_arg_reduce(
+    engine_fn: Callable[[_Impl, int, bool], _Impl],
+    name: str,
+    x_impl: _Impl,
+    keepdim: bool,
+) -> _Impl:
+    """``dim=None``: the index into the flattened tensor, as documented.
+
+    It used to reduce the last axis instead, so ``x.argmax()`` of a matrix
+    answered one index per row where the reference — and the docstring —
+    give one into the whole tensor.  ``keepdim`` keeps every axis, at 1.
+    """
+    shape = list(x_impl.shape)
+    if math.prod(shape) == 0:
+        raise IndexError(
+            f"{name}(): Expected reduction dim to be specified for input.numel() == 0."
+        )
+    out = engine_fn(_C_engine.reshape(x_impl, [-1]), 0, False)
+    return _C_engine.reshape(out, [1] * len(shape)) if keepdim else out
+
+
 def _argmax_adapter(
     x_impl: _Impl,
     dim: int | None = None,
     keepdim: bool = False,
 ) -> _Impl:
     """argmax(x, dim=None, keepdim=False)."""
-    return _C_engine.argmax(x_impl, -1 if dim is None else int(dim), bool(keepdim))
+    if dim is None:
+        return _flat_arg_reduce(_C_engine.argmax, "argmax", x_impl, bool(keepdim))
+    return _C_engine.argmax(x_impl, int(dim), bool(keepdim))
 
 
 def _argmin_adapter(
@@ -698,7 +721,9 @@ def _argmin_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """argmin(x, dim=None, keepdim=False)."""
-    return _C_engine.argmin(x_impl, -1 if dim is None else int(dim), bool(keepdim))
+    if dim is None:
+        return _flat_arg_reduce(_C_engine.argmin, "argmin", x_impl, bool(keepdim))
+    return _C_engine.argmin(x_impl, int(dim), bool(keepdim))
 
 
 def _logsumexp_adapter(

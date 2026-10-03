@@ -8,7 +8,7 @@
   "lucid.einops": "7c0185ab134e434aa5dcb4746f050b243f1946d66d0c05f6357ac0bca46c9a73",
   "lucid.fft": "205b9d8e8e55e74cf3b42f878da0513edb3bee9b06df703c5cea50c1312893f5",
   "lucid.func": "adceb8a064e310238db59b9344e47ac402ee16f8e255f41eb4bf87f76a5df864",
-  "lucid.linalg": "aea73095fbd8d026f7774bb24cd217b02a05706a2d022979d1eda55fe8eec5d8",
+  "lucid.linalg": "af80802a4c6e2b48dd352caf5169e0e656c53b4fc2c6cfdc3a8647484a983458",
   "lucid.models": "28709a089e8a5aa2893f50bf2bd8c7f87ac80996d2c02601570bbfe33a8f334c",
   "lucid.models.generative": "b91017c138493057272db99c3eef326b7bb69d93e6171b90e2af7a3a8be46b9b",
   "lucid.models.generative.ddpm": "6a8020db5b14e02787d505c58ebc6b7227b219ad522baf503dac1a4d5d5ef9f8",

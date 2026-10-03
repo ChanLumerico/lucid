@@ -122,9 +122,22 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
 
     const int d = wrap_dim(base, dim, "scatter");
 
+    // ``src`` may be larger than the index on any axis; only the corner the
+    // index covers is scattered.  Cut it to that corner first — the delta
+    // below is taken against a gather of the index's shape, and a larger
+    // ``src`` was refused as a broadcast mismatch the reference never raises.
+    // Too small a ``src`` is left for ``scatter_add`` to refuse.
+    TensorImplPtr values = src;
+    const Shape& is = indices->shape();
+    if (src->shape().size() == is.size()) {
+        for (std::size_t i = 0; i < is.size(); ++i)
+            if (src->shape()[i] > is[i])
+                values = narrow_op(values, static_cast<int>(i), 0, is[i]);
+    }
+
     // Overwrite via add: feed ``scatter_add`` the delta ``src - base[idx]``.
     auto existing = gather_op(base, indices, d);
-    auto delta = sub_op(src, existing);
+    auto delta = sub_op(values, existing);
     return scatter_add_op(base, indices, delta, d);
 }
 

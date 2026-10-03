@@ -512,6 +512,10 @@ def _scaled(
     """
     if ord == 0 and not isinstance(ord, str):
         return compute(x)
+    # Nothing to rescale, and no largest magnitude to find: ``max`` of an
+    # empty tensor is refused, as it has no identity.
+    if x.numel() == 0:
+        return compute(x)
     scale = lucid.max(lucid.abs(x))
     usable = lucid.isfinite(scale) & (scale > lucid.zeros_like(scale))
     safe = lucid.where(usable, scale, lucid.ones_like(scale))
@@ -1827,8 +1831,14 @@ def matrix_rank(
     m, n = int(A.shape[-2]), int(A.shape[-1])
     if tol is None:
         # eps for float32 ≈ 1.19e-7; use C++ ops to compute max(sv)*max(m,n)*eps
-        max_sv_t = _wrap(_C_engine.max(_unwrap(S), [], False))
-        tol_val = float(max_sv_t.item()) * max(m, n) * 1.1920929e-7
+        # No singular values (an empty matrix) has rank 0 at any tolerance —
+        # and ``max`` of nothing is refused, having no identity.
+        largest = (
+            float(_wrap(_C_engine.max(_unwrap(S), [], False)).item())
+            if S.numel()
+            else 0.0
+        )
+        tol_val = largest * max(m, n) * 1.1920929e-7
     else:
         tol_val = float(tol)
     S_impl = _unwrap(S)
@@ -3528,7 +3538,8 @@ def matrix_exp(A: Tensor) -> Tensor:
 
     # -- Scaling ---------------------------------------------------------------
     # Upper bound for the 1-norm: max element × n (safe over-estimate).
-    norm_bound: float = float(A.abs().max().item()) * n
+    # An empty matrix has nothing to bound (and ``max`` of nothing is refused).
+    norm_bound: float = float(A.abs().max().item()) * n if A.numel() else 0.0
     s: int = (
         max(0, _math.ceil(_math.log2(norm_bound / _theta)))
         if norm_bound > _theta
