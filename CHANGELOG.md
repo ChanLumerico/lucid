@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - gather and index_select read whole rows; bicubic resize is 4x faster
 - tanh GELU is 34x faster, exact GELU 34%, and parallel loops balance cores
 
+### Fixed
+
+- assigning into a tensor that requires grad writes in place
+
 ---
 
 ## [3.15.4] — 2026-10-02

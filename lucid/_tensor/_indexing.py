@@ -721,6 +721,23 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     ):
         t._impl.copy_from(impl)
         return
+    # A tensor that requires grad taking values that carry no graph — a write
+    # under no_grad, ``weight[pad] = 0`` — is written in place.  Rebinding
+    # swapped a new impl under the Parameter while the graph kept the old
+    # one: a weight already used in a forward accumulated its gradient into
+    # the impl it was swapped out of, and ``.grad`` stayed None, silently.
+    # Written in place, the version bump tells backward the saved weight
+    # changed, as the reference does; before any forward it just takes the
+    # values.
+    if (
+        keep
+        and not impl.requires_grad
+        and list(impl.shape) == list(t._impl.shape)
+        and impl.dtype == t._impl.dtype
+        and impl.device == t._impl.device
+    ):
+        t._impl.copy_from(impl)
+        return
     t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
 
 

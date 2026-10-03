@@ -78,19 +78,29 @@ class TestAWriteIntoAnInput:
         finally:
             exported.close()
 
-    def test_a_replaced_input_is_refused_by_name(self, tmp_path: object) -> None:
-        """A tensor that requires grad is rebound rather than written into.
+    def test_an_input_that_requires_grad_is_written_into_too(
+        self, tmp_path: object
+    ) -> None:
+        """A write into an input that requires grad is recorded like any other.
 
-        The rebinding happens in Python, where the recording cannot follow
-        it, so a package built from it would read the example as a
-        constant. Refused, and the example is handed back untouched.
+        Assigning into a tensor that requires grad used to rebind it to a new
+        impl instead of writing into it.  The rebinding happened in Python,
+        where the recording could not follow it, so the export refused such an
+        input by name.  The assignment now writes in place (``_rebind``), as
+        it does for every other tensor, and the package reads the cache it is
+        handed.
         """
         k, cache = lucid.ones(1, 2), lucid.zeros(1, 4, requires_grad=True)
         held = cache._impl
-        with pytest.raises(ValueError, match="writes into input 'input_1'") as info:
-            cml.export(_FillsCache().eval(), (k, cache), f"{tmp_path}/m.mlpackage")
-        assert "detach" in str(info.value)
-        assert cache._impl is held
+        exported = cml.export(
+            _FillsCache().eval(), (k, cache), f"{tmp_path}/m.mlpackage"
+        )
+        try:
+            got = exported.predict((k * 5.0, lucid.full((1, 4), 7.0)))
+            assert got.tolist() == [[5.0, 5.0, 7.0, 7.0]]
+        finally:
+            exported.close()
+        assert cache._impl is held and cache.requires_grad
         assert cache.tolist() == [[0.0, 0.0, 0.0, 0.0]]
 
 
