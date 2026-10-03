@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - assigning into a tensor that requires grad writes in place
+- an in-place write through a view reaches the tensor it views
 
 ---
 

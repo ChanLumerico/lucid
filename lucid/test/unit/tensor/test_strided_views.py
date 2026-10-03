@@ -4,7 +4,8 @@ Only dim-0 slices shared their tensor's buffer; a column slice, a ``split``
 along columns and ``expand`` were copies, so a write through one never
 reached the tensor it came from.  Every op now reads a strided CPU view
 correctly and a write through one follows its strides, so these are views
-too.  Metal keeps copy semantics.
+too.  On Metal a slice is its own array, but a write through it is carried
+back to its base (``lucid._tensor._metal_views``), so it ends the same way.
 """
 
 import pytest
@@ -81,8 +82,10 @@ def test_expand_s_gradient_sums_over_the_broadcast_axis() -> None:
 
 
 @pytest.mark.skipif(not lucid.metal.is_available(), reason="no Metal device")
-def test_metal_slices_stay_copies() -> None:
+def test_a_write_through_a_metal_slice_reaches_its_base() -> None:
     x = _grid().to("metal")
     c = x[:, 1:3]
     c.mul_(10.0)
-    assert x.to("cpu").tolist()[0] == [0.0, 1.0, 2.0, 3.0]
+    want = _grid()
+    want[:, 1:3].mul_(10.0)
+    assert x.to("cpu").tolist() == want.tolist()

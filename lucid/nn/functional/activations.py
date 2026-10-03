@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor._metal_views import write_back as _metal_write_back
 from lucid._types import GeluApproximate
 
 if TYPE_CHECKING:
@@ -1747,6 +1748,9 @@ def relu_(x: Tensor, inplace: bool = True) -> Tensor:
     # worth a branch on the one function that has a native kernel, since
     # avoiding the temporary is the whole reason to call this at all.
     _C_engine.relu_(_unwrap(x))
+    # The kernel writes ``x`` alone; a Metal view of another tensor has to
+    # carry the write back itself (see lucid._tensor._metal_views).
+    _metal_write_back(x)
     return x
 
 

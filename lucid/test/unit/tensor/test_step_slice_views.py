@@ -4,7 +4,8 @@
 it never reached ``x``.  On the CPU a positive step is now the run it covers,
 one-element windows every ``step`` along the axis, and the window axis
 squeezed away: split_at, unfold_dim and squeeze each make a view.  A negative
-step, which the reference does not have, and Metal still copy.
+step, which the reference does not have, still copies.  On Metal the slice is
+its own array and a write through it is carried back to its base.
 """
 
 import pytest
@@ -92,7 +93,7 @@ def test_a_negative_step_reads_right_and_stays_a_copy() -> None:
 
 
 @pytest.mark.skipif(not lucid.metal.is_available(), reason="no Metal device")
-def test_metal_step_slices_stay_copies() -> None:
+def test_a_write_through_a_metal_step_slice_reaches_its_base() -> None:
     x = lucid.arange(6).float().to("metal")
     x[::2].fill_(-1.0)
-    assert _flat(x.to("cpu")) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    assert _flat(x.to("cpu")) == [-1.0, 1.0, -1.0, 3.0, -1.0, 5.0]

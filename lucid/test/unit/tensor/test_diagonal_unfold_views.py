@@ -4,8 +4,9 @@ Both copied: a write through a diagonal or a window never reached the
 tensor it came from.  They now share its buffer.  Windows that overlap
 (``step < size``) repeat elements, so a write through them is refused, and
 the overlap test behind that refusal is exact: strides that interleave
-without landing on the same byte are not refused.  Metal keeps copy
-semantics.
+without landing on the same byte are not refused.  On Metal both are their
+own arrays; a write through them is carried back to the base, and windows
+that overlap are refused there too.
 """
 
 import pytest
@@ -128,8 +129,11 @@ def test_make_view_bounds_count_the_bases_own_offset() -> None:
 
 
 @pytest.mark.skipif(not lucid.metal.is_available(), reason="no Metal device")
-def test_metal_diagonal_and_unfold_stay_copies() -> None:
+def test_a_write_through_metal_diagonal_and_unfold_reaches_the_base() -> None:
     x = _grid().to("metal")
     x.diagonal().fill_(-1.0)
-    x.reshape(-1).unfold(0, 3, 3).fill_(-2.0)
-    assert x.to("cpu").tolist() == _grid().tolist()
+    assert x.to("cpu").diagonal().tolist() == [-1.0, -1.0, -1.0]
+    x.reshape(-1).unfold(0, 3, 3)[1].fill_(-2.0)  # windows that do not overlap
+    assert x.to("cpu").tolist()[1] == [-2.0, -2.0, -2.0]
+    with pytest.raises(RuntimeError, match="overlap"):
+        x.reshape(-1).unfold(0, 3, 2).fill_(0.0)

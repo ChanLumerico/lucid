@@ -665,4 +665,19 @@ def _bind_annotation_names() -> None:
     install()
 
 
+def _install_metal_views() -> None:
+    """Make in-place writes through a view of a Metal tensor reach its base.
+
+    A Metal view is its own MLX array, so an in-place op on it changed nothing
+    else; :mod:`lucid._tensor._metal_views` wraps the view-producing and
+    in-place methods so the write goes back.  Installed once every method is
+    on :class:`Tensor`.
+    """
+    from lucid._tensor._metal_views import install
+    from lucid._tensor.tensor import Tensor as _Tensor
+
+    install(_Tensor)
+
+
+_install_metal_views()
 _bind_annotation_names()

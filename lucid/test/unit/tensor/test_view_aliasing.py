@@ -313,13 +313,13 @@ def test_reshape_family_ops_view_a_dense_cpu_tensor(
     assert _flat(x) == [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
 
 
-def test_a_metal_reshape_is_still_a_copy() -> None:
-    # An MLX array cannot see a write made through another, so the GPU keeps
-    # copy semantics.
+def test_a_write_through_a_metal_reshape_reaches_its_base() -> None:
+    # An MLX array cannot see a write made through another; the write is
+    # carried back instead (lucid._tensor._metal_views).
     x = lucid.arange(6).float().to("metal")
     v = x.reshape(2, 3)
     v.add_(1.0)
-    assert _flat(x) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    assert _flat(x) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
 
 def test_a_reshape_under_no_grad_does_not_require_grad() -> None:
