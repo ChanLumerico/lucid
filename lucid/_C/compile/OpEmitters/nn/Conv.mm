@@ -159,6 +159,10 @@ public:
         MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
         if (g == nil || x == nil || W == nil) return false;
         if (x.shape.count != 3 || W.shape.count != 3) return false;
+        // The lift to 2-D reshapes with the batch spelled out, which a
+        // symbolic batch cannot carry — MPSGraph aborted resolving the
+        // reshape.  Declined, the compile retries per-shape static.
+        if (x.shape[0].longLongValue < 0) return false;
         // x → (B, C, 1, L)
         NSArray<NSNumber*>* x4 = @[x.shape[0], x.shape[1], @1, x.shape[2]];
         MPSGraphTensor* x_r = [g reshapeTensor:x withShape:x4 name:nil];
@@ -313,6 +317,10 @@ public:
                       weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
         if (d == nil) return false;
         // Output shape comes from the trace's output meta.
+        // The output shape is the trace's, batch included; a symbolic batch
+        // cannot be spelled into it, and MPSGraph aborted on the mismatch.
+        // Declined, the compile retries per-shape static.
+        if (x.shape.count > 0 && x.shape[0].longLongValue < 0) return false;
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];
@@ -381,6 +389,10 @@ public:
                       weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
         if (d == nil) return false;
         // Reshape trace output (B, Cout, Lout) → (B, Cout, 1, Lout) for the 2D call.
+        // The output shape is the trace's, batch included; a symbolic batch
+        // cannot be spelled into it, and MPSGraph aborted on the mismatch.
+        // Declined, the compile retries per-shape static.
+        if (x.shape.count > 0 && x.shape[0].longLongValue < 0) return false;
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         if (node.outputs[0].shape.size() != 3) return false;
         for (auto v : node.outputs[0].shape)
@@ -473,6 +485,10 @@ public:
                       weightsLayout:MPSGraphTensorNamedDataLayoutOIDHW];
         if (d == nil)
             return false;
+        // The output shape is the trace's, batch included; a symbolic batch
+        // cannot be spelled into it, and MPSGraph aborted on the mismatch.
+        // Declined, the compile retries per-shape static.
+        if (x.shape.count > 0 && x.shape[0].longLongValue < 0) return false;
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];
@@ -574,6 +590,10 @@ public:
                                                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
         if (d == nil) return false;
         // Output shape comes from trace meta: (N, C, outH, outW).
+        // The output shape is the trace's, batch included; a symbolic batch
+        // cannot be spelled into it, and MPSGraph aborted on the mismatch.
+        // Declined, the compile retries per-shape static.
+        if (x.shape.count > 0 && x.shape[0].longLongValue < 0) return false;
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];

@@ -903,7 +903,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
     # ── Internals ────────────────────────────────────────────────
 
-    def _want_symbolic(self, graph: object, args: tuple[object, ...]) -> bool:
+    def _want_symbolic(
+        self, graph: object, args: tuple[object, ...], tracer: object = None
+    ) -> bool:
         """Whether to attempt a symbolic-batch lowering for this traced graph.
 
         Returns the cached ``_symbolic_resolved`` once resolved; on the first
@@ -922,7 +924,18 @@ class CompiledModule[**P, R](_ModuleWrapper):
         first = args[0] if args else None
         if not isinstance(first, Tensor) or not first.shape:
             return False
-        return graph_symbolic_safe(graph, int(first.shape[0]))
+        # The tensors whose leading axis is the batch, by trace id, so the
+        # gate's axis rules follow the batch rather than every weight.
+        batch_ids: set[int] | None = None
+        lookup = getattr(tracer, "lookup_id", None)
+        if lookup is not None:
+            batch_ids = set()
+            for a in args:
+                if isinstance(a, Tensor) and a.shape and a.shape[0] == first.shape[0]:
+                    tid = lookup(a._impl)
+                    if tid is not None:
+                        batch_ids.add(int(tid))
+        return graph_symbolic_safe(graph, int(first.shape[0]), batch_ids)
 
     def _emit(
         self,
@@ -1084,7 +1097,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # The decision is cached in ``_symbolic_resolved`` so later input shapes
         # key consistently (the model's symbolic-safety is graph-structural, the
         # same across batch sizes).
-        use_dynamic = self._want_symbolic(graph, args)
+        use_dynamic = self._want_symbolic(graph, args, tracer)
         exe = self._emit(graph, ext, use_dynamic, explicit_outputs)
         if exe is None and use_dynamic:
             use_dynamic = False  # symbolic lowering failed → per-shape static

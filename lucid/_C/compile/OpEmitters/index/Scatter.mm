@@ -20,6 +20,25 @@ namespace lucid::compile {
 
 namespace {
 
+// MPSGraph's along-axis gather and scatter want the index to match the data
+// on every axis but ``axis`` (and the updates to match the index).  The
+// reference — and Lucid's eager kernels — allow an index shorter there, and
+// MPSGraph handed one aborted the process: "updates shape and indices shape
+// must match except at axis".  Such a call is declined and runs eagerly.
+inline bool shapes_agree(MPSGraphTensor* a, MPSGraphTensor* b, NSInteger skip_axis) {
+    NSArray<NSNumber*>* sa = a.shape;
+    NSArray<NSNumber*>* sb = b.shape;
+    if (sa == nil || sb == nil || sa.count != sb.count)
+        return false;
+    for (NSUInteger i = 0; i < sa.count; ++i) {
+        if (static_cast<NSInteger>(i) == skip_axis)
+            continue;
+        if (sa[i].longLongValue != sb[i].longLongValue)
+            return false;
+    }
+    return true;
+}
+
 // MODE: 0=Add 1=Max 2=Min 3=Mul 4=Set.
 template <int MODE>
 class ScatterEmitterT final : public OpEmitter {
@@ -38,6 +57,8 @@ public:
         MPSGraphTensor* idx = (__bridge MPSGraphTensor*)ctx.resolve(i_id);
         MPSGraphTensor* src = (__bridge MPSGraphTensor*)ctx.resolve(s_id);
         if (g == nil || base == nil || idx == nil || src == nil) return false;
+        const NSInteger axis = static_cast<NSInteger>(dim < 0 ? dim + (std::int64_t)base.shape.count : dim);
+        if (!shapes_agree(base, idx, axis) || !shapes_agree(src, idx, -1)) return false;
         // MPSGraph scatters int64 data in 32 bits — -7 came back as
         // 4294967289 — and bool data as all false.  Neither narrows safely,
         // so both stay eager; float and int32 compile.

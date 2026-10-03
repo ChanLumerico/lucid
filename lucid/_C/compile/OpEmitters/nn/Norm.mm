@@ -183,6 +183,11 @@ public:
         NSUInteger rank = x_t.shape.count;
         if (rank < 2)
             return false;
+        // MPSGraph's normalization does not carry a symbolic batch through:
+        // every batch size came back the traced one, (4, 3, 5) for a batch
+        // of 6.  Declined, the compile retries per-shape static.
+        if (symbolic_batch_at_dim0(x_t))
+            return false;
         NSMutableArray<NSNumber*>* affine_shape = [NSMutableArray arrayWithCapacity:rank];
         for (NSUInteger i = 0; i < rank; ++i)
             [affine_shape addObject:[NSNumber numberWithLongLong:1]];

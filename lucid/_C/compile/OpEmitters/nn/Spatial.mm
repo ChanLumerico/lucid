@@ -159,7 +159,20 @@ public:
         // build time; pin it to the recorded one.  Left open, the training
         // graph built on top — the resize gradient, a reshape — aborted
         // ("'mps.reshape' op the result shape can not be resolved").
-        MPSGraphTensor* pinned = reshape_to_recorded(g, y, node);
+        //
+        // Under a symbolic batch the recorded batch is the trace's, and
+        // pinning it aborted MPSGraph for every other batch size; the batch
+        // is left to MPSGraph (-1) and only the resized extents are pinned.
+        MPSGraphTensor* pinned = nil;
+        if (symbolic_batch_at_dim0(x)) {
+            NSMutableArray<NSNumber*>* shape = [NSMutableArray array];
+            const auto& rec = node.outputs[0].shape;
+            for (std::size_t i = 0; i < rec.size(); ++i)
+                [shape addObject:@(i == 0 ? -1 : rec[i])];
+            pinned = [g reshapeTensor:y withShape:shape name:nil];
+        } else {
+            pinned = reshape_to_recorded(g, y, node);
+        }
         if (pinned == nil)
             return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)pinned);

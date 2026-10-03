@@ -24,6 +24,25 @@ namespace lucid::compile {
 
 namespace {
 
+// MPSGraph's along-axis gather and scatter want the index to match the data
+// on every axis but ``axis`` (and the updates to match the index).  The
+// reference — and Lucid's eager kernels — allow an index shorter there, and
+// MPSGraph handed one aborted the process: "updates shape and indices shape
+// must match except at axis".  Such a call is declined and runs eagerly.
+inline bool shapes_agree(MPSGraphTensor* a, MPSGraphTensor* b, NSInteger skip_axis) {
+    NSArray<NSNumber*>* sa = a.shape;
+    NSArray<NSNumber*>* sb = b.shape;
+    if (sa == nil || sb == nil || sa.count != sb.count)
+        return false;
+    for (NSUInteger i = 0; i < sa.count; ++i) {
+        if (static_cast<NSInteger>(i) == skip_axis)
+            continue;
+        if (sa[i].longLongValue != sb[i].longLongValue)
+            return false;
+    }
+    return true;
+}
+
 class GatherEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "gather"; }
@@ -47,6 +66,8 @@ public:
         MPSGraphTensor* data_t = (__bridge MPSGraphTensor*)ctx.resolve(data_id);
         MPSGraphTensor* idx_t = (__bridge MPSGraphTensor*)ctx.resolve(idx_id);
         if (graph == nil || data_t == nil || idx_t == nil)
+            return false;
+        if (!shapes_agree(data_t, idx_t, static_cast<NSInteger>(axis)))
             return false;
 
         ctx.bind(node.outputs[0].id, (__bridge void*)([graph gatherAlongAxis:static_cast<NSInteger>(axis)

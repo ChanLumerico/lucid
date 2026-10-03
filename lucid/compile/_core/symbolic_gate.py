@@ -9,7 +9,18 @@ graph bakes the batch dimension into a constant shape MPSGraph cannot infer:
   is ``2*B``, which the dim-0 symbolic machinery can't represent;
 * a **batch-shaped factory** (``zeros`` / ``ones`` / ``full`` / ``arange`` /
   ``eye`` sized like the input, e.g. ``zeros_like(x)`` or an RNN's zero hidden
-  init) — a constant with the batch in its shape.
+  init) — a constant with the batch in its shape;
+* a **permutation that moves the batch axis** off dim 0 (``x.T``,
+  ``permute(1, 0)``) — the symbolic machinery assumes the batch stays at
+  dim 0, and the executable answered a traced-batch-shaped result for every
+  batch, or aborted MPSGraph on the next ``reshape``;
+* a **reduction over the batch axis** — a count that comes from the batch
+  is a trace-time constant: ``std(x, dim=0)``'s Bessel factor ``n/(n-1)``
+  is a ``full`` in the graph, and was applied to every batch size;
+* an **axis-sensitive op on the batch axis** — splitting it (the number of
+  pieces is the batch's), rolling it, taking its diagonal, gathering or
+  scattering along it (the index's shape is the traced batch): wrong values,
+  a wrong shape, or MPSGraph aborting on a gather.
 
 This gate scans the trace once.  A ``False`` result routes the model to robust
 per-shape static caching (correct, never crashes) instead of attempting
@@ -32,7 +43,34 @@ _FACTORY_OPS: frozenset[str] = frozenset(
     {"zeros", "ones", "full", "arange", "eye", "linspace"}
 )
 
+# Ops whose answer depends on the length of the axis they act along, so the
+# batch axis may not be that axis.  (``embedding`` is its own op, and a table
+# lookup along the weight's axis 0 is not caught here.)
+_AXIS_SENSITIVE_OPS: frozenset[str] = frozenset(
+    {
+        "split",
+        "split_at",
+        "unbind",
+        "roll",
+        "diagonal",
+        "gather",
+        "scatter",
+        "scatter_add",
+        "index_select",
+        "take",
+    }
+)
+_AXIS_ATTRS = ("axis", "axes", "dim", "dims", "axis1", "axis2")
+
 __all__ = ["graph_symbolic_safe"]
+
+
+def _touches_axis_zero(attrs: dict[str, object]) -> bool:
+    for key in _AXIS_ATTRS:
+        value = attrs.get(key)
+        if value == 0 or (isinstance(value, (list, tuple)) and 0 in value):
+            return True
+    return False
 
 
 def _out_shape(op: object) -> tuple[int, ...]:
@@ -44,7 +82,9 @@ def _out_shape(op: object) -> tuple[int, ...]:
     return tuple(shp) if shp else ()
 
 
-def graph_symbolic_safe(graph: object, trace_batch: int) -> bool:
+def graph_symbolic_safe(
+    graph: object, trace_batch: int, batch_ids: set[int] | None = None
+) -> bool:
     """Return ``True`` if ``graph`` can be compiled with a symbolic batch axis.
 
     Parameters
@@ -55,6 +95,12 @@ def graph_symbolic_safe(graph: object, trace_batch: int) -> bool:
         The leading (batch) size of the user input at trace time — used to tell a
         batch-shaped factory (``zeros_like(x)`` → leading dim == ``trace_batch``)
         from a concrete-shaped one (a fixed positional-encoding table, say).
+    batch_ids : set of int, optional
+        Trace ids of the inputs that carry the batch.  The axis rules —
+        permuting, reducing, splitting along axis 0 — apply only to ops fed,
+        however indirectly, by one of them: splitting a fused q/k/v weight
+        along its axis 0 has nothing to do with the batch.  ``None`` treats
+        every op as fed by the batch.
 
     Returns
     -------
@@ -62,6 +108,7 @@ def graph_symbolic_safe(graph: object, trace_batch: int) -> bool:
         ``False`` if any op would bake the batch into a constant MPSGraph can't
         symbolicise; ``True`` otherwise.
     """
+    carrying = set(batch_ids) if batch_ids is not None else None
     for op in getattr(graph, "ops", []):
         name = getattr(op, "name", "")
         if name in _BROADCAST_OPS:
@@ -81,4 +128,19 @@ def graph_symbolic_safe(graph: object, trace_batch: int) -> bool:
             shape = _out_shape(op)
             if shape and shape[0] == trace_batch:
                 return False
+        inputs = list(getattr(op, "inputs", []))
+        fed = carrying is None or any(i in carrying for i in inputs)
+        if carrying is not None and fed:
+            carrying.update(o.id for o in getattr(op, "outputs", []))
+        if not fed:
+            continue
+        attrs = getattr(op, "attrs", None) or {}
+        perm = attrs.get("permutation")
+        if isinstance(perm, (list, tuple)) and perm and perm[0] != 0:
+            return False  # the batch axis leaves dim 0
+        dims = attrs.get("dims")
+        if isinstance(dims, (list, tuple)) and 0 in dims:
+            return False  # a reduction over the batch axis
+        if name in _AXIS_SENSITIVE_OPS and _touches_axis_zero(attrs):
+            return False
     return True
