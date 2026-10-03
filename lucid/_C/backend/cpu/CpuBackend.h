@@ -278,11 +278,15 @@ inline void for_each_int_masked(Dtype dt,
                                 std::int64_t fill) {
     auto run = [&](auto tag) {
         using T = decltype(tag);
-        const T* ip = reinterpret_cast<const T*>(in);
-        T* op = reinterpret_cast<T*>(out);
+        const T* __restrict ip = reinterpret_cast<const T*>(in);
+        const std::uint8_t* __restrict mp = mask;
+        T* __restrict op = reinterpret_cast<T*>(out);
         const T f = static_cast<T>(fill);
-        for (std::size_t i = 0; i < n; ++i)
-            op[i] = mask[i] ? f : ip[i];
+        // Load, then select: a conditional load is a branch on the mask.
+        for (std::size_t i = 0; i < n; ++i) {
+            const T v = ip[i];
+            op[i] = mp[i] ? f : v;
+        }
     };
     switch (dt) {
     case Dtype::I64:
@@ -471,9 +475,87 @@ inline StoragePair back_to_f16(const StoragePair& p, Dtype to) {
 // the few microseconds a dispatch costs.  See cpu::parallel_for.
 inline constexpr std::size_t kTranscendentalGrain = 16384;
 
+// Elements of a memory-bound loop (a comparison, a select) worth a core: at
+// ~0.4 ns an element, 64k of them are ~25 us, still well past a dispatch.
+inline constexpr std::size_t kStreamGrain = 65536;
+
 // Elements per vForce call inside a parallel chunk: the tile lives on the
 // stack and stays in L1 (8 KiB of double) between the passes over it.
 inline constexpr std::size_t kTanhTile = 1024;
+
+namespace detail {
+
+// ``out = x ** e`` for a scalar exponent.
+//
+// vForce's pow is exact but ~8 ns an element, and backward reaches it for
+// every power (``d/dx x**2`` is ``2 * x**1``).  Exponents whose answer is one
+// correctly rounded operation take that operation instead, so the result is
+// the same bits: x*x, 1/x and sqrt are each a single IEEE rounding, as the
+// exact power is.  sqrt differs from the power only at -0 (sqrt keeps the
+// sign) and -inf (sqrt is NaN, the power +inf); both are set right.
+// Any other exponent runs vForce in L1 tiles across cores.
+// ``out[i] = mask[i] ? value : in[i]``, without a branch.
+//
+// Written as a conditional, the element was loaded only when the mask was
+// clear, so the compiler branched on the mask — and a data mask (``x > 0``)
+// is a coin flip: 150 us for 64k floats, thirty times an add.  Loading first
+// and selecting makes it a vector blend.
+template <typename T>
+inline void select_fill(const T* in, const std::uint8_t* mask, T value, T* out, std::size_t n) {
+    cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
+        // Locals, not the closure's references: a store through ``y`` could
+        // alias a captured ``value``, which would keep the loop scalar.
+        const T* __restrict x = in;
+        const std::uint8_t* __restrict m = mask;
+        T* __restrict y = out;
+        const T fill = value;
+        for (std::size_t i = lo; i < hi; ++i) {
+            const T v = x[i];
+            y[i] = m[i] ? fill : v;
+        }
+    });
+}
+
+template <typename T>
+inline void pow_by_scalar(const T* in, T e, T* out, std::size_t n) {
+    constexpr T kInf = std::numeric_limits<T>::infinity();
+    auto each = [&](auto f) {
+        cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
+            const T* __restrict x = in;
+            T* __restrict y = out;
+            for (std::size_t i = lo; i < hi; ++i)
+                y[i] = f(x[i]);
+        });
+    };
+    if (e == T(2)) {
+        each([](T v) { return v * v; });
+    } else if (e == T(1)) {
+        each([](T v) { return v; });
+    } else if (e == T(0)) {
+        each([](T) { return T(1); });
+    } else if (e == T(-1)) {
+        each([](T v) { return T(1) / v; });
+    } else if (e == T(0.5)) {
+        each([](T v) {
+            const T r = std::sqrt(v) + T(0);
+            return v == -kInf ? kInf : r;
+        });
+    } else {
+        cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+            T expo[kTanhTile];
+            std::fill_n(expo, std::min(kTanhTile, hi - lo), e);
+            for (std::size_t s = lo; s < hi; s += kTanhTile) {
+                const std::size_t m = std::min(kTanhTile, hi - s);
+                if constexpr (std::is_same_v<T, float>)
+                    cpu::vpow_f32(in + s, expo, out + s, m);
+                else
+                    cpu::vpow_f64(in + s, expo, out + s, m);
+            }
+        });
+    }
+}
+
+}  // namespace detail
 
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
@@ -707,11 +789,16 @@ public:
     Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return binary_op(
             a, b, shape, dt,
+            // vForce's pow is ~8 ns an element: split it across cores.
             [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vpow_f32(ap, bp, op, n);
+                cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                    cpu::vpow_f32(ap + lo, bp + lo, op + lo, hi - lo);
+                });
             },
             [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vpow_f64(ap, bp, op, n);
+                cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
+                    cpu::vpow_f64(ap + lo, bp + lo, op + lo, hi - lo);
+                });
             },
             [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
                 for (std::size_t i = 0; i < n; ++i)
@@ -731,42 +818,55 @@ public:
         const std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
 
-        auto run = [&](auto* dst, const auto* lhs, const auto* rhs) {
-            using T = std::remove_pointer_t<decltype(dst)>;
+        if (op < 0 || op > 4)
+            ErrorBuilder("cpu_backend::bitwise_binary").fail("unknown op");
+        // The op is chosen once, outside the loop: inside, the if-chain and
+        // its error path kept ``a & b`` scalar — twelve times an add.
+        auto run = [&](auto* dst_in, const auto* lhs_in, const auto* rhs_in) {
+            using T = std::remove_pointer_t<decltype(dst_in)>;
             // Width of T in bits — used to clamp shift amounts so we don't
             // hit the C++ undefined-behaviour zone (shifts ≥ width are UB).
             constexpr std::int64_t kWidth = static_cast<std::int64_t>(sizeof(T) * 8);
-            for (std::size_t i = 0; i < n; ++i) {
-                const auto x = static_cast<std::int64_t>(lhs[i]);
-                const auto y = static_cast<std::int64_t>(rhs[i]);
-                std::int64_t out;
-                if (op == 0)
-                    out = x & y;
-                else if (op == 1)
-                    out = x | y;
-                else if (op == 2)
-                    out = x ^ y;
-                else if (op == 3) {
-                    // Left-shift: clamp y into [0, width) — out-of-range
-                    // shifts are UB in C++, but the reference framework
-                    // returns 0 for y ≥ width and 0 for y < 0.
+            T* __restrict dst = dst_in;
+            const T* __restrict lhs = lhs_in;
+            const T* __restrict rhs = rhs_in;
+            auto each = [&](auto f) {
+                for (std::size_t i = 0; i < n; ++i)
+                    dst[i] = static_cast<T>(
+                        f(static_cast<std::int64_t>(lhs[i]), static_cast<std::int64_t>(rhs[i])));
+            };
+            switch (op) {
+            case 0:
+                each([](std::int64_t x, std::int64_t y) { return x & y; });
+                break;
+            case 1:
+                each([](std::int64_t x, std::int64_t y) { return x | y; });
+                break;
+            case 2:
+                each([](std::int64_t x, std::int64_t y) { return x ^ y; });
+                break;
+            case 3:
+                // Left-shift: clamp y into [0, width) — out-of-range shifts
+                // are UB in C++, but the reference framework returns 0 for
+                // y ≥ width and 0 for y < 0.
+                each([](std::int64_t x, std::int64_t y) -> std::int64_t {
                     if (y < 0 || y >= kWidth)
-                        out = 0;
-                    else
-                        out = static_cast<std::int64_t>(static_cast<T>(x) << y);
-                } else if (op == 4) {
-                    // Arithmetic right-shift on the *narrow* type so sign
-                    // extension matches the input dtype.  Same out-of-range
-                    // contract as left-shift.
+                        return 0;
+                    return static_cast<std::int64_t>(static_cast<T>(x) << y);
+                });
+                break;
+            default:
+                // Arithmetic right-shift on the *narrow* type so sign
+                // extension matches the input dtype.  Same out-of-range
+                // contract as left-shift.
+                each([](std::int64_t x, std::int64_t y) -> std::int64_t {
                     if (y < 0)
-                        out = 0;
-                    else if (y >= kWidth)
-                        out = (x < 0) ? -1 : 0;
-                    else
-                        out = static_cast<std::int64_t>(static_cast<T>(x) >> y);
-                } else
-                    ErrorBuilder("cpu_backend::bitwise_binary").fail("unknown op");
-                dst[i] = static_cast<T>(out);
+                        return 0;
+                    if (y >= kWidth)
+                        return (x < 0) ? -1 : 0;
+                    return static_cast<std::int64_t>(static_cast<T>(x) >> y);
+                });
+                break;
             }
         };
 
@@ -814,24 +914,45 @@ public:
         auto ptr = allocate_aligned_bytes(n, Device::CPU);
         auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
 
-        auto run = [&](const auto* lhs, const auto* rhs) {
-            for (std::size_t i = 0; i < n; ++i) {
-                bool out;
-                if (op == 0)
-                    out = lhs[i] == rhs[i];
-                else if (op == 1)
-                    out = lhs[i] != rhs[i];
-                else if (op == 2)
-                    out = lhs[i] > rhs[i];
-                else if (op == 3)
-                    out = lhs[i] >= rhs[i];
-                else if (op == 4)
-                    out = lhs[i] < rhs[i];
-                else if (op == 5)
-                    out = lhs[i] <= rhs[i];
-                else
-                    ErrorBuilder("cpu_backend::compare_binary").fail("unknown op");
-                dst[i] = out ? 1u : 0u;
+        // The comparison is chosen once, outside the loop, and the loop is
+        // split across cores.  An if-chain over ``op`` with an error path in
+        // every element kept it scalar and on one core: 0.52 ms for ``x > 0``
+        // on 524k floats, twenty times ``x + y``.
+        if (op < 0 || op > 5)
+            ErrorBuilder("cpu_backend::compare_binary").fail("unknown op");
+        auto run = [&](const auto* lhs_in, const auto* rhs_in) {
+            using T = std::remove_cv_t<std::remove_pointer_t<decltype(lhs_in)>>;
+            auto each = [&](auto cmp) {
+                cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
+                    // Local restrict pointers: a byte store may alias
+                    // anything, so pointers read through the closure would
+                    // be reloaded every element and the loop stay scalar.
+                    const T* __restrict lhs = lhs_in;
+                    const T* __restrict rhs = rhs_in;
+                    std::uint8_t* __restrict out = dst;
+                    for (std::size_t i = lo; i < hi; ++i)
+                        out[i] = static_cast<std::uint8_t>(cmp(lhs[i], rhs[i]));
+                });
+            };
+            switch (op) {
+            case 0:
+                each([](T l, T r) { return l == r; });
+                break;
+            case 1:
+                each([](T l, T r) { return l != r; });
+                break;
+            case 2:
+                each([](T l, T r) { return l > r; });
+                break;
+            case 3:
+                each([](T l, T r) { return l >= r; });
+                break;
+            case 4:
+                each([](T l, T r) { return l < r; });
+                break;
+            default:
+                each([](T l, T r) { return l <= r; });
+                break;
             }
         };
 
@@ -2138,14 +2259,18 @@ public:
             const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
             const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
             float* qp = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                qp[i] = (xp[i] > -3.f && xp[i] < 3.f) ? gp[i] / 6.f : 0.f;
+            for (std::size_t i = 0; i < n; ++i) {
+                const float g = gp[i] / 6.f;  // loaded first: a select, not a branch
+                qp[i] = (xp[i] > -3.f && xp[i] < 3.f) ? g : 0.f;
+            }
         } else if (dt == Dtype::F64) {
             const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
             const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
             double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                qp[i] = (xp[i] > -3.0 && xp[i] < 3.0) ? gp[i] / 6.0 : 0.0;
+            for (std::size_t i = 0; i < n; ++i) {
+                const double g = gp[i] / 6.0;
+                qp[i] = (xp[i] > -3.0 && xp[i] < 3.0) ? g : 0.0;
+            }
         } else {
             ErrorBuilder("cpu_backend::hard_sigmoid_backward")
                 .not_implemented("dtype not supported");
@@ -3253,19 +3378,21 @@ public:
         auto out = zeros(shape, dt);
         const std::size_t n = shape_numel(shape);
         const auto* cp = reinterpret_cast<const std::uint8_t*>(c.ptr.get());
+        // Loaded, then selected — a branch around the load mispredicted on
+        // every mask that is not sorted (see relu_backward).
         if (dt == Dtype::F32) {
-            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
-            auto* dst = reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get());
+            const float* __restrict gp = reinterpret_cast<const float*>(g.ptr.get());
+            float* __restrict dst = reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
-                const bool take = cp[i] != 0;
-                dst[i] = (take == true_branch) ? gp[i] : 0.0f;
+                const float v = gp[i];
+                dst[i] = ((cp[i] != 0) == true_branch) ? v : 0.0f;
             }
         } else if (dt == Dtype::F64) {
-            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
-            auto* dst = reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get());
+            const double* __restrict gp = reinterpret_cast<const double*>(g.ptr.get());
+            double* __restrict dst = reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
-                const bool take = cp[i] != 0;
-                dst[i] = (take == true_branch) ? gp[i] : 0.0;
+                const double v = gp[i];
+                dst[i] = ((cp[i] != 0) == true_branch) ? v : 0.0;
             }
         } else {
             ErrorBuilder("cpu_backend::where_branch").not_implemented("dtype not supported");
@@ -3292,16 +3419,11 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get());
         if (dt == Dtype::F32) {
-            const auto* src = reinterpret_cast<const float*>(as.ptr.get());
-            auto* dst = reinterpret_cast<float*>(ptr.get());
-            const float v = static_cast<float>(value);
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = mp[i] ? v : src[i];
+            detail::select_fill(reinterpret_cast<const float*>(as.ptr.get()), mp,
+                                static_cast<float>(value), reinterpret_cast<float*>(ptr.get()), n);
         } else if (dt == Dtype::F64) {
-            const auto* src = reinterpret_cast<const double*>(as.ptr.get());
-            auto* dst = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = mp[i] ? value : src[i];
+            detail::select_fill(reinterpret_cast<const double*>(as.ptr.get()), mp, value,
+                                reinterpret_cast<double*>(ptr.get()), n);
         } else if (detail::is_int_like(dt)) {
             // Structural, not arithmetic: it selects between an element and
             // a constant.  Integers keep their dtype in the reference
@@ -4334,7 +4456,37 @@ public:
             }
         };
 
-        if (dt == Dtype::F32) {
+        // A contiguous axis: the extreme first, by the vector reduction (NaN
+        // if any), then the first index holding it.  The same answer as the
+        // scan above — the first of equal values, the first NaN — without a
+        // compare-and-branch chained through every element (``argmax`` was
+        // twenty times ``sum``).
+        auto by_rows = [&](const auto* src, auto reduce) {
+            using V = std::remove_cv_t<std::remove_pointer_t<decltype(src)>>;
+            for (std::size_t o = 0; o < outer; ++o) {
+                const V* row = src + o * L;
+                V target;
+                reduce(row, &target, 1, L, 1);
+                std::size_t k = 0;
+                if (std::isnan(target)) {
+                    while (!std::isnan(row[k]))
+                        ++k;
+                } else {
+                    while (row[k] != target)
+                        ++k;
+                }
+                dst[o] = static_cast<std::int64_t>(k);
+            }
+        };
+        const bool rows = inner == 1 && L > 0;
+
+        if (dt == Dtype::F32 && rows) {
+            by_rows(reinterpret_cast<const float*>(ca.ptr.get()),
+                    is_min ? &cpu::min_axis_f32 : &cpu::max_axis_f32);
+        } else if (dt == Dtype::F64 && rows) {
+            by_rows(reinterpret_cast<const double*>(ca.ptr.get()),
+                    is_min ? &cpu::min_axis_f64 : &cpu::max_axis_f64);
+        } else if (dt == Dtype::F32) {
             run(reinterpret_cast<const float*>(ca.ptr.get()));
         } else if (dt == Dtype::F64) {
             run(reinterpret_cast<const double*>(ca.ptr.get()));
@@ -6459,8 +6611,13 @@ public:
         // sides have a 1-to-1 C++ scalar type.  ``bool`` is supported as From
         // and To by C++ static_cast rules (0 / 1 conversion at both ends).
         auto run = [&]<typename From, typename To>() {
-            const From* src = reinterpret_cast<const From*>(ca.ptr.get());
-            To* dst = reinterpret_cast<To*>(out_ptr.get());
+            // Restrict locals, the count among them: through the closure, a
+            // store of int64 or of a byte may alias ``n`` (same-width and
+            // char aliasing), so the bound was reloaded every element and
+            // the loop stayed scalar — bool to int64 cost three adds.
+            const From* __restrict src = reinterpret_cast<const From*>(ca.ptr.get());
+            To* __restrict dst = reinterpret_cast<To*>(out_ptr.get());
+            const std::size_t n = shape_numel(shape);
             if constexpr (std::is_floating_point_v<From> && std::is_integral_v<To> &&
                           !std::is_same_v<To, bool>) {
                 // Float to integer saturates and sends NaN to 0 — what the
@@ -6468,18 +6625,22 @@ public:
                 // (unit/ops/test_float_to_int_casts.py).  Spelled out because
                 // a ``static_cast`` of NaN, ±inf or anything out of range is
                 // undefined: the UBSan build halted on it.
+                //
+                // Clamp first, convert, then select: no branch, so the loop
+                // is a vector one (an if-chain per element was 14 times an
+                // add).  ``top`` is the largest From that converts in range —
+                // To's max itself when representable, else the From below
+                // 2^(bits-1) — and the selects restore max and 0 exactly.
                 constexpr auto lo = static_cast<From>(std::numeric_limits<To>::lowest());
                 constexpr auto hi = static_cast<From>(std::numeric_limits<To>::max());
+                const From top = hi < -lo ? hi : std::nextafter(-lo, From(0));
                 for (std::size_t i = 0; i < n; ++i) {
                     const From v = src[i];
-                    if (std::isnan(v))
-                        dst[i] = 0;
-                    else if (v <= lo)
-                        dst[i] = std::numeric_limits<To>::lowest();
-                    else if (v >= hi)
-                        dst[i] = std::numeric_limits<To>::max();
-                    else
-                        dst[i] = static_cast<To>(v);
+                    // fmax answers lo for a NaN, so c is always in range.
+                    const From c = std::fmin(std::fmax(v, lo), top);
+                    To r = static_cast<To>(c);
+                    r = v >= hi ? std::numeric_limits<To>::max() : r;
+                    dst[i] = v != v ? To(0) : r;
                 }
             } else {
                 for (std::size_t i = 0; i < n; ++i)
@@ -7204,18 +7365,15 @@ public:
         std::size_t nb = numel * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         switch (dt) {
-        case Dtype::F32: {
-            std::vector<float> exp_buf(numel, static_cast<float>(exp));
-            cpu::vpow_f32(reinterpret_cast<const float*>(cs.ptr.get()), exp_buf.data(),
-                          reinterpret_cast<float*>(ptr.get()), numel);
+        case Dtype::F32:
+            detail::pow_by_scalar(reinterpret_cast<const float*>(cs.ptr.get()),
+                                  static_cast<float>(exp), reinterpret_cast<float*>(ptr.get()),
+                                  numel);
             break;
-        }
-        case Dtype::F64: {
-            std::vector<double> exp_buf(numel, exp);
-            cpu::vpow_f64(reinterpret_cast<const double*>(cs.ptr.get()), exp_buf.data(),
-                          reinterpret_cast<double*>(ptr.get()), numel);
+        case Dtype::F64:
+            detail::pow_by_scalar(reinterpret_cast<const double*>(cs.ptr.get()), exp,
+                                  reinterpret_cast<double*>(ptr.get()), numel);
             break;
-        }
         default:
             ErrorBuilder("cpu_backend::pow_scalar").not_implemented("dtype not supported");
         }
@@ -13220,18 +13378,27 @@ private:
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        // The gradient is loaded before the comparison picks it, so the
+        // choice compiles to a select.  Written as ``x > 0 ? g[i] : 0`` the
+        // load sat on one side of a branch, and on activations of random
+        // sign — every real network's — half the branches mispredicted:
+        // 2.25 ms on 524k elements against 0.26 when every x was positive.
         if (dt == Dtype::F32) {
-            const auto* gp = reinterpret_cast<const float*>(cg.ptr.get());
-            const auto* xp = reinterpret_cast<const float*>(cx.ptr.get());
-            auto* op = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (xp[i] > 0.f) ? gp[i] : 0.f;
+            const float* __restrict gp = reinterpret_cast<const float*>(cg.ptr.get());
+            const float* __restrict xp = reinterpret_cast<const float*>(cx.ptr.get());
+            float* __restrict op = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float g = gp[i];
+                op[i] = xp[i] > 0.f ? g : 0.f;
+            }
         } else if (dt == Dtype::F64) {
-            const auto* gp = reinterpret_cast<const double*>(cg.ptr.get());
-            const auto* xp = reinterpret_cast<const double*>(cx.ptr.get());
-            auto* op = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (xp[i] > 0.0) ? gp[i] : 0.0;
+            const double* __restrict gp = reinterpret_cast<const double*>(cg.ptr.get());
+            const double* __restrict xp = reinterpret_cast<const double*>(cx.ptr.get());
+            double* __restrict op = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double g = gp[i];
+                op[i] = xp[i] > 0.0 ? g : 0.0;
+            }
         } else {
             ErrorBuilder("cpu_backend::relu_backward").not_implemented("dtype not supported");
         }
@@ -13796,9 +13963,22 @@ private:
         std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const auto* c = reinterpret_cast<const std::uint8_t*>(cc.ptr.get());
-        auto run = [&](auto* dst, const auto* xp, const auto* yp) {
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = c[i] ? xp[i] : yp[i];
+        // Both branches are loaded and one selected: a conditional load is a
+        // branch on the condition, and a data condition (``x > 0``) is a coin
+        // flip.  Restrict locals let the select run as a vector blend.
+        auto run = [&](auto* dst_in, const auto* xp_in, const auto* yp_in) {
+            using T = std::remove_pointer_t<decltype(dst_in)>;
+            cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
+                const std::uint8_t* __restrict cp = c;
+                const T* __restrict xp = xp_in;
+                const T* __restrict yp = yp_in;
+                T* __restrict dst = dst_in;
+                for (std::size_t i = lo; i < hi; ++i) {
+                    const T a = xp[i];
+                    const T b = yp[i];
+                    dst[i] = cp[i] ? a : b;
+                }
+            });
         };
         // Selection copies bits; it never reads them as numbers.  Dispatching
         // on element width rather than dtype therefore covers every type —

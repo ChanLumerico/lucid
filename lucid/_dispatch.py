@@ -123,6 +123,39 @@ def _scalar_dtype(
     return fallback
 
 
+# Dtypes ``pow_scalar`` computes in: the real floating ones.
+_REAL_FLOATS: frozenset[_C_engine.Dtype] = frozenset(
+    {
+        _C_engine.Dtype.F16,
+        _C_engine.Dtype.BF16,
+        _C_engine.Dtype.F32,
+        _C_engine.Dtype.F64,
+    }
+)
+
+
+def _scalar_power(
+    base: _C_engine.TensorImpl, exponent: object
+) -> _C_engine.TensorImpl | None:
+    """``base ** exponent`` through ``pow_scalar`` when that is the same op.
+
+    A Python number as the exponent of a real floating tensor is a constant
+    of the base's dtype, so the general tensor power only made a 0-d tensor
+    of it and broadcast it.  ``pow_scalar`` carries the number on the node
+    instead, and its kernels answer the common exponents (2, 1, 0, -1, 0.5)
+    with the single correctly rounded operation each one is — ``x ** 2``
+    on the CPU was 180 times ``x * x``.
+
+    Returns ``None`` for anything else — a tensor, a bool, an integer or
+    complex base — which keeps the general path and its promotion rules.
+    """
+    if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
+        return None
+    if base.dtype not in _REAL_FLOATS:
+        return None
+    return _C_engine.pow_scalar(base, float(exponent))
+
+
 def _refuse_bool_subtraction(a: _C_engine.TensorImpl, b: _C_engine.TensorImpl) -> None:
     """Refuse ``bool - bool``, as the reference framework refuses it.
 

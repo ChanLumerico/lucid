@@ -140,8 +140,13 @@ def _inject_to(cls: type) -> None:
         # ``contiguous`` copied it into an ordinary one, so the relabel below
         # was never reached and ``.to()`` of a shared tensor always copied.
         # Keep the buffer unless a cast has to copy anyway.
+        #
+        # A cast writes a fresh dense tensor from any layout, so the dense
+        # copy is needed only when no cast follows; taking it first copied
+        # every element twice (a third of ``.long()``).
         relabel = self._impl.is_metal_shared and target_dtype == self._impl.dtype
-        impl = self._impl if relabel else _C_engine.contiguous(self._impl)
+        casts = target_dtype != self._impl.dtype
+        impl = self._impl if relabel or casts else _C_engine.contiguous(self._impl)
         # Dtype cast via C++ astype op (CPU: static_cast loop, GPU: mlx::core::astype).
         if target_dtype != impl.dtype:
             impl = _C_engine.astype(impl, target_dtype)

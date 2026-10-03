@@ -28,6 +28,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import (
     _refuse_bool_subtraction,
     _scalar_dtype,
+    _scalar_power,
     _unwrap,
     _unwrap_or_scalar,
 )
@@ -161,8 +162,13 @@ def _make_arith_adapter(
     name = getattr(engine_fn, "__name__", "_arith_adapter")
 
     subtracts = engine_fn in (_C_engine.sub, _C_engine.sub_)
+    powers = engine_fn is _C_engine.pow
 
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
+        if powers and isinstance(a, _C_engine.TensorImpl):
+            scalar = _scalar_power(a, b)
+            if scalar is not None:
+                return scalar
         if not isinstance(b, _C_engine.TensorImpl):
             b = _unwrap_or_scalar(b, a if isinstance(a, _C_engine.TensorImpl) else None)
         if not isinstance(a, _C_engine.TensorImpl):

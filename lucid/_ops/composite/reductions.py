@@ -227,19 +227,14 @@ def count_nonzero(
 
     Notes
     -----
-    Composite implementation: the CPU backend lacks
-    ``where(bool, i64, i64)`` and ``astype(bool → i64)``, so the op
-    builds a float32 ``1.0/0.0`` mask, reduces, and ``astype``-casts
-    the float scalar back to int64 (a path the backend does support).
-    Slightly more allocations than a native int reduction but
-    semantically identical.
+    The sum of the bool mask ``x != 0``, which is int64 and exact.  It
+    used to build a float32 ``1.0/0.0`` mask with ``where`` and cast the
+    float sum back — three full-size temporaries and ten times a plain
+    reduction, from a time the CPU could not sum a bool.
     """
-    one_f = lucid.ones_like(x, dtype=lucid.float32)
-    zero_f = lucid.zeros_like(x, dtype=lucid.float32)
-    mask = lucid.where(x != lucid.zeros_like(x), one_f, zero_f)
+    mask = x != 0
     _dim2 = list(dim) if dim is not None and not isinstance(dim, int) else dim
-    counts = lucid.sum(mask) if _dim2 is None else lucid.sum(mask, _dim2, False)
-    return counts.to(dtype=lucid.int64)
+    return lucid.sum(mask) if _dim2 is None else lucid.sum(mask, _dim2, False)
 
 
 def amax(

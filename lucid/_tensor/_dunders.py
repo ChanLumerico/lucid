@@ -8,7 +8,12 @@ the Tensor class by _inject_dunders() at module import time.
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _refuse_bool_subtraction, _unwrap_or_scalar, _wrap
+from lucid._dispatch import (
+    _refuse_bool_subtraction,
+    _scalar_power,
+    _unwrap_or_scalar,
+    _wrap,
+)
 from lucid._dtype import to_engine_dtype
 from lucid._tensor._indexing import _adopt_inplace, _getitem, _setitem
 
@@ -705,6 +710,9 @@ def _inject_dunders(cls: type) -> None:
         >>> a ** lucid.tensor([3.0, 2.0, 1.0])
         Tensor([1., 4., 3.])
         """
+        scalar = _scalar_power(self._impl, other)
+        if scalar is not None:
+            return _wrap(scalar)
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.pow(a, b))
 
