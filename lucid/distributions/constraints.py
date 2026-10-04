@@ -4,13 +4,18 @@ A :class:`Constraint` answers the question *"is this value in the support
 of some random variable?"* via :meth:`Constraint.check`, which returns a
 boolean :class:`Tensor` broadcast over the input.
 
-The hierarchy mirrors the reference framework's set, but trimmed to the
-constraints actually used by the distributions Lucid ships.
+The set mirrors the reference framework's: each constraint admits exactly
+the values the reference's constraint of the same name admits, so a
+distribution's ``arg_constraints`` and ``support`` describe the same domain
+in both (``lucid/test/parity/test_distribution_constraints_parity.py``).
+Every domain has one definition here — an interval with either end open is
+one class, not one class per combination.
 """
 
 from typing import final, override
 
 import lucid
+from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 
 
@@ -121,50 +126,13 @@ class _Boolean(Constraint):
 
 
 @final
-class _Positive(Constraint):
-    """``(0, ∞)``."""
-
-    @override
-    def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``value > 0``."""
-        return value > 0
-
-
-@final
-class _Nonnegative(Constraint):
-    """``[0, ∞)``."""
-
-    @override
-    def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``value >= 0``."""
-        return value >= 0
-
-
-@final
-class _UnitInterval(Constraint):
-    """``[0, 1]``."""
-
-    @override
-    def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``0 <= value <= 1``."""
-        return (value >= 0) & (value <= 1)
-
-
-@final
-class _OpenUnitInterval(Constraint):
-    """``(0, 1)``."""
-
-    @override
-    def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``0 < value < 1``."""
-        return (value > 0) & (value < 1)
-
-
-@final
 class _GreaterThan(Constraint):
-    """``(lower_bound, ∞)``."""
+    """``(lower_bound, ∞)`` — ``positive`` is this with a bound of ``0``.
 
-    def __init__(self, lower_bound: float) -> None:
+    The bound may be a tensor, compared element by element.
+    """
+
+    def __init__(self, lower_bound: float | Tensor) -> None:
         """Store the strict lower bound used by :meth:`check`."""
         self.lower_bound = lower_bound
 
@@ -180,9 +148,13 @@ class _GreaterThan(Constraint):
 
 @final
 class _GreaterThanEq(Constraint):
-    """``[lower_bound, ∞)``."""
+    """``[lower_bound, ∞)`` — ``nonnegative`` is this with a bound of ``0``.
 
-    def __init__(self, lower_bound: float) -> None:
+    The bound may be a tensor, compared element by element: ``Pareto``'s
+    support is ``[scale, ∞)`` for each of its batch members.
+    """
+
+    def __init__(self, lower_bound: float | Tensor) -> None:
         """Store the non-strict lower bound used by :meth:`check`."""
         self.lower_bound = lower_bound
 
@@ -198,9 +170,9 @@ class _GreaterThanEq(Constraint):
 
 @final
 class _LessThan(Constraint):
-    """``(-∞, upper_bound)``."""
+    """``(-∞, upper_bound)``.  The bound may be a tensor."""
 
-    def __init__(self, upper_bound: float) -> None:
+    def __init__(self, upper_bound: float | Tensor) -> None:
         """Store the strict upper bound used by :meth:`check`."""
         self.upper_bound = upper_bound
 
@@ -216,33 +188,67 @@ class _LessThan(Constraint):
 
 @final
 class _Interval(Constraint):
-    """``[lower_bound, upper_bound]``."""
+    """An interval of the real line whose ends are each open or closed.
 
-    def __init__(self, lower_bound: float, upper_bound: float) -> None:
-        """Store the closed interval bounds used by :meth:`check`."""
+    One definition serves ``[a, b]`` (:func:`interval`, ``unit_interval``),
+    ``[a, b)`` (:func:`half_open_interval`), ``(a, b)``
+    (``open_unit_interval``) and ``(a, b]``.  The bounds may be tensors,
+    compared element by element: ``Uniform``'s support is ``[low, high]``
+    for each of its batch members.
+    """
+
+    def __init__(
+        self,
+        lower_bound: float | Tensor,
+        upper_bound: float | Tensor,
+        *,
+        lower_open: bool = False,
+        upper_open: bool = False,
+    ) -> None:
+        """Store the bounds, and whether each end excludes its bound."""
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
+        self.lower_open = lower_open
+        self.upper_open = upper_open
 
     @override
     def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``lower_bound <= value <= upper_bound``."""
-        return (value >= self.lower_bound) & (value <= self.upper_bound)
+        """Return ``True`` element-wise where ``value`` lies between the bounds.
+
+        An open end excludes its bound, a closed end includes it.
+        """
+        if self.lower_open:
+            above = value > self.lower_bound
+        else:
+            above = value >= self.lower_bound
+        if self.upper_open:
+            below = value < self.upper_bound
+        else:
+            below = value <= self.upper_bound
+        return above & below
 
     @override
     def __repr__(self) -> str:
-        return (
-            f"Interval(lower_bound={self.lower_bound}, "
-            f"upper_bound={self.upper_bound})"
-        )
+        name = {
+            (False, False): "Interval",
+            (False, True): "HalfOpenInterval",
+            (True, False): "LeftOpenInterval",
+            (True, True): "OpenInterval",
+        }[(self.lower_open, self.upper_open)]
+        return f"{name}(lower_bound={self.lower_bound}, upper_bound={self.upper_bound})"
 
 
 @final
 class _IntegerInterval(Constraint):
-    """``{lower_bound, lower_bound+1, ..., upper_bound}``."""
+    """``{lower_bound, lower_bound+1, ..., upper_bound}``.
+
+    The bounds may be tensors: ``Binomial``'s support is
+    ``{0, …, total_count}`` for each of its batch members.
+    """
 
     is_discrete = True
 
-    def __init__(self, lower_bound: int, upper_bound: int) -> None:
+    def __init__(self, lower_bound: int | Tensor, upper_bound: int | Tensor) -> None:
         """Store the inclusive integer interval bounds used by :meth:`check`."""
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
@@ -263,16 +269,25 @@ class _IntegerInterval(Constraint):
 
 
 @final
-class _NonnegativeInteger(Constraint):
-    """``{0, 1, 2, ...}``."""
+class _IntegerGreaterThan(Constraint):
+    """``{lower_bound, lower_bound+1, ...}`` — ``nonnegative_integer`` is
+    this with a bound of ``0``."""
 
     is_discrete = True
+
+    def __init__(self, lower_bound: int) -> None:
+        """Store the inclusive lower bound used by :meth:`check`."""
+        self.lower_bound = lower_bound
 
     @override
     def check(self, value: Tensor) -> Tensor:
         """Return ``True`` element-wise where ``value`` is a whole number
-        ``>= 0`` (``inf`` is not)."""
-        return (value >= 0) & _is_integral(value)
+        ``>= lower_bound`` (``inf`` is not)."""
+        return (value >= self.lower_bound) & _is_integral(value)
+
+    @override
+    def __repr__(self) -> str:
+        return f"IntegerGreaterThan(lower_bound={self.lower_bound})"
 
 
 @final
@@ -288,12 +303,37 @@ class _Simplex(Constraint):
         Verifies non-negativity of every component and that the sum along
         the last axis equals ``1`` (within a ``1e-6`` tolerance).
         """
-        # Lucid's ``Tensor.all`` is a 0-dim reducer, so we hand-roll the
-        # along-last-axis "all non-negative" check via ``min``.
         nonneg = value.min(dim=-1) >= 0
         sums = value.sum(dim=-1)
         unit = (sums - 1.0).abs() < 1e-6
         return nonneg & unit
+
+
+@final
+class _OneHot(Constraint):
+    """One-hot vectors: entries in ``{0, 1}`` that sum to ``1`` along the
+    last dimension — the support of
+    :class:`~lucid.distributions.OneHotCategorical`.
+
+    A point inside the simplex such as ``[0.2, 0.3, 0.5]`` is not a one-hot
+    sample, so ``simplex`` is not this support.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> constraints.one_hot.check(lucid.tensor([[0.0, 1.0, 0.0], [0.2, 0.3, 0.5]]))
+    tensor([True, False], dtype=lucid.bool)
+    """
+
+    is_discrete = True
+    event_dim = 1
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` per vector where every entry is 0 or 1 and they sum to 1."""
+        binary = _all_trailing((value == 0) | (value == 1), 1)
+        return binary & (value.sum(dim=-1) == 1)
 
 
 @final
@@ -323,25 +363,117 @@ class _PositiveDefinite(Constraint):
         return info == 0
 
 
+@final
+class _CorrCholesky(Constraint):
+    """Cholesky factors of correlation matrices: lower-triangular, positive
+    diagonal, every row of unit Euclidean norm — the support of
+    :class:`~lucid.distributions.LKJCholesky`.
+
+    The row norm is compared within ``10 · K · eps`` of 1, the tolerance
+    the reference framework uses.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> constraints.corr_cholesky.check(lucid.tensor([[1.0, 0.0], [0.6, 0.8]]))
+    tensor(True, dtype=lucid.bool)
+    >>> constraints.corr_cholesky.check(lucid.tensor([[1.0, 0.0], [0.5, 0.5]]))
+    tensor(False, dtype=lucid.bool)
+    """
+
+    event_dim = 2
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` per matrix where it is the Cholesky factor of a
+        correlation matrix."""
+        tol = float(finfo(value.dtype).eps) * value.shape[-1] * 10
+        lower = _all_trailing(lucid.tril(value) == value, 2)
+        positive_diagonal = _all_trailing(value.diagonal(dim1=-2, dim2=-1) > 0, 1)
+        row_norm = lucid.linalg.vector_norm(value.detach(), dim=-1)
+        unit_rows = _all_trailing((row_norm - 1.0).abs() <= tol, 1)
+        return lower & positive_diagonal & unit_rows
+
+
+@final
+class _IndependentConstraint(Constraint):
+    """A constraint applied to each element, read as one answer per event.
+
+    Wraps ``base_constraint`` so its last ``reinterpreted_batch_ndims`` batch
+    axes count as event axes: the answer is ``True`` for an event only when
+    every element of it satisfies the base constraint.  This is the support
+    of :class:`~lucid.distributions.Independent`.
+    """
+
+    def __init__(
+        self, base_constraint: Constraint, reinterpreted_batch_ndims: int
+    ) -> None:
+        """Store the wrapped constraint and how many batch axes it absorbs."""
+        if reinterpreted_batch_ndims < 0:
+            raise ValueError(
+                "independent: reinterpreted_batch_ndims must be >= 0, got "
+                f"{reinterpreted_batch_ndims}"
+            )
+        self.base_constraint = base_constraint
+        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
+        self.is_discrete = base_constraint.is_discrete
+        self.event_dim = base_constraint.event_dim + reinterpreted_batch_ndims
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return the base check reduced with *and* over the reinterpreted axes.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` has fewer dimensions than the event needs.
+        """
+        result = self.base_constraint.check(value)
+        if result.ndim < self.reinterpreted_batch_ndims:
+            raise ValueError(
+                f"independent: expected value.ndim >= {self.event_dim}, "
+                f"got {value.ndim}"
+            )
+        return _all_trailing(result, self.reinterpreted_batch_ndims)
+
+    @override
+    def __repr__(self) -> str:
+        return (
+            f"IndependentConstraint({self.base_constraint!r}, "
+            f"{self.reinterpreted_batch_ndims})"
+        )
+
+
 # Public singletons (functions/objects users actually reach for).
 real = _Real()
 boolean = _Boolean()
-positive = _Positive()
-nonnegative = _Nonnegative()
-unit_interval = _UnitInterval()
-open_unit_interval = _OpenUnitInterval()
+positive = _GreaterThan(0.0)
+nonnegative = _GreaterThanEq(0.0)
+unit_interval = _Interval(0.0, 1.0)
+open_unit_interval = _Interval(0.0, 1.0, lower_open=True, upper_open=True)
 simplex = _Simplex()
+one_hot = _OneHot()
 positive_definite = _PositiveDefinite()
-nonnegative_integer = _NonnegativeInteger()
+corr_cholesky = _CorrCholesky()
+nonnegative_integer = _IntegerGreaterThan(0)
+
+# ``(0, 1]`` — a success probability that may be certain but not impossible
+# (``Geometric``: with p = 0 no trial ever succeeds).  The reference
+# framework declares ``unit_interval`` and refuses 0 in the constructor;
+# held here, the table is the whole domain.  It has no reference name, so
+# it is not public.
+_positive_unit_interval = _Interval(0.0, 1.0, lower_open=True)
 
 
-def greater_than(lower_bound: float) -> Constraint:
+def greater_than(lower_bound: float | Tensor) -> Constraint:
     """Construct a strict-greater-than constraint ``(lower_bound, ∞)``.
 
     Parameters
     ----------
-    lower_bound : float
-        Strict lower bound for the support.
+    lower_bound : float or Tensor
+        Strict lower bound for the support; a tensor is compared element by
+        element.
 
     Returns
     -------
@@ -351,13 +483,14 @@ def greater_than(lower_bound: float) -> Constraint:
     return _GreaterThan(lower_bound)
 
 
-def greater_than_eq(lower_bound: float) -> Constraint:
+def greater_than_eq(lower_bound: float | Tensor) -> Constraint:
     """Construct a non-strict-greater-than constraint ``[lower_bound, ∞)``.
 
     Parameters
     ----------
-    lower_bound : float
-        Inclusive lower bound for the support.
+    lower_bound : float or Tensor
+        Inclusive lower bound for the support; a tensor is compared element
+        by element.
 
     Returns
     -------
@@ -367,13 +500,14 @@ def greater_than_eq(lower_bound: float) -> Constraint:
     return _GreaterThanEq(lower_bound)
 
 
-def less_than(upper_bound: float) -> Constraint:
+def less_than(upper_bound: float | Tensor) -> Constraint:
     """Construct a strict-less-than constraint ``(-∞, upper_bound)``.
 
     Parameters
     ----------
-    upper_bound : float
-        Strict upper bound for the support.
+    upper_bound : float or Tensor
+        Strict upper bound for the support; a tensor is compared element by
+        element.
 
     Returns
     -------
@@ -383,13 +517,14 @@ def less_than(upper_bound: float) -> Constraint:
     return _LessThan(upper_bound)
 
 
-def interval(lower_bound: float, upper_bound: float) -> Constraint:
+def interval(lower_bound: float | Tensor, upper_bound: float | Tensor) -> Constraint:
     """Construct a closed-interval constraint ``[lower_bound, upper_bound]``.
 
     Parameters
     ----------
-    lower_bound, upper_bound : float
-        Inclusive bounds for the support.
+    lower_bound, upper_bound : float or Tensor
+        Inclusive bounds for the support; tensors are compared element by
+        element.
 
     Returns
     -------
@@ -399,18 +534,92 @@ def interval(lower_bound: float, upper_bound: float) -> Constraint:
     return _Interval(lower_bound, upper_bound)
 
 
-def integer_interval(lower_bound: int, upper_bound: int) -> Constraint:
-    """Construct an inclusive integer-interval constraint.
+def half_open_interval(
+    lower_bound: float | Tensor, upper_bound: float | Tensor
+) -> Constraint:
+    """Construct a half-open interval constraint ``[lower_bound, upper_bound)``.
+
+    The domain of a probability that may be impossible but not certain —
+    :class:`~lucid.distributions.NegativeBinomial`'s ``probs``, where
+    ``p = 1`` would mean every trial fails and the count never ends.
 
     Parameters
     ----------
-    lower_bound, upper_bound : int
-        Inclusive integer bounds defining the discrete support
-        ``{lower_bound, ..., upper_bound}``.
+    lower_bound : float or Tensor
+        Inclusive lower bound.
+    upper_bound : float or Tensor
+        Exclusive upper bound.
 
     Returns
     -------
     Constraint
-        Constraint instance accepting integer values in the inclusive range.
+        Constraint instance accepting ``lower_bound <= value < upper_bound``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> constraints.half_open_interval(0.0, 1.0).check(lucid.tensor([0.0, 0.5, 1.0]))
+    tensor([True, True, False], dtype=lucid.bool)
+    """
+    return _Interval(lower_bound, upper_bound, upper_open=True)
+
+
+def integer_interval(
+    lower_bound: int | Tensor, upper_bound: int | Tensor
+) -> Constraint:
+    """Construct an inclusive integer-interval constraint.
+
+    Parameters
+    ----------
+    lower_bound, upper_bound : int or Tensor
+        Inclusive integer bounds defining the discrete support
+        ``{lower_bound, ..., upper_bound}``; tensors are compared element by
+        element.
+
+    Returns
+    -------
+    Constraint
+        Constraint instance accepting whole numbers in the inclusive range.
     """
     return _IntegerInterval(lower_bound, upper_bound)
+
+
+def independent(
+    base_constraint: Constraint, reinterpreted_batch_ndims: int
+) -> Constraint:
+    """Reinterpret batch axes of a constraint as event axes.
+
+    The returned constraint answers once per event: ``True`` when every
+    element of the event's trailing ``reinterpreted_batch_ndims`` axes
+    satisfies ``base_constraint``.  Its ``event_dim`` is the base's plus
+    ``reinterpreted_batch_ndims``, and it is discrete when the base is.
+
+    Parameters
+    ----------
+    base_constraint : Constraint
+        The element-wise constraint to wrap.
+    reinterpreted_batch_ndims : int
+        Number of trailing axes folded into each event.  Must be ``>= 0``.
+
+    Returns
+    -------
+    Constraint
+        The wrapped constraint.
+
+    Raises
+    ------
+    ValueError
+        If ``reinterpreted_batch_ndims`` is negative.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> c = constraints.independent(constraints.positive, 1)
+    >>> c.event_dim
+    1
+    >>> c.check(lucid.tensor([[1.0, 2.0], [1.0, -2.0]]))
+    tensor([True, False], dtype=lucid.bool)
+    """
+    return _IndependentConstraint(base_constraint, reinterpreted_batch_ndims)

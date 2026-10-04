@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - strsm / dtrsm wrappers with the empty-extent guard (CHA-227)
 
+- add half_open_interval, one_hot, corr_cholesky, independent
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
