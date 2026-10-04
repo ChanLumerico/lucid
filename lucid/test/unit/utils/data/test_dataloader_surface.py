@@ -15,6 +15,7 @@ what is wrong, rather than surfacing later from inside an iterator.
 """
 
 import inspect
+import multiprocessing
 import time
 import warnings
 
@@ -172,7 +173,13 @@ def test_an_iterable_loader_checks_its_batch_size_too():
         ({"num_workers": -1}, "num_workers"),
         ({"num_workers": 1.5}, "num_workers"),
         ({"timeout": -1.0}, "timeout"),
+        ({"timeout": float("nan")}, "timeout"),
         ({"prefetch_factor": 0, "num_workers": 1}, "prefetch_factor"),
+        ({"prefetch_factor": 2.5, "num_workers": 1}, "prefetch_factor"),
+        # Options of the worker pool, given without one (the reference
+        # refuses these too).
+        ({"prefetch_factor": 2}, "prefetch_factor"),
+        ({"multiprocessing_context": "spawn"}, "multiprocessing_context"),
         ({"persistent_workers": True}, "persistent_workers"),
         (
             {"multiprocessing_context": "no-such-method", "num_workers": 1},
@@ -180,14 +187,46 @@ def test_an_iterable_loader_checks_its_batch_size_too():
         ),
     ],
 )
-def test_a_bad_argument_is_refused_at_construction(kwargs, match):
+def test_a_bad_value_is_refused_at_construction(kwargs, match):
     with pytest.raises(ValueError, match=match):
         DataLoader(Indices(4), **kwargs)
 
 
-def test_a_bad_generator_is_refused_at_construction():
-    with pytest.raises(TypeError, match="generator"):
-        DataLoader(Indices(4), shuffle=True, generator=object())
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"timeout": None}, "timeout"),
+        ({"timeout": "5"}, "timeout"),
+        ({"collate_fn": 3}, "collate_fn"),
+        ({"worker_init_fn": "init", "num_workers": 1}, "worker_init_fn"),
+        (
+            {"multiprocessing_context": object(), "num_workers": 1},
+            "multiprocessing_context",
+        ),
+        ({"generator": object(), "shuffle": True}, "generator"),
+        # ``generator=True`` reads as a switch; taking it as the seed 1
+        # would turn a typo into a fixed shuffle.
+        ({"generator": True, "shuffle": True}, "generator"),
+    ],
+)
+def test_a_wrong_type_is_refused_at_construction(kwargs, match):
+    with pytest.raises(TypeError, match=match):
+        DataLoader(Indices(4), **kwargs)
+
+
+def test_a_multiprocessing_context_object_is_accepted():
+    context = multiprocessing.get_context("spawn")
+    loader = DataLoader(Indices(4), num_workers=1, multiprocessing_context=context)
+    assert loader.multiprocessing_context is context
+
+
+def test_stop_iteration_from_collate_fn_is_an_error_not_an_end():
+    def collate(batch):
+        raise StopIteration
+
+    for dataset in (Indices(4), Stream(4, shard=False)):
+        with pytest.raises(RuntimeError, match="raised StopIteration"):
+            list(DataLoader(dataset, batch_size=2, collate_fn=collate))
 
 
 # ── samplers ──────────────────────────────────────────────────────────────────

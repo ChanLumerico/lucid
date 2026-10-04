@@ -91,6 +91,15 @@ class Raises(Dataset):
         return index
 
 
+class StopsAt(Raises):
+    """A map-style ``__getitem__`` that leaks ``StopIteration`` for one index."""
+
+    def __getitem__(self, index: int) -> int:
+        if index == self.bad:
+            raise StopIteration
+        return index
+
+
 class Unpicklable(Dataset):
     """Its samples cannot be sent back from a worker."""
 
@@ -140,6 +149,16 @@ class Pids(Dataset):
 
     def __getitem__(self, index: int) -> int:
         return os.getpid()
+
+
+class Heavy(Dataset):
+    """4 MiB per sample: a few prefetched results fill the result pipe."""
+
+    def __len__(self) -> int:
+        return 16
+
+    def __getitem__(self, index: int) -> bytes:
+        return bytes(4 << 20)
 
 
 class Stream(IterableDataset):

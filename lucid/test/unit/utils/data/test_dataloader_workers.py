@@ -258,6 +258,19 @@ def test_the_pool_survives_a_worker_exception():
     del it, loader
 
 
+def test_stop_iteration_from_a_map_dataset_is_an_error_not_an_end():
+    """In a worker it was read as "this stream is spent": the sample was
+    dropped and the worker retired with its share of the epoch, so
+    ``num_workers=2`` gave ``[0, 1, 2, 4, 5]``.  With or without workers
+    it is now the same error."""
+    for num_workers in (0, _WORKERS):
+        loader = DataLoader(
+            wd.StopsAt(6, bad=3), batch_size=None, num_workers=num_workers
+        )
+        with pytest.raises(RuntimeError, match="raised StopIteration"):
+            list(loader)
+
+
 def test_a_worker_init_fn_error_is_reraised():
     loader = _loader(wd.Indices(4), batch_size=1, worker_init_fn=wd.failing_init)
     with pytest.raises(ValueError, match="init failed"):
@@ -296,10 +309,13 @@ def test_a_persistent_loader_starts_a_new_pool_after_a_shutdown():
     del loader
 
 
-def test_workers_exit_when_the_main_process_is_killed():
-    """An orphaned worker would otherwise wait on its index queue forever."""
-    script = textwrap.dedent("""
-        import os, signal
+# What the killed parent was doing: an idle persistent pool between epochs,
+# or a pool that still has 4 MiB results queued for it.  The second hung:
+# the worker left its loop but its exit waited on a feeder thread blocked in
+# ``send_bytes`` on a full pipe nobody would read again.
+_ORPHAN_SCRIPTS = {
+    "idle": """
+        import multiprocessing as mp, os, signal
         from lucid.utils.data import DataLoader
         from lucid.test.unit.utils.data import _worker_datasets as wd
 
@@ -307,19 +323,47 @@ def test_workers_exit_when_the_main_process_is_killed():
             wd.Pids(), batch_size=None, num_workers=2, collate_fn=wd.as_is,
             timeout=60.0, persistent_workers=True,
         )
-        print(" ".join(str(p) for p in sorted(set(loader))), flush=True)
+        list(loader)
+        with open(os.environ["POOL_FILE"], "w") as f:
+            f.write(" ".join(str(p.pid) for p in mp.active_children()))
         os.kill(os.getpid(), signal.SIGKILL)
-        """)
-    proc = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=_REPO,
-        capture_output=True,
-        text=True,
-        timeout=90,
-    )
-    assert proc.returncode == -signal.SIGKILL, proc.stderr
-    # The persistent pool is still up when its parent is killed.
-    pool = [int(p) for p in proc.stdout.split()]
+        """,
+    "results pending": """
+        import multiprocessing as mp, os, signal
+        from lucid.utils.data import DataLoader
+        from lucid.test.unit.utils.data import _worker_datasets as wd
+
+        it = iter(DataLoader(
+            wd.Heavy(), batch_size=None, num_workers=2, collate_fn=wd.as_is,
+            timeout=60.0,
+        ))
+        next(it)
+        with open(os.environ["POOL_FILE"], "w") as f:
+            f.write(" ".join(str(p.pid) for p in mp.active_children()))
+        os.kill(os.getpid(), signal.SIGKILL)
+        """,
+}
+
+
+@pytest.mark.parametrize("state", sorted(_ORPHAN_SCRIPTS))
+def test_workers_exit_when_the_main_process_is_killed(state, tmp_path):
+    """An orphaned worker would otherwise outlive its parent indefinitely."""
+    pool_file = tmp_path / "pool"
+    log_file = tmp_path / "log"
+    # Files, not pipes: the workers inherit the parent's stdout / stderr, and
+    # waiting for a surviving worker to close a pipe would stall this test.
+    with open(log_file, "w") as log:
+        proc = subprocess.run(
+            [sys.executable, "-c", textwrap.dedent(_ORPHAN_SCRIPTS[state])],
+            cwd=_REPO,
+            env={**os.environ, "POOL_FILE": str(pool_file)},
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            timeout=90,
+        )
+    assert proc.returncode == -signal.SIGKILL, log_file.read_text()
+    pool = [int(p) for p in pool_file.read_text().split()]
     assert len(pool) == _WORKERS
 
     def alive(pid):
@@ -332,4 +376,7 @@ def test_workers_exit_when_the_main_process_is_killed():
     deadline = time.monotonic() + 20.0
     while any(alive(p) for p in pool) and time.monotonic() < deadline:
         time.sleep(0.1)
-    assert not any(alive(p) for p in pool)
+    survivors = [p for p in pool if alive(p)]
+    for pid in survivors:  # never leave one behind, even on failure
+        os.kill(pid, signal.SIGKILL)
+    assert not survivors

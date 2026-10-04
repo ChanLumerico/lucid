@@ -34,6 +34,33 @@ from lucid.test.unit.utils.data._worker_datasets import Indices
 _N = 24
 
 
+@pytest.fixture(autouse=True)
+def _on_default_device(device):
+    """Every contract here holds whatever the default device is.
+
+    With ``set_default_device("metal")`` the draws went to the GPU: every
+    seed came back 0 (so each epoch repeated the last, and every worker
+    pool got base seed 0), ``WeightedRandomSampler`` died on ``float64``,
+    and the same seed shuffled differently on the two devices.  Sampling
+    is host work and is now pinned there.
+    """
+    previous = lucid.get_default_device()
+    lucid.set_default_device(device)
+    try:
+        yield device
+    finally:
+        lucid.set_default_device(previous)
+
+
+def test_the_default_device_does_not_change_a_draw(device):
+    """Same seed, same order — on whichever device the model lives."""
+    draws = []
+    for target in ("cpu", device):
+        lucid.set_default_device(target)
+        draws.append({name: EPOCHS[name](lucid.Generator(4))() for name in EPOCHS})
+    assert draws[0] == draws[1]
+
+
 def _loader_epochs(generator):
     loader = DataLoader(Indices(_N), batch_size=None, shuffle=True, generator=generator)
     return lambda: [int(i) for i in loader]
