@@ -251,9 +251,12 @@ public:
     //
     // Raises
     // ------
-    // std::runtime_error
-    //     The Python ``backward_fn`` is unset, or it raised an exception
-    //     during execution (the original message is preserved).
+    // LucidError
+    //     The Python ``backward_fn`` is unset.
+    // py::error_already_set
+    //     ``backward_fn`` raised.  It is not rewrapped: the binding that
+    //     started the backward pass restores the original Python exception,
+    //     so the caller sees its own type, message and traceback.
     std::vector<Storage> apply(Storage grad_out) override;
 
     // create_graph=True: the user's backward, run on the live gradient.

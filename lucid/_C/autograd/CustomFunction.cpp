@@ -10,7 +10,6 @@
 #include <pybind11/stl.h>
 
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
@@ -77,8 +76,9 @@ TensorImplPtr extract_impl(const py::object& obj) {
 //   2. Wrap grad_out in a temporary TensorImpl so Python can treat it as a
 //      normal tensor.  out_shape is used as the shape; if it is empty the
 //      shape is inferred from nbytes / element size.
-//   3. Call py_backward_fn(py_ctx, grad_tensor).  Any Python exception is
-//      re-thrown as a C++ std::runtime_error.
+//   3. Call py_backward_fn(py_ctx, grad_tensor).  A Python exception is left
+//      to propagate as the py::error_already_set pybind11 throws (see
+//      invoke_backward).
 //   4. Unpack the result: a tuple or list yields one Storage per item; a
 //      single tensor yields one Storage.  Python None entries become empty
 //      CpuStorage{} values representing "no gradient for this input".
@@ -120,12 +120,9 @@ std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplP
             .not_implemented("create_graph=True through a Function whose backward is "
                              "once_differentiable — it does not record its own graph");
 
-    py::object result;
-    try {
-        result = py_backward_fn(py_ctx, py::cast(grad_out));
-    } catch (py::error_already_set& e) {
-        throw std::runtime_error(std::string("PythonBackward raised: ") + e.what());
-    }
+    // An exception raised by ``backward`` propagates untouched, as in
+    // invoke_backward.
+    py::object result = py_backward_fn(py_ctx, py::cast(grad_out));
     std::vector<TensorImplPtr> grads;
     if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
         for (auto item : result)
@@ -176,12 +173,21 @@ std::vector<Storage> PythonBackwardNode::apply_barrier() {
 }
 
 std::vector<Storage> PythonBackwardNode::invoke_backward(const py::tuple& grads) {
-    py::object result;
-    try {
-        result = py_backward_fn(py_ctx, *grads);
-    } catch (py::error_already_set& e) {
-        throw std::runtime_error(std::string("PythonBackward raised: ") + e.what());
-    }
+    // An exception raised by ``backward`` is not caught here.  pybind11
+    // carries it out as py::error_already_set, which holds the original
+    // Python exception — type, message, traceback, ``__cause__``.  Nothing
+    // between here and the Python caller catches it (the engine has no
+    // handler, and lucid's translator in bind_errors.cpp matches only
+    // LucidError types), so the binding's dispatcher restores it and the
+    // caller of backward() sees the ValueError or VersionMismatch the user
+    // code raised.  Rewrapping it as std::runtime_error, as this did,
+    // delivered every such error as a RuntimeError with the type folded
+    // into the message.
+    //
+    // The GIL is held for the whole traversal (engine_backward and
+    // engine_grad do not release it), and error_already_set re-acquires it
+    // anyway when it is read or destroyed.
+    py::object result = py_backward_fn(py_ctx, *grads);
 
     std::vector<Storage> storages;
 

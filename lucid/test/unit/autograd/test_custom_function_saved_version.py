@@ -23,15 +23,11 @@ from lucid._C import engine as _C_engine
 from lucid.autograd import Function
 from lucid.autograd.graph import allow_mutation_on_saved_tensors
 
-# ``ctx.saved_tensors`` raises ``VersionMismatch``, but the engine's bridge to
-# a Python ``backward`` re-raises every Python exception as a plain
-# ``RuntimeError`` ("PythonBackward raised: VersionMismatch: ..."), so that is
-# the type a ``backward()`` caller gets today.  Once that rewrap is gone —
-# the ``catch (py::error_already_set&)`` blocks in
-# ``PythonBackwardNode::invoke_backward`` and ``::apply_for_graph``
-# (lucid/_C/autograd/CustomFunction.cpp) — tighten this one line to
-# ``RAISED = _C_engine.VersionMismatch``.  The message is matched either way.
-RAISED: type[Exception] = RuntimeError
+# ``ctx.saved_tensors`` raises ``VersionMismatch`` inside ``backward``, and the
+# engine hands a Python ``backward``'s exception to the caller as it was
+# raised (test_custom_function_exception_type.py), so that is the type a
+# ``backward()`` caller gets.
+RAISED: type[Exception] = _C_engine.VersionMismatch
 
 
 class _Mul(Function):
