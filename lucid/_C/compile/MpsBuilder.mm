@@ -112,6 +112,41 @@ static std::string first_empty_tensor(const TraceGraph& graph,
     return {};
 }
 
+// Every trace id ``loss_id`` depends on, itself included — one reverse walk
+// over the recorded ops.  MPSGraph's ``gradientForPrimaryTensor:withTensors:``
+// aborts the process ("Not a predecessor of primaryTensor") when one of the
+// requested tensors does not feed the primary tensor, so no caller may ask it
+// for a parameter outside this set.
+static std::unordered_set<TensorId> loss_ancestors(const TraceGraph& graph, TensorId loss_id) {
+    std::unordered_set<TensorId> needed{loss_id};
+    for (auto it = graph.ops.rbegin(); it != graph.ops.rend(); ++it) {
+        bool feeds_loss = false;
+        for (const auto& out : it->outputs) {
+            if (needed.count(out.id) != 0) {
+                feeds_loss = true;
+                break;
+            }
+        }
+        if (!feeds_loss)
+            continue;
+        for (TensorId iid : it->inputs)
+            if (iid >= 0)
+                needed.insert(iid);
+    }
+    return needed;
+}
+
+// The first of ``param_ids`` the loss does not depend on, or -1.
+static TensorId first_param_off_loss_path(const TraceGraph& graph,
+                                          TensorId loss_id,
+                                          const std::vector<TensorId>& param_ids) {
+    const auto ancestors = loss_ancestors(graph, loss_id);
+    for (TensorId pid : param_ids)
+        if (ancestors.count(pid) == 0)
+            return pid;
+    return -1;
+}
+
 inline bool result_is_a_host_constant(std::string_view name) {
     return name == "arange" || name == "empty" || name == "eye" || name == "full" ||
            name == "linspace" || name == "logspace" || name == "ones" || name == "zeros" ||
@@ -1067,10 +1102,20 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
             if (const std::string bad = first_op_unsafe_for_autodiff(graph); !bad.empty())
                 return fail("compile_trace_with_backward: " + vjp_err + "; op '" + bad +
                             "' rules out MPSGraph's autodiff as the fallback");
+            // Ask only for the parameters the loss depends on — MPSGraph
+            // aborts on any other rather than returning nil.  The rest get
+            // the zero, absent gradient below.
+            const auto ancestors = loss_ancestors(graph, loss_id);
+            NSMutableArray<MPSGraphTensor*>* reach_arr =
+                [NSMutableArray arrayWithCapacity:param_ids.size()];
+            for (std::size_t i = 0; i < param_ids.size(); ++i)
+                if (ancestors.count(param_ids[i]) != 0)
+                    [reach_arr addObject:param_arr[i]];
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
-                [graph_obj gradientForPrimaryTensor:loss_t
-                                        withTensors:param_arr
-                                               name:@"lucid_grads"];
+                reach_arr.count == 0 ? @{}
+                                     : [graph_obj gradientForPrimaryTensor:loss_t
+                                                               withTensors:reach_arr
+                                                                      name:@"lucid_grads"];
             if (grad_map == nil)
                 return fail("compile_trace_with_backward: gradientForPrimaryTensor returned nil");
 
@@ -1713,6 +1758,10 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
         return fail("compile_generic_fused_step: param_ids must be non-empty");
     if (ghost_grad_ids.size() != param_ids.size())
         return fail("compile_generic_fused_step: ghost_grad_ids size != param_ids size");
+    if (const TensorId off = first_param_off_loss_path(graph, loss_id, param_ids); off >= 0)
+        return fail("compile_generic_fused_step: param id " + std::to_string(off) +
+                    " does not reach the loss — MPSGraph aborts the process when asked for "
+                    "its gradient; leave it out of param_ids");
 
     const std::unordered_set<TensorId> ghost_set(ghost_grad_ids.begin(), ghost_grad_ids.end());
 
@@ -2083,6 +2132,10 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         return this->compile_generic_fused_step(loss_id, param_ids, ghost_grad_ids,
                                                 output_target_ids);
     }
+    if (const TensorId off = first_param_off_loss_path(graph, loss_id, param_ids); off >= 0)
+        return fail("compile_generic_fused_step_with_vars: param id " + std::to_string(off) +
+                    " does not reach the loss — MPSGraph aborts the process when asked for "
+                    "its gradient; leave it out of param_ids");
 
     const std::unordered_set<TensorId> ghost_set(ghost_grad_ids.begin(), ghost_grad_ids.end());
 

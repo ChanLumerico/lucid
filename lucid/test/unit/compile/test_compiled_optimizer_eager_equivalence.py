@@ -14,6 +14,9 @@ gradients inside MPSGraph, which rounds a few ulp differently — 1e-6 over
 a handful of steps.
 """
 
+import subprocess
+import sys
+import textwrap
 from collections.abc import Callable
 
 import pytest
@@ -487,3 +490,98 @@ def test_an_active_set_that_keeps_changing_uses_one_masked_executable() -> None:
         assert drift < TOL, f"route {route}: drift {drift:.3e}"
     _assert_same_state(comp.state_dict(), eager.state_dict())
     assert len(comp._plans) <= comp._EXACT_PLAN_LIMIT + 1
+
+
+# ── CHA-174: a parameter the loss never reaches ────────────────────
+
+
+def _run_child(code: str) -> subprocess.CompletedProcess[str]:
+    """Run ``code`` in a fresh interpreter — an abort there is an exit code here."""
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+
+def test_fused_step_skips_a_parameter_the_loss_never_reaches() -> None:
+    """Used to abort the process inside MPSGraph's autodiff ("Not a predecessor
+    of primaryTensor").  Now the unused head is left alone, as in eager."""
+    proc = _run_child("""
+        import lucid, lucid.nn as nn, lucid.nn.functional as F, lucid.optim as optim
+        from lucid.compile import fused_step
+
+        class N(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.fc = nn.Linear(8, 4)
+                self.aux = nn.Linear(8, 4)
+
+            def forward(self, x):
+                return self.fc(x)
+
+        def make():
+            lucid.manual_seed(0)
+            m = N().to("metal")
+            return m, optim.SGD(m.parameters(), lr=0.1, momentum=0.9, weight_decay=0.1)
+
+        lucid.manual_seed(1)
+        x = lucid.randn(4, 8).to("metal")
+        t = lucid.randn(4, 4).to("metal")
+        em, eo = make()
+        cm, co = make()
+        aux0 = cm.aux.weight.detach().clone()
+        step = fused_step(cm, F.mse_loss, co)
+        for _ in range(3):
+            eo.zero_grad()
+            F.mse_loss(em(x), t).backward()
+            eo.step()
+            step(x, t)
+        assert float((cm.aux.weight - aux0).abs().max().item()) == 0.0
+        drift = max(
+            float((a - b).abs().max().item())
+            for a, b in zip(em.parameters(), cm.parameters())
+        )
+        assert drift < 1e-6, drift
+        assert sorted(co.state_dict()["state"]) == sorted(eo.state_dict()["state"])
+        print("ok")
+        """)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert proc.stdout.strip().endswith("ok")
+
+
+def test_the_builder_refuses_a_gradient_off_the_loss_path() -> None:
+    """Asked directly for such a gradient, the builder fails instead of aborting."""
+    proc = _run_child("""
+        import lucid
+        from lucid._C import engine as _C_engine
+        from lucid._dispatch import _unwrap
+        from lucid.compile import _tracing
+
+        w = lucid.randn(4, 4).to("metal")
+        unused = lucid.randn(4, 4).to("metal")
+        ghost_w = lucid.zeros(4, 4, device="metal")
+        ghost_u = lucid.zeros(4, 4, device="metal")
+        x = lucid.randn(2, 4).to("metal")
+        with lucid.no_grad():
+            with _tracing() as tr:
+                loss = (x @ w).square().mean()
+                new_w = w - ghost_w
+                new_u = unused - ghost_u
+        ids = lambda *ts: [int(tr.lookup_id(_unwrap(t))) for t in ts]
+        try:
+            exe = _C_engine.compile.compile_generic_fused_step(
+                tr.graph,
+                dict(tr.external_feeds),
+                ids(loss)[0],
+                ids(w, unused),
+                ids(ghost_w, ghost_u),
+                ids(new_w, new_u),
+            )
+            print("refused" if exe is None else "compiled")
+        except RuntimeError as e:
+            print("refused:", "does not reach the loss" in str(e))
+        """)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert proc.stdout.strip() in ("refused", "refused: True"), proc.stdout
