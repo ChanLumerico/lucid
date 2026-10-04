@@ -116,6 +116,27 @@ class TestGatherOrder:
             ):
                 assert_close(out, np.array(self.WANT, dtype=np.float32))
 
+    def test_a_zero_d_integer_tensor_is_a_dim(self, device: str) -> None:
+        # The reference reads a 0-d integer tensor there as the dim, so it
+        # is the reference order even though a tensor sits where the old
+        # order put its index.
+        x, idx = self._operands(device)
+        dim = lucid.tensor(1, device=device)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", LucidDeprecationWarning)
+            for out in (
+                lucid.gather(x, dim, idx),
+                x.gather(dim, idx),
+                lucid.gather(x, dim, index=idx),
+                lucid.gather(x, dim=dim, index=idx),
+            ):
+                assert_close(out, np.array(self.WANT, dtype=np.float32))
+
+    def test_input_binds_by_keyword(self, device: str) -> None:
+        x, idx = self._operands(device)
+        out = lucid.gather(input=x, dim=1, index=idx)
+        assert_close(out, np.array(self.WANT, dtype=np.float32))
+
     def test_it_matches_take_along_axis(self, device: str) -> None:
         a = _rng().standard_normal((3, 4, 5)).astype(np.float32)
         for dim in (0, 1, 2, -1):
@@ -177,8 +198,22 @@ class TestGatherOrder:
             (lambda x, i: lucid.gather(x, 1, dim=1, index=i), "multiple values for argument 'dim'"),
             (lambda x, i: lucid.gather(x, i, index=i), "multiple values for argument 'index'"),
             (lambda x, i: x.gather(1, i, 0), "takes 3 positional arguments"),
+            (lambda x, i: lucid.gather(x, lucid.tensor(1.0), i), "0-d integer tensor"),
+            (lambda x, i: lucid.gather(x, lucid.tensor(True), i), "0-d integer tensor"),
+            (lambda x, i: lucid.gather(x, i, i), "0-d integer tensor"),
         ],
-        ids=["no-index", "float-dim", "list-index", "bad-kw", "dim-twice", "index-twice", "too-many"],
+        ids=[
+            "no-index",
+            "float-dim",
+            "list-index",
+            "bad-kw",
+            "dim-twice",
+            "index-twice",
+            "too-many",
+            "float-tensor-dim",
+            "bool-tensor-dim",
+            "two-index-tensors",
+        ],
     )
     def test_a_call_neither_order_binds_is_a_type_error(self, call, message: str) -> None:  # type: ignore[no-untyped-def]
         x, idx = self._operands("cpu")
@@ -214,15 +249,21 @@ class TestLibraryUsesTheReferenceOrder:
             lucid.distributions.Categorical(logits=logits).log_prob(target)
 
     def test_no_library_call_spells_the_old_order(self) -> None:
-        # The calls the test above cannot reach (the zoo, Core ML export,
-        # distributions) are held statically: a ``gather`` with the dim as
-        # a keyword and only two positionals, the old ``indices=``, or an
-        # integer literal third is the index-first order.
-        root = Path(lucid.__file__).parent
+        """The callers the test above cannot reach — the zoo, Core ML export,
+        ``tools/`` — are held statically.
+
+        A ``gather`` with the dim as a keyword and only two positionals, the
+        old ``indices=``, or an integer literal third is the index-first
+        order.  Not caught: the old order with the dim in a variable,
+        ``gather(x, idx, dim)``, which reads like ``gather(x, dim, idx)``.
+        """
+        package = Path(lucid.__file__).parent
+        sources = [p for p in package.rglob("*.py") if "test" not in p.relative_to(package).parts]
+        tools = package.parent / "tools"
+        if tools.is_dir():  # a source checkout; an installed wheel has none
+            sources += tools.rglob("*.py")
         offenders = []
-        for path in sorted(root.rglob("*.py")):
-            if "test" in path.relative_to(root).parts:
-                continue
+        for path in sorted(sources):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if not (
                     isinstance(node, ast.Call)
@@ -244,7 +285,7 @@ class TestLibraryUsesTheReferenceOrder:
                     or (isinstance(third, ast.UnaryOp) and isinstance(third.operand, ast.Constant))
                 )
                 if old:
-                    offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+                    offenders.append(f"{path.relative_to(package.parent)}:{node.lineno}")
         assert offenders == []
 
 

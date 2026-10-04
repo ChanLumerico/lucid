@@ -294,6 +294,23 @@ _GATHER_SINCE = "3.16.0"
 _GATHER_REMOVAL = "3.18.0"
 
 
+def _as_dim(value: object) -> int:
+    """``value`` as a ``gather`` dim: an int, or a 0-d integer tensor."""
+    impl = getattr(value, "_impl", None)
+    if isinstance(impl, _Impl):
+        kind = _ARITH_DTYPE_KIND_WIDTH.get(impl.dtype, (2, 32))[0]
+        if not impl.shape and kind == 1:
+            return int(cast(int, impl.item()))
+        raise TypeError(
+            "gather(): dim must be an int or a 0-d integer tensor, got a tensor "
+            f"of shape {tuple(impl.shape)} and dtype {_ENGINE_TO_DTYPE[impl.dtype]}"
+        )
+    try:
+        return operator.index(value)  # type: ignore[arg-type]  # refused below
+    except TypeError:
+        raise TypeError(f"gather(): dim must be an int, got {type(value).__name__}") from None
+
+
 def _gather_operands(
     args: tuple[object, ...], kwargs: dict[str, object]
 ) -> tuple[int, Tensor]:
@@ -303,8 +320,10 @@ def _gather_operands(
     ``gather(input, indices, dim=-1)`` and released code still calls it so,
     which no single signature can bind alongside the reference one — the
     argument after ``input`` decides instead.  An integer there is a
-    ``dim``: the reference order.  A tensor there, or the old keyword
-    ``indices=``, is the old order, which still answers and warns.
+    ``dim``: the reference order.  So is a 0-d tensor followed by a tensor
+    index, which the reference reads as a dim too.  Any other tensor there,
+    or the old keyword ``indices=``, is the old order, which still answers
+    and warns.
     """
     extra = sorted(set(kwargs) - {"dim", "index", "indices"})
     if extra:
@@ -313,7 +332,10 @@ def _gather_operands(
         raise TypeError(
             f"gather() takes 3 positional arguments but {len(args) + 1} were given"
         )
-    old_order = "indices" in kwargs or (len(args) > 0 and hasattr(args[0], "_impl"))
+    second = getattr(args[0], "_impl", None) if args else None
+    index_follows = "index" in kwargs or (len(args) > 1 and hasattr(args[1], "_impl"))
+    zero_d_dim = isinstance(second, _Impl) and not second.shape and index_follows
+    old_order = "indices" in kwargs or (second is not None and not zero_d_dim)
     if old_order and "index" in kwargs:
         raise TypeError("gather() got multiple values for argument 'index'")
 
@@ -331,12 +353,7 @@ def _gather_operands(
     index = bound["indices" if old_order else "index"]
     if not hasattr(index, "_impl"):
         raise TypeError(f"gather(): index must be a Tensor, got {type(index).__name__}")
-    try:
-        dim = operator.index(bound["dim"])  # type: ignore[arg-type]  # refused below
-    except TypeError:
-        raise TypeError(
-            f"gather(): dim must be an int, got {type(bound['dim']).__name__}"
-        ) from None
+    dim = _as_dim(bound["dim"])
     if old_order:
         warn_deprecated(
             _GATHER_OLD_ORDER,
@@ -347,15 +364,22 @@ def _gather_operands(
     return dim, cast("Tensor", index)
 
 
-def _gather_adapter(a_impl: _Impl, *args: object, **kwargs: object) -> _Impl:
+def _gather_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
     """gather(input, dim, index), read by :func:`_gather_operands`.
 
-    The parameters stay open because the old order binds by type rather
-    than by name: a signature naming either order would turn the other
-    one's calls away before they got here.
+    The parameters after ``input`` stay open because the old order binds
+    by type rather than by name: a signature naming either order would
+    turn the other one's calls away before they got here.  ``input`` is
+    named so that ``input=`` binds; the free function unwraps positional
+    tensors only, so a keyword one arrives as a Tensor — hence ``_unwrap``.
     """
+    # The reference order with positional ints, as every caller inside
+    # Lucid writes it (cross_entropy and nll_loss among them), skips the
+    # parsing below.
+    if not kwargs and len(args) == 2 and type(args[0]) is int and hasattr(args[1], "_impl"):
+        return _C_engine.gather(_unwrap(input), _unwrap(cast("Tensor", args[1])), args[0])
     dim, index = _gather_operands(args, kwargs)
-    return _C_engine.gather(a_impl, _unwrap(index), dim)
+    return _C_engine.gather(_unwrap(input), _unwrap(index), dim)
 
 
 # ── Composite indexing adapters ──────────────────────────────────────────────
