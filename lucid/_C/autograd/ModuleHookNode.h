@@ -58,20 +58,25 @@ struct ModuleHookTensorMeta {
 //
 // Notes
 // -----
-// The two ``py::object`` runners are the Python-side dispatchers that fan
-// each barrier event out to every registered hook on the module.  They are
-// held as opaque ``py::object`` (the GIL is acquired only when they are
-// actually invoked inside ``apply_barrier``).
+// The two ``py::object`` runners are the Python-side loops over the module's
+// hooks of each kind.  They are held as opaque ``py::object`` (the GIL is
+// acquired only when they are actually invoked inside ``apply_barrier``).
+// Each is a generator: it calls the hooks in turn and yields every result
+// that is not ``None``, and the barrier checks that result against the
+// slots it replaces — count, then each gradient's dtype, device and shape
+// (autograd/TensorHooks.h) — and puts it in place before the generator goes
+// on, so the next hook is handed only a tuple the engine accepted.
 //
 // Attributes
 // ----------
 // pre_runner : py::object
-//     Python callable that runs the *pre*-backward hooks.  Receives the
-//     output-gradient tuple, may return a tuple replacing it.
+//     Python generator function that runs the *pre*-backward hooks.
+//     Receives the output-gradient tuple; yields each replacement for it.
 // full_runner : py::object
-//     Python callable that runs the *full*-backward hooks.  Receives both
-//     the input-gradient tuple and the output-gradient tuple, may return a
-//     tuple replacing the input gradients.
+//     Python generator function that runs the *full*-backward hooks.
+//     Receives the input-gradient tuple (one entry per positional argument
+//     of the call) and the output-gradient tuple; yields each replacement
+//     for the input gradients.
 // n_inputs : std::size_t
 //     Number of original Python-side input positions on the module call
 //     (some may have ``requires_grad=False`` and therefore no edge).
@@ -248,8 +253,9 @@ public:
 
 private:
     // Fire the pre-backward hooks — and the full ones when the module has no
-    // input that takes a gradient — once per pass.
-    void run_hooks();
+    // input that takes a gradient — once per pass.  ``graph`` is whether the
+    // pass is a create_graph one, whose slots keep a replacement's graph.
+    void run_hooks(bool graph);
 
     std::shared_ptr<ModuleBackwardHookState> state_;
 };
@@ -267,9 +273,12 @@ private:
 // -----
 // Hooks may return ``None`` (keep current gradients) or a tuple matching
 // the positional input signature with ``None`` entries for slots that
-// should remain untouched.  Hooks may NOT change the dtype / shape of
-// returned gradients — downstream nodes rely on the original metadata
-// captured in :attr:`ModuleBackwardHookState::input_metas`.
+// should remain untouched.  A returned gradient must have the dtype, device
+// and shape of the one it replaces — downstream nodes read it with the
+// metadata captured in :attr:`ModuleBackwardHookState::input_metas` — and a
+// tuple of another length, an entry that is not a tensor, or a tensor for an
+// argument that takes no gradient is refused.  When a hook is refused, or
+// raises, nothing any hook returned flows on and the state is reset.
 //
 // See Also
 // --------
@@ -338,8 +347,9 @@ public:
     std::string node_name() const override { return "ModuleInputHook"; }
 
 private:
-    // Fire the full-backward hooks once per pass.
-    void run_hooks();
+    // Fire the full-backward hooks once per pass; ``graph`` as for
+    // :meth:`ModuleOutputHookNode::run_hooks`.
+    void run_hooks(bool graph);
 
     std::shared_ptr<ModuleBackwardHookState> state_;
 };

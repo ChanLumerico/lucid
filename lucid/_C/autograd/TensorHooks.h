@@ -22,6 +22,12 @@
 // None`` that Python installs once, and the engine calls only that.  A slot
 // that was never asked for does not exist, so a backward pass with no hooks
 // never touches Python.
+//
+// This file also owns what every gradient Python hands back has to pass
+// before the engine uses it — a hook's, a module hook's, a custom Function's,
+// ``Tensor.grad =``'s: one converter from Python and one check against the
+// slot the gradient replaces (``tensor_from_python``, ``check_grad_kind``,
+// ``grad_slot_buffer`` below).
 
 #pragma once
 
@@ -29,11 +35,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../api.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Shape.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -117,6 +125,8 @@ inline bool has_slot_hooks(const Node& node, std::uint32_t output_nr) {
 // ------
 // py::error_already_set
 //     A hook raised; the exception reaches the caller of backward as it was.
+// py::type_error
+//     A hook returned something that is neither a tensor nor ``None``.
 // DtypeMismatch, DeviceMismatch, ShapeMismatch
 //     A hook returned a gradient of another kind than it was given.
 LUCID_API Storage run_slot_hooks(Node& producer, std::uint32_t output_nr, Storage grad);
@@ -177,6 +187,56 @@ LUCID_API bool has_tensor_hooks(const TensorImpl& t);
 // output slot — called again after an in-place op moves ``t`` to a new one.
 // A leaf keeps its gradient anyway; only the flag changes.
 LUCID_API void retain_grad(const TensorImplPtr& t);
+
+// ── Gradients handed back by Python ──────────────────────────────────────────
+//
+// Every gradient Python hands back to the engine crosses one of these before
+// it reaches a kernel or an accumulator: a tensor hook's result, a module
+// backward hook's tuple (ModuleHookNode.cpp), a custom Function's backward
+// (CustomFunction.cpp — its shape, dtype and device are held to the input by
+// ``lucid.autograd._python_node._validate`` first) and ``Tensor.grad =``.  A
+// gradient slot is read as the tensor it stands for, so a value of another
+// kind is not converted but refused: read as it was, a short buffer was read
+// past its end and a float16 one had its bits taken for float32.
+
+// The tensor a Python value holds — a ``TensorImpl``, or a ``lucid.Tensor``
+// through its ``impl`` — or null for ``None``.  The one Python → TensorImpl
+// conversion of the autograd layer.
+//
+// Raises
+// ------
+// py::type_error
+//     ``obj`` is anything else; the message names ``what``, the value's role
+//     ("a tensor hook's result", ...).
+LUCID_API TensorImplPtr tensor_from_python(py::handle obj, const std::string& what);
+
+// Refuse ``g`` unless it has the dtype, device and shape of the gradient slot
+// it replaces — checked in that order, as the reference checks them.
+// ``what`` names ``g`` in the message.
+//
+// Raises
+// ------
+// DtypeMismatch, DeviceMismatch, ShapeMismatch
+//     ``g`` is of another kind.
+LUCID_API void check_grad_kind(const ErrorBuilder& err,
+                               const std::string& what,
+                               Dtype dtype,
+                               Device device,
+                               const Shape& shape,
+                               const TensorImpl& g);
+
+// ``g``'s values as a buffer read from its first byte in row-major order —
+// the form a gradient slot holds.  A CPU view answers ``storage()`` with a
+// packed copy of the elements it reads; a Metal tensor's array is its
+// elements, unless it is a window at an offset or with strides into another
+// tensor's array, which only the private ``_make_view`` builds and which has
+// no such buffer to hand over.
+//
+// Raises
+// ------
+// NotImplementedError
+//     ``g`` is such a Metal window.
+LUCID_API Storage grad_slot_buffer(const ErrorBuilder& err, const TensorImpl& g);
 
 // ── Shared with the rest of the engine ───────────────────────────────────────
 

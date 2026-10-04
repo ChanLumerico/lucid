@@ -30,52 +30,7 @@ private:
     bool prev_;
 };
 
-// ``g``'s dtype, device and shape against the gradient it stands for, in the
-// order — and with the errors — ``Tensor.grad =`` checks them.
-void check_kind(const ErrorBuilder& err,
-                const char* what,
-                Dtype dtype,
-                Device device,
-                const Shape& shape,
-                const TensorImpl& g) {
-    const std::string subject(what);
-    if (g.dtype() != dtype)
-        err.dtype_mismatch(dtype, g.dtype(), subject + " must have the tensor's dtype");
-    if (g.device() != device)
-        err.device_mismatch(device, g.device(), subject + " must be on the tensor's device");
-    if (g.shape() != shape)
-        err.shape_mismatch(shape, g.shape(), subject + " must have the tensor's shape");
-}
-
-// ``g``'s values as a buffer read from its first byte in row-major order —
-// the form a gradient slot holds.  A CPU view answers storage() with a packed
-// copy of the elements it reads; a Metal tensor's array is its elements,
-// unless it is a window at an offset or with strides into another tensor's
-// array, which only the private ``_make_view`` builds and which has no such
-// buffer to hand over.
-Storage slot_buffer(const ErrorBuilder& err, const TensorImpl& g) {
-    if (!storage_is_cpu(g.raw_storage()) && (g.storage_offset() != 0 || !g.is_contiguous()))
-        err.not_implemented("a Metal gradient that is a strided view of another tensor's array — "
-                            "pass a contiguous copy");
-    return g.storage();
-}
-
 constexpr const char* kHookResult = "a hook's returned gradient";
-
-// The tensor a runner handed back, or null for ``None``.
-TensorImplPtr hook_result(const py::object& result) {
-    if (result.is_none())
-        return nullptr;
-    if (py::isinstance<TensorImpl>(result))
-        return result.cast<TensorImplPtr>();
-    if (py::hasattr(result, "impl")) {
-        py::object impl = result.attr("impl");
-        if (py::isinstance<TensorImpl>(impl))
-            return impl.cast<TensorImplPtr>();
-    }
-    throw py::type_error("a tensor hook must return a tensor or None, got " +
-                         std::string(py::str(py::type::of(result).attr("__name__"))));
-}
 
 // Call the slot's runner on ``grad`` with grad mode ``graph`` — on for a
 // create_graph pass, so what a hook computes joins the graph, off otherwise.
@@ -88,7 +43,7 @@ TensorImplPtr call_runner(const TensorHookSlot& slot, const TensorImplPtr& grad,
         const GradModeScope mode(graph);
         result = runner(grad);
     }
-    return hook_result(result);
+    return tensor_from_python(result, "a tensor hook's result");
 }
 
 Device storage_device(const Storage& s) {
@@ -108,8 +63,8 @@ Storage run_hooks(const TensorHookSlot& slot, Storage grad, const Shape& shape) 
         out = given->storage();
     } else {
         const ErrorBuilder err("Tensor.register_hook");
-        check_kind(err, kHookResult, dtype, device, shape, *returned);
-        out = slot_buffer(err, *returned);
+        check_grad_kind(err, kHookResult, dtype, device, shape, *returned);
+        out = grad_slot_buffer(err, *returned);
     }
     return own_grad_copy(out);
 }
@@ -119,8 +74,8 @@ TensorImplPtr run_hooks_for_graph(const TensorHookSlot& slot, TensorImplPtr grad
     const TensorImplPtr returned = call_runner(slot, grad, /*graph=*/true);
     if (!returned || returned == grad)
         return grad;
-    check_kind(ErrorBuilder("Tensor.register_hook"), kHookResult, grad->dtype(), grad->device(),
-               grad->shape(), *returned);
+    check_grad_kind(ErrorBuilder("Tensor.register_hook"), kHookResult, grad->dtype(),
+                    grad->device(), grad->shape(), *returned);
     return returned;
 }
 
@@ -272,6 +227,43 @@ void retain_grad(const TensorImplPtr& t) {
     slot->shape = t->shape();
 }
 
+// ── Gradients handed back by Python ──────────────────────────────────────────
+
+TensorImplPtr tensor_from_python(py::handle obj, const std::string& what) {
+    if (obj.is_none())
+        return nullptr;
+    if (py::isinstance<TensorImpl>(obj))
+        return obj.cast<TensorImplPtr>();
+    if (py::hasattr(obj, "impl")) {
+        const py::object impl = obj.attr("impl");
+        if (py::isinstance<TensorImpl>(impl))
+            return impl.cast<TensorImplPtr>();
+    }
+    throw py::type_error(what + " must be a tensor or None, got " +
+                         std::string(py::str(py::type::of(obj).attr("__name__"))));
+}
+
+void check_grad_kind(const ErrorBuilder& err,
+                     const std::string& what,
+                     Dtype dtype,
+                     Device device,
+                     const Shape& shape,
+                     const TensorImpl& g) {
+    if (g.dtype() != dtype)
+        err.dtype_mismatch(dtype, g.dtype(), what + " must have the tensor's dtype");
+    if (g.device() != device)
+        err.device_mismatch(device, g.device(), what + " must be on the tensor's device");
+    if (g.shape() != shape)
+        err.shape_mismatch(shape, g.shape(), what + " must have the tensor's shape");
+}
+
+Storage grad_slot_buffer(const ErrorBuilder& err, const TensorImpl& g) {
+    if (!storage_is_cpu(g.raw_storage()) && (g.storage_offset() != 0 || !g.is_contiguous()))
+        err.not_implemented("a Metal gradient that is a strided view of another tensor's array — "
+                            "pass a contiguous copy");
+    return g.storage();
+}
+
 // ── Shared ───────────────────────────────────────────────────────────────────
 
 Storage own_grad_copy(const Storage& s) {
@@ -293,8 +285,8 @@ Storage assignable_grad(const TensorImpl& self, const TensorImpl& g) {
     const ErrorBuilder err("Tensor.grad");
     if (&g == &self)
         err.fail("a tensor cannot be assigned as its own gradient");
-    check_kind(err, "an assigned gradient", self.dtype(), self.device(), self.shape(), g);
-    return slot_buffer(err, g);
+    check_grad_kind(err, "an assigned gradient", self.dtype(), self.device(), self.shape(), g);
+    return grad_slot_buffer(err, g);
 }
 
 }  // namespace lucid

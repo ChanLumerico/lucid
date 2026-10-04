@@ -8,16 +8,13 @@ from collections import OrderedDict
 from typing import (
     Callable,
     ClassVar,
+    Iterable,
     Iterator,
     Self,
-    TYPE_CHECKING,
     cast,
     final,
     override,
 )
-
-if TYPE_CHECKING:
-    from lucid.autograd.function import FunctionCtx
 
 from lucid._C import engine as _C_engine
 import lucid as _lucid
@@ -317,70 +314,28 @@ class Module:
         args: tuple[Tensor, ...],
     ) -> tuple[tuple[Tensor, ...], _ModuleBackwardState]:
         state = _ModuleBackwardState(self, len(args))
-        if hasattr(_C_engine, "_create_module_backward_hook_state"):
-            state.C_engine_state = _C_engine._create_module_backward_hook_state(
-                len(args),
-                state.apply_backward_pre_hooks_from_C_engine,
-                state.apply_full_backward_hooks_from_C_engine,
-            )
-            entries: list[tuple[int, _C_engine.TensorImpl]] = []
-            for idx, arg in enumerate(args):
-                if isinstance(arg, Tensor) and arg.requires_grad:
-                    entries.append((idx, _unwrap(arg)))
-                    state.input_tensor_indices.append(idx)
-            if not entries:
-                return args, state
-            wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]
-                state.C_engine_state, entries
-            )
-            wrapped_args = list(args)
-            for (idx, _), impl in zip(entries, wrapped_impls, strict=True):
-                wrapped_args[idx] = _wrap(impl)
-            return tuple(wrapped_args), state
-
-        wrapped: list[Tensor] = []
-        for idx, arg in enumerate(args):
-            if isinstance(arg, Tensor) and arg.requires_grad:
-                wrapped.append(_ModuleInputBackwardHookFunction.apply(arg, state, idx))
-                state.input_tensor_indices.append(idx)
-            else:
-                wrapped.append(arg)
-        return tuple(wrapped), state
+        entries: list[tuple[int, _C_engine.TensorImpl]] = [
+            (idx, _unwrap(arg))
+            for idx, arg in enumerate(args)
+            if isinstance(arg, Tensor) and arg.requires_grad
+        ]
+        if not entries:
+            return args, state
+        wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]
+            state.engine_state, entries
+        )
+        wrapped_args = list(args)
+        for (idx, _), impl in zip(entries, wrapped_impls, strict=True):
+            wrapped_args[idx] = _wrap(impl)
+        return tuple(wrapped_args), state
 
     def _attach_output_backward_hooks(
         self,
         output: _ModuleOutput,
         state: _ModuleBackwardState,
     ) -> _ModuleOutput:
-        if state.C_engine_state is not None:
-            return self._attach_C_engine_output_backward_hooks(output, state)
-
-        if isinstance(output, tuple):
-            state.n_outputs = sum(1 for item in output if isinstance(item, Tensor))
-            output_idx = 0
-            wrapped_output: list[Tensor] = []
-            for item in output:
-                if isinstance(item, Tensor):
-                    wrapped_output.append(
-                        _ModuleOutputBackwardHookFunction.apply(item, state, output_idx)
-                    )
-                    output_idx += 1
-                else:
-                    wrapped_output.append(item)
-            return tuple(wrapped_output)
-        if not isinstance(output, Tensor):
-            return output
-        state.n_outputs = 1
-        return _ModuleOutputBackwardHookFunction.apply(output, state, 0)
-
-    def _attach_C_engine_output_backward_hooks(
-        self,
-        output: _ModuleOutput,
-        state: _ModuleBackwardState,
-    ) -> _ModuleOutput:
         if isinstance(output, tuple):
             n_outputs = sum(1 for item in output if isinstance(item, Tensor))
-            state.n_outputs = n_outputs
             entries: list[tuple[int, _C_engine.TensorImpl]] = []
             output_idx = 0
             positions: list[int] = []
@@ -393,20 +348,17 @@ class Module:
             if not entries:
                 return output
             wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
-                state.C_engine_state, entries, n_outputs
+                state.engine_state, entries, n_outputs
             )
             wrapped_output = list(output)
             for pos, impl in zip(positions, wrapped_impls, strict=True):
                 wrapped_output[pos] = _wrap(impl)
             return tuple(wrapped_output)
 
-        if not isinstance(output, Tensor):
-            return output
-        state.n_outputs = 1
-        if not output.requires_grad:
+        if not isinstance(output, Tensor) or not output.requires_grad:
             return output
         wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
-            state.C_engine_state, [(0, _unwrap(output))], 1
+            state.engine_state, [(0, _unwrap(output))], 1
         )[
             0
         ]
@@ -1314,189 +1266,62 @@ class Module:
 
 @final
 class _ModuleBackwardState:
+    """The Python half of one hooked module call's backward.
+
+    The engine's two barriers (``ModuleHookNode``) hold the call's
+    gradients and call back into :meth:`run_pre_hooks` and
+    :meth:`run_full_hooks`.  Each calls one kind of hook in turn, global
+    ones first, and yields every result that is not ``None``.  The engine
+    checks that result against the gradients it replaces — the count, then
+    each gradient's dtype, device and shape — and puts it in place before
+    the generator goes on, so the next hook is handed only a tuple the
+    engine accepted, and what flows on is the last hook's.  Nothing is
+    filtered here: an entry that is not a tensor reaches the engine, which
+    refuses it.
+    """
+
     def __init__(self, module: Module, n_inputs: int) -> None:
         self.module = module
-        self.n_inputs = n_inputs
-        self.n_outputs = 0
-        self.input_tensor_indices: list[int] = []
-        self.grad_inputs: list[Tensor | None] = [None] * n_inputs
-        self.grad_outputs: list[Tensor | None] = []
-        self.pre_hooks_ran = False
-        self.full_hooks_ran = False
-        self.C_engine_state: object | None = None
-
-    def set_num_outputs(self, n_outputs: int) -> None:
-        if not self.grad_outputs:
-            self.grad_outputs = [None] * n_outputs
-
-    def apply_backward_pre_hooks(self, index: int, grad_output: Tensor) -> Tensor:
-        self.set_num_outputs(max(self.n_outputs, index + 1))
-        self.grad_outputs[index] = grad_output
-
-        # For a single Tensor output, pre-hooks can transform the actual
-        # gradient flowing into the module. For multiple outputs, each output
-        # edge arrives separately; apply the hook to the currently available
-        # slot while preserving other slots as None.
-        grad_outputs = tuple(self.grad_outputs)
-        for hook in _GLOBAL_BACKWARD_PRE_HOOKS.values():
-            result = hook(self.module, grad_outputs)
-            if result is not None:
-                grad_outputs = result if isinstance(result, tuple) else (result,)
-        for hook in self.module._backward_pre_hooks.values():
-            result = hook(self.module, grad_outputs)
-            if result is not None:
-                grad_outputs = result if isinstance(result, tuple) else (result,)
-
-        self.pre_hooks_ran = True
-        updated = grad_outputs[index] if index < len(grad_outputs) else None
-        return updated if isinstance(updated, Tensor) else grad_output
-
-    def apply_backward_pre_hooks_from_C_engine(
-        self, grad_output_impls: tuple[_C_engine.TensorImpl | None, ...]
-    ) -> tuple[_C_engine.TensorImpl | None, ...] | None:
-        self.grad_outputs = [
-            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
-            for g in grad_output_impls
-        ]
-        grad_outputs = tuple(self.grad_outputs)
-        for hook in _GLOBAL_BACKWARD_PRE_HOOKS.values():
-            result = hook(self.module, grad_outputs)
-            if result is not None:
-                grad_outputs = result if isinstance(result, tuple) else (result,)
-        for hook in self.module._backward_pre_hooks.values():
-            result = hook(self.module, grad_outputs)
-            if result is not None:
-                grad_outputs = result if isinstance(result, tuple) else (result,)
-        self.pre_hooks_ran = True
-        self.grad_outputs = [
-            item if isinstance(item, Tensor) else None for item in grad_outputs
-        ]
-        return tuple(
-            _unwrap(item) if isinstance(item, Tensor) else None for item in grad_outputs
+        self.engine_state: object = _C_engine._create_module_backward_hook_state(  # type: ignore[attr-defined]
+            n_inputs, self.run_pre_hooks, self.run_full_hooks
         )
 
-    def apply_full_backward_hooks_for_input(
-        self,
-        index: int,
-        grad_input: Tensor,
-    ) -> Tensor:
-        self.grad_inputs[index] = grad_input
-        grad_inputs = tuple(self.grad_inputs)
-        grad_outputs = tuple(self.grad_outputs)
-
-        for hook in _GLOBAL_BACKWARD_HOOKS.values():
-            result = hook(self.module, grad_inputs, grad_outputs)
+    def run_pre_hooks(
+        self, grad_output_impls: tuple[_C_engine.TensorImpl | None, ...]
+    ) -> Iterator[object]:
+        """Run the backward pre-hooks on the output gradients."""
+        grad_outputs = _wrap_grads(grad_output_impls)
+        hooks = (
+            *_GLOBAL_BACKWARD_PRE_HOOKS.values(),
+            *self.module._backward_pre_hooks.values(),
+        )
+        for hook in hooks:
+            result = hook(self.module, grad_outputs)
             if result is not None:
-                grad_inputs = result if isinstance(result, tuple) else (result,)
-        for hook in self.module._backward_hooks.values():
-            result = hook(self.module, grad_inputs, grad_outputs)
-            if result is not None:
-                grad_inputs = result if isinstance(result, tuple) else (result,)
+                yield result
+                grad_outputs = tuple(cast(Iterable[Tensor | None], result))
 
-        self.full_hooks_ran = True
-        updated = grad_inputs[index] if index < len(grad_inputs) else None
-        return updated if isinstance(updated, Tensor) else grad_input
-
-    def apply_full_backward_hooks_from_C_engine(
+    def run_full_hooks(
         self,
         grad_input_impls: tuple[_C_engine.TensorImpl | None, ...],
         grad_output_impls: tuple[_C_engine.TensorImpl | None, ...],
-    ) -> tuple[_C_engine.TensorImpl | None, ...] | None:
-        grad_inputs = tuple(
-            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
-            for g in grad_input_impls
+    ) -> Iterator[object]:
+        """Run the full backward hooks on the input and output gradients."""
+        grad_inputs = _wrap_grads(grad_input_impls)
+        grad_outputs = _wrap_grads(grad_output_impls)
+        hooks = (
+            *_GLOBAL_BACKWARD_HOOKS.values(),
+            *self.module._backward_hooks.values(),
         )
-        grad_outputs = tuple(
-            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
-            for g in grad_output_impls
-        )
-        for hook in _GLOBAL_BACKWARD_HOOKS.values():
+        for hook in hooks:
             result = hook(self.module, grad_inputs, grad_outputs)
             if result is not None:
-                grad_inputs = result if isinstance(result, tuple) else (result,)
-        for hook in self.module._backward_hooks.values():
-            result = hook(self.module, grad_inputs, grad_outputs)
-            if result is not None:
-                grad_inputs = result if isinstance(result, tuple) else (result,)
-        self.full_hooks_ran = True
-        self.grad_inputs = [
-            item if isinstance(item, Tensor) else None for item in grad_inputs
-        ]
-        self.grad_outputs = [
-            item if isinstance(item, Tensor) else None for item in grad_outputs
-        ]
-        return tuple(
-            _unwrap(item) if isinstance(item, Tensor) else None for item in grad_inputs
-        )
-
-    def apply_full_backward_hooks_without_inputs(self) -> None:
-        if self.full_hooks_ran or self.input_tensor_indices:
-            return
-        grad_inputs: tuple[Tensor | None, ...] = ()
-        grad_outputs = tuple(self.grad_outputs)
-        for hook in _GLOBAL_BACKWARD_HOOKS.values():
-            hook(self.module, grad_inputs, grad_outputs)
-        for hook in self.module._backward_hooks.values():
-            hook(self.module, grad_inputs, grad_outputs)
-        self.full_hooks_ran = True
+                yield result
+                grad_inputs = tuple(cast(Iterable[Tensor | None], result))
 
 
-@final
-class _ModuleInputBackwardHookFunction:
-    @staticmethod
-    def apply(x: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
-        from lucid.autograd import Function
-
-        @final
-        class _InputHook(Function):
-            @override
-            @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
-                ctx.state = state
-                ctx.index = index
-                return x
-
-            @override
-            @staticmethod
-            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]
-                return cast(
-                    Tensor,
-                    ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
-                        ctx.index, grad_input
-                    ),
-                )
-
-        result = _InputHook.apply(x)
-        assert isinstance(
-            result, Tensor
-        )  # Function.apply returns object but forward() returns Tensor
-        return result
-
-
-@final
-class _ModuleOutputBackwardHookFunction:
-    @staticmethod
-    def apply(output: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
-        from lucid.autograd import Function
-
-        @final
-        class _OutputHook(Function):
-            @override
-            @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
-                ctx.state = state
-                ctx.index = index
-                return x
-
-            @override
-            @staticmethod
-            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]
-                updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]
-                ctx.state.apply_full_backward_hooks_without_inputs()  # type: ignore[attr-defined]
-                return cast(Tensor, updated)
-
-        result = _OutputHook.apply(output)
-        assert isinstance(
-            result, Tensor
-        )  # Function.apply returns object but forward() returns Tensor
-        return result
+def _wrap_grads(
+    impls: tuple[_C_engine.TensorImpl | None, ...],
+) -> tuple[Tensor | None, ...]:
+    """The engine's gradients as the tensors a backward hook is handed."""
+    return tuple(None if g is None else _wrap(g) for g in impls)

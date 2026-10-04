@@ -5,12 +5,13 @@
 #include <pybind11/stl.h>
 
 #include <algorithm>
-#include <optional>
+#include <string>
 #include <utility>
 
 #include "../core/ErrorBuilder.h"
 #include "AccumulateGrad.h"
 #include "Helpers.h"
+#include "TensorHooks.h"
 
 namespace lucid {
 
@@ -22,22 +23,6 @@ namespace {
 
 py::object to_python(const TensorImplPtr& grad) {
     return grad ? py::cast(grad) : py::none();
-}
-
-// The tensor a hook returned, or null for anything that is not one.
-TensorImplPtr extract_impl(py::handle obj) {
-    if (obj.is_none()) {
-        return nullptr;
-    }
-    try {
-        return obj.cast<std::shared_ptr<TensorImpl>>();
-    } catch (...) {
-    }
-    try {
-        return obj.attr("impl").cast<std::shared_ptr<TensorImpl>>();
-    } catch (...) {
-    }
-    return nullptr;
 }
 
 // An eager gradient as the tensor the hooks receive.
@@ -71,8 +56,12 @@ void add_to_slot_for_graph(TensorImplPtr& slot, TensorImplPtr grad) {
     slot = slot ? add_op(slot, grad) : std::move(grad);
 }
 
+// What flows on from a slot in an eager pass.  A CPU buffer is copied first:
+// the hooks were handed it, or handed it back, and may keep it, while the
+// engine adds into what flows on in place — a gradient a hook kept read
+// ``[3, 3, 3]`` after backward instead of the ``[1, 1, 1]`` it was handed.
 Storage emitted(const TensorImplPtr& grad) {
-    return grad ? grad->storage() : Storage{CpuStorage{}};
+    return grad ? own_grad_copy(grad->storage()) : Storage{CpuStorage{}};
 }
 
 py::tuple output_tuple(const ModuleBackwardHookState& state) {
@@ -94,49 +83,136 @@ py::tuple input_tuple(const ModuleBackwardHookState& state) {
     return tup;
 }
 
-// A hook's returned tuple replaces the gradients it gives; ``None`` keeps one.
-void replace_outputs(const py::object& result, ModuleBackwardHookState& state) {
-    if (result.is_none()) {
-        return;
+// One side of a hooked module as its backward hooks see it: a tuple with an
+// entry per position — the module's positional arguments for a full hook,
+// its tensor outputs for a pre-hook — of which only the positions a gradient
+// flows through have a slot.
+struct HookTuple {
+    const char* op;     // the registration that installs the hooks, for errors
+    const char* title;  // the hook as the reference's count error names it
+    const char* noun;   // the hook in the middle of a sentence
+    const char* name;   // the tuple's name: grad_input or grad_output
+    // Per position: the slot a gradient replaces, or null where none flows.
+    std::vector<TensorImplPtr*> slots;
+    // Per position: the tensor the slot stands for, or null where none flows.
+    std::vector<const ModuleHookTensorMeta*> metas;
+};
+
+HookTuple input_side(ModuleBackwardHookState& state) {
+    HookTuple side{"Module.register_full_backward_hook",
+                   "Backward hook",
+                   "backward hook",
+                   "grad_input",
+                   {},
+                   {}};
+    side.slots.assign(state.n_inputs, nullptr);
+    side.metas.assign(state.n_inputs, nullptr);
+    for (std::size_t edge_idx = 0; edge_idx < state.input_arg_indices.size(); ++edge_idx) {
+        const std::uint32_t pos = state.input_arg_indices[edge_idx];
+        side.slots[pos] = &state.grad_inputs[edge_idx];
+        side.metas[pos] = &state.input_metas[edge_idx];
     }
-    if (!py::isinstance<py::tuple>(result) && !py::isinstance<py::list>(result)) {
-        return;
+    return side;
+}
+
+HookTuple output_side(ModuleBackwardHookState& state) {
+    HookTuple side{"Module.register_full_backward_pre_hook",
+                   "Backward pre hook",
+                   "backward pre-hook",
+                   "grad_output",
+                   {},
+                   {}};
+    side.slots.assign(state.n_outputs, nullptr);
+    side.metas.assign(state.n_outputs, nullptr);
+    for (const std::uint32_t pos : state.output_edge_indices) {
+        side.slots[pos] = &state.grad_outputs[pos];
+        side.metas[pos] = &state.output_metas[pos];
     }
-    std::size_t idx = 0;
-    for (auto item : result) {
-        if (idx >= state.grad_outputs.size()) {
-            break;
-        }
-        if (!item.is_none()) {
-            state.grad_outputs[idx] = extract_impl(item);
-        }
-        ++idx;
+    return side;
+}
+
+// Put a hook's ``result`` in place of the gradients ``side`` holds.
+//
+// ``None`` keeps them all.  Anything else is a tuple or list with one entry
+// per position: ``None`` keeps that gradient, and a tensor replaces it when
+// it has the kind of the gradient it replaces — the one the hook was handed,
+// or where none arrived the tensor the slot stands for.  The engine reads a
+// slot as that kind, so a short gradient was read past its end and a float16
+// one had its bits taken for float32.  Every entry is checked before any is
+// put in place.  An eager pass keeps a replacement's values in a buffer of
+// the slot's form (grad_slot_buffer); a create_graph pass keeps the tensor,
+// graph and all.
+//
+// Raises
+// ------
+// py::type_error
+//     ``result`` is not a tuple or list, or an entry is neither a tensor nor
+//     ``None``.
+// LucidError
+//     The count is not the tuple's, or a tensor stands where no gradient
+//     flows.
+// DtypeMismatch, DeviceMismatch, ShapeMismatch, NotImplementedError
+//     A tensor is of another kind than the gradient it replaces, or a Metal
+//     window an eager slot cannot hold.
+void replace_from_hook(py::handle result, const HookTuple& side, bool graph) {
+    if (result.is_none())
+        return;
+    const ErrorBuilder err(side.op);
+    const std::string name(side.name);
+    if (!py::isinstance<py::tuple>(result) && !py::isinstance<py::list>(result))
+        throw py::type_error("a " + std::string(side.noun) + " must return None or a tuple of " +
+                             name + ", got " +
+                             std::string(py::str(py::type::of(result).attr("__name__"))));
+    const auto values = py::reinterpret_borrow<py::sequence>(result);
+    const std::size_t n = side.slots.size();
+    if (values.size() != n)
+        err.fail(std::string(side.title) + " returned an invalid number of " + name + ", got " +
+                 std::to_string(values.size()) + ", but expected " + std::to_string(n));
+
+    std::vector<TensorImplPtr> replaced(n);
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        const std::string what =
+            name + "[" + std::to_string(pos) + "] returned by a " + std::string(side.noun);
+        const py::object value = values[pos];
+        TensorImplPtr g = tensor_from_python(value, what);
+        if (!g)
+            continue;
+        if (side.slots[pos] == nullptr)
+            err.fail(what + " is a gradient where none flows — the value there takes no "
+                            "gradient; return None in its place");
+        const TensorImplPtr& current = *side.slots[pos];
+        const ModuleHookTensorMeta& meta = *side.metas[pos];
+        check_grad_kind(err, what, current ? current->dtype() : meta.dtype,
+                        current ? current->device() : meta.device,
+                        current ? current->shape() : meta.shape, *g);
+        replaced[pos] = graph ? std::move(g) : as_tensor(grad_slot_buffer(err, *g), meta);
+    }
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        if (replaced[pos])
+            *side.slots[pos] = std::move(replaced[pos]);
     }
 }
 
-void replace_inputs(const py::object& result, ModuleBackwardHookState& state) {
-    if (result.is_none()) {
-        return;
-    }
-    if (!py::isinstance<py::tuple>(result) && !py::isinstance<py::list>(result)) {
-        return;
-    }
-    std::vector<std::optional<TensorImplPtr>> by_arg(state.n_inputs);
-    std::size_t arg_idx = 0;
-    for (auto item : result) {
-        if (arg_idx >= by_arg.size()) {
-            break;
-        }
-        if (!item.is_none()) {
-            by_arg[arg_idx] = extract_impl(item);
-        }
-        ++arg_idx;
-    }
-    for (std::size_t edge_idx = 0; edge_idx < state.input_arg_indices.size(); ++edge_idx) {
-        const auto input_arg_idx = state.input_arg_indices[edge_idx];
-        if (input_arg_idx < by_arg.size() && by_arg[input_arg_idx].has_value()) {
-            state.grad_inputs[edge_idx] = std::move(*by_arg[input_arg_idx]);
-        }
+// Run one kind of a module's hooks.  ``results`` is the Python runner's
+// generator: it calls the hooks in turn and yields each result that is not
+// ``None``, and each is put in place before the generator goes on, so a hook
+// is never handed a tuple the engine refused and what flows on is the last
+// hook's.
+void run_hook_kind(const py::object& results, const HookTuple& side, bool graph) {
+    for (const py::handle result : results)
+        replace_from_hook(result, side, graph);
+}
+
+// Run ``body``, the hooks of one barrier; if it throws — a hook raised, or
+// returned something refused — nothing any hook returned flows on: the state
+// is emptied, as a finished backward leaves it, and the error goes on.
+template <typename Body>
+void run_or_reset(ModuleBackwardHookState& state, Body&& body) {
+    try {
+        body();
+    } catch (...) {
+        state.reset();
+        throw;
     }
 }
 
@@ -211,25 +287,29 @@ void ModuleOutputHookNode::accumulate_barrier_grad_for_graph(std::uint32_t input
     add_to_slot_for_graph(state_->grad_outputs[input_nr], std::move(grad));
 }
 
-void ModuleOutputHookNode::run_hooks() {
+void ModuleOutputHookNode::run_hooks(bool graph) {
     state_->enter_pass();
     py::gil_scoped_acquire gil;
-    if (!state_->pre_hooks_ran && !state_->pre_runner.is_none()) {
-        replace_outputs(state_->pre_runner(output_tuple(*state_)), *state_);
-        state_->pre_hooks_ran = true;
-    }
-    if (state_->input_arg_indices.empty() && !state_->full_hooks_ran &&
-        !state_->full_runner.is_none()) {
-        state_->full_runner(py::tuple(0), output_tuple(*state_));
-        state_->full_hooks_ran = true;
-    }
+    run_or_reset(*state_, [&] {
+        if (!state_->pre_hooks_ran && !state_->pre_runner.is_none()) {
+            run_hook_kind(state_->pre_runner(output_tuple(*state_)), output_side(*state_), graph);
+            state_->pre_hooks_ran = true;
+        }
+        // Every position of grad_input is None here, and has to stay None.
+        if (state_->input_arg_indices.empty() && !state_->full_hooks_ran &&
+            !state_->full_runner.is_none()) {
+            run_hook_kind(state_->full_runner(input_tuple(*state_), output_tuple(*state_)),
+                          input_side(*state_), graph);
+            state_->full_hooks_ran = true;
+        }
+    });
 }
 
 std::vector<Storage> ModuleOutputHookNode::apply_barrier() {
     if (!state_) {
         return {};
     }
-    run_hooks();
+    run_hooks(/*graph=*/false);
     std::vector<Storage> out;
     out.reserve(state_->output_edge_indices.size());
     for (const auto out_idx : state_->output_edge_indices) {
@@ -246,7 +326,7 @@ std::vector<TensorImplPtr> ModuleOutputHookNode::apply_barrier_for_graph() {
     if (!state_) {
         return {};
     }
-    run_hooks();
+    run_hooks(/*graph=*/true);
     std::vector<TensorImplPtr> out;
     out.reserve(state_->output_edge_indices.size());
     for (const auto out_idx : state_->output_edge_indices) {
@@ -283,20 +363,23 @@ void ModuleInputHookNode::accumulate_barrier_grad_for_graph(std::uint32_t input_
     add_to_slot_for_graph(state_->grad_inputs[input_nr], std::move(grad));
 }
 
-void ModuleInputHookNode::run_hooks() {
+void ModuleInputHookNode::run_hooks(bool graph) {
     state_->enter_pass();
     py::gil_scoped_acquire gil;
-    if (!state_->full_hooks_ran && !state_->full_runner.is_none()) {
-        replace_inputs(state_->full_runner(input_tuple(*state_), output_tuple(*state_)), *state_);
-        state_->full_hooks_ran = true;
-    }
+    run_or_reset(*state_, [&] {
+        if (!state_->full_hooks_ran && !state_->full_runner.is_none()) {
+            run_hook_kind(state_->full_runner(input_tuple(*state_), output_tuple(*state_)),
+                          input_side(*state_), graph);
+            state_->full_hooks_ran = true;
+        }
+    });
 }
 
 std::vector<Storage> ModuleInputHookNode::apply_barrier() {
     if (!state_) {
         return {};
     }
-    run_hooks();
+    run_hooks(/*graph=*/false);
     std::vector<Storage> out;
     out.reserve(state_->grad_inputs.size());
     for (const auto& grad : state_->grad_inputs) {
@@ -310,7 +393,7 @@ std::vector<TensorImplPtr> ModuleInputHookNode::apply_barrier_for_graph() {
     if (!state_) {
         return {};
     }
-    run_hooks();
+    run_hooks(/*graph=*/true);
     std::vector<TensorImplPtr> out = state_->grad_inputs;
     state_->reset();
     return out;
@@ -345,6 +428,10 @@ void register_module_hook_nodes(py::module_& m) {
             state->grad_inputs.clear();
 
             for (const auto& [arg_idx, impl] : inputs) {
+                if (arg_idx >= state->n_inputs) {
+                    ErrorBuilder("_wrap_module_backward_inputs")
+                        .index_error("input index out of range");
+                }
                 const std::uint32_t slot = static_cast<std::uint32_t>(edges.size());
                 edges.push_back(edge_for(impl));
                 state->input_arg_indices.push_back(arg_idx);

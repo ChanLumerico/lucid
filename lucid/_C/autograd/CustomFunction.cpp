@@ -17,6 +17,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "Helpers.h"
+#include "TensorHooks.h"
 
 namespace py = pybind11;
 
@@ -24,47 +25,10 @@ namespace lucid {
 
 namespace {
 
-// Attempt to extract a Storage from a Python object.
-//
-// Two strategies are tried in order:
-//   1. Direct cast to shared_ptr<TensorImpl>: the object is itself a
-//      C++-backed TensorImpl exposed to Python.
-//   2. Attribute-access cast via obj.impl: the object is a thin Python
-//      wrapper (lucid.Tensor) that carries an impl shared_ptr.
-// If both fail, returns an empty default-constructed CpuStorage{} so that
-// None-valued gradient outputs (stop-gradient inputs) can be represented.
-Storage extract_storage(py::object obj) {
-    try {
-        auto t = obj.cast<std::shared_ptr<TensorImpl>>();
-        if (t)
-            return t->storage();
-    } catch (...) {
-    }
-
-    try {
-        auto impl = obj.attr("impl").cast<std::shared_ptr<TensorImpl>>();
-        if (impl)
-            return impl->storage();
-    } catch (...) {
-    }
-
-    return Storage{CpuStorage{}};
-}
-
-// The tensor a Python return value holds, or null for ``None``.
-TensorImplPtr extract_impl(const py::object& obj) {
-    if (obj.is_none())
-        return nullptr;
-    try {
-        return obj.cast<std::shared_ptr<TensorImpl>>();
-    } catch (...) {
-    }
-    try {
-        return obj.attr("impl").cast<std::shared_ptr<TensorImpl>>();
-    } catch (...) {
-    }
-    return nullptr;
-}
+// How a gradient ``backward`` returned is named in the TypeError for one that
+// is neither a tensor nor ``None``.  Its shape, dtype and device were held to
+// the input it is for by ``_python_node._validate`` before it got here.
+constexpr const char* kBackwardResult = "a custom Function's backward result";
 
 }  // namespace
 
@@ -81,7 +45,8 @@ TensorImplPtr extract_impl(const py::object& obj) {
 //      invoke_backward).
 //   4. Unpack the result: a tuple or list yields one Storage per item; a
 //      single tensor yields one Storage.  Python None entries become empty
-//      CpuStorage{} values representing "no gradient for this input".
+//      CpuStorage{} values representing "no gradient for this input"; any
+//      other value that is not a tensor raises TypeError (tensor_from_python).
 std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     py::gil_scoped_acquire gil;
 
@@ -126,9 +91,9 @@ std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplP
     std::vector<TensorImplPtr> grads;
     if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
         for (auto item : result)
-            grads.push_back(extract_impl(item.cast<py::object>()));
+            grads.push_back(tensor_from_python(item, kBackwardResult));
     } else {
-        grads.push_back(extract_impl(result));
+        grads.push_back(tensor_from_python(result, kBackwardResult));
     }
     return grads;
 }
@@ -190,20 +155,19 @@ std::vector<Storage> PythonBackwardNode::invoke_backward(const py::tuple& grads)
     py::object result = py_backward_fn(py_ctx, *grads);
 
     std::vector<Storage> storages;
+    const ErrorBuilder err("custom Function backward");
 
-    // Helper that appends one Storage for a single Python return value.
-    auto collect_one = [&](py::object item) {
-        if (item.is_none()) {
-            storages.push_back(Storage{CpuStorage{}});
-        } else {
-            storages.push_back(extract_storage(std::move(item)));
-        }
+    // One Storage per returned value: ``None`` — no gradient for that input —
+    // is an empty storage, a tensor its buffer.
+    auto collect_one = [&](py::handle item) {
+        const TensorImplPtr g = tensor_from_python(item, kBackwardResult);
+        storages.push_back(g ? grad_slot_buffer(err, *g) : Storage{CpuStorage{}});
     };
 
     // Unpack tuple/list returns (multiple inputs) or a single tensor return.
     if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
         for (auto item : result)
-            collect_one(item.cast<py::object>());
+            collect_one(item);
     } else {
         collect_one(result);
     }
@@ -227,14 +191,8 @@ void register_custom_function(py::module_& m) {
             [](FunctionCtx& ctx, py::args tensors) {
                 std::vector<std::shared_ptr<TensorImpl>> v;
                 v.reserve(tensors.size());
-                for (auto t : tensors) {
-                    try {
-                        v.push_back(t.cast<std::shared_ptr<TensorImpl>>());
-                    } catch (...) {
-                        // Fall back to wrapper-with-.impl convention.
-                        v.push_back(t.attr("impl").cast<std::shared_ptr<TensorImpl>>());
-                    }
-                }
+                for (auto t : tensors)
+                    v.push_back(tensor_from_python(t, "a value passed to save_for_backward"));
                 ctx.save_for_backward(std::move(v));
             },
             "Save tensors for backward.  Mirrors ctx.save_for_backward().")
