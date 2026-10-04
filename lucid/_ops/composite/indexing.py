@@ -463,7 +463,9 @@ def index_put(
         Values to scatter, broadcastable to the common index shape
         followed by the dimensions taken whole.
     accumulate : bool, default False
-        If True, add at each position; otherwise overwrite.
+        If True, add at each position; otherwise overwrite — a position
+        named twice keeps the last write on the CPU and an unspecified one
+        of its values on Metal.
     """
     if not isinstance(indices, (list, tuple)) or len(indices) == 0:
         raise ValueError("index_put: `indices` must be a non-empty sequence of Tensors")
@@ -538,8 +540,9 @@ def put(
     Mirrors the reference framework's ``Tensor.put`` semantics: indices
     refer to the row-major linearisation of ``input``, regardless of its
     shape.  ``accumulate=True`` performs additive scatter (duplicates
-    add), otherwise duplicates resolve to the last write (``scatter``
-    semantics).
+    add).  Otherwise a position named twice keeps the last write on the
+    CPU and one of its values, which one unspecified, on Metal
+    (``scatter`` semantics).
 
     Parameters
     ----------
@@ -595,8 +598,9 @@ def index_put_(
         dtype.
     accumulate : bool, optional
         When ``True`` add to existing values (duplicate indices sum);
-        when ``False`` (default) overwrite (duplicate indices resolve
-        to the last write).
+        when ``False`` (default) overwrite — a duplicate index keeps the
+        last write on the CPU, and an unspecified one of its values on
+        Metal.
 
     Returns
     -------

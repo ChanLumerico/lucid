@@ -779,8 +779,9 @@ _NON_FLOAT = ("i64", "i32", "bool")
 EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
     # The reference framework refuses every one of these as well.
     ("neg", "bool"): _both(_C_engine.LucidError, "negating a bool; use ~"),
-    # ``sub`` of two bools, refused at the public entry point (the engine's
-    # own composites still subtract bool masks — ``scatter`` does).
+    # ``sub`` of two bools, refused at the public entry point.  ``scatter``
+    # used to subtract bool masks inside the engine; it overwrites now
+    # (CHA-158).
     ("sub", "bool"): _both(_C_engine.LucidError, "subtracting bools; use ^"),
     **_each("lerp", _INT, _both(TypeError, "lerp takes floating tensors only")),
     **_each(

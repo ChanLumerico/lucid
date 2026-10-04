@@ -24,7 +24,10 @@ does); on Metal the writes race and one of the values survives, which one
 unspecified — the reference's GPU behaviour too.
 """
 
+import json
 import math
+import subprocess
+import sys
 from collections.abc import Callable
 
 import numpy as np
@@ -379,6 +382,65 @@ class TestScatterShapes:
                 _i([0], device),
                 lucid.ones(1, device=device),
             )
+
+
+# ``index_copy`` with an index outside the axis ended the process on the CPU:
+# into an empty axis a SIGSEGV, at index 1000000 a SIGBUS — the reduce loop
+# it shared wrote wherever the index pointed.  Each case runs in a child
+# interpreter, so a regression fails its test instead of the whole run.
+_OUT_OF_RANGE = {
+    "empty-axis": "lucid.zeros(0, 5, device=D).index_copy("
+    "0, lucid.tensor([0, 1], device=D), lucid.ones(2, 5, device=D))",
+    "far": "lucid.zeros(3, 4, device=D).index_copy("
+    "0, lucid.tensor([1000000], device=D), lucid.ones(1, 4, device=D))",
+    "far-negative": "lucid.zeros(3, 4, device=D).index_copy("
+    "0, lucid.tensor([-4], device=D), lucid.ones(1, 4, device=D))",
+}
+
+_CHILD = """
+import json
+import lucid
+D = {device!r}
+try:
+    out = {{"value": ({expr}).tolist()}}
+except IndexError:
+    out = {{"raised": "IndexError"}}
+except Exception as e:
+    out = {{"raised": type(e).__name__}}
+print(json.dumps(out))
+"""
+
+
+def _run_child(expr: str, device: str) -> dict:
+    proc = subprocess.run(
+        [sys.executable, "-c", _CHILD.format(device=device, expr=expr)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert proc.returncode == 0, f"the child died ({proc.returncode}): {proc.stderr}"
+    return json.loads(proc.stdout.strip().splitlines()[-1])  # type: ignore[no-any-return]
+
+
+class TestIndexCopyOutOfRange:
+    @pytest.mark.parametrize("case", sorted(_OUT_OF_RANGE))
+    def test_the_cpu_raises(self, case: str) -> None:
+        assert _run_child(_OUT_OF_RANGE[case], "cpu") == {"raised": "IndexError"}
+
+    @_needs_metal
+    def test_metal_survives_and_checks_only_the_shapes(self) -> None:
+        # An empty axis is refused from the shapes alone.  The index values
+        # are not checked on Metal (CHA-160 decides whether they should be):
+        # MLX drops a write past the end, and -4 on an axis of 3 — moved once
+        # to -1 — it wraps again, onto the last row.  Pinned so that the
+        # CHA-160 change shows up here.
+        got = {case: _run_child(e, "metal") for case, e in _OUT_OF_RANGE.items()}
+        zero_row = [0.0] * 4
+        assert got == {
+            "empty-axis": {"raised": "IndexError"},
+            "far": {"value": [zero_row] * 3},
+            "far-negative": {"value": [zero_row, zero_row, [1.0] * 4]},
+        }
 
 
 # ── gradients ───────────────────────────────────────────────────────────────

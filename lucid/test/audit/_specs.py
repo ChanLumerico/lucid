@@ -517,7 +517,22 @@ def _indexing(name: str, domain: str) -> Iterator[Call]:
     if name in ("gather", "take_along_dim", "take_along_axis"):
         yield Call([x, 1, idx_full], {}, 0, "gather(x, dim, index)")
         yield Call([x, idx_full], {"dim": 1}, 0, "gather(x, index, dim=)")
-    elif name in ("scatter", "scatter_add", "scatter_reduce"):
+    elif name == "scatter":
+        # The overwrite names each position once per row: a position named
+        # twice keeps the last write on the CPU and an unspecified one on
+        # Metal, so a repeated index would make the device axis compare a
+        # choice, not an answer.  The accumulating forms keep their repeats.
+        # Three of five columns, so two per row keep ``x``'s value and its
+        # gradient — a full permutation overwrote all of ``x``.
+        rng = _probe.rng(3)
+        distinct = np.stack([rng.permutation(5)[:3] for _ in range(4)])
+        yield Call(
+            [x, 1, _probe.as_int(distinct), _f((4, 3), domain)],
+            {},
+            0,
+            "scatter(x, dim, index, src)",
+        )
+    elif name in ("scatter_add", "scatter_reduce"):
         yield Call([x, 1, idx_full, src], {}, 0, "scatter(x, dim, index, src)")
     elif name in ("index_select",):
         yield Call([x, 0, idx_row], {}, 0, "index_select(x, dim, index)")
