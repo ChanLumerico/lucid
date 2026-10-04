@@ -2,11 +2,12 @@
 //
 // Implements sort, argsort, argmax, argmin, nonzero, unique, and topk.
 //
-// sort_op and the topk values output are differentiable for F32/F64 inputs.
-// Their shared autograd node is IndexScatterBackward, which uses
-// Dispatcher::scatter_add_axis to place each incoming gradient value back at
-// the position in the input that produced the corresponding sorted output
-// element.  This is the adjoint of the gather operation performed during sort.
+// sort_op and the topk values output are differentiable for float (half
+// included) and complex inputs.  Their shared autograd node is
+// IndexScatterBackward, which uses Dispatcher::scatter_add_axis to place each
+// incoming gradient value back at the position in the input that produced the
+// corresponding sorted output element.  This is the adjoint of the gather
+// operation performed during sort.
 //
 // argsort, argmax, argmin return integer index tensors and have no gradient.
 //
@@ -28,6 +29,7 @@
 #include "../../backend/Dispatcher.h"
 #include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
+#include "../../core/Dtype.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -48,11 +50,13 @@ namespace {
 using utils_detail::fresh;
 using utils_detail::wrap_axis;
 
-// Integer dtypes cannot accumulate meaningful gradients through sort (the
-// sorted positions are discontinuous).  Only F32 and F64 are considered
-// differentiable here.
+// Sorting moves values without changing them, so a gradient flows back
+// through the permutation for every dtype that carries one: the real floats
+// (half included) and the complex types.  Integer and bool results carry
+// none.  This used to be the list ``F32 || F64``, which dropped the grad_fn
+// of every float16 / bfloat16 / complex sort and topk without a word.
 bool differentiable_dtype(Dtype dt) {
-    return dt == Dtype::F32 || dt == Dtype::F64;
+    return is_floating_point(dt) || is_complex(dt);
 }
 
 // Scatter-add gradient values from `grad` back to their original positions
