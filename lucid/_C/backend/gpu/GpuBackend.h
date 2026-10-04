@@ -937,8 +937,33 @@ public:
         return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::all(x); });
     }
 
+    // MLX's ``isinf`` and ``isfinite`` judge a complex number as a whole —
+    // ``isinf`` is true only for (inf + 0j), so (1 + inf j) and (-inf + 1j)
+    // read as finite — where the reference takes a complex number as
+    // infinite when either part is.  A complex input is split into its parts.
+    // (MLX's ``isnan`` already looks at both parts.)
+    static bool is_complex_array(const ::mlx::core::array& x) {
+        return x.dtype() == ::mlx::core::complex64;
+    }
+
+    // A complex64 array of ``like``'s shape from float32 parts.  Assembling
+    // it as ``re + im * 1j`` turns an infinite part into NaN (the product
+    // computes inf * 0 for the other lane), so the parts are interleaved and
+    // the pairs reinterpreted.
+    static ::mlx::core::array complex_from_parts(const ::mlx::core::array& re,
+                                                 const ::mlx::core::array& im,
+                                                 const ::mlx::core::array& like) {
+        auto pairs = ::mlx::core::stack({re, im}, -1);
+        return ::mlx::core::reshape(::mlx::core::view(pairs, ::mlx::core::complex64), like.shape());
+    }
+
     Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) { return ::mlx::core::isinf(x); });
+        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) {
+            if (is_complex_array(x))
+                return ::mlx::core::logical_or(::mlx::core::isinf(::mlx::core::real(x)),
+                                               ::mlx::core::isinf(::mlx::core::imag(x)));
+            return ::mlx::core::isinf(x);
+        });
     }
 
     Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
@@ -946,7 +971,30 @@ public:
     }
 
     Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) { return ::mlx::core::isfinite(x); });
+        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) {
+            if (is_complex_array(x))
+                return ::mlx::core::logical_and(::mlx::core::isfinite(::mlx::core::real(x)),
+                                                ::mlx::core::isfinite(::mlx::core::imag(x)));
+            return ::mlx::core::isfinite(x);
+        });
+    }
+
+    // ``x`` with NaN, +inf and -inf replaced, for a real float ``x``.
+    static ::mlx::core::array replace_nonfinite(const ::mlx::core::array& x,
+                                                double nan_val,
+                                                double posinf_val,
+                                                double neginf_val) {
+        const auto mdt = x.dtype();
+        ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
+        ::mlx::core::array pi_a(static_cast<float>(posinf_val), mdt);
+        ::mlx::core::array ni_a(static_cast<float>(neginf_val), mdt);
+        auto out = ::mlx::core::where(::mlx::core::isnan(x), nan_a, x);
+        auto pos_inf = ::mlx::core::logical_and(
+            ::mlx::core::isinf(out), ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
+        out = ::mlx::core::where(pos_inf, pi_a, out);
+        auto neg_inf = ::mlx::core::logical_and(
+            ::mlx::core::isinf(out), ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
+        return ::mlx::core::where(neg_inf, ni_a, out);
     }
 
     Storage nan_to_num(const Storage& a,
@@ -963,17 +1011,14 @@ public:
             if (dt == Dtype::Bool || dt == Dtype::I8 || dt == Dtype::I16 || dt == Dtype::I32 ||
                 dt == Dtype::I64)
                 return x;
-            auto mdt = gpu::to_mlx_dtype(dt);
-            ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
-            ::mlx::core::array pi_a(static_cast<float>(posinf_val), mdt);
-            ::mlx::core::array ni_a(static_cast<float>(neginf_val), mdt);
-            auto out = ::mlx::core::where(::mlx::core::isnan(x), nan_a, x);
-            auto pos_inf = ::mlx::core::logical_and(
-                ::mlx::core::isinf(out), ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
-            out = ::mlx::core::where(pos_inf, pi_a, out);
-            auto neg_inf = ::mlx::core::logical_and(
-                ::mlx::core::isinf(out), ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
-            return ::mlx::core::where(neg_inf, ni_a, out);
+            // A complex number has each part replaced on its own, as the
+            // reference does: (1 + inf j) becomes (1 + max j).  MLX compared
+            // the complex value as a whole and left it as it was.
+            if (is_complex_array(x))
+                return complex_from_parts(
+                    replace_nonfinite(::mlx::core::real(x), nan_val, posinf_val, neginf_val),
+                    replace_nonfinite(::mlx::core::imag(x), nan_val, posinf_val, neginf_val), x);
+            return replace_nonfinite(x, nan_val, posinf_val, neginf_val);
         });
     }
 
