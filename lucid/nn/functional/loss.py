@@ -672,13 +672,15 @@ def cross_entropy(
     target : Tensor
         Either integer class indices of shape :math:`(N,)` /
         :math:`(N, d_1, \dots, d_k)` or per-class probabilities of
-        shape matching ``x``.  An index outside :math:`[0, C)` that is
-        not ``ignore_index`` raises ``IndexError`` for a CPU tensor; on
-        Metal, where reading the target back would stall every step, it
-        makes the loss NaN instead.
+        shape matching ``x``; any other shape raises ``ValueError``.  An
+        index outside :math:`[0, C)` that is not ``ignore_index`` raises
+        ``IndexError`` for a CPU tensor; on Metal, where reading the
+        target back would stall every step, it makes the loss NaN
+        instead.
     weight : Tensor or None, optional
         Per-class weight vector of shape :math:`(C,)` — useful for
-        class-imbalanced training.
+        class-imbalanced training.  Any other shape raises
+        ``ValueError``.
     ignore_index : int, optional
         Class index whose samples are skipped entirely (default ``-100``).
         Common for masked / padded targets in sequence models.
@@ -729,16 +731,32 @@ def cross_entropy(
     >>> cross_entropy(logits, target)
     tensor(0.3597)
     """
-    _check_reduction(reduction, "cross_entropy")
     from lucid.nn.functional.activations import log_softmax as _log_softmax
 
-    if label_smoothing < 0.0 or label_smoothing >= 1.0:
-        raise ValueError(f"label_smoothing must be in [0, 1), got {label_smoothing!r}")
-
+    op = "cross_entropy"
+    _check_reduction(reduction, op)
+    if not 0.0 <= label_smoothing < 1.0:
+        raise ValueError(
+            f"{op}: label_smoothing must be in [0, 1), got {label_smoothing!r}"
+        )
+    _check_class_weight(weight, _num_classes(x, op), op)
     # A target of the input's own shape holds class probabilities, as in
     # the reference; the docstring said so, and the gather path refused it
     # with a rank mismatch.
-    soft: bool = tuple(target.shape) == tuple(x.shape)
+    soft: bool = _shape(target) == _shape(x)
+    if not soft:
+        _check_class_target(x, target, op)
+    elif not target.is_floating_point():
+        raise TypeError(
+            f"{op}: a target of the input's shape holds class probabilities "
+            f"and must be floating point, got {target.dtype}"
+        )
+    elif ignore_index >= 0:
+        raise ValueError(
+            f"{op}: ignore_index is not supported for a target of class "
+            "probabilities"
+        )
+
     # An unbatched (C,) input is one sample; it raised in log_softmax.
     unbatched: bool = x.ndim == 1
     if unbatched:
@@ -747,9 +765,7 @@ def cross_entropy(
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
     log_p: Tensor = _log_softmax(x, dim=1)
     out: Tensor = (
-        _soft_target_nll(
-            log_p, target, weight, ignore_index, reduction, label_smoothing
-        )
+        _soft_target_nll(log_p, target, weight, reduction, label_smoothing)
         if soft
         else _class_nll(
             log_p,
@@ -767,23 +783,13 @@ def _soft_target_nll(
     log_p: Tensor,
     target: Tensor,
     weight: Tensor | None,
-    ignore_index: int | None,
     reduction: str,
     label_smoothing: float,
 ) -> Tensor:
     """Cross-entropy against per-class probabilities ``target`` of the
     shape of ``log_p``: ``-sum_c w_c y_c log p_c`` per sample, and a
-    ``"mean"`` over the samples (not over their weights)."""
-    if not target.is_floating_point():
-        raise TypeError(
-            "cross_entropy: a target of the input's shape holds class "
-            f"probabilities and must be floating point, got {target.dtype}"
-        )
-    if ignore_index is not None and ignore_index >= 0:
-        raise ValueError(
-            "cross_entropy: ignore_index is not supported for a target of "
-            "class probabilities"
-        )
+    ``"mean"`` over the samples (not over their weights).  The target's
+    dtype and ``ignore_index`` were checked by :func:`cross_entropy`."""
     num_classes: int = int(log_p.shape[1])
     if label_smoothing > 0.0:
         target = target * (1.0 - label_smoothing) + label_smoothing / num_classes
@@ -816,11 +822,13 @@ def nll_loss(
         sample (with a 0-d target, and a 0-d loss under ``"none"``).
     target : Tensor
         Integer class indices of shape :math:`(N,)` /
-        :math:`(N, d_1, \dots, d_k)`.  An index outside :math:`[0, C)`
-        that is not ``ignore_index`` raises ``IndexError`` for a CPU
-        tensor and makes the loss NaN on Metal.
+        :math:`(N, d_1, \dots, d_k)`; any other shape raises
+        ``ValueError``.  An index outside :math:`[0, C)` that is not
+        ``ignore_index`` raises ``IndexError`` for a CPU tensor and makes
+        the loss NaN on Metal.
     weight : Tensor or None, optional
-        Per-class weight vector :math:`(C,)`.
+        Per-class weight vector :math:`(C,)`.  Any other shape raises
+        ``ValueError``.
     ignore_index : int, optional
         Class index whose samples are excluded (default ``-100``).
     reduction : str, optional
@@ -853,7 +861,10 @@ def nll_loss(
     >>> nll_loss(log_softmax(logits, dim=1), target)
     tensor(0.3597)
     """
-    _check_reduction(reduction, "nll_loss")
+    op = "nll_loss"
+    _check_reduction(reduction, op)
+    _check_class_weight(weight, _num_classes(x, op), op)
+    _check_class_target(x, target, op)
     # An unbatched (C,) input is one sample.
     unbatched: bool = x.ndim == 1
     if unbatched:
@@ -1981,21 +1992,23 @@ def multi_margin_loss(
     x : Tensor
         Class scores of shape :math:`(N, C)`, or :math:`(C,)` for one
         unbatched sample (the ``"none"`` loss then takes the target's
-        shape, ``()`` or ``(1,)``).
+        shape, ``()`` or ``(1,)``).  Any other rank raises
+        ``ValueError``.
     target : Tensor
-        Integer class indices of shape :math:`(N,)`.  An index outside
-        :math:`[0, C)` raises ``IndexError`` for a CPU tensor and makes
-        the loss NaN on Metal.
+        Integer class indices of shape :math:`(N,)`; any other shape
+        raises ``ValueError``.  An index outside :math:`[0, C)` raises
+        ``IndexError`` for a CPU tensor and makes the loss NaN on Metal.
     p : int, optional
         Power applied to each hinge term — ``1`` for the standard
         hinge loss, ``2`` for the smoother squared-hinge variant
-        (default ``1``).
+        (default ``1``).  Any other value raises ``ValueError``.
     margin : float, optional
         Required minimum score gap between the true class and
         every competitor (default ``1.0``).
     weight : Tensor or None, optional
         Per-class weight vector of shape :math:`(C,)`.  Each sample
-        contribution is scaled by the weight of its *true* class.
+        contribution is scaled by the weight of its *true* class.  Any
+        other shape raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -2027,14 +2040,21 @@ def multi_margin_loss(
     >>> multi_margin_loss(scores, target)
     tensor(0.)
     """
-    _check_reduction(reduction, "multi_margin_loss")
+    op = "multi_margin_loss"
+    _check_reduction(reduction, op)
+    # Any other power was computed as written; the reference defines these
+    # two.
+    if p != 1 and p != 2:
+        raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
+    num_classes: int = _num_classes(x, op, max_ndim=2)
+    _check_class_weight(weight, num_classes, op)
+    _check_class_target(x, target, op)
     # An unbatched (C,) input is one sample; its loss takes the target's
     # shape, () or (1,), as in the reference.  It raised in the gather.
     unbatched: bool = x.ndim == 1
     target_shape: list[int] = list(target.shape)
     if unbatched:
         x = x.unsqueeze(0)
-    num_classes: int = int(x.shape[1])
     tgt: Tensor = target.to(dtype=_lucid.int32).reshape(-1)
     safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
     poison: Tensor | None = _refuse_or_poison(tgt, safe, None, None, x.dtype)
@@ -2043,8 +2063,8 @@ def multi_margin_loss(
     # margin - x[i, y_i] + x[i, j] for every j, hinged and raised to p.
     correct: Tensor = _lucid.gather(x, 1, tgt_col)  # (N, 1)
     hinge: Tensor = (margin - correct + x).relu()
-    if p > 1:
-        hinge = hinge ** float(p)
+    if p == 2:
+        hinge = hinge**2.0
 
     if weight is not None:
         # The weight of each sample's true class.  This was a gather of a
@@ -2087,12 +2107,14 @@ def multilabel_margin_loss(
     Parameters
     ----------
     x : Tensor
-        Class scores of shape :math:`(N, C)` or :math:`(C,)`.
+        Class scores of shape :math:`(N, C)` or :math:`(C,)`; any other
+        rank raises ``ValueError``.
     target : Tensor
-        Same shape as ``x``, any integer dtype.  The entries before the
-        first negative one are the positive class indices.  A listed
-        class outside :math:`[0, C)` raises ``IndexError`` for a CPU
-        tensor and makes that sample's loss NaN on Metal.
+        Same shape as ``x`` (any other raises ``ValueError``), any
+        integer dtype.  The entries before the first negative one are
+        the positive class indices.  A listed class outside
+        :math:`[0, C)` raises ``IndexError`` for a CPU tensor and makes
+        that sample's loss NaN on Metal.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -2127,7 +2149,12 @@ def multilabel_margin_loss(
     >>> multilabel_margin_loss(scores, target)
     tensor(0.275)
     """
-    _check_reduction(reduction, "multilabel_margin_loss")
+    op = "multilabel_margin_loss"
+    _check_reduction(reduction, op)
+    _num_classes(x, op, max_ndim=2)
+    # A target of another shape was read column by column against x's
+    # classes, and scored whatever lined up.
+    _check_target_shape(x, target, op)
     unbatched: bool = x.ndim == 1
     xb: Tensor = x.reshape([1, -1]) if unbatched else x
     # Any integer dtype is taken: a ``lucid.tensor([...ints...])`` target

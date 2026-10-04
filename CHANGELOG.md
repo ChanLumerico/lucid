@@ -264,6 +264,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop the unused optimizer spec, fix stale docs
 - hand optimizer state over in one place (CHA-176)
 - every loss checks reduction first and reduces in _reduce
+- class losses refuse a bad weight, target shape or p first
 
 ---
 
