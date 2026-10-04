@@ -528,7 +528,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_ac_vit_giant\")\n>>> config.encoder_dim, config.encoder_depth, config.encoder_heads\n(1408, 40, 22)\n>>> config.predictor_dim, config.predictor_depth, config.predictor_heads\n(1024, 24, 16)\n>>> config.tokens_per_step\n256"
       ],
       "notes": [
-        "Reference: Assran et al., arXiv:2506.09985, 2025.  The release publishes\none action-conditioned ViT-g checkpoint; smaller variants are\nintentionally not registered.  One action-model step is one frame — the\nreleased loop repeats each frame to fill the encoder's tubelet — so a\nclip of `T` frames takes `T - 1` conditioning rows.  Checked against\nthe official implementation with that checkpoint: encoder `8.5e-5`,\npredictor `4.5e-5` relative."
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release publishes\none action-conditioned ViT-g checkpoint; smaller variants are\nintentionally not registered.  One action-model step is one frame — the\nreleased loop repeats each frame to fill the encoder's tubelet — so a\nclip of `T` frames takes `T - 1` conditioning rows.  Checked against\nthe official implementation with that checkpoint: encoder `8.5e-5`,\npredictor `4.5e-5` relative."
       ],
       "attributes": [],
       "warns": [],
@@ -839,7 +839,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_ac_vit_giant_world_model\")\n>>> config.action_dim, config.state_dim\n(7, 7)\n>>> config.frame_causal, config.use_extrinsics\n(True, False)"
       ],
       "notes": [
-        "Reference: Assran et al., arXiv:2506.09985, 2025.  The wrapper adds no\nparameters; it exists so `AutoModelForWorldModeling` can reach the\nfamily.  Planning and controller search stay outside the model — the\nforward is one teacher-forced latent transition."
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The wrapper adds no\nparameters; it exists so `AutoModelForWorldModeling` can reach the\nfamily.  Planning and controller search stay outside the model — the\nforward is one teacher-forced latent transition."
       ],
       "attributes": [],
       "warns": [],
@@ -1155,7 +1155,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "V-JEPA 2-AC",
-  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" arXiv:2506.09985, 2025.",
+  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.",
   "theory": "V-JEPA 2-AC post-trains a V-JEPA 2 visual encoder as a latent,\naction-conditioned world model.  Each frame is encoded into its own\nspatial token grid — the three-dimensional patch embedding wants\n$2$ frames, so a frame is repeated to fill one tubelet.  The\npredictor interleaves an action token and a state token before every\ngrid, applies a frame-causal transformer, and emits the next latent\ngrid.  The visual target is kept in representation space, so\nthe model predicts the consequences of an action without rendering pixels.\n\nThe released action-conditioned checkpoint contains one ViT-g/16 variant\nwith a 1024-wide, 24-layer predictor and seven-dimensional robot action\nand state vectors.  Its encoder uses the ViT-g wide MLP ratio, while the\npredictor retains the released four-times expansion.\n\nAttention is *frame-causal* rather than token-causal: every token of a\nstep attends to every token of that step and of the ones before it, and\nto nothing after.  A step is therefore a unit of time rather than a\nposition in a sequence, and the conditioning tokens sit inside it —\naction first, then state, then the spatial grid.  The action and state\ntokens are rotated only along the time axis, since they have no place in\nthe spatial grid, which is what separates this attention from the\nencoder's.\n\nThe training signal is next-frame prediction in representation space:\nthe predictor is given the latents of frames up to $t$ and the\naction taken at $t$, and is scored against the latents of frame\n$t + 1$, both sides layer-normalised.  Scoring against the same\nframe instead would be satisfied by copying the input, which the causal\nmask already permits.  Planning and controller search are consumers of\nthis latent transition model, not additional network layers — the\nforward is one transition, and a rollout is that forward applied to its\nown output.",
   "tasks": [
     "world-modeling"

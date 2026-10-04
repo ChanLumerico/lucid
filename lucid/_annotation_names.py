@@ -165,6 +165,9 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("PretrainedModel", "lucid.models._base", "PretrainedModel"),
     ),
     "lucid.models._utils._common": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid.nn.functional._index_checks": (
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+    ),
     "lucid.nn.functional.activations": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.attention": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.conv": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
@@ -185,7 +188,6 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("QConfig", "lucid.quantization.qconfig", "QConfig"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
-    "lucid.nn.module": (("FunctionCtx", "lucid.autograd.function", "FunctionCtx"),),
     "lucid.nn.modules._lazy": (("Module", "lucid.nn.module", "Module"),),
     "lucid.nn.qat.conv": (
         ("FakeQuantize", "lucid.quantization._fake_quantize", "FakeQuantize"),

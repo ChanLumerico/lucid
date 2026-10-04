@@ -203,7 +203,7 @@
         }
       ],
       "summary": "MobileNet-v4 feature-extracting backbone (no classification head).",
-      "extended": "Implements the searched architectures of Qin et al., \"MobileNetV4:\nUniversal Models for the Mobile Ecosystem\", ECCV 2024\n(arXiv:2404.10518).  The trunk is a stride-2 stem followed by five\nstages built from the **Universal Inverted Bottleneck** (UIB), whose\ntwo optional depthwise convolutions let the architecture search pick\nan inverted bottleneck, a ConvNeXt-like block, an FFN or the new\nExtraDW block at every position; a fused inverted bottleneck opens the\nmedium and large models, and the hybrid variants interleave **Mobile\nMQA** attention blocks into the two deepest stages.  The last stage is\na $1 \\times 1$ convolution widening the stride-32 map to 960\nchannels.",
+      "extended": "Implements the searched architectures of Qin et al., \"MobileNetV4:\nUniversal Models for the Mobile Ecosystem\", ECCV 2024\n([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The trunk is a stride-2 stem followed by five\nstages built from the **Universal Inverted Bottleneck** (UIB), whose\ntwo optional depthwise convolutions let the architecture search pick\nan inverted bottleneck, a ConvNeXt-like block, an FFN or the new\nExtraDW block at every position; a fused inverted bottleneck opens the\nmedium and large models, and the hybrid variants interleave **Mobile\nMQA** attention blocks into the two deepest stages.  The last stage is\na $1 \\times 1$ convolution widening the stride-32 map to 960\nchannels.",
       "parameters": [
         {
           "name": "config",
@@ -415,7 +415,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_large\n>>> model = mobilenet_v4_conv_large().eval()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 960, 7, 7)"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  The paper trains and evaluates this\nvariant at 384x384; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The paper trains and evaluates this\nvariant at 384x384; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
       ],
       "attributes": [],
       "warns": [],
@@ -2604,7 +2604,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_large_cls\n>>> model = mobilenet_v4_conv_large_cls(num_classes=10).eval()\n>>> model(lucid.randn(2, 3, 224, 224)).logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v4_conv_large_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV4ConvLargeWeights\n>>> model = mobilenet_v4_conv_large_cls(\n...     weights=MobileNetV4ConvLargeWeights.E600_R384_IN1K\n... )"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 384x384.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_large.e600_r384_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 384x384; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-large`.  timm reports 82.974% top-1 /\n96.244% top-5 for it at 384x384 with the preset that\n`MobileNetV4ConvLargeWeights.E600_R384_IN1K.transforms` reproduces\n(384 crop, 404 resize, bicubic, ImageNet mean/std)."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 384x384.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_large.e600_r384_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 384x384; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-large`.  timm reports 82.974% top-1 /\n96.244% top-5 for it at 384x384 with the preset that\n`MobileNetV4ConvLargeWeights.E600_R384_IN1K.transforms` reproduces\n(384 crop, 404 resize, bicubic, ImageNet mean/std)."
       ],
       "attributes": [],
       "warns": [],
@@ -4834,7 +4834,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_medium\n>>> model = mobilenet_v4_conv_medium().eval()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 960, 7, 7)"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  The paper trains and evaluates this\nvariant at 256x256; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The paper trains and evaluates this\nvariant at 256x256; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
       ],
       "attributes": [],
       "warns": [],
@@ -7303,7 +7303,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_medium_cls\n>>> model = mobilenet_v4_conv_medium_cls(num_classes=10).eval()\n>>> model(lucid.randn(2, 3, 224, 224)).logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v4_conv_medium_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV4ConvMediumWeights\n>>> model = mobilenet_v4_conv_medium_cls(\n...     weights=MobileNetV4ConvMediumWeights.E500_R256_IN1K\n... )"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 256x256.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_medium.e500_r256_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 256x256; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-medium`.  timm reports 79.916% top-1 /\n95.188% top-5 for it at 256x256 with the preset that\n`MobileNetV4ConvMediumWeights.E500_R256_IN1K.transforms`\nreproduces (256 crop, 269 resize, bicubic, ImageNet mean/std)."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 256x256.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_medium.e500_r256_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 256x256; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-medium`.  timm reports 79.916% top-1 /\n95.188% top-5 for it at 256x256 with the preset that\n`MobileNetV4ConvMediumWeights.E500_R256_IN1K.transforms`\nreproduces (256 crop, 269 resize, bicubic, ImageNet mean/std)."
       ],
       "attributes": [],
       "warns": [],
@@ -9813,7 +9813,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_small\n>>> model = mobilenet_v4_conv_small().eval()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 960, 7, 7)"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  The paper trains and evaluates this\nvariant at 224x224; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The paper trains and evaluates this\nvariant at 224x224; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
       ],
       "attributes": [],
       "warns": [],
@@ -11077,7 +11077,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_conv_small_cls\n>>> model = mobilenet_v4_conv_small_cls(num_classes=10).eval()\n>>> model(lucid.randn(2, 3, 224, 224)).logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v4_conv_small_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV4ConvSmallWeights\n>>> model = mobilenet_v4_conv_small_cls(\n...     weights=MobileNetV4ConvSmallWeights.E2400_R224_IN1K\n... )"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 224x224.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_small.e2400_r224_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 224x224; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-small`.  timm reports 73.756% top-1 /\n91.430% top-5 for it at 224x224 with the preset that\n`MobileNetV4ConvSmallWeights.E2400_R224_IN1K.transforms`\nreproduces (224 crop, 256 resize, bicubic, ImageNet mean/std)."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 224x224.\n\nPretrained weights are converted from timm's\n`mobilenetv4_conv_small.e2400_r224_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 224x224; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-conv-small`.  timm reports 73.756% top-1 /\n91.430% top-5 for it at 224x224 with the preset that\n`MobileNetV4ConvSmallWeights.E2400_R224_IN1K.transforms`\nreproduces (224 crop, 256 resize, bicubic, ImageNet mean/std)."
       ],
       "attributes": [],
       "warns": [],
@@ -12382,7 +12382,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_hybrid_large\n>>> model = mobilenet_v4_hybrid_large().eval()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 960, 7, 7)"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  The paper trains and evaluates this\nvariant at 384x384; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The paper trains and evaluates this\nvariant at 384x384; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
       ],
       "attributes": [],
       "warns": [],
@@ -16084,7 +16084,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_hybrid_large_cls\n>>> model = mobilenet_v4_hybrid_large_cls(num_classes=10).eval()\n>>> model(lucid.randn(2, 3, 224, 224)).logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v4_hybrid_large_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV4HybridLargeWeights\n>>> model = mobilenet_v4_hybrid_large_cls(\n...     weights=MobileNetV4HybridLargeWeights.IX_E600_R384_IN1K\n... )"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 384x384.\n\nPretrained weights are converted from timm's\n`mobilenetv4_hybrid_large.ix_e600_r384_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 384x384; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-hybrid-large`.  timm reports 83.996% top-1 /\n96.714% top-5 for it at 384x384 with the preset that\n`MobileNetV4HybridLargeWeights.IX_E600_R384_IN1K.transforms`\nreproduces (384 crop, 404 resize, bicubic, ImageNet mean/std)."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 384x384.\n\nPretrained weights are converted from timm's\n`mobilenetv4_hybrid_large.ix_e600_r384_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 384x384; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-hybrid-large`.  timm reports 83.996% top-1 /\n96.714% top-5 for it at 384x384 with the preset that\n`MobileNetV4HybridLargeWeights.IX_E600_R384_IN1K.transforms`\nreproduces (384 crop, 404 resize, bicubic, ImageNet mean/std)."
       ],
       "attributes": [],
       "warns": [],
@@ -19827,7 +19827,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_hybrid_medium\n>>> model = mobilenet_v4_hybrid_medium().eval()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 960, 7, 7)"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  The paper trains and evaluates this\nvariant at 256x256; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  The paper trains and evaluates this\nvariant at 256x256; the network is fully convolutional up to the\npool, so any input whose sides are multiples of 32 works."
       ],
       "attributes": [],
       "warns": [],
@@ -23394,7 +23394,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v4 import mobilenet_v4_hybrid_medium_cls\n>>> model = mobilenet_v4_hybrid_medium_cls(num_classes=10).eval()\n>>> model(lucid.randn(2, 3, 224, 224)).logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v4_hybrid_medium_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV4HybridMediumWeights\n>>> model = mobilenet_v4_hybrid_medium_cls(\n...     weights=MobileNetV4HybridMediumWeights.IX_E550_R256_IN1K\n... )"
       ],
       "notes": [
-        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 (arXiv:2404.10518).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 256x256.\n\nPretrained weights are converted from timm's\n`mobilenetv4_hybrid_medium.ix_e550_r256_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 256x256; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-hybrid-medium`.  timm reports 81.478% top-1 /\n95.692% top-5 for it at 256x256 with the preset that\n`MobileNetV4HybridMediumWeights.IX_E550_R256_IN1K.transforms`\nreproduces (256 crop, 269 resize, bicubic, ImageNet mean/std)."
+        "Qin et al., \"MobileNetV4: Universal Models for the Mobile Ecosystem\",\nECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518)).  Parameter names match timm's\nimplementation, so its ImageNet-1k checkpoints load with an identity\nkey map.  The paper evaluates this variant at 256x256.\n\nPretrained weights are converted from timm's\n`mobilenetv4_hybrid_medium.ix_e550_r256_in1k` — timm's own ImageNet-1k\ntraining of this architecture, trained at 256x256; the authors released\nnone — and hosted on the Hugging Face Hub under\n`lucid-dl/mobilenet-v4-hybrid-medium`.  timm reports 81.478% top-1 /\n95.692% top-5 for it at 256x256 with the preset that\n`MobileNetV4HybridMediumWeights.IX_E550_R256_IN1K.transforms`\nreproduces (256 crop, 269 resize, bicubic, ImageNet mean/std)."
       ],
       "attributes": [],
       "warns": [],
@@ -26986,7 +26986,7 @@
         ">>> from lucid.models.weights import MobileNetV4ConvLargeWeights\n>>> tf = MobileNetV4ConvLargeWeights.DEFAULT.transforms()\n>>> tf.crop_size, tf.resize_size\n(384, 404)"
       ],
       "notes": [
-        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 (arXiv:2404.10518)."
+        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518))."
       ],
       "attributes": [
         {
@@ -27025,7 +27025,7 @@
         ">>> from lucid.models.weights import MobileNetV4ConvMediumWeights\n>>> MobileNetV4ConvMediumWeights.DEFAULT is (\n...     MobileNetV4ConvMediumWeights.E500_R256_IN1K\n... )\nTrue\n>>> tf = MobileNetV4ConvMediumWeights.DEFAULT.transforms()\n>>> tf.crop_size, tf.resize_size\n(256, 269)"
       ],
       "notes": [
-        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 (arXiv:2404.10518)."
+        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518))."
       ],
       "attributes": [
         {
@@ -27064,7 +27064,7 @@
         ">>> from lucid.models.weights import MobileNetV4ConvSmallWeights\n>>> list(MobileNetV4ConvSmallWeights.__members__)\n['E2400_R224_IN1K', 'DEFAULT']\n>>> tf = MobileNetV4ConvSmallWeights.DEFAULT.transforms()\n>>> tf.crop_size, tf.resize_size, tf.interpolation\n(224, 256, 'bicubic')"
       ],
       "notes": [
-        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 (arXiv:2404.10518)."
+        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518))."
       ],
       "attributes": [
         {
@@ -27103,7 +27103,7 @@
         ">>> from lucid.models.weights import MobileNetV4HybridLargeWeights\n>>> tf = MobileNetV4HybridLargeWeights.DEFAULT.transforms()\n>>> tf.crop_size, tf.resize_size, tf.interpolation\n(384, 404, 'bicubic')"
       ],
       "notes": [
-        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 (arXiv:2404.10518)."
+        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518))."
       ],
       "attributes": [
         {
@@ -27142,7 +27142,7 @@
         ">>> from lucid.models.weights import MobileNetV4HybridMediumWeights\n>>> list(MobileNetV4HybridMediumWeights.__members__)\n['IX_E550_R256_IN1K', 'DEFAULT']\n>>> MobileNetV4HybridMediumWeights.DEFAULT.meta[\"metrics\"][\"ImageNet-1k\"]\n{'acc@1': 81.478, 'acc@5': 95.692}"
       ],
       "notes": [
-        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 (arXiv:2404.10518)."
+        "Reference: Qin et al., *\"MobileNetV4: Universal Models for the\nMobile Ecosystem\"*, ECCV 2024 ([arXiv:2404.10518](https://arxiv.org/abs/2404.10518))."
       ],
       "attributes": [
         {

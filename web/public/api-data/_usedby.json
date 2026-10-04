@@ -238,6 +238,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.functional._index_checks"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.functional.activations"
     },
     {
@@ -334,6 +338,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.optim.lbfgs"
+    },
+    {
+      "kind": "module",
       "module": "lucid.optim.optimizer"
     },
     {
@@ -425,10 +433,6 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.neural_ode._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.nn.module"
     },
     {
       "kind": "module",
@@ -709,10 +713,6 @@
     {
       "kind": "module",
       "module": "lucid.linalg"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.nn.module"
     }
   ],
   "lucid.autograd.gradcheck.gradcheck": [
@@ -11343,6 +11343,12 @@
       "module": "lucid.models.vision.yolo"
     }
   ],
+  "lucid.models.vision.yolo._v3.YOLOV3TinyForObjectDetection": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    }
+  ],
   "lucid.models.vision.yolo._v3.yolo_v3": [
     {
       "kind": "module",
@@ -15644,10 +15650,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.compile._optim.spec"
-    },
-    {
-      "kind": "module",
       "module": "lucid.optim"
     },
     {
@@ -16312,7 +16314,41 @@
   "lucid.special": [
     {
       "kind": "module",
+      "module": "lucid.distributions.bernoulli"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.extra"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.gamma"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.kl"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.matrix"
+    }
+  ],
+  "lucid.special.xlog1py": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions.bernoulli"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.extra"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.gamma"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.kl"
     }
   ],
   "lucid.stack": [
@@ -16451,6 +16487,10 @@
     {
       "kind": "module",
       "module": "lucid.utils.data"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.data.dataloader"
     }
   ],
   "lucid.utils.data.dataloader.DataLoader": [

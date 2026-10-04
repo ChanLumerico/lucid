@@ -3016,7 +3016,7 @@
         ">>> from lucid.models.weights import InceptionV4Weights\n>>> InceptionV4Weights.DEFAULT is InceptionV4Weights.TF_IN1K\nTrue\n>>> tf = InceptionV4Weights.TF_IN1K.transforms()\n>>> tf.crop_size, tf.resize_size, tf.interpolation\n(299, 341, 'bicubic')\n>>> tuple(tf.mean), tuple(tf.std)\n((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))"
       ],
       "notes": [
-        "Reference: Szegedy, Ioffe, Vanhoucke, Alemi, *\"Inception-v4,\nInception-ResNet and the Impact of Residual Connections on\nLearning\"*, AAAI 2017 (arXiv:1602.07261)."
+        "Reference: Szegedy, Ioffe, Vanhoucke, Alemi, *\"Inception-v4,\nInception-ResNet and the Impact of Residual Connections on\nLearning\"*, AAAI 2017 ([arXiv:1602.07261](https://arxiv.org/abs/1602.07261))."
       ],
       "attributes": [
         {
