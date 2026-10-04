@@ -697,7 +697,7 @@ class DiffusionMixin:
         num_inference_steps: int | None = None,
         generator_shape: tuple[int, ...] | None = None,
         return_intermediates: bool = False,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         r"""Sample ``n_samples`` images via the reverse diffusion process.
 
@@ -719,8 +719,11 @@ class DiffusionMixin:
         return_intermediates : bool, optional, keyword-only, default=False
             If ``True``, every per-step sample is recorded and returned
             in :attr:`GenerationOutput.intermediates`.
-        device : str, optional, keyword-only, default="cpu"
-            Device to allocate the initial Gaussian noise tensor on.
+        device : str or None, optional, keyword-only, default=None
+            Device to allocate the initial Gaussian noise, the timestep
+            batch and the scheduler's timesteps on.  ``None`` follows the
+            model's own parameters, so ``model.to("metal").generate(...)``
+            samples on Metal; an explicit value still wins.
 
         Returns
         -------
@@ -755,6 +758,11 @@ class DiffusionMixin:
         (4, 3, 32, 32)
         """
         from lucid.models._output import GenerationOutput
+        from lucid.models._utils._generative import resolve_generation_device
+
+        # A hard "cpu" default drew the noise off-device for any model that
+        # had been moved to Metal, so the first forward raised.
+        device = resolve_generation_device(cast(nn.Module, self), device)
 
         if num_inference_steps is not None:
             scheduler.set_timesteps(num_inference_steps, device=device)

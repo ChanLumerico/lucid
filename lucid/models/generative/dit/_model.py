@@ -560,8 +560,12 @@ class DiTForImageGeneration(ImageGenerationModel):
 
                 alpha_bar = self.alphas_cumprod[t]
                 previous = grid[index + 1] if index + 1 < len(grid) else 0
+                # The final step's alpha_bar_prev = 1 has to sit with the
+                # schedule; a bare CPU scalar broke the last step on Metal.
                 alpha_bar_prev = (
-                    self.alphas_cumprod[previous] if previous > 0 else lucid.ones(())
+                    self.alphas_cumprod[previous]
+                    if previous > 0
+                    else lucid.ones_like(alpha_bar)
                 )
                 # Song et al.'s generalised reverse step: recover x0,
                 # then re-noise it to the previous timestep.  `eta`

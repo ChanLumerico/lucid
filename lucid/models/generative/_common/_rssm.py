@@ -42,7 +42,11 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._utils._generative import generative_activation, normal_kl
+from lucid.models._utils._generative import (
+    generative_activation,
+    normal_kl,
+    resolve_generation_device,
+)
 
 __all__ = ["RSSMState", "RSSM", "BlockLinear", "rssm_kl"]
 
@@ -755,15 +759,17 @@ class RSSM(nn.Module):
 
     # ── single steps ─────────────────────────────────────────────────────
 
-    def initial(self, batch_size: int, device: str = "cpu") -> RSSMState:
+    def initial(self, batch_size: int, device: str | None = None) -> RSSMState:
         """Return the all-zero state the unroll starts from.
 
         Parameters
         ----------
         batch_size : int
             Leading dimension.
-        device : str, default="cpu"
-            Where to allocate.
+        device : str or None, default=None
+            Where to allocate.  ``None`` follows this model's parameters,
+            so a model moved to Metal starts its unroll there; an explicit
+            value still wins.
 
         Returns
         -------
@@ -795,6 +801,9 @@ class RSSM(nn.Module):
         >>> start.stoch.shape, start.logits.shape  # 4 variables of 5 classes
         ((3, 20), (3, 4, 5))
         """
+        # A hard "cpu" default handed a Metal model a CPU start state, and
+        # the first recurrent step raised on the concatenation.
+        device = resolve_generation_device(self, device)
         deter = lucid.zeros(batch_size, self.deter_size, device=device)
         stoch = lucid.zeros(batch_size, self.stoch_width, device=device)
         if self.discrete:

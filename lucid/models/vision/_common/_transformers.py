@@ -79,8 +79,14 @@ def gather_tokens(tokens: Tensor, indices: Tensor) -> Tensor:
         ``(B, K, D)``.
     """
     width = int(tokens.shape[2])
+    # The broadcast helper must sit with the tokens it gathers from: left
+    # on the CPU it made every masked forward raise on a Metal model.
     spread = indices.unsqueeze(dim=-1) + lucid.zeros(
-        int(indices.shape[0]), int(indices.shape[1]), width, dtype=indices.dtype
+        int(indices.shape[0]),
+        int(indices.shape[1]),
+        width,
+        dtype=indices.dtype,
+        device=tokens.device,
     )
     return lucid.gather(tokens, 1, spread)
 
