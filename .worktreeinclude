@@ -1,7 +1,0 @@
-# Gitignored files Claude Code copies into every worktree it creates
-# (`claude -w`, background sessions, `isolation: worktree` subagents).
-# `python3 tools/agent_ws.py bootstrap` covers whatever is missing and adds
-# the light .venv and the vault links — see CLAUDE.md "병렬 에이전트 워크스페이스".
-lucid/_C/engine.cpython-*.so
-.claude/settings.json
-.claude/settings.local.json
