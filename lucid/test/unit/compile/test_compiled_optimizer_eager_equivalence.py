@@ -472,6 +472,60 @@ def test_compiling_after_eager_steps_carries_their_state_on(
     _assert_same_state(warm.opt.state_dict(), reference.opt.state_dict())
 
 
+EVERY_OPTIMIZER = [
+    pytest.param(lambda m: optim.SGD(m.parameters(), lr=0.1), id="SGD"),
+    pytest.param(lambda m: optim.Adam(m.parameters()), id="Adam"),
+    pytest.param(lambda m: optim.AdamW(m.parameters()), id="AdamW"),
+    pytest.param(lambda m: optim.RMSprop(m.parameters()), id="RMSprop"),
+    pytest.param(lambda m: optim.Adagrad(m.parameters()), id="Adagrad"),
+    pytest.param(lambda m: optim.Adadelta(m.parameters()), id="Adadelta"),
+    pytest.param(lambda m: optim.Adamax(m.parameters()), id="Adamax"),
+    pytest.param(lambda m: optim.NAdam(m.parameters()), id="NAdam"),
+    pytest.param(lambda m: optim.RAdam(m.parameters()), id="RAdam"),
+    pytest.param(lambda m: optim.ASGD(m.parameters()), id="ASGD"),
+    pytest.param(lambda m: optim.Rprop(m.parameters()), id="Rprop"),
+    pytest.param(lambda m: optim.SparseAdam(m.parameters()), id="SparseAdam"),
+    pytest.param(lambda m: optim.LBFGS(m.parameters()), id="LBFGS"),
+]
+
+
+@pytest.mark.parametrize("make_opt", EVERY_OPTIMIZER)
+def test_every_state_entry_point_has_one_owner(make_opt: OptFactory) -> None:
+    """Class-wide guard for the one-owner rule, over every compilable class.
+
+    Each method of the eager optimizer that reads or advances its state is
+    the wrapper's after compiling — or, for LBFGS (a different compiled
+    algorithm), still the eager optimizer's own.  A new state entry point
+    on ``Optimizer`` that is not in the handed-over list shows up here.
+    """
+    from lucid.compile._optim.compiler import _STATE_ENTRY_POINTS
+    from lucid.optim.optimizer import Optimizer
+
+    # Every public method of an optimizer either touches its state — and is
+    # handed over — or is known not to.  A new public method has to be put
+    # on one side or the other.
+    public = {
+        name
+        for name in dir(Optimizer)
+        if not name.startswith("_") and callable(getattr(Optimizer, name))
+    }
+    stateless = {"zero_grad", "add_param_group"}
+    assert public - stateless == set(_STATE_ENTRY_POINTS)
+
+    opt = make_opt(_net())
+    wrapper = compile_optimizer(opt)
+    assert compile_optimizer(opt) is wrapper
+    for name in _STATE_ENTRY_POINTS:
+        bound = getattr(opt, name)
+        if isinstance(opt, optim.LBFGS):
+            assert getattr(bound, "__self__", None) is opt, name
+        else:
+            assert getattr(bound, "__self__", None) is wrapper, name
+            assert getattr(bound, "__func__", None) is getattr(
+                type(wrapper), name
+            ), name
+
+
 def test_lbfgs_keeps_its_eager_state_and_step() -> None:
     """The compiled LBFGS is a different algorithm, so ``opt`` stays its own:
     its ``step`` (closure line search), state and checkpoint are untouched."""

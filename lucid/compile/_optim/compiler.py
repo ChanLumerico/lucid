@@ -214,6 +214,10 @@ def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
 # its state.
 _OWNER_ATTR = "_compiled_step"
 
+# Every method of an eager optimizer that reads or advances its state —
+# all of them answer for the compiled wrapper once it owns the state.
+_STATE_ENTRY_POINTS: tuple[str, ...] = ("step", "state_dict", "load_state_dict")
+
 # Structural choices of one parameter group (weight decay on, momentum
 # on, AMSGrad …) — the part of the hyper-parameters that shapes the trace.
 _Flags = tuple[object, ...]
@@ -470,20 +474,29 @@ class _CompiledStepBase:
         self._sync_params()
         if not self._params:
             raise ValueError("compile_optimizer: optimizer has no trainable parameters")
+        self._take_over(opt)
+
+    def _take_over(self, opt: Optimizer) -> None:
+        """The one place the optimizer state changes owner (``compile_optimizer``).
+
+        One owner at a time: the eager engines and this wrapper must never
+        both advance, or a checkpoint taken through one handle misses the
+        steps taken through the other.  So the wrapper adopts whatever
+        eager steps built so far, then every entry point that reads or
+        advances the state on ``opt`` (``_STATE_ENTRY_POINTS``)
+        answers for the wrapper.  A class whose compiled algorithm is not
+        the eager one (``_OWNS_EAGER_STATE = False``) leaves ``opt`` the
+        owner of its own state.
+        """
         opt.__dict__[_OWNER_ATTR] = self
         if not self._OWNS_EAGER_STATE:
             return
-        # One owner of the state at a time (see ``compile_optimizer``):
-        # take over what eager steps built so far, then answer for ``opt``
-        # — stepping it eagerly from here on would advance engines whose
-        # state nobody checkpoints any more.
         from lucid.optim.optimizer import Optimizer as _Optimizer
 
         if opt._engines_built:
             self.load_state_dict(_Optimizer.state_dict(opt))
-        opt.__dict__["step"] = self.step
-        opt.__dict__["state_dict"] = self.state_dict
-        opt.__dict__["load_state_dict"] = self.load_state_dict
+        for name in _STATE_ENTRY_POINTS:
+            opt.__dict__[name] = getattr(self, name)
 
     @override
     def __getstate__(self) -> dict[str, object]:
