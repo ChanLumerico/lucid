@@ -146,18 +146,25 @@ MPSGraphTensor* local_argmax(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* y,
     const std::size_t nd = xs.count - 2;
     NSMutableArray<NSNumber*>* left = [NSMutableArray arrayWithArray:@[ @0, @0 ]];
     NSMutableArray<NSNumber*>* right = [NSMutableArray arrayWithArray:@[ @0, @0 ]];
+    bool needs_padding = false;
     for (std::size_t a = 0; a < nd; ++a) {
         const long long in = xs[a + 2].longLongValue, out = ys[a + 2].longLongValue;
         const long long need = (out - 1) * stride[a] + kernel[a] - in - pad_front[a];
         [left addObject:@(pad_front[a])];
         [right addObject:@(need > 0 ? need : 0)];
+        needs_padding = needs_padding || pad_front[a] > 0 || need > 0;
     }
-    MPSGraphTensor* xp = [g padTensor:x
-                      withPaddingMode:MPSGraphPaddingModeConstant
-                          leftPadding:left
-                         rightPadding:right
-                        constantValue:-INFINITY
-                                 name:nil];
+    // Avoid a no-op PadOp: on some Apple GPU compiler paths it lowers through
+    // MPSGraph's ANEC padding conversion and aborts during VJP compilation.
+    MPSGraphTensor* xp = x;
+    if (needs_padding) {
+        xp = [g padTensor:x
+          withPaddingMode:MPSGraphPaddingModeConstant
+              leftPadding:left
+             rightPadding:right
+            constantValue:-INFINITY
+                     name:nil];
+    }
     long long offsets = 1;
     for (std::size_t a = 0; a < nd; ++a)
         offsets *= kernel[a];
