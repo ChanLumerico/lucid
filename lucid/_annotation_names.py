@@ -102,6 +102,8 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Module", "lucid.nn.module", "Module"),
         ("Optimizer", "lucid.optim.optimizer", "Optimizer"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("_Flags", "lucid.compile._optim.compiler", "_Flags"),
+        ("_ScalarLayout", "lucid.compile._optim.compiler", "_ScalarLayout"),
     ),
     "lucid.compile._entry.module": (
         ("Module", "lucid.nn.module", "Module"),
