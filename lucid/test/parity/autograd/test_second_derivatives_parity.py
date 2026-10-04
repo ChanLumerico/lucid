@@ -129,7 +129,7 @@ def test_gather_is_differentiable_twice(ref) -> None:
     x = lucid.tensor(values.copy(), requires_grad=True)
     idx = lucid.tensor(indices, dtype=lucid.int32)
     (g,) = lucid.autograd.grad(
-        (lucid.gather(x, idx, 1) ** 2).sum(), [x], create_graph=True
+        (lucid.gather(x, 1, idx) ** 2).sum(), [x], create_graph=True
     )
 
     r = ref.from_numpy(values.copy()).requires_grad_(True)

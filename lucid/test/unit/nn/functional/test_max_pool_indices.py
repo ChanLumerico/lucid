@@ -17,7 +17,7 @@ import lucid.nn.functional as F
 def test_each_index_points_at_the_value_it_reports() -> None:
     x = lucid.randn(2, 3, 9, 11)
     out, idx = F.max_pool2d(x, 3, 2, 1, return_indices=True)
-    picked = lucid.gather(x.reshape(2, 3, -1), idx.reshape(2, 3, -1), dim=2)
+    picked = lucid.gather(x.reshape(2, 3, -1), 2, idx.reshape(2, 3, -1))
     assert float((picked.reshape(*out.shape) - out).abs().max().item()) == 0.0
 
 

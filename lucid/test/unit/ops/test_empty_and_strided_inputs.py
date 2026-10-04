@@ -246,7 +246,7 @@ def test_an_index_smaller_than_its_operands_scatters_and_gathers(device: str) ->
 
     table = np.arange(24.0, dtype=np.float32).reshape(4, 6)
     x = lucid.tensor(table).to(device).requires_grad_()
-    picked = lucid.gather(x, index, 1)
+    picked = lucid.gather(x, 1, index)
     np.testing.assert_array_equal(
         picked.numpy(), np.take_along_axis(table[:2], np.array(idx), 1)
     )

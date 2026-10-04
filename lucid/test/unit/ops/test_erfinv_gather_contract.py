@@ -75,7 +75,7 @@ def test_gather_with_integer_indices(device):
     values = np.arange(20, dtype=np.float32).reshape(4, 5)
     idx = np.array([[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]] * 2, dtype=np.int64)
     got = lucid.tensor(values, device=device).gather(
-        lucid.tensor(idx, device=device), dim=1
+        1, lucid.tensor(idx, device=device)
     )
     assert np.abs(got.numpy() - np.take_along_axis(values, idx, axis=1)).max() == 0.0
 
@@ -86,7 +86,7 @@ def test_gather_rejects_float_indices(device):
     values = np.arange(20, dtype=np.float32).reshape(4, 5)
     tensor = lucid.tensor(values, device=device)
     with pytest.raises(Exception, match="integer"):
-        tensor.gather(lucid.tensor(values, device=device), dim=1)
+        tensor.gather(1, lucid.tensor(values, device=device))
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -94,5 +94,5 @@ def test_gather_rejects_float_indices(device):
 def test_gather_accepts_every_integer_width(device, dtype):
     values = np.arange(12, dtype=np.float32).reshape(3, 4)
     idx = lucid.tensor(np.zeros((3, 4), dtype=np.int64), device=device).to(dtype)
-    got = lucid.tensor(values, device=device).gather(idx, dim=1)
+    got = lucid.tensor(values, device=device).gather(1, idx)
     assert got.shape == (3, 4)

@@ -382,7 +382,7 @@ def test_gather_refuses_an_index_outside_the_axis() -> None:
     base = lucid.tensor(np.ones((2, 3)), dtype=lucid.float64)
     index = lucid.tensor(np.full((2, 3), 99), dtype=lucid.int64)
     with pytest.raises(Exception, match="out of range"):
-        base.gather(index, dim=0)
+        base.gather(0, index)
 
 
 def test_gather_refuses_an_empty_axis() -> None:
@@ -390,14 +390,14 @@ def test_gather_refuses_an_empty_axis() -> None:
     empty = lucid.tensor(np.zeros((0, 5)), dtype=lucid.float64)
     index = lucid.tensor(np.zeros((4, 5), dtype=np.int64), dtype=lucid.int64)
     with pytest.raises(Exception, match="out of range"):
-        empty.gather(index, dim=0)
+        empty.gather(0, index)
 
 
 def test_gather_still_gathers() -> None:
     """Guard the instrument: the bounds check must not have disabled the op."""
     base = lucid.tensor(np.arange(6.0).reshape(2, 3), dtype=lucid.float64)
     index = lucid.tensor(np.array([[1, 0, 1], [0, 1, 0]]), dtype=lucid.int64)
-    got = base.gather(index, dim=0).numpy()
+    got = base.gather(0, index).numpy()
     assert np.allclose(got, [[3.0, 1.0, 5.0], [0.0, 4.0, 2.0]])
 
 
@@ -410,7 +410,7 @@ def test_gather_backward_refuses_an_index_outside_the_axis() -> None:
     base = lucid.tensor(np.ones((2, 3)), dtype=lucid.float64, requires_grad=True)
     index = lucid.tensor(np.full((2, 3), 99), dtype=lucid.int64)
     with pytest.raises(Exception, match="out of range"):
-        base.gather(index, dim=0).sum().backward()
+        base.gather(0, index).sum().backward()
 
 
 def test_lu_solve_still_solves() -> None:

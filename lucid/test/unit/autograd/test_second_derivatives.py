@@ -166,7 +166,7 @@ def test_duplicate_indices_accumulate() -> None:
     three units of gradient back, not one."""
     x = lucid.tensor(np.array([1.0, 2.0, 3.0]), requires_grad=True)
     idx = lucid.tensor(np.array([1, 1, 1]), dtype=lucid.int32)
-    (g,) = lucid.autograd.grad(lucid.gather(x, idx, 0).sum(), [x], create_graph=True)
+    (g,) = lucid.autograd.grad(lucid.gather(x, 0, idx).sum(), [x], create_graph=True)
     assert np.allclose(np.asarray(g.numpy()), [0.0, 3.0, 0.0])
 
 

@@ -379,7 +379,7 @@ def _cases() -> list[Case]:
         "slice": lambda t: t[1:3, ::2] * 1,
         "narrow": lambda t: lucid.narrow(t, 1, 2, 3) * 1,
         "gather": lambda t: lucid.gather(
-            t, _idx(0, 5, 2, 1, 3, 4).reshape(1, 6).expand(4, 6), 1
+            t, 1, _idx(0, 5, 2, 1, 3, 4).reshape(1, 6).expand(4, 6)
         ),
         "index_select": lambda t: lucid.index_select(t, 0, _idx(3, 0, 0, 2)),
         "fancy_index": lambda t: t[_idx(2, 0, 3)],

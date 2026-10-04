@@ -10,7 +10,7 @@ class TestGather:
     def test_basic(self, device: str) -> None:
         x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device=device)
         idx = lucid.tensor([[0, 2], [1, 0]], dtype=lucid.int64, device=device)
-        out = lucid.gather(x, idx, dim=1).numpy()
+        out = lucid.gather(x, 1, idx).numpy()
         np.testing.assert_array_equal(out, [[1.0, 3.0], [5.0, 4.0]])
 
 

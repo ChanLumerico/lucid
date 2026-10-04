@@ -41,7 +41,7 @@ def test_gather_matches_take_along_axis(name: str, dim: int) -> None:
     a = DTYPES[name]
     rng = np.random.default_rng(dim)
     index = rng.integers(-a.shape[dim], a.shape[dim], size=a.shape)
-    got = lucid.gather(lucid.tensor(a), lucid.tensor(index), dim).numpy()
+    got = lucid.gather(lucid.tensor(a), dim, lucid.tensor(index)).numpy()
     np.testing.assert_array_equal(
         got, np.take_along_axis(a, index % a.shape[dim], axis=dim)
     )
@@ -49,7 +49,7 @@ def test_gather_matches_take_along_axis(name: str, dim: int) -> None:
 
 def test_a_narrower_output_still_takes_the_general_walk() -> None:
     index = np.random.default_rng(3).integers(0, 5, size=(2, 3, 4))
-    got = lucid.gather(lucid.tensor(BASE), lucid.tensor(index), 1).numpy()
+    got = lucid.gather(lucid.tensor(BASE), 1, lucid.tensor(index)).numpy()
     np.testing.assert_array_equal(got, np.take_along_axis(BASE[:2], index, axis=1))
 
 

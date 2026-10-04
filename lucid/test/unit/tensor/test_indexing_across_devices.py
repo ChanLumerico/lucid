@@ -48,7 +48,7 @@ def test_a_metal_index_on_a_cpu_tensor_is_refused_by_name() -> None:
     "call",
     [
         lambda x: lucid.index_select(x, 0, lucid.tensor([0, 2])),
-        lambda x: lucid.gather(x, lucid.tensor([[0, 1]]), 1),
+        lambda x: lucid.gather(x, 1, lucid.tensor([[0, 1]])),
     ],
     ids=["index_select", "gather"],
 )
