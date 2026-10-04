@@ -26,6 +26,8 @@
 #include "../core/Generator.h"
 #include "../core/Half.h"
 #include "../core/TensorImpl.h"
+#include "AccumulateGrad.h"
+#include "Node.h"
 
 namespace lucid {
 
@@ -361,6 +363,45 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
         throw VersionMismatch(saved_version, t->version(),
                               std::string(op_name) + " input " + std::to_string(input_idx));
     }
+}
+
+std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>& live,
+                                               const Storage& values,
+                                               const Shape& shape,
+                                               const Edge& edge,
+                                               std::string_view op_name,
+                                               std::size_t input_idx) {
+    // Only an in-place write that records a graph moves a non-leaf to another
+    // grad_fn: it gives the tensor the node of the write.  A leaf never moves
+    // this way — its write is refused while autograd records, and outside it
+    // the version moves instead, which validate_versions has refused by now.
+    // A tensor without a grad_fn was detached (``detach_``, or a write outside
+    // the graph, whose version moved too) and is read as the constant it is.
+    if (!live || live->is_leaf() || !live->grad_fn())
+        return nullptr;
+    if (live->grad_fn() == edge.node && live->grad_output_nr() == edge.input_nr)
+        return nullptr;
+    // Nothing saved by value: the formula reads no values of this input, and
+    // the tensor it reads stands for its shape.
+    const std::size_t nbytes = storage_nbytes(values);
+    if (nbytes == 0)
+        return nullptr;
+    const Dtype dtype = storage_dtype(values);
+    if (nbytes != shape_numel(shape) * dtype_size(dtype)) {
+        std::string msg = std::string(op_name) + " input " + std::to_string(input_idx);
+        msg += " was modified by an in-place operation after the forward, and the values it "
+               "held then cannot be rebuilt for create_graph=True — clone() it before the write";
+        ErrorBuilder("backward").fail(msg);
+    }
+    auto t = std::make_shared<TensorImpl>(values, shape, dtype,
+                                          storage_is_gpu(values) ? Device::GPU : Device::CPU,
+                                          edge.node != nullptr);
+    if (edge.node) {
+        t->set_grad_fn(edge.node);
+        t->set_grad_output_nr(edge.input_nr);
+        t->set_leaf(dynamic_cast<const AccumulateGrad*>(edge.node.get()) != nullptr);
+    }
+    return t;
 }
 
 // -------------------------------------------------------------------------

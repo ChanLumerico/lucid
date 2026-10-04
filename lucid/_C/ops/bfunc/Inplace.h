@@ -5,11 +5,13 @@
 // ``mul_``, ``div_``, ``pow_``, ``maximum_``, ``minimum_``.
 //
 // Each function runs the corresponding out-of-place op
-// (e.g. :func:`add_op`, :func:`mul_op`), splices the resulting
-// :class:`Storage` back into the *left* input tensor ``a``, updates
-// ``a``'s dtype / device fields to match the result, and bumps
-// ``a``'s version counter so autograd can detect illegal mutations
-// of tensors that are still saved for backward.
+// (e.g. :func:`add_op`, :func:`mul_op`) against a snapshot of ``a``
+// (``inplace::snapshot``), splices the resulting :class:`Storage` back
+// into the *left* input tensor ``a``, updates ``a``'s dtype / device
+// fields to match the result, moves ``a`` to where the result sits in the
+// autograd graph (or out of it, when the op recorded none), and bumps
+// ``a``'s version counter so autograd can detect illegal mutations of
+// tensors that are still saved for backward.
 //
 // Notes
 // -----
@@ -37,14 +39,13 @@
 // if broadcasting would have grown ``a``, the op raises
 // :exc:`ShapeMismatch` instead of silently allocating a new buffer.
 //
-// **Autograd safety.**  These ops are **not** autograd-safe when
-// ``a->requires_grad()`` is ``true`` *and* ``a`` is still reachable
-// from a saved tensor on a live backward node.  The version-counter
-// bump issued by ``a->bump_version()`` lets autograd raise during
-// backward if a saved snapshot is later mutated, but it is the
-// **caller's responsibility** to avoid the situation; callers must
-// check before invoking these entry points (typically through the
-// Python-side ``_no_grad_check`` guard).
+// **Autograd safety.**  The op's own node reads ``a`` as it was before
+// the write, in eager and graph-mode backward alike: it is handed a
+// snapshot that keeps the pre-op values and a version count of its own.
+// Another node that saved ``a`` before the write sees ``a``'s version
+// move, and its backward raises :exc:`VersionMismatch`, as the
+// reference's does.  On the CPU the write itself is refused first when
+// that node holds ``a``'s buffer (the ``storage_is_shared`` check below).
 //
 // **Invariants enforced.**
 //   - Neither ``a`` nor ``b`` may be null.

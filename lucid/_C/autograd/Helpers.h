@@ -1021,6 +1021,58 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::string_view op_name,
                          std::size_t input_idx);
 
+struct Edge;
+
+// The tensor a node was handed at forward time, rebuilt — or ``nullptr``
+// when ``live`` still is that tensor.
+//
+// ``live`` stopped being it when an in-place op that records a graph wrote
+// into it: the op gives it a grad_fn of its own.  The write moves its
+// version too, so this is reached past :func:`check_version_match` only
+// when that check is waived (:func:`is_mutation_on_saved_allowed`), or when
+// something gave ``live`` a grad_fn without writing into it — a custom
+// ``Function`` that returns its input (see
+// :meth:`Node::restore_saved_for_graph`).  The rebuilt tensor
+// holds the values the node saved by value and sits where ``live`` sat when
+// the node was recorded — on ``edge``, the edge the node recorded for it —
+// so graph-mode backward computes what eager backward computes, and its own
+// derivative flows to what produced those values rather than to the write.
+//
+// Parameters
+// ----------
+// live : const std::shared_ptr<TensorImpl>&
+//     The tensor the node holds for graph-mode backward.
+// values : const Storage&
+//     What the node saved by value for the same input.  Empty when the
+//     node's formula does not read the input's values.
+// shape : const Shape&
+//     The input's shape at forward time.
+// edge : const Edge&
+//     The edge the node recorded for the input.
+// op_name : std::string_view
+//     Name of the op, for the error message.
+// input_idx : std::size_t
+//     Zero-based index of the input within ``op_name``.
+//
+// Returns
+// -------
+// std::shared_ptr<TensorImpl>
+//     The rebuilt tensor; ``nullptr`` when ``live`` is still the tensor the
+//     node was handed, or when the node saved no values — its formula then
+//     reads ``live`` for its shape alone.
+//
+// Raises
+// ------
+// LucidError
+//     ``values`` is not the whole input in one dtype, so there is nothing
+//     to rebuild it from.
+std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>& live,
+                                               const Storage& values,
+                                               const Shape& shape,
+                                               const Edge& edge,
+                                               std::string_view op_name,
+                                               std::size_t input_idx);
+
 // Read the process-wide "allow mutation on saved tensors" flag.
 //
 // Returns

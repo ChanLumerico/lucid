@@ -100,11 +100,11 @@ class TensorImpl;
 //     retain every per-call graph and eventually OOM.  Holding it weakly
 //     keeps the autograd reference graph a pure backward-pointing DAG, so
 //     dropping the output cascades the whole graph free.  ``create_graph``
-//     backward re-fetches the live, ``grad_fn``-bearing output via
-//     ``lock()`` (the output is still alive, pinned by the consumer's
-//     :attr:`saved_impl_inputs_` or by the user); if it was already
-//     dropped, the reader reconstructs a data-only leaf from
-//     :attr:`saved_output_`.
+//     backward does not read the live output through it any more: a write
+//     after forward could have changed it with nothing to show, so
+//     :meth:`restore_saved_for_graph` drops the handle and the reader
+//     rebuilds the output from :attr:`saved_output_` with this node as its
+//     grad_fn — the case it already covered for an output that was gone.
 //
 // Notes
 // -----
@@ -183,6 +183,36 @@ public:
                                          saved_versions_.size() > i ? saved_versions_[i] : 0,
                                          Derived::schema_v1.name, i);
         }
+    }
+
+    // Put back, for graph-mode backward, every saved tensor a write since
+    // forward may have changed without :meth:`validate_versions` refusing.
+    //
+    // An input is replaced by the tensor it was at forward time, rebuilt
+    // from :attr:`saved_inputs_` and its edge (:func:`forward_time_input`),
+    // when it no longer sits where it did — reachable past the version check
+    // only while that check is waived.  The output is always rebuilt — from
+    // :attr:`saved_output_`, with this node as its grad_fn — by dropping the
+    // weak handle, which is the case a reader already covers for an output
+    // that is gone: no version guards it, and a write under ``no_grad``
+    // leaves its grad_fn where it was, so nothing on the live tensor says
+    // whether it still holds the values this node saw.  Either way
+    // graph-mode backward reads the values eager backward reads.
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     An input was written into and its saved values cannot rebuild it.
+    void restore_saved_for_graph() override {
+        const auto& edges = next_edges();
+        for (std::size_t i = 0; i < N_IN && i < edges.size(); ++i) {
+            if (auto then = ::lucid::forward_time_input(saved_impl_inputs_[i], saved_inputs_[i],
+                                                        input_shapes_[i], edges[i],
+                                                        Derived::schema_v1.name, i))
+                saved_impl_inputs_[i] = std::move(then);
+        }
+        if (storage_nbytes(saved_output_) > 0)
+            saved_impl_output_.reset();
     }
 
     // Drop every reference held for backward so that memory can be

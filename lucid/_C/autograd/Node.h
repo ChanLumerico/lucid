@@ -373,6 +373,32 @@ public:
     // engine after :meth:`apply` returns, unless ``retain_graph=True``.
     virtual void release_saved() {}
 
+    // Make the tensors :meth:`apply_for_graph` reads the ones this node was
+    // handed at forward time again.
+    //
+    // Graph-mode backward reads its inputs through the tensors it was
+    // handed, where eager backward reads the Storage it saved by value — and
+    // not every write between the two passes :meth:`validate_versions`.  A
+    // saved *output* is not version-checked: after ``y = x.sigmoid()``, a
+    // ``y.mul_(2)`` (metal; the CPU refuses that write) or a ``y.exp_()``
+    // under ``no_grad`` gave ``grad(y.sum(), x, create_graph=True)`` the
+    // derivative at the written ``y``, while eager backward used the saved
+    // one.  Nor is anything under ``allow_mutation_on_saved_tensors``, whose
+    // promise is the values from before the write.  Rebuilt, those reads
+    // answer what eager backward answers.
+    //
+    // Called by the engine after :meth:`validate_versions` and before
+    // :meth:`apply_for_graph`.  Eager backward does not call it.  The default
+    // has nothing to restore.  Declared after the other virtuals so their
+    // slots keep their places.
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     (Through overrides) when such a tensor's values were not kept in a
+    //     form the forward-time tensor can be rebuilt from.
+    virtual void restore_saved_for_graph() {}
+
     // Monotonically-increasing identifier assigned at construction.
     //
     // Returns

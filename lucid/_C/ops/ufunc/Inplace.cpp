@@ -63,13 +63,11 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);
-    // The version bump is what tells autograd "a saved tensor was mutated
-    // behind your back".  Once ``a`` *is* the output of this op that is no
-    // longer the relationship: the op saved the pre-op state, which lives
-    // on in its own storage because the assignment above only replaced
-    // ``a``'s slot, and bumping here reported the legitimate write as
-    // tampering — VersionMismatch on every differentiable in-place call.
-    // Outside the graph the counter still does its job.
+    // Either branch moves ``a``'s version, which is what tells a node that
+    // saved ``a`` before this write that its values moved.  This op's own
+    // node is not one of them: it holds the snapshot taken above, whose
+    // count is its own, so the write does not read to it as tampering.
+    // With no graph position to adopt, ``a`` leaves the graph as well.
     if (!adopted)
         inplace::detach_and_bump(a);
     return a;
@@ -185,13 +183,11 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);
-    // The version bump is what tells autograd "a saved tensor was mutated
-    // behind your back".  Once ``a`` *is* the output of this op that is no
-    // longer the relationship: the op saved the pre-op state, which lives
-    // on in its own storage because the assignment above only replaced
-    // ``a``'s slot, and bumping here reported the legitimate write as
-    // tampering — VersionMismatch on every differentiable in-place call.
-    // Outside the graph the counter still does its job.
+    // Either branch moves ``a``'s version, which is what tells a node that
+    // saved ``a`` before this write that its values moved.  This op's own
+    // node is not one of them: it holds the snapshot taken above, whose
+    // count is its own, so the write does not read to it as tampering.
+    // With no graph position to adopt, ``a`` leaves the graph as well.
     if (!adopted)
         inplace::detach_and_bump(a);
     return a;

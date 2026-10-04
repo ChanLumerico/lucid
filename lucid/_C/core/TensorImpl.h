@@ -331,6 +331,22 @@ public:
     //     view), or a gradient's buffer that something else also reads.
     void take_storage_from(TensorImpl& out, const char* name);
 
+    // Predicate: would an in-place op that records a graph write into the
+    // bytes this tensor reads now, rather than hand it a new storage slot?
+    //
+    // The two cases :func:`take_storage_from` writes through: a CPU tensor
+    // with live views, and a tensor read from ``.grad`` whose write is let
+    // into its gradient's buffer.  An op that keeps a handle on the pre-write
+    // tensor for backward needs to know, because a handle sharing those bytes
+    // would read the new values back — and, for the gradient, would itself be
+    // one more reader that has the write refused.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` when the write lands in this tensor's current buffer.
+    bool write_lands_in_buffer() const;
+
     // Creates a new :class:`TensorImpl` that aliases ``base``'s
     // :class:`Storage` with a different shape, stride, and optional byte
     // offset.

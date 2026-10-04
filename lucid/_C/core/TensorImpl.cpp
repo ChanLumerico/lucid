@@ -403,6 +403,14 @@ SlotWrite gradient_slot_write(const Storage& storage, long members) {
 
 }  // namespace
 
+bool TensorImpl::write_lands_in_buffer() const {
+    // The rule take_storage_from follows once a graph is recorded.
+    if (!storage_is_cpu(storage_))
+        return false;
+    return is_aliased() ||
+           gradient_slot_write(storage_, family_ ? family_.use_count() : 1) == SlotWrite::kInto;
+}
+
 void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // Checked here, the one place every in-place op's result lands, and not
     // only in write_through: an expanded view whose base is gone has no live
@@ -423,11 +431,12 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     if (!graph && write_into_shared(out))
         return;
     // A CPU tensor with live views takes the values into its buffer, graph or
-    // no graph: a new slot would leave the views reading the old ones.  Its
-    // snapshot was a copy (inplace::snapshot), so no node of this op holds
-    // the bytes being replaced.  So does a tensor read from ``.grad``, and
-    // no node holds those bytes either: one that had saved the tensor would
-    // hold its pointer too, and the write was refused above.
+    // no graph: a new slot would leave the views reading the old ones.  So
+    // does a tensor read from ``.grad``.  Either way its snapshot was a copy
+    // (inplace::snapshot, by write_lands_in_buffer — the same rule), so no
+    // node of this op holds the bytes being replaced; a node that had saved
+    // the gradient tensor earlier would hold its pointer, and the write was
+    // refused above.
     if (storage_is_cpu(storage_) && (is_aliased() || slot == SlotWrite::kInto)) {
         write_through(out, name);
         return;

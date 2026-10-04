@@ -44,8 +44,10 @@ namespace {
 // A target whose elements overlap — an expanded view — is refused where the
 // result lands (take_storage_from), as the reference refuses it.
 //
-// After the Storage swap, a->bump_version() invalidates any backward nodes that
-// hold a saved reference to a's old storage, making stale-gradient bugs loud.
+// The forward runs against a snapshot of a (inplace::snapshot), so this op's
+// own node keeps the values a held before the write.  a's version is bumped
+// either way (inplace::adopt_graph_position or inplace::detach_and_bump),
+// which is what tells another node that saved a that its values moved.
 template <typename Fn>
 TensorImplPtr
 inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const char* name) {
@@ -70,7 +72,14 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     // Seven ops, and ``add_`` hid it: its derivative with respect to the
     // first operand really is 1, so the wrong answer and the right one
     // coincided there while ``y`` still received nothing.
-    auto out = fwd_fn(inplace::snapshot(a), b);
+    //
+    // ``b`` takes part in the snapshot rule: when only ``b`` requires grad,
+    // the node still saves ``a`` to differentiate with respect to ``b``.
+    // And ``b`` may be ``a`` itself (``x.mul_(x)``), which the node must
+    // read as it was too — handed ``a``, it read ``x * x`` for ``x``, and
+    // held the tensor whose grad_fn it is.
+    const auto source = inplace::snapshot(a, b);
+    auto out = fwd_fn(source, b.get() == a.get() ? source : b);
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");

@@ -224,6 +224,11 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
 
         refuse_released(*node);
         node->validate_versions();
+        // What eager backward reads by value, graph mode reads through the
+        // tensors the node was handed — and an in-place write since forward
+        // may have rewritten one that validate_versions does not check: a
+        // saved output, or any input while the check is waived.
+        node->restore_saved_for_graph();
 
         // apply_for_graph throws NotImplementedError if the op doesn't support
         // graph mode — gives the user a clear, actionable message.
@@ -557,6 +562,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
 
             refuse_released(*node);
             node->validate_versions();
+            node->restore_saved_for_graph();
             const auto input_grads =
                 keep_in_graph(node->apply_for_graph(grad_in), node->next_edges());
 

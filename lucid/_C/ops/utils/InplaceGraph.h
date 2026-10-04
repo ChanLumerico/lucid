@@ -41,36 +41,50 @@ inline void refuse_on_leaf(const TensorImplPtr& a, const char* name) {
                                 "wrap the call in no_grad, or use the out-of-place form");
 }
 
+// Whether the op about to run records a node — and so keeps a handle on
+// ``a`` and on ``other``, the second operand of a binary op.  ``other`` is
+// what makes ``buf.mul_(v)`` record a node when only ``v`` requires grad.
+inline bool records_graph(const TensorImplPtr& a, const TensorImplPtr& other) {
+    return GradMode::is_enabled() && (a->requires_grad() || (other && other->requires_grad()));
+}
+
 // A stand-in for ``a`` to run the forward against.
 //
-// A node that saves its input keeps a handle on the tensor it was given
-// and graph-mode backward re-reads it — so once ``a``'s storage slot has
-// been overwritten, ``sin_`` differentiated through
-// ``grad(create_graph=True)`` computed ``cos(sin(x))`` instead of
-// ``cos(x)``.  Eager ``backward()`` did not notice, because it saves a
-// Storage by value at forward time, which is why the two routes
-// disagreed and only in graph mode.
+// A node keeps a handle on each tensor it was given, and graph-mode
+// backward reads its values and its graph position through that handle,
+// not through the Storage it saved by value.  Handed ``a`` itself, the node
+// read ``a`` as the write left it — the new values, and the new grad_fn,
+// which is the node itself:
+//
+//     sin_                ->  cos(sin(x)) instead of cos(x)
+//     buf.mul_(v)         ->  d/dv = buf * v instead of buf
+//
+// in graph mode only, since eager ``backward()`` reads the Storage.  So
+// whenever the op records a node, the node is handed a tensor of its own:
+// one that holds the values ``a`` holds now and sits where ``a`` sits now.
+// ``a`` not requiring grad is no exception — the other operand of a binary
+// op may, and its node saves this one.  Being its own tensor, it also keeps
+// its own version count, which is what lets the write move ``a``'s
+// (:func:`adopt_graph_position`) without the node refusing itself.
 //
 // The snapshot shares the buffer rather than copying it, and the caller's
 // assignment replaces ``a``'s *slot* rather than the buffer, so the
 // original values stay alive and unmutated for as long as the node needs
-// them — and nothing is allocated when no graph is being built.  It also
-// inherits where ``a`` sat, or the new node's parent is a fresh leaf and
-// the chain back to the input is cut.
+// them.  No data is copied, and when no node is recorded — ``no_grad``, or
+// no operand requiring grad — nothing is allocated either.
 //
-// A tensor that shares its buffer with a live view is the exception: its
-// write goes into the buffer itself (``TensorImpl::write_through``), where
-// a node holding a snapshot of that buffer would read the new values back
-// — and the holder would stop the write besides.  While autograd records,
-// its snapshot is a copy, whether or not ``a`` requires grad: the other
-// operand of a binary op may, and its node saves this one.
-inline TensorImplPtr snapshot(const TensorImplPtr& a) {
-    const bool copy = a->is_aliased() && GradMode::is_enabled();
-    if (!a->requires_grad() && !copy)
+// A write that lands in the buffer (``TensorImpl::write_lands_in_buffer``:
+// a CPU tensor with live views, or one read from ``.grad``) is the
+// exception: a node holding the buffer would read the new values back, and
+// the holder would stop the write besides — ``p.grad.add_(w)`` with ``w``
+// requiring grad was refused as a gradient something else reads.  Its
+// snapshot is a copy.
+inline TensorImplPtr snapshot(const TensorImplPtr& a, const TensorImplPtr& other = nullptr) {
+    if (!records_graph(a, other))
         return a;
-    Storage storage = copy ? backend::Dispatcher::for_device(a->device())
-                                 .clone(a->storage(), a->shape(), a->dtype())
-                           : a->storage();
+    Storage storage = a->write_lands_in_buffer() ? backend::Dispatcher::for_device(a->device())
+                                                       .clone(a->storage(), a->shape(), a->dtype())
+                                                 : a->storage();
     auto source = std::make_shared<TensorImpl>(std::move(storage), a->shape(), a->dtype(),
                                                a->device(), a->requires_grad());
     if (a->requires_grad()) {
@@ -116,6 +130,17 @@ LUCID_API void rebase_views(const TensorImplPtr& a);
 // was not, so a model using one trained on a wrong gradient with nothing
 // to show for it.  The views of ``a`` read the values it now holds, so
 // they move with it.
+//
+// The version moves too, as for any write.  A node that saved ``a`` before
+// the write holds a tensor whose values and grad_fn are no longer the ones
+// it saw; with the count left alone nothing told it so.  Eager backward of
+// an engine node got away with that, reading the Storage it had saved, but
+// graph-mode backward read the written values, and a custom ``Function``
+// reads its saved tensors as they are, with the count the only sign of the
+// write: ``y = Fn.apply(x); y.mul_(2)`` gave the gradient of the written
+// ``y`` on both devices.  The op's own node is not among those that
+// refuse: it was handed a snapshot (:func:`snapshot`), a tensor of its own
+// whose count no write to ``a`` reaches.
 inline bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
     if (!out->requires_grad() && !out->grad_fn())
         return false;
@@ -131,6 +156,7 @@ inline bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& ou
     a->set_leaf(false);
     if (a->is_aliased())
         rebase_views(a);
+    a->bump_version();
     return true;
 }
 
