@@ -83,6 +83,7 @@ _converted/
 # CLAUDE & CODEX
 CLAUDE.md
 AGENTS.md
+.worktreeinclude
 
 # workspace sync harness (local tooling, not part of the project)
 .sync/
