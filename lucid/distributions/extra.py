@@ -920,11 +920,15 @@ class ContinuousBernoulli(Distribution):
             raise ValueError(
                 "ContinuousBernoulli: pass exactly one of `probs` or `logits`."
             )
+        # Stored through the lazy parameters, as ``Bernoulli`` does, so the
+        # one given is in ``arg_constraints``' reach: held in a private
+        # ``_param`` instead, both ``probs`` and ``logits`` looked derived
+        # and validation checked neither — ``probs=1.5`` and NaN constructed.
         if probs is not None:
-            self._param = _as_tensor(probs)
+            self.probs = _as_tensor(probs)
             self._is_logits = False
         else:
-            self._param = _as_tensor(logits)  # type: ignore[arg-type]
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
         super().__init__(
             batch_shape=tuple(self._param.shape),
@@ -933,13 +937,17 @@ class ContinuousBernoulli(Distribution):
         )
 
     @property
-    def _probs(self) -> Tensor:
-        """Lazily resolved probability parameter :math:`p \\in [0, 1]`.
+    def _param(self) -> Tensor:
+        """The parameter as given — ``logits`` or ``probs``."""
+        return self.logits if self._is_logits else self.probs
 
-        Returns the stored parameter when constructed from ``probs``;
-        otherwise applies the sigmoid to the stored logits.
+    @property
+    def _probs(self) -> Tensor:
+        """Probability parameter :math:`p \\in [0, 1]` — :attr:`probs`.
+
+        As given, or the sigmoid of the given logits.
         """
-        return self._param if not self._is_logits else _logits_to_probs(self._param)
+        return self.probs
 
     @property
     def _logits(self) -> Tensor:
@@ -955,7 +963,7 @@ class ContinuousBernoulli(Distribution):
     @_lazy_param
     def probs(self) -> Tensor:
         r"""Parameter :math:`\lambda` — as given, or ``sigmoid(logits)``."""
-        return self._probs
+        return _logits_to_probs(self.logits)
 
     @_lazy_param
     def logits(self) -> Tensor:
@@ -964,9 +972,7 @@ class ContinuousBernoulli(Distribution):
         Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
         the reference framework derives it.
         """
-        if self._is_logits:
-            return self._param
-        return _probs_to_logits(_clamp_probs(self._param))
+        return _probs_to_logits(_clamp_probs(self.probs))
 
     # -- helpers ---------------------------------------------------------------
 
