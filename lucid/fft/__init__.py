@@ -397,7 +397,9 @@ class _RfftnAutograd(_AutogradFunction):
         full_sizes: list[int],
     ) -> Tensor:
         _save_input(ctx, x, axes)
-        ctx.full_sizes = full_sizes  # transform sizes along each axis (``s`` or the input's)
+        ctx.full_sizes = (
+            full_sizes  # transform sizes along each axis (``s`` or the input's)
+        )
         ctx.norm = norm
         ctx.N = N
         out = _engine_rfftn(x, s, axes)

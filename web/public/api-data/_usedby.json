@@ -182,6 +182,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.coreml._cache"
+    },
+    {
+      "kind": "module",
       "module": "lucid.coreml._model"
     },
     {
@@ -626,6 +630,10 @@
   "lucid.autograd.function.Function": [
     {
       "kind": "module",
+      "module": "lucid._ops.composite.indexing"
+    },
+    {
+      "kind": "module",
       "module": "lucid.autograd"
     },
     {
@@ -662,6 +670,10 @@
     }
   ],
   "lucid.autograd.function.FunctionCtx": [
+    {
+      "kind": "module",
+      "module": "lucid._ops.composite.indexing"
+    },
     {
       "kind": "module",
       "module": "lucid.autograd"

@@ -51,9 +51,7 @@ def _sum_to(grad: Tensor, shape: tuple[int, ...]) -> Tensor:
     lead = grad.ndim - len(shape)
     if lead > 0:
         grad = grad.sum(dim=tuple(range(lead)))
-    axes = tuple(
-        i for i, size in enumerate(shape) if size == 1 and grad.shape[i] != 1
-    )
+    axes = tuple(i for i, size in enumerate(shape) if size == 1 and grad.shape[i] != 1)
     if axes:
         grad = grad.sum(dim=axes, keepdim=True)
     return grad
@@ -183,9 +181,7 @@ def _register(
 
     name = f"{getattr(fn_class, '__name__', 'Function')}Backward"
     metas = [
-        _InputMeta(
-            tuple(t.shape), t.dtype, t.is_complex(), t.device, t.requires_grad
-        )
+        _InputMeta(tuple(t.shape), t.dtype, t.is_complex(), t.device, t.requires_grad)
         for t in tensor_inputs
     ]
     positional = (

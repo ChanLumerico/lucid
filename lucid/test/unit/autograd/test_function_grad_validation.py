@@ -53,7 +53,9 @@ def _returning(grad_fn):
     ("shape", "grad_shape"),
     [((2, 5), (3,)), ((4,), (2, 3)), ((2, 5), (1, 5)), ((2, 5), (5, 2)), ((3,), ())],
 )
-def test_a_gradient_of_an_incompatible_shape_is_refused(shape, grad_shape, device: str) -> None:
+def test_a_gradient_of_an_incompatible_shape_is_refused(
+    shape, grad_shape, device: str
+) -> None:
     fn = _returning(lambda g: lucid.ones(grad_shape, device=device))
     x = lucid.ones(shape, device=device, requires_grad=True)
     expected = (
@@ -104,7 +106,10 @@ def test_the_index_is_the_tensor_input_s(device: str) -> None:
 
     a = lucid.ones(2, 3, device=device, requires_grad=True)
     b = lucid.ones(3, device=device, requires_grad=True)
-    with pytest.raises(RuntimeError, match=r"PairBackward returned an invalid gradient at index 1 - got \[7\]"):
+    with pytest.raises(
+        RuntimeError,
+        match=r"PairBackward returned an invalid gradient at index 1 - got \[7\]",
+    ):
         Pair.apply(a, b).sum().backward()
 
 
@@ -169,7 +174,9 @@ def test_a_wrong_shape_is_refused_for_a_several_output_function(device: str) -> 
 
     x = lucid.ones(2, 3, device=device, requires_grad=True)
     a, b = Split.apply(x)
-    with pytest.raises(RuntimeError, match="SplitBackward returned an invalid gradient"):
+    with pytest.raises(
+        RuntimeError, match="SplitBackward returned an invalid gradient"
+    ):
         (a + b).sum().backward()
 
 
@@ -177,7 +184,9 @@ def test_a_wrong_shape_is_refused_for_a_several_output_function(device: str) -> 
 
 
 @pytest.mark.parametrize("dtype", [lucid.float16, lucid.int32])
-def test_another_dtype_is_cast_for_an_input_that_is_not_a_leaf(dtype, device: str) -> None:
+def test_another_dtype_is_cast_for_an_input_that_is_not_a_leaf(
+    dtype, device: str
+) -> None:
     """A leaf's accumulator always cast; an intermediate input read the
     buffer bit for bit — 32.06 for 3, or zeros, depending on the dtype."""
     fn = _returning(lambda g: (g * 3).to(dtype))
@@ -210,7 +219,9 @@ def test_a_gradient_on_another_device_is_refused(device_gpu_only: str) -> None:
     assert x.grad is None
 
 
-def test_a_zero_dim_gradient_is_moved_to_the_input_s_device(device_gpu_only: str) -> None:
+def test_a_zero_dim_gradient_is_moved_to_the_input_s_device(
+    device_gpu_only: str,
+) -> None:
     fn = _returning(lambda g: lucid.tensor(5.0))
     x = lucid.tensor(1.0, device="metal", requires_grad=True)
     fn.apply(x).backward()
@@ -235,7 +246,9 @@ class _ScaleBy(Function):
 
 
 @pytest.mark.parametrize("x_first", [True, False], ids=["x-then-k", "k-then-x"])
-def test_one_gradient_per_positional_argument_is_accepted(x_first: bool, device: str) -> None:
+def test_one_gradient_per_positional_argument_is_accepted(
+    x_first: bool, device: str
+) -> None:
     x = lucid.ones(2, 3, device=device, requires_grad=True)
     out = _ScaleBy.apply(x, 3) if x_first else _ScaleBy.apply(3, x)
     out.sum().backward()
@@ -305,7 +318,9 @@ def _outcome(make_ones, apply_twice, shape, grad_shape):
 
 @pytest.mark.parity
 @pytest.mark.parametrize("case", list(SHAPE_CASES), ids=list(SHAPE_CASES))
-def test_shapes_are_judged_as_the_reference_judges_them(case: str, device: str, ref) -> None:
+def test_shapes_are_judged_as_the_reference_judges_them(
+    case: str, device: str, ref
+) -> None:
     shape, grad_shape = SHAPE_CASES[case]
 
     def lucid_apply(x, grad_fn):

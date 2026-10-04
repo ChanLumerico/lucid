@@ -75,7 +75,9 @@ def _ulp(value: np.ndarray, dtype: lucid.dtype) -> np.ndarray:
     return np.maximum(2.0 ** (exp - bits), tiny)
 
 
-def _assert_within_ulp(got: lucid.Tensor, truth: float | np.ndarray, ulps: int = 1) -> None:
+def _assert_within_ulp(
+    got: lucid.Tensor, truth: float | np.ndarray, ulps: int = 1
+) -> None:
     """``got`` is the float64 ``truth`` rounded to ``got``'s dtype, give or
     take ``ulps`` units in the last place."""
     want = _rounded(truth, got.dtype)
@@ -123,7 +125,12 @@ _NORMAL = _RNG.standard_normal(1 << 17)
 
 
 def _cases() -> list[
-    tuple[str, Callable[[], np.ndarray], Callable[..., lucid.Tensor], Callable[[np.ndarray], float]]
+    tuple[
+        str,
+        Callable[[], np.ndarray],
+        Callable[..., lucid.Tensor],
+        Callable[[np.ndarray], float],
+    ]
 ]:
     """(id, input values, the op on a Metal tensor, the float64 truth)."""
     shifted = 3.0 + 2.0 * _NORMAL
@@ -186,12 +193,16 @@ def test_reduction_is_the_rounded_exact_answer(case: tuple, dtype: lucid.dtype) 
     # The truth is taken from the values the half tensor actually holds.
     # ``var`` and ``std`` round more than once on the way (the population
     # variance, the Bessel factor, the root), as the reference's do.
-    _assert_within_ulp(got, truth(_exact(x)), ulps=2 if case[0].startswith(("var", "std")) else 1)
+    _assert_within_ulp(
+        got, truth(_exact(x)), ulps=2 if case[0].startswith(("var", "std")) else 1
+    )
 
 
 @pytest.mark.parametrize("dtype", _HALVES, ids=_name)
 @pytest.mark.parametrize("case", _CASES, ids=[c[0] for c in _CASES])
-def test_reduction_matches_reference(ref: object, case: tuple, dtype: lucid.dtype) -> None:
+def test_reduction_matches_reference(
+    ref: object, case: tuple, dtype: lucid.dtype
+) -> None:
     """Against the reference on its own GPU stream: its CPU half kernels
     are not the comparison — they overflow ``logsumexp`` of 70000 zeros
     and lose 5% of a float16 ``prod`` of 1000 x 1.01."""
@@ -318,7 +329,10 @@ def test_linear_bias_gradient_is_summed_in_float32(dtype: lucid.dtype) -> None:
 
 
 def _half_vs_float32(
-    make: Callable[[], nn.Module], shape: tuple[int, ...], dtype: lucid.dtype, scale: float
+    make: Callable[[], nn.Module],
+    shape: tuple[int, ...],
+    dtype: lucid.dtype,
+    scale: float,
 ) -> tuple[nn.Module, nn.Module]:
     """The half layer against the same layer in float32, on the same
     half-representable input, through forward and backward.
@@ -337,7 +351,9 @@ def _half_vs_float32(
         x.requires_grad_(True)
         y = layer(x)
         (y * _half(project, dtype).to(dt)).sum().backward()
-        outs[dt] = [_exact(y), _exact(x.grad)] + [_exact(p.grad) for p in layer.parameters()]
+        outs[dt] = [_exact(y), _exact(x.grad)] + [
+            _exact(p.grad) for p in layer.parameters()
+        ]
         layers[dt] = layer
     tol = 2.0 ** -_FORMAT[dtype][0] * 8
     for h, f in zip(outs[dtype], outs[lucid.float32], strict=True):
@@ -351,7 +367,9 @@ def test_half_batchnorm_trains_one_step(dtype: lucid.dtype) -> None:
     """The issue's case: a half ``BatchNorm2d`` trained its running mean
     to inf.  Forward, backward and the running statistics against the
     same step in float32."""
-    half, full = _half_vs_float32(lambda: nn.BatchNorm2d(4), (64, 4, 32, 32), dtype, scale=3.0)
+    half, full = _half_vs_float32(
+        lambda: nn.BatchNorm2d(4), (64, 4, 32, 32), dtype, scale=3.0
+    )
     for name in ("running_mean", "running_var"):
         h, f = _exact(getattr(half, name)), _exact(getattr(full, name))
         assert np.all(np.isfinite(h)), (name, h)
@@ -414,7 +432,9 @@ def test_mean_loss_over_more_elements_than_float16_counts(
 
 @pytest.mark.parametrize("dtype", _HALVES, ids=_name)
 @pytest.mark.parametrize("which", ["cross_entropy_loss", "nll_loss"])
-def test_engine_class_loss_mean_over_many_targets(which: str, dtype: lucid.dtype) -> None:
+def test_engine_class_loss_mean_over_many_targets(
+    which: str, dtype: lucid.dtype
+) -> None:
     """The engine's fused class losses counted the targets in the loss
     dtype — exact in float16 only to 2048, inf past 65504 — and divided
     the half sum by that count."""

@@ -26,7 +26,9 @@ INF = float("inf")
 NAN = float("nan")
 
 
-def _param(values: list[float], device: str, dtype: lucid.dtype = lucid.float32) -> lucid.nn.Parameter:
+def _param(
+    values: list[float], device: str, dtype: lucid.dtype = lucid.float32
+) -> lucid.nn.Parameter:
     return lucid.nn.Parameter(lucid.tensor(values, device=device, dtype=dtype))
 
 
@@ -250,7 +252,9 @@ class _Side:
         self.tensor, self.parameter, self.sgd = tensor, parameter, sgd
         self.scaler_cls, self.clip = scaler, clip
 
-    def run(self, n_opts: int, unscale_first: bool) -> list[tuple[list[list[float]], float]]:
+    def run(
+        self, n_opts: int, unscale_first: bool
+    ) -> list[tuple[list[list[float]], float]]:
         params = [self.parameter([1.0, -2.0, 0.5]) for _ in range(n_opts)]
         opts = [self.sgd([p], lr=0.1) for p in params]
         scaler = self.scaler_cls(init_scale=2.0**10, growth_interval=2)
@@ -261,7 +265,11 @@ class _Side:
             # With two optimizers only the second sees the overflow.
             loss = None
             for i, p in enumerate(params):
-                w = weights if (i == n_opts - 1) else [abs(x) if math.isfinite(x) else 1.0 for x in weights]
+                w = (
+                    weights
+                    if (i == n_opts - 1)
+                    else [abs(x) if math.isfinite(x) else 1.0 for x in weights]
+                )
                 term = (p * self.tensor(w)).sum()
                 loss = term if loss is None else loss + term
             scaler.scale(loss).backward()
@@ -298,8 +306,12 @@ def _ref_side(ref) -> _Side:
 
 @pytest.mark.parity
 @pytest.mark.parametrize("n_opts", [1, 2], ids=["one-optimizer", "two-optimizers"])
-@pytest.mark.parametrize("unscale_first", [True, False], ids=["unscale-clip-step", "step"])
-def test_trajectory_matches_the_reference(device: str, ref, n_opts: int, unscale_first: bool) -> None:
+@pytest.mark.parametrize(
+    "unscale_first", [True, False], ids=["unscale-clip-step", "step"]
+)
+def test_trajectory_matches_the_reference(
+    device: str, ref, n_opts: int, unscale_first: bool
+) -> None:
     got = _lucid_side(device).run(n_opts, unscale_first)
     want = _ref_side(ref).run(n_opts, unscale_first)
     for it, ((gp, gs), (wp, ws)) in enumerate(zip(got, want)):
