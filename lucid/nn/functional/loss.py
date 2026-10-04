@@ -26,6 +26,31 @@ def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
         raise ValueError(f"reduction must be one of {valid}, got {reduction!r}")
 
 
+def _accumulation_dtype(t: Tensor) -> _lucid.dtype:
+    """The dtype a loss over ``t`` is computed and summed in.
+
+    Half precision is widened to float32.  A float16 sum overflows at
+    65504, so a mean over a large batch came out ``inf / inf = nan`` even
+    though every term and the answer were small; and constants a loss
+    needs (an ``eps`` of 1e-12, a gradient floor of 1e12) are not float16
+    numbers at all.  The result is rounded back to the input's dtype.
+    """
+    if t.dtype in (_lucid.float16, _lucid.bfloat16):
+        return _lucid.float32
+    return t.dtype
+
+
+def _reduce_in(t: Tensor, reduction: str, out_dtype: _lucid.dtype) -> Tensor:
+    """Reduce per-element losses held in their accumulation dtype, then
+    round the result back to ``out_dtype``."""
+    _validate_reduction(reduction)
+    if reduction == "mean":
+        t = t.mean()
+    elif reduction == "sum":
+        t = t.sum()
+    return t if t.dtype == out_dtype else t.to(dtype=out_dtype)
+
+
 def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     r"""Mean-squared-error (L2) loss between input and target.
 
@@ -553,9 +578,11 @@ def binary_cross_entropy(
     with raw logits, prefer :func:`binary_cross_entropy_with_logits`
     for numerical stability.
 
-    Inputs are clamped to :math:`[\varepsilon, 1 - \varepsilon]`
-    with :math:`\varepsilon = 10^{-12}` before the logarithm to
-    prevent ``-inf`` gradients at the boundaries.
+    Each logarithm is clamped below at :math:`-100`, so a probability
+    of exactly ``0`` or ``1`` costs at most ``100`` instead of an
+    infinite or undefined loss, and the input gradient's denominator
+    :math:`p(1-p)` is floored at :math:`\varepsilon = 10^{-12}`, so the
+    gradient stays finite at the boundaries too.
 
     Parameters
     ----------
@@ -580,12 +607,15 @@ def binary_cross_entropy(
 
     .. math::
 
-        L_i = -\big(y_i\,\log p_i + (1 - y_i)\,\log(1 - p_i)\big)
+        L_i = -\big(y_i\,\max(\log p_i, -100)
+              + (1 - y_i)\,\max(\log(1 - p_i), -100)\big)
 
-    Gradient w.r.t. ``x`` is :math:`(p_i - y_i) / (p_i(1 - p_i))`,
-    which diverges as :math:`p_i \to 0` or :math:`1` — the reason
-    the logits-form (which yields a clean :math:`\sigma(x) - y`
-    gradient) is preferred when training stability is critical.
+    Gradient w.r.t. ``x`` is
+    :math:`(p_i - y_i) / \max(p_i(1 - p_i), \varepsilon)`, which grows
+    without bound as :math:`p_i \to 0` or :math:`1` until the floor
+    caps it — the reason the logits-form (which yields a clean
+    :math:`\sigma(x) - y` gradient) is preferred when training
+    stability is critical.
 
     Examples
     --------
@@ -597,18 +627,38 @@ def binary_cross_entropy(
     tensor(0.2284)
     """
     _validate_reduction(reduction)
+    # The probability used to be clamped to [1e-12, 1 - 1e-12], and in
+    # float32 ``1 - 1e-12`` rounds to 1.0: a sigmoid of a logit above ~17
+    # is exactly 1, ``log(1 - 1)`` is -inf, and ``0 * -inf`` made the loss
+    # NaN.  The clamp also zeroed the gradient at both ends.
+    #
+    # The definition now is the reference's: each log term clamped at
+    # -100 in the value, and an input gradient of
+    # ``(p - y) / max(p (1 - p), eps)``.  Where ``p (1 - p) >= eps`` the
+    # plain expression is differentiated as written (which also keeps the
+    # second derivative); elsewhere — within ~1e-12 of 0 or 1, where the
+    # logs are clamped or infinite — the value is computed off the graph
+    # and the floored gradient is attached as a straight-through term.
+    #
+    # Half precision is computed in float32 and rounded back: ``eps`` is 0
+    # in float16, and the floored gradient (1e12) is not a float16 number.
+    out_dtype = x.dtype
+    acc = _accumulation_dtype(x)
+    p: Tensor = x.to(dtype=acc)
+    y: Tensor = target.to(dtype=acc)
     eps: float = 1e-12
-    one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
-    _lucid.tensor(eps, dtype=x.dtype, device=x.device)
-    x_clamped: Tensor = x.clamp(eps, 1.0 - eps)
-    bce: Tensor = -(target * x_clamped.log() + (one - target) * (one - x_clamped).log())
+    p_d: Tensor = p.detach()
+    inside: Tensor = p_d * (1.0 - p_d) >= eps
+    p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
+    interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
+    log_p: Tensor = p_d.log().clamp(min=-100.0)
+    log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
+    grad_edge: Tensor = (p_d - y.detach()) / eps
+    edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
+    bce: Tensor = _lucid.where(inside, interior, edge)
     if weight is not None:
         bce = bce * weight
-    if reduction == "none":
-        return bce
-    if reduction == "sum":
-        return bce.sum()
-    return bce.mean()
+    return _reduce_in(bce, reduction, out_dtype)
 
 
 def binary_cross_entropy_with_logits(
