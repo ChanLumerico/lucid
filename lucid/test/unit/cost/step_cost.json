@@ -31,7 +31,7 @@
     "peak_bytes": 65568
   },
   "cnn_sgd/cpu": {
-    "allocations": 75,
+    "allocations": 83,
     "forward_ops": {
       "add": 1,
       "all": 1,
@@ -42,8 +42,8 @@
       "clip": 1,
       "conv2d": 1,
       "div": 1,
-      "equal": 1,
-      "full": 2,
+      "equal": 2,
+      "full": 4,
       "gather": 1,
       "invert": 1,
       "linear": 1,
@@ -52,18 +52,20 @@
       "mul": 1,
       "neg": 1,
       "not_equal": 1,
+      "ones": 1,
       "relu": 1,
       "reshape": 1,
       "squeeze": 1,
       "sum": 2,
-      "unsqueeze": 1
+      "unsqueeze": 1,
+      "where": 2
     },
-    "frees": 75,
+    "frees": 83,
     "host_syncs": 0,
-    "peak_bytes": 171156
+    "peak_bytes": 171157
   },
   "cnn_sgd/metal": {
-    "allocations": 85,
+    "allocations": 93,
     "forward_ops": {
       "add": 1,
       "astype": 2,
@@ -72,8 +74,8 @@
       "clip": 1,
       "conv2d": 1,
       "div": 1,
-      "equal": 1,
-      "full": 3,
+      "equal": 2,
+      "full": 5,
       "gather": 1,
       "invert": 1,
       "linear": 1,
@@ -82,17 +84,18 @@
       "mul": 1,
       "neg": 1,
       "not_equal": 1,
+      "ones": 1,
       "relu": 1,
       "reshape": 1,
       "squeeze": 1,
       "sum": 2,
       "unsqueeze": 1,
-      "where": 1
+      "where": 3
     },
-    "frees": 85,
+    "frees": 93,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 203924
+    "peak_bytes": 203925
   },
   "compiled_mlp_adam/metal": {
     "allocations": 17,
@@ -183,7 +186,7 @@
     "peak_bytes": 36740
   },
   "mlp_adam/cpu": {
-    "allocations": 52,
+    "allocations": 60,
     "forward_ops": {
       "all": 1,
       "astype": 2,
@@ -191,8 +194,8 @@
       "broadcast_to": 1,
       "clip": 1,
       "div": 1,
-      "equal": 1,
-      "full": 1,
+      "equal": 2,
+      "full": 3,
       "gather": 1,
       "invert": 1,
       "linear": 2,
@@ -200,24 +203,26 @@
       "mul": 1,
       "neg": 1,
       "not_equal": 1,
+      "ones": 1,
       "relu": 1,
       "squeeze": 1,
       "sum": 2,
-      "unsqueeze": 1
+      "unsqueeze": 1,
+      "where": 2
     },
-    "frees": 52,
+    "frees": 60,
     "host_syncs": 0,
-    "peak_bytes": 14404
+    "peak_bytes": 14405
   },
   "mlp_adam/metal": {
-    "allocations": 60,
+    "allocations": 68,
     "forward_ops": {
       "astype": 2,
       "bitwise_or": 1,
       "clip": 1,
       "div": 1,
-      "equal": 1,
-      "full": 2,
+      "equal": 2,
+      "full": 4,
       "gather": 1,
       "invert": 1,
       "linear": 2,
@@ -225,13 +230,14 @@
       "mul": 1,
       "neg": 1,
       "not_equal": 1,
+      "ones": 1,
       "relu": 1,
       "squeeze": 1,
       "sum": 2,
       "unsqueeze": 1,
-      "where": 1
+      "where": 3
     },
-    "frees": 60,
+    "frees": 68,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 8196

@@ -432,7 +432,17 @@ def _class_nll(
     # mean — the divisor is the total weight of the samples kept.
     if sample_weight is None:
         return nll.mean()
-    return nll.sum() / sample_weight.sum()
+    total: Tensor = nll.sum()
+    denom: Tensor = sample_weight.sum()
+    # A batch with nothing kept — all padding, as one micro-batch of an
+    # MLM or seq2seq run can be — has the value 0 / 0 = NaN, as in the
+    # reference.  Its gradient is 0, also as in the reference: dividing by
+    # the zero itself sent inf to every masked position, inf * 0 = NaN
+    # reached every parameter, and one such batch under gradient
+    # accumulation ruined the whole step.
+    empty: Tensor = denom == 0.0
+    safe_denom: Tensor = _lucid.where(empty, _lucid.ones_like(denom), denom)
+    return _lucid.where(empty, _lucid.full_like(total, math.nan), total / safe_denom)
 
 
 def cross_entropy(

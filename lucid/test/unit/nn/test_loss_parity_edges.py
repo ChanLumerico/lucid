@@ -379,3 +379,89 @@ class TestClassTargetsAreNeverGatheredRaw:
             assert _close(lo.item(), ro.item())
             assert lx.grad is not None
             assert _close(_vals(lx.grad), rxx.grad.tolist())
+
+
+# ── CHA-87 ─────────────────────────────────────────────────────────────────
+
+
+class TestABatchWithEveryTargetIgnored:
+    """An all-``ignore_index`` batch gave every parameter a NaN gradient.
+
+    The mean divided by a total weight of 0, and the backward sent
+    ``inf * 0`` to every masked position.  The value stays NaN, as in the
+    reference; the gradient is 0, also as in the reference.
+    """
+
+    def test_the_value_is_nan_and_the_gradient_zero(self, device: str) -> None:
+        lin = nn.Linear(4, 3).to(device)
+        loss = nn.CrossEntropyLoss()(
+            lin(lucid.randn(2, 4, device=device)),
+            lucid.tensor([-100, -100], device=device),
+        )
+        loss.backward()
+        assert math.isnan(loss.item())
+        assert lin.weight.grad is not None and lin.bias.grad is not None
+        assert _vals(lin.weight.grad) == [[0.0] * 4] * 3
+        assert _vals(lin.bias.grad) == [0.0] * 3
+
+    @pytest.mark.parametrize("option", ["plain", "weight", "smoothing"])
+    def test_every_option_keeps_the_gradient_finite(
+        self, device: str, option: str
+    ) -> None:
+        x = lucid.tensor(
+            [[1.0, 2.0, 3.0], [0.5, 0.1, 0.2]], requires_grad=True, device=device
+        )
+        t = lucid.tensor([-100, -100], device=device)
+        if option == "weight":
+            loss = F.cross_entropy(
+                x, t, weight=lucid.tensor([1.0, 2.0, 3.0], device=device)
+            )
+        elif option == "smoothing":
+            loss = F.cross_entropy(x, t, label_smoothing=0.1)
+        else:
+            loss = F.cross_entropy(x, t)
+        loss.backward()
+        assert math.isnan(loss.item())
+        assert x.grad is not None
+        assert _vals(x.grad) == [[0.0] * 3] * 2
+
+    def test_gradient_accumulation_survives_a_padding_batch(self, device: str) -> None:
+        lin = nn.Linear(4, 3).to(device)
+        x = lucid.randn(2, 4, device=device)
+        F.cross_entropy(lin(x), lucid.tensor([0, 2], device=device)).backward()
+        assert lin.weight.grad is not None
+        before = _vals(lin.weight.grad)
+        F.nll_loss(
+            F.log_softmax(lin(x), dim=1), lucid.tensor([-100, -100], device=device)
+        ).backward()
+        assert _vals(lin.weight.grad) == before
+
+    def test_sum_of_an_all_ignored_batch_is_zero(self, device: str) -> None:
+        x = lucid.tensor([[1.0, 2.0, 3.0]], device=device)
+        t = lucid.tensor([-100], device=device)
+        assert F.nll_loss(x, t, reduction="sum").item() == 0.0
+
+    @pytest.mark.parity
+    @pytest.mark.parametrize("option", ["plain", "weight", "smoothing"])
+    def test_matches_the_reference(self, ref: object, device: str, option: str) -> None:
+        R = ref
+        vals = [[1.0, 2.0, 3.0], [0.5, 0.1, 0.2]]
+        lx = lucid.tensor(vals, requires_grad=True, device=device)
+        lt = lucid.tensor([-100, -100], device=device)
+        rx = R.tensor(vals, requires_grad=True)  # type: ignore[attr-defined]
+        rt = R.tensor([-100, -100])  # type: ignore[attr-defined]
+        rf = R.nn.functional  # type: ignore[attr-defined]
+        if option == "weight":
+            lo = F.cross_entropy(lx, lt, weight=lucid.tensor([1.0, 2.0, 3.0], device=device))
+            ro = rf.cross_entropy(rx, rt, weight=R.tensor([1.0, 2.0, 3.0]))  # type: ignore[attr-defined]
+        elif option == "smoothing":
+            lo = F.cross_entropy(lx, lt, label_smoothing=0.1)
+            ro = rf.cross_entropy(rx, rt, label_smoothing=0.1)
+        else:
+            lo = F.cross_entropy(lx, lt)
+            ro = rf.cross_entropy(rx, rt)
+        lo.backward()
+        ro.backward()
+        assert _close(lo.item(), ro.item())
+        assert lx.grad is not None
+        assert _close(_vals(lx.grad), rx.grad.tolist())
