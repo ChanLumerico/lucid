@@ -9,6 +9,8 @@ Not under ``lucid/test`` (the default ``testpaths``), so it runs on request::
     .venv/bin/python3 -m pytest tools/test_quality_gate.py
 """
 
+import ast
+import importlib.util
 import json
 import os
 import shutil
@@ -20,6 +22,7 @@ import pytest
 
 from tools.quality_gate.collectors.counters import count_python
 from tools.quality_gate.core import Baseline, MergeRefused, merge_baselines
+from tools.quality_gate.unlaunder import strip_ignores, strip_transitional, unwrap_casts
 
 REPO = Path(__file__).resolve().parents[1]
 FAST = "ruff,counters,lizard"
@@ -279,3 +282,174 @@ def test_rebase_merges_concurrent_lowerings_through_the_driver(tmp_path: Path) -
     counts = json.loads((root / "tools" / "quality_baseline.json").read_text())["counts"]
     assert counts["counters"]["type-ignore[misc]"] == {"lucid/pkg/a.py": 1, "lucid/pkg/b.py": 2}
     assert gate(root, "--full", "--collectors", FAST).returncode == 0
+
+
+# ── unlaunder: the mypy-driven codemod ──────────────────────────────────────
+
+
+def test_unlaunder_strips_only_the_marked_sections() -> None:
+    ini = (
+        "[mypy]\nstrict = True\n\n"
+        "# transitional (LCD-260) — removed later.\n# more words\n"
+        "[mypy-lucid.pkg.*]\nwarn_unused_ignores = False\n\n"
+        "[mypy-lucid.keep.*]\nignore_errors = True\n"
+        "# transitional (LCD-260) is a stray marker here\nfoo = 1\n"
+        "[mypy-lucid.also_kept]\nignore_errors = True\n"
+    )
+    out = strip_transitional(ini)
+    assert "[mypy-lucid.pkg.*]" not in out and "warn_unused_ignores" not in out
+    assert "[mypy-lucid.keep.*]" in out and "[mypy-lucid.also_kept]" in out
+    assert "strict = True" in out
+
+
+@pytest.mark.parametrize(
+    ("line", "unused", "after"),
+    [
+        ("x = 1  # type: ignore\n", None, "x = 1\n"),
+        ("x = 1  # type: ignore[misc]\n", None, "x = 1\n"),
+        ("x = 1  # type: ignore[a, b]\n", {"a"}, "x = 1  # type: ignore[b]\n"),
+        ("x = 1  # type: ignore[a, b]  # why\n", {"a"}, "x = 1  # type: ignore[b]  # why\n"),
+        ("x = 1  # type: ignore[a, b]\n", {"a", "b"}, "x = 1\n"),
+        ("x = 1  # type: ignore[misc]  # it is fine at runtime\n", None, "x = 1\n"),
+        ("x = 1  # type: ignore # noqa: F821\n", None, "x = 1  # noqa: F821\n"),
+        ("x = 1  # noqa: E501  # type: ignore[misc]\n", None, "x = 1  # noqa: E501\n"),
+        ("s = '# type: ignore'  # type: ignore\n", None, "s = '# type: ignore'\n"),
+    ],
+)
+def test_unlaunder_removes_only_the_unused_codes(
+    line: str, unused: set[str] | None, after: str
+) -> None:
+    out, skipped = strip_ignores(line, {1: None if unused is None else frozenset(unused)})
+    assert (out, skipped) == (after, [])
+
+
+def test_unlaunder_leaves_an_ignore_whose_codes_do_not_match() -> None:
+    out, skipped = strip_ignores("x = 1  # type: ignore[misc]\n", {1: frozenset({"override"})})
+    assert out == "x = 1  # type: ignore[misc]\n" and len(skipped) == 1
+
+
+def _sites(src: str) -> set[tuple[int, int]]:
+    """Every cast call's (line, byte column), as mypy reports them."""
+    return {
+        (n.lineno, n.col_offset)
+        for n in ast.walk(ast.parse(src))
+        if isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", "")) == "cast"
+    }
+
+
+@pytest.mark.parametrize(
+    ("src", "after"),
+    [
+        ("y = cast(int, cast(int, x)) + cast(int, x)\n", "y = x + x\n"),
+        ("y = cast(\n    int,\n    f(\n        x,\n    ),\n)\n", "y = f(\n        x,\n    )\n"),
+        ("y = cast(int, a + b) * 2\n", "y = (a + b) * 2\n"),
+        ("y = cast(int, a + b)\n", "y = a + b\n"),
+        ("f(cast(int, a if b else c))\n", "f(a if b else c)\n"),
+        ("y = cast(int, a or b).bit_length()\n", "y = (a or b).bit_length()\n"),
+        ("y = cast(int, a\n    + b)\n", "y = (a\n    + b)\n"),
+        ("f(cast(int, a\n    + b))\n", "f(a\n    + b)\n"),
+        ("y = -cast(int, (z := 1))\n", "y = -(z := 1)\n"),
+        ("y = typing.cast(int, x)\n", "y = x\n"),
+        ("y = cast(typ=int, val=x)\n", "y = x\n"),
+        ("s = 'é'; y = cast(int, x)\n", "s = 'é'; y = x\n"),
+    ],
+)
+def test_unlaunder_unwraps_casts_without_changing_the_code(src: str, after: str) -> None:
+    out, n, skipped = unwrap_casts(src, _sites(src))
+    assert (out, skipped) == (after, [])
+    assert n == len(_sites(src))
+
+
+def test_unlaunder_leaves_a_cast_whose_comment_would_be_lost() -> None:
+    src = "y = cast(\n    int,  # the engine returns int here\n    x,\n)\n"
+    out, n, skipped = unwrap_casts(src, _sites(src))
+    assert out == src and n == 0
+    assert skipped == ["1: a comment inside the cast would be lost"]
+
+
+def test_unlaunder_unwraps_only_the_reported_cast_of_a_nest() -> None:
+    src = "y = cast(int, cast(str, x))\n"
+    out, n, _ = unwrap_casts(src, {(1, 14)})
+    assert (out, n) == ("y = cast(int, x)\n", 1)
+
+
+UNLAUNDER_INI = """\
+[mypy]
+python_version = 3.14
+strict = True
+
+# transitional (LCD-260) — keeps the package green until its sweep lands.
+[mypy-lucid.pkg.*]
+warn_unused_ignores = False
+disable_error_code = redundant-cast
+"""
+
+UNLAUNDER_MOD = """\
+from typing import cast
+
+
+def f(x: int, s: str) -> int:
+    a = cast(int, cast(int, x)) + cast(int, x)
+    b = cast(
+        int,
+        x,
+    )
+    c: int = s  # type: ignore[assignment, misc]
+    d = 1  # type: ignore[misc]  # the reason this was needed
+    e = 2  # type: ignore # noqa: E501
+    return a + b + c + d + e
+"""
+
+UNLAUNDER_DONE = """\
+def f(x: int, s: str) -> int:
+    a = x + x
+    b = x
+    c: int = s  # type: ignore[assignment]
+    d = 1
+    e = 2  # noqa: E501
+    return a + b + c + d + e
+"""
+
+
+def unlaunder(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "tools.quality_gate.unlaunder", "--root", str(root), *args],
+        cwd=REPO,
+        env=_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("black") is None and shutil.which("black") is None,
+    reason="unlaunder reformats with black",
+)
+def test_unlaunder_end_to_end_reaches_a_fixpoint(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    for pkg in ("lucid/pkg", "lucid/other"):
+        (root / pkg).mkdir(parents=True)
+        (root / pkg / "__init__.py").write_text("")
+    (root / "lucid" / "__init__.py").write_text("")
+    (root / "mypy.ini").write_text(UNLAUNDER_INI)
+    (root / "lucid" / "pkg" / "mod.py").write_text(UNLAUNDER_MOD)
+    (root / "lucid" / "other" / "mod.py").write_text(UNLAUNDER_MOD)
+
+    # A path mypy never reports on would read as "0 left": refused instead.
+    (root / "tools").mkdir()
+    (root / "lucid" / "test").mkdir()
+    for wrong in ("lucid/nope", "tools", "lucid/test", str(tmp_path)):
+        assert unlaunder(root, "--check", "--paths", wrong).returncode == 2, wrong
+    check = unlaunder(root, "--check", "--paths", str(root / "lucid" / "pkg"))
+    assert check.returncode == 1, check.stdout + check.stderr
+    assert "2 redundant-cast, 3 unused-ignore" in check.stdout  # one per line
+    assert (root / "lucid" / "pkg" / "mod.py").read_text() == UNLAUNDER_MOD
+
+    run = unlaunder(root, "--paths", "lucid/pkg")
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "round 2:" in run.stdout  # mypy reports one cast per line and message
+    assert (root / "lucid" / "pkg" / "mod.py").read_text() == UNLAUNDER_DONE
+    assert (root / "lucid" / "other" / "mod.py").read_text() == UNLAUNDER_MOD
+    done = unlaunder(root, "--check", "--paths", "lucid/pkg")
+    assert done.returncode == 0 and "0 redundant-cast, 0 unused-ignore" in done.stdout

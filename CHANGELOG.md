@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - land refuses slop; baseline is claim-exempt with a merge driver
 
+- unlaunder codemod for mypy-proven dead casts and ignores
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

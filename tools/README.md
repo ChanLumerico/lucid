@@ -102,6 +102,66 @@ registers the driver in repo-local config, and `land` re-checks it before
 every rebase. Without the driver, git falls back to a text merge, which
 conflicts on neighbouring keys.
 
+### Unlaundering (redundant casts, unused ignores)
+
+When an owner's types are fixed (LCD-260: `Module.__call__` typed from the
+subclass's `forward`), the casts and `type: ignore`s written around the
+old types become dead, and mypy can prove which ones. Those are removed
+mechanically, never by hand:
+
+```
+python -m tools.quality_gate.unlaunder --paths lucid/models/vision          # edit
+python -m tools.quality_gate.unlaunder --paths lucid/models/vision --check  # count, exit 1 if any
+```
+
+Each round runs mypy over `lucid/` with the gate's flags. It then unwraps
+`cast(T, e)` to `e` at each `redundant-cast` under `--paths`, and drops
+the codes each `unused-ignore` names. An ignore left with no codes goes
+together with its trailing reason; a `# noqa` or `# pragma` tail stays.
+mypy reports one finding per line and message, so the next cast on a line
+only shows up after the first one is gone. Rounds therefore repeat until
+nothing more applies, usually in 2–3 rounds. A round takes about 6 s
+once mypy's cache (`.mypy_cache/unlaunder`) is warm, and about 25 s cold.
+The heavy lock is not needed. The
+touched files then get `ruff --select F401 --fix` (for a `cast` import
+that became unused) and black at 88. Rules that keep the edit safe:
+
+- every file's result is checked against the original AST with the casts
+  replaced, and parentheses are added when the value binds looser than
+  its new context;
+- a cast whose removed parts hold a comment is left in place and listed;
+- a mypy error of any other code that appears during the run fails it
+  (exit 2);
+- a `--paths` entry outside `lucid/` (or under `lucid/test/`) is
+  refused, because mypy would never report there and the result would
+  read as "0 left".
+
+Exit codes are `0` (nothing left), `1` (sites left) and `2` (could not
+proceed).
+
+**The transitional-section convention.** A change to an owner's types
+turns hundreds of existing suppressions into errors at once under the
+gate's `--warn-unused-ignores` / `redundant-cast`. Those suppressions
+cannot all be removed in the same commit. The owner's commit therefore
+adds a `mypy.ini` section for the affected packages that turns those two
+checks off, and the comment right above its header starts with
+`# transitional (<issue>)`. unlaunder runs mypy on a copy of `mypy.ini`
+without every section introduced that way, so it sees exactly what the
+section hides. Only the comment block directly above a header counts: a
+key line between the marker and the header cancels it. The last sweep
+card deletes the section (LCD-260-C4).
+
+**Per sweep card** (one path set, for example `lucid/models/vision`):
+
+1. `python -m tools.quality_gate.unlaunder --paths <prefix>...`
+2. `python -m tools.quality_gate.unlaunder --paths <prefix>... --check` → `0 redundant-cast, 0 unused-ignore`.
+3. `mypy --strict lucid/` → 0 errors (with the real `mypy.ini`).
+4. `python -m tools.quality_gate --update --fast` to record the drop. Stage
+   `tools/quality_baseline.json` together with the edits.
+
+The edits change no behaviour, so the card's tests are the touched
+package's own suite.
+
 ### Adding a collector
 
 1. Put a subclass of `collectors.Collector` in `tools/quality_gate/collectors/`.
