@@ -104,22 +104,36 @@ def _transformer_adamw(device: str) -> Callable[[], object]:
     return step
 
 
-def _lstm_adam(device: str) -> Callable[[], object]:
-    lstm = nn.LSTM(16, 32, batch_first=True).to(device)
+def _recurrent_adam(
+    cls: type[nn.LSTM] | type[nn.GRU], device: str
+) -> Callable[[], object]:
+    rnn = cls(16, 32, batch_first=True).to(device)
     head = nn.Linear(32, 1).to(device)
-    opt = optim.Adam(list(lstm.parameters()) + list(head.parameters()), lr=1e-3)
+    opt = optim.Adam(list(rnn.parameters()) + list(head.parameters()), lr=1e-3)
     x = lucid.randn(2, 6, 16, device=device)
     target = lucid.randn(2, 1, device=device)
 
     def step() -> object:
         opt.zero_grad()
-        out, _ = lstm(x)
+        out, _ = rnn(x)
         loss = F.mse_loss(head(out[:, -1]), target)
         loss.backward()
         opt.step()
         return loss.item()
 
     return step
+
+
+def _lstm_adam(device: str) -> Callable[[], object]:
+    return _recurrent_adam(nn.LSTM, device)
+
+
+def _gru_adam(device: str) -> Callable[[], object]:
+    # GRU and RNN step a cell per timestep rather than making one engine
+    # call, so a cost paid per step — a whole-batch slice that became a
+    # view of its own — shows up here once per timestep and is invisible
+    # in the LSTM workload.
+    return _recurrent_adam(nn.GRU, device)
 
 
 def _compiled_mlp_adam(device: str) -> Callable[[], object]:
@@ -146,6 +160,7 @@ WORKLOADS: tuple[Workload, ...] = (
     Workload("cnn_inference", _cnn_inference),
     Workload("transformer_adamw", _transformer_adamw),
     Workload("lstm_adam", _lstm_adam),
+    Workload("gru_adam", _gru_adam),
     Workload("compiled_mlp_adam", _compiled_mlp_adam, devices=("metal",)),
 )
 

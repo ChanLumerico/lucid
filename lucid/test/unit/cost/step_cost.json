@@ -97,6 +97,49 @@
     "host_syncs": 1,
     "peak_bytes": 8192
   },
+  "gru_adam/cpu": {
+    "allocations": 552,
+    "forward_ops": {
+      "add": 24,
+      "full": 6,
+      "linear": 13,
+      "mse_loss": 1,
+      "mul": 18,
+      "permute": 2,
+      "sigmoid": 12,
+      "split_at": 43,
+      "squeeze": 8,
+      "stack": 2,
+      "sub": 6,
+      "tanh": 6,
+      "zeros": 1
+    },
+    "frees": 552,
+    "host_syncs": 0,
+    "peak_bytes": 55060
+  },
+  "gru_adam/metal": {
+    "allocations": 654,
+    "forward_ops": {
+      "add": 24,
+      "full": 6,
+      "linear": 13,
+      "mse_loss": 1,
+      "mul": 18,
+      "permute": 2,
+      "sigmoid": 12,
+      "split_at": 43,
+      "squeeze": 8,
+      "stack": 2,
+      "sub": 6,
+      "tanh": 6,
+      "zeros": 1
+    },
+    "frees": 654,
+    "host_allocations": 0,
+    "host_syncs": 1,
+    "peak_bytes": 54036
+  },
   "lstm_adam/cpu": {
     "allocations": 36,
     "forward_ops": {
