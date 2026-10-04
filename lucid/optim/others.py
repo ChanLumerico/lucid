@@ -2,7 +2,7 @@
 Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, Rprop.
 """
 
-from typing import Iterable, cast, override
+from typing import Any, Iterable, cast, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
@@ -87,6 +87,9 @@ class RMSprop(Optimizer):
     >>> loss.backward()
     >>> optimizer.step()
     """
+
+    _HYPERPARAMS = ("lr", "alpha", "eps", "weight_decay", "momentum", "centered")
+    _ENGINE_RULES = _C_engine.RMSprop
 
     def __init__(
         self,
@@ -205,6 +208,15 @@ class Adagrad(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = (
+        "lr",
+        "lr_decay",
+        "weight_decay",
+        "initial_accumulator_value",
+        "eps",
+    )
+    _ENGINE_RULES = _C_engine.Adagrad
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -314,6 +326,9 @@ class Adadelta(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = ("lr", "rho", "eps", "weight_decay")
+    _ENGINE_RULES = _C_engine.Adadelta
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -410,6 +425,9 @@ class Adamax(Optimizer):
     >>> loss.backward()
     >>> optimizer.step()
     """
+
+    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _ENGINE_RULES = _C_engine.Adamax
 
     def __init__(
         self,
@@ -525,6 +543,9 @@ class RAdam(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _ENGINE_RULES = _C_engine.RAdam
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -621,6 +642,9 @@ class NAdam(Optimizer):
     >>> loss.backward()
     >>> optimizer.step()
     """
+
+    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _ENGINE_RULES = _C_engine.NAdam
 
     def __init__(
         self,
@@ -741,6 +765,9 @@ class ASGD(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = ("lr", "lambd", "alpha", "t0", "weight_decay")
+    _ENGINE_RULES = _C_engine.ASGD
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -846,6 +873,9 @@ class Rprop(Optimizer):
     >>> loss.backward()
     >>> optimizer.step()
     """
+
+    _HYPERPARAMS = ("lr", "eta_minus", "eta_plus", "step_min", "step_max")
+    _ENGINE_RULES = _C_engine.Rprop
 
     def __init__(
         self,
@@ -954,6 +984,8 @@ class SparseAdam(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = ("lr", "betas", "eps")
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -971,6 +1003,24 @@ class SparseAdam(Optimizer):
 
     def _n_params(self) -> int:
         return sum(len(g["params"]) for g in self.param_groups)  # type: ignore[arg-type, misc]
+
+    @override
+    @classmethod
+    def _check_hyperparams(cls, values: dict[str, Any]) -> None:
+        """Hold a group to the reference framework's SparseAdam rules.
+
+        ``lr`` and ``eps`` must be positive and each beta in ``[0, 1)``.
+        Written so a NaN fails, as the reference's ``not 0.0 < lr`` does.
+        """
+        if not 0.0 < values["lr"]:
+            raise _C_engine.InvalidArgument("SparseAdam: lr must be > 0")
+        if not 0.0 < values["eps"]:
+            raise _C_engine.InvalidArgument("SparseAdam: eps must be > 0")
+        beta1, beta2 = values["betas"]
+        if not 0.0 <= beta1 < 1.0:
+            raise _C_engine.InvalidArgument("SparseAdam: betas[0] must be in [0, 1)")
+        if not 0.0 <= beta2 < 1.0:
+            raise _C_engine.InvalidArgument("SparseAdam: betas[1] must be in [0, 1)")
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -1010,6 +1060,9 @@ class SparseAdam(Optimizer):
         >>> optimizer.step()
         """
         loss = closure() if closure is not None else None
+        # The groups are read below as they are; an edited one is checked
+        # first.
+        self._sync_hyperparams()
         flat_idx = 0
         for group in self.param_groups:
             lr = group["lr"]

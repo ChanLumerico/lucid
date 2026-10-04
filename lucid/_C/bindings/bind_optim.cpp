@@ -24,10 +24,22 @@
 // pybind11/functional.h is included for LambdaLR which stores a
 // std::function<double(int64_t)> populated from a Python callable.
 
+// Each optimizer class also takes its hyper-parameters as a dict keyed by
+// the Python wrapper's ``param_groups`` names: ``set_hyperparams`` applies
+// a group's edited values between steps, and the static
+// ``check_hyperparams`` runs the same rules on a group the wrapper is given.
+// One reader per class serves both, so they cannot take different names.
+
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
+#include <initializer_list>
+#include <string>
+#include <tuple>
+
+#include "../core/ErrorBuilder.h"
 #include "../core/TensorImpl.h"
 #include "../optim/Ada.h"
 #include "../optim/Adam.h"
@@ -39,6 +51,86 @@
 namespace py = pybind11;
 
 namespace lucid::bindings {
+
+namespace {
+
+// One optimizer's hyper-parameters as the Python wrapper passes them.
+//
+// The dict must hold exactly the names the engine takes.  A name it did not
+// take would be dropped without a word, and a missing one means the
+// wrapper's hyper-parameter table has drifted from this binding; either is
+// an ``InvalidArgument`` naming the key.
+class HyperparamDict {
+public:
+    HyperparamDict(const char* op, const py::dict& values, std::initializer_list<const char*> names)
+        : op_(op), values_(values) {
+        for (const char* name : names) {
+            if (!values_.contains(name))
+                ErrorBuilder(op_).invalid_argument(std::string("missing hyper-parameter '") + name +
+                                                   "'");
+        }
+        if (py::len(values_) == names.size())
+            return;
+        for (const auto& item : values_) {
+            const std::string key = py::str(item.first);
+            const bool known = std::any_of(names.begin(), names.end(),
+                                           [&key](const char* name) { return key == name; });
+            if (!known)
+                ErrorBuilder(op_).invalid_argument("unknown hyper-parameter '" + key + "'");
+        }
+    }
+
+    // A numeric hyper-parameter; anything ``float()`` accepts.
+    double num(const char* name) const {
+        const py::object value = values_[name];
+        try {
+            return value.cast<double>();
+        } catch (const py::cast_error&) {
+            throw py::type_error(std::string(op_) + ": " + name + " must be a number, not " +
+                                 Py_TYPE(value.ptr())->tp_name);
+        }
+    }
+
+    // A boolean hyper-parameter; read by truth value, as ``if flag:`` reads it.
+    bool flag(const char* name) const {
+        const py::object value = values_[name];
+        try {
+            return value.cast<bool>();
+        } catch (const py::cast_error&) {
+            throw py::type_error(std::string(op_) + ": " + name + " must be a bool, not " +
+                                 Py_TYPE(value.ptr())->tp_name);
+        }
+    }
+
+private:
+    const char* op_;
+    const py::dict& values_;
+};
+
+// Binds ``set_hyperparams`` and the static ``check_hyperparams`` of ``Opt``.
+//
+// ``read`` turns the wrapper's dict into the argument tuple of
+// ``Opt::set_hyperparams``; ``check`` takes that same tuple and runs the
+// class's rules.
+template <class Opt, class Read, class Check>
+void def_hyperparams(py::class_<Opt, Optimizer>& cls, Read read, Check check) {
+    cls.def(
+        "set_hyperparams",
+        [read](Opt& self, const py::dict& values) {
+            std::apply([&self](auto... args) { self.set_hyperparams(args...); }, read(values));
+        },
+        py::arg("values"),
+        "Replace the hyper-parameters between steps, from a dict keyed by "
+        "param_groups name.  Checked as the constructor checks them; nothing "
+        "is applied when a value is rejected.");
+    cls.def_static(
+        "check_hyperparams",
+        [read, check](const py::dict& values) { std::apply(check, read(values)); },
+        py::arg("values"),
+        "Raise InvalidArgument when the hyper-parameters break the constructor's rules.");
+}
+
+}  // namespace
 
 // Registers all optimizer and LR scheduler classes.
 void register_optim(py::module_& m) {
@@ -63,19 +155,46 @@ void register_optim(py::module_& m) {
         .def_property("step_count", &Optimizer::step_count, &Optimizer::set_step_count);
 
     // SGD with optional Nesterov momentum and L2 weight decay.
-    py::class_<SGD, Optimizer>(m, "SGD")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      bool>(),
-             py::arg("params"), py::arg("lr"), py::arg("momentum") = 0.0,
-             py::arg("dampening") = 0.0, py::arg("weight_decay") = 0.0, py::arg("nesterov") = false,
-             "SGD with momentum, Nesterov, and L2 weight decay.")
+    py::class_<SGD, Optimizer> sgd(m, "SGD");
+    sgd.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                     bool>(),
+            py::arg("params"), py::arg("lr"), py::arg("momentum") = 0.0, py::arg("dampening") = 0.0,
+            py::arg("weight_decay") = 0.0, py::arg("nesterov") = false,
+            "SGD with momentum, Nesterov, and L2 weight decay.")
         .def_property_readonly("momentum", &SGD::momentum)
         .def_property_readonly("weight_decay", &SGD::weight_decay);
+    def_hyperparams(
+        sgd,
+        [](const py::dict& v) {
+            const HyperparamDict h("SGD", v,
+                                   {"lr", "momentum", "dampening", "weight_decay", "nesterov"});
+            return std::make_tuple(h.num("lr"), h.num("momentum"), h.num("dampening"),
+                                   h.num("weight_decay"), h.flag("nesterov"));
+        },
+        &SGD::check_hyperparams);
+
+    // The Adam family's shared table: AMSGrad is a flag without a rule.
+    const auto adam_args = [](const char* op) {
+        return [op](const py::dict& v) {
+            const HyperparamDict h(op, v,
+                                   {"lr", "beta1", "beta2", "eps", "weight_decay", "amsgrad"});
+            return std::make_tuple(h.num("lr"), h.num("beta1"), h.num("beta2"), h.num("eps"),
+                                   h.num("weight_decay"), h.flag("amsgrad"));
+        };
+    };
+    // NAdam, RAdam and Adamax take the same names without ``amsgrad``.
+    const auto moment_args = [](const char* op) {
+        return [op](const py::dict& v) {
+            const HyperparamDict h(op, v, {"lr", "beta1", "beta2", "eps", "weight_decay"});
+            return std::make_tuple(h.num("lr"), h.num("beta1"), h.num("beta2"), h.num("eps"),
+                                   h.num("weight_decay"));
+        };
+    };
 
     // Adam (Kingma & Ba 2014).  amsgrad=True enables the AMSGrad variant which
     // uses the maximum of past squared gradients for a tighter convergence bound.
-    py::class_<Adam, Optimizer>(m, "Adam")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+    py::class_<Adam, Optimizer> adam(m, "Adam");
+    adam.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                       double, bool>(),
              py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
@@ -83,70 +202,138 @@ void register_optim(py::module_& m) {
         .def_property_readonly("beta1", &Adam::beta1)
         .def_property_readonly("beta2", &Adam::beta2)
         .def_property_readonly("eps", &Adam::eps);
+    def_hyperparams(adam, adam_args("Adam"),
+                    [](double lr, double beta1, double beta2, double eps, double wd, bool) {
+                        Adam::check_hyperparams(lr, beta1, beta2, eps, wd);
+                    });
 
     // AdamW: decoupled weight decay applied directly to parameters rather than
     // folded into the gradient (Loshchilov & Hutter 2017).
-    py::class_<AdamW, Optimizer>(m, "AdamW")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double, bool>(),
-             py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
-             py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 1e-2,
-             py::arg("amsgrad") = false,
-             "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
+    py::class_<AdamW, Optimizer> adamw(m, "AdamW");
+    adamw.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                       double, bool>(),
+              py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
+              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 1e-2,
+              py::arg("amsgrad") = false,
+              "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
+    def_hyperparams(adamw, adam_args("AdamW"),
+                    [](double lr, double beta1, double beta2, double eps, double wd, bool) {
+                        AdamW::check_hyperparams(lr, beta1, beta2, eps, wd);
+                    });
 
     // ASGD: decaying step size, decayed parameter, running average from t0.
-    py::class_<ASGD, Optimizer>(m, "ASGD").def(
-        py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                 double>(),
-        py::arg("params"), py::arg("lr") = 1e-2, py::arg("lambd") = 1e-4, py::arg("alpha") = 0.75,
-        py::arg("t0") = 1e6, py::arg("weight_decay") = 0.0, "Averaged SGD.");
-
-    py::class_<NAdam, Optimizer>(m, "NAdam")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double, double>(),
-             py::arg("params"), py::arg("lr") = 2e-3, py::arg("beta1") = 0.9,
-             py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
-             py::arg("momentum_decay") = 0.004, "Nesterov-accelerated Adam.");
-
-    py::class_<RAdam, Optimizer>(m, "RAdam")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+    py::class_<ASGD, Optimizer> asgd(m, "ASGD");
+    asgd.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                       double>(),
-             py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
-             py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
-             "Rectified Adam (Liu et al. 2020).");
+             py::arg("params"), py::arg("lr") = 1e-2, py::arg("lambd") = 1e-4,
+             py::arg("alpha") = 0.75, py::arg("t0") = 1e6, py::arg("weight_decay") = 0.0,
+             "Averaged SGD.");
+    def_hyperparams(
+        asgd,
+        [](const py::dict& v) {
+            const HyperparamDict h("ASGD", v, {"lr", "lambd", "alpha", "t0", "weight_decay"});
+            return std::make_tuple(h.num("lr"), h.num("lambd"), h.num("alpha"), h.num("t0"),
+                                   h.num("weight_decay"));
+        },
+        [](double lr, double, double, double, double wd) { ASGD::check_hyperparams(lr, wd); });
 
-    py::class_<RMSprop, Optimizer>(m, "RMSprop")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double, bool>(),
-             py::arg("params"), py::arg("lr") = 1e-2, py::arg("alpha") = 0.99,
-             py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0, py::arg("momentum") = 0.0,
-             py::arg("centered") = false, "RMSprop with optional centered variance and momentum.");
+    py::class_<NAdam, Optimizer> nadam(m, "NAdam");
+    nadam.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                       double, double>(),
+              py::arg("params"), py::arg("lr") = 2e-3, py::arg("beta1") = 0.9,
+              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
+              py::arg("momentum_decay") = NAdam::kDefaultMomentumDecay,
+              "Nesterov-accelerated Adam.");
+    // The wrapper's groups have no ``momentum_decay``: it builds every NAdam
+    // with the default, which is what its groups are checked with.
+    def_hyperparams(nadam, moment_args("NAdam"),
+                    [](double lr, double beta1, double beta2, double eps, double wd) {
+                        NAdam::check_hyperparams(lr, beta1, beta2, eps, wd,
+                                                 NAdam::kDefaultMomentumDecay);
+                    });
 
-    py::class_<Rprop, Optimizer>(m, "Rprop")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double>(),
-             py::arg("params"), py::arg("lr") = 1e-2, py::arg("eta_minus") = 0.5,
-             py::arg("eta_plus") = 1.2, py::arg("step_min") = 1e-6, py::arg("step_max") = 50.0,
-             "Resilient backprop (Rprop).");
+    py::class_<RAdam, Optimizer> radam(m, "RAdam");
+    radam.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                       double>(),
+              py::arg("params"), py::arg("lr") = 1e-3, py::arg("beta1") = 0.9,
+              py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
+              "Rectified Adam (Liu et al. 2020).");
+    def_hyperparams(radam, moment_args("RAdam"), &RAdam::check_hyperparams);
 
-    py::class_<Adagrad, Optimizer>(m, "Adagrad")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double>(),
-             py::arg("params"), py::arg("lr") = 1e-2, py::arg("lr_decay") = 0.0,
-             py::arg("weight_decay") = 0.0, py::arg("initial_accumulator_value") = 0.0,
-             py::arg("eps") = 1e-10, "Adagrad: per-parameter accumulator of squared grads.");
+    py::class_<RMSprop, Optimizer> rmsprop(m, "RMSprop");
+    rmsprop.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                         double, bool>(),
+                py::arg("params"), py::arg("lr") = 1e-2, py::arg("alpha") = 0.99,
+                py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0, py::arg("momentum") = 0.0,
+                py::arg("centered") = false,
+                "RMSprop with optional centered variance and momentum.");
+    def_hyperparams(
+        rmsprop,
+        [](const py::dict& v) {
+            const HyperparamDict h("RMSprop", v,
+                                   {"lr", "alpha", "eps", "weight_decay", "momentum", "centered"});
+            return std::make_tuple(h.num("lr"), h.num("alpha"), h.num("eps"), h.num("weight_decay"),
+                                   h.num("momentum"), h.flag("centered"));
+        },
+        [](double lr, double alpha, double eps, double wd, double momentum, bool) {
+            RMSprop::check_hyperparams(lr, alpha, eps, wd, momentum);
+        });
 
-    py::class_<Adadelta, Optimizer>(m, "Adadelta")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double>(),
-             py::arg("params"), py::arg("lr") = 1.0, py::arg("rho") = 0.9, py::arg("eps") = 1e-6,
-             py::arg("weight_decay") = 0.0, "Adadelta: parameter-free adaptive LR (Zeiler 2012).");
+    py::class_<Rprop, Optimizer> rprop(m, "Rprop");
+    rprop.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                       double>(),
+              py::arg("params"), py::arg("lr") = 1e-2, py::arg("eta_minus") = 0.5,
+              py::arg("eta_plus") = 1.2, py::arg("step_min") = 1e-6, py::arg("step_max") = 50.0,
+              "Resilient backprop (Rprop).");
+    def_hyperparams(
+        rprop,
+        [](const py::dict& v) {
+            const HyperparamDict h("Rprop", v,
+                                   {"lr", "eta_minus", "eta_plus", "step_min", "step_max"});
+            return std::make_tuple(h.num("lr"), h.num("eta_minus"), h.num("eta_plus"),
+                                   h.num("step_min"), h.num("step_max"));
+        },
+        [](double lr, double eta_minus, double eta_plus, double, double) {
+            Rprop::check_hyperparams(lr, eta_minus, eta_plus);
+        });
 
-    py::class_<Adamax, Optimizer>(m, "Adamax")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
-                      double>(),
-             py::arg("params"), py::arg("lr") = 2e-3, py::arg("beta1") = 0.9,
-             py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
-             "Adamax: Adam with infinity norm.");
+    py::class_<Adagrad, Optimizer> adagrad(m, "Adagrad");
+    adagrad.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                         double>(),
+                py::arg("params"), py::arg("lr") = 1e-2, py::arg("lr_decay") = 0.0,
+                py::arg("weight_decay") = 0.0, py::arg("initial_accumulator_value") = 0.0,
+                py::arg("eps") = 1e-10, "Adagrad: per-parameter accumulator of squared grads.");
+    def_hyperparams(
+        adagrad,
+        [](const py::dict& v) {
+            const HyperparamDict h(
+                "Adagrad", v,
+                {"lr", "lr_decay", "weight_decay", "initial_accumulator_value", "eps"});
+            return std::make_tuple(h.num("lr"), h.num("lr_decay"), h.num("weight_decay"),
+                                   h.num("initial_accumulator_value"), h.num("eps"));
+        },
+        &Adagrad::check_hyperparams);
+
+    py::class_<Adadelta, Optimizer> adadelta(m, "Adadelta");
+    adadelta.def(
+        py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double>(),
+        py::arg("params"), py::arg("lr") = 1.0, py::arg("rho") = 0.9, py::arg("eps") = 1e-6,
+        py::arg("weight_decay") = 0.0, "Adadelta: parameter-free adaptive LR (Zeiler 2012).");
+    def_hyperparams(
+        adadelta,
+        [](const py::dict& v) {
+            const HyperparamDict h("Adadelta", v, {"lr", "rho", "eps", "weight_decay"});
+            return std::make_tuple(h.num("lr"), h.num("rho"), h.num("eps"), h.num("weight_decay"));
+        },
+        &Adadelta::check_hyperparams);
+
+    py::class_<Adamax, Optimizer> adamax(m, "Adamax");
+    adamax.def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                        double>(),
+               py::arg("params"), py::arg("lr") = 2e-3, py::arg("beta1") = 0.9,
+               py::arg("beta2") = 0.999, py::arg("eps") = 1e-8, py::arg("weight_decay") = 0.0,
+               "Adamax: Adam with infinity norm.");
+    def_hyperparams(adamax, moment_args("Adamax"), &Adamax::check_hyperparams);
 
     // LRScheduler is the abstract base for epoch-based schedules.  Subclasses
     // store a raw reference to the Optimizer and adjust its lr on each call

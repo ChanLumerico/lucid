@@ -43,7 +43,7 @@ class TensorImpl;
 //
 // The cache invalidates when the slot's step count differs from the one
 // it was built at, the param dtype changes (mixed-precision case), or
-// when ``set_lr`` mutates $\eta$.
+// when ``set_lr`` / ``set_hyperparams`` changes a hyper-parameter.
 //
 // Attributes
 // ----------
@@ -221,6 +221,27 @@ public:
         lr_ = lr;
         scalar_cache_.valid = false;
     }
+
+    // Check Adam's hyper-parameters — the reference framework's constructor
+    // checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``eps`` or ``weight_decay`` is negative or NaN, or a
+    //     beta lies outside ``[0, 1)``.
+    static void
+    check_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
+
+    // Replace the hyper-parameters between steps.
+    //
+    // Nothing is applied when ``check_hyperparams`` rejects them.  The
+    // scalar cache is rebuilt on the next step.  Switching ``amsgrad`` on
+    // gives each slot that holds state a zero running maximum, as a fresh
+    // optimizer built with it on would start from; switching it off keeps
+    // the maximum, so switching it on again resumes it.
+    void set_hyperparams(
+        double lr, double beta1, double beta2, double eps, double weight_decay, bool amsgrad);
 
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }
@@ -413,6 +434,15 @@ public:
         scalar_cache_.valid = false;
     }
 
+    // Check AdamW's hyper-parameters.  See ``Adam::check_hyperparams``.
+    static void
+    check_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
+
+    // Replace the hyper-parameters between steps.  See
+    // ``Adam::set_hyperparams``.
+    void set_hyperparams(
+        double lr, double beta1, double beta2, double eps, double weight_decay, bool amsgrad);
+
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }
 
@@ -529,6 +559,11 @@ private:
 // Adam, AdamW, RAdam.
 class LUCID_API NAdam : public Optimizer {
 public:
+    // Default momentum schedule decay $\psi$ — the paper's and the reference
+    // framework's.  The Python wrapper has no ``momentum_decay`` argument and
+    // builds every NAdam with this value.
+    static constexpr double kDefaultMomentumDecay = 0.004;
+
     // Construct a NAdam optimiser bound to ``params``.
     //
     // Parameters
@@ -551,10 +586,30 @@ public:
           double beta2 = 0.999,
           double eps = 1e-8,
           double weight_decay = 0.0,
-          double momentum_decay = 0.004);
+          double momentum_decay = kDefaultMomentumDecay);
 
     // Set the learning rate.
     void set_lr(double lr) override { lr_ = lr; }
+
+    // Check NAdam's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``eps``, ``weight_decay`` or ``momentum_decay`` is
+    //     negative or NaN, or a beta lies outside ``[0, 1)``.
+    static void check_hyperparams(double lr,
+                                  double beta1,
+                                  double beta2,
+                                  double eps,
+                                  double weight_decay,
+                                  double momentum_decay);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.  ``momentum_decay`` keeps its
+    // constructed value.
+    void set_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
 
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }
@@ -695,6 +750,21 @@ public:
 
     // Set the learning rate.
     void set_lr(double lr) override { lr_ = lr; }
+
+    // Check RAdam's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``eps`` or ``weight_decay`` is negative or NaN, or a
+    //     beta lies outside ``[0, 1)``.
+    static void
+    check_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.
+    void set_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
 
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }

@@ -469,6 +469,21 @@ protected:
     // stepped.  A null parameter is left alone.
     void ensure_state_slot(std::size_t i);
 
+    // Give each slot that holds state a zero buffer in ``bufs`` if it has none.
+    //
+    // A hyper-parameter edit can switch on a feature whose buffer the slots
+    // were initialised without, such as AMSGrad's running maximum or
+    // RMSprop's ``grad_avg``.  Each such slot then starts from zero, as it
+    // would in a fresh optimizer built with the feature on and given the
+    // same state.  A buffer the slot already holds is kept, so switching a
+    // feature off and on again resumes it.
+    //
+    // Parameters
+    // ----------
+    // bufs : std::vector<Storage>&
+    //     A state vector parallel to ``params_``; grown to its length.
+    void ensure_buffers(std::vector<Storage>& bufs);
+
     // Snapshot one per-slot state vector for ``state_buffers``.
     //
     // Parameters

@@ -171,6 +171,17 @@ void Optimizer::ensure_state_slot(std::size_t i) {
     state_initialized_[i] = true;
 }
 
+void Optimizer::ensure_buffers(std::vector<Storage>& bufs) {
+    if (bufs.size() < params_.size())
+        bufs.resize(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (!slot_has_state(i) || optim_detail::holds_buffer(bufs[i]))
+            continue;
+        const auto& p = params_[i];
+        bufs[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
+    }
+}
+
 std::vector<std::shared_ptr<TensorImpl>>
 Optimizer::clone_state_slots(const std::vector<Storage>& bufs) const {
     std::vector<std::shared_ptr<TensorImpl>> out(params_.size());

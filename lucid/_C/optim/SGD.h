@@ -162,6 +162,30 @@ public:
     //     New learning rate.
     void set_lr(double lr) override { lr_ = lr; }
 
+    // Check SGD's hyper-parameters against its rules.
+    //
+    // The single statement of the rules: the constructor and
+    // ``set_hyperparams`` both run it, and the Python wrapper runs it on
+    // every parameter group it is given.  They are the reference
+    // framework's constructor checks.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``momentum`` or ``weight_decay`` is negative, or
+    //     ``nesterov`` is set without positive momentum and zero dampening.
+    static void check_hyperparams(
+        double lr, double momentum, double dampening, double weight_decay, bool nesterov);
+
+    // Replace the hyper-parameters between steps.
+    //
+    // The whole set is checked by ``check_hyperparams`` before any of it is
+    // applied, so a rejected call changes nothing.  Momentum switched on
+    // mid-run starts each parameter's buffer at its next gradient, as the
+    // first momentum step always does (see ``update_one``).
+    void set_hyperparams(
+        double lr, double momentum, double dampening, double weight_decay, bool nesterov);
+
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }
 
@@ -348,6 +372,22 @@ public:
 
     // Update the learning rate from a scheduler.
     void set_lr(double lr) override { lr_ = lr; }
+
+    // Check ASGD's hyper-parameters against its rules — the reference
+    // framework's constructor checks, run by the constructor and by
+    // ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr`` or ``weight_decay`` is negative or NaN.
+    static void check_hyperparams(double lr, double weight_decay);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.  ``lr`` reaches the update through
+    // the next step's ``eta``, which the reference framework computes at the
+    // end of each step.
+    void set_hyperparams(double lr, double lambd, double alpha, double t0, double weight_decay);
 
     // Current learning rate $\eta$.
     double lr() const override { return lr_; }

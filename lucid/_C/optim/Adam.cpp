@@ -193,7 +193,24 @@ void adam_step_gpu_cached(GpuStorage& param_g,
     param_g.arr = gpu::wrap_mlx_array(std::move(new_param), dt).arr;
 }
 
+// The reference framework's constructor checks for every Adam-family
+// optimizer: written as ``x >= 0`` so a NaN fails, as its ``not 0.0 <= x``
+// does.
+void check_adam_family(
+    const char* op, double lr, double beta1, double beta2, double eps, double weight_decay) {
+    require(lr >= 0.0, op, "lr must be >= 0");
+    require(eps >= 0.0, op, "eps must be >= 0");
+    require(beta1 >= 0.0 && beta1 < 1.0, op, "beta1 must be in [0, 1)");
+    require(beta2 >= 0.0 && beta2 < 1.0, op, "beta2 must be in [0, 1)");
+    require(weight_decay >= 0.0, op, "weight_decay must be >= 0");
+}
+
 }  // namespace
+
+void Adam::check_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_adam_family("Adam", lr, beta1, beta2, eps, weight_decay);
+}
 
 Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
            double lr,
@@ -209,16 +226,21 @@ Adam::Adam(std::vector<std::shared_ptr<TensorImpl>> params,
       eps_(eps),
       weight_decay_(weight_decay),
       amsgrad_(amsgrad) {
-    if (lr_ < 0.0)
-        ErrorBuilder("Adam").invalid_argument("lr must be >= 0");
-    if (beta1_ < 0.0 || beta1_ >= 1.0)
-        ErrorBuilder("Adam").invalid_argument("beta1 must be in [0, 1)");
-    if (beta2_ < 0.0 || beta2_ >= 1.0)
-        ErrorBuilder("Adam").invalid_argument("beta2 must be in [0, 1)");
-    if (eps_ < 0.0)
-        ErrorBuilder("Adam").invalid_argument("eps must be >= 0");
-    if (weight_decay_ < 0.0)
-        ErrorBuilder("Adam").invalid_argument("weight_decay must be >= 0");
+    check_hyperparams(lr_, beta1_, beta2_, eps_, weight_decay_);
+}
+
+void Adam::set_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay, bool amsgrad) {
+    check_hyperparams(lr, beta1, beta2, eps, weight_decay);
+    if (amsgrad && !amsgrad_)
+        ensure_buffers(vmax_);
+    lr_ = lr;
+    beta1_ = beta1;
+    beta2_ = beta2;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+    amsgrad_ = amsgrad;
+    scalar_cache_.valid = false;
 }
 
 // Allocate zero-initialized first- and second-moment buffers.
@@ -329,16 +351,26 @@ AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
       eps_(eps),
       weight_decay_(weight_decay),
       amsgrad_(amsgrad) {
-    if (lr_ < 0.0)
-        ErrorBuilder("AdamW").invalid_argument("lr must be >= 0");
-    if (beta1_ < 0.0 || beta1_ >= 1.0)
-        ErrorBuilder("AdamW").invalid_argument("beta1 must be in [0, 1)");
-    if (beta2_ < 0.0 || beta2_ >= 1.0)
-        ErrorBuilder("AdamW").invalid_argument("beta2 must be in [0, 1)");
-    if (eps_ < 0.0)
-        ErrorBuilder("AdamW").invalid_argument("eps must be >= 0");
-    if (weight_decay_ < 0.0)
-        ErrorBuilder("AdamW").invalid_argument("weight_decay must be >= 0");
+    check_hyperparams(lr_, beta1_, beta2_, eps_, weight_decay_);
+}
+
+void AdamW::check_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_adam_family("AdamW", lr, beta1, beta2, eps, weight_decay);
+}
+
+void AdamW::set_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay, bool amsgrad) {
+    check_hyperparams(lr, beta1, beta2, eps, weight_decay);
+    if (amsgrad && !amsgrad_)
+        ensure_buffers(vmax_);
+    lr_ = lr;
+    beta1_ = beta1;
+    beta2_ = beta2;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+    amsgrad_ = amsgrad;
+    scalar_cache_.valid = false;
 }
 
 // Allocate zero-initialized first- and second-moment buffers.
@@ -445,7 +477,25 @@ NAdam::NAdam(std::vector<std::shared_ptr<TensorImpl>> p,
       beta2_(b2),
       eps_(eps),
       weight_decay_(wd),
-      momentum_decay_(mom_decay) {}
+      momentum_decay_(mom_decay) {
+    check_hyperparams(lr_, beta1_, beta2_, eps_, weight_decay_, momentum_decay_);
+}
+
+void NAdam::check_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay, double momentum_decay) {
+    check_adam_family("NAdam", lr, beta1, beta2, eps, weight_decay);
+    require(momentum_decay >= 0.0, "NAdam", "momentum_decay must be >= 0");
+}
+
+void NAdam::set_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_hyperparams(lr, beta1, beta2, eps, weight_decay, momentum_decay_);
+    lr_ = lr;
+    beta1_ = beta1;
+    beta2_ = beta2;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+}
 
 // Allocate zero-initialized m and v buffers; initialize the per-parameter
 // mu_product to 1.0 (the empty product).
@@ -584,7 +634,24 @@ RAdam::RAdam(std::vector<std::shared_ptr<TensorImpl>> p,
              double b2,
              double eps,
              double wd)
-    : Optimizer(std::move(p)), lr_(lr), beta1_(b1), beta2_(b2), eps_(eps), weight_decay_(wd) {}
+    : Optimizer(std::move(p)), lr_(lr), beta1_(b1), beta2_(b2), eps_(eps), weight_decay_(wd) {
+    check_hyperparams(lr_, beta1_, beta2_, eps_, weight_decay_);
+}
+
+void RAdam::check_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_adam_family("RAdam", lr, beta1, beta2, eps, weight_decay);
+}
+
+void RAdam::set_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_hyperparams(lr, beta1, beta2, eps, weight_decay);
+    lr_ = lr;
+    beta1_ = beta1;
+    beta2_ = beta2;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+}
 
 // Allocate zero-initialized m and v buffers for this slot.
 void RAdam::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {

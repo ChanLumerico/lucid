@@ -46,6 +46,15 @@ lerp_toward(const ::mlx::core::array& from, const ::mlx::core::array& to, double
 
 }  // namespace
 
+void RMSprop::check_hyperparams(
+    double lr, double alpha, double eps, double weight_decay, double momentum) {
+    require(lr >= 0.0, "RMSprop", "lr must be >= 0");
+    require(eps >= 0.0, "RMSprop", "eps must be >= 0");
+    require(momentum >= 0.0, "RMSprop", "momentum must be >= 0");
+    require(weight_decay >= 0.0, "RMSprop", "weight_decay must be >= 0");
+    require(alpha >= 0.0, "RMSprop", "alpha must be >= 0");
+}
+
 RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
                  double lr,
                  double alpha,
@@ -59,7 +68,24 @@ RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
       eps_(eps),
       weight_decay_(wd),
       momentum_(momentum),
-      centered_(centered) {}
+      centered_(centered) {
+    check_hyperparams(lr_, alpha_, eps_, weight_decay_, momentum_);
+}
+
+void RMSprop::set_hyperparams(
+    double lr, double alpha, double eps, double weight_decay, double momentum, bool centered) {
+    check_hyperparams(lr, alpha, eps, weight_decay, momentum);
+    if (centered && !centered_)
+        ensure_buffers(grad_avg_);
+    if (momentum != 0.0 && momentum_ == 0.0)
+        ensure_buffers(moment_buf_);
+    lr_ = lr;
+    alpha_ = alpha;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+    momentum_ = momentum;
+    centered_ = centered;
+}
 
 // Conditionally allocate the three possible state buffers.
 // grad_avg_ and moment_buf_ are only allocated when their corresponding
@@ -203,7 +229,25 @@ Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
       eta_minus_(eta_minus),
       eta_plus_(eta_plus),
       step_min_(step_min),
-      step_max_(step_max) {}
+      step_max_(step_max) {
+    check_hyperparams(lr_, eta_minus_, eta_plus_);
+}
+
+void Rprop::check_hyperparams(double lr, double eta_minus, double eta_plus) {
+    require(lr >= 0.0, "Rprop", "lr must be >= 0");
+    require(eta_minus > 0.0 && eta_minus < 1.0 && eta_plus > 1.0, "Rprop",
+            "etas must satisfy 0 < eta_minus < 1 < eta_plus");
+}
+
+void Rprop::set_hyperparams(
+    double lr, double eta_minus, double eta_plus, double step_min, double step_max) {
+    check_hyperparams(lr, eta_minus, eta_plus);
+    lr_ = lr;
+    eta_minus_ = eta_minus;
+    eta_plus_ = eta_plus;
+    step_min_ = step_min;
+    step_max_ = step_max;
+}
 
 // Allocate previous-gradient buffer (zero) and step-size buffer.
 // step_size_ is set to lr_ on every element rather than 1.0 so the

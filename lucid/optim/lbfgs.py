@@ -3,13 +3,15 @@ L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
 
 from collections.abc import Iterable
-from typing import Callable, cast, override
+from typing import Any, Callable, cast, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid.nn.parameter import Parameter
 from lucid.optim.optimizer import Optimizer
+
+from lucid._C import engine as _C_engine
 
 
 class LBFGS(Optimizer):
@@ -112,6 +114,8 @@ class LBFGS(Optimizer):
     >>> loss = optimizer.step(closure)   # step returns the closure's loss
     """
 
+    _HYPERPARAMS = ("lr",)
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -152,8 +156,14 @@ class LBFGS(Optimizer):
         pass
 
     @override
-    def _sync_hyperparams(self) -> None:
-        pass
+    @classmethod
+    def _check_hyperparams(cls, values: dict[str, Any]) -> None:
+        """Hold a group to the reference framework's LBFGS rule: ``lr >= 0``.
+
+        Written so a NaN fails, as the reference's ``not 0.0 <= lr`` does.
+        """
+        if not 0.0 <= values["lr"]:
+            raise _C_engine.InvalidArgument("LBFGS: lr must be >= 0")
 
     # ── state_dict round-trip ────────────────────────────────────────────────
     #
@@ -410,6 +420,8 @@ class LBFGS(Optimizer):
         if closure is None:
             raise ValueError("L-BFGS requires a closure that reevaluates the model")
 
+        # The group is read below as it is; an edited one is checked first.
+        self._sync_hyperparams()
         group = self.param_groups[0]
         lr = cast(float, group["lr"])
         cast(int, group["max_iter"])

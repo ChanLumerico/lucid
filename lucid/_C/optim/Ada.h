@@ -124,6 +124,21 @@ public:
     //     New base step size $\eta$ used on subsequent steps.
     void set_lr(double lr) override { lr_ = lr; }
 
+    // Check Adamax's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``eps`` or ``weight_decay`` is negative or NaN, or a
+    //     beta lies outside ``[0, 1)``.
+    static void
+    check_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.
+    void set_hyperparams(double lr, double beta1, double beta2, double eps, double weight_decay);
+
     // Return the current learning rate.
     //
     // Returns
@@ -296,6 +311,33 @@ public:
     //     New base step size.
     void set_lr(double lr) override { lr_ = lr; }
 
+    // Check Adagrad's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If any argument is negative or NaN.
+    static void check_hyperparams(double lr,
+                                  double lr_decay,
+                                  double weight_decay,
+                                  double initial_accumulator_value,
+                                  double eps);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.
+    //
+    // Notes
+    // -----
+    // ``initial_accumulator_value`` is checked but not applied: it seeds
+    // the accumulator once, as the reference framework reads it once at
+    // construction, so an edit has no effect there either.
+    void set_hyperparams(double lr,
+                         double lr_decay,
+                         double weight_decay,
+                         double initial_accumulator_value,
+                         double eps);
+
     // Return the current learning rate.
     //
     // Returns
@@ -458,6 +500,20 @@ public:
     // lr : float
     //     New scale factor applied to the unit-matched update.
     void set_lr(double lr) override { lr_ = lr; }
+
+    // Check Adadelta's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``eps`` or ``weight_decay`` is negative or NaN, or
+    //     ``rho`` lies outside ``[0, 1]``.
+    static void check_hyperparams(double lr, double rho, double eps, double weight_decay);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.
+    void set_hyperparams(double lr, double rho, double eps, double weight_decay);
 
     // Return the current learning-rate scale.
     //

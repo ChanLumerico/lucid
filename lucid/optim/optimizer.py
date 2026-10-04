@@ -4,7 +4,8 @@ Optimizer base class.
 
 import operator
 import warnings
-from typing import ClassVar, Iterable, cast, override
+from collections.abc import Callable
+from typing import Any, ClassVar, Iterable, Protocol, cast, override
 
 import lucid as _lucid
 from lucid._tensor.tensor import Tensor
@@ -22,6 +23,36 @@ _INTEGER_DTYPES = frozenset(
         _C_engine.Dtype.Bool,
     }
 )
+
+
+class _EngineRules(Protocol):
+    """An engine optimizer class, as the base class reads its rules."""
+
+    @staticmethod
+    def check_hyperparams(values: dict[str, float]) -> None: ...
+
+
+class _TunableEngine(Protocol):
+    """An engine optimizer, as the base class hands it edited hyper-parameters."""
+
+    def set_hyperparams(self, values: dict[str, float]) -> None: ...
+
+
+def _hyperparam_reader(
+    keys: tuple[str, ...],
+) -> Callable[[dict[str, object]], Any] | None:
+    """Return a reader of ``keys`` out of a param group, as one tuple.
+
+    ``operator.itemgetter`` does the reading in C, so comparing a group with
+    the values last handed over costs one call and one tuple comparison.
+    ``None`` when there are no keys to read.
+    """
+    if not keys:
+        return None
+    if len(keys) == 1:
+        (key,) = keys
+        return lambda group: (group[key],)
+    return operator.itemgetter(*keys)
 
 
 def _state_like(state: object, param: object) -> object | None:
@@ -89,6 +120,21 @@ class Optimizer:
     tensors to the Metal GPU after each update.  This ensures that
     parameter values are materialised before the next forward pass.
 
+    Each step reads the hyper-parameters from ``param_groups``, so a value
+    assigned there takes effect at the next :meth:`step`, the way a
+    hand-written warm-up or fine-tuning schedule expects:
+
+    .. code-block:: python
+
+        for group in optimizer.param_groups:
+            group["lr"] = 1e-4
+
+    Each group is checked against the optimizer's rules when it is added and
+    again when an edited group is next used.  A value the constructor would
+    reject (a negative ``lr``, a beta outside ``[0, 1)``) raises
+    ``InvalidArgument``, a ``ValueError``, and nothing of that group is
+    applied.
+
     Parameter groups allow different hyperparameters per group:
 
     .. code-block:: python
@@ -130,6 +176,19 @@ class Optimizer:
     # via ``optimizer.AUTO_EVAL_AFTER_STEP = True`` or globally on a
     # subclass) only when you need step() to act as a synchronisation point.
     AUTO_EVAL_AFTER_STEP: ClassVar[bool] = False
+
+    # The hyper-parameter table: the ``param_groups`` keys this optimizer's
+    # rules and engine take.  It drives both the checks of a group (when it
+    # is added, and when it is next used after an edit) and the hand-over of
+    # edited values to the group's engine.  Empty for an optimizer with
+    # nothing to check.
+    _HYPERPARAMS: ClassVar[tuple[str, ...]] = ()
+
+    # The engine optimizer class whose ``check_hyperparams`` states the
+    # rules — the same checks its constructor and ``set_hyperparams`` run.
+    # ``None`` for an optimizer that runs in Python; that one overrides
+    # :meth:`_check_hyperparams`.
+    _ENGINE_RULES: ClassVar[_EngineRules | None] = None
 
     @override
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -223,6 +282,12 @@ class Optimizer:
         self._engine_binds: list[tuple[list[Parameter], list[object]]] = []
         self._engine_state_reset_warned: bool = False
         self._engines_built: bool = False
+        # Parallel to ``param_groups``: each group's hyper-parameters as they
+        # were last checked or handed to its engine.
+        self._group_hparams: list[tuple[object, ...]] = []
+        self._read_hparams: Callable[[dict[str, object]], Any] | None = (
+            _hyperparam_reader(self._HYPERPARAMS)
+        )
         self.state: dict[int, dict[str, object]] = {}
         self.defaults: dict[str, object] = defaults
 
@@ -256,24 +321,108 @@ class Optimizer:
         carrying its state across (see :meth:`_rebuild_engine_optim`).
         """
         if not self._engines_built:
+            # Every group is checked before anything is built, so a group
+            # edited to a rejected value fails the step with no engine half
+            # made.  The engines are then built from these same values.
+            hparams = [self._hyperparams_of(group) for group in self.param_groups]
+            for values in hparams:
+                self._check_hyperparams(self._hyperparam_dict(values))
             # Set first: ``_append_engine_optim`` appends through this
             # same property, and a re-entrant build would recurse.
             self._engines_built = True
             for group in self.param_groups:
                 self._bind_engine_optim(group)
+            self._group_hparams = hparams
         else:
             self._rebind_replaced_params()
+            self._sync_group_hyperparams()
         return self._engines
 
     def add_param_group(self, group: dict[str, object]) -> None:
-        """Add a parameter group, creating one new engine optimizer for it."""
+        """Add a parameter group, creating one new engine optimizer for it.
+
+        The group's hyper-parameters are checked first, against the rules
+        the optimizer's constructor applies; a group that breaks one raises
+        ``InvalidArgument`` and is not added.
+        """
         merged: dict[str, object] = {**self.defaults, **group}
         merged["params"] = list(merged["params"])  # type: ignore[call-overload]
+        values: tuple[object, ...] = self._hyperparams_of(merged)
+        self._check_hyperparams(self._hyperparam_dict(values))
         self.param_groups.append(merged)
+        self._group_hparams.append(values)
         # Before the build, the group is simply on the list the build reads;
         # after it, the new group needs an engine of its own right now.
         if self._engines_built:
             self._bind_engine_optim(merged)
+
+    # ── hyper-parameters ──────────────────────────────────────────────────────
+    #
+    # ``_HYPERPARAMS`` names the group keys; the engine class (or a Python
+    # optimizer's override of ``_check_hyperparams``) holds the rules.  A
+    # group is checked when it is added, and every use of the engines
+    # compares each group with the values last handed over — one tuple
+    # comparison per group — and hands over only a group that changed.
+
+    def _hyperparams_of(self, group: dict[str, object]) -> tuple[object, ...]:
+        """Return ``group``'s hyper-parameters in ``_HYPERPARAMS`` order."""
+        read = self._read_hparams
+        return () if read is None else tuple(read(group))
+
+    def _hyperparam_dict(self, values: tuple[object, ...]) -> dict[str, Any]:
+        """Name ``values`` by ``_HYPERPARAMS``, as the engine bindings take them."""
+        return dict(zip(self._HYPERPARAMS, values))
+
+    @classmethod
+    def _check_hyperparams(cls, values: dict[str, Any]) -> None:
+        """Raise ``InvalidArgument`` when a group's hyper-parameters break a rule.
+
+        The engine class states the rules, so a group is held to exactly the
+        checks its engine's constructor and ``set_hyperparams`` run.  An
+        optimizer that runs in Python overrides this with its own.
+
+        Parameters
+        ----------
+        values : dict
+            The group's ``_HYPERPARAMS`` entries, by name.  Empty for an
+            optimizer without a table, which has nothing to check.
+        """
+        if values and cls._ENGINE_RULES is not None:
+            cls._ENGINE_RULES.check_hyperparams(values)
+
+    def _sync_group_hyperparams(self) -> None:
+        """Hand every edited group's hyper-parameters to where they apply.
+
+        An engine optimizer receives them through ``set_hyperparams``, which
+        checks the whole set before applying any of it; an optimizer without
+        an engine, which reads its groups as it steps, has them checked.  A
+        group equal to what was last handed over is skipped, so a step after
+        no edit makes no binding call.  A rejected group raises and stays
+        marked as changed, so every later step raises until it is fixed.
+        """
+        read = self._read_hparams
+        if read is None:
+            return
+        seen = self._group_hparams
+        for idx, (group, last) in enumerate(zip(self.param_groups, seen)):
+            values = read(group)
+            if values == last:
+                continue
+            self._apply_hyperparams(idx, self._hyperparam_dict(tuple(values)))
+            seen[idx] = tuple(values)
+
+    def _apply_hyperparams(self, idx: int, values: dict[str, Any]) -> None:
+        """Hand group ``idx``'s edited hyper-parameters to its engine.
+
+        A group without an engine (not built yet, or an optimizer that runs
+        in Python) has them checked instead.
+        """
+        engines = self._engines
+        engine = engines[idx] if idx < len(engines) else None
+        if engine is None:
+            self._check_hyperparams(values)
+        else:
+            cast(_TunableEngine, engine).set_hyperparams(values)
 
     @staticmethod
     def _group_binding(
@@ -349,6 +498,8 @@ class Optimizer:
         fresh: object | None = self._build_engine_optim(group)
         self._engines[idx] = fresh
         self._engine_binds[idx] = self._group_binding(group)
+        # Built from the group as it is now, edits included.
+        self._group_hparams[idx] = self._hyperparams_of(group)
         if old is None or fresh is None:
             return
 
@@ -410,29 +561,22 @@ class Optimizer:
         pass
 
     def _sync_hyperparams(self) -> None:
-        """Push current param_group hyperparams into existing engine optimizers.
+        """Hand edited ``param_groups`` hyper-parameters over now.
 
-        Preserves all accumulated optimizer state (e.g. Adam first/second moments).
-        Called by LR schedulers instead of recreating engine optimizers.
-        Skips read-only engine attributes silently.
+        Preserves all accumulated optimizer state (e.g. Adam first/second
+        moments).  Every step does this anyway (see
+        :meth:`_sync_group_hyperparams`); LR schedulers call it so the rate
+        they write is in the engine as soon as they return, and an optimizer
+        that runs in Python calls it at the top of its ``step``.
 
-        A no-op before the engines exist — a scheduler constructed
-        alongside the optimizer must not be what forces them into being,
-        or the deferral above buys nothing.  The build reads
-        ``param_groups``, which is where the new values already are.
+        A no-op for an engine optimizer before its engines exist — a
+        scheduler constructed alongside the optimizer must not be what
+        forces them into being, or the deferral above buys nothing.  The
+        build reads ``param_groups``, which is where the new values already
+        are.
         """
-        if not self._engines_built:
-            return
-        for group, eng in zip(self.param_groups, self._engine_optims):
-            for k, v in group.items():
-                if k == "params":
-                    continue
-                if not hasattr(eng, k):
-                    continue
-                try:
-                    setattr(eng, k, v)
-                except (AttributeError, TypeError):  # fmt: skip
-                    pass
+        if self._engines_built or self._ENGINE_RULES is None:
+            self._sync_group_hyperparams()
 
     def zero_grad(self, set_to_none: bool = True) -> None:
         """Zero gradients of all parameters."""

@@ -24,6 +24,20 @@ using namespace lucid::optim_detail;
 
 namespace lucid {
 
+// The reference framework's constructor checks.  The comparisons are its
+// own: ``lr < 0`` rather than ``!(lr >= 0)``, so a NaN passes here as it
+// does there.
+void SGD::check_hyperparams(
+    double lr, double momentum, double dampening, double weight_decay, bool nesterov) {
+    require(!(lr < 0.0), "SGD", "lr must be >= 0");
+    require(!(momentum < 0.0), "SGD", "momentum must be >= 0");
+    require(!(weight_decay < 0.0), "SGD", "weight_decay must be >= 0");
+    // Nesterov momentum requires a pure momentum term (no dampening) so
+    // that the gradient look-ahead is well-defined.
+    require(!nesterov || (momentum > 0.0 && dampening == 0.0), "SGD",
+            "nesterov requires momentum > 0 and dampening = 0");
+}
+
 SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
          double lr,
          double momentum,
@@ -36,17 +50,17 @@ SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
       dampening_(dampening),
       weight_decay_(weight_decay),
       nesterov_(nesterov) {
-    if (lr_ < 0.0)
-        ErrorBuilder("SGD").invalid_argument("lr must be >= 0");
-    if (momentum_ < 0.0)
-        ErrorBuilder("SGD").invalid_argument("momentum must be >= 0");
-    if (weight_decay_ < 0.0)
-        ErrorBuilder("SGD").invalid_argument("weight_decay must be >= 0");
-    // Nesterov momentum requires a pure momentum term (no dampening) so
-    // that the gradient look-ahead is well-defined.
-    if (nesterov_ && (momentum_ <= 0.0 || dampening_ != 0.0)) {
-        ErrorBuilder("SGD").invalid_argument("nesterov requires momentum > 0 and dampening = 0");
-    }
+    check_hyperparams(lr_, momentum_, dampening_, weight_decay_, nesterov_);
+}
+
+void SGD::set_hyperparams(
+    double lr, double momentum, double dampening, double weight_decay, bool nesterov) {
+    check_hyperparams(lr, momentum, dampening, weight_decay, nesterov);
+    lr_ = lr;
+    momentum_ = momentum;
+    dampening_ = dampening;
+    weight_decay_ = weight_decay;
+    nesterov_ = nesterov;
 }
 
 // Grow moment_ to cover all parameter slots.  The buffer itself is made by
@@ -234,6 +248,11 @@ void SGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
     }
 }
 
+void ASGD::check_hyperparams(double lr, double weight_decay) {
+    require(lr >= 0.0, "ASGD", "lr must be >= 0");
+    require(weight_decay >= 0.0, "ASGD", "weight_decay must be >= 0");
+}
+
 ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
            double lr,
            double lambd,
@@ -241,8 +260,16 @@ ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
            double t0,
            double wd)
     : Optimizer(std::move(p)), lr_(lr), lambd_(lambd), alpha_(alpha), t0_(t0), weight_decay_(wd) {
-    if (lr_ < 0.0)
-        ErrorBuilder("ASGD").invalid_argument("lr must be >= 0");
+    check_hyperparams(lr_, weight_decay_);
+}
+
+void ASGD::set_hyperparams(double lr, double lambd, double alpha, double t0, double weight_decay) {
+    check_hyperparams(lr, weight_decay);
+    lr_ = lr;
+    lambd_ = lambd;
+    alpha_ = alpha;
+    t0_ = t0;
+    weight_decay_ = weight_decay;
 }
 
 // ax starts at zero — the first update has mu = 1 and copies the

@@ -93,6 +93,9 @@ class SGD(Optimizer):
     >>> optimizer.step()
     """
 
+    _HYPERPARAMS = ("lr", "momentum", "dampening", "weight_decay", "nesterov")
+    _ENGINE_RULES = _C_engine.SGD
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],

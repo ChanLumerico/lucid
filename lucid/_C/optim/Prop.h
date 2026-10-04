@@ -138,6 +138,30 @@ public:
     //     New base step size.
     void set_lr(double lr) override { lr_ = lr; }
 
+    // Check RMSprop's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr``, ``alpha``, ``eps``, ``weight_decay`` or ``momentum`` is
+    //     negative or NaN.
+    static void
+    check_hyperparams(double lr, double alpha, double eps, double weight_decay, double momentum);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.
+    //
+    // Notes
+    // -----
+    // Switching on ``centered`` or momentum gives each slot that holds state
+    // a zero ``grad_avg`` / momentum buffer, as a fresh optimizer built with
+    // the feature on would start from.  Switching one off keeps the buffer,
+    // so switching it on again resumes it, as the reference framework's
+    // state does.
+    void set_hyperparams(
+        double lr, double alpha, double eps, double weight_decay, double momentum, bool centered);
+
     // Return the current learning rate.
     //
     // Returns
@@ -322,6 +346,22 @@ public:
     //     existing ``step_size_`` buffers — it only affects fresh
     //     allocations.
     void set_lr(double lr) override { lr_ = lr; }
+
+    // Check Rprop's hyper-parameters — the reference framework's
+    // constructor checks, run by the constructor and ``set_hyperparams``.
+    //
+    // Raises
+    // ------
+    // InvalidArgument
+    //     If ``lr`` is negative or NaN, or the etas do not satisfy
+    //     ``0 < eta_minus < 1 < eta_plus``.
+    static void check_hyperparams(double lr, double eta_minus, double eta_plus);
+
+    // Replace the hyper-parameters between steps; nothing is applied when
+    // ``check_hyperparams`` rejects them.  ``lr`` only seeds the step size
+    // of a slot that has not stepped (see ``set_lr``).
+    void
+    set_hyperparams(double lr, double eta_minus, double eta_plus, double step_min, double step_max);
 
     // Return the current ``lr_`` parameter.
     //

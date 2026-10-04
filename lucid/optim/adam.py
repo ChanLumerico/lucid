@@ -75,6 +75,9 @@ class Adam(Optimizer):
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
     """
 
+    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay", "amsgrad")
+    _ENGINE_RULES = _C_engine.Adam
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
@@ -220,6 +223,9 @@ class AdamW(Optimizer):
     >>> loss.backward()
     >>> optimizer.step()
     """
+
+    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay", "amsgrad")
+    _ENGINE_RULES = _C_engine.AdamW
 
     def __init__(
         self,

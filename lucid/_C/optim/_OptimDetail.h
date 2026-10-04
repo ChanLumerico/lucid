@@ -15,10 +15,35 @@
 #include <mlx/ops.h>
 
 #include "../backend/gpu/MlxBridge.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 
 namespace lucid::optim_detail {
+
+// Reject a hyper-parameter that breaks one of an optimizer's rules.
+//
+// The form every ``check_hyperparams`` states its rules in, so a value
+// set through ``set_hyperparams`` meets exactly the constructor's checks.
+//
+// Parameters
+// ----------
+// ok : bool
+//     Whether the rule holds.  Write it so a NaN fails it where the
+//     reference framework's ``not 0.0 <= x`` would, e.g. ``x >= 0.0``.
+// op : const char*
+//     Optimizer name, the prefix of the message.
+// msg : const char*
+//     The rule, e.g. ``"lr must be >= 0"``.
+//
+// Raises
+// ------
+// InvalidArgument
+//     When ``ok`` is false.
+inline void require(bool ok, const char* op, const char* msg) {
+    if (!ok)
+        ErrorBuilder(op).invalid_argument(msg);
+}
 
 // Typed mutable pointer into a CPU storage buffer.
 //

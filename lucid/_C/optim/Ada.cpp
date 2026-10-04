@@ -22,13 +22,34 @@ namespace lucid {
 
 using namespace lucid::optim_detail;
 
+void Adamax::check_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    require(lr >= 0.0, "Adamax", "lr must be >= 0");
+    require(eps >= 0.0, "Adamax", "eps must be >= 0");
+    require(beta1 >= 0.0 && beta1 < 1.0, "Adamax", "beta1 must be in [0, 1)");
+    require(beta2 >= 0.0 && beta2 < 1.0, "Adamax", "beta2 must be in [0, 1)");
+    require(weight_decay >= 0.0, "Adamax", "weight_decay must be >= 0");
+}
+
 Adamax::Adamax(std::vector<std::shared_ptr<TensorImpl>> p,
                double lr,
                double b1,
                double b2,
                double eps,
                double wd)
-    : Optimizer(std::move(p)), lr_(lr), beta1_(b1), beta2_(b2), eps_(eps), weight_decay_(wd) {}
+    : Optimizer(std::move(p)), lr_(lr), beta1_(b1), beta2_(b2), eps_(eps), weight_decay_(wd) {
+    check_hyperparams(lr_, beta1_, beta2_, eps_, weight_decay_);
+}
+
+void Adamax::set_hyperparams(
+    double lr, double beta1, double beta2, double eps, double weight_decay) {
+    check_hyperparams(lr, beta1, beta2, eps, weight_decay);
+    lr_ = lr;
+    beta1_ = beta1;
+    beta2_ = beta2;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+}
 
 // Allocate zero-initialized first-moment m_ and infinity-norm u_ buffers.
 void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
@@ -121,6 +142,15 @@ void Adamax::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
     }
 }
 
+void Adagrad::check_hyperparams(
+    double lr, double lr_decay, double weight_decay, double initial_accumulator_value, double eps) {
+    require(lr >= 0.0, "Adagrad", "lr must be >= 0");
+    require(lr_decay >= 0.0, "Adagrad", "lr_decay must be >= 0");
+    require(weight_decay >= 0.0, "Adagrad", "weight_decay must be >= 0");
+    require(initial_accumulator_value >= 0.0, "Adagrad", "initial_accumulator_value must be >= 0");
+    require(eps >= 0.0, "Adagrad", "eps must be >= 0");
+}
+
 Adagrad::Adagrad(std::vector<std::shared_ptr<TensorImpl>> p,
                  double lr,
                  double lr_decay,
@@ -132,7 +162,18 @@ Adagrad::Adagrad(std::vector<std::shared_ptr<TensorImpl>> p,
       lr_decay_(lr_decay),
       weight_decay_(wd),
       initial_accumulator_value_(init_acc),
-      eps_(eps) {}
+      eps_(eps) {
+    check_hyperparams(lr_, lr_decay_, weight_decay_, initial_accumulator_value_, eps_);
+}
+
+void Adagrad::set_hyperparams(
+    double lr, double lr_decay, double weight_decay, double initial_accumulator_value, double eps) {
+    check_hyperparams(lr, lr_decay, weight_decay, initial_accumulator_value, eps);
+    lr_ = lr;
+    lr_decay_ = lr_decay;
+    weight_decay_ = weight_decay;
+    eps_ = eps;
+}
 
 // Allocate sum_sq_grad_ and pre-fill with initial_accumulator_value_
 // if non-zero, so early steps are not dominated by a near-zero divisor.
@@ -227,9 +268,26 @@ void Adagrad::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
     }
 }
 
+void Adadelta::check_hyperparams(double lr, double rho, double eps, double weight_decay) {
+    require(lr >= 0.0, "Adadelta", "lr must be >= 0");
+    require(rho >= 0.0 && rho <= 1.0, "Adadelta", "rho must be in [0, 1]");
+    require(eps >= 0.0, "Adadelta", "eps must be >= 0");
+    require(weight_decay >= 0.0, "Adadelta", "weight_decay must be >= 0");
+}
+
 Adadelta::Adadelta(
     std::vector<std::shared_ptr<TensorImpl>> p, double lr, double rho, double eps, double wd)
-    : Optimizer(std::move(p)), lr_(lr), rho_(rho), eps_(eps), weight_decay_(wd) {}
+    : Optimizer(std::move(p)), lr_(lr), rho_(rho), eps_(eps), weight_decay_(wd) {
+    check_hyperparams(lr_, rho_, eps_, weight_decay_);
+}
+
+void Adadelta::set_hyperparams(double lr, double rho, double eps, double weight_decay) {
+    check_hyperparams(lr, rho, eps, weight_decay);
+    lr_ = lr;
+    rho_ = rho;
+    eps_ = eps;
+    weight_decay_ = weight_decay;
+}
 
 // Allocate zero-initialized sq_avg_ (running squared-gradient average)
 // and accumulated_update_ (running squared-update average).
