@@ -577,3 +577,128 @@ class TestMultilabelMarginStopsAtTheFirstMinusOne:
             assert _close(_vals(lo), ro.tolist())
             assert lx.grad is not None
             assert _close(_vals(lx.grad), rx.grad.tolist())
+
+
+# ── CHA-91 ─────────────────────────────────────────────────────────────────
+
+
+class TestGaussianNLLVariance:
+    """``gaussian_nll_loss`` took ``var`` with the wrong shape rules, a
+    clamp that stopped the gradient, and no check for a negative value.
+
+    A per-sample ``(N,)`` variance broadcast along the last axis — one
+    variance per feature — and failed when ``D != N``; ``maximum(var, eps)``
+    gave every variance below ``eps`` a zero gradient; ``var = -1`` gave a
+    loss of half a million.
+    """
+
+    def test_a_per_sample_variance_is_per_row(self, device: str) -> None:
+        out = F.gaussian_nll_loss(
+            lucid.zeros(2, 2, device=device),
+            lucid.ones(2, 2, device=device),
+            lucid.tensor([1.0, 4.0], device=device),
+            reduction="none",
+        )
+        b = 0.5 * (math.log(4.0) + 0.25)
+        assert _close(_vals(out), [[0.5, 0.5], [b, b]])
+
+    def test_a_per_sample_variance_against_a_wider_input(self, device: str) -> None:
+        loss = F.gaussian_nll_loss(
+            lucid.zeros(2, 3, device=device),
+            lucid.ones(2, 3, device=device),
+            lucid.tensor([1.0, 4.0], device=device),
+        )
+        assert _close(loss.item(), (0.5 + 0.5 * (math.log(4.0) + 0.25)) / 2)
+
+    @pytest.mark.parametrize(
+        ("x_shape", "var_shape"),
+        [((4, 3, 5), (4, 1, 5)), ((3,), ()), ((3,), (1,))],
+        ids=["one-size-1-dim", "0d-var", "1-elem-var"],
+    )
+    def test_the_other_accepted_shapes(
+        self, device: str, x_shape: tuple[int, ...], var_shape: tuple[int, ...]
+    ) -> None:
+        loss = F.gaussian_nll_loss(
+            lucid.zeros(*x_shape, device=device),
+            lucid.ones(*x_shape, device=device),
+            lucid.ones(*var_shape, device=device),
+        )
+        assert _close(loss.item(), 0.5)
+
+    @pytest.mark.parametrize(
+        ("x_shape", "var_shape"), [((2, 3), (3, 2)), ((4, 3, 5), (1, 1, 5))]
+    )
+    def test_a_variance_of_another_shape_is_refused(
+        self, device: str, x_shape: tuple[int, ...], var_shape: tuple[int, ...]
+    ) -> None:
+        with pytest.raises(ValueError, match="incorrect size"):
+            F.gaussian_nll_loss(
+                lucid.zeros(*x_shape, device=device),
+                lucid.ones(*x_shape, device=device),
+                lucid.ones(*var_shape, device=device),
+            )
+
+    def test_the_gradient_passes_the_clamp(self, device: str) -> None:
+        v = lucid.tensor([0.0, 1.0], requires_grad=True, device=device)
+        F.gaussian_nll_loss(
+            lucid.zeros(2, device=device), lucid.ones(2, device=device), v
+        ).backward()
+        assert v.grad is not None
+        # 0.5 (1/v - d^2/v^2) at the clamped v = 1e-6, over a mean of two.
+        assert _close(_vals(v.grad), [0.25 * (1e6 - 1e12), 0.0], tol=1e-4)
+
+    def test_a_negative_cpu_variance_raises(self) -> None:
+        with pytest.raises(ValueError, match="negative"):
+            F.gaussian_nll_loss(
+                lucid.zeros(2), lucid.ones(2), lucid.tensor([-1.0, 4.0])
+            )
+        with pytest.raises(ValueError, match="negative"):
+            F.gaussian_nll_loss(lucid.zeros(2), lucid.ones(2), -1.0)
+
+    @_needs_metal
+    def test_a_negative_metal_variance_poisons_the_loss(self) -> None:
+        out = F.gaussian_nll_loss(
+            lucid.zeros(2, device="metal"),
+            lucid.ones(2, device="metal"),
+            lucid.tensor([-1.0, 4.0], device="metal"),
+            reduction="none",
+        )
+        got = out.tolist()
+        assert math.isnan(got[0]) and math.isfinite(got[1])
+
+    def test_a_float_variance(self, device: str) -> None:
+        loss = nn.GaussianNLLLoss()(
+            lucid.zeros(2, device=device), lucid.ones(2, device=device), 2.0
+        )
+        assert _close(loss.item(), 0.5 * (math.log(2.0) + 0.5))
+
+    @pytest.mark.parity
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        cases = [
+            ([[0.0, 0.5], [1.0, -1.0]], [[1.0, 0.0], [0.5, 0.5]], [1.0, 4.0]),
+            ([[0.0, 0.5, 2.0]], [[1.0, 0.0, 1.0]], [[0.0, 1e-8, 3.0]]),
+            (
+                [[0.2, 0.5, 2.0], [0.1, 0.1, 0.1]],
+                [[1.0, 0.0, 1.0], [0.0, 0.0, 0.0]],
+                [[0.5], [2.0]],
+            ),
+        ]
+        for xs, ys, vs in cases:
+            for full in (False, True):
+                lv = lucid.tensor(vs, requires_grad=True, device=device)
+                lx = lucid.tensor(xs, requires_grad=True, device=device)
+                lo = F.gaussian_nll_loss(
+                    lx, lucid.tensor(ys, device=device), lv, full=full
+                )
+                lo.backward()
+                rv = R.tensor(vs, requires_grad=True)  # type: ignore[attr-defined]
+                rx = R.tensor(xs, requires_grad=True)  # type: ignore[attr-defined]
+                ro = R.nn.functional.gaussian_nll_loss(  # type: ignore[attr-defined]
+                    rx, R.tensor(ys), rv, full=full  # type: ignore[attr-defined]
+                )
+                ro.backward()
+                assert _close(lo.item(), ro.item())
+                assert lv.grad is not None and lx.grad is not None
+                assert _close(_vals(lv.grad), rv.grad.tolist(), tol=1e-4)
+                assert _close(_vals(lx.grad), rx.grad.tolist(), tol=1e-4)

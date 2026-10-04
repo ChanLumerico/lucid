@@ -1658,8 +1658,10 @@ class GaussianNLLLoss(Module):
     -----
     - **x** (mean)   : :math:`(N, *)` — predicted means.
     - **target**     : :math:`(N, *)` — observed values.
-    - **var**        : :math:`(N, *)` or :math:`(N, 1)` — predicted
-      variances (must be positive).
+    - **var**        : :math:`(N, *)` (the input's shape), :math:`(N, *)`
+      without its last dimension (one variance per sample, broadcast over
+      that dimension), the input's shape with one dimension of size 1, or
+      a float — predicted variances, non-negative.
     - **Output**     : scalar for ``'mean'`` / ``'sum'``;
       :math:`(N, *)` for ``'none'``.
 
@@ -1708,7 +1710,7 @@ class GaussianNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor, var: Tensor | float) -> Tensor:  # type: ignore[override]
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1717,8 +1719,9 @@ class GaussianNLLLoss(Module):
             Input tensor.
         target : Tensor
             Input tensor.
-        var : Tensor
-            Input tensor.
+        var : Tensor or float
+            Predicted variances; see the class docstring for the shapes
+            accepted.
 
         Returns
         -------

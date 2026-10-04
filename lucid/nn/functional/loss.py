@@ -51,6 +51,22 @@ def _reduce_in(t: Tensor, reduction: str, out_dtype: _lucid.dtype) -> Tensor:
     return t if t.dtype == out_dtype else t.to(dtype=out_dtype)
 
 
+def _host_any(mask: Tensor) -> bool:
+    """Whether any element of a CPU ``mask`` is set.
+
+    For a guard on a CPU tensor, which is on the host already, so reading
+    it costs no sync.  The read runs outside any active compile trace,
+    like the embedding table's range check: it raises or passes, and a
+    host read inside a trace would mark the trace unsupported.
+    """
+    tracer = _C_engine.compile.current_tracer()
+    _C_engine.compile.set_current_tracer(None)
+    try:
+        return bool(mask.any().item())
+    finally:
+        _C_engine.compile.set_current_tracer(tracer)
+
+
 def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     r"""Mean-squared-error (L2) loss between input and target.
 
@@ -1353,9 +1369,9 @@ def poisson_nll_loss(
     full : bool, optional
         Include the Stirling approximation term
         :math:`\log(y!) \approx y\log y - y + \tfrac{1}{2}\log(2\pi y)`
-        in the loss.  Has no effect on gradients (constant in
-        ``x``) but yields the correct log-likelihood value.  Not
-        currently added — kept for API parity.
+        in the loss, where ``target > 1`` (at 0 and 1 the true
+        :math:`\log(y!)` is 0).  Has no effect on gradients (constant in
+        ``x``) but yields the correct log-likelihood value.
     eps : float, optional
         Small constant added before :math:`\log` when
         ``log_input=False`` (default ``1e-8``).
@@ -1438,7 +1454,7 @@ def poisson_nll_loss(
 def gaussian_nll_loss(
     x: Tensor,
     target: Tensor,
-    var: Tensor,
+    var: Tensor | float,
     full: bool = False,
     eps: float = 1e-6,
     reduction: Reduction = "mean",
@@ -1455,7 +1471,9 @@ def gaussian_nll_loss(
 
     The variance ``var`` is clamped below by ``eps`` to prevent
     division by zero and runaway log-terms when the network
-    initially predicts near-zero variance.
+    initially predicts near-zero variance.  The clamp acts on the value
+    only: the gradient reaches ``var`` as if it had not been clamped, so
+    a variance head stuck below ``eps`` is still pushed back up.
 
     Parameters
     ----------
@@ -1463,13 +1481,21 @@ def gaussian_nll_loss(
         Predicted means :math:`\mu`, any shape.
     target : Tensor
         Observed values :math:`y`, broadcast-compatible with ``x``.
-    var : Tensor
-        Predicted variances :math:`\sigma^2 > 0`, broadcast-
-        compatible with ``x``.
+    var : Tensor or float
+        Predicted variances :math:`\sigma^2 \ge 0`.  Either the shape of
+        ``x``; or that shape without its last dimension — one variance
+        per sample, e.g. ``(N,)`` for an ``(N, D)`` input — which is
+        unsqueezed to broadcast over that dimension; or the shape of
+        ``x`` with exactly one dimension of size 1.  A float is one
+        variance for every element.  Any other shape raises
+        ``ValueError``.  A negative variance raises ``ValueError`` for a
+        CPU tensor; on Metal, where reading it back would stall the
+        step, it makes the loss NaN there instead.
     full : bool, optional
         Include the constant :math:`\tfrac{1}{2}\log(2\pi)` term in
-        the loss value.  Has no effect on gradients; useful only
-        for reporting log-likelihoods.  Not currently added.
+        the loss value.  Has no effect on gradients; it makes the value
+        an actual negative log-likelihood rather than one shifted by a
+        constant.
     eps : float, optional
         Lower bound applied to ``var`` for numerical stability
         (default ``1e-6``).
@@ -1505,31 +1531,45 @@ def gaussian_nll_loss(
     >>> gaussian_nll_loss(mu, y, var)
     tensor(-0.2841)
     """
-    xi = _unwrap(x)
-    ti = _unwrap(target)
-    vi = _C_engine.maximum(
-        _unwrap(var),
-        _C_engine.full(
-            _unwrap(var).shape, eps, _unwrap(var).dtype, _unwrap(var).device
-        ),
-    )
-    diff2 = _C_engine.square(_C_engine.sub(xi, ti))
-    half = _C_engine.full(diff2.shape, 0.5, diff2.dtype, diff2.device)
-    loss = _C_engine.mul(
-        half,
-        _C_engine.add(_C_engine.log(vi), _C_engine.div(diff2, vi)),
-    )
+    if isinstance(var, (int, float)):
+        if var < 0:
+            raise ValueError("var has negative entry/entries")
+        var = _lucid.full_like(x, float(var))
+    # The reference's shape rules.  A per-sample variance ``(N,)`` against
+    # an ``(N, D)`` input used to broadcast along the *last* axis — one
+    # variance per feature — and ``(N,)`` against ``(N, D != N)`` failed.
+    if tuple(var.shape) != tuple(x.shape):
+        if tuple(x.shape[:-1]) == tuple(var.shape):
+            var = var.unsqueeze(-1)
+        elif x.ndim == var.ndim and (
+            sum(v for d, v in zip(x.shape, var.shape) if d != v) == 1
+        ):
+            pass
+        else:
+            raise ValueError("var is of incorrect size")
+    _validate_reduction(reduction)
+
+    negative: Tensor = var < 0.0
+    if var.device == "cpu" and _host_any(negative):
+        raise ValueError("var has negative entry/entries")
+
+    # Clamped at ``eps`` in value, not in gradient: the reference clamps a
+    # copy under ``no_grad``, so the gradient flows to ``var`` unchanged.
+    # ``maximum(var, eps)`` gave every variance below ``eps`` a zero
+    # gradient, and a variance head that collapsed there stayed there.
+    var_d: Tensor = var.detach()
+    var_c: Tensor = _lucid.where(var_d >= eps, var, (var - var_d) + eps)
+    loss: Tensor = 0.5 * (var_c.log() + (x - target) ** 2 / var_c)
     if full:
         # The omitted constant of the Gaussian log-density, 0.5 * log(2 pi)
         # per element.  It does not change the gradient, but it is what makes
         # the returned number an actual negative log-likelihood rather than
         # one shifted by a constant — which matters the moment the value is
         # compared against another model's or reported as a likelihood.
-        const = _C_engine.full(
-            loss.shape, 0.5 * math.log(2.0 * math.pi), loss.dtype, loss.device
-        )
-        loss = _C_engine.add(loss, const)
-    return _apply_reduction(loss, reduction)
+        loss = loss + 0.5 * math.log(2.0 * math.pi)
+    if var.device != "cpu":
+        loss = _lucid.where(negative, _lucid.full_like(loss, math.nan), loss)
+    return _apply_reduction(_unwrap(loss), reduction)
 
 
 def ctc_loss(
