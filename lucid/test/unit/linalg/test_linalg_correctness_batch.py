@@ -14,6 +14,9 @@ Each section names the defect it pins and was written to fail first:
   ``matrix_power(a, 1)`` returned ``a`` itself, and ``cond`` refused a batch,
   a singular matrix and an empty one.  ``det`` / ``slogdet`` at a singular
   matrix are the engine half and not covered here.
+* **CHA-147** — ``vecdot`` did not conjugate ``x``; ``vector_norm`` of a
+  complex ``x`` squared the entries (a complex "norm" on Metal, an error on
+  the CPU); ``vector_norm(dtype=)`` was accepted and ignored.
 
 Values are compared with the reference framework through the ``ref``
 fixture on every device; gradients in float64 on the CPU, where the
@@ -567,3 +570,104 @@ def test_cond_refuses_what_it_cannot_compute(args: tuple[Any, ...], match: str) 
 def test_cond_rectangular_spectral() -> None:
     a = np.random.default_rng(8).standard_normal((3, 5))
     np.testing.assert_allclose(_np(LA.cond(lucid.tensor(a))), np.linalg.cond(a))
+
+
+# ── CHA-147: complex vecdot / vector_norm, and vector_norm(dtype=) ───────────
+
+
+def _complex(seed: int, shape: tuple[int, ...]) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    return (rng.standard_normal(shape) + 1j * rng.standard_normal(shape)).astype(
+        np.complex64
+    )
+
+
+def _np_complex(t: lucid.Tensor) -> np.ndarray:
+    t = t.to("cpu")
+    if not t.is_complex():
+        return _np(t)
+    return _np(lucid.real(t)) + 1j * _np(lucid.imag(t))
+
+
+@pytest.mark.parity
+def test_vecdot_conjugates_its_first_operand(device: str, ref: Any) -> None:
+    x, y = _complex(0, (3, 4)), _complex(1, (3, 4))
+    got = LA.vecdot(lucid.tensor(x, device=device), lucid.tensor(y, device=device))
+    want = ref.linalg.vecdot(ref.tensor(x), ref.tensor(y)).numpy()
+    np.testing.assert_allclose(_np_complex(got), want, rtol=1e-5, atol=1e-5)
+    # The issue's numbers.
+    a = lucid.tensor(np.array([1 + 2j, 3 - 1j], np.complex64), device=device)
+    b = lucid.tensor(np.array([2 - 1j, 1 + 1j], np.complex64), device=device)
+    assert complex(_np_complex(LA.vecdot(a, b))) == 2 - 1j
+
+
+def test_vecdot_of_a_complex_vector_with_itself_is_real(device: str) -> None:
+    x = _complex(2, (5,))
+    got = _np_complex(
+        LA.vecdot(lucid.tensor(x, device=device), lucid.tensor(x, device=device))
+    )
+    np.testing.assert_allclose(got, np.sum(np.abs(x) ** 2), rtol=1e-5)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("ord", [2, 1, 3, 0.5, float("inf"), float("-inf"), 0])
+def test_vector_norm_of_a_complex_input_is_real(
+    ord: float, device: str, ref: Any
+) -> None:
+    x = _complex(3, (3, 5))
+    got = LA.vector_norm(lucid.tensor(x, device=device), ord=ord, dim=-1)
+    want = ref.linalg.vector_norm(ref.tensor(x), ord=ord, dim=-1).numpy()
+    assert not got.is_complex()
+    assert str(got.dtype).split(".")[-1] == str(want.dtype).split(".")[-1]
+    np.testing.assert_allclose(_np(got), want, rtol=1e-5)
+
+
+@pytest.mark.parity
+def test_complex_norm_gradient_matches_the_reference(ref: Any) -> None:
+    x = _complex(4, (4,))
+    t = lucid.tensor(x, requires_grad=True)
+    LA.vector_norm(t).backward()
+    r = ref.tensor(x, requires_grad=True)
+    ref.linalg.vector_norm(r).backward()
+    np.testing.assert_allclose(_np_complex(t.grad), r.grad.numpy(), rtol=1e-5)
+
+
+@pytest.mark.parity
+def test_vector_norm_computes_in_the_requested_dtype(ref: Any) -> None:
+    """``1e20`` squared overflows float32; in float64 it does not."""
+    x = np.array([[1e20, 1e20], [3.0, 4.0]], dtype=np.float32)
+    got = LA.vector_norm(lucid.tensor(x), dim=-1, dtype=lucid.float64)
+    want = ref.linalg.vector_norm(ref.tensor(x), dim=-1, dtype=ref.float64).numpy()
+    assert got.dtype == lucid.float64
+    np.testing.assert_allclose(_np(got), want, rtol=1e-12)
+    assert np.isfinite(_np(got)).all()
+
+
+def test_vector_norm_widens_half_on_every_device(device: str) -> None:
+    """float64 is CPU-only; half → float32 is the widening Metal has."""
+    x = lucid.tensor([3.0, 4.0], dtype=lucid.float16, device=device)
+    got = LA.vector_norm(x, dtype=lucid.float32)
+    assert got.dtype == lucid.float32
+    assert float(got.item()) == 5.0
+
+
+def test_vector_norm_complex_dtype_gives_its_real_counterpart() -> None:
+    x = lucid.tensor(np.array([3 + 4j, 0j], np.complex64))
+    got = LA.vector_norm(x, dtype=lucid.complex128)
+    assert got.dtype == lucid.float64
+    assert float(got.item()) == 5.0
+
+
+@pytest.mark.parametrize(
+    "values,dtype,match",
+    [
+        ([1.0, 2.0], lucid.float16, "narrow"),
+        ([1.0, 2.0], lucid.complex64, "real"),
+        ([1 + 1j], lucid.float64, "complex"),
+    ],
+)
+def test_vector_norm_refuses_a_dtype_the_reference_refuses(
+    values: list[Any], dtype: Any, match: str
+) -> None:
+    with pytest.raises(TypeError, match=match):
+        LA.vector_norm(lucid.tensor(values), dtype=dtype)

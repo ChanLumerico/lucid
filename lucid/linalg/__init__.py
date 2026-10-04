@@ -8,6 +8,7 @@ from typing import Callable, cast, final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
 from lucid._tensor.tensor import Tensor
 
@@ -2363,6 +2364,34 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     return _wrap(_C_engine.pow(x_col, exp_row))
 
 
+_COMPLEX_DTYPES = (lucid.complex64, lucid.complex128)
+
+
+def _cast_for_norm(x: Tensor, dtype: object) -> _C_engine.TensorImpl:
+    """``x`` cast to the ``dtype`` a norm was asked to compute in.
+
+    The argument used to be accepted and dropped: ``dtype=float64`` on a
+    float32 input overflowed to ``inf`` in float32 and came back float32.
+    The reference's rules come with it — the kind (real / complex) must
+    match the input's, and the cast must not narrow.
+    """
+    target = _ENGINE_TO_DTYPE[to_engine_dtype(cast(lucid.dtype | str, dtype))]
+    complex_in = x.dtype in _COMPLEX_DTYPES
+    if complex_in != (target in _COMPLEX_DTYPES):
+        kind = "complex" if complex_in else "real"
+        raise TypeError(
+            f"vector_norm: dtype must be {kind} for a {kind} input, got {target}"
+        )
+    if lucid.promote_types(x.dtype, target) != target:
+        raise TypeError(
+            f"vector_norm: dtype={target} would narrow the {x.dtype} input; "
+            f"pass a dtype it converts to without loss, or cast it first"
+        )
+    xi = _unwrap(x)
+    engine_dtype = to_engine_dtype(target)
+    return xi if xi.dtype == engine_dtype else _C_engine.astype(xi, engine_dtype)
+
+
 def vector_norm(
     x: Tensor,
     ord: int | float = 2,
@@ -2398,20 +2427,33 @@ def vector_norm(
         input axis rather than a single one.
     keepdim : bool, optional
         If ``True``, reduced dimensions are retained with size 1.
-    dtype : optional
-        Currently unused; reserved for future accumulation-dtype
-        control.
+    dtype : dtype, optional
+        Cast ``x`` to this dtype before reducing, so the whole computation
+        — and the result — is in it; a complex ``dtype`` gives its real
+        counterpart.  It must be complex for a complex ``x`` and real
+        otherwise, and must not narrow ``x``.  ``None`` (default) reduces
+        in ``x``'s own dtype.
 
     Returns
     -------
     Tensor
-        Norm along the specified axes.
+        Norm along the specified axes — real, also for a complex ``x``.
+
+    Raises
+    ------
+    TypeError
+        If ``dtype`` would narrow ``x``, or its kind (real / complex)
+        differs from ``x``'s.
 
     Notes
     -----
     All operations are routed through autograd-aware engine kernels, so
     gradients flow naturally even for non-integer :math:`p` (via
     :math:`p`-power and root).
+
+    A complex ``x`` is reduced through its magnitudes :math:`|x_i|`, as
+    the definition says.  Squaring the entries themselves gave a complex
+    "norm" for ``ord=2`` on Metal and an error on the CPU.
 
     Examples
     --------
@@ -2421,8 +2463,16 @@ def vector_norm(
     tensor(5.)
     >>> vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)
     tensor(6.)
+    >>> vector_norm(lucid.tensor([3.0, 4.0]), dtype=lucid.float64)
+    tensor(5., dtype=lucid.float64)
+    >>> vector_norm(lucid.tensor([3 + 4j, 0j]))
+    tensor(5.)
     """
     xi = _unwrap(x)
+    if dtype is not None:
+        xi = _cast_for_norm(x, dtype)
+    if xi.dtype in (_C_engine.C64, _C_engine.C128):
+        xi = _C_engine.abs(xi)
     axes: list[int] = []
     if dim is None:
         # Every axis, rather than a flatten.
@@ -2539,11 +2589,12 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
 def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     r"""Compute a batched vector dot product along an axis.
 
-    Reduces the chosen axis with a sum of element-wise products:
+    Reduces the chosen axis with a sum of element-wise products, the
+    first operand conjugated:
 
     .. math::
 
-        (x \cdot y)_{\ldots} \,=\, \sum_{k} x_{\ldots, k, \ldots}\,
+        (x \cdot y)_{\ldots} \,=\, \sum_{k} \overline{x_{\ldots, k, \ldots}}\,
                                               y_{\ldots, k, \ldots}.
 
     Parameters
@@ -2562,9 +2613,14 @@ def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
 
     Notes
     -----
-    Equivalent to ``(x * y).sum(dim=dim)``.  Useful for computing many
+    Equivalent to ``(x.conj() * y).sum(dim=dim)`` — for real inputs
+    simply ``(x * y).sum(dim=dim)``.  Useful for computing many
     independent dot products in one shot (e.g., per-row inner products
     of two matrices).
+
+    The conjugate makes ``vecdot(x, x)`` the squared norm
+    :math:`\sum_k |x_k|^2` of a complex vector.  Without it, the
+    complex result was the bilinear :math:`\sum_k x_k y_k` instead.
 
     Examples
     --------
@@ -2574,8 +2630,13 @@ def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     >>> y = lucid.tensor([[1.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
     >>> vecdot(x, y)
     tensor([-2., 5.])
+    >>> vecdot(lucid.tensor([1 + 2j, 3 - 1j]), lucid.tensor([2 - 1j, 1 + 1j]))
+    tensor((2.-1.j), dtype=lucid.complex64)
     """
-    prod = _C_engine.mul(_unwrap(x), _unwrap(y))
+    xi = _unwrap(x)
+    if xi.dtype in (_C_engine.C64, _C_engine.C128):
+        xi = _C_engine.conj(xi)
+    prod = _C_engine.mul(xi, _unwrap(y))
     return _wrap(_C_engine.sum(prod, [dim], False))
 
 
