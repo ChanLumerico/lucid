@@ -477,6 +477,12 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
                       shape_str(bs) + " apart from dimension " + std::to_string(d) +
                       " and to be no larger than src " + shape_str(ss));
     }
+    // Any index into an empty axis is out of range; saying so needs only the
+    // shapes, so Metal, which reads no index back, refuses it too (as
+    // ``scatter`` and ``gather`` do).
+    if (bs[static_cast<std::size_t>(d)] == 0 && shape_numel(is) > 0)
+        ErrorBuilder("scatter_add")
+            .index_error("index out of range: dimension " + std::to_string(d) + " has size 0");
 
     // Only the corner of src the index covers is scattered; cut it to that
     // corner so every backend reads src with the index's own layout.

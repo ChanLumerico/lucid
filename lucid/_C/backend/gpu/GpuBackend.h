@@ -92,6 +92,7 @@
 #include "../../core/Shape.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
+#include "AxisIndex.h"
 #include "HalfAccumulation.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -120,34 +121,6 @@ inline ::mlx::core::array eye_or_empty(int n, int m, int k, ::mlx::core::Dtype d
     if (n == 0 || m == 0)
         return ::mlx::core::zeros({n, m}, dtype);
     return ::mlx::core::eye(n, m, k, dtype);
-}
-
-// An axis scatter over the corner of ``base`` that ``idx`` covers.
-//
-// The index may be shorter than ``base`` on every axis but ``dim`` and
-// shorter than ``src`` on every axis — the reference's rule, and the CPU's.
-// MLX's axis scatters want all three to agree off ``dim`` and raised
-// "[broadcast_shapes] Shapes (4) and (2) cannot be broadcast" for a valid
-// call.  So ``src`` is cut to the index's extent, the scatter runs on the
-// matching corner of ``base``, and the corner is written back.
-template <class Scatter>
-::mlx::core::array scatter_on_index_corner(const ::mlx::core::array& base,
-                                           const ::mlx::core::array& idx,
-                                           const ::mlx::core::array& src,
-                                           int dim,
-                                           Scatter&& scatter) {
-    const int ndim = static_cast<int>(base.ndim());
-    ::mlx::core::Shape start(static_cast<std::size_t>(ndim), 0);
-    ::mlx::core::Shape src_stop = idx.shape();
-    ::mlx::core::Shape corner = idx.shape();
-    corner[static_cast<std::size_t>(dim)] = base.shape(dim);
-    const bool cut_src = src.shape() != src_stop;
-    const bool cut_base = base.shape() != corner;
-    auto updates = cut_src ? ::mlx::core::slice(src, start, src_stop) : src;
-    if (!cut_base)
-        return scatter(base, idx, updates);
-    auto region = ::mlx::core::slice(base, start, corner);
-    return ::mlx::core::slice_update(base, scatter(region, idx, updates), start, corner);
 }
 
 // Concrete GPU backend routing every Lucid op through Apple's MLX library.
@@ -1286,7 +1259,7 @@ public:
         if (source.shape() != corner)
             source = ::mlx::core::slice(
                 source, ::mlx::core::Shape(static_cast<std::size_t>(source.ndim()), 0), corner);
-        auto result = ::mlx::core::take_along_axis(source, *gi.arr, axis);
+        auto result = gpu_take_along_axis(source, *gi.arr, axis);
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
@@ -1299,17 +1272,14 @@ public:
                             Dtype dt) override {
         const auto& gg = std::get<GpuStorage>(grad);
         const auto& gi = std::get<GpuStorage>(indices);
-        auto idx = *gi.arr;
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(input_shape[static_cast<std::size_t>(axis)]), idx.dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
-        auto fixed =
-            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
+        // The forward answered NaN where the index was out of range; nothing
+        // was read there, so nothing flows back (policy B, gpu_axis_index).
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
-        auto result = scatter_on_index_corner(
-            base, fixed, *gg.arr, axis, [axis](const auto& b, const auto& i, const auto& v) {
-                return ::mlx::core::scatter_add_axis(b, i, v, axis);
-            });
+        auto result =
+            gpu_scatter_reduce_axis(base, *gi.arr, *gg.arr, axis, ScatterReduce::Add,
+                                    [axis](const auto& b, const auto& i, const auto& v) {
+                                        return ::mlx::core::scatter_add_axis(b, i, v, axis);
+                                    });
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
@@ -1599,18 +1569,21 @@ public:
         const auto& g = std::get<GpuStorage>(grad);
         const auto& idx = std::get<GpuStorage>(indices);
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(output_shape), gpu::to_mlx_dtype(dt));
-        auto out = ::mlx::core::scatter_add_axis(base, *idx.arr, *g.arr, axis);
+        auto out = gpu_scatter_reduce_axis(base, *idx.arr, *g.arr, axis, ScatterReduce::Add,
+                                           [axis](const auto& b, const auto& i, const auto& v) {
+                                               return ::mlx::core::scatter_add_axis(b, i, v, axis);
+                                           });
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
-    // Scatter-add: ``base[indices] += src`` (out-of-place).
+    // Scatter-add: ``base[indices] += src`` (out-of-place), along ``dim``:
+    //   out[..., idx[..., j, ...], ...] += src[..., j, ...]
     //
-    // Notes
-    // -----
-    // Builds explicit multi-axis index arrays so MLX's
-    // ``scatter_add`` can dispatch in one kernel; the helper
-    // :meth:`axis_scatter_via_multiaxis` is shared with
-    // scatter-amax / amin / prod.
+    // ``mlx::core::scatter_add_axis`` is that primitive exactly.  MLX's
+    // multi-axis ``scatter_add`` (np.add.at flavour: one index array per
+    // axis) is a different operation and tripped its own "Number of index
+    // arrays does not match number of axes" guard.  An out-of-range index
+    // drops its update (policy B, ``gpu_axis_index``).
     Storage scatter_add(const Storage& base,
                         const Storage& indices,
                         const Storage& src,
@@ -1618,37 +1591,33 @@ public:
                         const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
-        if (dt == Dtype::I64)
-            return scatter_via_cpu(base, indices, src, base_shape, idx_shape,
-                                   [&](const Storage& b, const Storage& i, const Storage& v) {
-                                       return backend::Dispatcher::for_device(Device::CPU)
-                                           .scatter_add(b, i, v, base_shape, idx_shape, dim, dt);
-                                   });
-        // Axis-scatter add — Lucid's flavour:
-        //   out[..., idx[..., j, ...], ...] += src[..., j, ...]   along dim
-        //
-        // The earlier impl wired MLX's multi-axis ``scatter_add`` (np.add.at-
-        // flavour: one index array per axis, all coordinates supplied), which
-        // is a different semantic from the axis-scatter Lucid exposes and
-        // tripped MLX's "Number of index arrays does not match number of
-        // axes" guard.  ``mlx::core::scatter_add_axis`` is the exact axis-
-        // scatter primitive we need — same one already used in the gradient
-        // path on line 804.
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
         const int ndim = static_cast<int>(base_shape.size());
         const int d = dim < 0 ? dim + ndim : dim;
-        // Normalise negative indices the same way the gradient path does so
-        // user code can mirror the ``idx[i] += N`` convention used by the
-        // reference framework.
-        auto idx = *gi.arr;
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx.dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
-        auto fixed =
-            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
-        auto out = scatter_on_index_corner(*gb.arr, fixed, *gs.arr, d,
+        const std::int64_t extent = base_shape[static_cast<std::size_t>(d)];
+        if (dt == Dtype::I64) {
+            // The add runs on the CPU (see ``scatter_via_cpu``).  The index is
+            // made safe on this side first: an out-of-range update becomes 0
+            // aimed at an in-range position.  So the CPU kernel's IndexError
+            // never fires, and Metal drops the update here as it does for
+            // every other dtype.
+            if (extent == 0)
+                return base;
+            auto ix = gpu_axis_index(*gi.arr, extent);
+            auto values = ::mlx::core::where(ix.in_range, *gs.arr,
+                                             scatter_identity(ScatterReduce::Add, gs.arr->dtype()));
+            const Storage safe_idx{
+                gpu::wrap_mlx_array(::mlx::core::astype(ix.safe, ::mlx::core::int64), Dtype::I64)};
+            const Storage safe_src{gpu::wrap_mlx_array(std::move(values), dt)};
+            return scatter_via_cpu(base, safe_idx, safe_src, base_shape, idx_shape,
+                                   [&](const Storage& b, const Storage& i, const Storage& v) {
+                                       return backend::Dispatcher::for_device(Device::CPU)
+                                           .scatter_add(b, i, v, base_shape, idx_shape, d, dt);
+                                   });
+        }
+        auto out = gpu_scatter_reduce_axis(*gb.arr, *gi.arr, *gs.arr, d, ScatterReduce::Add,
                                            [d](const auto& b, const auto& i, const auto& v) {
                                                return ::mlx::core::scatter_add_axis(b, i, v, d);
                                            });
@@ -1661,11 +1630,17 @@ public:
     // ``index_copy`` route through it.  A position named twice takes one of
     // the values aimed at it, which one unspecified — the GPU threads race.
     //
+    // An out-of-range index drops its write (policy B, ``gpu_axis_index``).
+    // It is aimed at a one-wide sink slab past the end of ``dim`` that is cut
+    // off again (``gpu_sink_index``), because no in-range position can take
+    // a write and stay as it was.
+    //
     // MLX scatters no 8-byte element on Metal: int64 and complex64 both
     // report "[ScatterAxis::eval_gpu] Does not support".  Writing each as
     // two uint32 halves would be exact for distinct indices, but two writers
     // racing for one position can land one's low half beside the other's
-    // high half — a value nobody wrote.  So those two go through the CPU.
+    // high half — a value nobody wrote.  So those two go through the CPU,
+    // sink slab and all.
     Storage scatter_set(const Storage& base,
                         const Storage& indices,
                         const Storage& src,
@@ -1673,28 +1648,36 @@ public:
                         const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
-        if (dt == Dtype::I64 || dt == Dtype::C64)
-            return scatter_via_cpu(base, indices, src, base_shape, idx_shape,
-                                   [&](const Storage& b, const Storage& i, const Storage& v) {
-                                       return backend::Dispatcher::for_device(Device::CPU)
-                                           .scatter_set(b, i, v, base_shape, idx_shape, dim, dt);
-                                   });
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
         const int ndim = static_cast<int>(base_shape.size());
         const int d = dim < 0 ? dim + ndim : dim;
-        auto idx = *gi.arr;
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx.dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
-        auto fixed =
-            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
-        auto out = scatter_on_index_corner(*gb.arr, fixed, *gs.arr, d,
+        const std::int64_t extent = base_shape[static_cast<std::size_t>(d)];
+        if (extent == 0)
+            return base;
+        auto sink = gpu_sink_index(*gi.arr, extent);
+        auto padded = with_sink_slab(*gb.arr, d);
+        if (dt == Dtype::I64 || dt == Dtype::C64) {
+            Shape padded_shape = base_shape;
+            padded_shape[static_cast<std::size_t>(d)] += 1;
+            const Storage padded_base{gpu::wrap_mlx_array(std::move(padded), dt)};
+            const Storage sink_idx{
+                gpu::wrap_mlx_array(::mlx::core::astype(sink, ::mlx::core::int64), Dtype::I64)};
+            const Storage out =
+                scatter_via_cpu(padded_base, sink_idx, src, padded_shape, idx_shape,
+                                [&](const Storage& b, const Storage& i, const Storage& v) {
+                                    return backend::Dispatcher::for_device(Device::CPU)
+                                        .scatter_set(b, i, v, padded_shape, idx_shape, d, dt);
+                                });
+            return Storage{gpu::wrap_mlx_array(
+                without_sink_slab(*std::get<GpuStorage>(out).arr, gb.arr->shape()), dt)};
+        }
+        auto out = scatter_on_index_corner(padded, sink, *gs.arr, d,
                                            [d](const auto& b, const auto& i, const auto& v) {
                                                return ::mlx::core::put_along_axis(b, i, v, d);
                                            });
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+        return Storage{gpu::wrap_mlx_array(without_sink_slab(out, gb.arr->shape()), dt)};
     }
 
     // MLX's Metal scatter has no int64 kernel (nor complex64 — see scatter_set).
@@ -1728,60 +1711,17 @@ public:
     }
 
 private:
-    // MLX's ``scatter_{max,min,prod}`` lack an axis-only variant the way
-    // ``scatter_add`` does (``scatter_add_axis``).  For axis-scatter we
-    // reach the multi-axis API but use **K=1** with a single index array
-    // reshaped to (1,...,N,...,1) — same trick MLX would do internally
-    // for ``scatter_max(a, idx, src, axis)``.
+    // MLX's ``scatter_{max,min,prod}`` have no axis-only variant the way
+    // ``scatter_add`` has ``scatter_add_axis``.  So the axis scatter
+    // ``a[..., idx[i,j,...], ...] op= src[i,j,...]`` along ``dim`` uses the
+    // multi-axis form with K = ndim: one coordinate array per axis.  For
+    // every axis but ``dim`` the coordinate is ``arange(idx_shape[a])``
+    // reshaped to (1..N..1).  For ``dim`` it is the index, made safe by
+    // ``gpu_axis_index``.  Updates then have the index's shape, which meets
+    // MLX's "updates.ndim == K + (ndim - K)" invariant.
     //
-    // For Lucid's axis-scatter ``a[..., idx[i,j,...], ...] op= src[i,j,...]``
-    // along ``dim``: idx and src have identical shape (≤ a along non-dim
-    // axes).  MLX's multi-axis scatter expects updates of shape
-    // ``idx_shape + a.shape[K..]``; with K=1 and reshaping idx so the dim
-    // axis sits at the head, MLX broadcasts updates back across non-dim
-    // axes for us.
-    struct AxisIndexUpdates {
-        ::mlx::core::array idx_for_mlx;
-        ::mlx::core::array updates_for_mlx;
-        int axis;
-    };
-    AxisIndexUpdates prep_axis_scatter(const ::mlx::core::array& idx_in,
-                                       const ::mlx::core::array& src_in,
-                                       const Shape& base_shape,
-                                       const Shape& idx_shape,
-                                       int dim) {
-        const int ndim = static_cast<int>(base_shape.size());
-        const int d = dim < 0 ? dim + ndim : dim;
-
-        // Normalise negative indices for the scatter axis the same way the
-        // gradient path does.
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx_in.dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx_in.dtype());
-        auto fixed = ::mlx::core::where(::mlx::core::less(idx_in, zero),
-                                        ::mlx::core::add(idx_in, axis_len), idx_in);
-
-        // MLX multi-axis scatter with K=1, axes=[d] expects ``indices`` to
-        // have shape ``idx_shape[d] = (idx_shape[d],)`` (just the scatter
-        // axis) and ``updates`` to broadcast over the non-scatter axes.
-        // We collapse all non-scatter axes from ``fixed`` by selecting the
-        // first slice — the axis-scatter invariant guarantees they're all
-        // identical along non-dim axes (they index the same scatter target
-        // row by row).
-        // Equivalently: take the values from ``fixed`` along all non-d axes
-        // at index 0, leaving a 1-D index of length idx_shape[d].
-        // BUT that doesn't preserve the per-row addresses.  Instead, we use
-        // the K=ndim multi-axis form where every axis has a coord array;
-        // updates then has shape == idx_shape exactly.
-        AxisIndexUpdates out{fixed, src_in, d};
-        return out;
-    }
-
-    // Multi-axis scatter where K = ndim and one coord array per axis.
-    // For non-scatter axis a: coord = arange(idx_shape[a]).reshape(1..N..1).
-    // For scatter axis dim: coord = idx_in (negative-normalised).
-    // Updates then has shape == idx_shape (same as the broadcast index
-    // shape), satisfying MLX's "updates.ndim == K + (ndim - K)" invariant.
+    // An out-of-range index drops its update (policy B): the update becomes
+    // the identity of ``op``.
     template <typename ScatterFn>
     Storage axis_scatter_via_multiaxis(const Storage& base,
                                        const Storage& indices,
@@ -1790,18 +1730,26 @@ private:
                                        const Shape& idx_shape,
                                        int dim,
                                        Dtype dt,
+                                       ScatterReduce op,
                                        ScatterFn scatter_fn) {
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
         const int ndim = static_cast<int>(base_shape.size());
         const int d = dim < 0 ? dim + ndim : dim;
-
-        auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), gi.arr->dtype());
-        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), gi.arr->dtype());
-        auto fixed = ::mlx::core::where(::mlx::core::less(*gi.arr, zero),
-                                        ::mlx::core::add(*gi.arr, axis_len), *gi.arr);
+        // The coordinates off ``dim`` come from the index's shape, so an index
+        // wider than the base there would write past it however its values
+        // read.  That is known from the shapes alone.
+        for (int a = 0; a < ndim; ++a)
+            if (a != d &&
+                idx_shape[static_cast<std::size_t>(a)] > base_shape[static_cast<std::size_t>(a)])
+                ErrorBuilder("gpu_backend::scatter_reduce")
+                    .fail("index is larger than the base on a non-scattered axis");
+        const std::int64_t extent = base_shape[static_cast<std::size_t>(d)];
+        if (extent == 0)
+            return base;
+        auto ix = gpu_axis_index(*gi.arr, extent);
+        const auto coord_dt = ix.safe.dtype();
 
         std::vector<::mlx::core::array> index_list;
         std::vector<int> axes_v;
@@ -1810,10 +1758,10 @@ private:
         for (int a = 0; a < ndim; ++a) {
             axes_v.push_back(a);
             if (a == d) {
-                index_list.push_back(fixed);
+                index_list.push_back(ix.safe);
             } else {
                 auto sz = static_cast<int>(idx_shape[static_cast<std::size_t>(a)]);
-                auto coord = ::mlx::core::arange(0, sz, 1, gi.arr->dtype());
+                auto coord = ::mlx::core::arange(0, sz, 1, coord_dt);
                 std::vector<int> reshape_dims(ndim, 1);
                 reshape_dims[a] = sz;
                 coord = ::mlx::core::reshape(
@@ -1832,8 +1780,11 @@ private:
             upd_shape.push_back(static_cast<int>(idx_shape[static_cast<std::size_t>(a)]));
         for (int a = 0; a < ndim; ++a)
             upd_shape.push_back(1);
+        auto values =
+            ::mlx::core::where(ix.in_range, ::mlx::core::reshape(*gs.arr, ix.in_range.shape()),
+                               scatter_identity(op, gs.arr->dtype()));
         auto updates =
-            ::mlx::core::reshape(*gs.arr, ::mlx::core::Shape(upd_shape.begin(), upd_shape.end()));
+            ::mlx::core::reshape(values, ::mlx::core::Shape(upd_shape.begin(), upd_shape.end()));
 
         auto out = scatter_fn(*gb.arr, index_list, updates, axes_v);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
@@ -1848,7 +1799,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return axis_scatter_via_multiaxis(
-            base, indices, src, base_shape, idx_shape, dim, dt,
+            base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Max,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_max(a, idxs, upd, axes);
@@ -1863,7 +1814,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return axis_scatter_via_multiaxis(
-            base, indices, src, base_shape, idx_shape, dim, dt,
+            base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Min,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_min(a, idxs, upd, axes);
@@ -1878,7 +1829,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return axis_scatter_via_multiaxis(
-            base, indices, src, base_shape, idx_shape, dim, dt,
+            base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Prod,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_prod(a, idxs, upd, axes);
@@ -3554,8 +3505,11 @@ public:
         if (B <= 0 || n_idx == 0)
             return Storage{gpu::wrap_mlx_array(mx::zeros({std::max(B, 0), D}, mdt), dt)};
 
-        auto idx_i = mx::astype(*gi.arr, mx::int32);
-        auto emb = mx::take(*gw.arr, idx_i, 0);  // (n_idx, D)
+        // (n_idx, D).  An index outside the table reads a row of NaN, so its
+        // bag answers NaN (policy B, ``gpu_axis_index``).  The index is
+        // checked at its own width: it was narrowed to int32 first, and an
+        // index of 2^32 + 1 read row 1.
+        auto emb = gpu_take(*gw.arr, *gi.arr, 0, NegativeIndex::OutOfRange);
 
         // seg[k] = (#offsets <= k) - 1  — the bag position k falls in.  The
         // sentinel counts here, so a position past it lands on bag B.
@@ -3567,19 +3521,23 @@ public:
                                 mx::array(static_cast<std::int32_t>(1), mx::int32));
 
         // valid[k] (float): 1 unless the index equals padding_idx or k lies
-        // past the sentinel.
-        auto in_bag = mx::less(seg, mx::array(static_cast<std::int32_t>(B), mx::int32));
+        // outside every bag: past the sentinel, or before the first offset
+        // (seg -1), which the CPU kernel also leaves out.  MLX would read
+        // seg -1 as the last bag.
+        auto in_bag = mx::logical_and(
+            mx::greater_equal(seg, mx::array(static_cast<std::int32_t>(0), mx::int32)),
+            mx::less(seg, mx::array(static_cast<std::int32_t>(B), mx::int32)));
         mx::array valid = mx::astype(in_bag, mdt);
         if (padding_idx >= 0) {
             valid = mx::multiply(
-                valid,
-                mx::astype(mx::not_equal(
-                               idx_i, mx::array(static_cast<std::int32_t>(padding_idx), mx::int32)),
-                           mdt));
+                valid, mx::astype(mx::not_equal(mx::astype(*gi.arr, mx::int64),
+                                                mx::array(std::int64_t{padding_idx}, mx::int64)),
+                                  mdt));
         }
         // Rows outside every bag are zeroed through ``valid`` below; clamp
         // their segment so the scatter stays in bounds.
-        seg = mx::minimum(seg, mx::array(static_cast<std::int32_t>(B - 1), mx::int32));
+        seg = mx::clip(seg, mx::array(static_cast<std::int32_t>(0), mx::int32),
+                       mx::array(static_cast<std::int32_t>(B - 1), mx::int32));
 
         // one-hot membership (B, n_idx): oh[b,k] = (seg[k]==b) * valid[k]
         auto brow = mx::reshape(mx::arange(0, B, 1, mx::int32), {B, 1});
@@ -4159,7 +4117,7 @@ public:
         auto ig_mask = class_ignore_mask(t_idx, ignore_index);
         auto safe_t = safe_class_indices(t_idx, ig_mask);
 
-        auto pred = ::mlx::core::take_along_axis(softmax, safe_t, 1);
+        auto pred = class_pick(softmax, safe_t);
         auto neg_log_pred = ::mlx::core::negative(
             ::mlx::core::log(::mlx::core::add(pred, gpu::mlx_scalar(eps, mlx_dt))));
         auto w_gather = class_weight_gather(weight, safe_t, neg_log_pred.shape(), mlx_dt);
@@ -4239,7 +4197,7 @@ public:
         auto t_idx = class_target_indices(*t.arr, target_shape);
         auto ig_mask = class_ignore_mask(t_idx, ignore_index);
         auto safe_t = safe_class_indices(t_idx, ig_mask);
-        auto pred = ::mlx::core::take_along_axis(*x.arr, safe_t, 1);
+        auto pred = class_pick(*x.arr, safe_t);
         auto neg = ::mlx::core::negative(pred);
         auto w_gather = class_weight_gather(weight, safe_t, neg.shape(), mlx_dt);
         auto ig_mask_dt = ::mlx::core::astype(ig_mask, mlx_dt);
@@ -4742,7 +4700,6 @@ public:
         (void)out_shape;
         const auto& gw = std::get<GpuStorage>(weight);
         const auto& gi = std::get<GpuStorage>(indices);
-        auto idx = ::mlx::core::astype(*gi.arr, ::mlx::core::int64);
         // padding_idx does not mask the lookup.  The convention it comes
         // from zeroes that row at initialisation and stops its gradient,
         // so the row holds whatever training left there — and a loaded
@@ -4753,7 +4710,9 @@ public:
         // lives in embedding_backward, which is the whole of the
         // contract.
         (void)padding_idx;
-        auto out = ::mlx::core::take(*gw.arr, idx, 0);
+        // An index outside the table, negative ones included, reads a row of
+        // NaN (policy B, ``gpu_axis_index``); the CPU raises IndexError.
+        auto out = gpu_take(*gw.arr, *gi.arr, 0, NegativeIndex::OutOfRange);
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
@@ -4781,26 +4740,32 @@ public:
         const auto& gg = std::get<GpuStorage>(grad_out);
         const auto& gi = std::get<GpuStorage>(indices);
 
-        auto idx_flat = ::mlx::core::reshape(::mlx::core::astype(*gi.arr, ::mlx::core::int64),
-                                             {static_cast<int>(M_total)});
+        auto base = ::mlx::core::zeros({static_cast<int>(N), static_cast<int>(D)}, mlx_dt);
+        if (N == 0)
+            return Storage{gpu::wrap_mlx_array(std::move(base), dt)};
         auto grad_flat =
             ::mlx::core::reshape(*gg.arr, {static_cast<int>(M_total), static_cast<int>(D)});
-        if (padding_idx >= 0) {
-            // Zero out rows whose index equals the padding slot so they
-            // contribute nothing to the scatter-add.
-            auto pad_v = ::mlx::core::astype(::mlx::core::array(padding_idx), ::mlx::core::int64);
-            auto mask = ::mlx::core::not_equal(idx_flat, pad_v);
-            auto mask_dt = ::mlx::core::astype(mask, mlx_dt);
-            auto mask_b = ::mlx::core::reshape(mask_dt, {static_cast<int>(M_total), 1});
-            grad_flat = ::mlx::core::multiply(grad_flat, mask_b);
-        }
+        // A row contributes when its index names a row of the table and is
+        // not the padding slot.  An index outside the table read NaN in the
+        // forward and sends nothing back (policy B, ``gpu_axis_index``).
+        // The rest are *selected* away, not multiplied by 0: ``0 * inf`` is
+        // NaN, and an infinite gradient at a padding position reached the
+        // padding row as NaN.
+        auto ix = gpu_axis_index(::mlx::core::reshape(*gi.arr, {static_cast<int>(M_total)}), N,
+                                 NegativeIndex::OutOfRange);
+        auto keep = ix.in_range;
+        if (padding_idx >= 0)
+            keep = ::mlx::core::logical_and(
+                keep,
+                ::mlx::core::not_equal(ix.safe, ::mlx::core::array(padding_idx, ix.safe.dtype())));
+        grad_flat = ::mlx::core::where(::mlx::core::reshape(keep, {static_cast<int>(M_total), 1}),
+                                       grad_flat, scatter_identity(ScatterReduce::Add, mlx_dt));
         // scatter_add_axis requires indices and updates to share shape.
         // Broadcast the index column across D so each row of grad_flat
         // lands on the correct vocab row of dW.
-        auto idx_2d = ::mlx::core::reshape(idx_flat, {static_cast<int>(M_total), 1});
         auto idx_bcast =
-            ::mlx::core::broadcast_to(idx_2d, {static_cast<int>(M_total), static_cast<int>(D)});
-        auto base = ::mlx::core::zeros({static_cast<int>(N), static_cast<int>(D)}, mlx_dt);
+            ::mlx::core::broadcast_to(::mlx::core::reshape(ix.safe, {static_cast<int>(M_total), 1}),
+                                      {static_cast<int>(M_total), static_cast<int>(D)});
         auto dW = ::mlx::core::scatter_add_axis(base, idx_bcast, grad_flat, /*axis=*/0);
         return Storage{gpu::wrap_mlx_array(std::move(dW), dt)};
     }
@@ -6410,10 +6375,21 @@ private:
         return ::mlx::core::not_equal(target_idx, ignore);
     }
 
+    // The target with every ignored entry replaced by class 0, so the
+    // gathers below read a real class there; the loss masks it out.  A
+    // target that is neither ignored nor a class stays as it is, and the
+    // gathers answer NaN for it (policy B, ``gpu_axis_index``): the loss
+    // there is NaN, the CPU raises IndexError.
     ::mlx::core::array safe_class_indices(const ::mlx::core::array& target_idx,
                                           const ::mlx::core::array& keep_mask) {
         auto zero = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
         return ::mlx::core::where(keep_mask, target_idx, zero);
+    }
+
+    // The class-axis value at each target (``take_along_axis`` on axis 1).
+    static ::mlx::core::array class_pick(const ::mlx::core::array& x,
+                                         const ::mlx::core::array& safe_t) {
+        return gpu_take_along_axis(x, safe_t, 1, NegativeIndex::OutOfRange);
     }
 
     ::mlx::core::array class_weight_gather(const Storage* weight,
@@ -6422,7 +6398,7 @@ private:
                                            ::mlx::core::Dtype dt) {
         if (weight) {
             const auto& w = std::get<GpuStorage>(*weight);
-            return ::mlx::core::take(*w.arr, safe_t);
+            return gpu_take(*w.arr, safe_t, 0, NegativeIndex::OutOfRange);
         }
         return ::mlx::core::broadcast_to(gpu::mlx_scalar(1.0, dt), shape);
     }
@@ -8108,6 +8084,11 @@ private:
         return out;
     }
 
+    // Built by comparing each index with every class, so no index value is
+    // ever used as an offset.  One outside [0, num_classes), negative ones
+    // included, matches no class and leaves its row zero: policy B for
+    // Metal (``gpu_axis_index``).  The CPU raises IndexError, as the
+    // reference does.
     Storage one_hot_forward(const Storage& indices,
                             const Shape& indices_shape,
                             int num_classes,

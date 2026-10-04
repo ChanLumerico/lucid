@@ -83,6 +83,7 @@
 #include "ErfPoly.h"
 #include "GeluGrad.h"
 #include "Im2Col.h"
+#include "IndexBounds.h"
 #include "Lapack.h"
 #include "NonFinite.h"
 #include "Norm.h"
@@ -4835,6 +4836,15 @@ private:
 
     // Generic scatter-reduce loop shared by scatter_amax / scatter_amin / scatter_prod.
     // Op is a binary functor: (T& dst_elem, T src_elem) → void  (modifies dst in-place).
+    //
+    // The index is read at its own width and checked against the axis.  This
+    // loop read every index as int32 lanes (an int64 index of 2^32 + 1 was 1)
+    // and wrote wherever the value pointed, so an out-of-range index wrote
+    // past the buffer.  It also placed the index's elements by the base's
+    // strides, so an index narrower than the base off ``dim`` read past the
+    // index and src and took the process down with SIGBUS.
+    // ``axis_scatter_walk`` places them now, as it does for scatter_add and
+    // scatter_set.
     template <typename Op>
     Storage scatter_reduce_loop(const Storage& base,
                                 const Storage& indices,
@@ -4849,39 +4859,51 @@ private:
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& cs = std::get<CpuStorage>(src);
 
-        const std::size_t base_n = shape_numel(base_shape);
-        const std::size_t nbytes = base_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
-
         const int ndim = static_cast<int>(base_shape.size());
         if (dim < 0)
             dim += ndim;
+        // Known from the shapes alone: an index wider than the base off
+        // ``dim`` writes past it, and a src with fewer elements than the
+        // index is read past its end, whatever the index values are.
+        for (int a = 0; a < ndim; ++a)
+            if (a != dim &&
+                idx_shape[static_cast<std::size_t>(a)] > base_shape[static_cast<std::size_t>(a)])
+                ErrorBuilder(name).fail("index is larger than the base on a non-scattered axis");
+        const std::size_t count = shape_numel(idx_shape);
+        if (cs.nbytes < count * dtype_size(dt))
+            ErrorBuilder(name).fail("src must hold one element per index position");
 
-        std::size_t outer = 1;
-        for (int d = 0; d < dim; ++d)
-            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
-        std::size_t inner = 1;
-        for (int d = dim + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
-        const std::size_t base_dim =
-            static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dim)]);
-        const std::size_t idx_dim =
-            static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(dim)]);
-        const auto* ip = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
+        const std::size_t base_n = shape_numel(base_shape);
+        const std::size_t nbytes = base_n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        if (nbytes > 0)
+            std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
+        if (count == 0)
+            return Storage{CpuStorage{ptr, nbytes, dt}};
+
+        const auto read_idx = cpu::index_reader(name, ci);
+        const AxisScatterWalk w = axis_scatter_walk(base_shape, idx_shape, dim);
+        const auto len = static_cast<std::int64_t>(w.base_dim);
 
         auto run = [&](auto* dst, const auto* sp) {
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j)
-                    for (std::size_t k = 0; k < idx_dim; ++k) {
-                        const std::size_t sf = (o * idx_dim + k) * inner + j;
-                        std::int32_t tgt = ip[sf];
+            const std::size_t inner = w.inner_off.size();
+            for (std::size_t o = 0; o < w.outer_off.size(); ++o)
+                for (std::size_t k = 0; k < w.idx_dim; ++k) {
+                    const std::size_t row = (o * w.idx_dim + k) * inner;
+                    for (std::size_t j = 0; j < inner; ++j) {
+                        std::int64_t tgt = read_idx(row + j);
                         if (tgt < 0)
-                            tgt += static_cast<std::int32_t>(base_dim);
-                        const std::size_t df =
-                            (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
-                        op(dst[df], sp[sf]);
+                            tgt += len;
+                        // Refuse rather than write outside the buffer.
+                        if (tgt < 0 || tgt >= len)
+                            ErrorBuilder(name).index_error(
+                                "index out of range for the scattered axis");
+                        const std::size_t at = w.outer_off[o] +
+                                               static_cast<std::size_t>(tgt) * w.dim_stride +
+                                               w.inner_off[j];
+                        op(dst[at], sp[row + j]);
                     }
+                }
         };
 
         if (dt == Dtype::F32)
@@ -6660,32 +6682,15 @@ public:
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& co = std::get<CpuStorage>(offsets);
 
-        const int num_emb = static_cast<int>(weight_shape[0]);
+        const std::int64_t num_emb = weight_shape[0];
         const int D = static_cast<int>(weight_shape[1]);
-        const int n_idx = static_cast<int>(shape_numel(indices_shape));
-        // Indices / offsets may be I32 or I64.  Read each per its actual dtype —
-        // this bag path previously hard-cast to int32, silently misreading an
-        // int64 index buffer (the common case, since index tensors default to
-        // I64).  The non-bag ``embedding_forward`` path is already dtype-aware.
-        auto read_int = [](const CpuStorage& s, int k) -> int {
-            return s.dtype == Dtype::I64
-                       ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
-                       : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
-        };
-        const int n_offsets = static_cast<int>(co.nbytes / dtype_size(co.dtype));
-
-        // Bag b is [offsets[b], offsets[b + 1]).  Under include_last_offset
-        // the final offset is a sentinel that ends the last bag, so there is
-        // one bag fewer than offsets; otherwise the last bag runs to the end
-        // of the indices.  (This used to count the sentinel as a bag and end
-        // every other bag at n_idx.)
-        const int B = n_offsets - (include_last_offset ? 1 : 0);
-        std::vector<int> starts(static_cast<std::size_t>(B));
-        std::vector<int> ends(static_cast<std::size_t>(B));
-        for (int b = 0; b < B; ++b) {
-            starts[static_cast<std::size_t>(b)] = read_int(co, b);
-            ends[static_cast<std::size_t>(b)] = b + 1 < n_offsets ? read_int(co, b + 1) : n_idx;
-        }
+        constexpr const char* kOp = "cpu_backend::embedding_bag";
+        // Indices and offsets are each read at their own width.  This path
+        // cast an int64 index to int, so an index of 2^32 + 1 read row 1.
+        const auto read_idx = cpu::index_reader(kOp, ci);
+        const auto bags =
+            cpu::embedding_bags(kOp, co, shape_numel(indices_shape), include_last_offset);
+        const int B = static_cast<int>(bags.start.size());
 
         std::size_t out_nb = static_cast<std::size_t>(B) * D * dtype_size(dt);
         auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
@@ -6698,8 +6703,8 @@ public:
         auto run = [&](auto* op) {
             using T = std::remove_pointer_t<decltype(op)>;
             for (int b = 0; b < B; ++b) {
-                int s = starts[static_cast<std::size_t>(b)];
-                int e = ends[static_cast<std::size_t>(b)];
+                const std::size_t s = bags.start[static_cast<std::size_t>(b)];
+                const std::size_t e = bags.end[static_cast<std::size_t>(b)];
                 T* row = op + b * D;
                 if (mode == 2) {  // max: seed with the lowest value so an
                     // all-negative bag isn't masked by the 0 memset init.
@@ -6707,13 +6712,16 @@ public:
                         row[d] = std::numeric_limits<T>::lowest();
                 }
                 int count = 0;
-                for (int k = s; k < e; ++k) {
-                    int emb = read_int(ci, k);
-                    if (emb == padding_idx)
+                for (std::size_t k = s; k < e; ++k) {
+                    const std::int64_t emb = read_idx(k);
+                    if (padding_idx >= 0 && emb == padding_idx)
                         continue;
-                    if (emb < 0 || emb >= num_emb)
-                        continue;
-                    const T* src = reinterpret_cast<const T*>(wp + emb * D * esz);
+                    // Refused, as the reference refuses it.  It used to be
+                    // skipped, so a bad index silently left its bag short.
+                    // Metal reads a row of NaN instead (policy B).
+                    cpu::checked_row(kOp, emb, num_emb);
+                    const T* src = reinterpret_cast<const T*>(
+                        wp + static_cast<std::size_t>(emb) * static_cast<std::size_t>(D) * esz);
                     if (mode == 2) {  // max
                         for (int d = 0; d < D; ++d)
                             if (src[d] > row[d])
@@ -6766,25 +6774,23 @@ public:
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& co = std::get<CpuStorage>(offsets);
 
-        const int num_emb = static_cast<int>(weight_shape[0]);
+        const std::int64_t num_emb = weight_shape[0];
         const int D = static_cast<int>(weight_shape[1]);
-        const int n_idx = static_cast<int>(shape_numel(indices_shape));
-        auto read_int = [](const CpuStorage& s, int k) -> int {
-            return s.dtype == Dtype::I64
-                       ? static_cast<int>(reinterpret_cast<const std::int64_t*>(s.ptr.get())[k])
-                       : static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[k]);
+        constexpr const char* kOp = "cpu_backend::embedding_bag_backward";
+        const auto read_idx = cpu::index_reader(kOp, ci);
+        // The same bag boundaries the forward computed, derived by the same
+        // helper so the two cannot disagree about which rows a bag owns.
+        const auto bags =
+            cpu::embedding_bags(kOp, co, shape_numel(indices_shape), include_last_offset);
+        const int B = static_cast<int>(bags.start.size());
+        // An index outside the table sends nothing back.  The CPU forward
+        // refuses one, so on the CPU only an index changed in place since
+        // then is skipped here.  Metal's backward runs through this kernel,
+        // and there the skip is policy B's drop: the forward answered NaN
+        // for that row, and nothing was read from the table.
+        const auto usable = [&](std::int64_t emb) {
+            return emb != padding_idx && emb >= 0 && emb < num_emb;
         };
-        const int n_offsets = static_cast<int>(co.nbytes / dtype_size(co.dtype));
-
-        // The same bag boundaries the forward computed, derived the same
-        // way so the two cannot disagree about which rows a bag owns.
-        const int B = n_offsets - (include_last_offset ? 1 : 0);
-        std::vector<int> starts(static_cast<std::size_t>(B));
-        std::vector<int> ends(static_cast<std::size_t>(B));
-        for (int b = 0; b < B; ++b) {
-            starts[static_cast<std::size_t>(b)] = read_int(co, b);
-            ends[static_cast<std::size_t>(b)] = b + 1 < n_offsets ? read_int(co, b + 1) : n_idx;
-        }
 
         const std::size_t gw_nb = static_cast<std::size_t>(num_emb) * D * dtype_size(dt);
         auto gw_ptr = allocate_aligned_bytes(gw_nb, Device::CPU);
@@ -6796,17 +6802,13 @@ public:
             const T* wp = reinterpret_cast<const T*>(cw.ptr.get());
             T* gwp = reinterpret_cast<T*>(gw_ptr.get());
             for (int b = 0; b < B; ++b) {
-                const int s = starts[static_cast<std::size_t>(b)];
-                const int e = ends[static_cast<std::size_t>(b)];
+                const std::size_t s = bags.start[static_cast<std::size_t>(b)];
+                const std::size_t e = bags.end[static_cast<std::size_t>(b)];
                 const T* grow = gp + static_cast<std::size_t>(b) * D;
 
                 int count = 0;
-                for (int k = s; k < e; ++k) {
-                    const int emb = read_int(ci, k);
-                    if (emb == padding_idx || emb < 0 || emb >= num_emb)
-                        continue;
-                    ++count;
-                }
+                for (std::size_t k = s; k < e; ++k)
+                    count += usable(read_idx(k)) ? 1 : 0;
                 if (count == 0)
                     continue;
 
@@ -6816,11 +6818,11 @@ public:
                     // forward records no argmax; ties go to the first,
                     // matching the forward's strict ``>``.
                     for (int d = 0; d < D; ++d) {
-                        int best = -1;
+                        std::int64_t best = -1;
                         T best_val = std::numeric_limits<T>::lowest();
-                        for (int k = s; k < e; ++k) {
-                            const int emb = read_int(ci, k);
-                            if (emb == padding_idx || emb < 0 || emb >= num_emb)
+                        for (std::size_t k = s; k < e; ++k) {
+                            const std::int64_t emb = read_idx(k);
+                            if (!usable(emb))
                                 continue;
                             const T v = wp[static_cast<std::size_t>(emb) * D + d];
                             if (best < 0 || v > best_val) {
@@ -6835,9 +6837,9 @@ public:
                 }
 
                 const T scale = mode == 1 ? T(1) / static_cast<T>(count) : T(1);
-                for (int k = s; k < e; ++k) {
-                    const int emb = read_int(ci, k);
-                    if (emb == padding_idx || emb < 0 || emb >= num_emb)
+                for (std::size_t k = s; k < e; ++k) {
+                    const std::int64_t emb = read_idx(k);
+                    if (!usable(emb))
                         continue;
                     T* dst = gwp + static_cast<std::size_t>(emb) * D;
                     for (int d = 0; d < D; ++d)
@@ -8219,8 +8221,9 @@ public:
                     const T inv = T{1} / sum;
                     for (int c = 0; c < channels; ++c)
                         sp[(n * channels + c) * spatial + s] *= inv;
-                    const std::int64_t y = read_target_index(ts, n * spatial + s);
-                    if (static_cast<int>(y) == ignore_index) {
+                    const std::int64_t y = class_target("cpu_backend::cross_entropy_loss", ts,
+                                                        n * spatial + s, ignore_index, channels);
+                    if (y < 0) {
                         lp[n * spatial + s] = T{0};
                         continue;
                     }
@@ -8288,8 +8291,9 @@ public:
             const bool elem = reduction == 0;
             for (int n = 0; n < n_batch; ++n) {
                 for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = read_target_index(ts, n * spatial + s);
-                    if (static_cast<int>(y) == ignore_index)
+                    const std::int64_t y = class_target("cpu_backend::cross_entropy_backward", ts,
+                                                        n * spatial + s, ignore_index, channels);
+                    if (y < 0)
                         continue;
                     const T go = elem ? gp[n * spatial + s] : gp[0];
                     const T scale = (reduction == 1) ? (go / valid) : go;
@@ -8339,8 +8343,9 @@ public:
             const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
             for (int n = 0; n < n_batch; ++n) {
                 for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = read_target_index(ts, n * spatial + s);
-                    if (static_cast<int>(y) == ignore_index) {
+                    const std::int64_t y = class_target("cpu_backend::nll_loss", ts,
+                                                        n * spatial + s, ignore_index, channels);
+                    if (y < 0) {
                         lp[n * spatial + s] = T{0};
                         continue;
                     }
@@ -8403,8 +8408,9 @@ public:
             const bool elem = reduction == 0;
             for (int n = 0; n < n_batch; ++n) {
                 for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = read_target_index(ts, n * spatial + s);
-                    if (static_cast<int>(y) == ignore_index)
+                    const std::int64_t y = class_target("cpu_backend::nll_loss_backward", ts,
+                                                        n * spatial + s, ignore_index, channels);
+                    if (y < 0)
                         continue;
                     const T go = elem ? gp[n * spatial + s] : gp[0];
                     const T scale = (reduction == 1) ? (go / valid) : go;
@@ -9851,23 +9857,12 @@ public:
         std::size_t M = 1;
         for (auto d : indices_shape)
             M *= static_cast<std::size_t>(d);
-        (void)N;
         (void)out_shape;
         const auto& ws = std::get<CpuStorage>(weight);
         const auto& is = std::get<CpuStorage>(indices);
         auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(D), dt);
         const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(dt);
-        auto read_idx = [&](std::size_t i) -> std::int64_t {
-            const auto* ip = is.ptr.get();
-            switch (is.dtype) {
-            case Dtype::I32:
-                return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-            case Dtype::I64:
-                return reinterpret_cast<const std::int64_t*>(ip)[i];
-            default:
-                return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-            }
-        };
+        const auto read_idx = cpu::index_reader("cpu_backend::embedding_forward", is);
         // padding_idx does not mask the lookup.  The convention it comes
         // from zeroes that row at initialisation and stops its gradient,
         // so the row holds whatever training left there — and a loaded
@@ -9879,7 +9874,11 @@ public:
         // contract.
         (void)padding_idx;
         for (std::size_t i = 0; i < M; ++i) {
-            const std::int64_t id = read_idx(i);
+            // Refuse rather than copy a row from outside the table.  Nothing
+            // checked this: the Python wrapper's host-side range check was
+            // the only guard, and the engine op read past the allocation.
+            const std::int64_t id =
+                cpu::checked_row("cpu_backend::embedding_forward", read_idx(i), N);
             std::byte* dst = out_cpu.ptr.get() + i * row_bytes;
             const std::byte* src = ws.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
             std::memcpy(dst, src, row_bytes);
@@ -9913,25 +9912,21 @@ public:
         const auto& gs = std::get<CpuStorage>(grad_out);
         const auto& is = std::get<CpuStorage>(indices);
         // The index buffer is read at its own width, so any other integer
-        // width would be misread the same way; the op hands over int64.
-        if (is.dtype != Dtype::I32 && is.dtype != Dtype::I64)
-            ErrorBuilder("cpu_backend::embedding_backward")
-                .not_implemented("indices dtype must be I32 or I64");
+        // width would be misread the same way.
+        const auto read_idx = cpu::index_reader("cpu_backend::embedding_backward", is);
         auto dW = alloc_cpu(static_cast<std::size_t>(N) * static_cast<std::size_t>(D), dt);
         std::memset(dW.ptr.get(), 0, dW.nbytes);
-        auto read_idx = [&](std::size_t i) -> std::int64_t {
-            const auto* ip = is.ptr.get();
-            if (is.dtype == Dtype::I32)
-                return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-            return reinterpret_cast<const std::int64_t*>(ip)[i];
-        };
         auto run = [&](auto tag) {
             using T = decltype(tag);
             const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
             T* wp = reinterpret_cast<T*>(dW.ptr.get());
             const std::size_t width = static_cast<std::size_t>(D);
             for (std::size_t i = 0; i < M; ++i) {
-                const std::int64_t id = read_idx(i);
+                // Refuse rather than add into memory past the gradient.  The
+                // forward refuses the same index, so only indices changed in
+                // place since then can reach here.
+                const std::int64_t id =
+                    cpu::checked_row("cpu_backend::embedding_backward", read_idx(i), N);
                 if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx))
                     continue;
                 const T* sp = gp + i * width;
@@ -11515,6 +11510,10 @@ public:
                             const Shape& indices_shape,
                             int num_classes,
                             Dtype out_dtype) override {
+        // A half index is read the way Metal reads it: widened, then
+        // truncated toward zero.
+        if (detail::is_half_like(std::get<CpuStorage>(indices).dtype))
+            return one_hot_forward(detail::as_f32(indices), indices_shape, num_classes, out_dtype);
         const std::size_t M = shape_numel(indices_shape);
         const auto& is_ = std::get<CpuStorage>(indices);
         auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(num_classes), out_dtype);
@@ -11539,13 +11538,18 @@ public:
             case Dtype::F64:
                 return static_cast<std::int64_t>(reinterpret_cast<const double*>(is_.ptr.get())[i]);
             default:
-                return -1;  // no class — the row stays zero rather than reading garbage
+                ErrorBuilder("cpu_backend::one_hot")
+                    .dtype_mismatch(Dtype::I64, is_.dtype, "indices must be a real tensor");
             }
         };
         for (std::size_t i = 0; i < M; ++i) {
-            const std::int64_t cls = read_idx(i);
-            if (cls < 0 || cls >= num_classes)
-                continue;
+            // A class outside [0, num_classes) is refused, as the reference
+            // refuses it.  It used to leave its row zero, the same answer as
+            // Metal, so a bad label vanished silently on both devices.  Metal
+            // still answers a zero row (policy B, see GpuBackend's
+            // ``gpu_axis_index``), because refusing there needs a host sync.
+            const auto cls = static_cast<std::size_t>(
+                cpu::checked_row("cpu_backend::one_hot", read_idx(i), num_classes));
             const std::size_t pos = i * static_cast<std::size_t>(num_classes) + cls;
             switch (out_dtype) {
             case Dtype::F32:
@@ -12185,6 +12189,22 @@ private:
         default:
             ErrorBuilder("cpu_backend::class_loss_target").not_implemented("dtype not supported");
         }
+    }
+
+    // The class of target ``i``, or -1 where the target is ``ignore_index``.
+    // A class outside [0, channels) is refused with IndexError, as the
+    // reference refuses it.  The losses read the probability and the class
+    // weight at whatever offset the target named, so an out-of-range label
+    // read memory outside both.  The comparison with ``ignore_index`` is
+    // made at full width: cut to ``int`` first, a target of 2^32 - 100 was
+    // taken for the default -100 and skipped.  Metal answers NaN for such a
+    // target instead (policy B, GpuBackend's ``gpu_axis_index``).
+    static std::int64_t class_target(
+        const char* op, const CpuStorage& target, std::size_t i, int ignore_index, int channels) {
+        const std::int64_t y = read_target_index(target, i);
+        if (y == ignore_index)
+            return -1;
+        return cpu::checked_row(op, y, channels);
     }
 
     template <typename T>
