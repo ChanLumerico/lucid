@@ -7,7 +7,9 @@ machine from the answers they are there to check.
 """
 
 import functools
+import glob
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -55,3 +57,14 @@ def has_neural_engine() -> bool:
 def require_neural_engine() -> None:
     if not has_neural_engine():
         pytest.skip("no Neural Engine on this machine; a hosted CI runner is a VM")
+
+
+#: Where Core ML keeps the bundles it specialises a loaded package into,
+#: relative to the home it was given: one directory per load, under the
+#: cache of whichever app the process is.
+_BUNDLES = ("Library", "Caches", "*", "com.apple.e5rt.e5bundlecache", "*", "*")
+
+
+def bundles_under(home: Path) -> set[str]:
+    """Every bundle Core ML has specialised under ``home``."""
+    return set(glob.glob(str(home.joinpath(*_BUNDLES))))
