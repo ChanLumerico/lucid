@@ -49,15 +49,13 @@ SGD::SGD(std::vector<std::shared_ptr<TensorImpl>> params,
     }
 }
 
-// Grow moment_ to cover all parameter slots if needed, then
-// allocate a zero velocity buffer only when momentum is active.
+// Grow moment_ to cover all parameter slots.  The buffer itself is made by
+// the slot's first momentum step.
 void SGD::init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) {
-    if (moment_.size() < params_.size()) {
+    (void)slot_idx;
+    (void)param;
+    if (moment_.size() < params_.size())
         moment_.resize(params_.size());
-    }
-    if (momentum_ != 0.0) {
-        moment_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
-    }
 }
 
 namespace {
@@ -65,10 +63,14 @@ namespace {
 // Scalar CPU loop for SGD. Supports full feature set: weight decay,
 // momentum, dampening, and Nesterov acceleration. When momentum == 0
 // the moment_buf pointer is null and the code takes the simpler branch.
+// ``first_momentum_step`` starts the buffer at the gradient, undamped —
+// the reference framework's ``buf = clone(grad)`` for a parameter that has
+// no buffer yet.
 template <typename T>
 void sgd_step_cpu(T* param,
                   const T* grad,
                   T* moment_buf,
+                  bool first_momentum_step,
                   std::size_t numel,
                   double lr,
                   double momentum,
@@ -86,7 +88,7 @@ void sgd_step_cpu(T* param,
             T g = grad[i];
             if (weight_decay != 0.0)
                 g += wdT * param[i];
-            T buf = mT * moment_buf[i] + dampT * g;
+            T buf = first_momentum_step ? g : mT * moment_buf[i] + dampT * g;
             moment_buf[i] = buf;
             // Nesterov: look one step ahead by adding m * new_buf to the
             // gradient; classical: use the buffer directly.
@@ -108,10 +110,12 @@ void sgd_step_cpu(T* param,
 // All arithmetic is expressed as MLX lazy-evaluated array operations.
 // The momentum buffer and parameter array are replaced atomically via
 // gpu_replace() so the shared_ptr inside GpuStorage always points to
-// the latest computed result.
+// the latest computed result.  ``moment`` is null without momentum; a
+// slot that holds no buffer yet gets one here, started at the gradient
+// (see ``sgd_step_cpu``).
 void sgd_step_gpu(GpuStorage& param_g,
                   const GpuStorage& grad_g,
-                  GpuStorage& moment_g,
+                  Storage* moment,
                   Dtype dt,
                   double lr,
                   double momentum,
@@ -128,17 +132,20 @@ void sgd_step_gpu(GpuStorage& param_g,
         g = ::mlx::core::add(g, ::mlx::core::multiply(wd_arr, *param_g.arr));
     }
     ::mlx::core::array lr_arr(lr, mdt);
-    if (momentum != 0.0) {
-        if (!moment_g.arr) {
-            ErrorBuilder("SGD GPU").fail("null momentum array");
-        }
+    if (moment != nullptr) {
         ::mlx::core::array m_arr(momentum, mdt);
         ::mlx::core::array dampening_arr(1.0 - dampening, mdt);
 
-        auto new_buf = ::mlx::core::add(::mlx::core::multiply(m_arr, *moment_g.arr),
-                                        ::mlx::core::multiply(dampening_arr, g));
-
-        moment_g.arr = gpu::wrap_mlx_array(::mlx::core::array(new_buf), dt).arr;
+        // MLX arrays are immutable, so the buffer may share the gradient's.
+        const bool first_momentum_step = !holds_buffer(*moment);
+        auto new_buf = first_momentum_step
+                           ? g
+                           : ::mlx::core::add(::mlx::core::multiply(m_arr, *gpu_get(*moment).arr),
+                                              ::mlx::core::multiply(dampening_arr, g));
+        if (first_momentum_step)
+            *moment = gpu::wrap_mlx_array(::mlx::core::array(new_buf), dt);
+        else
+            gpu_get(*moment).arr = gpu::wrap_mlx_array(::mlx::core::array(new_buf), dt).arr;
 
         ::mlx::core::array eff_g =
             nesterov ? ::mlx::core::add(g, ::mlx::core::multiply(m_arr, new_buf)) : new_buf;
@@ -157,17 +164,12 @@ void sgd_step_gpu(GpuStorage& param_g,
 void SGD::update_one(std::size_t slot_idx,
                      std::shared_ptr<TensorImpl>& param,
                      const Storage& grad) {
+    const bool use_momentum = momentum_ != 0.0;
     if (param->device() == Device::GPU) {
         auto& param_g = storage_gpu(param->mutable_storage());
         const auto& grad_g = storage_gpu(grad);
-        GpuStorage* moment_g = nullptr;
-        if (momentum_ != 0.0) {
-            moment_g = &storage_gpu(moment_[slot_idx]);
-        }
-
-        GpuStorage dummy_moment;
-        sgd_step_gpu(param_g, grad_g, moment_g ? *moment_g : dummy_moment, param->dtype(), lr_,
-                     momentum_, dampening_, weight_decay_, nesterov_);
+        sgd_step_gpu(param_g, grad_g, use_momentum ? &moment_[slot_idx] : nullptr, param->dtype(),
+                     lr_, momentum_, dampening_, weight_decay_, nesterov_);
         param_g.bump_version();
         return;
     }
@@ -175,7 +177,12 @@ void SGD::update_one(std::size_t slot_idx,
     auto& param_cpu = storage_cpu(param->mutable_storage());
     const auto& grad_cpu = storage_cpu(grad);
     CpuStorage* moment_cpu = nullptr;
-    if (momentum_ != 0.0) {
+    // A slot without a buffer is at its first momentum step: the loop
+    // writes the gradient into a fresh one.
+    const bool first_momentum_step = use_momentum && !holds_buffer(moment_[slot_idx]);
+    if (first_momentum_step)
+        moment_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
+    if (use_momentum) {
         moment_cpu = &storage_cpu(moment_[slot_idx]);
     }
     const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype());
@@ -185,14 +192,15 @@ void SGD::update_one(std::size_t slot_idx,
         sgd_step_cpu<float>(reinterpret_cast<float*>(param_cpu.ptr.get()),
                             reinterpret_cast<const float*>(grad_cpu.ptr.get()),
                             moment_cpu ? reinterpret_cast<float*>(moment_cpu->ptr.get()) : nullptr,
-                            numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
+                            first_momentum_step, numel, lr_, momentum_, dampening_, weight_decay_,
+                            nesterov_);
         break;
     case Dtype::F64:
-        sgd_step_cpu<double>(reinterpret_cast<double*>(param_cpu.ptr.get()),
-                             reinterpret_cast<const double*>(grad_cpu.ptr.get()),
-                             moment_cpu ? reinterpret_cast<double*>(moment_cpu->ptr.get())
-                                        : nullptr,
-                             numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
+        sgd_step_cpu<double>(
+            reinterpret_cast<double*>(param_cpu.ptr.get()),
+            reinterpret_cast<const double*>(grad_cpu.ptr.get()),
+            moment_cpu ? reinterpret_cast<double*>(moment_cpu->ptr.get()) : nullptr,
+            first_momentum_step, numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
         break;
     default:
         ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
@@ -200,44 +208,29 @@ void SGD::update_one(std::size_t slot_idx,
     param_cpu.bump_version();
 }
 
+// Every buffer a slot holds is exported, including one kept after momentum
+// was set to zero; slots without one contribute null.
 std::vector<Optimizer::NamedBuffers> SGD::state_buffers() const {
-    // Without momentum SGD has no per-parameter state; emit nothing.
-    if (momentum_ == 0.0 || moment_.empty())
-        return {};
-    std::vector<std::shared_ptr<TensorImpl>> mom;
-    mom.reserve(params_.size());
+    std::vector<std::shared_ptr<TensorImpl>> mom(params_.size());
+    bool any = false;
     for (std::size_t i = 0; i < params_.size(); ++i) {
-        if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
-            mom.push_back(nullptr);
+        if (!slot_has_state(i) || i >= moment_.size() || !holds_buffer(moment_[i]))
             continue;
-        }
         const auto& p = params_[i];
-        mom.push_back(clone_state_storage(moment_[i], p->shape(), p->dtype(), p->device()));
+        mom[i] = clone_state_storage(moment_[i], p->shape(), p->dtype(), p->device());
+        any = true;
     }
+    if (!any)
+        return {};
     std::vector<NamedBuffers> out;
     out.emplace_back("momentum_buffer", std::move(mom));
     return out;
 }
 
 void SGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    if (momentum_ == 0.0)
-        return;
-    if (moment_.size() != params_.size())
-        moment_.resize(params_.size());
-    if (state_initialized_.size() != params_.size())
-        state_initialized_.assign(params_.size(), false);
     for (const auto& [name, tensors] : bufs) {
-        if (name != "momentum_buffer")
-            continue;
-        for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
-            if (!tensors[i] || !params_[i])
-                continue;
-            if (!state_initialized_[i]) {
-                init_state_slot(i, params_[i]);
-                state_initialized_[i] = true;
-            }
-            overwrite_state_storage(moment_[i], tensors[i]->storage());
-        }
+        if (name == "momentum_buffer")
+            load_state_slots(moment_, tensors);
     }
 }
 

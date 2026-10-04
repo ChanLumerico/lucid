@@ -176,6 +176,35 @@ inline void gpu_replace(GpuStorage& dst, ::mlx::core::array&& arr, Dtype dt) {
     dst.arr = gpu::wrap_mlx_array(std::move(arr), dt).arr;
 }
 
+// Whether a state slot holds a buffer.
+//
+// A per-slot state vector is sized with ``resize``, which leaves every
+// slot that has not been allocated as a default ``CpuStorage`` with no
+// bytes.  A buffer that is allocated holds a GPU array or CPU bytes.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     One entry of a per-slot state vector (``moment_``, ``vmax_`` ...).
+//
+// Returns
+// -------
+// bool
+//     ``true`` when ``s`` holds a GPU array, CPU bytes, or shared memory.
+//
+// Notes
+// -----
+// An empty parameter's CPU buffer has no bytes either, so it reads as not
+// held.  Allocating it again changes nothing, which is all the callers do
+// with a slot that is not held.
+inline bool holds_buffer(const Storage& s) {
+    if (const auto* g = std::get_if<GpuStorage>(&s))
+        return g->arr != nullptr;
+    if (const auto* c = std::get_if<CpuStorage>(&s))
+        return c->ptr != nullptr;
+    return true;
+}
+
 // Dtype a per-parameter scalar of optimizer state is checkpointed in.
 //
 // F64 for an F64 parameter, F32 otherwise — the reference framework's

@@ -14,6 +14,11 @@ These pin the repair: the parameter **and state** trajectory matches the
 reference step for step on every device and float dtype; a run restored
 from ``state_dict`` continues bit-identically; and the state survives a
 parameter move (``module.to()`` / ``.double()``), which rebuilds the engine.
+
+``SGD`` joined them with CHA-210: its first momentum step damped the
+gradient into a zeroed buffer, ``buf = (1 - dampening) * g``, where the
+reference starts the buffer at the gradient itself, so with
+``dampening != 0`` every later step was off.
 """
 
 import contextlib
@@ -69,6 +74,11 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
     ("ASGD", {"lr": 0.05, "t0": 2.0, "lambd": 0.1}),
     ("ASGD", {"lr": 0.05, "t0": 0.0, "alpha": 0.5, "lambd": 0.01}),
     ("ASGD", {"lr": 0.05, "t0": 3.0, "weight_decay": 0.1}),
+    # The first momentum step starts the buffer at the gradient, undamped.
+    ("SGD", {"lr": 0.1, "momentum": 0.9}),
+    ("SGD", {"lr": 0.1, "momentum": 0.9, "dampening": 0.5}),
+    ("SGD", {"lr": 0.1, "momentum": 0.5, "dampening": 0.3, "weight_decay": 0.1}),
+    ("SGD", {"lr": 0.1, "momentum": 0.9, "nesterov": True}),
 ]
 
 

@@ -489,7 +489,8 @@ protected:
     // Parameters
     // ----------
     // bufs : std::vector<Storage>&
-    //     The live state vector to overwrite in place.
+    //     The live state vector to overwrite in place.  A slot that holds
+    //     no buffer in it yet is given one first.
     // saved : const std::vector<std::shared_ptr<TensorImpl>>&
     //     Saved tensors parallel to ``params_``; null entries are skipped.
     //

@@ -15,11 +15,13 @@
 #include <mlx/ops.h>
 #include <mlx/transforms.h>  // mlx::core::eval(std::vector<array>)
 
+#include "../autograd/Helpers.h"
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
+#include "_OptimDetail.h"
 
 namespace lucid {
 
@@ -195,6 +197,12 @@ void Optimizer::load_state_slots(std::vector<Storage>& bufs,
         if (s->device() != p->device())
             ErrorBuilder("load_state_buffers").device_mismatch(p->device(), s->device());
         ensure_state_slot(i);
+        // A slot can hold state without this buffer: SGD makes its momentum
+        // buffer at the first momentum step, not when the slot starts.
+        if (bufs.size() < params_.size())
+            bufs.resize(params_.size());
+        if (!optim_detail::holds_buffer(bufs[i]))
+            bufs[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
         overwrite_state_storage(bufs[i], s->storage());
     }
 }

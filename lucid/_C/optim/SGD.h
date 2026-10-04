@@ -63,7 +63,12 @@ class TensorImpl;
 //   \theta_{t+1} = \theta_t - \eta\, v_{t+1}.
 // $$
 // Plain SGD is the $\mu = 0$ special case where the velocity buffer is
-// never allocated.
+// never allocated.  A parameter's first momentum step starts the buffer
+// at its gradient, undamped, as the reference framework does:
+// $$
+//   v_1 = g_1.
+// $$
+// The same holds when momentum is switched on part-way through training.
 //
 // Attributes
 // ----------
@@ -175,9 +180,10 @@ public:
     // -------
     // std::vector<NamedBuffers>
     //     Single-entry list ``[("momentum_buffer", tensors)]`` whose
-    //     ``tensors`` runs parallel to ``params_``.  Slots without an
-    //     allocated velocity (``momentum == 0`` or the slot has never
-    //     received a gradient) contribute a null pointer.
+    //     ``tensors`` runs parallel to ``params_``, or an empty list when no
+    //     slot holds a buffer.  A slot contributes a null pointer until its
+    //     first momentum step.  A buffer stays after momentum is set to
+    //     zero, as the reference framework's state keeps it.
     //
     // See Also
     // --------
@@ -189,9 +195,9 @@ public:
     // Parameters
     // ----------
     // bufs : const std::vector<NamedBuffers>&
-    //     Must contain exactly one entry whose name is
-    //     ``"momentum_buffer"`` and whose tensor list matches the
-    //     layout of ``state_buffers``.
+    //     The ``"momentum_buffer"`` entry, laid out as ``state_buffers``
+    //     lays it out; other names are ignored.  It is restored whatever
+    //     the current momentum, as the reference framework restores it.
     //
     // Raises
     // ------
@@ -220,20 +226,19 @@ protected:
                     std::shared_ptr<TensorImpl>& param,
                     const Storage& grad) override;
 
-    // Allocate the velocity buffer for one slot when ``momentum != 0``.
+    // Make room for one slot's velocity buffer without allocating it.
     //
     // Parameters
     // ----------
     // slot_idx : std::size_t
     //     Index into ``params_`` and ``moment_``.
     // param : const std::shared_ptr<TensorImpl>&
-    //     Parameter whose shape, dtype and device dictate the velocity
-    //     buffer layout.
+    //     Parameter occupying the slot (unused).
     //
     // Notes
     // -----
-    // When ``momentum_ == 0`` the corresponding ``moment_`` entry is
-    // left empty so that plain SGD allocates no extra memory.
+    // The buffer is made by the slot's first momentum step, from that
+    // step's gradient, so plain SGD allocates no extra memory.
     void init_state_slot(std::size_t slot_idx, const std::shared_ptr<TensorImpl>& param) override;
 
 private:
@@ -242,7 +247,8 @@ private:
     double dampening_;
     double weight_decay_;
     bool nesterov_;
-    // Per-parameter velocity buffers; entry i is active only when momentum != 0.
+    // Per-parameter velocity buffers; entry i is held from slot i's first
+    // momentum step on.
     std::vector<Storage> moment_;
 };
 
