@@ -3,9 +3,14 @@ autocast context manager for automatic mixed precision.
 """
 
 import functools
+import threading
 from typing import Callable
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype, float16, to_engine_dtype
+
+#: The device types an autocast scope can name — the same two ``lucid.device``
+#: accepts.
+_DEVICE_TYPES = frozenset({"metal", "cpu"})
 
 
 class autocast:
@@ -19,17 +24,24 @@ class autocast:
     in the lower-precision dtype but accumulator and reduction state stay
     in float32 to preserve numerical fidelity (the standard "mixed" recipe).
 
-    The engine's :class:`AutocastGuard` is *enter-only* (its
-    ``__exit__`` is a no-op), so this Python class implements full RAII
-    on top of it: ``__enter__`` snapshots the previously active AMP
-    state, ``__exit__`` reinstalls it (or installs a neutral float32
-    guard if AMP was inactive before the scope).
+    Leaving the scope restores exactly the state it was entered from —
+    autocast off, or the enclosing scope's dtype — whether it is left
+    normally or by an exception, and however long the ``autocast`` object
+    itself lives on afterwards.  One object can be entered again after it
+    exits, entered while it is already active (each entry is undone by its
+    own exit), and used as a decorator.  ``enabled=False`` leaves the
+    current state untouched: it does not switch an enclosing scope off.
+
+    The engine keeps one autocast state per thread rather than one per
+    device, so a scope currently applies to eligible ops on *both*
+    devices whichever ``device_type`` it names (CHA-70).
 
     Parameters
     ----------
     device_type : str, optional
         Device the autocast scope applies to.  ``"metal"`` (GPU stream,
-        default) or ``"cpu"`` (Accelerate stream).
+        default) or ``"cpu"`` (Accelerate stream); anything else raises
+        :class:`ValueError`.
     dtype : lucid.dtype, optional
         Lower-precision dtype that supported ops cast inputs to inside
         the scope.  Default :data:`lucid.float16`.  On the CPU, float16
@@ -99,56 +111,82 @@ class autocast:
             the scope.
         enabled : bool, default=True
             When ``False`` the context is a no-op (useful for ablation).
+
+        Raises
+        ------
+        ValueError
+            If ``device_type`` is neither ``'metal'`` nor ``'cpu'``.
         """
+        if device_type not in _DEVICE_TYPES:
+            raise ValueError(
+                f"autocast: unknown device_type {device_type!r}. Use 'metal' or 'cpu'."
+            )
+        self._device_type = device_type
         self._dtype = dtype
         self._enabled = enabled
-        self._prev_active: bool = False
-        self._prev_dtype: object = None
+        # One stack of live engine guards per thread: the AMP state the
+        # guards change is thread-local, so a guard must be released on the
+        # thread that made it.  A stack (not a single slot) lets the same
+        # object be entered again while it is already active.
+        self._local = threading.local()
+
+    def _guards(self) -> list[_C_engine.AutocastGuard]:
+        """Return this thread's stack of guards opened by this object."""
+        stack: list[_C_engine.AutocastGuard] | None = getattr(
+            self._local, "stack", None
+        )
+        if stack is None:
+            stack = []
+            self._local.stack = stack
+        return stack
 
     def __enter__(self) -> autocast:
         """Activate the autocast scope and return ``self``.
 
-        Captures the previously active AMP state (if any) so it can be
-        restored on exit, then installs a new ``AutocastGuard`` for the
-        configured target dtype.
+        Constructing the engine ``AutocastGuard`` switches AMP on with the
+        configured dtype and records the state it replaced; the guard is
+        kept until :meth:`__exit__`.
         """
         if not self._enabled:
             return self
-        self._prev_active = _C_engine.amp_is_active()
-        self._prev_dtype = _C_engine.amp_active_dtype()
-        engine_dtype = to_engine_dtype(self._dtype)
-        self._guard = _C_engine.AutocastGuard(engine_dtype)
-        self._guard.__enter__()
+        self._guards().append(_C_engine.AutocastGuard(to_engine_dtype(self._dtype)))
         return self
 
     def __exit__(self, *args: object) -> None:
-        """Restore the previous AMP state on scope exit.
+        """Restore the AMP state that was active when the scope was entered.
 
-        If autocast was already active before this scope, the prior
-        dtype guard is reinstalled. Otherwise a neutral float32 guard
-        is entered since the engine has no ``disable_amp()`` primitive.
+        Releases the guard :meth:`__enter__` made.  Its destructor runs at
+        once and puts back the state it recorded, so the scope ends here
+        rather than whenever the ``autocast`` object is collected.
+        Exceptions propagate.
         """
         if not self._enabled:
             return
-        if self._prev_active and self._prev_dtype is not None:
-            # Restore the previous AMP dtype (e.g. nested autocast blocks).
-            prev_guard = _C_engine.AutocastGuard(self._prev_dtype)  # type: ignore[arg-type]
-            prev_guard.__enter__()
-        elif not self._prev_active:
-            # AMP was off before this context.  The engine has no disable_amp()
-            # API, so restore neutrality by entering a float32 guard — ops will
-            # cast to float32 (identity for most) until the guard is superseded
-            # or the program exits AMP-active scope.
-            restore_guard = _C_engine.AutocastGuard(_C_engine.F32)
-            restore_guard.__enter__()
+        guard = self._guards().pop()
+        del guard  # the last reference — ~AutocastGuard restores the prior state
 
     def __call__[F: Callable[..., object]](self, fn: F) -> F:
-        """Use as a function decorator."""
+        """Use as a function decorator.
+
+        Every call of the decorated function runs inside this scope — the
+        same ``device_type``, ``dtype`` and ``enabled`` — and leaves it on
+        return or on an exception.
+
+        Parameters
+        ----------
+        fn : callable
+            The function to wrap.
+
+        Returns
+        -------
+        callable
+            ``fn`` wrapped so that each call enters and exits the scope.
+        """
 
         @functools.wraps(fn)
         def wrapper(*args: object, **kwargs: object) -> object:
-            """Invoke ``fn`` inside a fresh autocast scope with the captured config."""
-            with autocast(dtype=self._dtype, enabled=self._enabled):
+            """Invoke ``fn`` inside this autocast scope."""
+            with self:
                 return fn(*args, **kwargs)
 
         return wrapper  # type: ignore[return-value]
