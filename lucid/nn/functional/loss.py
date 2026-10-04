@@ -930,6 +930,9 @@ def kl_div(
 
 def _apply_reduction(t: _C_engine.TensorImpl, reduction: Reduction) -> Tensor:
     """Apply reduction to a batch of per-sample losses."""
+    # Nine losses reduce here, and an unknown string used to fall through
+    # to "none": ``reduction="avg"`` returned the unreduced tensor.
+    _validate_reduction(reduction)
     if reduction == "mean":
         return _wrap(_C_engine.mean(t, [], False))
     if reduction == "sum":
@@ -1664,6 +1667,7 @@ def ctc_loss(
     >>> ctc_loss(log_p, targets, il, tl)  # doctest: +SKIP
     Tensor(...)
     """
+    _validate_reduction(reduction)
 
     def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
         if isinstance(v, _lucid.Tensor):

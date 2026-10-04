@@ -702,3 +702,53 @@ class TestGaussianNLLVariance:
                 assert lv.grad is not None and lx.grad is not None
                 assert _close(_vals(lv.grad), rv.grad.tolist(), tol=1e-4)
                 assert _close(_vals(lx.grad), rx.grad.tolist(), tol=1e-4)
+
+
+# ── CHA-94 (a) ─────────────────────────────────────────────────────────────
+
+
+def _reduction_cases() -> dict[str, object]:
+    """Each loss that reduced through the shared helper, called with a
+    reduction string it does not know."""
+    a, b, c = lucid.randn(3, 4), lucid.randn(3, 4), lucid.randn(3, 4)
+    s1, s2, ones = lucid.randn(3), lucid.randn(3), lucid.ones(3)
+    idx = lucid.tensor([0, 2, 1])
+    lp = F.log_softmax(lucid.randn(5, 1, 4), dim=2)
+    return {
+        "triplet_margin": lambda r: F.triplet_margin_loss(a, b, c, reduction=r),
+        "cosine_embedding": lambda r: F.cosine_embedding_loss(a, b, ones, reduction=r),
+        "margin_ranking": lambda r: F.margin_ranking_loss(s1, s2, ones, reduction=r),
+        "hinge_embedding": lambda r: F.hinge_embedding_loss(s1, ones, reduction=r),
+        "poisson_nll": lambda r: F.poisson_nll_loss(s1, ones, reduction=r),
+        "gaussian_nll": lambda r: F.gaussian_nll_loss(s1, s2, ones, reduction=r),
+        "multi_margin": lambda r: F.multi_margin_loss(a, idx, reduction=r),
+        "multilabel_margin": lambda r: F.multilabel_margin_loss(
+            a, lucid.tensor([[0, -1, 0, 0]] * 3), reduction=r
+        ),
+        "ctc": lambda r: F.ctc_loss(
+            lp, lucid.tensor([[1, 2]]), [5], [2], reduction=r
+        ),
+        "margin_ranking_module": lambda r: nn.MarginRankingLoss(reduction=r)(
+            s1, s2, ones
+        ),
+    }
+
+
+class TestAnUnknownReductionIsRefused:
+    """Nine losses treated an unknown ``reduction`` as ``"none"``.
+
+    ``reduction="avg"`` returned the unreduced tensor; the reference, and
+    Lucid's own ``l1_loss`` and ``binary_cross_entropy``, raise.
+    """
+
+    @pytest.mark.parametrize("name", list(_reduction_cases()))
+    def test_raises_value_error(self, name: str) -> None:
+        fn = _reduction_cases()[name]
+        with pytest.raises(ValueError, match="reduction"):
+            fn("avg")  # type: ignore[operator]
+
+    @pytest.mark.parametrize("name", list(_reduction_cases()))
+    def test_the_known_ones_still_work(self, name: str) -> None:
+        fn = _reduction_cases()[name]
+        for reduction in ("none", "mean", "sum"):
+            fn(reduction)  # type: ignore[operator]
