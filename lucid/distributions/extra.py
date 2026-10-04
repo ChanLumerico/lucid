@@ -21,12 +21,12 @@ from lucid.distributions.bernoulli import (
 from lucid.distributions.constraints import (
     Constraint,
     nonnegative_integer,
-    open_unit_interval,
     positive,
     real,
     unit_interval,
 )
 from lucid.distributions.distribution import Distribution
+from lucid.special import xlog1py
 
 # ── Euler–Mascheroni constant ─────────────────────────────────────────────────
 _EULER_GAMMA: float = 0.5772156649015329
@@ -352,7 +352,7 @@ class InverseGamma(Distribution):
 
 
 class Kumaraswamy(Distribution):
-    r"""Kumaraswamy distribution on :math:`(0, 1)`.
+    r"""Kumaraswamy distribution on :math:`[0, 1]`.
 
     Two-parameter continuous distribution on the unit interval that
     mimics the shapes of the :class:`~lucid.distributions.Beta`
@@ -372,7 +372,7 @@ class Kumaraswamy(Distribution):
 
     Notes
     -----
-    Probability density on :math:`x \in (0, 1)`:
+    Probability density on :math:`x \in [0, 1]`:
 
     .. math::
 
@@ -418,7 +418,10 @@ class Kumaraswamy(Distribution):
     """
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
-    support: Constraint | None = open_unit_interval
+    # ``[0, 1]``, as in the reference framework.  At an end the density is
+    # finite, infinite or 0 depending on the shape parameter, and
+    # :meth:`log_prob` scores each.
+    support: Constraint | None = unit_interval
     has_rsample: bool = True
 
     def __init__(
@@ -496,19 +499,28 @@ class Kumaraswamy(Distribution):
         Parameters
         ----------
         value : Tensor
-            Point(s) :math:`x \in (0, 1)` at which to evaluate the density.
+            Point(s) :math:`x \in [0, 1]` at which to evaluate the density.
 
         Returns
         -------
         Tensor
             Log-density :math:`\log a + \log b + (a-1)\log x + (b-1)\log(1-x^a)`.
+
+        Notes
+        -----
+        The two weighted logarithms are :func:`lucid.xlogy` and
+        :func:`lucid.special.xlog1py`, so the ends of the support score the
+        density's limit there: at :math:`x = 0` it is ``+inf`` for
+        :math:`a < 1`, ``-inf`` for :math:`a > 1` and :math:`\log b` for
+        :math:`a = 1`; :math:`x = 1` is the same in :math:`b`.  The
+        reference framework answers NaN at both ends.
         """
         a, b = self.concentration1, self.concentration0
         return (
             a.log()
             + b.log()
-            + (a - 1.0) * value.log()
-            + (b - 1.0) * (1.0 - value**a).log()
+            + lucid.xlogy(a - 1.0, value)
+            + xlog1py(b - 1.0, -(value**a))
         )
 
     @override

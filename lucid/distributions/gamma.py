@@ -12,6 +12,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
+    nonnegative,
     positive,
     simplex,
     unit_interval,
@@ -75,7 +76,7 @@ def _sample_standard_gamma(
 
 
 class Gamma(ExponentialFamily):
-    r"""Gamma distribution on :math:`(0, \infty)` — shape/rate parameterisation.
+    r"""Gamma distribution on :math:`[0, \infty)` — shape/rate parameterisation.
 
     Two-parameter continuous distribution that generalises the
     :class:`~lucid.distributions.Exponential` (shape :math:`\alpha = 1`)
@@ -153,7 +154,10 @@ class Gamma(ExponentialFamily):
     """
 
     arg_constraints = {"concentration": positive, "rate": positive}
-    support: Constraint | None = positive
+    # ``[0, ∞)``, as in the reference framework: at 0 the density is
+    # finite (``α = 1``), infinite (``α < 1``) or 0 (``α > 1``), and
+    # :meth:`log_prob` scores all three.  ``Chi2`` inherits it.
+    support: Constraint | None = nonnegative
     has_rsample = False  # rejection-based; gradients don't flow.
 
     def __init__(

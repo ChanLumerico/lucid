@@ -7,6 +7,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
+    nonnegative,
     positive,
     real,
 )
@@ -79,7 +80,9 @@ class Exponential(ExponentialFamily):
     """
 
     arg_constraints = {"rate": positive}
-    support: Constraint | None = positive
+    # ``[0, ∞)``: the density is ``λ`` at 0.  ``positive`` made
+    # ``log_prob(0)`` — validated below — raise.
+    support: Constraint | None = nonnegative
     has_rsample = True
 
     def __init__(
