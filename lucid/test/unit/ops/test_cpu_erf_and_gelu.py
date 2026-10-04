@@ -12,6 +12,14 @@ kernel is exact on all but 0.7% and one ulp off on the rest; the share that
 is exact is held too, so a change that stays inside one ulp while rounding
 the wrong way much more often still shows.
 
+The exact GELU's gradient, Phi(x) + x * phi(x), took its density from
+vForce's ``expf`` called between two passes over a tile; the call cost the
+erf loop beside it its registers.  The density is now an inline float32
+exp (``backend/cpu/GeluGrad.h``, Linear CHA-25) that also recovers the
+rounding of x^2 the old route fed to the exp.  Where the CDF has rounded to
+zero the gradient is x * phi(x) alone, so the density shows through: a few
+ulp there, where the old route was 64 off.
+
 The tanh-approximate GELU took a scalar ``tanhf`` per element on one core,
 4 ms for 524k elements.  It now runs through vForce a tile at a time and is
 held to the formula evaluated in float64.
@@ -140,6 +148,90 @@ def test_exact_gelu_and_its_gradient_follow_erf() -> None:
     F.gelu(x).sum().backward()
     pdf = np.exp(-0.5 * x64 * x64) / math.sqrt(2.0 * math.pi)
     _assert_close_to_scale(x.grad.numpy(), cdf + x64 * pdf, GRID, 2.0**-21)
+
+
+def _gelu_grad(x: np.ndarray, upstream: np.ndarray | None = None) -> np.ndarray:
+    t = lucid.tensor(x, requires_grad=True)
+    y = F.gelu(t)
+    if upstream is None:
+        y.sum().backward()
+    else:
+        y.backward(lucid.tensor(upstream))
+    return t.grad.numpy()
+
+
+def _signed_ulps(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    # Distance in representable floats, counted through zero.
+    def ordered(v: np.ndarray) -> np.ndarray:
+        bits = v.astype(np.float32).view(np.int32).astype(np.int64)
+        return np.where(bits < 0, -(bits & 0x7FFFFFFF), bits)
+
+    return np.abs(ordered(a) - ordered(b))
+
+
+def _x_times_density(x: np.ndarray) -> np.ndarray:
+    x64 = x.astype(np.float64)
+    density = np.exp(-0.5 * x64 * x64) / math.sqrt(2.0 * math.pi)
+    return (x64 * density).astype(np.float32)
+
+
+@pytest.mark.parametrize(
+    "lo, hi, bound",
+    [
+        # erf(x / sqrt 2) has rounded to -1 from x = -5.54, so the CDF is 0
+        # and the gradient is x * phi(x) rounded: the density alone.
+        (-13.0, -6.0, 3),
+        # The density is subnormal from |x| = 13.39; it is rounded once into
+        # the subnormals, then multiplied by x.
+        (-14.5, -13.0, 8),
+    ],
+)
+def test_exact_gelu_gradient_carries_the_density_to_a_few_ulp(
+    lo: float, hi: float, bound: int
+) -> None:
+    # The vForce route rounded x^2 before the exp, which multiplies that
+    # error by x^2 / 2: it was 64 ulp off in the first range, 69 in the
+    # second.
+    x = np.linspace(lo, hi, 200_001, dtype=np.float32)
+    worst = int(_signed_ulps(_gelu_grad(x), _x_times_density(x)).max())
+    assert worst <= bound, f"{worst} ulp from x * phi(x)"
+
+
+def test_exact_gelu_gradient_is_within_one_ulp_for_positive_inputs() -> None:
+    # Phi(x) + x phi(x) has no cancellation for x >= 0.  Over every positive
+    # float the kernel is at most 2 ulp off (on 5e-5 of [0.5, 1)), and 1 ulp
+    # on this grid.
+    x = np.linspace(0.0, 6.0, 200_001, dtype=np.float32)
+    x64 = x.astype(np.float64)
+    cdf = 0.5 * np.array([math.erfc(-v / math.sqrt(2.0)) for v in x64])
+    want = (cdf + x64 * np.exp(-0.5 * x64 * x64) / math.sqrt(2.0 * math.pi)).astype(
+        np.float32
+    )
+    assert int(_signed_ulps(_gelu_grad(x), want).max()) <= 1
+
+
+def test_exact_gelu_gradient_scales_by_the_upstream_gradient_in_one_rounding() -> None:
+    # The incoming gradient multiplies the finished derivative, once.
+    rng = np.random.default_rng(11)
+    x = 3.0 * rng.standard_normal(70_001).astype(np.float32)
+    g = rng.standard_normal(70_001).astype(np.float32)
+    np.testing.assert_array_equal(_gelu_grad(x, g), _gelu_grad(x) * g)
+
+
+@pytest.mark.parametrize("copies", [1, 13])
+def test_exact_gelu_gradient_keeps_the_special_values(copies: int) -> None:
+    # One copy runs the scalar tail, thirteen mostly the vector body.  The
+    # density is clamped past |x| = 14.5, where it has rounded to zero, so a
+    # huge input gives the step it tends to and +-inf give inf * 0 = nan.
+    special = np.array(
+        [np.inf, -np.inf, np.nan, 0.0, -0.0, 1e20, -1e20, 3e38, -3e38, 14.5, -14.5],
+        np.float32,
+    )
+    got = _gelu_grad(np.tile(special, copies)).reshape(copies, -1)
+    assert np.isnan(got[:, :3]).all()
+    np.testing.assert_array_equal(
+        got[:, 3:], [[0.5, 0.5, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]] * copies
+    )
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
