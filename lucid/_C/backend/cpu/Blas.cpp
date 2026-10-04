@@ -1,9 +1,9 @@
 // lucid/_C/backend/cpu/Blas.cpp
 //
 // Implements the BLAS wrapper functions declared in Blas.h by delegating
-// directly to cblas_sgemm, cblas_dgemm, cblas_sgemv, and cblas_dgemv from
-// Apple Accelerate.  All calls use CblasRowMajor storage order because
-// Lucid tensors are row-major by default.
+// directly to cblas_{s,d}gemm, cblas_{s,d}gemv, cblas_{s,d}axpy and
+// cblas_{s,d}trsm from Apple Accelerate.  All calls use CblasRowMajor
+// storage order because Lucid tensors are row-major by default.
 //
 // Empty extents
 // -------------
@@ -25,7 +25,10 @@
 //   matrix, leaving ``C = beta * C``.  With ``beta == 0`` BLAS does not
 //   read ``C`` at all, so ``C`` is overwritten with zeros rather than
 //   scaled — scaling would carry a NaN in uninitialised memory through
-//   ``0 * NaN``.
+//   ``0 * NaN``;
+// - a triangular solve with no rows or no right-hand sides (``M == 0`` or
+//   ``N == 0``) has nothing to solve — a row-major ``M x 0`` right-hand
+//   side would otherwise reach BLAS as ``ldb = 0``.
 
 #include "Blas.h"
 
@@ -39,6 +42,15 @@ namespace {
 // Converts a bool transpose flag to the CBLAS enum expected by Accelerate.
 inline CBLAS_TRANSPOSE T(bool t) {
     return t ? CblasTrans : CblasNoTrans;
+}
+
+// Converts the triangle and unit-diagonal flags of a triangular operand.
+inline CBLAS_UPLO Uplo(bool upper) {
+    return upper ? CblasUpper : CblasLower;
+}
+
+inline CBLAS_DIAG Diag(bool unit) {
+    return unit ? CblasUnit : CblasNonUnit;
 }
 
 // ``C <- beta * C`` over a row-major ``M x N`` block with row stride ``ldc``,
@@ -178,6 +190,23 @@ void daxpy(int n, double alpha, const double* x, double* y) {
     if (n <= 0)
         return;
     cblas_daxpy(n, alpha, x, 1, y, 1);
+}
+
+// Side Left, no transpose, alpha 1: the only form the callers solve — a
+// right-side or transposed system is rewritten as this one above the
+// backend.
+void strsm(bool upper, bool unit_diag, int M, int N, const float* A, int lda, float* B, int ldb) {
+    if (M <= 0 || N <= 0)
+        return;
+    cblas_strsm(CblasRowMajor, CblasLeft, Uplo(upper), CblasNoTrans, Diag(unit_diag), M, N, 1.0f, A,
+                lda, B, ldb);
+}
+
+void dtrsm(bool upper, bool unit_diag, int M, int N, const double* A, int lda, double* B, int ldb) {
+    if (M <= 0 || N <= 0)
+        return;
+    cblas_dtrsm(CblasRowMajor, CblasLeft, Uplo(upper), CblasNoTrans, Diag(unit_diag), M, N, 1.0, A,
+                lda, B, ldb);
 }
 
 }  // namespace lucid::backend::cpu

@@ -1,9 +1,10 @@
 // lucid/_C/backend/cpu/Blas.h
 //
 // Thin wrappers around Apple Accelerate CBLAS routines used by the CPU backend
-// for matrix multiplication and matrix-vector multiplication.  All functions
-// assume row-major storage (CblasRowMajor) and map the bool transpose flags to
-// CBLAS_TRANSPOSE constants.  "s" prefix = float32; "d" prefix = float64.
+// for matrix multiplication, matrix-vector multiplication, scaled vector
+// accumulation and triangular solves.  All functions assume row-major storage
+// (CblasRowMajor) and map the bool flags to the CBLAS enums.  "s" prefix =
+// float32; "d" prefix = float64.
 
 #pragma once
 
@@ -244,5 +245,82 @@ LUCID_INTERNAL void saxpy(int n, float alpha, const float* x, float* y);
 // ----------
 // Accelerate.framework ``cblas_daxpy``.
 LUCID_INTERNAL void daxpy(int n, double alpha, const double* x, double* y);
+
+// Single-precision triangular solve with a matrix right-hand side (TRSM).
+//
+// Overwrites $B$ with $X = A^{-1} B$, where $A$ is an $M \times M$
+// triangular matrix on the left and $B$ is $M \times N$, both row-major.
+// Only the triangle named by ``upper`` is read; ``unit_diag`` treats the
+// diagonal as ones without reading it.  Dispatches to Accelerate's
+// ``cblas_strsm`` with side Left, no transpose and $\alpha = 1$.
+//
+// Parameters
+// ----------
+// upper : bool
+//     Whether $A$ is upper (back substitution) or lower (forward
+//     substitution) triangular.
+// unit_diag : bool
+//     Treat the diagonal of $A$ as all ones.
+// M, N : int
+//     $A \in \mathbb{R}^{M \times M}$, $B \in \mathbb{R}^{M \times N}$.
+// A : const float*
+//     Row-major triangular matrix buffer.
+// lda : int
+//     Leading dimension (row stride) of $A$.
+// B : float*
+//     Row-major right-hand sides, replaced by the solution.
+// ldb : int
+//     Leading dimension (row stride) of $B$.
+//
+// Math
+// ----
+// For upper $A$, back substitution:
+// $$ x_i = \Big(b_i - \sum_{j > i} A_{ij} x_j\Big) / A_{ii} $$
+//
+// Notes
+// -----
+// No singularity check.  An exactly-zero diagonal entry divides by zero,
+// so the solution carries the IEEE result ($\pm\infty$, or NaN for
+// $0 / 0$) — the reference framework's answer for a singular triangle.
+// LAPACK's ``?trtrs`` driver checks the diagonal first and reports
+// ``info > 0`` without solving; that is the difference that matters here.
+//
+// References
+// ----------
+// Accelerate.framework ``cblas_strsm``.
+LUCID_INTERNAL void
+strsm(bool upper, bool unit_diag, int M, int N, const float* A, int lda, float* B, int ldb);
+
+// Double-precision triangular solve with a matrix right-hand side (TRSM).
+//
+// Identical contract to ``strsm`` but for ``double`` buffers; dispatches to
+// ``cblas_dtrsm``.
+//
+// Parameters
+// ----------
+// upper : bool
+//     Whether $A$ is upper or lower triangular.
+// unit_diag : bool
+//     Treat the diagonal of $A$ as all ones.
+// M, N : int
+//     $A \in \mathbb{R}^{M \times M}$, $B \in \mathbb{R}^{M \times N}$.
+// A : const double*
+//     Row-major triangular matrix buffer.
+// lda : int
+//     Leading dimension of $A$.
+// B : double*
+//     Row-major right-hand sides, replaced by the solution.
+// ldb : int
+//     Leading dimension of $B$.
+//
+// Math
+// ----
+// $$ X = A^{-1} B $$
+//
+// References
+// ----------
+// Accelerate.framework ``cblas_dtrsm``.
+LUCID_INTERNAL void
+dtrsm(bool upper, bool unit_diag, int M, int N, const double* A, int lda, double* B, int ldb);
 
 }  // namespace lucid::backend::cpu

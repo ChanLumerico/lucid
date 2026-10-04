@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add the check_dtype_dispatch rule (CHA-225)
 
+- strsm / dtrsm wrappers with the empty-extent guard (CHA-227)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
