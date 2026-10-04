@@ -129,7 +129,9 @@ def deprecated[T: Callable[..., object]](
 
 
 def _message(what: str, since: str, removal: str, alternative: str | None) -> str:
-    message = f"{what} is deprecated since Lucid {since} and will be removed in {removal}"
+    message = (
+        f"{what} is deprecated since Lucid {since} and will be removed in {removal}"
+    )
     if alternative:
         message += f"; use {alternative} instead"
     return message

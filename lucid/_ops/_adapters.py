@@ -308,7 +308,9 @@ def _as_dim(value: object) -> int:
     try:
         return operator.index(value)  # type: ignore[arg-type]  # refused below
     except TypeError:
-        raise TypeError(f"gather(): dim must be an int, got {type(value).__name__}") from None
+        raise TypeError(
+            f"gather(): dim must be an int, got {type(value).__name__}"
+        ) from None
 
 
 def _gather_operands(
@@ -376,8 +378,15 @@ def _gather_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
     # The reference order with positional ints, as every caller inside
     # Lucid writes it (cross_entropy and nll_loss among them), skips the
     # parsing below.
-    if not kwargs and len(args) == 2 and type(args[0]) is int and hasattr(args[1], "_impl"):
-        return _C_engine.gather(_unwrap(input), _unwrap(cast("Tensor", args[1])), args[0])
+    if (
+        not kwargs
+        and len(args) == 2
+        and type(args[0]) is int
+        and hasattr(args[1], "_impl")
+    ):
+        return _C_engine.gather(
+            _unwrap(input), _unwrap(cast("Tensor", args[1])), args[0]
+        )
     dim, index = _gather_operands(args, kwargs)
     return _C_engine.gather(_unwrap(input), _unwrap(index), dim)
 
