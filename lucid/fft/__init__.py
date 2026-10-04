@@ -300,7 +300,7 @@ def _save_input(ctx: FunctionCtx, x: Tensor, axes: list[int]) -> None:
 class _FftnAutograd(_AutogradFunction):
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -319,7 +319,7 @@ class _FftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         # grad_x = ifft(grad_out, dual(norm)) at the output's size, then
         # resized to the input's.
         dual = _dual_norm(cast(str, ctx.norm))
@@ -331,7 +331,7 @@ class _FftnAutograd(_AutogradFunction):
 class _IfftnAutograd(_AutogradFunction):
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -350,7 +350,7 @@ class _IfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         dual = _dual_norm(cast(str, ctx.norm))
         g = _engine_fftn(grad_out, [], cast(list[int], ctx.axes))
         return _input_grad(g, ctx, _scale_after_fft(cast(int, ctx.N), dual))
@@ -387,7 +387,7 @@ def _hermitian_weights(like: Tensor, axis: int, bins: int, full: int) -> Tensor:
 class _RfftnAutograd(_AutogradFunction):
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -410,7 +410,7 @@ class _RfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         """The adjoint of ``rfft``, which is not ``irfft``.
 
         This used to call ``irfftn``, and ``irfft`` is the *inverse* of
@@ -457,7 +457,7 @@ class _RfftnAutograd(_AutogradFunction):
 class _IrfftnAutograd(_AutogradFunction):
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -480,7 +480,7 @@ class _IrfftnAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         """The adjoint of ``irfft``, which is not ``rfft``.
 
         The mirror of the mistake in ``_RfftnAutograd``: ``rfft`` is the

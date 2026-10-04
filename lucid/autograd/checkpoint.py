@@ -133,7 +133,7 @@ def checkpoint(
 
         @override
         @staticmethod
-        def backward(  # type: ignore[override]
+        def backward(
             ctx: FunctionCtx, *grad_outputs: Tensor
         ) -> tuple[Tensor | None, ...]:
             inputs = ctx.saved_tensors

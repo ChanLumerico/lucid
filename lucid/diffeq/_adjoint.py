@@ -167,7 +167,7 @@ class _AdjointSolve(Function):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature by design
+    def forward(
         ctx: FunctionCtx, y0: Tensor, *params: Tensor, config: _Config
     ) -> Tensor:
         """Integrate the trajectory with gradient tracking switched off."""
@@ -199,9 +199,7 @@ class _AdjointSolve(Function):
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature by design
-        ctx: FunctionCtx, grad_ys: Tensor
-    ) -> tuple[Tensor, ...]:
+    def backward(ctx: FunctionCtx, grad_ys: Tensor) -> tuple[Tensor, ...]:
         """Integrate the augmented system backwards, interval by interval."""
         # ``FunctionCtx`` stores user attributes as ``object``; these two were
         # written by ``forward`` just above.

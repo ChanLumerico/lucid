@@ -400,7 +400,7 @@ class _EventTimeGradient(Function):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature by design
+    def forward(
         ctx: FunctionCtx,
         state_t: Tensor,
         *,
@@ -416,9 +416,7 @@ class _EventTimeGradient(Function):
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature by design
-        ctx: FunctionCtx, grad_t: Tensor
-    ) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_t: Tensor) -> Tensor:
         """Turn the event time's cotangent into the state's."""
         event_t, state_t = ctx.saved_tensors
         func = cast(RightHandSide, ctx.func)

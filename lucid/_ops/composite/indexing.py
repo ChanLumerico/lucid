@@ -43,16 +43,12 @@ class _Snapshot(Function):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, x: Tensor
-    ) -> Tensor:
+    def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
         return x.detach().clone()
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, grad: Tensor
-    ) -> Tensor:
+    def backward(ctx: FunctionCtx, grad: Tensor) -> Tensor:
         return grad
 
 

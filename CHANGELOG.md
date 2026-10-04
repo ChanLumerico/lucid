@@ -300,6 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - narrow blind excepts to the failures each one expects
 - type module(...) from the subclass's own forward
 - ModelFactory accepts typed weights= keywords (LCD-260-C6)
+- widen Function forward/backward base (LCD-260-C5)
 
 ---
 

@@ -2,7 +2,7 @@
 autograd.Function: base class for custom differentiable operations.
 """
 
-from typing import Protocol, cast, override
+from typing import Any, Protocol, cast, override
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
@@ -424,8 +424,13 @@ class Function(metaclass=FunctionMeta):
     >>> y.sum().backward()
     """
 
+    # The base signature is ``(ctx, *Any, **Any) -> Any`` on purpose: every
+    # subclass declares its own concrete parameters and return type, and only
+    # this shape is override-compatible with all of them (LSP), so subclasses
+    # need no ``ignore[override]``.  The runtime contract is documented below
+    # and enforced by ``apply`` / the backward node, not by this annotation.
     @staticmethod
-    def forward(ctx: FunctionCtx, *args: Tensor) -> Tensor | tuple[Tensor, ...]:
+    def forward(ctx: FunctionCtx, *args: Any, **kwargs: Any) -> Any:
         """Compute the forward result of the custom op.
 
         Subclasses override this static method. Save anything needed
@@ -440,6 +445,9 @@ class Function(metaclass=FunctionMeta):
         *args : Tensor
             Positional inputs to the custom op. Non-Tensor positional
             arguments are allowed but receive no gradients.
+        **kwargs
+            Keyword inputs forwarded unchanged from :meth:`apply`; they
+            receive no gradients.
 
         Returns
         -------
@@ -449,9 +457,7 @@ class Function(metaclass=FunctionMeta):
         raise NotImplementedError
 
     @staticmethod
-    def backward(
-        ctx: FunctionCtx, *grad_outputs: Tensor
-    ) -> Tensor | tuple[Tensor, ...]:
+    def backward(ctx: FunctionCtx, *grad_outputs: Any) -> Any:
         r"""Compute gradients of the loss w.r.t. each input of :meth:`forward`.
 
         Subclasses override this static method. The returned tuple must

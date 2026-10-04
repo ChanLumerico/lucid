@@ -26,16 +26,12 @@ class _Overwritten(Function):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, old: Tensor, new: Tensor
-    ) -> Tensor:
+    def forward(ctx: FunctionCtx, old: Tensor, new: Tensor) -> Tensor:
         return new.detach()
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, grad: Tensor
-    ) -> tuple[Tensor, None]:
+    def backward(ctx: FunctionCtx, grad: Tensor) -> tuple[Tensor, None]:
         return zeros_like(grad), None
 
 

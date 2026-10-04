@@ -263,7 +263,7 @@ class _CholeskyAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:  # type: ignore[override]
+    def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:
         out = _wrap(_la.cholesky(_unwrap(x), upper))
         ctx.save_for_backward(out)
         ctx.upper = bool(upper)
@@ -271,7 +271,7 @@ class _CholeskyAutograd(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)
         upper: bool = cast(bool, ctx.upper)
 
@@ -584,7 +584,7 @@ class _SVDSGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -598,7 +598,7 @@ class _SVDSGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         return U @ lucid.diag_embed(G_S) @ Vh
@@ -610,7 +610,7 @@ class _SVDUGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -624,7 +624,7 @@ class _SVDUGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         S = _wrap(ctx.s_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -648,7 +648,7 @@ class _SVDVhGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -662,7 +662,7 @@ class _SVDVhGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:
         U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         S = _wrap(ctx.s_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
@@ -857,7 +857,7 @@ class _QRRGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         q_impl: _C_engine.TensorImpl,
@@ -868,7 +868,7 @@ class _QRRGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
         # R backward via Cholesky of A^T A:
         #   R = D L^T  where L = chol(A^T A), D = diag(sign(diag(R)))
         #   G_L = G_R.mT @ D  (chain rule through R = D L^T)
@@ -972,7 +972,7 @@ class _QRRGradWithA(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         q_impl: _C_engine.TensorImpl,
@@ -985,7 +985,7 @@ class _QRRGradWithA(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
         A = _wrap(ctx.A_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         if int(A.shape[-2]) < int(A.shape[-1]):
@@ -1034,7 +1034,7 @@ class _QRQGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         q_impl: _C_engine.TensorImpl,
@@ -1047,7 +1047,7 @@ class _QRQGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:
         Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         if int(Q.shape[-1]) < int(R.shape[-1]):
@@ -1142,7 +1142,7 @@ class _MatrixPowerZero(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
         shape = tuple(int(s) for s in x.shape)
         eye = lucid.eye(shape[-1], dtype=x.dtype, device=x.device)
         if len(shape) == 2:
@@ -1153,7 +1153,7 @@ class _MatrixPowerZero(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         return lucid.zeros_like(grad_out)
 
 
@@ -1313,18 +1313,14 @@ class _Pinv(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, A: Tensor
-    ) -> Tensor:
+    def forward(ctx: FunctionCtx, A: Tensor) -> Tensor:
         P = _wrap(_la.pinv(_unwrap(A)))
         ctx.save_for_backward(A, P)
         return P
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, grad_out: Tensor
-    ) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         A, P = ctx.saved_tensors
         m, n = int(A.shape[-2]), int(A.shape[-1])
         Gt = grad_out.mT
@@ -1485,9 +1481,7 @@ class _Eig(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, A: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def forward(ctx: FunctionCtx, A: Tensor) -> tuple[Tensor, Tensor]:
         vals, vecs = _la.eig(_unwrap(A))
         w, V = _wrap(vals), _wrap(vecs)
         ctx.save_for_backward(w, V)
@@ -1496,9 +1490,7 @@ class _Eig(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, gw: Tensor, gV: Tensor
-    ) -> Tensor:
+    def backward(ctx: FunctionCtx, gw: Tensor, gV: Tensor) -> Tensor:
         w, V = ctx.saved_tensors
         n = int(V.shape[-1])
         real_dtype = lucid.float64 if V.dtype == lucid.complex128 else lucid.float32
@@ -1538,7 +1530,7 @@ class _EighWGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         w_impl: _C_engine.TensorImpl,
@@ -1549,7 +1541,7 @@ class _EighWGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:
         V = _wrap(ctx.V_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         return V @ lucid.diag_embed(G_w) @ V.mT
 
@@ -1560,7 +1552,7 @@ class _EighVGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         ctx: FunctionCtx,
         A: Tensor,
         w_impl: _C_engine.TensorImpl,
@@ -1572,7 +1564,7 @@ class _EighVGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:  # type: ignore[override]
+    def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:
         w = _wrap(ctx.w_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         V = _wrap(ctx.V_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         k = int(w.shape[-1])
@@ -1831,18 +1823,14 @@ class _LUFactorGrad(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, A: Tensor, LU: Tensor, P: Tensor
-    ) -> Tensor:
+    def forward(ctx: FunctionCtx, A: Tensor, LU: Tensor, P: Tensor) -> Tensor:
         out = LU.detach()
         ctx.save_for_backward(out, P)
         return out
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]  # narrower signature than Function by design
-        ctx: FunctionCtx, grad_out: Tensor
-    ) -> tuple[Tensor, None, None]:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> tuple[Tensor, None, None]:
         LU, P = ctx.saved_tensors
         n = int(LU.shape[-1])
         eye = lucid.eye(n, dtype=LU.dtype, device=LU.device)
@@ -2281,7 +2269,7 @@ class _SolveTriangular(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(  # type: ignore[override]
+    def forward(
         ctx: FunctionCtx, A: Tensor, B: Tensor, upper: bool, unitriangular: bool
     ) -> Tensor:
         ctx.shapes = (tuple(A.shape), tuple(B.shape))
@@ -2299,9 +2287,7 @@ class _SolveTriangular(_AutogradFunction):
 
     @override
     @staticmethod
-    def backward(  # type: ignore[override]
-        ctx: FunctionCtx, grad_out: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> tuple[Tensor, Tensor]:
         A, X = ctx.saved_tensors
         upper = cast(bool, ctx.upper)
         unit = cast(bool, ctx.unitriangular)

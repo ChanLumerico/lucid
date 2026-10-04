@@ -341,7 +341,7 @@ class _SegmentFunction(Function):
     # make_step._CompiledStepFunction's.
     @override
     @staticmethod
-    def forward(  # type: ignore[override]
+    def forward(
         ctx: FunctionCtx,
         holder: list[object],
         x: Tensor,
@@ -366,9 +366,7 @@ class _SegmentFunction(Function):
     # params); the base returns Tensor | tuple.
     @override
     @staticmethod
-    def backward(  # type: ignore[override]
-        ctx: FunctionCtx, grad_out: Tensor
-    ) -> tuple[Tensor | None, ...]:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> tuple[Tensor | None, ...]:
         """Run the segment's backward executable; return (grad_x, *grad_params)."""
         from lucid._dispatch import _unwrap, _wrap
 

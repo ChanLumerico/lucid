@@ -450,7 +450,7 @@ def make_step(
         # documented exception per CompiledModule's design.
         @override
         @staticmethod
-        def forward(  # type: ignore[override]
+        def forward(
             ctx: FunctionCtx,
             entry_holder: list[_StepEntry],
             *step_args: Tensor,
@@ -485,9 +485,7 @@ def make_step(
         # for user inputs, Tensors for params); the base returns Tensor | tuple.
         @override
         @staticmethod
-        def backward(  # type: ignore[override]
-            ctx: FunctionCtx, grad_loss: Tensor
-        ) -> tuple[Tensor | None, ...]:
+        def backward(ctx: FunctionCtx, grad_loss: Tensor) -> tuple[Tensor | None, ...]:
             """Chain ``grad_loss`` into each saved per-parameter gradient.
 
             Returns one slot per autograd next-edge: ``None`` for
