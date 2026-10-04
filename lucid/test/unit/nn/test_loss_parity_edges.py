@@ -193,3 +193,52 @@ class TestBinaryCrossEntropyWithLogitsAtZero:
                 assert lz.grad is not None and ly.grad is not None
                 assert _close(_vals(lz.grad), rz.grad.tolist())
                 assert _close(_vals(ly.grad), ry.grad.tolist())
+
+
+# ── CHA-85 ─────────────────────────────────────────────────────────────────
+
+
+class TestKLDivWithZeroTargets:
+    """``kl_div`` was NaN wherever the target was 0.
+
+    ``target * (log(target) - x)`` is ``0 * -inf``.  One-hot and sparse
+    distillation targets are made of such entries.
+    """
+
+    P = [[0.7, 0.2, 0.1], [0.3, 0.3, 0.4]]
+    Q = [[1.0, 0.0, 0.0], [0.5, 0.5, 0.0]]
+
+    def test_batchmean_of_a_one_hot_target(self, device: str) -> None:
+        x = lucid.log(lucid.tensor(self.P, device=device))
+        q = lucid.tensor(self.Q, device=device)
+        assert _close(F.kl_div(x, q, reduction="batchmean").item(), 0.43375030)
+
+    def test_zero_entries_contribute_zero(self, device: str) -> None:
+        x = lucid.log(lucid.tensor(self.P, device=device))
+        q = lucid.tensor(self.Q, device=device)
+        out = F.kl_div(x, q, reduction="none")
+        assert _close(_vals(out), [[0.35667494, 0.0, 0.0], [0.25541281, 0.25541281, 0.0]])
+
+    def test_the_module_and_every_reduction_are_finite(self, device: str) -> None:
+        x = lucid.log(lucid.tensor(self.P, device=device)).requires_grad_()
+        q = lucid.tensor(self.Q, device=device)
+        for reduction in ("mean", "sum", "batchmean"):
+            assert math.isfinite(nn.KLDivLoss(reduction=reduction)(x, q).item())
+        F.kl_div(x, q, reduction="batchmean").backward()
+        assert x.grad is not None
+        assert _close(_vals(x.grad), [[-0.5, 0.0, 0.0], [-0.25, -0.25, 0.0]])
+
+    @pytest.mark.parity
+    @pytest.mark.filterwarnings("ignore::UserWarning")  # the reference on "mean"
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        for reduction in ("none", "mean", "sum", "batchmean"):
+            lx = lucid.log(lucid.tensor(self.P, device=device)).requires_grad_()
+            lo = F.kl_div(lx, lucid.tensor(self.Q, device=device), reduction=reduction)
+            lo.sum().backward()
+            rx = R.log(R.tensor(self.P)).requires_grad_()  # type: ignore[attr-defined]
+            ro = R.nn.functional.kl_div(rx, R.tensor(self.Q), reduction=reduction)  # type: ignore[attr-defined]
+            ro.sum().backward()
+            assert _close(_vals(lo), ro.tolist())
+            assert lx.grad is not None
+            assert _close(_vals(lx.grad), rx.grad.tolist())

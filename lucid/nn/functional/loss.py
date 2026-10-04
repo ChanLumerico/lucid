@@ -806,7 +806,8 @@ def kl_div(
 
         L_i = p_i \cdot (\log p_i - \log q_i)
 
-    Globally:
+    with :math:`0 \log 0 = 0`, so a target with zero entries (one-hot,
+    sparse) contributes nothing there rather than ``nan``.  Globally:
 
     .. math::
 
@@ -837,9 +838,13 @@ def kl_div(
         diff: _C_engine.TensorImpl = _C_engine.sub(ti, xi)
         kl: _C_engine.TensorImpl = _C_engine.mul(_C_engine.exp(ti), diff)
     else:
-        # Standard: target * (log(target) − x).
-        diff = _C_engine.sub(_C_engine.log(ti), xi)
-        kl = _C_engine.mul(ti, diff)
+        # ``target * (log(target) - x)`` is ``0 * -inf = nan`` wherever the
+        # target is 0 — every off-class entry of a one-hot or sparse
+        # distillation target.  ``xlogy`` takes ``0 log 0`` as 0, the limit
+        # the divergence is defined with.
+        kl = _C_engine.sub(
+            _unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi)
+        )
     if reduction == "mean":
         return _wrap(_C_engine.mean(kl, [], False))
     if reduction == "sum":
