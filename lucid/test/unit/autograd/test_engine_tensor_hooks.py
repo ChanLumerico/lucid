@@ -15,6 +15,8 @@ so they pin what the engine does whatever the Python wrapper over it does.
 """
 
 import gc
+import json
+import subprocess
 import sys
 import weakref
 from collections.abc import Callable
@@ -457,6 +459,85 @@ def test_an_exception_in_a_hook_keeps_its_type() -> None:
     with pytest.raises(ValueError, match="boom from the hook"):
         y.sum().backward()
     assert lucid.is_grad_enabled()
+
+
+# ── a hook that runs a backward through its own node ───────────────────────
+#
+# A hook on y that runs a backward of its own through y's producer, without
+# retain_graph, frees what that producer saved.  The engine used to check the
+# node before running its hooks and apply it after: the node then read freed
+# storage and the process died (SIGSEGV in the CPU mul).  The checks now come
+# after the hooks, so the outer pass is refused the way the reference refuses
+# it.  A crash cannot fail an in-process test, so each case runs in a child.
+
+
+def _nested_backward_outcome(
+    lib: ModuleType, device: str, hook: Register, outer: str, inner: str
+) -> dict[str, object]:
+    x = lib.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+    y = x * x
+    done: list[int] = []
+
+    def run_inner(g: object) -> None:
+        if done:
+            return
+        done.append(1)
+        with lib.enable_grad():
+            if inner == "backward":
+                (y * 1.0).sum().backward()
+            else:
+                lib.autograd.grad((y * 1.0).sum(), [x])
+
+    hook(y, run_inner)
+    loss = (y * 2.0).sum()
+    try:
+        if outer == "backward":
+            loss.backward()
+        elif outer == "backward-create-graph":
+            loss.backward(create_graph=True)
+        elif outer == "grad":
+            lib.autograd.grad(loss, [x])
+        else:
+            lib.autograd.grad(loss, [x], create_graph=True)
+    except RuntimeError as e:
+        return {"raised": True, "second_pass": "a second time" in str(e).lower()}
+    return {"raised": False, "second_pass": False}
+
+
+_CHILD = """
+import json, sys
+import lucid
+from lucid.test.unit.autograd.test_engine_tensor_hooks import _hook, _nested_backward_outcome
+print(json.dumps(_nested_backward_outcome(lucid, *sys.argv[1:2], _hook, *sys.argv[2:4])))
+"""
+
+_NESTED = [
+    ("backward", "backward"),
+    ("backward", "grad"),
+    ("backward-create-graph", "backward"),
+    ("grad", "backward"),
+    ("grad-create-graph", "grad"),
+]
+
+
+@pytest.mark.parametrize(
+    ("outer", "inner"), _NESTED, ids=[f"{o}-around-{i}" for o, i in _NESTED]
+)
+def test_a_hook_that_frees_its_own_node_is_refused_cleanly(
+    outer: str, inner: str, device: str, ref: ModuleType
+) -> None:
+    child = subprocess.run(
+        [sys.executable, "-c", _CHILD, device, outer, inner],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert (
+        child.returncode == 0
+    ), f"the process died ({child.returncode}):\n{child.stderr[-2000:]}"
+    got = json.loads(child.stdout.strip().splitlines()[-1])
+    assert got == {"raised": True, "second_pass": True}
+    assert _nested_backward_outcome(ref, "cpu", _ref_hook, outer, inner) == got
 
 
 # ── what grad() leaves behind ──────────────────────────────────────────────

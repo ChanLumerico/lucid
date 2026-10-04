@@ -144,6 +144,37 @@ def _after_an_in_place_write(lib: ModuleType, device: str) -> dict[str, object]:
     return {"y": y.grad, "x": x.grad}
 
 
+def _after_a_write_through_a_view(lib: ModuleType, device: str) -> dict[str, object]:
+    # The write moves y to a new place in the graph; its retained gradient is
+    # the one of its new place (main gave [20, 20, 5], the old place's).
+    x = _x(lib, device)
+    y = x * 2
+    y.retain_grad()
+    y[0:2].mul_(3)
+    (y * 5).sum().backward()
+    return {"y": y.grad, "x": x.grad}
+
+
+def _after_copy(lib: ModuleType, device: str) -> dict[str, object]:
+    # copy_ gives y the source's place in the graph; retain_grad follows it.
+    x = _x(lib, device)
+    y = x * 2
+    y.retain_grad()
+    z = lib.tensor([9.0, 9.0, 9.0], device=device, requires_grad=True)
+    y.copy_(z * 3)
+    (y * 5).sum().backward()
+    return {"y": y.grad, "z": z.grad}
+
+
+def _after_setitem(lib: ModuleType, device: str) -> dict[str, object]:
+    x = _x(lib, device)
+    y = x * 2
+    y.retain_grad()
+    y[0] = 7.0
+    (y * 5).sum().backward()
+    return {"y": y.grad, "x": x.grad}
+
+
 def _create_graph(lib: ModuleType, device: str) -> dict[str, object]:
     x = _x(lib, device)
     y = lib.cat([x * 2, x])
@@ -175,14 +206,35 @@ _SCENARIOS: dict[str, Callable[[ModuleType, str], dict[str, object]]] = {
     "consumers-before-and-after": _consumers_before_and_after,
     "in-autograd-grad": _in_autograd_grad,
     "after-an-in-place-write": _after_an_in_place_write,
+    "after-a-write-through-a-view": _after_a_write_through_a_view,
+    "after-copy": _after_copy,
+    "after-setitem": _after_setitem,
     "create-graph": _create_graph,
     "two-passes": _two_passes,
 }
 
 
+#: ``y[0] = v`` rebinds the Python tensor to a new impl (``_tensor/_indexing.py``
+#: ``_rebind``) that does not carry the retain flag, so ``.grad`` stays None —
+#: on main as well.  A Metal view writes back into its base the same way
+#: (``_tensor/_metal_views.py`` ``write_back``).  The fix is on the Python side
+#: (CHA-151-A): these turn into failures, as a reminder, once it lands.
+_SETITEM_REBINDS = {"after-setitem": None, "after-a-write-through-a-view": "metal"}
+
+
 @pytest.mark.parametrize("name", list(_SCENARIOS))
 def test_matches_the_reference(name: str, ref: ModuleType, device: str) -> None:
+    if name in _SETITEM_REBINDS and _SETITEM_REBINDS[name] in (None, device):
+        pytest.xfail("setitem rebinds the impl without the retain flag (CHA-151-A)")
     _compare(_SCENARIOS[name](lucid, device), _SCENARIOS[name](ref, "cpu"))
+
+
+@pytest.mark.parametrize("name", sorted(_SETITEM_REBINDS))
+def test_setitem_still_loses_the_retain_flag(name: str, device: str) -> None:
+    # Pins the gap above until the Python side carries the flag over.
+    if _SETITEM_REBINDS[name] not in (None, device):
+        pytest.skip("the engine handles this write on this device")
+    assert _SCENARIOS[name](lucid, device)["y"] is None
 
 
 # ── without the reference ──────────────────────────────────────────────────
