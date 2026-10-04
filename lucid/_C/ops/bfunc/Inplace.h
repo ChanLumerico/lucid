@@ -23,10 +23,12 @@
 // in-place target; ``b`` is read-only.  The returned
 // :class:`TensorImplPtr` is the *same* pointer as ``a``, now holding the
 // new storage.  Aliases of ``a`` (other ``TensorImplPtr`` handles to
-// the same impl) observe the mutation; aliases that hold an independent
-// view but share storage do not — Lucid views are not refcounted on
-// storage, only on impl, which is why ``storage_is_shared()`` rejects
-// the op rather than risk a silently broken view.
+// the same impl) observe the mutation, and so do its CPU views and the
+// gradient slot of a tensor read from ``.grad``: for those the result is
+// written into ``a``'s buffer instead (``TensorImpl::take_storage_from``).
+// Anything else holding the buffer — a storage saved for backward, a
+// NumPy array — would not, which is why ``storage_is_shared()`` rejects
+// the op rather than risk a silently stale holder.
 //
 // **Broadcasting.**  The out-of-place binary op may broadcast ``b``
 // up to ``a``'s shape, but ``a`` itself cannot be smaller than the
@@ -46,10 +48,11 @@
 //
 // **Invariants enforced.**
 //   - Neither ``a`` nor ``b`` may be null.
-//   - ``a`` must not share storage with a view tensor
-//     (``storage_is_shared()`` must be ``false``) — otherwise the op
-//     would corrupt the view; the error tells the caller to ``.clone()``
-//     first or operate on the base tensor.
+//   - ``a``'s buffer must not be held by anything but ``a``, its views
+//     and, for a tensor read from ``.grad``, the gradient slot — the
+//     error tells the caller to ``.clone()`` first.
+//   - ``a``'s elements must not overlap (an expanded view): a repeated
+//     element has no single value to take.
 //   - The out-of-place result must have the same :class:`Shape` as
 //     ``a``; otherwise :exc:`ShapeMismatch` is raised.
 //   - Dtype and device, on the other hand, are *overwritten* on

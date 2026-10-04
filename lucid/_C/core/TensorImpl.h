@@ -282,8 +282,9 @@ public:
     // ShapeMismatch
     //     ``src`` has another shape.
     // LucidError
-    //     ``src`` has another dtype, or a view of a leaf that requires grad
-    //     would be modified while autograd records.
+    //     ``src`` has another dtype, a view of a leaf that requires grad
+    //     would be modified while autograd records, the elements overlap,
+    //     or the buffer is a gradient's that something else also reads.
     // NotImplementedError
     //     The tensor is on the GPU or is not dense, or its buffer is also
     //     held by something that is not one of its views — a storage saved
@@ -312,8 +313,9 @@ public:
     // buffer instead, so every alias of it sees them — but only when ``out``
     // recorded no graph, since a node that saved the pre-op input shares the
     // buffer.  A CPU tensor with live views always writes into its buffer
-    // (:func:`write_through`).  Otherwise the swap happens and the tensor
-    // stops being shared.
+    // (:func:`write_through`), and so does one read from ``.grad``
+    // (:func:`grad_to_tensor`), whose buffer is its owner's gradient.
+    // Otherwise the swap happens and the tensor stops being shared.
     //
     // Parameters
     // ----------
@@ -321,6 +323,12 @@ public:
     //     The op's result; its storage is moved from.
     // name : const char*
     //     Op name for error messages.
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     The tensor is a CPU tensor whose elements overlap (an expanded
+    //     view), or a gradient's buffer that something else also reads.
     void take_storage_from(TensorImpl& out, const char* name);
 
     // Creates a new :class:`TensorImpl` that aliases ``base``'s
@@ -856,13 +864,14 @@ public:
     std::string
     to_string(int precision = 4, std::size_t threshold = 1000, std::size_t edgeitems = 3) const;
 
-    // Wraps the tensor's accumulated gradient as a fresh :class:`TensorImpl`
-    // that shares the underlying :class:`Storage`.
+    // Wraps the tensor's accumulated gradient as a :class:`TensorImpl` that
+    // reads the underlying buffer.
     //
     // Prefers the graph-mode :attr:`grad_impl` when present; otherwise wraps
     // the standard :attr:`grad` :class:`Storage` directly.  Replaces the
     // older NumPy round-trip used by the Python-side ``Tensor.grad``
-    // accessor.
+    // accessor.  On the CPU the same impl comes back while it lives, and an
+    // in-place op on it writes into the gradient (:func:`take_storage_from`).
     //
     // Returns
     // -------

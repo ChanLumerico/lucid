@@ -34,9 +34,15 @@ namespace {
 //      a NumPy array, a storage saved for backward.  The swap below would
 //      leave that holder reading the old values without saying so.  A
 //      tensor with live views is written through instead
-//      (TensorImpl::write_through), which checks the same thing.
+//      (TensorImpl::write_through), which checks the same thing.  The
+//      gradient slot a tensor read from ``.grad`` stands for is not such a
+//      holder: that tensor holds the buffer through a pointer of its own,
+//      and its write goes into the slot's buffer (take_storage_from).
 //   3. The out-of-place result has the same shape as a (in-place ops may not
 //      change shape; this would also silently break any live views of a).
+//
+// A target whose elements overlap — an expanded view — is refused where the
+// result lands (take_storage_from), as the reference refuses it.
 //
 // After the Storage swap, a->bump_version() invalidates any backward nodes that
 // hold a saved reference to a's old storage, making stale-gradient bugs loud.
@@ -46,8 +52,9 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     if (!a || !b)
         ErrorBuilder(name).fail("null input");
     if (a->storage_is_shared() && !a->is_aliased())
-        ErrorBuilder(name).fail("in-place op on a tensor that shares storage with a view — "
-                                "call .clone() first or operate on the base tensor");
+        ErrorBuilder(name).fail("in-place op on a tensor that shares storage with something "
+                                "other than its views (a tensor saved for backward, a NumPy "
+                                "array) — call .clone() first");
     inplace::refuse_on_leaf(a, name);
     // The same three rules the unary family follows — see
     // ``ops/utils/InplaceGraph.h``.  This helper had none of them, so the

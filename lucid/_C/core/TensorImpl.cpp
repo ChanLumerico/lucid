@@ -298,9 +298,113 @@ void note_inplace_write(TensorImpl& dst, const TensorImpl& src) {
         trc->on_inplace_write(d, from);
 }
 
+// Two of the target's elements are one byte: a write has no single value to
+// leave there, so the reference refuses it.
+[[noreturn]] void refuse_overlapping_write(const char* name) {
+    ErrorBuilder(name).fail(
+        "an in-place write into a tensor whose elements overlap (an "
+        "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
+}
+
+// The tensor ``.grad`` reads, and why its pointers are not the slot's.
+//
+// A gradient lives in its tensor's AutogradMeta as a bare Storage — a slot,
+// not a tensor — and grad_to_tensor wraps it in a TensorImpl over the same
+// bytes.  That tensor used to hold the slot's own pointer, so the slot was
+// one more holder of its buffer, which an in-place op cannot tell from the
+// holders it protects (a node's saved input, a NumPy array):
+// ``p.grad.mul_(s)`` was refused as storage shared with a view, while
+// ``p.grad.neg_()`` took a new buffer of its own and left the gradient as it
+// was.  Now each side holds the buffer through a pointer that owns a record
+// of the other, which ``std::get_deleter`` finds from the pointer alone:
+//
+// * the slot's pointer owns a GradSlot — the buffer, and the tensor
+//   ``.grad`` returned for it, handed out again while it lives, as the
+//   reference's ``.grad`` is one tensor (a ``g = p.grad`` kept alive is not
+//   then a second reader of ``p.grad.mul_(s)``'s buffer);
+// * that tensor's pointer owns a GradSlotRef — the slot's pointer, and whose
+//   slot it is — and so does every view of it, since a view copies or
+//   aliases its base's pointer.
+//
+// The holders of the tensor's pointer are then the tensor's own, counted
+// apart from the slot's.
+struct GradSlot {
+    std::shared_ptr<std::byte[]> buffer;
+    std::weak_ptr<TensorImpl> handle;
+    void operator()(void*) noexcept { buffer.reset(); }
+};
+
+struct GradSlotRef {
+    std::shared_ptr<std::byte[]> slot;
+    std::weak_ptr<const TensorImpl> owner;
+    void operator()(void*) noexcept { slot.reset(); }
+};
+
+// Whether ``a`` and ``b`` share ownership — one control block, whatever
+// address each points at.
+bool same_owner(const std::shared_ptr<std::byte[]>& a, const std::shared_ptr<std::byte[]>& b) {
+    return !a.owner_before(b) && !b.owner_before(a);
+}
+
+// Where an in-place write to a tensor holding ``storage`` belongs, when that
+// storage reads a gradient slot.
+enum class SlotWrite {
+    kNone,     // not a gradient's buffer (any more): the ordinary rules apply
+    kInto,     // into the slot's buffer, which the gradient reads
+    kRefused,  // something besides the slot reads the buffer as well
+};
+
+SlotWrite gradient_slot_write(const Storage& storage, long members) {
+    const auto* cpu = std::get_if<CpuStorage>(&storage);
+    if (cpu == nullptr || !cpu->ptr)
+        return SlotWrite::kNone;
+    const auto* ref = std::get_deleter<GradSlotRef>(cpu->ptr);
+    if (ref == nullptr || !ref->slot)
+        return SlotWrite::kNone;
+    // Read in place: a copy of the slot would hold the buffer while it is
+    // being counted.
+    const auto owner = ref->owner.lock();
+    const CpuStorage* slot = nullptr;
+    if (owner && owner->grad_storage())
+        slot = std::get_if<CpuStorage>(&*owner->grad_storage());
+    // The tensor has let go of that gradient — ``p.grad = None``, another one
+    // assigned — so this is an ordinary tensor now.
+    if (slot == nullptr || !same_owner(slot->ptr, ref->slot))
+        return SlotWrite::kNone;
+    // The slot and this pointer's GradSlotRef hold the slot's pointer, its
+    // GradSlot alone holds the buffer, and the members of this tensor's view
+    // family hold this tensor's pointer.  Anything more reads the same bytes
+    // — a second tensor read from ``.grad``, a node that saved one for
+    // backward, a NumPy array, a tensor the gradient was taken from — and the
+    // write would change them behind its back.
+    const auto* owned = std::get_deleter<GradSlot>(ref->slot);
+    if (ref->slot.use_count() > 2 || (owned != nullptr && owned->buffer.use_count() > 1) ||
+        cpu->ptr.use_count() > members)
+        return SlotWrite::kRefused;
+    return SlotWrite::kInto;
+}
+
+[[noreturn]] void refuse_shared_gradient_write(const char* name) {
+    ErrorBuilder(name).fail(
+        "an in-place write to a gradient is not supported while something else also reads "
+        "its storage (another tensor read from .grad, a tensor saved for backward, a NumPy "
+        "array) — write through a single .grad tensor, or clone() first");
+}
+
 }  // namespace
 
 void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
+    // Checked here, the one place every in-place op's result lands, and not
+    // only in write_through: an expanded view whose base is gone has no live
+    // views, so it came down to the swap below and took a dense buffer in
+    // silence — ``ones(1, 3).expand(2, 3).add_(1)`` raised nothing.
+    if (storage_is_cpu(storage_) && !is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
+        refuse_overlapping_write(name);
+    // A tensor read from ``.grad`` writes into its gradient's buffer: a new
+    // slot of its own would leave the gradient as it was.
+    const SlotWrite slot = gradient_slot_write(storage_, family_ ? family_.use_count() : 1);
+    if (slot == SlotWrite::kRefused)
+        refuse_shared_gradient_write(name);
     note_inplace_write(*this, out);
     // Write through only when ``out`` recorded no graph: a node that saved
     // the pre-op input shares this buffer and would read the new values back
@@ -311,8 +415,10 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // A CPU tensor with live views takes the values into its buffer, graph or
     // no graph: a new slot would leave the views reading the old ones.  Its
     // snapshot was a copy (inplace::snapshot), so no node of this op holds
-    // the bytes being replaced.
-    if (is_aliased() && storage_is_cpu(storage_)) {
+    // the bytes being replaced.  So does a tensor read from ``.grad``, and
+    // no node holds those bytes either: one that had saved the tensor would
+    // hold its pointer too, and the write was refused above.
+    if (storage_is_cpu(storage_) && (is_aliased() || slot == SlotWrite::kInto)) {
         write_through(out, name);
         return;
     }
@@ -380,9 +486,10 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
         ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
     if (overlaps_itself(meta_.shape, meta_.stride))
-        ErrorBuilder(name).fail(
-            "an in-place write into a tensor whose elements overlap (an "
-            "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
+        refuse_overlapping_write(name);
+    const long members = family_ ? family_.use_count() : 1;
+    if (gradient_slot_write(storage_, members) == SlotWrite::kRefused)
+        refuse_shared_gradient_write(name);
     // A leaf's values are where its gradient accumulates.  A write through
     // one of its views moves them as surely as a write to the leaf itself,
     // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
@@ -403,8 +510,9 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         return;
     // Whatever else holds the buffer — a storage saved for backward, a NumPy
     // array — expects the values it has now, and nothing would tell it they
-    // changed: a node's saved output carries no version.
-    const long members = family_ ? family_.use_count() : 1;
+    // changed: a node's saved output carries no version.  A gradient's slot
+    // is not among them: a tensor read from ``.grad`` holds the buffer
+    // through a pointer of its own (GradSlotRef).
     if (dst.ptr.use_count() > members)
         ErrorBuilder(name).not_implemented(
             "an in-place write to a tensor that shares storage with a live view is not supported "
@@ -1243,11 +1351,40 @@ std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
         return autograd_->grad_impl;
     if (!autograd_->grad.has_value())
         return nullptr;
-    // Wrap the accumulated grad Storage as a fresh leaf TensorImpl with the
-    // same shape/dtype/device as ``this``.  No data copy — the new impl
-    // shares the underlying Storage variant.
-    return std::make_shared<TensorImpl>(*autograd_->grad, meta_.shape, meta_.dtype, meta_.device,
-                                        false);
+    // Wrap the accumulated grad Storage as a leaf TensorImpl with the same
+    // shape/dtype/device as ``this``.  No data copy — the impl reads the
+    // slot's buffer.  On the CPU it reads it through a pointer of its own,
+    // and the same impl comes back while it lives (see GradSlot).
+    //
+    // The slot is const here only as the rest of ``this`` is: its buffer and
+    // values stay as they are, and what changes, once, is the pointer it
+    // holds them through — which gains a record of the impl handed out.
+    auto& slot = const_cast<std::optional<Storage>&>(autograd_->grad);
+    auto* cpu = std::get_if<CpuStorage>(&*slot);
+    if (cpu == nullptr || !cpu->ptr)
+        return std::make_shared<TensorImpl>(*slot, meta_.shape, meta_.dtype, meta_.device, false);
+    auto* owned = std::get_deleter<GradSlot>(cpu->ptr);
+    if (owned == nullptr) {
+        const std::shared_ptr<void> record(nullptr, GradSlot{cpu->ptr, {}});
+        cpu->ptr = std::shared_ptr<std::byte[]>(record, cpu->ptr.get());
+        owned = std::get_deleter<GradSlot>(cpu->ptr);
+    }
+    // The impl handed out last, if it lives and still reads the whole slot.
+    if (auto h = owned->handle.lock()) {
+        const auto* held = std::get_if<CpuStorage>(&h->raw_storage());
+        const auto* ref = held != nullptr ? std::get_deleter<GradSlotRef>(held->ptr) : nullptr;
+        if (ref != nullptr && same_owner(ref->slot, cpu->ptr) && ref->owner.lock().get() == this &&
+            h->storage_offset() == 0 && h->is_contiguous() && h->shape() == meta_.shape &&
+            h->dtype() == meta_.dtype)
+            return h;
+    }
+    CpuStorage reads = *cpu;
+    const std::shared_ptr<void> ref(nullptr, GradSlotRef{cpu->ptr, weak_from_this()});
+    reads.ptr = std::shared_ptr<std::byte[]>(ref, cpu->ptr.get());
+    auto h = std::make_shared<TensorImpl>(Storage{std::move(reads)}, meta_.shape, meta_.dtype,
+                                          meta_.device, false);
+    owned->handle = h;
+    return h;
 }
 
 std::string

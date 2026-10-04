@@ -34,12 +34,14 @@ def test_a_write_through_a_broadcast_is_refused_while_its_input_lives() -> None:
     assert x.tolist() == [1.0, 2.0, 3.0]
 
 
-def test_a_broadcast_nothing_else_shares_can_be_written() -> None:
-    # Once its input is gone the buffer is the broadcast's alone, so an
-    # in-place op gives it a buffer of its own rather than refusing.
+def test_a_write_through_a_broadcast_is_refused_once_its_input_is_gone() -> None:
+    # The broadcast axis still repeats its elements, whoever else holds the
+    # buffer, and the reference refuses the write either way.  This used to
+    # hand the broadcast a dense buffer of its own and go through.
     b = lucid.broadcast_to(lucid.tensor([1.0, 2.0, 3.0]), (2, 3))
-    b.add_(1.0)
-    assert b.tolist() == [[2.0, 3.0, 4.0], [2.0, 3.0, 4.0]]
+    with pytest.raises(RuntimeError, match="overlap"):
+        b.add_(1.0)
+    assert b.tolist() == [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
 
 
 def test_contiguous_gives_a_writable_copy() -> None:
