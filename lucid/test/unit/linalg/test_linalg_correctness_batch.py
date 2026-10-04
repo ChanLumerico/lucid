@@ -5,12 +5,19 @@ Each section names the defect it pins and was written to fail first:
 * **CHA-141** — ``eigh`` / ``eigvalsh`` ignored ``UPLO`` (the CPU always read
   the lower triangle, Metal the upper), and the ``*_ex`` family failed the
   whole batch when one matrix failed, with an invented ``info = 1``.
+* **CHA-142** — ``ldl_solve`` applied the Bunch-Kaufman interchanges as one
+  up-front permutation (wrong as soon as a later step swaps rows an earlier
+  column of ``L`` reaches), ``ldl_factor`` left the input's upper triangle
+  in ``LD``, and both pivot paths read their pivots through numpy (H4).
 
 Values are compared with the reference framework through the ``ref``
 fixture on every device; gradients in float64 on the CPU, where the
 reference and a finite difference are both exact enough to disagree with.
 """
 
+import subprocess
+import sys
+import textwrap
 from typing import Any
 
 import numpy as np
@@ -228,3 +235,180 @@ def test_ex_refuses_a_non_square_input(op: str, shape: tuple[int, ...]) -> None:
     args = (lucid.ones(*shape),) + ((lucid.ones(2, 1),) if op == "solve_ex" else ())
     with pytest.raises(ValueError, match="square"):
         getattr(LA, op)(*args)
+
+
+# ── CHA-142: ldl_solve replays Bunch-Kaufman interchanges in order ───────────
+
+
+def _symmetric(seed: int, n: int, dtype: Any = np.float64) -> np.ndarray:
+    a = np.random.default_rng(seed).standard_normal((n, n))
+    return (a + a.T).astype(dtype)
+
+
+def _dtype(device: str) -> Any:
+    return np.float32 if device == "metal" else np.float64
+
+
+@pytest.mark.parity
+def test_ldl_factor_zeroes_the_upper_triangle(device: str, ref: Any) -> None:
+    """``sytrf`` leaves the input's upper triangle in place; the reference
+    clears it, and so does Lucid now."""
+    s = _symmetric(0, 4, _dtype(device))
+    ld, piv = LA.ldl_factor(lucid.tensor(s, device=device))
+    rld, rpiv = ref.linalg.ldl_factor(ref.tensor(s))
+    assert _np(piv).tolist() == rpiv.numpy().tolist()
+    np.testing.assert_array_equal(np.triu(_np(ld), 1), np.zeros((4, 4)))
+    np.testing.assert_allclose(_np(ld), rld.numpy(), rtol=_rtol(device), atol=1e-6)
+
+
+@pytest.mark.parity
+def test_ldl_solve_with_row_interchanges(device: str, ref: Any) -> None:
+    """The issue's case: pivots ``[4, 4, 3, 4]`` — two 1×1 steps that both
+    swap with row 4, which a single up-front permutation of ``B`` cannot
+    express."""
+    a = np.random.default_rng(0).standard_normal((4, 4)).astype(_dtype(device))
+    s = a + a.T
+    b = np.random.default_rng(1).standard_normal((4, 2)).astype(_dtype(device))
+    ld, piv = LA.ldl_factor(lucid.tensor(s, device=device))
+    assert _np(piv).tolist() == [4, 4, 3, 4]
+    x = LA.ldl_solve(ld, piv, lucid.tensor(b, device=device))
+    rld, rpiv = ref.linalg.ldl_factor(ref.tensor(s))
+    want = ref.linalg.ldl_solve(rld, rpiv, ref.tensor(b)).numpy()
+    np.testing.assert_allclose(_np(x), want, rtol=_rtol(device), atol=1e-4)
+    np.testing.assert_allclose(
+        _np(x), np.linalg.solve(s.astype(np.float64), b), rtol=1e-3, atol=1e-4
+    )
+
+
+def test_ldl_solve_over_every_pivot_pattern(device: str) -> None:
+    """Random symmetric indefinite systems: 1×1 interchanges, 2×2 blocks
+    and none, checked against a dense solve — and the sweep asserts it
+    actually met each pattern."""
+    dtype = _dtype(device)
+    seen = {"interchange": 0, "2x2": 0, "none": 0}
+    worst = 0.0
+    for seed in range(60):
+        n = 3 + seed % 5
+        s = _symmetric(seed, n, dtype)
+        b = np.random.default_rng(seed + 1000).standard_normal((n, 3)).astype(dtype)
+        ld, piv = LA.ldl_factor(lucid.tensor(s, device=device))
+        p = _np(piv).tolist()
+        seen["2x2"] += any(v < 0 for v in p)
+        seen["interchange"] += any(v > 0 and v != i + 1 for i, v in enumerate(p))
+        seen["none"] += all(v == i + 1 for i, v in enumerate(p))
+        x = _np(LA.ldl_solve(ld, piv, lucid.tensor(b, device=device)))
+        want = np.linalg.solve(s.astype(np.float64), b.astype(np.float64))
+        worst = max(worst, float(np.max(np.abs(x - want)) / np.max(np.abs(want))))
+    assert all(seen.values()), seen
+    assert worst < (1e-3 if device == "metal" else 1e-10), worst
+
+
+def test_ldl_solve_batched_broadcast_and_vector() -> None:
+    s = np.stack([_symmetric(seed, 5) for seed in (3, 4, 5)])
+    b = np.random.default_rng(9).standard_normal((3, 5, 2))
+    ld, piv = LA.ldl_factor(lucid.tensor(s))
+    x = LA.ldl_solve(ld, piv, lucid.tensor(b))
+    np.testing.assert_allclose(_np(x), np.linalg.solve(s, b), atol=1e-10)
+    # One right-hand side shared by the batch.
+    x = LA.ldl_solve(ld, piv, lucid.tensor(b[0]))
+    np.testing.assert_allclose(
+        _np(x), np.linalg.solve(s, np.broadcast_to(b[0], (3, 5, 2))), atol=1e-10
+    )
+    # A single vector.
+    x = LA.ldl_solve(ld[1], piv[1], lucid.tensor(b[1, :, 0]))
+    assert tuple(x.shape) == (5,)
+    np.testing.assert_allclose(_np(x), np.linalg.solve(s[1], b[1, :, 0]), atol=1e-10)
+
+
+def test_ldl_solve_is_differentiable_in_b() -> None:
+    s = _symmetric(0, 4)
+    ld, piv = LA.ldl_factor(lucid.tensor(s))
+    b = lucid.tensor(np.ones((4, 1)), requires_grad=True)
+    LA.ldl_solve(ld, piv, b).sum().backward()
+    # d(1ᵀ A⁻¹ b)/db = A⁻ᵀ 1 = A⁻¹ 1 for symmetric A.
+    np.testing.assert_allclose(
+        _np(b.grad), np.linalg.solve(s, np.ones((4, 1))), atol=1e-10
+    )
+
+
+@pytest.mark.parametrize(
+    "pivots",
+    [
+        [1, 2, 0],  # zero is not a LAPACK pivot
+        [1, 2, 7],  # out of range
+        [-2, 2, 3],  # an unpaired negative pivot
+        [1, 2, -3],  # a 2x2 block running past the end
+    ],
+)
+def test_ldl_solve_refuses_malformed_pivots(pivots: list[int]) -> None:
+    ld, _ = LA.ldl_factor(lucid.tensor(_symmetric(0, 3)))
+    with pytest.raises(ValueError, match="pivot"):
+        LA.ldl_solve(ld, lucid.tensor(pivots, dtype=lucid.int32), lucid.ones(3, 1))
+
+
+def test_ldl_solve_refuses_float_pivots() -> None:
+    ld, piv = LA.ldl_factor(lucid.tensor(_symmetric(0, 3)))
+    with pytest.raises(TypeError, match="integer"):
+        LA.ldl_solve(ld, piv.to(lucid.float32), lucid.ones(3, 1))
+
+
+def test_lu_and_lu_factor_gradient_take_a_batch(device: str) -> None:
+    """The pivot-to-permutation conversion handled one matrix only, so
+    ``lu`` and the gradient of ``lu_factor`` refused a batch."""
+    a = np.random.default_rng(4).standard_normal((3, 4, 4)).astype(np.float32)
+    P, L, U = LA.lu(lucid.tensor(a, device=device))
+    np.testing.assert_allclose(_np(P @ L @ U), a, atol=1e-5)
+
+    x = lucid.tensor(a, device=device, requires_grad=True)
+    LA.lu_factor(x)[0].sum().backward()
+    for i in range(3):
+        one = lucid.tensor(a[i], device=device, requires_grad=True)
+        LA.lu_factor(one)[0].sum().backward()
+        np.testing.assert_allclose(
+            _np(x.grad)[i], _np(one.grad), rtol=_rtol(device), atol=1e-5
+        )
+
+
+def test_pivot_paths_run_without_numpy() -> None:
+    """``ldl_solve`` and the LU permutation read their pivots through
+    ``Tensor.numpy`` — numpy on the compute path, outside every H4 bridge.
+    ``check_numpy_h4`` only sees ``import`` statements, and the import
+    happened inside the sanctioned ``Tensor.numpy``, so it never noticed.
+    """
+    script = textwrap.dedent("""
+        import sys
+
+        for mod in list(sys.modules):
+            if mod == "numpy" or mod.startswith("numpy."):
+                del sys.modules[mod]
+
+        class _Blocker:
+            def find_spec(self, name, path=None, target=None):
+                if name == "numpy" or name.startswith("numpy."):
+                    raise ImportError("numpy blocked for test")
+                return None
+
+        sys.meta_path.insert(0, _Blocker())
+
+        import lucid
+        import lucid.linalg as LA
+
+        S = lucid.tensor([[0.0, 1.0, 2.0], [1.0, 0.0, 3.0], [2.0, 3.0, 1.0]])
+        LD, piv = LA.ldl_factor(S)
+        x = LA.ldl_solve(LD, piv, lucid.ones(3, 1))
+        assert float((S @ x - 1.0).abs().max().item()) < 1e-4
+
+        A = lucid.tensor([[[0.0, 1.0], [2.0, 3.0]], [[4.0, 1.0], [1.0, 3.0]]])
+        P, L, U = LA.lu(A)
+        assert float((P @ L @ U - A).abs().max().item()) < 1e-5
+        A.requires_grad_(True)
+        LA.lu_factor(A)[0].sum().backward()
+        assert A.grad is not None
+        assert "numpy" not in sys.modules
+        print("ok")
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().endswith("ok")

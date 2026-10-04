@@ -2984,23 +2984,34 @@ def ldl_factor(
         Packed factor of shape ``(*, n, n)``.  The strict lower
         triangle holds :math:`L`; the diagonal holds :math:`D`'s
         entries (:math:`2 \times 2` blocks are stored in the
-        sub-diagonal).
+        sub-diagonal).  The strict upper triangle is zero.
     pivots : Tensor
-        ``int32`` pivot indices.  Positive entries indicate
-        :math:`1 \times 1` blocks; pairs of negative entries flag a
-        :math:`2 \times 2` block.
+        ``int32`` pivot indices, shape ``(*, n)``, 1-based (LAPACK
+        convention).  A positive entry :math:`p` at :math:`k` marks a
+        :math:`1 \times 1` block, with row :math:`k` interchanged with
+        row :math:`p`; a pair of equal negative entries :math:`-p` at
+        :math:`k, k+1` marks a :math:`2 \times 2` block, with row
+        :math:`k+1` interchanged with row :math:`p`.
 
     Notes
     -----
     Backed by LAPACK ``sytrf``.  Cost is :math:`O(n^3 / 3)`.  Pair
     with :func:`ldl_solve` for solving symmetric indefinite systems.
 
+    ``sytrf`` writes the factor into the lower triangle and leaves the
+    upper one as it found it — the input's own entries.  Those are
+    cleared here, so ``LD`` holds the factorization and nothing else.
+
     Examples
     --------
     >>> import lucid
     >>> from lucid.linalg import ldl_factor
-    >>> A = lucid.tensor([[1.0, 2.0], [2.0, 3.0]])
+    >>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
     >>> LD, piv = ldl_factor(A)
+    >>> LD
+    tensor([[4., 0.], [0.25, 2.75]])
+    >>> piv
+    tensor([1, 2], dtype=lucid.int32)
     """
     unsupported_if(
         not hermitian,
@@ -3010,7 +3021,7 @@ def ldl_factor(
         detail="Only the Hermitian case is computed.",
     )
     ld_impl, piv_impl = _la.ldl_factor(_unwrap(A))
-    return _wrap(ld_impl), _wrap(piv_impl)
+    return lucid.tril(_wrap(ld_impl)), _wrap(piv_impl)
 
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
@@ -3424,8 +3435,7 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     Parameters
     ----------
     A : Tensor
-        Square matrix of shape ``(n, n)``.  Batched inputs are not
-        yet exposed through the Python wrapper (will raise).
+        Square matrix of shape ``(*, n, n)`` (batch dims allowed).
     pivot : bool, keyword-only, optional
         Must be ``True`` (the default).  ``False`` would request an
         unpivoted LU; Lucid does not currently ship that kernel and
@@ -3434,11 +3444,11 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     Returns
     -------
     P : Tensor
-        Permutation matrix of shape ``(n, n)``.
+        Permutation matrix of shape ``(*, n, n)``.
     L : Tensor
-        Unit-lower-triangular factor of shape ``(n, n)``.
+        Unit-lower-triangular factor of shape ``(*, n, n)``.
     U : Tensor
-        Upper-triangular factor of shape ``(n, n)``.
+        Upper-triangular factor of shape ``(*, n, n)``.
 
     Notes
     -----
@@ -3561,28 +3571,71 @@ def _build_permutation_matrix(
     dtype: lucid.dtype | type[lucid.dtype] | _C_engine.Dtype | None,
     device: lucid.device | _C_engine.Device | str | None,
 ) -> Tensor:
-    """Convert LAPACK's 1-based pivot vector to an explicit (n × n) P
-    matrix such that ``A = P · L · U`` (LAPACK's contract is
+    """Convert LAPACK's 1-based pivot vectors to explicit ``(*, n, n)`` P
+    matrices such that ``A = P · L · U`` (LAPACK's contract is
     ``P · A = L · U``; we transpose at the end so callers can use the
-    factor product directly)."""
-    perm: list[int] = list(range(n))
-    pv = pivots.numpy()
-    # If batched, only the leading instance is exposed here — caller
-    # should iterate.  Lucid's lu_factor on a non-batched 2-D input
-    # gives a length-n pivot vector; that's what we handle.
-    if pv.ndim != 1:
-        raise NotImplementedError("lu: batched LU is not yet exposed")
-    for i in range(n):
-        j = int(pv[i]) - 1  # 1-based → 0-based
-        perm[i], perm[j] = perm[j], perm[i]
-    # Build the explicit matrix.  P[i, perm[i]] = 1.
-    P_np = [[0.0] * n for _ in range(n)]
-    for i in range(n):
-        P_np[i][perm[i]] = 1.0
-    return lucid.tensor(P_np, dtype=dtype, device=device).mT  # transpose: A = P·L·U
+    factor product directly).
+
+    The swaps are replayed on host integers read with ``tolist`` — the
+    pivots are a handful of indices, and the conversion used to go through
+    ``Tensor.numpy``, which put numpy on the compute path (H4) and limited
+    it to a single matrix.  Every matrix of a batch gets its own ``P``.
+    """
+    k = int(pivots.shape[-1]) if pivots.ndim else 0
+    batch = tuple(int(s) for s in pivots.shape[:-1])
+    rows = cast(list[list[int]], pivots.reshape(-1, k).tolist()) if k else [[]]
+    perms: list[int] = []
+    for piv in rows:
+        perm = list(range(n))
+        for i, p in enumerate(piv):
+            j = int(p) - 1  # 1-based → 0-based
+            perm[i], perm[j] = perm[j], perm[i]
+        perms.extend(perm)
+    # Row i of LAPACK's P is e_{perm[i]}: pick those rows of the identity.
+    eye = lucid.eye(n, dtype=dtype, device=device)
+    index = lucid.tensor(perms, dtype=lucid.int64, device=eye.device)
+    P = eye.index_select(0, index).reshape(*batch, n, n)
+    return P.mT  # transpose: A = P·L·U
 
 
 # ── ldl_solve — back-substitution using the LDL factorization ──────────────
+
+
+def _bunch_kaufman_steps(piv: list[int], n: int) -> list[tuple[int, int, int]]:
+    """Read one ``sytrf`` pivot vector as its sequence of elimination steps.
+
+    Each step is ``(k, size, partner)``: a diagonal block of ``size`` 1 or 2
+    starting at row ``k`` (0-based), and the row its interchange swapped
+    with row ``k`` (a 1×1 block) or row ``k + 1`` (a 2×2 block).
+
+    Raises
+    ------
+    ValueError
+        If the vector is not one ``sytrf`` could have written: a zero, an
+        index outside ``[1, n]``, or a negative entry not paired with an
+        equal one in the next position.
+    """
+    steps: list[tuple[int, int, int]] = []
+    k = 0
+    while k < n:
+        p = int(piv[k])
+        if p == 0 or abs(p) > n:
+            raise ValueError(
+                f"ldl_solve: pivot {p} at position {k} is out of range for an "
+                f"order-{n} factorization (valid: ±1 … ±{n}, LAPACK is 1-based)"
+            )
+        if p > 0:
+            steps.append((k, 1, p - 1))
+            k += 1
+            continue
+        if k + 1 >= n or int(piv[k + 1]) != p:
+            raise ValueError(
+                f"ldl_solve: pivot {p} at position {k} opens a 2x2 block, so "
+                f"position {k + 1} must hold the same value"
+            )
+        steps.append((k, 2, -p - 1))
+        k += 2
+    return steps
 
 
 def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
@@ -3593,33 +3646,47 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
 
     .. math::
 
-        A\,X \,=\, B
+        A\,X \,=\, B.
 
-    by chaining three substitutions:
+    ``sytrf``'s :math:`L` is a product :math:`P_1 L_1 P_2 L_2 \cdots` of
+    elimination steps, each preceded by its own row interchange.  Moving
+    every interchange to the left gives
 
     .. math::
 
-        L\,Y = P B, \quad D\,Z = Y, \quad L^\top X = Z,
+        A \,=\, P\,\tilde L\,D\,\tilde L^\top P^\top,
 
-    followed by an inverse permutation to undo the Bunch-Kaufman row
-    swaps.
+    with :math:`\tilde L` unit-lower-triangular — :math:`L` with each
+    column carrying the interchanges of the steps after it, as LAPACK's
+    ``syconv`` arranges it — so the solve is a permutation, two triangular
+    solves around a block-diagonal one, and the inverse permutation.
 
     Parameters
     ----------
     LD : Tensor
-        Packed LDL factor from :func:`ldl_factor`, shape ``(n, n)``.
+        Packed LDL factor from :func:`ldl_factor`, shape ``(*, n, n)``.
+        Only its lower triangle is read.
     pivots : Tensor
-        Pivot indices from :func:`ldl_factor`.  This implementation
-        only supports **1×1 (simple) pivots** — every entry must be
-        strictly positive.  Mixed 2×2 block pivots raise
-        ``NotImplementedError``.
+        Integer pivot indices from :func:`ldl_factor`, shape ``(*, n)``
+        (1-based, LAPACK convention).  Both :math:`1 \times 1` and
+        :math:`2 \times 2` Bunch-Kaufman blocks are supported.
     B : Tensor
-        Right-hand side of shape ``(n, k)`` (or ``(n,)``).
+        Right-hand side of shape ``(*, n, k)`` (or ``(n,)``).  Its batch
+        dimensions broadcast with those of ``LD``.
 
     Returns
     -------
     Tensor
-        Solution :math:`X`, same shape as ``B``.
+        Solution :math:`X`, shaped like ``B`` broadcast against ``LD``'s
+        batch.
+
+    Raises
+    ------
+    ValueError
+        If ``LD`` is not square, ``pivots`` does not match it, or a pivot
+        is not one ``sytrf`` could have written.
+    TypeError
+        If ``pivots`` is not an integer tensor.
 
     Notes
     -----
@@ -3628,6 +3695,14 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     would fail.  Cost per solve is :math:`O(n^2 k)` once the LDL
     factor is in hand.
 
+    The interchanges are applied in the order ``sytrf`` performed them
+    (LAPACK ``sytrs``).  Applying them as a single up-front row
+    permutation of :math:`B` — as this function once did — is right only
+    when no later step swaps rows an earlier column of :math:`L` has
+    entries in, and silently wrong otherwise.  The pivots are read on the
+    host with ``tolist``; the arithmetic stays on ``LD``'s device and is
+    differentiable in ``LD`` and ``B``.
+
     Examples
     --------
     >>> import lucid
@@ -3635,45 +3710,106 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     >>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
     >>> LD, piv = ldl_factor(A)
     >>> b = lucid.tensor([[5.0], [4.0]])
-    >>> ldl_solve(LD, piv, b)  # doctest: +SKIP
+    >>> ldl_solve(LD, piv, b)
+    tensor([[1.], [1.]])
     """
-    pv = pivots.numpy()
-    if pv.ndim != 1:
-        raise NotImplementedError("ldl_solve: batched solve not yet exposed")
-    if int(pv.min()) <= 0:
-        raise NotImplementedError(
-            "ldl_solve: 2x2 block pivots from Bunch-Kaufman are not yet "
-            "supported.  All pivot entries must be > 0 (1x1 simple pivots)."
+    if LD.ndim < 2 or LD.shape[-1] != LD.shape[-2]:
+        raise ValueError(
+            f"ldl_solve: LD must be a square matrix or a batch of them, got "
+            f"shape {tuple(LD.shape)}"
+        )
+    if pivots.dtype not in (lucid.int8, lucid.int16, lucid.int32, lucid.int64):
+        raise TypeError(
+            f"ldl_solve: pivots must be an integer tensor, got {pivots.dtype}; "
+            f"pass the vector returned by ldl_factor"
         )
     n = int(LD.shape[-1])
-    eye_n = lucid.eye(n, dtype=LD.dtype, device=LD.device)
-    # L is the strictly lower triangle of LD with 1s on the diagonal;
-    # D's diagonal lives in LD's diagonal.
-    L_strict = lucid.tril(LD) - lucid.tril(LD) * eye_n
-    L = L_strict + eye_n
-    diag = lucid.diagonal(LD)  # length-n vector
+    if tuple(pivots.shape) != tuple(LD.shape[:-1]):
+        raise ValueError(
+            f"ldl_solve: pivots must have shape {tuple(LD.shape[:-1])} to match "
+            f"LD of shape {tuple(LD.shape)}, got {tuple(pivots.shape)}"
+        )
+    vector = B.ndim == 1
+    rhs = B.unsqueeze(-1) if vector else B
+    if rhs.ndim < 2 or int(rhs.shape[-2]) != n:
+        raise ValueError(
+            f"ldl_solve: B must have {n} rows to match LD of shape "
+            f"{tuple(LD.shape)}, got shape {tuple(B.shape)}"
+        )
+    try:
+        batch = _broadcast_batch(
+            tuple(int(s) for s in LD.shape[:-2]),
+            tuple(int(s) for s in rhs.shape[:-2]),
+        )
+    except ValueError:
+        raise ValueError(
+            f"ldl_solve: the batch dimensions of LD {tuple(LD.shape)} and B "
+            f"{tuple(B.shape)} do not broadcast"
+        ) from None
+    k = int(rhs.shape[-1])
+    if n == 0 or k == 0 or 0 in batch:
+        empty = lucid.zeros(*batch, n, k, dtype=rhs.dtype, device=rhs.device)
+        return empty.squeeze(-1) if vector else empty
 
-    # Apply LAPACK's pivot permutation to B before the triangular solves.
-    perm: list[int] = list(range(n))
-    pv_l = pv.tolist()
-    for i in range(n):
-        j = int(pv_l[i]) - 1
-        perm[i], perm[j] = perm[j], perm[i]
-    B_perm = B.index_select(-2, lucid.tensor(perm, dtype=lucid.int64, device=B.device))
-
-    y = solve_triangular(L, B_perm, upper=False, unitriangular=True)
-    # Diagonal solve via element-wise division along the leading dim of y.
-    diag_col = diag.reshape(n, 1)
-    z = y / diag_col
-    X_perm = solve_triangular(L.mT, z, upper=True, unitriangular=True)
-
-    # Inverse permutation to restore the original row order.
-    inv_perm: list[int] = [0] * n
-    for i, p in enumerate(perm):
-        inv_perm[p] = i
-    return X_perm.index_select(
-        -2, lucid.tensor(inv_perm, dtype=lucid.int64, device=B.device)
+    LD = lucid.broadcast_to(lucid.tril(LD), (*batch, n, n))
+    rhs = lucid.broadcast_to(rhs, (*batch, n, k))
+    piv_rows = cast(
+        list[list[int]],
+        lucid.broadcast_to(pivots, (*batch, n)).reshape(-1, n).tolist(),
     )
+
+    # Replay every matrix's interchanges on host indices:
+    #   order[i]    — the row of B that the forward sweep sees at position i
+    #                 (B permuted by P^T);
+    #   rows[i][j]  — the row of the stored L whose column-j entry lands at
+    #                 row i of L̃ (syconv's swap of the earlier columns);
+    #   opens[k]    — 1 where a 2x2 block of D starts at row k.
+    orders: list[int] = []
+    sources: list[list[int]] = []
+    opens: list[float] = []
+    moved = False
+    for piv in piv_rows:
+        order = list(range(n))
+        rows = [[r] * n for r in range(n)]
+        starts = [0.0] * (n - 1)
+        for start, size, partner in _bunch_kaufman_steps(piv, n):
+            a = start + size - 1  # the row this step interchanged
+            order[a], order[partner] = order[partner], order[a]
+            if partner != a and start > 0:
+                ra, rp = rows[a], rows[partner]
+                ra[:start], rp[:start] = rp[:start], ra[:start]
+                moved = True
+            if size == 2:
+                starts[start] = 1.0
+        orders.extend(order)
+        sources.extend(rows)
+        opens.extend(starts)
+
+    device = LD.device
+    eye = lucid.eye(n, dtype=LD.dtype, device=device)
+    # D's off-diagonal entries live on LD's sub-diagonal, at the 2x2 blocks.
+    two = lucid.tensor(opens, dtype=LD.dtype, device=device).reshape(*batch, n - 1)
+    sub = LD.diagonal(offset=-1, dim1=-2, dim2=-1) * two
+    D = (
+        lucid.diag_embed(LD.diagonal(dim1=-2, dim2=-1))
+        + lucid.diag_embed(sub, offset=-1)
+        + lucid.diag_embed(sub, offset=1)
+    )
+    L = lucid.tril(LD, -1) - lucid.diag_embed(sub, offset=-1)
+    if moved:
+        index = lucid.tensor(sources, dtype=lucid.int64, device=device)
+        L = lucid.gather(L, -2, index.reshape(*batch, n, n))
+    L = L + eye
+
+    order_index = lucid.tensor(orders, dtype=lucid.int64, device=device)
+    order_index = order_index.reshape(*batch, n, 1)
+    inverse_index = lucid.argsort(order_index, dim=-2)
+    Y = lucid.gather(rhs, -2, lucid.broadcast_to(order_index, (*batch, n, k)))
+    Y = solve_triangular(L, Y, upper=False, unitriangular=True)
+    Y = cast(Tensor, solve(D, Y))
+    Y = solve_triangular(L.mT, Y, upper=True, unitriangular=True)
+    X = lucid.gather(Y, -2, lucid.broadcast_to(inverse_index, (*batch, n, k)))
+    return X.squeeze(-1) if vector else X
 
 
 # ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────
