@@ -92,18 +92,20 @@ def _check_target_shape(x: Tensor, target: Tensor, op: str) -> None:
         )
 
 
-def _check_same_rank(op: str, **tensors: Tensor) -> None:
+def _check_same_rank(op: str, *, broadcast: bool = True, **tensors: Tensor) -> None:
     """The inputs of a pairwise loss line up element for element: one rank,
-    and shapes that broadcast together."""
+    and (with ``broadcast``) shapes that broadcast together.  A user's
+    distance function decides for itself which shapes it pairs, so
+    ``triplet_margin_with_distance_loss`` checks the rank only."""
     shapes = {name: _shape(t) for name, t in tensors.items()}
-    if (
-        len({len(s) for s in shapes.values()}) > 1
-        or _broadcast_shape(*shapes.values()) is None
+    if len({len(s) for s in shapes.values()}) > 1 or (
+        broadcast and _broadcast_shape(*shapes.values()) is None
     ):
         got = ", ".join(f"{name} {s}" for name, s in shapes.items())
         raise ValueError(
             f"{op}: the inputs are expected to have the same number of "
-            f"dimensions and broadcastable shapes, got {got}"
+            f"dimensions{' and broadcastable shapes' if broadcast else ''}, "
+            f"got {got}"
         )
 
 
@@ -386,7 +388,8 @@ def smooth_l1_loss(
         Transition point between quadratic and linear regions
         (default ``1.0``).  Smaller ``beta`` makes the loss behave
         more like :func:`l1_loss`; larger ``beta`` makes it behave
-        more like :func:`mse_loss`.
+        more like :func:`mse_loss`.  A negative ``beta`` raises
+        ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -427,6 +430,10 @@ def smooth_l1_loss(
     # was scaled.  The ``1/beta`` this restores is the one the docstring
     # above has always described.
     _check_reduction(reduction, "smooth_l1_loss")
+    # A negative beta reached huber_loss as its delta, whose refusal named
+    # the wrong function and the wrong argument.
+    if beta < 0.0:
+        raise ValueError(f"smooth_l1_loss: beta must be non-negative, got {beta!r}")
     if beta == 0.0:
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
@@ -1233,7 +1240,9 @@ def triplet_margin_loss(
     positive : Tensor
         Positive sample embedding of the same shape.
     negative : Tensor
-        Negative sample embedding of the same shape.
+        Negative sample embedding of the same shape.  The three
+        embeddings have one rank and broadcastable shapes; otherwise
+        ``ValueError`` is raised.
     margin : float, optional
         Minimum desired gap between positive and negative distances
         (default ``1.0``).  Triplets satisfying the margin already
@@ -1280,7 +1289,9 @@ def triplet_margin_loss(
     """
     from lucid.nn.functional.activations import pairwise_distance
 
-    _check_reduction(reduction, "triplet_margin_loss")
+    op = "triplet_margin_loss"
+    _check_reduction(reduction, op)
+    _check_same_rank(op, anchor=anchor, positive=positive, negative=negative)
     d_ap = _unwrap(pairwise_distance(anchor, positive, p=p, eps=eps))
     d_an = _unwrap(pairwise_distance(anchor, negative, p=p, eps=eps))
     if swap:
@@ -1317,7 +1328,8 @@ def triplet_margin_with_distance_loss(
     positive : Tensor
         Positive sample embedding of the same shape.
     negative : Tensor
-        Negative sample embedding of the same shape.
+        Negative sample embedding of the same shape.  The three
+        embeddings have one rank, or ``ValueError`` is raised.
     distance_function : callable or None, optional
         Function ``(x, y) -> Tensor`` returning a non-negative
         distance of shape :math:`(N,)`.  Defaults to :math:`L_2`
@@ -1366,7 +1378,11 @@ def triplet_margin_with_distance_loss(
     """
     from lucid.nn.functional.activations import pairwise_distance
 
-    _check_reduction(reduction, "triplet_margin_with_distance_loss")
+    op = "triplet_margin_with_distance_loss"
+    _check_reduction(reduction, op)
+    _check_same_rank(
+        op, broadcast=False, anchor=anchor, positive=positive, negative=negative
+    )
     df: object = distance_function
     if df is None:
 
@@ -1503,7 +1519,9 @@ def margin_ranking_loss(
         Scores for the second item, same shape as ``x1``.
     y : Tensor
         Pairwise preference label :math:`\pm 1`: :math:`+1` if
-        :math:`x_1` should rank higher, :math:`-1` otherwise.
+        :math:`x_1` should rank higher, :math:`-1` otherwise.  The three
+        tensors have one rank and broadcastable shapes; otherwise
+        ``ValueError`` is raised.
     margin : float, optional
         Required minimum score gap (default ``0.0``).
     reduction : str, optional
@@ -1537,7 +1555,10 @@ def margin_ranking_loss(
     >>> margin_ranking_loss(s1, s2, y, margin=1.0)
     tensor(0.75)
     """
-    _check_reduction(reduction, "margin_ranking_loss")
+    op = "margin_ranking_loss"
+    _check_reduction(reduction, op)
+    # A (1, N) label against (N,) scores broadcast to an (N, N) loss.
+    _check_same_rank(op, x1=x1, x2=x2, y=y)
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
     margin_t = _C_engine.full(diff.shape, margin, diff.dtype, diff.device)
     neg_y_diff = _C_engine.mul(_C_engine.neg(_unwrap(y)), diff)
