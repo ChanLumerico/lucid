@@ -136,6 +136,35 @@ jobs:
           name: lucid-wheel-py3.14
           path: dist/*.whl
 
+  # Ratchet quality gate (tools/quality_gate, tools/README.md "Quality gate"):
+  # every collector over the whole tree against tools/quality_baseline.json.
+  # Fails when any (tool, rule, file) count rises — new slop — and when the
+  # committed baseline is higher than the code, so a fix that was not
+  # recorded cannot leave room for slop to come back.  No engine build: the
+  # tools read source only.  macOS so mypy sees the same platform and the
+  # same installed packages as the Macs that wrote the baseline.
+  quality-gate:
+    name: Quality gate (ratchet)
+    runs-on: macos-26
+    timeout-minutes: 20          # measured ~40 s of gate on an M1 Pro
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install the pinned tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --group quality
+          # What lucid/ imports, so mypy types it as it does locally.
+          python -m pip install numpy mlx safetensors
+
+      - name: Gate (--full)
+        run: python -m tools.quality_gate --full
+
   coverage:
     name: Coverage
     runs-on: macos-26
