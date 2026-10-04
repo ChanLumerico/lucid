@@ -289,20 +289,13 @@ def test_compiled_trajectory_follows_eager(mk_opt: object) -> None:
         drift = float((a - b).abs().max().item())
         assert drift < 1e-5, f"step {k + 1}: compiled drift = {drift:.3e}"
 
-    # The compiled step keeps its own buffers; they hold the same values as
-    # the eager engine's state under the reference framework's names.
+    # The compiled step keeps its own buffers; its state_dict holds the same
+    # entries as the eager engine's, under the reference framework's names.
     state = eager_opt.state_dict()["state"][0]  # type: ignore[attr-defined]
-    buffers = {
-        "ax": "_ax",
-        "grad_avg": "_grad_avg",
-        "square_avg": "_square_avg",
-        "sum": "_state_sum",
-    }
-    for key, attr in buffers.items():
-        if key not in state:
-            continue
-        ours = getattr(copt, attr)[0].to("cpu").numpy()
-        assert abs(ours - state[key]).max() < 1e-5, key
+    ours = copt.state_dict()["state"][0]  # type: ignore[attr-defined]
+    assert sorted(ours) == sorted(state)
+    for key, want in state.items():
+        assert abs(ours[key] - want).max() < 1e-5, key
 
 
 def test_compile_optimizer_lbfgs_convergence() -> None:

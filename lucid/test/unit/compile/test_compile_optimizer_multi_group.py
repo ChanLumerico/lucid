@@ -95,14 +95,36 @@ def test_multi_group_sgd_parity() -> None:
         )
 
 
-def test_multi_group_returns_wrapper() -> None:
-    """Sanity: compile_optimizer on multi-group returns the wrapper, not the single-group class."""
-    from lucid.compile._optim.compiler import _MultiGroupCompiledOptimizer
+def test_multi_group_shares_the_parent_groups() -> None:
+    """Multi-group compiles into the one compiled optimizer, over the parent's groups.
+
+    No per-group clone: a learning rate a scheduler (or a hand edit) writes
+    into the parent's group is the one the next compiled step uses.
+    """
+    from lucid.compile._optim.compiler import _CompiledStepBase
 
     lucid.manual_seed(0)
-    model = _BackboneHead().to(COMPILE_DEVICE)
-    opt = _build_optimizer(model)
+    x = metal_tensor(8, 16)
+    t = metal_tensor(8, 4)
+    eager_model, comp_model = _matched_models()
+    eager_opt = _build_optimizer(eager_model)
+    opt = _build_optimizer(comp_model)
     copt = compile_optimizer(opt)
-    assert isinstance(copt, _MultiGroupCompiledOptimizer)
-    # Lifecycle delegation works.
+    assert isinstance(copt, _CompiledStepBase)
     assert copt.param_groups is opt.param_groups
+
+    for k in range(3):
+        for o, m in ((eager_opt, eager_model), (copt, comp_model)):
+            o.zero_grad()
+            F.mse_loss(m(x), t).backward()
+            o.step()
+        if k == 0:
+            # After the first step the head's rate drops for both, written
+            # the way an LR scheduler writes it.
+            for o in (eager_opt, opt):
+                o.param_groups[1]["lr"] = 1e-4
+                o._sync_hyperparams()
+    for (_, pe), (_, pc) in zip(
+        eager_model.named_parameters(), comp_model.named_parameters()
+    ):
+        assert float((pe - pc).abs().max().item()) < 1e-6
