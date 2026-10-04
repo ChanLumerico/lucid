@@ -266,6 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - every loss checks reduction first and reduces in _reduce
 - class losses refuse a bad weight, target shape or p first
 - cross_entropy accepts label_smoothing=1.0 (a uniform target)
+- BCE refuses bad target/weight shapes, CPU values off [0, 1]
 
 ---
 

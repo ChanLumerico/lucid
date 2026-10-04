@@ -903,12 +903,19 @@ def binary_cross_entropy(
     Parameters
     ----------
     x : Tensor
-        Predicted probabilities in :math:`(0, 1)`, any shape.
+        Predicted probabilities in :math:`[0, 1]`, any shape.  For a CPU
+        tensor an entry outside :math:`[0, 1]` (or NaN) raises
+        ``ValueError``, as the reference's CPU kernel does; a Metal
+        tensor is not read back, which would stall every step, and such
+        an entry makes the loss NaN instead.
     target : Tensor
-        Target probabilities (typically binary) of the same shape.
+        Target probabilities (typically binary) in :math:`[0, 1]`, of
+        the same shape — another shape raises ``ValueError`` rather than
+        being broadcast.  Its range is checked as ``x``'s is.
     weight : Tensor or None, optional
-        Element-wise rescaling factor (broadcast-compatible with
-        ``x``).  Use to up-weight rare classes or hard examples.
+        Element-wise rescaling factor that broadcasts to ``x``'s shape;
+        one that does not, or that would enlarge it, raises
+        ``ValueError``.  Use to up-weight rare classes or hard examples.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -942,7 +949,13 @@ def binary_cross_entropy(
     >>> binary_cross_entropy(p, y)
     tensor(0.2284)
     """
-    _check_reduction(reduction, "binary_cross_entropy")
+    op = "binary_cross_entropy"
+    _check_reduction(reduction, op)
+    _check_target_shape(x, target, op)
+    _check_broadcasts_to(weight, _shape(x), "weight", op)
+    # Last: the only check that reads values, and only on the CPU.
+    _check_unit_interval(x, "input", op)
+    _check_unit_interval(target, "target", op)
     # The probability used to be clamped to [1e-12, 1 - 1e-12], and in
     # float32 ``1 - 1e-12`` rounds to 1.0: a sigmoid of a logit above ~17
     # is exactly 1, ``log(1 - 1)`` is -inf, and ``0 * -inf`` made the loss
@@ -1010,14 +1023,18 @@ def binary_cross_entropy_with_logits(
     x : Tensor
         Raw logits (un-bounded reals), any shape.
     target : Tensor
-        Target probabilities (typically binary), same shape as ``x``.
+        Target probabilities (typically binary), same shape as ``x`` —
+        another shape raises ``ValueError`` rather than being broadcast.
     weight : Tensor or None, optional
-        Element-wise rescaling factor.
+        Element-wise rescaling factor that broadcasts to ``x``'s shape;
+        one that does not, or that would enlarge it, raises
+        ``ValueError``.
     pos_weight : Tensor or None, optional
         Per-class weight applied to the *positive* term only —
         useful for highly-imbalanced binary tasks, where setting
         ``pos_weight = n_neg / n_pos`` recovers the prevalence-
-        balanced gradient.
+        balanced gradient.  It broadcasts to ``x``'s shape, as
+        ``weight`` does.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -1057,7 +1074,11 @@ def binary_cross_entropy_with_logits(
     >>> binary_cross_entropy_with_logits(logits, target)
     tensor(0.3048)
     """
-    _check_reduction(reduction, "binary_cross_entropy_with_logits")
+    op = "binary_cross_entropy_with_logits"
+    _check_reduction(reduction, op)
+    _check_target_shape(x, target, op)
+    _check_broadcasts_to(weight, _shape(x), "weight", op)
+    _check_broadcasts_to(pos_weight, _shape(x), "pos_weight", op)
     # ``max(x, 0) - x y + log(1 + exp(-|x|))`` has the right value and the
     # wrong derivative at x = 0: the subgradients there are clamp' = 1 and
     # sign(0) = 0, so d/dx came out 1 - y instead of 1/2 - y, and a
@@ -2286,10 +2307,13 @@ def multilabel_soft_margin_loss(
     input : Tensor
         Raw logits of shape :math:`(N, C)`.
     target : Tensor
-        Target probabilities (typically binary) of shape :math:`(N, C)`.
+        Target probabilities (typically binary) of shape :math:`(N, C)`,
+        or one that broadcasts to it.
     weight : Tensor or None, optional
         Per-class weight broadcast against the per-class loss
-        tensor before averaging.
+        tensor before averaging.  A ``target`` or ``weight`` that does
+        not broadcast to the input's shape, or that would enlarge it,
+        raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -2323,7 +2347,10 @@ def multilabel_soft_margin_loss(
     >>> multilabel_soft_margin_loss(logits, target)
     tensor(0.3048)
     """
-    _check_reduction(reduction, "multilabel_soft_margin_loss")
+    op = "multilabel_soft_margin_loss"
+    _check_reduction(reduction, op)
+    _check_broadcasts_to(target, _shape(input), "target", op)
+    _check_broadcasts_to(weight, _shape(input), "weight", op)
     # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
     # are numerically stable for large |x|.
     log_sig = -_lucid.nn.functional.softplus(-input)
