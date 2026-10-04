@@ -6463,17 +6463,20 @@ public:
         if (dt == Dtype::F32) {
             const auto* lup = reinterpret_cast<const float*>(lu_cpu.ptr.get());
             auto* xp = reinterpret_cast<float*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_lu_solve_f32(lup + bi * lu_per, ipiv + bi * n, xp + bi * b_per, n, nrhs,
                                          &info);
+                check_lapack_info(info, "lu_solve", bi, batch);
+            }
         } else {
             const auto* lup = reinterpret_cast<const double*>(lu_cpu.ptr.get());
             auto* xp = reinterpret_cast<double*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_lu_solve_f64(lup + bi * lu_per, ipiv + bi * n, xp + bi * b_per, n, nrhs,
                                          &info);
+                check_lapack_info(info, "lu_solve", bi, batch);
+            }
         }
-        check_lapack_info(info, "lu_solve");
         return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
     }
 
@@ -6527,21 +6530,28 @@ public:
         auto piv_ptr = allocate_aligned_bytes(piv_nb, Device::CPU);
         auto* piv_out = reinterpret_cast<int*>(piv_ptr.get());
 
+        // ``sytrf``'s ``info > 0`` is an exactly-zero block of D; the
+        // wrapper then writes nothing for that matrix.  The batch is refused
+        // at the first such matrix, as the reference refuses it — never
+        // returned with that block left unwritten.
         int info = 0;
         if (dt == Dtype::F32) {
             const auto* src = reinterpret_cast<const float*>(cs.ptr.get());
             auto* dst = reinterpret_cast<float*>(ld_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_ldl_factor_f32(src + bi * per_mat, dst + bi * per_mat, piv_out + bi * n,
                                            n, &info);
+                check_lapack_info(info, "ldl_factor", bi, batch);
+            }
         } else {
             const auto* src = reinterpret_cast<const double*>(cs.ptr.get());
             auto* dst = reinterpret_cast<double*>(ld_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
+            for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_ldl_factor_f64(src + bi * per_mat, dst + bi * per_mat, piv_out + bi * n,
                                            n, &info);
+                check_lapack_info(info, "ldl_factor", bi, batch);
+            }
         }
-        check_lapack_info(info, "ldl_factor");
         return {Storage{CpuStorage{ld_ptr, cs.nbytes, dt}},
                 Storage{CpuStorage{piv_ptr, piv_nb, Dtype::I32}}};
     }
@@ -12414,6 +12424,24 @@ private:
             ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
         if (info > 0)
             ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
+    }
+
+    // ``check_lapack_info`` for matrix ``index`` of a ``batch``, naming the
+    // matrix when there is more than one.  Call it inside the batch loop:
+    // ``info`` is overwritten per matrix, so checked once after the loop it
+    // reports only the last matrix, and an earlier failure leaves its output
+    // block unwritten and returned as if it were an answer.
+    static void
+    check_lapack_info(int info, const char* op, std::int64_t index, std::int64_t batch) {
+        if (info == 0 || batch <= 1) {
+            check_lapack_info(info, op);
+            return;
+        }
+        const std::string where = " in matrix " + std::to_string(index) + " of the batch";
+        if (info < 0)
+            ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info) + where);
+        ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")" +
+                              where);
     }
 
     // Whether every one of the ``n`` values is finite.  LAPACK's drivers

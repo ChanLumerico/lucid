@@ -3061,25 +3061,19 @@ public:
         return Storage{gpu::upload_cpu_to_gpu(res_cpu, q_shape)};
     }
 
-    // ldl_factor: fall back to CPU LAPACK
+    // ldl_factor: the CPU backend's ``sytrf``, uploaded (MLX has no LDLᵀ).
     StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& ga = std::get<GpuStorage>(a);
-        auto ca = ::mlx::core::contiguous(*ga.arr);
-        ca.eval();
-        auto a_cpu = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
-        MemoryTracker::track_host_sync(ca.nbytes());
-        std::memcpy(a_cpu.get(), ca.data<void>(), ca.nbytes());
-        CpuStorage a_cs{a_cpu, ca.nbytes(), dt};
-        auto [ld_s, piv_s] =
-            Dispatcher::for_device(Device::CPU).linalg_ldl_factor(Storage{a_cs}, shape, dt);
-        // Re-upload both to GPU
-        const auto& ld_cpu = std::get<CpuStorage>(ld_s);
-        const auto& piv_cpu = std::get<CpuStorage>(piv_s);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        Shape piv_shape{static_cast<std::int64_t>(n)};
-        Storage ld_gpu = Storage{gpu::upload_cpu_to_gpu(ld_cpu, shape)};
-        Storage piv_gpu = Storage{gpu::upload_cpu_to_gpu(piv_cpu, piv_shape)};
-        return {std::move(ld_gpu), std::move(piv_gpu)};
+        Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape)};
+        auto [ld_cpu, piv_cpu] =
+            Dispatcher::for_device(Device::CPU).linalg_ldl_factor(a_cpu, shape, dt);
+        // Shapes mirror ldl_factor_op: LD keeps the input shape, pivots are
+        // batch dims + n.  The MLX array must carry the batch dims too — it
+        // holds only as many elements as its shape names, and every later
+        // read of this tensor copies the TensorImpl's element count out of
+        // it.
+        Shape piv_shape(shape.begin(), shape.end() - 1);
+        return {Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(ld_cpu), shape)},
+                Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(piv_cpu), piv_shape)}};
     }
 
     // fold (col2im) — Metal-native via ``scatter_add_axis``.
