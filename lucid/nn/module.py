@@ -209,12 +209,7 @@ class Module:
         try:
             output = self.forward(*args, **kwargs)
         except Exception:
-            # Run the always-hooks for cleanup, but never let one of them
-            # mask the original forward error — re-raise that.
-            try:
-                self._call_always_forward_hooks(args, kwargs, output)
-            except Exception:
-                pass
+            self._call_always_forward_hooks(args, kwargs, output)
             raise
 
         for hook, with_kwargs, _ in _GLOBAL_FORWARD_HOOKS.values():
@@ -286,20 +281,35 @@ class Module:
         kwargs: dict[str, object],
         output: _ModuleOutput | None,
     ) -> None:
-        for hook, with_kwargs, always_call in _GLOBAL_FORWARD_HOOKS.values():
-            if not always_call:
-                continue
-            if with_kwargs:
-                hook(self, args, kwargs, output)
-            else:
-                hook(self, args, output)
-        for key, hook in self._forward_hooks.items():
-            if key not in self._forward_hooks_always_called:
-                continue
-            if key in self._forward_hooks_with_kwargs:
-                hook(self, args, kwargs, output)
-            else:
-                hook(self, args, output)
+        """Run the ``always_call`` forward hooks after ``forward`` raised.
+
+        Each hook runs even when an earlier one fails, and none may mask
+        the forward error the caller re-raises: a hook's own error is
+        reported as a warning instead.
+        """
+        calls: list[tuple[Callable[..., object], bool]] = [
+            (hook, with_kwargs)
+            for hook, with_kwargs, always_call in _GLOBAL_FORWARD_HOOKS.values()
+            if always_call
+        ]
+        calls.extend(
+            (hook, key in self._forward_hooks_with_kwargs)
+            for key, hook in self._forward_hooks.items()
+            if key in self._forward_hooks_always_called
+        )
+        for hook, with_kwargs in calls:
+            try:
+                if with_kwargs:
+                    hook(self, args, kwargs, output)
+                else:
+                    hook(self, args, output)
+            except Exception as err:  # arbitrary user callback; reference warns too
+                warnings.warn(
+                    f"forward hook {hook!r} with always_call=True raised {err!r}; "
+                    "it was suppressed because forward() had already raised",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
 
     def _has_backward_hooks(self) -> bool:
         return (

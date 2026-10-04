@@ -160,6 +160,44 @@ def test_several_forward_hooks_run_in_registration_order():
     assert order == ["first", "second"]
 
 
+class _Fails(nn.Module):
+    def forward(self, x):
+        raise ValueError("forward failed")
+
+
+def _failing_hook(calls):
+    def hook(mod, args, out):
+        calls.append("failing")
+        raise RuntimeError("hook failed")
+
+    return hook
+
+
+@pytest.mark.parametrize("first_is_global", [False, True])
+def test_a_failing_always_call_hook_does_not_skip_the_next_one(first_is_global):
+    # forward() raised, so every always_call hook still runs as cleanup.  One
+    # that fails is reported as a warning — it must neither stop the hooks
+    # after it nor replace the forward error the caller sees.
+    from lucid.nn.hooks import register_module_forward_hook
+
+    model, calls = _Fails(), []
+    failing = _failing_hook(calls)
+    if first_is_global:
+        handle = register_module_forward_hook(failing, always_call=True)
+    else:
+        handle = model.register_forward_hook(failing, always_call=True)
+    model.register_forward_hook(
+        lambda mod, args, out: calls.append("next"), always_call=True
+    )
+    try:
+        with pytest.warns(RuntimeWarning, match="hook failed"):
+            with pytest.raises(ValueError, match="forward failed"):
+                model(_x())
+    finally:
+        handle.remove()
+    assert calls == ["failing", "next"]
+
+
 # ── backward hooks ────────────────────────────────────────────────────────────
 
 

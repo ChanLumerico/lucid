@@ -2018,7 +2018,6 @@
    },
    "S110": {
     "lucid/_annotation_resolver.py": 1,
-    "lucid/nn/module.py": 1,
     "lucid/utils/data/dataloader.py": 3
    },
    "SIM101": {
@@ -2034,7 +2033,6 @@
     "lucid/_annotation_resolver.py": 1,
     "lucid/autograd/_hooks.py": 1,
     "lucid/coreml/_cache.py": 2,
-    "lucid/nn/module.py": 1,
     "lucid/nn/utils/parametrize.py": 1,
     "lucid/nn/utils/prune.py": 1,
     "lucid/nn/utils/spectral_norm.py": 1,
