@@ -276,10 +276,7 @@ def resnext_101_64x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
 # ---------------------------------------------------------------------------
 
 
-# reason: resnext_50_32x4d_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnext",
     model_type="resnext",
@@ -360,10 +357,7 @@ def resnext_50_32x4d_cls(
     return model
 
 
-# reason: resnext_101_32x4d_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnext",
     model_type="resnext",
@@ -444,10 +438,7 @@ def resnext_101_32x4d_cls(
     return model
 
 
-# reason: resnext_101_32x8d_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnext",
     model_type="resnext",

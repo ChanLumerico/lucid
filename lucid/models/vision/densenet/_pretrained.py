@@ -262,7 +262,7 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="densenet",
     model_type="densenet",
@@ -324,7 +324,7 @@ def densenet_121_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="densenet",
     model_type="densenet",
@@ -379,7 +379,7 @@ def densenet_169_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="densenet",
     model_type="densenet",
@@ -546,7 +546,7 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     return _b(_CFG_161, overrides)
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="densenet",
     model_type="densenet",

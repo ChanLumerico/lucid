@@ -149,10 +149,7 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: mobilenet_v3_large_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",
@@ -231,10 +228,7 @@ def mobilenet_v3_large_cls(
     return model
 
 
-# reason: mobilenet_v3_small_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",

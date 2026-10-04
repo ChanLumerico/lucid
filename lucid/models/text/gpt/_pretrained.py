@@ -30,9 +30,7 @@ def _apply(cfg: GPTConfig, overrides: dict[str, object]) -> GPTConfig:
 # ── Backbone ──────────────────────────────────────────────────────────────────
 
 
-# reason: gpt adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
-# protocol predates the weights system and names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="gpt",
     model_type="gpt",
@@ -108,9 +106,7 @@ def gpt(
 # ── Causal-LM head (CausalLMMixin host) ─────────────────────────────────────
 
 
-# reason: gpt_lm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
-# protocol predates the weights system and names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="language-modeling",
     family="gpt",
     model_type="gpt",
@@ -182,9 +178,7 @@ def gpt_lm(
 # ── Sequence-classification head ──────────────────────────────────────────────
 
 
-# reason: gpt_cls adds a typed weights= kwarg (the encoder GPTWeights); the ModelFactory
-# protocol predates the weights system and names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="sequence-classification",
     family="gpt",
     model_type="gpt",

@@ -353,9 +353,7 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
 # ---------------------------------------------------------------------------
 
 
-# reason: resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -437,9 +435,7 @@ def resnet_18_cls(
     return model
 
 
-# reason: resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -507,9 +503,7 @@ def resnet_34_cls(
     return model
 
 
-# reason: resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -591,9 +585,7 @@ def resnet_50_cls(
     return model
 
 
-# reason: resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -663,9 +655,7 @@ def resnet_101_cls(
     return model
 
 
-# reason: resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -803,10 +793,7 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     return ResNet(cfg)
 
 
-# reason: wide_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
-# **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -936,10 +923,7 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     return ResNet(cfg)
 
 
-# reason: wide_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
-# **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnet",
     model_type="resnet",

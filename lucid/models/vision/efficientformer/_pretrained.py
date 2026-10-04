@@ -243,10 +243,7 @@ def efficientformer_l7(
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: efficientformer_l1_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -312,10 +309,7 @@ def efficientformer_l1_cls(
     return model
 
 
-# reason: efficientformer_l3_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -379,10 +373,7 @@ def efficientformer_l3_cls(
     return model
 
 
-# reason: efficientformer_l7_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",

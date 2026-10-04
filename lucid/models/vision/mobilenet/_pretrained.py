@@ -248,10 +248,7 @@ def mobilenet_025(pretrained: bool = False, **overrides: object) -> MobileNet:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: mobilenet_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet",
     model_type="mobilenet",

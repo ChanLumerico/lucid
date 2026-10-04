@@ -1270,10 +1270,7 @@ _CFG_V3 = YOLOV3Config()
 _CFG_V3_TINY = YOLOV3Config()
 
 
-# reason: yolo_v3 adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="object-detection",
     family="yolo",
     model_type="yolo_v3",
@@ -1341,10 +1338,7 @@ def yolo_v3(
     return model
 
 
-# reason: yolo_v3_tiny adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="object-detection",
     family="yolo",
     model_type="yolo_v3_tiny",

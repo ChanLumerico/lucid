@@ -109,10 +109,7 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: inception_next_tiny_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="inception_next",
     model_type="inception_next",
@@ -231,10 +228,7 @@ def inception_next_small(
     return _b(_CFG_S, overrides)
 
 
-# reason: inception_next_small_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="inception_next",
     model_type="inception_next",
@@ -351,10 +345,7 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
     return _b(_CFG_B, overrides)
 
 
-# reason: inception_next_base_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="inception_next",
     model_type="inception_next",

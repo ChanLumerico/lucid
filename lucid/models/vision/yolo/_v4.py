@@ -1098,10 +1098,7 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
 _CFG_V4 = YOLOV4Config()
 
 
-# reason: yolo_v4 adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="object-detection",
     family="yolo",
     model_type="yolo_v4",

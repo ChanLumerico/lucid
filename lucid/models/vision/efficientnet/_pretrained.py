@@ -489,10 +489,7 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: efficientnet_b0_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -568,10 +565,7 @@ def efficientnet_b0_cls(
     return model
 
 
-# reason: efficientnet_b1_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -637,10 +631,7 @@ def efficientnet_b1_cls(
     return model
 
 
-# reason: efficientnet_b2_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -706,10 +697,7 @@ def efficientnet_b2_cls(
     return model
 
 
-# reason: efficientnet_b3_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -775,10 +763,7 @@ def efficientnet_b3_cls(
     return model
 
 
-# reason: efficientnet_b4_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -844,10 +829,7 @@ def efficientnet_b4_cls(
     return model
 
 
-# reason: efficientnet_b5_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -913,10 +895,7 @@ def efficientnet_b5_cls(
     return model
 
 
-# reason: efficientnet_b6_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -982,10 +961,7 @@ def efficientnet_b6_cls(
     return model
 
 
-# reason: efficientnet_b7_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",

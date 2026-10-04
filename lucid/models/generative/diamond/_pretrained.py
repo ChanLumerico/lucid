@@ -164,10 +164,7 @@ def _actions_for(
     return overrides if actions is None else {**overrides, "num_actions": actions}
 
 
-# reason: diamond adds a typed weights= kwarg (DIAMONDWeights); the
-# ModelFactory protocol fixes the signature at (pretrained, **overrides),
-# so the extra keyword widens it beyond what the alias can express.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="diamond",
     model_type="diamond",
@@ -226,10 +223,7 @@ def diamond(
     return model
 
 
-# reason: diamond_world_model adds a typed weights= kwarg (DIAMONDWeights); the
-# ModelFactory protocol fixes the signature at (pretrained, **overrides),
-# so the extra keyword widens it beyond what the alias can express.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="world-modeling",
     family="diamond",
     model_type="diamond",
@@ -298,10 +292,7 @@ def diamond_world_model(
     return model
 
 
-# reason: diamond_csgo adds a typed weights= kwarg (DIAMONDWeights); the
-# ModelFactory protocol fixes the signature at (pretrained, **overrides),
-# so the extra keyword widens it beyond what the alias can express.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     # "base", not "world-modeling", even though a world model is what it
     # is.  The task tag names the *class* a factory returns, and this one
     # returns the direct model: CS:GO has no agent, so the task wrapper's

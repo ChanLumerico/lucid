@@ -324,10 +324,7 @@ def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: maxvit_tiny_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="maxvit",
     model_type="maxvit",
@@ -390,10 +387,7 @@ def maxvit_tiny_cls(
     return model
 
 
-# reason: maxvit_small_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="maxvit",
     model_type="maxvit",
@@ -454,10 +448,7 @@ def maxvit_small_cls(
     return model
 
 
-# reason: maxvit_base_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="maxvit",
     model_type="maxvit",
@@ -518,10 +509,7 @@ def maxvit_base_cls(
     return model
 
 
-# reason: maxvit_large_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="maxvit",
     model_type="maxvit",

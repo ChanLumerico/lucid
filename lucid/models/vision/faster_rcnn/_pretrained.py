@@ -20,10 +20,7 @@ def _det(cfg: FasterRCNNConfig, kw: dict[str, object]) -> FasterRCNNForObjectDet
     )
 
 
-# reason: faster_rcnn adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="object-detection",
     family="faster_rcnn",
     model_type="faster_rcnn",
@@ -82,10 +79,7 @@ def faster_rcnn(
     return model
 
 
-# reason: faster_rcnn_resnet50_fpn adds a typed weights= kwarg (per-model
-# WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and
-# still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="object-detection",
     family="faster_rcnn",
     model_type="faster_rcnn",

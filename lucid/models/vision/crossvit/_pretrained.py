@@ -263,7 +263,7 @@ def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
@@ -325,7 +325,7 @@ def crossvit_tiny_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
@@ -381,7 +381,7 @@ def crossvit_small_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
@@ -437,7 +437,7 @@ def crossvit_base_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
@@ -493,7 +493,7 @@ def crossvit_9_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
@@ -549,7 +549,7 @@ def crossvit_15_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="crossvit",
     model_type="crossvit",

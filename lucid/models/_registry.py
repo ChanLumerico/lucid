@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, final
+from typing import TYPE_CHECKING, Any, Protocol, final
 
 if TYPE_CHECKING:
     from lucid.models._base import ModelConfig, PretrainedModel
@@ -23,10 +23,14 @@ class ModelFactory(Protocol):
     pretrained : bool, default=False
         Whether to download / load registered checkpoint weights into the
         model before returning it.
-    **overrides : object
+    **overrides : Any
         Optional config-field overrides.  Forwarded to the underlying
         :class:`ModelConfig` constructor — e.g.
-        ``create_model("resnet_50", num_classes=10)``.
+        ``create_model("resnet_50", num_classes=10)``.  Typed ``Any``
+        rather than ``object`` because keyword parameters are
+        contravariant: a factory that adds a typed keyword such as
+        ``weights: ResNet50Weights | None`` only satisfies the protocol
+        when the protocol's keywords are ``Any``.
 
     Returns
     -------
@@ -73,7 +77,7 @@ class ModelFactory(Protocol):
     def __call__(
         self,
         pretrained: bool = False,
-        **overrides: object,
+        **overrides: Any,
     ) -> PretrainedModel: ...
 
 

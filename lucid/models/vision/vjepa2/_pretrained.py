@@ -54,7 +54,7 @@ def _apply(config: VJEPA2Config, overrides: dict[str, object]) -> VJEPA2Config:
     return replace(config, **cast(dict[str, Any], overrides)) if overrides else config
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="vjepa2",
     model_type="vjepa2",
@@ -109,7 +109,7 @@ def vjepa2_vit_large(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="vjepa2",
     model_type="vjepa2",
@@ -164,7 +164,7 @@ def vjepa2_vit_huge(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="vjepa2",
     model_type="vjepa2",
@@ -220,7 +220,7 @@ def vjepa2_vit_giant(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="vjepa2",
     model_type="vjepa2",

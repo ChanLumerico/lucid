@@ -58,10 +58,7 @@ def _apply(cfg: GPT2Config, overrides: dict[str, object]) -> GPT2Config:
 # ── Backbones ─────────────────────────────────────────────────────────────────
 
 
-# reason: gpt2_small adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="gpt2",
     model_type="gpt2",
@@ -122,10 +119,7 @@ def gpt2_small(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="gpt2",
     model_type="gpt2",
@@ -185,10 +179,7 @@ def gpt2_medium(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="gpt2",
     model_type="gpt2",
@@ -247,10 +238,7 @@ def gpt2_large(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="gpt2",
     model_type="gpt2",
@@ -311,10 +299,7 @@ def gpt2_xlarge(
 # ── Causal-LM heads ───────────────────────────────────────────────────────────
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="language-modeling",
     family="gpt2",
     model_type="gpt2",
@@ -370,10 +355,7 @@ def gpt2_small_lm(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="language-modeling",
     family="gpt2",
     model_type="gpt2",
@@ -428,10 +410,7 @@ def gpt2_medium_lm(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="language-modeling",
     family="gpt2",
     model_type="gpt2",
@@ -486,10 +465,7 @@ def gpt2_large_lm(
     return model
 
 
-# reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="language-modeling",
     family="gpt2",
     model_type="gpt2",
@@ -547,10 +523,7 @@ def gpt2_xlarge_lm(
 # ── Sequence-classification head ──────────────────────────────────────────────
 
 
-# reason: gpt2_small_cls adds a typed weights= kwarg (the encoder GPT2SmallWeights);
-# the ModelFactory protocol predates the weights system and names only pretrained
-# + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="sequence-classification",
     family="gpt2",
     model_type="gpt2",

@@ -446,7 +446,7 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     return _b(_CFG_B5, overrides)
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -506,9 +506,7 @@ def pvt_v2_b0_cls(
     return model
 
 
-# reason: pvt_v2_b1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -566,9 +564,7 @@ def pvt_v2_b1_cls(
     return model
 
 
-# reason: pvt_v2_b2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -626,9 +622,7 @@ def pvt_v2_b2_cls(
     return model
 
 
-# reason: pvt_v2_b3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -686,9 +680,7 @@ def pvt_v2_b3_cls(
     return model
 
 
-# reason: pvt_v2_b4_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -746,9 +738,7 @@ def pvt_v2_b4_cls(
     return model
 
 
-# reason: pvt_v2_b5_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="pvt",
     model_type="pvt",

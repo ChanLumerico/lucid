@@ -357,10 +357,7 @@ def mobilenet_v4_hybrid_large(
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: mobilenet_v4_conv_small_cls adds a typed weights= kwarg
-# (per-model WeightsEnum); the ModelFactory protocol predates the
-# weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v4",
     model_type="mobilenet_v4",
@@ -450,10 +447,7 @@ def mobilenet_v4_conv_small_cls(
     return model
 
 
-# reason: mobilenet_v4_conv_medium_cls adds a typed weights= kwarg
-# (per-model WeightsEnum); the ModelFactory protocol predates the
-# weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v4",
     model_type="mobilenet_v4",
@@ -543,10 +537,7 @@ def mobilenet_v4_conv_medium_cls(
     return model
 
 
-# reason: mobilenet_v4_conv_large_cls adds a typed weights= kwarg
-# (per-model WeightsEnum); the ModelFactory protocol predates the
-# weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v4",
     model_type="mobilenet_v4",
@@ -636,10 +627,7 @@ def mobilenet_v4_conv_large_cls(
     return model
 
 
-# reason: mobilenet_v4_hybrid_medium_cls adds a typed weights= kwarg
-# (per-model WeightsEnum); the ModelFactory protocol predates the
-# weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v4",
     model_type="mobilenet_v4",
@@ -731,10 +719,7 @@ def mobilenet_v4_hybrid_medium_cls(
     return model
 
 
-# reason: mobilenet_v4_hybrid_large_cls adds a typed weights= kwarg
-# (per-model WeightsEnum); the ModelFactory protocol predates the
-# weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="mobilenet_v4",
     model_type="mobilenet_v4",

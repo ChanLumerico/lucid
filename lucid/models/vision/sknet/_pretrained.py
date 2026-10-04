@@ -378,9 +378,7 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
 # ---------------------------------------------------------------------------
 
 
-# reason: sk_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="sknet",
     model_type="sknet",
@@ -460,9 +458,7 @@ def sk_resnet_18_cls(
     return model
 
 
-# reason: sk_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="sknet",
     model_type="sknet",

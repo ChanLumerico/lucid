@@ -451,9 +451,7 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: vgg_11_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -519,9 +517,7 @@ def vgg_11_cls(
     return model
 
 
-# reason: vgg_13_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -585,9 +581,7 @@ def vgg_13_cls(
     return model
 
 
-# reason: vgg_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -651,9 +645,7 @@ def vgg_16_cls(
     return model
 
 
-# reason: vgg_19_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -717,9 +709,7 @@ def vgg_19_cls(
     return model
 
 
-# reason: vgg_11_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -786,9 +776,7 @@ def vgg_11_bn_cls(
     return model
 
 
-# reason: vgg_13_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -852,9 +840,7 @@ def vgg_13_bn_cls(
     return model
 
 
-# reason: vgg_16_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -919,9 +905,7 @@ def vgg_16_bn_cls(
     return model
 
 
-# reason: vgg_19_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="vgg",
     model_type="vgg",

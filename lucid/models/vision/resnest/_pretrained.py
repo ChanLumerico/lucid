@@ -471,9 +471,7 @@ def resnest_26_cls(
     return ResNeStForImageClassification(cfg)
 
 
-# reason: resnest_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -541,9 +539,7 @@ def resnest_50_cls(
     return model
 
 
-# reason: resnest_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -611,9 +607,7 @@ def resnest_101_cls(
     return model
 
 
-# reason: resnest_200_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -681,9 +675,7 @@ def resnest_200_cls(
     return model
 
 
-# reason: resnest_269_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="resnest",
     model_type="resnest",

@@ -318,9 +318,7 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
 # ---------------------------------------------------------------------------
 
 
-# reason: se_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -386,9 +384,7 @@ def se_resnet_18_cls(
     return model
 
 
-# reason: se_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -454,9 +450,7 @@ def se_resnet_34_cls(
     return model
 
 
-# reason: se_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -527,10 +521,7 @@ def se_resnet_50_cls(
     return model
 
 
-# reason: se_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
-# **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="senet",
     model_type="senet",
@@ -600,10 +591,7 @@ def se_resnet_101_cls(
     return model
 
 
-# reason: se_resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only pretrained +
-# **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="senet",
     model_type="senet",

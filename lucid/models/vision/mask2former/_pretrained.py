@@ -56,10 +56,7 @@ def _build(
     )
 
 
-# reason: mask2former_swin_tiny adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -116,10 +113,7 @@ def mask2former_swin_tiny(
     return model
 
 
-# reason: mask2former_swin_small adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -174,10 +168,7 @@ def mask2former_swin_small(
     return model
 
 
-# reason: mask2former_swin_base adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",
@@ -229,10 +220,7 @@ def mask2former_swin_base(
     return model
 
 
-# reason: mask2former_swin_large adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="mask2former",
     model_type="mask2former",

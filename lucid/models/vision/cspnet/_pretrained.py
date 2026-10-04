@@ -198,7 +198,7 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cspnet",
     model_type="cspnet",
@@ -253,7 +253,7 @@ def cspresnet_50_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cspnet",
     model_type="cspnet",
@@ -307,7 +307,7 @@ def cspresnext_50_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cspnet",
     model_type="cspnet",

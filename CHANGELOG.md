@@ -299,6 +299,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - bind loop values explicitly instead of closing over them
 - narrow blind excepts to the failures each one expects
 - type module(...) from the subclass's own forward
+- ModelFactory accepts typed weights= keywords (LCD-260-C6)
 
 ---
 

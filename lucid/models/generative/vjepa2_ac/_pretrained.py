@@ -27,7 +27,7 @@ def _apply(config: VJEPA2ACConfig, overrides: dict[str, object]) -> VJEPA2ACConf
     return replace(config, **cast(dict[str, Any], overrides)) if overrides else config
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="vjepa2_ac",
     model_type="vjepa2_ac",
@@ -86,7 +86,7 @@ def vjepa2_ac_vit_giant(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="world-modeling",
     family="vjepa2_ac",
     model_type="vjepa2_ac",

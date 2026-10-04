@@ -210,7 +210,7 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
 # ---------------------------------------------------------------------------
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cvt",
     model_type="cvt",
@@ -267,7 +267,7 @@ def cvt_13_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cvt",
     model_type="cvt",
@@ -323,7 +323,7 @@ def cvt_21_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="cvt",
     model_type="cvt",

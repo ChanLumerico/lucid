@@ -71,10 +71,7 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
     return InceptionV3(cfg)
 
 
-# reason: inception_v3_cls adds typed weights= kwarg (per-model WeightsEnum);
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="inception",
     model_type="inception_v3",

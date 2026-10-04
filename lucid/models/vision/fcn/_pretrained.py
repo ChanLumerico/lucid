@@ -39,10 +39,7 @@ def _build(cfg: FCNConfig, kw: dict[str, object]) -> FCNForSemanticSegmentation:
     )
 
 
-# reason: fcn_resnet50 adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="fcn",
     model_type="fcn",
@@ -107,10 +104,7 @@ def fcn_resnet50(
     return model
 
 
-# reason: fcn_resnet101 adds a typed weights= kwarg (per-model WeightsEnum); the
-# ModelFactory protocol predates the v3.1 weights system and still names only
-# pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="semantic-segmentation",
     family="fcn",
     model_type="fcn",

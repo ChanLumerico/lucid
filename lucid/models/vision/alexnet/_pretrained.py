@@ -78,9 +78,7 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     return AlexNet(cfg)
 
 
-# reason: alexnet_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="alexnet",
     model_type="alexnet",

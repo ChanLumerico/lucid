@@ -468,10 +468,7 @@ def dit_large_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     return DiTModel(_apply(_CFG_LARGE_8, overrides))
 
 
-# reason: dit_xlarge_2 adds a typed weights= kwarg (DiTXLarge2Weights); the ModelFactory
-# protocol fixes the signature at (pretrained, **overrides), so the extra
-# keyword widens it beyond what the alias can express.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="base",
     family="dit",
     model_type="dit",
@@ -949,10 +946,7 @@ def dit_large_8_gen(
     return DiTForImageGeneration(_apply(_CFG_LARGE_8, overrides))
 
 
-# reason: dit_xlarge_2_gen adds a typed weights= kwarg (DiTXLarge2Weights); the ModelFactory
-# protocol fixes the signature at (pretrained, **overrides), so the extra
-# keyword widens it beyond what the alias can express.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-generation",
     family="dit",
     model_type="dit",

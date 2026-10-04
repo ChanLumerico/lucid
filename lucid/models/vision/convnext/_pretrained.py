@@ -300,9 +300,7 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: convnext_tiny_cls adds typed weights= kwarg; ModelFactory protocol
-# predates v3.1 weights system.
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -366,7 +364,7 @@ def convnext_tiny_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -428,7 +426,7 @@ def convnext_small_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -493,7 +491,7 @@ def convnext_base_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -557,7 +555,7 @@ def convnext_large_cls(
     return model
 
 
-@register_model(  # type: ignore[arg-type]
+@register_model(
     task="image-classification",
     family="convnext",
     model_type="convnext",
