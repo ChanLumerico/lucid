@@ -10,9 +10,9 @@ The autocast → fused_step integration works as a side-effect of:
    source dtype)
 3. The mixed-dtype trace acceptance lifted in X4.1
 4. The compile path's split-scope fix in
-   ``_FusedStep._build_executable`` — capture user's autocast
+   ``_FusedStep._build_plan`` — capture user's autocast
    state, run model + loss under it, but disable for the
-   optimizer ``_trace_update`` (so F32 master weights stay F32
+   optimizer update emission (so F32 master weights stay F32
    and don't get cast to F16 by the optimizer reading them
    through the autocast guard)
 
@@ -91,7 +91,7 @@ def test_fused_step_autocast_mlp_trains() -> None:
 def test_fused_step_autocast_preserves_f32_master_weights() -> None:
     """Critical invariant: model parameters stay F32 after autocast steps.
 
-    The split-scope fix in `_FusedStep._build_executable` is what
+    The split-scope fix in `_FusedStep._build_plan` is what
     enforces this — without it the optimizer would read the params
     through the active autocast guard, cast them to F16, and the
     new_param output would be F16 (causing a dtype-mismatch error
@@ -114,7 +114,7 @@ def test_fused_step_autocast_preserves_f32_master_weights() -> None:
         assert p.dtype == lucid.float32, (
             f"param {name} got cast to {p.dtype} under autocast; "
             "master weights must stay F32 — the split-scope fix in "
-            "_FusedStep._build_executable failed."
+            "_FusedStep._build_plan failed."
         )
 
 

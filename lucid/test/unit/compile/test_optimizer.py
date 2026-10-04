@@ -44,8 +44,8 @@ def _tiny_model() -> nn.Module:
 
 
 # Every optimizer compile_optimizer accepts.  If the ghost-grad
-# mechanism breaks for one of these, the corresponding ``_trace_update``
-# in ``_optim.py`` is the suspect.
+# mechanism breaks for one of these, the corresponding ``_update`` in
+# ``lucid/compile/_optim/compiler.py`` is the suspect.
 #
 # Notes:
 #   * ``SGD(nesterov=True)`` is intentionally excluded — the eager

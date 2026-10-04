@@ -64,7 +64,7 @@ def test_grad_scaler_disabled_passes_through() -> None:
 
     The trace must NOT install the scale/unscale/found_inf plumbing
     when the scaler is disabled — verifies the ``scaler_enabled``
-    short-circuit in ``_FusedStep._build_executable``.
+    short-circuit in ``_FusedStep._build_plan``.
     """
     lucid.manual_seed(0)
     model = _MLP().to(COMPILE_DEVICE)

@@ -1,10 +1,10 @@
 """Compile optimizer — multi-group (X3) acceptance.
 
 Backbone + head model with distinct learning rates per group.
-``compile_optimizer`` now wraps a multi-``param_group`` optimizer in
-``_MultiGroupCompiledOptimizer`` which runs one MPSGraph executable
-per group.  Verifies that 5 SGD steps match eager training within
-1e-4 absolute (tighter than F16 because everything is F32).
+``compile_optimizer`` compiles every ``param_group`` into one MPSGraph
+executable, each parameter reading its own group's hyper-parameters
+from the live groups.  Verifies that 5 SGD steps match eager training
+within 1e-4 absolute (tighter than F16 because everything is F32).
 """
 
 import lucid
