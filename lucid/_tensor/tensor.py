@@ -1,4 +1,14 @@
-from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, overload
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    ClassVar,
+    Iterator,
+    Protocol,
+    Self,
+    cast,
+    final,
+    overload,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -63,6 +73,66 @@ if TYPE_CHECKING:
 # DLPack device type for Metal — what a GPU-resident tensor reports and
 # what MLX tags its own capsules with.
 _DLPACK_METAL = 8
+
+
+class _RequiresGradFlip(Protocol):
+    """The engine's in-place ``requires_grad`` setter on ``TensorImpl``."""
+
+    def _set_requires_grad(self, requires_grad: bool) -> None:
+        """Set the flag on this TensorImpl itself."""
+        ...
+
+
+def _set_requires_grad(t: Tensor, requires_grad: bool, *, setter: bool) -> None:
+    """Change ``t``'s ``requires_grad`` flag in place, by the leaf rules.
+
+    The flag flips on the tensor's own ``TensorImpl``.  This used to swap in
+    a ``clone_with_grad`` alias, and every holder of the old impl was left
+    behind: an engine optimizer built before the swap kept stepping a tensor
+    that no longer received gradients, so a parameter frozen and unfrozen
+    after the first ``step()`` (a GAN discriminator, a backbone) silently
+    stopped training.  The gradient already accumulated stayed on the old
+    impl too; in place, ``.grad`` survives a toggle.
+
+    Only a leaf's flag is the user's to change.  A computed tensor's flag
+    follows its graph: clearing it would not detach the tensor, so that is
+    refused, as is the property setter on any computed tensor.
+    ``requires_grad_(True)`` on one is a no-op, since it already requires
+    grad.
+
+    Parameters
+    ----------
+    t : Tensor
+        Tensor whose flag changes.
+    requires_grad : bool
+        New flag value.
+    setter : bool
+        ``True`` for the property setter, which refuses any computed
+        tensor; ``False`` for :meth:`Tensor.requires_grad_`.
+
+    Raises
+    ------
+    RuntimeError
+        If ``t`` was computed by an operation and the change is refused.
+    """
+    impl = t._impl
+    if not isinstance(impl, _C_engine.TensorImpl):
+        # A lazy layer's placeholder holds no autograd state to flip; it
+        # takes the flag on a fresh placeholder.
+        t._impl = _impl_with_grad(impl, requires_grad)
+        return
+    if not impl.is_leaf:
+        if requires_grad and not setter:
+            return
+        hint = (
+            ""
+            if requires_grad
+            else "; to use a computed tensor without gradient tracking, "
+            "take x.detach()"
+        )
+        raise RuntimeError(f"requires_grad can only be changed on a leaf tensor{hint}.")
+    # TODO(CHA-44 follow-up): direct call once engine.pyi has _set_requires_grad (gen_pyi _ENGINE_HEADER)
+    cast(_RequiresGradFlip, impl)._set_requires_grad(requires_grad)
 
 
 class Tensor:
@@ -604,9 +674,10 @@ class Tensor:
     def requires_grad(self, v: bool) -> None:
         """Set whether this tensor participates in autograd, in place.
 
-        Replaces the underlying ``TensorImpl`` with one whose
-        gradient-tracking flag is set to ``v``. The storage is shared, so
-        only the flag (and any owning autograd node bookkeeping) changes.
+        The flag changes on this tensor itself: its storage, its identity
+        and any gradient already accumulated in ``.grad`` are kept, so an
+        optimizer that holds the tensor keeps updating it after a freeze
+        and unfreeze.
 
         Parameters
         ----------
@@ -617,9 +688,9 @@ class Tensor:
         Raises
         ------
         RuntimeError
-            If ``v`` is ``True`` and ``self`` is not a leaf — non-leaf
-            (intermediate) tensors inherit ``requires_grad`` from their
-            inputs and cannot be flipped on directly.
+            If ``self`` is not a leaf.  An intermediate tensor's flag
+            follows the operation that computed it; use :meth:`detach` for
+            a tensor outside the graph.
 
         Notes
         -----
@@ -633,7 +704,7 @@ class Tensor:
         >>> x.requires_grad
         True
         """
-        self._impl = _impl_with_grad(self._impl, v)
+        _set_requires_grad(self, v, setter=True)
 
     def numel(self) -> int:
         r"""Return the total number of elements in the tensor.
@@ -951,6 +1022,12 @@ class Tensor:
         Tensor
             ``self`` with the updated ``requires_grad`` flag.
 
+        Raises
+        ------
+        RuntimeError
+            If ``requires_grad`` is ``False`` and ``self`` is not a leaf.
+            Use :meth:`detach` for a computed tensor outside the graph.
+
         Examples
         --------
         >>> import lucid
@@ -960,13 +1037,13 @@ class Tensor:
 
         Notes
         -----
-        In-place flag flip: the underlying storage is preserved, but the
-        ``TensorImpl`` is replaced with one whose autograd flag is
-        :math:`\text{requires\_grad} \in \{\text{True}, \text{False}\}`.
-        Only valid on **leaf** tensors; non-leaf tensors inherit the flag
-        from their producing op and cannot be flipped on directly.
+        In-place flag flip on this tensor itself: its storage, its identity
+        and any accumulated ``.grad`` are kept, so freezing and unfreezing a
+        parameter between optimizer steps does not detach it from the
+        optimizer.  On a non-leaf tensor ``requires_grad_(True)`` is a no-op
+        (it already requires grad), and clearing the flag is refused.
         """
-        self._impl = _impl_with_grad(self._impl, requires_grad)
+        _set_requires_grad(self, requires_grad, setter=False)
         return self
 
     def retain_grad(self) -> None:

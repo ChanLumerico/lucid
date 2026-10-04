@@ -313,11 +313,13 @@ void register_tensor_impl(py::module_& m) {
             [](const std::shared_ptr<TensorImpl>& self,
                bool requires_grad) -> std::shared_ptr<TensorImpl> {
                 // A second TensorImpl over the same bytes, at the same place in
-                // them, with its own autograd flags and no grad_fn — the
-                // canonical way to flip requires_grad without a copy.  It joins
-                // self's view family, so an in-place write through either
-                // reaches the other, which is what ``.data`` promises; and it
-                // keeps self's offset and strides instead of resetting them.
+                // them, with its own autograd flags and no grad_fn — how a
+                // factory or ``Parameter`` gets a tensor of its own without a
+                // copy.  It joins self's view family, so an in-place write
+                // through either reaches the other, which is what ``.data``
+                // promises; and it keeps self's offset and strides instead of
+                // resetting them.  To change an existing tensor's flag, use
+                // ``_set_requires_grad``: the alias is a different tensor.
                 auto alias = TensorImpl::make_view(self, self->shape(), self->stride(), 0);
                 if (requires_grad)
                     alias->set_requires_grad(true);
@@ -326,6 +328,25 @@ void register_tensor_impl(py::module_& m) {
             py::arg("requires_grad"),
             "Return a new TensorImpl sharing the same storage but with a different "
             "requires_grad flag.  No data is copied.")
+        .def(
+            "_set_requires_grad",
+            [](TensorImpl& self, bool requires_grad) {
+                // The flag flips on this TensorImpl itself.  Swapping in a
+                // ``clone_with_grad`` alias instead left every holder of the
+                // old one behind: an engine optimizer kept stepping a tensor
+                // that no longer received gradients, and the gradient already
+                // accumulated stayed on the old one too.  Turning the flag
+                // off keeps the autograd metadata, so ``.grad`` survives.
+                // Private: ``Tensor.requires_grad`` / ``requires_grad_`` are
+                // the entry points, and they hold the leaf rules.
+                self.set_requires_grad(requires_grad);
+            },
+            py::arg("requires_grad"),
+            "Set this tensor's requires_grad flag in place.  The TensorImpl, its "
+            "storage and its accumulated gradient are kept.  Meant for leaf "
+            "tensors: clearing the flag on a tensor with a grad_fn does not "
+            "detach it, so ``Tensor.requires_grad_`` refuses that case before "
+            "calling this.")
         .def(
             "data_alias",
             [](const std::shared_ptr<TensorImpl>& self) -> std::shared_ptr<TensorImpl> {
