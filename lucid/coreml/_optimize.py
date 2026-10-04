@@ -282,7 +282,8 @@ class CompressionAware(Module):
             held[name] = parameter
             module.weight = self._compressed(name)
         try:
-            return self.model(*args, **kwargs)
+            output: Tensor | tuple[Tensor, ...] = self.model(*args, **kwargs)
+            return output
         finally:
             for name, module in self._holders.items():
                 module.weight = held[name]

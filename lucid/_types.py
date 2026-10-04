@@ -234,6 +234,20 @@ type DimLike = int | list[int] | tuple[int, ...] | None
 # Return type of Module.forward: either a single Tensor or a tuple of Tensors.
 type _ModuleOutput = Tensor | tuple[Tensor, ...]
 
+
+class _HasForward[**P, R](Protocol):
+    """Anything whose ``forward`` takes ``P`` and returns ``R``.
+
+    ``Module.__call__`` binds its ``self`` to this, so the checker reads the
+    parameters and the return type of a call off the concrete subclass's own
+    ``forward`` instead of the base class's catch-all signature.
+    """
+
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        """The computation a call runs."""
+        ...
+
+
 # State dict: flat mapping from dotted parameter / buffer name to its tensor.
 type StateDict = dict[str, Tensor]
 

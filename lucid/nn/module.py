@@ -6,6 +6,8 @@ import warnings
 import weakref
 from collections import OrderedDict
 from typing import (
+    TYPE_CHECKING,
+    Any,
     Callable,
     ClassVar,
     Iterable,
@@ -29,6 +31,9 @@ from lucid.nn.hooks import (
     RemovableHandle,
 )
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
+
+if TYPE_CHECKING:
+    from lucid._types import _HasForward
 
 
 class UninitializedParameterWarning(UserWarning):
@@ -165,12 +170,18 @@ class Module:
         object.__setattr__(self, "_load_state_dict_post_hooks", OrderedDict())
         object.__setattr__(self, "training", True)
 
-    def forward(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
+    # ``(*Any, **Any) -> Any`` is the one signature every narrower override is
+    # compatible with; the precise type of a call comes from ``__call__``
+    # below, which reads it off the subclass's own ``forward``.
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
         """Override in subclasses to define the computation."""
         raise NotImplementedError(f"{type(self).__name__}.forward() not implemented")
 
-    def __call__(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
-        """Forward to the underlying callable (see class docstring)."""
+    def _call_impl(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
+        """Run :meth:`forward` with the registered hooks around it.
+
+        This is what ``module(...)`` executes; it is bound as ``__call__``.
+        """
         # 3.2.2 fast path: 99 % of training-loop ``forward()`` calls have
         # zero hooks attached.  Short-circuit when neither global nor
         # local hooks are registered so the four dict-iteration loops
@@ -187,7 +198,8 @@ class Module:
             and not self._forward_hooks
             and not self._has_backward_hooks()
         ):
-            return self.forward(*args, **kwargs)
+            result: _ModuleOutput = self.forward(*args, **kwargs)
+            return result
 
         for hook, with_kwargs in _GLOBAL_FORWARD_PRE_HOOKS.values():
             args, kwargs = self._call_forward_pre_hook(
@@ -227,6 +239,23 @@ class Module:
         if backward_state is not None:
             output = self._attach_output_backward_hooks(output, backward_state)
         return output
+
+    if TYPE_CHECKING:
+
+        def __call__[**P, R](
+            self: _HasForward[P, R], *args: P.args, **kwargs: P.kwargs
+        ) -> R:
+            """Run :meth:`forward` with the registered hooks around it.
+
+            Always call the module rather than :meth:`forward` directly:
+            forward pre-hooks, forward hooks and backward hooks only run on
+            this path.  The arguments and the return type are those of the
+            subclass's own :meth:`forward`.
+            """
+            ...
+
+    else:
+        __call__ = _call_impl
 
     def _call_forward_pre_hook(
         self,
