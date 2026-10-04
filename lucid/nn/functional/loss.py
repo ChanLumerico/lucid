@@ -1100,7 +1100,8 @@ def kl_div(
         (default ``"mean"``).  ``"batchmean"`` divides the summed
         loss by the leading (batch) dimension and is the *only*
         reduction that yields the mathematically correct KL value
-        in expectation.
+        in expectation; a 0-d input has no batch dimension, and its
+        ``"batchmean"`` is the sum.
     log_target : bool, optional
         When ``True``, treat ``target`` as already-logged
         (:math:`\log p`).  This often avoids a redundant
@@ -1158,7 +1159,11 @@ def kl_div(
         kl = _C_engine.sub(_unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi))
     if reduction != "batchmean":
         return _reduce(_wrap(kl), reduction)
-    return _reduce(_wrap(kl), "sum") / int(x.shape[0])
+    # The sum over the leading (batch) dimension's size.  A 0-d input has
+    # no batch dimension, and its batchmean is the sum, as in the
+    # reference; reading ``x.shape[0]`` there raised IndexError.
+    total: Tensor = _reduce(_wrap(kl), "sum")
+    return total / int(x.shape[0]) if x.ndim > 0 else total
 
 
 def triplet_margin_loss(
