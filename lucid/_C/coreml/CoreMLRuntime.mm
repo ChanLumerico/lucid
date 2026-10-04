@@ -131,12 +131,42 @@ std::vector<std::string> all_names(NSDictionary<NSString*, MLFeatureDescription*
     return names;
 }
 
+// Whether ``path`` names a compiled model rather than a package.
+bool is_compiled(const std::string& path) {
+    static const std::string suffix = ".mlmodelc";
+    std::string trimmed = path;
+    while (trimmed.size() > 1 && trimmed.back() == '/')
+        trimmed.pop_back();
+    return trimmed.size() > suffix.size() &&
+           trimmed.compare(trimmed.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+// Compile ``url`` into Core ML's temporary space.
+NSURL* compile_url(NSURL* url, const std::string& path) {
+    NSError* error = nil;
+    NSURL* compiled = [MLModel compileModelAtURL:url error:&error];
+    if (compiled == nil)
+        throw std::runtime_error("lucid.coreml: failed to compile " + path + ": " +
+                                 describe(error));
+    return compiled;
+}
+
 }  // namespace
 
-// Holds the compiled model plus the temporary directory it was compiled
-// into.  Core ML writes the ``.mlmodelc`` next to a caller-chosen URL and
-// does not clean it up, so the handle owns that too and removes it on
-// destruction rather than leaving artifacts in the user's temp space.
+std::string compile_model(const std::string& path) {
+    @autoreleasepool {
+        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
+        NSURL* compiled = compile_url(url, path);
+        return std::string([[compiled path] UTF8String]);
+    }
+}
+
+// Holds the compiled model plus, when it compiled the package itself, the
+// temporary directory it compiled into.  Core ML writes the ``.mlmodelc``
+// to a path of its choosing and does not clean it up, so a handle that
+// compiled owns that directory and removes it on destruction rather than
+// leaving artifacts in the user's temp space.  A handle opened on a
+// ``.mlmodelc`` the caller supplied owns nothing on disk.
 class CoreMLModel {
 public:
     MLModel* model = nil;  // ARC strong
@@ -149,7 +179,7 @@ public:
     // reads and writes is one object shared by all of them, so those
     // calls queue instead.  A stateless model takes nothing.
     std::mutex state_lock;
-    NSURL* compiled_url = nil;
+    NSURL* compiled_url = nil;  // nil unless this handle compiled, and so owns, it
     std::vector<std::string> input_names;
     std::vector<std::string> output_names;
 
@@ -168,11 +198,12 @@ load_model(const std::string& path, ComputeUnits units, const std::string& funct
         NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
         NSError* error = nil;
 
-        // Core ML runs compiled models; the package is the source form.
-        NSURL* compiled = [MLModel compileModelAtURL:url error:&error];
-        if (compiled == nil)
-            throw std::runtime_error("lucid.coreml: failed to compile " + path + ": " +
-                                     describe(error));
+        // Core ML runs compiled models; the package is the source form.  A
+        // compiled model is opened in place — the bundle Core ML
+        // specialised from it is keyed by that path, and is found again
+        // only if the path is.
+        const bool owned = !is_compiled(path);
+        NSURL* compiled = owned ? compile_url(url, path) : url;
 
         MLModelConfiguration* config = [[MLModelConfiguration alloc] init];
         config.computeUnits = to_mlcompute(units);
@@ -202,8 +233,10 @@ load_model(const std::string& path, ComputeUnits units, const std::string& funct
                                                             error:&probe_error];
                 cpu_only_loads = (on_cpu != nil);
             }
-            NSError* cleanup = nil;
-            [[NSFileManager defaultManager] removeItemAtURL:compiled error:&cleanup];
+            if (owned) {
+                NSError* cleanup = nil;
+                [[NSFileManager defaultManager] removeItemAtURL:compiled error:&cleanup];
+            }
             if (cpu_only_loads)
                 throw std::runtime_error(
                     "lucid.coreml: " + path +
@@ -218,7 +251,7 @@ load_model(const std::string& path, ComputeUnits units, const std::string& funct
 
         auto* handle = new CoreMLModel();
         handle->model = model;
-        handle->compiled_url = compiled;
+        handle->compiled_url = owned ? compiled : nil;
         if (model.modelDescription.stateDescriptionsByName.count > 0)
             handle->state = [model newState];
         handle->input_names = all_names(model.modelDescription.inputDescriptionsByName);
@@ -236,11 +269,8 @@ std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits unit
     if (@available(macOS 14.4, *)) {
         @autoreleasepool {
             NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
-            NSError* error = nil;
-            NSURL* compiled = [MLModel compileModelAtURL:url error:&error];
-            if (compiled == nil)
-                throw std::runtime_error("lucid.coreml: failed to compile " + path + ": " +
-                                         describe(error));
+            const bool owned = !is_compiled(path);
+            NSURL* compiled = owned ? compile_url(url, path) : url;
 
             MLModelConfiguration* config = [[MLModelConfiguration alloc] init];
             config.computeUnits = to_mlcompute(units);
@@ -261,8 +291,10 @@ std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits unit
                            }];
             dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
 
-            NSError* cleanup = nil;
-            [[NSFileManager defaultManager] removeItemAtURL:compiled error:&cleanup];
+            if (owned) {
+                NSError* cleanup = nil;
+                [[NSFileManager defaultManager] removeItemAtURL:compiled error:&cleanup];
+            }
 
             if (plan == nil)
                 throw std::runtime_error("lucid.coreml: could not plan " + path + ": " +

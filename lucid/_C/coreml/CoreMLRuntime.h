@@ -8,10 +8,20 @@
 // here, and none in the writer either.
 //
 // Core ML executes a *compiled* model (``.mlmodelc``), not the package
-// itself, so :func:`load_model` compiles on the way in.  Compilation is
-// the expensive step (hundreds of milliseconds for a real network) and
-// the compiled artifact is cached for the handle's lifetime, which is why
-// loading returns a handle rather than each prediction taking a path.
+// itself.  Compilation is the expensive step (hundreds of milliseconds for
+// a real network), which is why loading returns a handle rather than each
+// prediction taking a path.
+//
+// Where the compiled model lives matters more than what compiling it
+// costs.  Loading one makes Core ML specialise it into a bundle under the
+// user's caches — for a GPU segment a full copy of the weights — keyed by
+// the compiled model's *path and file identity*.  Opening the same
+// ``.mlmodelc`` again reuses that bundle; compiling the package again
+// lands at a fresh temporary path, so the bundle is written again and the
+// old one is never read.  :func:`compile_model` therefore hands the
+// compiled model to the caller (the Python layer keeps one per package
+// content), and :func:`load_model` / :func:`compute_plan` open a
+// ``.mlmodelc`` in place.
 
 #pragma once
 
@@ -37,7 +47,25 @@ enum class ComputeUnits : int {
     CpuAndNeuralEngine = 3,
 };
 
-// Compile and load the package at ``path``.
+// Compile the package at ``path`` and return where Core ML put the
+// ``.mlmodelc`` — a fresh directory in the temporary space every call.
+// The caller owns it: move it somewhere stable and open it there, or
+// remove it.
+//
+// Raises
+// ------
+// std::runtime_error
+//     Core ML could not compile the package; the message carries its own
+//     description.
+LUCID_API std::string compile_model(const std::string& path);
+
+// Load the model at ``path``.
+//
+// A path ending in ``.mlmodelc`` is an already compiled model: it is
+// opened where it is and never removed, so the bundle Core ML specialised
+// from it the last time is found again.  Anything else is a package,
+// compiled into a private temporary directory that the handle removes on
+// destruction.
 //
 // Raises
 // ------
@@ -116,7 +144,8 @@ struct OpPlacement {
 //
 // Backed by ``MLComputePlan`` (macOS 14.4+).  Returns an empty vector
 // when the platform is older, which callers must treat as "unknown"
-// rather than "not accelerated".
+// rather than "not accelerated".  ``path`` is a package, compiled for
+// the call and removed after it, or a ``.mlmodelc``, read in place.
 LUCID_API std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits units);
 
 // Forget everything a stateful model has accumulated.

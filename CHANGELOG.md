@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - index_add, index_copy, index_fill, index_put as methods
 
+- open a .mlmodelc in place, and compile without loading
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

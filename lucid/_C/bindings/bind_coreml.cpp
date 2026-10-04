@@ -508,7 +508,20 @@ void register_coreml(py::module_& m) {
         },
         py::arg("path"), py::arg("units") = lucid::coreml::ComputeUnits::All,
         "Per-operation device assignment as (op, device) pairs. Empty on macOS < 14.4, "
-        "which means unknown rather than unaccelerated.");
+        "which means unknown rather than unaccelerated. ``path`` is a package, compiled "
+        "for the call, or a .mlmodelc, read in place.");
+
+    cm.def(
+        "compile_model",
+        [](const std::string& path) {
+            py::gil_scoped_release unlocked;
+            return lucid::coreml::compile_model(path);
+        },
+        py::arg("path"),
+        "Compile a .mlpackage and return the .mlmodelc Core ML wrote, in its "
+        "temporary space. The caller owns it — Core ML keys the bundle it "
+        "specialises a loaded model into by this path, so keeping it and "
+        "opening it again is what lets that bundle be reused.");
 
     cm.def(
         "load_model",
@@ -526,8 +539,9 @@ void register_coreml(py::module_& m) {
         },
         py::arg("path"), py::arg("units") = lucid::coreml::ComputeUnits::All,
         py::arg("function_name") = "",
-        "Compile and load a .mlpackage. Compilation is the expensive step and is "
-        "done once per handle.");
+        "Load a model. A .mlmodelc is opened in place and left on disk; a "
+        ".mlpackage is compiled into a temporary directory the handle removes "
+        "when it is closed.");
 
     cm.attr("BLOB_INT8") = static_cast<int>(lucid::coreml::BlobDataType::Int8);
     cm.attr("BLOB_UINT8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8);
