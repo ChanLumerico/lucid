@@ -9,13 +9,13 @@
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
+#include "GraphBarrier.h"
 #include "Node.h"
 
 namespace py = pybind11;
@@ -82,23 +82,33 @@ struct ModuleHookTensorMeta {
 //     backward pass even when the barrier is visited from multiple edges.
 // full_hooks_ran : bool
 //     Same guard for the full-backward hook batch.
+// pass : std::uint64_t
+//     The :class:`BackwardPass` whose gradients the state holds.
 // input_arg_indices : std::vector<std::uint32_t>
 //     Maps each edge slot in :attr:`grad_inputs` back to its original
 //     positional argument index in the Python signature.
 // input_metas : std::vector<ModuleHookTensorMeta>
 //     Metadata for each gradient-receiving input edge, parallel to
 //     :attr:`grad_inputs`.
-// grad_inputs : std::vector<std::optional<Storage>>
-//     Per-edge incoming gradient buffers populated by the input-side
-//     barrier.  ``std::nullopt`` means no gradient arrived for that slot.
+// grad_inputs : std::vector<TensorImplPtr>
+//     Per-edge gradient reaching each input, summed over every use the
+//     module body made of it.  Null means no gradient arrived for that slot.
 // output_metas : std::vector<ModuleHookTensorMeta>
 //     Metadata for every output position (``size() == n_outputs``).
-// grad_outputs : std::vector<std::optional<Storage>>
-//     Gradient buffers accumulated at the output barrier, indexed by
-//     output position.
+// grad_outputs : std::vector<TensorImplPtr>
+//     Gradient reaching each output position, summed over every consumer
+//     of that output.
 // output_edge_indices : std::vector<std::uint32_t>
 //     For each edge of the output barrier, the output-position index it
 //     corresponds to in :attr:`grad_outputs`.
+//
+// A slot sums what reaches it, as the reference's input buffer does: a
+// module whose output feeds two consumers, or whose body reads an input
+// twice, receives one gradient per use, and the hooks — and everything
+// upstream — must see their sum.  Overwriting kept only the last one.
+//
+// The gradients are held as tensors in both modes: under ``create_graph``
+// they carry their graph, and the sums are graph ops.
 class ModuleBackwardHookState : public std::enable_shared_from_this<ModuleBackwardHookState> {
 public:
     // Construct fresh hook state for a module forward call.
@@ -115,19 +125,29 @@ public:
     //     barrier.
     ModuleBackwardHookState(std::size_t n_inputs, py::object pre_runner, py::object full_runner);
 
+    // Discard what an earlier backward pass left behind, if the running pass
+    // is a different one.  Called before every read or write of the slots.
+    void enter_pass();
+
+    // Forget every gradient and hook guard of the current pass — once the
+    // module's backward is complete, so the next pass starts empty and fires
+    // the hooks again.
+    void reset();
+
     py::object pre_runner;
     py::object full_runner;
     std::size_t n_inputs = 0;
     std::size_t n_outputs = 0;
     bool pre_hooks_ran = false;
     bool full_hooks_ran = false;
+    std::uint64_t pass = 0;
 
     std::vector<std::uint32_t> input_arg_indices;
     std::vector<ModuleHookTensorMeta> input_metas;
-    std::vector<std::optional<Storage>> grad_inputs;
+    std::vector<TensorImplPtr> grad_inputs;
 
     std::vector<ModuleHookTensorMeta> output_metas;
-    std::vector<std::optional<Storage>> grad_outputs;
+    std::vector<TensorImplPtr> grad_outputs;
     std::vector<std::uint32_t> output_edge_indices;
 };
 
@@ -148,15 +168,16 @@ public:
 // Notes
 // -----
 // Marked as a barrier (``is_barrier() == true``), which the engine uses to
-// switch from the fast ``apply()`` path to the staged barrier protocol.
-// The node does not modify gradients unless a registered hook explicitly
-// returns a replacement tuple.
+// switch from the fast ``apply()`` path to the staged barrier protocol, and
+// a :class:`GraphBarrier`, so ``create_graph`` delivers to it slot by slot
+// too.  The node does not modify gradients unless a registered hook
+// explicitly returns a replacement tuple.
 //
 // See Also
 // --------
 // :class:`ModuleInputHookNode` : sibling barrier on the input side.
 // :class:`ModuleBackwardHookState` : shared state container.
-class ModuleOutputHookNode : public Node {
+class ModuleOutputHookNode : public Node, public GraphBarrier {
 public:
     // Construct an output-side barrier bound to shared hook state.
     //
@@ -188,7 +209,7 @@ public:
     // A hook's ``None``, or a slot no gradient reached, is an empty storage.
     bool empty_grad_is_none() const noexcept override { return true; }
 
-    // Park a single incoming gradient into the shared state.
+    // Add an incoming gradient to what its output position holds.
     //
     // Parameters
     // ----------
@@ -197,7 +218,8 @@ public:
     //     are silently ignored to keep the engine robust against
     //     pruned graphs.
     // grad : Storage
-    //     Incoming gradient buffer.
+    //     Incoming gradient buffer.  Never added into in place: it may be
+    //     the very buffer another holder still reads.
     void accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) override;
 
     // Fire the pre-backward hooks and emit one ``Storage`` per outgoing
@@ -211,11 +233,24 @@ public:
     //     empty :class:`CpuStorage` placeholders.
     std::vector<Storage> apply_barrier() override;
 
+    // :meth:`accumulate_barrier_grad` for a ``create_graph`` pass: the sum is
+    // an ``add_op``, so it stays differentiable.
+    void accumulate_barrier_grad_for_graph(std::uint32_t input_nr, TensorImplPtr grad) override;
+
+    // :meth:`apply_barrier` for a ``create_graph`` pass: the hooks see the
+    // gradients with their graph, and a null entry is an edge no gradient
+    // reached.
+    std::vector<TensorImplPtr> apply_barrier_for_graph() override;
+
     // Graph label — ``"ModuleOutputHook"`` — for debug printing and profiler
     // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleOutputHook"; }
 
 private:
+    // Fire the pre-backward hooks — and the full ones when the module has no
+    // input that takes a gradient — once per pass.
+    void run_hooks();
+
     std::shared_ptr<ModuleBackwardHookState> state_;
 };
 
@@ -239,7 +274,7 @@ private:
 // See Also
 // --------
 // :class:`ModuleOutputHookNode` : sibling barrier on the output side.
-class ModuleInputHookNode : public Node {
+class ModuleInputHookNode : public Node, public GraphBarrier {
 public:
     // Construct an input-side barrier bound to shared hook state.
     //
@@ -269,7 +304,7 @@ public:
     // A hook's ``None``, or a slot no gradient reached, is an empty storage.
     bool empty_grad_is_none() const noexcept override { return true; }
 
-    // Park an incoming input gradient into the shared state.
+    // Add an incoming input gradient to what its slot holds.
     //
     // Parameters
     // ----------
@@ -277,10 +312,12 @@ public:
     //     Edge slot index (parallel to :attr:`ModuleBackwardHookState::grad_inputs`).
     //     Out-of-range values are ignored.
     // grad : Storage
-    //     Incoming gradient buffer.
+    //     Incoming gradient buffer.  Never added into in place.
     void accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) override;
 
     // Fire the full-backward hooks and emit one gradient per outgoing edge.
+    // The module's backward ends here, so the shared state is reset for the
+    // next pass.
     //
     // Returns
     // -------
@@ -290,11 +327,20 @@ public:
     //     slots become empty :class:`CpuStorage` placeholders.
     std::vector<Storage> apply_barrier() override;
 
+    // :meth:`accumulate_barrier_grad` for a ``create_graph`` pass.
+    void accumulate_barrier_grad_for_graph(std::uint32_t input_nr, TensorImplPtr grad) override;
+
+    // :meth:`apply_barrier` for a ``create_graph`` pass.
+    std::vector<TensorImplPtr> apply_barrier_for_graph() override;
+
     // Graph label — ``"ModuleInputHook"`` — for debug printing and
     // profiler traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleInputHook"; }
 
 private:
+    // Fire the full-backward hooks once per pass.
+    void run_hooks();
+
     std::shared_ptr<ModuleBackwardHookState> state_;
 };
 

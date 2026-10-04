@@ -120,6 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - grad by a barrier's output reads what reached its slot (CHA-112)
 
+- module backward hooks sum every gradient a slot gets (CHA-45)
+
 ### Changed
 
 - A refusal is catchable by its kind from either layer: ShapeMismatch and DeviceMismatch are also ValueError, DtypeMismatch also TypeError, and a new InvalidArgument (also ValueError) carries the engine's argument-value refusals — groups=0, dropout(p=1.5), bins=0 — which were bare LucidError. An axis or index out of range is IndexError throughout. Every class stays a LucidError, so a RuntimeError

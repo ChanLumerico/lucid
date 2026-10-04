@@ -22,6 +22,7 @@
 #include "../ops/gfunc/Gfunc.h"
 #include "AccumulateGrad.h"
 #include "FusionPass.h"
+#include "GraphBarrier.h"
 #include "Helpers.h"
 #include "Node.h"
 
@@ -134,6 +135,50 @@ std::vector<TensorImplPtr> keep_in_graph(std::vector<TensorImplPtr> grads,
     return grads;
 }
 
+// ── Graph-mode delivery ──────────────────────────────────────────────────────
+//
+// An ordinary node gets one pending gradient, the add_op sum of everything
+// routed to it.  A barrier that implements GraphBarrier takes its gradients
+// slot by slot instead, as eager backward hands them over — summing a hooked
+// module's two outputs into one tensor was wrong — and ``pending`` holds only
+// a placeholder that schedules it.
+
+void seed_for_graph(std::unordered_map<Node*, TensorImplPtr>& pending,
+                    const std::shared_ptr<TensorImpl>& root,
+                    TensorImplPtr seed) {
+    Node* node = root->grad_fn().get();
+    if (auto* barrier = graph_barrier_of(node)) {
+        barrier->accumulate_barrier_grad_for_graph(root->grad_output_nr(), std::move(seed));
+        pending.emplace(node, nullptr);
+        return;
+    }
+    pending.emplace(node, std::move(seed));
+}
+
+void route_for_graph(std::unordered_map<Node*, TensorImplPtr>& pending,
+                     const Edge& edge,
+                     const TensorImplPtr& grad) {
+    Node* next = edge.node.get();
+    if (next == nullptr || !grad)
+        return;
+    if (auto* barrier = graph_barrier_of(next)) {
+        barrier->accumulate_barrier_grad_for_graph(edge.input_nr, grad);
+        pending.emplace(next, nullptr);
+        return;
+    }
+    auto pit = pending.find(next);
+    if (pit == pending.end())
+        pending.emplace(next, grad);
+    else
+        pit->second = add_op(pit->second, grad);
+}
+
+std::vector<TensorImplPtr> apply_node_for_graph(Node& node, const TensorImplPtr& grad_in) {
+    if (auto* barrier = graph_barrier_of(&node))
+        return barrier->apply_barrier_for_graph();
+    return node.apply_for_graph(grad_in);
+}
+
 // Returns true when s carries no data (zero nbytes and null pointer/array).
 // Used to decide whether to synthesise a ones-valued grad_seed.
 bool storage_is_empty(const Storage& s) {
@@ -232,7 +277,7 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
     auto order = topo_order(root->grad_fn());
 
     std::unordered_map<Node*, TensorImplPtr> pending;
-    pending.emplace(root->grad_fn().get(), std::move(grad_seed));
+    seed_for_graph(pending, root, std::move(grad_seed));
 
     for (const auto& node : order) {
         auto it = pending.find(node.get());
@@ -251,7 +296,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
 
         // apply_for_graph throws NotImplementedError if the op doesn't support
         // graph mode — gives the user a clear, actionable message.
-        const auto input_grads = keep_in_graph(node->apply_for_graph(grad_in), node->next_edges());
+        const auto input_grads =
+            keep_in_graph(apply_node_for_graph(*node, grad_in), node->next_edges());
 
         if (!retain_graph) {
             node->release_saved();
@@ -259,16 +305,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         }
 
         const auto& edges = node->next_edges();
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-            auto next = edges[i].node;
-            if (!next || !input_grads[i])
-                continue;
-            auto pit = pending.find(next.get());
-            if (pit == pending.end())
-                pending.emplace(next.get(), input_grads[i]);
-            else
-                pit->second = add_op(pit->second, input_grads[i]);
-        }
+        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i)
+            route_for_graph(pending, edges[i], input_grads[i]);
     }
 
     if (!retain_graph)
@@ -282,6 +320,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     if (!root) {
         ErrorBuilder("Engine::backward").fail("root is null");
     }
+    // Barriers discard what an earlier pass left in them (GraphBarrier.h).
+    const BackwardPass pass;
 
     if (create_graph) {
         // create_graph=True implies retain_graph=True: the backward computation
@@ -548,6 +588,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
                                         bool create_graph) {
     if (!root)
         ErrorBuilder("Engine::grad").fail("root is null");
+    // Barriers discard what an earlier pass left in them (GraphBarrier.h).
+    const BackwardPass pass;
 
     const CaptureTargets targets = build_targets(inputs);
     std::vector<TensorImplPtr> results(inputs.size());
@@ -584,7 +626,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
 
         std::unordered_map<Node*, TensorImplPtr> pending;
         gather(root->grad_fn().get(), root->grad_output_nr(), seed_impl);
-        pending.emplace(root->grad_fn().get(), std::move(seed_impl));
+        seed_for_graph(pending, root, std::move(seed_impl));
 
         for (const auto& node : order) {
             auto it = pending.find(node.get());
@@ -613,19 +655,13 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             node->validate_versions();
             node->restore_saved_for_graph();
             const auto input_grads =
-                keep_in_graph(node->apply_for_graph(grad_in), node->next_edges());
+                keep_in_graph(apply_node_for_graph(*node, grad_in), node->next_edges());
 
             const auto& edges = node->next_edges();
             for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-                auto next = edges[i].node;
-                if (!next || !input_grads[i])
-                    continue;
-                gather(next.get(), edges[i].input_nr, input_grads[i]);
-                auto pit = pending.find(next.get());
-                if (pit == pending.end())
-                    pending.emplace(next.get(), input_grads[i]);
-                else
-                    pit->second = add_op(pit->second, input_grads[i]);
+                if (edges[i].node)
+                    gather(edges[i].node.get(), edges[i].input_nr, input_grads[i]);
+                route_for_graph(pending, edges[i], input_grads[i]);
             }
         }
         return results;
