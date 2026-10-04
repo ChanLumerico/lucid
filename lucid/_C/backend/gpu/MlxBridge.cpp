@@ -250,6 +250,23 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     // that goes with them.
     const auto want = to_mlx_dtype(dtype);
     ::mlx::core::array held = arr.dtype() == want ? std::move(arr) : ::mlx::core::astype(arr, want);
+    // An empty result is replaced by a fresh empty array, dropping the graph
+    // that produced it.  This works around an MLX bug: ``contiguous()`` over
+    // an empty ``matmul`` or ``fast::scaled_dot_product_attention`` result
+    // segfaults in ``Contiguous::eval_gpu`` — and this backend wraps almost
+    // every result as ``contiguous(op(...))``.  Minimal repro (MLX 0.32):
+    //
+    //     mx.eval(mx.contiguous(mx.matmul(mx.zeros((0, 4)), mx.zeros((4, 3)))))
+    //
+    // dies with SIGSEGV, while the same matmul without ``contiguous`` (and
+    // ``contiguous`` of a plain ``zeros((0, 3))``) evaluates.  In Lucid it
+    // killed the interpreter on a matmul gradient with an empty extent and
+    // on an attention with no queries.  An array with no elements is fully
+    // described by its shape and dtype, and nothing can be written into or
+    // read out of it, so the substitute is indistinguishable.  Costs one
+    // size comparison on every other result.
+    if (held.size() == 0)
+        held = ::mlx::core::zeros(held.shape(), held.dtype());
     GpuStorage out;
     out.dtype = dtype;
     out.nbytes = held.nbytes();

@@ -4507,12 +4507,15 @@ public:
                                       const int*,
                                       const int*,
                                       const IBackend::ConvTransposeNdOpts& opts,
-                                      const Shape&,
+                                      const Shape& out_shape,
                                       Dtype dt) override {
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gW = std::get<GpuStorage>(W);
         const auto& gb = std::get<GpuStorage>(b);
         const int N = opts.N;
+
+        if (gpu_conv_has_empty_operand(*gx.arr, *gW.arr, shape_numel(out_shape)))
+            return Storage{gpu::wrap_mlx_array(gpu_conv_bias_only(*gb.arr, out_shape), dt)};
 
         // PERF: contiguous before conv_transpose — same rationale as forward
         // conv path. See conv_nd_forward for the microbench data.
@@ -4564,6 +4567,9 @@ public:
         for (int i = 0; i < N; ++i)
             db_axes.push_back(2 + i);
         auto db = sum_widened(*gG.arr, db_axes, false);
+
+        if (gpu_conv_has_empty_operand(*gx.arr, *gW.arr, gG.arr->size()))
+            return gpu_conv_empty_grads(*gx.arr, *gW.arr, std::move(db), dt);
 
         // dx — the adjoint of a transposed convolution is the plain forward
         // convolution it is the data gradient of, with the same geometry.
@@ -5388,6 +5394,9 @@ public:
         std::vector<int> pv(opts.pad, opts.pad + N);
         std::vector<int> dv(opts.dilation, opts.dilation + N);
 
+        if (gpu_conv_has_empty_operand(*gx.arr, *gW.arr, shape_numel(out_shape)))
+            return Storage{gpu::wrap_mlx_array(gpu_conv_bias_only(*gb.arr, out_shape), dt)};
+
         // 1x1 POINTWISE fast-path: a stride-1, pad-0, dilation-1, groups-1, K=1
         // conv is exactly a per-position channel matmul. MLX conv_general is
         // slower for this degenerate kernel (esp. its weight-gradient at large
@@ -5480,6 +5489,9 @@ public:
         for (int i = 0; i < N; ++i)
             db_axes.push_back(2 + i);
         auto db = sum_widened(*gG.arr, db_axes, false);
+
+        if (gpu_conv_has_empty_operand(*gx.arr, *gW.arr, gG.arr->size()))
+            return gpu_conv_empty_grads(*gx.arr, *gW.arr, std::move(db), dt);
 
         // 1x1 POINTWISE fast-path (mirrors conv_nd_forward): dx = grad @ W and
         // dW = grad^T @ x are pure matmuls — faster than conv_general at large
@@ -5989,6 +6001,49 @@ private:
             out.sliced = true;
         }
         return out;
+    }
+
+    // ── Convolutions with nothing to convolve ─────────────────────────────
+    //
+    // MLX's rank-5 convolution dereferences an empty operand: a conv3d or
+    // conv_transpose3d with batch 0, no output channels or a zero spatial
+    // extent dies with SIGSEGV when it is evaluated (1-D and 2-D happen to
+    // survive).  None of those cases needs a convolution.  Every output
+    // element is the bias plus a sum over input channels and kernel taps,
+    // so an empty input-channel axis leaves the bias alone, and an empty
+    // output has nothing to compute.  Every gradient is a sum over output
+    // positions, so with none of them each is zero.  The four convolution
+    // entry points answer these cases here, for every rank.
+
+    // True when the input, the weight or the output (``out_numel``, the
+    // output of the forward or the incoming gradient of the backward) holds
+    // no elements.
+    static bool gpu_conv_has_empty_operand(const ::mlx::core::array& x,
+                                           const ::mlx::core::array& w,
+                                           std::size_t out_numel) {
+        return x.size() == 0 || w.size() == 0 || out_numel == 0;
+    }
+
+    // The forward of an empty convolution: the bias, broadcast over
+    // ``out_shape`` (channels on axis 1).  ``b`` always holds one value per
+    // output channel — the op passes zeros when the module has no bias.
+    static ::mlx::core::array gpu_conv_bias_only(const ::mlx::core::array& b,
+                                                 const Shape& out_shape) {
+        ::mlx::core::Shape b_brd(out_shape.size(), 1);
+        b_brd[1] = static_cast<::mlx::core::ShapeElem>(out_shape[1]);
+        return ::mlx::core::contiguous(::mlx::core::broadcast_to(::mlx::core::reshape(b, b_brd),
+                                                                 gpu::to_mlx_shape(out_shape)));
+    }
+
+    // ``{dx, dW, db}`` of an empty convolution: zeros shaped like the input
+    // and the weight, and ``db`` as already reduced from the gradient.
+    static std::vector<Storage> gpu_conv_empty_grads(const ::mlx::core::array& x,
+                                                     const ::mlx::core::array& w,
+                                                     ::mlx::core::array db,
+                                                     Dtype dt) {
+        return {Storage{gpu::wrap_mlx_array(::mlx::core::zeros_like(x), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::zeros_like(w), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
     }
 
     // ``mlx::core::conv_general`` over channel-aligned operands (see
