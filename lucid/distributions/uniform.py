@@ -7,6 +7,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
+    interval,
     real,
 )
 from lucid.distributions.distribution import Distribution
@@ -141,19 +142,32 @@ class Uniform(Distribution):
     def support(self) -> Constraint:  # type: ignore[override]
         """The support constraint of the Uniform distribution.
 
-        Returns the ``real`` constraint as a conservative fallback, because
-        the bounds may be arbitrary tensors and a precise interval constraint
-        would require tensor-aware bound tracking.
-
         Returns
         -------
         Constraint
-            The ``real`` constraint object.
+            ``interval(low, high)`` — the bounds are the parameter tensors,
+            so each batch member is held to its own interval.  Closed at
+            both ends, as in the reference framework, although
+            :meth:`log_prob` scores ``high`` itself as ``-inf``.
         """
-        # Bounds may be tensors — fall back to a generic real constraint
-        # rather than building an _Interval out of tensor bounds (which
-        # the simple ``check`` doesn't handle).
-        return real
+        return interval(self.low, self.high)
+
+    @override
+    def _validate_params(self) -> None:
+        """Check ``low`` and ``high`` against ``real``, then ``low < high``.
+
+        The ordering involves both parameters, so no entry of
+        ``arg_constraints`` can hold it; an empty or reversed interval has
+        no density at all.
+
+        Raises
+        ------
+        ValueError
+            If a bound is NaN, or ``low >= high`` anywhere in the batch.
+        """
+        super()._validate_params()
+        if not bool((self.low < self.high).all().item()):
+            raise ValueError("Uniform: `low` must be less than `high`")
 
     @override
     @property
