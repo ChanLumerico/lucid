@@ -2481,7 +2481,6 @@
     "edge::F.correct_count": "pass",
     "edge::F.cosine_embedding_loss": "pass",
     "edge::F.cosine_similarity": "pass",
-    "edge::F.ctc_loss": "pass",
     "edge::F.dropout": "pass",
     "edge::F.dropout1d": "pass",
     "edge::F.dropout2d": "pass",
