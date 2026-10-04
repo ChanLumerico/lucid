@@ -9,6 +9,11 @@ Each section names the defect it pins and was written to fail first:
   up-front permutation (wrong as soon as a later step swaps rows an earlier
   column of ``L`` reaches), ``ldl_factor`` left the input's upper triangle
   in ``LD``, and both pivot paths read their pivots through numpy (H4).
+* **CHA-146** (Python half) — ``qr``'s backward failed on a wide matrix,
+  ``matrix_power(·, 0)`` returned a CPU identity with no ``grad_fn`` and
+  ``matrix_power(a, 1)`` returned ``a`` itself, and ``cond`` refused a batch,
+  a singular matrix and an empty one.  ``det`` / ``slogdet`` at a singular
+  matrix are the engine half and not covered here.
 
 Values are compared with the reference framework through the ``ref``
 fixture on every device; gradients in float64 on the CPU, where the
@@ -412,3 +417,153 @@ def test_pivot_paths_run_without_numpy() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip().endswith("ok")
+
+
+# ── CHA-146: QR of a wide matrix differentiates ──────────────────────────────
+
+
+def _qr_loss(q: Any, r: Any, wq: Any, wr: Any, path: str) -> Any:
+    loss = 0.0
+    if path in ("Q", "both"):
+        loss = loss + (q * wq).sum()
+    if path in ("R", "both"):
+        loss = loss + (r * r * wr).sum()
+    return loss
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("shape", [(3, 5), (2, 2, 4), (1, 3)])
+@pytest.mark.parametrize("path", ["Q", "R", "both"])
+def test_wide_qr_gradient_matches_the_reference(
+    shape: tuple[int, ...], path: str, device: str, ref: Any
+) -> None:
+    rng = np.random.default_rng(sum(shape))
+    a = rng.standard_normal(shape).astype(_dtype(device))
+    k = shape[-2]
+    wq = rng.standard_normal(shape[:-1] + (k,)).astype(a.dtype)
+    wr = rng.standard_normal(shape[:-2] + (k, shape[-1])).astype(a.dtype)
+
+    x = lucid.tensor(a, device=device, requires_grad=True)
+    q, r = LA.qr(x)
+    weights = (lucid.tensor(wq, device=device), lucid.tensor(wr, device=device))
+    _qr_loss(q, r, *weights, path).backward()
+
+    t = ref.tensor(a, requires_grad=True)
+    rq, rr = ref.linalg.qr(t)
+    _qr_loss(rq, rr, ref.tensor(wq), ref.tensor(wr), path).backward()
+    # Same LAPACK factorization, same signs, so Q and R agree as they stand.
+    np.testing.assert_allclose(_np(r.detach()), rr.detach().numpy(), atol=1e-4)
+    np.testing.assert_allclose(
+        _np(x.grad), t.grad.numpy(), rtol=_rtol(device), atol=1e-4
+    )
+
+
+@pytest.mark.parametrize("output", [0, 1])
+def test_wide_qr_differentiates_twice(output: int) -> None:
+    rng = np.random.default_rng(5)
+    x = lucid.tensor(rng.standard_normal((3, 5)), requires_grad=True)
+    w = lucid.tensor(rng.standard_normal((3, 3) if output == 0 else (3, 5)))
+    assert lucid.autograd.gradcheck(lambda t: (LA.qr(t)[output] * w).sum(), (x,))
+    assert lucid.autograd.gradgradcheck(
+        lambda t: (LA.qr(t)[output] ** 2 * w).sum(), (x,)
+    )
+
+
+# ── CHA-146: matrix_power at 0 and 1 ─────────────────────────────────────────
+
+
+def test_matrix_power_zero_is_a_fresh_identity_on_the_input_device(
+    device: str,
+) -> None:
+    x = lucid.rand(2, 3, 3, device=device, requires_grad=True)
+    y = LA.matrix_power(x, 0)
+    assert y.device == x.device
+    np.testing.assert_array_equal(
+        _np(y.detach()), np.broadcast_to(np.eye(3), (2, 3, 3))
+    )
+    assert y.grad_fn is not None
+    (y * 3).sum().backward()
+    np.testing.assert_array_equal(_np(x.grad), np.zeros((2, 3, 3)))
+    # Downstream ops on the input's device no longer meet a CPU tensor.
+    _ = y + x
+
+
+def test_matrix_power_one_is_a_copy(device: str) -> None:
+    a = lucid.rand(2, 2, device=device)
+    before = _np(a).copy()
+    b = LA.matrix_power(a, 1)
+    b.add_(1.0)
+    np.testing.assert_array_equal(_np(a), before)
+    np.testing.assert_array_equal(_np(b), before + 1.0)
+
+
+def test_matrix_power_one_keeps_the_gradient() -> None:
+    x = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    (LA.matrix_power(x, 1) * 2).sum().backward()
+    np.testing.assert_array_equal(_np(x.grad), np.full((2, 2), 2.0))
+
+
+# ── CHA-146: cond on a batch, a singular matrix and an empty one ─────────────
+
+_ORDERS = [None, 2, -2, 1, -1, float("inf"), float("-inf"), "fro", "nuc"]
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("p", _ORDERS, ids=str)
+def test_cond_takes_a_batch(p: Any, device: str, ref: Any) -> None:
+    a = np.random.default_rng(6).standard_normal((2, 3, 4, 4)).astype(np.float32)
+    got = LA.cond(lucid.tensor(a, device=device), p)
+    want = ref.linalg.cond(ref.tensor(a), p).numpy()
+    assert tuple(got.shape) == want.shape == (2, 3)
+    np.testing.assert_allclose(_np(got), want, rtol=1e-3 if device == "metal" else 1e-4)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("p", _ORDERS, ids=str)
+def test_cond_of_a_singular_matrix(p: Any, device: str, ref: Any) -> None:
+    """Infinite under the inverse-based orders, rather than an error; the
+    singular-value orders are a ratio of what the SVD found."""
+    a = np.stack([np.asarray(_SINGULAR, np.float32), np.eye(2, dtype=np.float32)])
+    got = _np(LA.cond(lucid.tensor(a, device=device), p))
+    want = ref.linalg.cond(ref.tensor(a), p).numpy()
+    np.testing.assert_allclose(got, want, rtol=1e-3)
+    if p in (1, -1, float("inf"), float("-inf"), "fro"):
+        assert got[0] == np.inf and np.isfinite(got[1])
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("p", [None, 1, "fro"], ids=str)
+def test_cond_of_a_zero_matrix(p: Any, device: str, ref: Any) -> None:
+    got = _np(LA.cond(lucid.zeros(2, 2, device=device), p))
+    want = ref.linalg.cond(ref.zeros(2, 2), p).numpy()
+    np.testing.assert_array_equal(got, want)  # nan for the SVD ratio, else inf
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("shape", [(0, 0), (2, 0, 0), (3, 0)])
+def test_cond_of_an_empty_matrix_is_zero(
+    shape: tuple[int, ...], device: str, ref: Any
+) -> None:
+    got = LA.cond(lucid.zeros(*shape, device=device))
+    want = ref.linalg.cond(ref.zeros(*shape)).numpy()
+    assert tuple(got.shape) == want.shape
+    np.testing.assert_array_equal(_np(got), want)
+
+
+@pytest.mark.parametrize(
+    "args,match",
+    [
+        ((lucid.ones(2, 3), "fro"), "square"),
+        ((lucid.ones(2, 3), 1), "square"),
+        ((lucid.eye(2), 3), "unsupported order"),
+        ((lucid.ones(3), None), "at least 2"),
+    ],
+)
+def test_cond_refuses_what_it_cannot_compute(args: tuple[Any, ...], match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        LA.cond(*args)
+
+
+def test_cond_rectangular_spectral() -> None:
+    a = np.random.default_rng(8).standard_normal((3, 5))
+    np.testing.assert_allclose(_np(LA.cond(lucid.tensor(a))), np.linalg.cond(a))

@@ -909,6 +909,55 @@ class _QRRGrad(_AutogradFunction):
         )
 
 
+def _copyltu(M: Tensor) -> Tensor:
+    """Mirror the strict lower triangle of ``M`` upward, keeping its diagonal.
+
+    ``tril(M, -1) + tril(M, -1)ᵀ + diag(M)`` — not ``sym(M)``; the two agree
+    only for a symmetric ``M``.
+    """
+    strict_lower = lucid.tril(M, -1)
+    return (
+        strict_lower + strict_lower.mT + lucid.diag_embed(M.diagonal(dim1=-2, dim2=-1))
+    )
+
+
+def _qr_wide_backward(
+    A: Tensor, Q: Tensor, R: Tensor, G_Q: Tensor | None, G_R: Tensor | None
+) -> Tensor:
+    r"""``dA`` for the reduced QR of a wide ``A`` (``m < n``).
+
+    Split ``A = [X | Y]`` and ``R = [U | V]`` after the first ``m``
+    columns: ``X = Q U`` is a square QR and ``V = Qᵀ Y``.  ``V``'s gradient
+    reaches ``Y`` as ``Q G_V`` and ``Q`` as ``Y G_Vᵀ``; what remains is the
+    square case for ``X``:
+
+    .. math::
+
+        G_X = \big(G_Q' + Q\,\mathrm{copyltu}(U G_U^\top - G_Q'^\top Q)\big)
+              U^{-\top}, \qquad G_Q' = G_Q + Y G_V^\top.
+
+    The tall / square formula needed ``R`` square to invert it, so a wide
+    matrix's backward failed on a shape mismatch.  Either cotangent may be
+    absent — each output's Function supplies its own and the
+    contributions add up in ``A.grad``.
+    """
+    m = int(Q.shape[-1])
+    U = R[..., :m]
+    gQ = G_Q if G_Q is not None else lucid.zeros_like(Q)
+    gY: Tensor | None = None
+    if G_R is not None:
+        gV = G_R[..., m:]
+        gQ = gQ + A[..., m:] @ gV.mT
+        M = U @ G_R[..., :m].mT - gQ.mT @ Q
+        gY = Q @ gV
+    else:
+        M = -(gQ.mT @ Q)
+    gX = solve_triangular(U, (gQ + Q @ _copyltu(M)).mT, upper=True).mT
+    if gY is None:
+        gY = lucid.zeros_like(A[..., m:])
+    return lucid.cat([gX, gY], -1)
+
+
 @final
 class _QRRGradWithA(_AutogradFunction):
     """Backward: R contribution to dA via Cholesky of A^T A."""
@@ -918,9 +967,11 @@ class _QRRGradWithA(_AutogradFunction):
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
+        q_impl: _C_engine.TensorImpl,
         r_impl: _C_engine.TensorImpl,
     ) -> Tensor:
         ctx.A_impl = _unwrap(A)  # store A as TensorImpl
+        ctx.q_impl = q_impl
         ctx.r_impl = r_impl
         return _wrap(r_impl)
 
@@ -929,6 +980,9 @@ class _QRRGradWithA(_AutogradFunction):
     def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]
         A = _wrap(ctx.A_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        if int(A.shape[-2]) < int(A.shape[-1]):
+            Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # TensorImpl at runtime
+            return _qr_wide_backward(A, Q, R, None, G_R)
         n = int(R.shape[-1])
         # D = sign matrix of R diagonal
         diag_R = R.diagonal(dim1=-2, dim2=-1)
@@ -967,7 +1021,7 @@ class _QRQGrad(_AutogradFunction):
     copyltu is *not* the same as sym(M) = (M + M^T)/2 — they agree only for
     symmetric M, and Q^T G_Q is not symmetric in general.  This form is exact
     for square and tall (m >= n) reduced QR, so no separate off-range term is
-    needed.
+    needed; a wide input (m < n) goes through ``_qr_wide_backward``.
     """
 
     @override
@@ -978,6 +1032,7 @@ class _QRQGrad(_AutogradFunction):
         q_impl: _C_engine.TensorImpl,
         r_impl: _C_engine.TensorImpl,
     ) -> Tensor:
+        ctx.A_impl = _unwrap(A)
         ctx.q_impl = q_impl
         ctx.r_impl = r_impl
         return _wrap(q_impl)
@@ -987,15 +1042,12 @@ class _QRQGrad(_AutogradFunction):
     def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:  # type: ignore[override]
         Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        if int(Q.shape[-1]) < int(R.shape[-1]):
+            A = _wrap(ctx.A_impl)  # type: ignore[arg-type]  # TensorImpl at runtime
+            return _qr_wide_backward(A, Q, R, G_Q, None)
         # M = -G_Q^T Q, then mirror its strict lower triangle upward.
         M = -(G_Q.mT @ Q)  # n×n
-        strict_lower = lucid.tril(M, -1)
-        copyltu = (
-            strict_lower
-            + strict_lower.mT
-            + lucid.diag_embed(M.diagonal(dim1=-2, dim2=-1))
-        )
-        numerator = G_Q + Q @ copyltu  # m×n
+        numerator = G_Q + Q @ _copyltu(M)  # m×n
         return solve_triangular(R, numerator.mT, upper=True).mT
 
 
@@ -1040,7 +1092,10 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     convention) — the factorization is unique only up to a diagonal
     sign matrix.  Backward routes :math:`R` through a Cholesky of
     :math:`A^\top A` (sign-robust) and :math:`Q` through the
-    Stiefel-manifold tangent projection.
+    Stiefel-manifold tangent projection.  A wide input
+    (:math:`m < n`) splits as :math:`A = [X \mid Y]`, :math:`R = [U \mid
+    V]`: :math:`X = QU` is differentiated as a square QR and
+    :math:`V = Q^\top Y` carries the rest.
 
     Examples
     --------
@@ -1062,8 +1117,36 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     if not _C_engine.grad_enabled() or not x.requires_grad:
         return _wrap(q_impl), _wrap(r_impl)
     Q = _QRQGrad.apply(x, q_impl, r_impl)
-    R = _QRRGradWithA.apply(x, r_impl)
+    R = _QRRGradWithA.apply(x, q_impl, r_impl)
     return Q, R  # type: ignore[return-value]
+
+
+@final
+class _MatrixPowerZero(_AutogradFunction):
+    """``A⁰ = I`` — a fresh identity per matrix, on ``A``'s graph.
+
+    The identity was built without a device, so a Metal input got a CPU
+    answer and the next op raised DeviceMismatch; and it had no
+    ``grad_fn``, so a loss through it could not be backpropagated at all.
+    Its gradient is zero — the identity does not depend on ``A`` — which
+    is what this node hands back.
+    """
+
+    @override
+    @staticmethod
+    def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]
+        shape = tuple(int(s) for s in x.shape)
+        eye = lucid.eye(shape[-1], dtype=x.dtype, device=x.device)
+        if len(shape) == 2:
+            return eye
+        # A fresh identity per batch element, writable as the reference's
+        # is — broadcast_to alone would be a read-only view of one.
+        return lucid.broadcast_to(eye, shape).contiguous()
+
+    @override
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]
+        return lucid.zeros_like(grad_out)
 
 
 def matrix_power(x: Tensor, n: int) -> Tensor:
@@ -1100,6 +1183,10 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     :func:`inv` so autograd flows naturally — the engine
     ``matrix_power_op`` is not differentiable.
 
+    The result is always a new tensor on ``x``'s device: ``n = 0`` gives
+    an identity per matrix (with a zero gradient) and ``n = 1`` a copy
+    of ``x``, never ``x`` itself.
+
     Examples
     --------
     >>> import lucid
@@ -1118,18 +1205,14 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
         )
 
     if n == 0:
-        # Identity broadcast to the input's batch shape.
-        eye_2d: Tensor = lucid.eye(int(sh[-1]), dtype=x.dtype)
-        if len(sh) == 2:
-            return eye_2d
-        # A fresh identity per batch element, writable as the reference's
-        # is — broadcast_to alone would be a read-only view of one.
-        return lucid.broadcast_to(eye_2d, tuple(sh)).contiguous()
+        return cast(Tensor, _MatrixPowerZero.apply(x))
 
     base: Tensor = cast(Tensor, inv(x)) if n < 0 else x
     exponent: int = -n if n < 0 else n
     if exponent == 1:
-        return base
+        # A new tensor, never the argument itself: handing ``x`` back made
+        # ``matrix_power(a, 1).add_(1)`` write into ``a``.
+        return base.clone() if base is x else base
 
     # Standard binary exponentiation: result starts at base if the lowest
     # bit is set, otherwise it gets multiplied in on the first set bit.
@@ -1891,6 +1974,19 @@ def matrix_rank(
     return _wrap(_C_engine.full([], float(rank), _C_engine.I64, _unwrap(A).device))
 
 
+_COND_ORDERS: tuple[int | float | str | None, ...] = (
+    None,
+    2,
+    -2,
+    1,
+    -1,
+    float("inf"),
+    float("-inf"),
+    "fro",
+    "nuc",
+)
+
+
 def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
     r"""Compute the condition number of a matrix.
 
@@ -1915,21 +2011,34 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
     A : Tensor
         Input matrix of shape ``(*, m, n)``.
     p : int, float, str or None, optional
-        Norm order.  ``None`` (default) and ``2`` use the spectral
-        norm via SVD; ``-2`` returns the reciprocal :math:`\sigma_{\min}
-        / \sigma_{\max}`.  Other orders dispatch to :func:`norm`.
+        Norm order: ``None`` (default) or ``2`` for the spectral norm,
+        ``-2`` for its reciprocal :math:`\sigma_{\min} / \sigma_{\max}`,
+        ``"nuc"``, or one of the :func:`matrix_norm` orders ``"fro"``,
+        ``1``, ``-1``, ``inf``, ``-inf``.
 
     Returns
     -------
     Tensor
         Condition number, shape ``(*,)``.
 
+    Raises
+    ------
+    ValueError
+        For an unknown ``p``, an input with fewer than two dimensions, or a
+        non-square input under any order but :math:`\pm 2`.
+
     Notes
     -----
     A condition number near :math:`1/\varepsilon_{\mathrm{mach}}`
     indicates numerical singularity.  Non-spectral orders require an
-    explicit :func:`inv`, so prefer ``p = 2`` for rank-deficient or
+    explicit inverse, so prefer ``p = 2`` for rank-deficient or
     rectangular matrices.
+
+    The spectral orders and ``"nuc"`` are read off the singular values;
+    the others are :math:`\|A\|_p \|A^{-1}\|_p` with the inverse from
+    :func:`inv_ex`, so a singular matrix has condition number
+    :math:`\infty` rather than an error, each matrix of a batch on its
+    own.  A matrix with no entries has condition number ``0``.
 
     Examples
     --------
@@ -1937,25 +2046,53 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
     >>> from lucid.linalg import cond
     >>> cond(lucid.tensor([[1.0, 0.0], [0.0, 1e-6]]))
     tensor(1e+06)
+    >>> cond(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]), "fro")
+    tensor(inf)
     """
-    if p is None or p == 2:
-        _, S, _ = svd(A)
-        S_impl = _unwrap(S)
-        smax = _C_engine.max(S_impl, [-1], False)
-        smin = _C_engine.min(S_impl, [-1], False)
-        return _wrap(_C_engine.div(smax, smin))
-    if p == -2:
-        _, S, _ = svd(A)
-        S_impl = _unwrap(S)
-        smax = _C_engine.max(S_impl, [-1], False)
-        smin = _C_engine.min(S_impl, [-1], False)
-        return _wrap(_C_engine.div(smin, smax))
-    return _wrap(
-        _C_engine.mul(
-            _unwrap(norm(A, ord=p)),
-            _unwrap(norm(inv(A), ord=p)),  # type: ignore[arg-type]
+    if p not in _COND_ORDERS:
+        raise ValueError(
+            f"cond: unsupported order p={p!r}; expected None, ±1, ±2, ±inf, "
+            f"'fro' or 'nuc'"
         )
-    )
+    if A.ndim < 2:
+        raise ValueError(
+            f"cond: A must have at least 2 dimensions, got shape {tuple(A.shape)}"
+        )
+    square = A.shape[-1] == A.shape[-2]
+    if isinstance(p, str) and not square:
+        raise ValueError(
+            f"cond(p={p!r}): A must be a square matrix or a batch of them, got "
+            f"shape {tuple(A.shape)}"
+        )
+    if A.numel() == 0:
+        # No entries, no singular values to compare: 0, as the reference
+        # answers — the extreme-value reductions below have no identity and
+        # refused an empty axis.
+        return lucid.zeros(tuple(A.shape[:-2]), dtype=A.dtype, device=A.device)
+    if p is None or p in (2, -2):
+        _, S, _ = svd(A)
+        S_impl = _unwrap(S)
+        smax = _C_engine.max(S_impl, [-1], False)
+        smin = _C_engine.min(S_impl, [-1], False)
+        ratio = (smin, smax) if p == -2 else (smax, smin)
+        return _wrap(_C_engine.div(*ratio))
+    if p == "nuc":
+        _, S, _ = svd(A)
+        return S.sum(dim=-1) * (1.0 / S).sum(dim=-1)
+    if not square:
+        raise ValueError(
+            f"cond(p={p!r}): A must be a square matrix or a batch of them, got "
+            f"shape {tuple(A.shape)}"
+        )
+    # A singular matrix has no inverse; its norm is taken as infinite, and
+    # 0·∞ (a zero matrix) counts as infinite too.  inv_ex judges each matrix
+    # of a batch on its own — and never runs Metal's inverse on a singular
+    # one, which aborts the process.
+    Ainv, info = inv_ex(A)
+    failed = (info != 0).reshape(*tuple(info.shape), 1, 1)
+    Ainv = lucid.where(failed, float("inf"), Ainv)
+    out = matrix_norm(A, ord=p) * matrix_norm(Ainv, ord=p)
+    return lucid.where(lucid.isnan(out), float("inf"), out)
 
 
 def multi_dot(tensors: list[Tensor]) -> Tensor:
