@@ -17,6 +17,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid.test._fixtures.devices import metal_available
+from lucid.test.unit.nn.test_loss_boundary_validation import losses_with, valid_call
 
 _needs_metal = pytest.mark.skipif(not metal_available(), reason="needs Metal")
 
@@ -736,49 +737,31 @@ class TestGaussianNLLVariance:
 # ── CHA-94 (a) ─────────────────────────────────────────────────────────────
 
 
-def _reduction_cases() -> dict[str, object]:
-    """Each loss that reduced through the shared helper, called with a
-    reduction string it does not know."""
-    a, b, c = lucid.randn(3, 4), lucid.randn(3, 4), lucid.randn(3, 4)
-    s1, s2, ones = lucid.randn(3), lucid.randn(3), lucid.ones(3)
-    idx = lucid.tensor([0, 2, 1])
-    lp = F.log_softmax(lucid.randn(5, 1, 4), dim=2)
-    return {
-        "triplet_margin": lambda r: F.triplet_margin_loss(a, b, c, reduction=r),
-        "cosine_embedding": lambda r: F.cosine_embedding_loss(a, b, ones, reduction=r),
-        "margin_ranking": lambda r: F.margin_ranking_loss(s1, s2, ones, reduction=r),
-        "hinge_embedding": lambda r: F.hinge_embedding_loss(s1, ones, reduction=r),
-        "poisson_nll": lambda r: F.poisson_nll_loss(s1, ones, reduction=r),
-        "gaussian_nll": lambda r: F.gaussian_nll_loss(s1, s2, ones, reduction=r),
-        "multi_margin": lambda r: F.multi_margin_loss(a, idx, reduction=r),
-        "multilabel_margin": lambda r: F.multilabel_margin_loss(
-            a, lucid.tensor([[0, -1, 0, 0]] * 3), reduction=r
-        ),
-        "ctc": lambda r: F.ctc_loss(lp, lucid.tensor([[1, 2]]), [5], [2], reduction=r),
-        "margin_ranking_module": lambda r: nn.MarginRankingLoss(reduction=r)(
-            s1, s2, ones
-        ),
-    }
-
-
 class TestAnUnknownReductionIsRefused:
     """Nine losses treated an unknown ``reduction`` as ``"none"``.
 
     ``reduction="avg"`` returned the unreduced tensor; the reference, and
-    Lucid's own ``l1_loss`` and ``binary_cross_entropy``, raise.
+    Lucid's own ``l1_loss`` and ``binary_cross_entropy``, raise.  The
+    losses are found by introspection — every ``nn.functional`` function
+    with a ``reduction`` parameter — so a new one is covered the day it is
+    exported.  ``test_loss_boundary_validation.py`` holds the full table of
+    bad arguments (and checks that no op runs before the refusal).
     """
 
-    @pytest.mark.parametrize("name", list(_reduction_cases()))
-    def test_raises_value_error(self, name: str) -> None:
-        fn = _reduction_cases()[name]
+    @pytest.mark.parametrize("name", losses_with("reduction"))
+    def test_raises_value_error(self, name: str, device: str) -> None:
         with pytest.raises(ValueError, match="reduction"):
-            fn("avg")  # type: ignore[operator]
+            getattr(F, name)(**valid_call(name, device), reduction="avg")
 
-    @pytest.mark.parametrize("name", list(_reduction_cases()))
-    def test_the_known_ones_still_work(self, name: str) -> None:
-        fn = _reduction_cases()[name]
+    @pytest.mark.parametrize("name", losses_with("reduction"))
+    def test_the_known_ones_still_work(self, name: str, device: str) -> None:
         for reduction in ("none", "mean", "sum"):
-            fn(reduction)  # type: ignore[operator]
+            getattr(F, name)(**valid_call(name, device), reduction=reduction)
+
+    def test_a_module_refuses_it_through_its_function(self) -> None:
+        s1, s2, ones = lucid.randn(3), lucid.randn(3), lucid.ones(3)
+        with pytest.raises(ValueError, match="reduction"):
+            nn.MarginRankingLoss(reduction="avg")(s1, s2, ones)  # type: ignore[arg-type]
 
 
 # ── CHA-94 (b) ─────────────────────────────────────────────────────────────
