@@ -5962,6 +5962,7 @@ public:
             auto* v_p = reinterpret_cast<float*>(vectors_ptr.get());
             std::vector<float> wr(n), wi(n), vr(per_mat);
             for (std::int64_t b = 0; b < batch; ++b) {
+                require_finite_eig(in_p + b * per_mat, per_mat);
                 cpu::lapack_eig_f32(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
                 check_lapack_info(info, "eig");
                 unpack_eig<float>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
@@ -5973,6 +5974,7 @@ public:
             auto* v_p = reinterpret_cast<double*>(vectors_ptr.get());
             std::vector<double> wr(n), wi(n), vr(per_mat);
             for (std::int64_t b = 0; b < batch; ++b) {
+                require_finite_eig(in_p + b * per_mat, per_mat);
                 cpu::lapack_eig_f64(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
                 check_lapack_info(info, "eig");
                 unpack_eig<double>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
@@ -12252,6 +12254,17 @@ private:
     template <typename T>
     static void fill_nan(T* p, std::size_t n) {
         std::fill(p, p + n, std::numeric_limits<T>::quiet_NaN());
+    }
+
+    // geev has no answer for a non-finite matrix: its balancing step turns
+    // the NaN into an illegal argument for the Hessenberg solver (and the
+    // Fortran runtime prints that to file descriptor 2).  The reference
+    // raises for it too, so this raises before LAPACK is reached, with the
+    // message the Metal stream uses.
+    template <typename T>
+    static void require_finite_eig(const T* p, std::size_t n) {
+        if (!all_finite(p, n))
+            ErrorBuilder("eig").fail("input should not contain infs or NaNs");
     }
 
     template <typename T>

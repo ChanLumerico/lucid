@@ -2722,18 +2722,40 @@ public:
     }
 
     // Dense matrix inverse $A^{-1}$ via the MLX CPU linalg stream.
+    //
+    // Built from MLX's LU factors rather than ``linalg::inv``, which throws
+    // from the CPU stream's worker thread on a singular matrix and so
+    // aborts the process — see ``gpu_lu_inverse``.  A singular input raises
+    // the same ``LucidError`` the CPU stream does.
     Storage linalg_inv(const Storage& a, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = ::mlx::core::linalg::inv(*ga.arr, k_linalg_stream);
+        auto out = gpu_lu_inverse(*ga.arr, "inv");
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
     // Solve the linear system $A x = b$ for ``x``.  CPU linalg stream.
-    Storage linalg_solve(
-        const Storage& a, const Storage& b, const Shape&, const Shape&, Dtype dt) override {
+    //
+    // ``x = A^{-1} b`` with the inverse from ``gpu_lu_inverse``:
+    // ``linalg::solve`` inverts the triangular factors with the same
+    // throwing routine, so a singular ``A`` aborted the process here too.
+    // MLX's own solve is a product with explicit triangular inverses, so
+    // this is the same arithmetic in a different order, not a weaker one.
+    Storage linalg_solve(const Storage& a,
+                         const Storage& b,
+                         const Shape& a_shape,
+                         const Shape& b_shape,
+                         Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gb = std::get<GpuStorage>(b);
-        auto out = ::mlx::core::linalg::solve(*ga.arr, *gb.arr, k_linalg_stream);
+        auto a_inv = gpu_lu_inverse(*ga.arr, "solve");
+        // A right-hand side one rank below A is a (batch of) vector(s).
+        const bool b_is_vec = (b_shape.size() + 1 == a_shape.size());
+        ::mlx::core::array out =
+            b_is_vec ? ::mlx::core::squeeze(
+                           ::mlx::core::matmul(a_inv, ::mlx::core::expand_dims(*gb.arr, -1),
+                                               k_linalg_stream),
+                           -1, k_linalg_stream)
+                     : ::mlx::core::matmul(a_inv, *gb.arr, k_linalg_stream);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -2749,7 +2771,7 @@ public:
             return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(eye), dt)};
         }
         const int reps = std::abs(power);
-        auto base = (power < 0) ? ::mlx::core::linalg::inv(*ga.arr, k_linalg_stream) : *ga.arr;
+        auto base = (power < 0) ? gpu_lu_inverse(*ga.arr, "matrix_power") : *ga.arr;
         ::mlx::core::array result = base;
         for (int i = 1; i < reps; ++i)
             result = ::mlx::core::matmul(result, base);
@@ -2825,6 +2847,10 @@ public:
     StoragePair
     linalg_eig(const Storage& a, const Shape&, const Shape&, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
+        // LAPACK's geev rejects a NaN as an illegal argument, and MLX throws
+        // that from its worker thread, which aborts the process.  Checked
+        // here instead, with the CPU stream's error.
+        gpu_require_finite(*ga.arr, "eig");
         auto [w, v] = ::mlx::core::linalg::eig(*ga.arr, k_linalg_stream);
         // MLX returns complex64 here, and tagging it with the real input
         // dtype used to be enough to lose it: since ``wrap_mlx_array``
@@ -5919,6 +5945,68 @@ private:
                                             const ::mlx::core::array& a) {
         const ::mlx::core::array nan(std::numeric_limits<float>::quiet_NaN(), a.dtype());
         return ::mlx::core::where(bad, nan, a, k_linalg_stream);
+    }
+
+    // Raise, the way the CPU stream does, when ``a`` holds a NaN or an
+    // infinity.  Costs one host round trip.
+    static void gpu_require_finite(const ::mlx::core::array& a, const char* op) {
+        auto finite =
+            ::mlx::core::all(::mlx::core::isfinite(a, k_linalg_stream), false, k_linalg_stream);
+        finite.eval();
+        MemoryTracker::track_host_sync(finite.nbytes());
+        if (!finite.item<bool>())
+            ErrorBuilder(op).fail("input should not contain infs or NaNs");
+    }
+
+    // $A^{-1}$ for a batch of square matrices, from MLX's LU factors.
+    //
+    // ``linalg::lu`` reports a zero pivot by leaving it in ``U`` rather than
+    // by throwing, so the pivots are read back and a singular matrix raises
+    // here — with the CPU stream's message, ``info`` being the 1-based
+    // index of the first zero pivot, as LAPACK numbers it.  Only then are
+    // the factors inverted, and ``tri_inv`` fails on nothing but an exactly
+    // zero diagonal: ``U``'s was just checked, ``L``'s is all ones.  (A
+    // NaN pivot is not zero; it propagates into a NaN inverse, which is
+    // what LAPACK's own ``getri`` returns for it.)
+    //
+    // MLX's ``lu`` gives ``A = L[P] U`` with ``P`` a row-index vector, so
+    // $A^{-1} = U^{-1} L^{-1} P^T$, whose column ``j`` is column ``P[j]``
+    // of $U^{-1} L^{-1}$.
+    static ::mlx::core::array gpu_lu_inverse(const ::mlx::core::array& a, const char* op) {
+        auto factors = ::mlx::core::linalg::lu(a, k_linalg_stream);
+        if (factors.size() < 3)
+            ErrorBuilder(op).fail("lu returned fewer than 3 factors");
+        const auto& p = factors[0];
+        const auto& l = factors[1];
+        const auto& u = factors[2];
+
+        auto pivots = ::mlx::core::diagonal(u, 0, -2, -1, k_linalg_stream);
+        auto zero =
+            ::mlx::core::equal(pivots, ::mlx::core::array(0.0f, pivots.dtype()), k_linalg_stream);
+        auto any_zero = ::mlx::core::any(zero, false, k_linalg_stream);
+        any_zero.eval();
+        MemoryTracker::track_host_sync(any_zero.nbytes());
+        if (any_zero.item<bool>()) {
+            auto flags = ::mlx::core::contiguous(zero, false, k_linalg_stream);
+            flags.eval();
+            MemoryTracker::track_host_sync(flags.nbytes());
+            const std::size_t n = static_cast<std::size_t>(pivots.shape(-1));
+            const bool* f = flags.data<bool>();
+            std::size_t first = 0;
+            while (first < flags.size() && !f[first])
+                ++first;
+            ErrorBuilder(op).fail(
+                "LAPACK numerical failure (info=" + std::to_string(first % n + 1) + ")");
+        }
+
+        auto u_inv = ::mlx::core::linalg::tri_inv(u, /*upper=*/true, k_linalg_stream);
+        auto l_inv = ::mlx::core::linalg::tri_inv(l, /*upper=*/false, k_linalg_stream);
+        auto m = ::mlx::core::matmul(u_inv, l_inv, k_linalg_stream);
+        auto cols = ::mlx::core::broadcast_to(
+            ::mlx::core::expand_dims(::mlx::core::astype(p, ::mlx::core::int32, k_linalg_stream),
+                                     -2, k_linalg_stream),
+            m.shape(), k_linalg_stream);
+        return ::mlx::core::take_along_axis(m, cols, -1, k_linalg_stream);
     }
 
     // Builds a permutation for NCHW → NHWC transpose: [0, 2,..,N+1, 1].
