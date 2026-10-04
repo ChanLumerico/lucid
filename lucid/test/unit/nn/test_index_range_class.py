@@ -37,6 +37,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -85,6 +86,7 @@ GUARD_READS = frozenset(
 POISON = "poison"  # the bad sample's loss is NaN, nothing read back
 ZERO_ROW = "zero-row"  # one_hot's row is all zeros, nothing read back
 READ = "read"  # read on the host and refused, as on the CPU
+REFUSE = "refuse"  # a bad parameter, refused on both devices, nothing read
 
 Kwargs = dict[str, object]
 
@@ -123,6 +125,8 @@ class Row:
     stricter: bool = False
     #: Extra kwargs that only the per-sample (Metal) check passes.
     per_sample: Kwargs = field(default_factory=dict)
+    #: The refusal: an index outside its axis, or a malformed parameter.
+    exc: type[Exception] = IndexError
 
 
 def _class_rows(name: str, kernels: frozenset[str]) -> list[Row]:
@@ -140,6 +144,30 @@ def _class_rows(name: str, kernels: frozenset[str]) -> list[Row]:
             )
         )
     return rows
+
+
+def _ctc_row(id: str, match: str, *, stricter: bool = False, **override: object) -> Row:
+    """One ``ctc_loss`` row: the valid call ``(T, N, C) = (5, 2, 4)`` with
+    padded targets ``[[1, 2], [2, 3]]``, with ``override`` swapped in."""
+    args: Kwargs = {
+        "targets": [[1, 2], [2, 3]],
+        "input_lengths": [T, T],
+        "target_lengths": [2, 2],
+        **override,
+    }
+
+    def call(d: str) -> Kwargs:
+        return {**args, "log_probs": _log_probs(d), "targets": _ids(args["targets"], d)}
+
+    return Row(
+        id=id,
+        consumer="ctc_loss",
+        call=call,
+        match=match,
+        metal=READ,
+        kernels=frozenset({"gather", "maximum", "div"}),
+        stricter=stricter,
+    )
 
 
 ROWS: list[Row] = [
@@ -216,97 +244,96 @@ ROWS: list[Row] = [
     ],
     # ctc_loss: (T, N, C) = (5, 2, 4).
     *[
-        Row(
-            id=f"ctc_loss-{form}-target{bad}",
-            consumer="ctc_loss",
-            call=(
-                (
-                    lambda d, b=bad: {
-                        "log_probs": _log_probs(d),
-                        "targets": _ids([[1, b], [2, 3]], d),
-                        "input_lengths": [T, T],
-                        "target_lengths": [2, 2],
-                    }
-                )
-                if form == "padded"
-                else (
-                    lambda d, b=bad: {
-                        "log_probs": _log_probs(d),
-                        "targets": _ids([1, b, 2, 3], d),
-                        "input_lengths": [T, T],
-                        "target_lengths": [2, 2],
-                    }
-                )
-            ),
-            match=f"ctc_loss: target {bad} is out of range for 4 classes",
-            metal=READ,
-            kernels=frozenset({"gather", "maximum", "div"}),
+        _ctc_row(
+            f"ctc_loss-{form}-target{bad}",
+            f"ctc_loss: target {bad} is out of range for 4 classes",
             stricter=True,
+            targets=[[1, bad], [2, 3]] if form == "padded" else [1, bad, 2, 3],
         )
         for bad in (C, 9, -1)
         for form in ("padded", "concatenated")
     ],
     *[
-        Row(
-            id=f"ctc_loss-blank{bad}",
-            consumer="ctc_loss",
-            call=lambda d, b=bad: {
-                "log_probs": _log_probs(d),
-                "targets": _ids([[1, 2], [2, 3]], d),
-                "input_lengths": [T, T],
-                "target_lengths": [2, 2],
-                "blank": b,
-            },
-            match=f"ctc_loss: blank {bad} is out of range for 4 classes",
-            metal=READ,
-            kernels=frozenset({"gather", "maximum", "div"}),
+        _ctc_row(
+            f"ctc_loss-blank{bad}",
+            f"ctc_loss: blank {bad} is out of range for 4 classes",
+            blank=bad,
         )
         for bad in (C, 10, -1)
     ],
     *[
-        Row(
-            id=f"ctc_loss-input_lengths{bad}",
-            consumer="ctc_loss",
-            call=lambda d, b=bad: {
-                "log_probs": _log_probs(d),
-                "targets": _ids([[1, 2], [2, 3]], d),
-                "input_lengths": [b, T],
-                "target_lengths": [2, 2],
-            },
-            match=rf"ctc_loss: each of input_lengths must lie in \[0, {T}\], got {bad}",
-            metal=READ,
-            kernels=frozenset({"gather", "maximum", "div"}),
+        _ctc_row(
+            f"ctc_loss-input_lengths{bad}",
+            rf"ctc_loss: each of input_lengths must lie in \[0, {T}\], got {bad}",
+            input_lengths=[bad, T],
         )
         for bad in (T + 1, 50, -1)
     ],
     *[
-        Row(
-            id=f"ctc_loss-target_lengths{bad}",
-            consumer="ctc_loss",
-            call=lambda d, b=bad: {
-                "log_probs": _log_probs(d),
-                "targets": _ids([[1, 2], [2, 3]], d),
-                "input_lengths": [T, T],
-                "target_lengths": [b, 2],
-            },
-            match=rf"ctc_loss: each of target_lengths must lie in \[0, 2\], got {bad}",
-            metal=READ,
-            kernels=frozenset({"gather", "maximum", "div"}),
+        _ctc_row(
+            f"ctc_loss-target_lengths{bad}",
+            rf"ctc_loss: each of target_lengths must lie in \[0, 2\], got {bad}",
+            target_lengths=[bad, 2],
         )
         for bad in (3, -1)
     ],
+    _ctc_row(
+        "ctc_loss-concatenated-target_lengths-1",
+        "ctc_loss: each of target_lengths must be non-negative, got -1",
+        targets=[1, 2, 2, 3],
+        target_lengths=[-1, 5],
+    ),
+    # embedding_bag's bag boundaries index into its indices.
+    *[
+        Row(
+            id=f"embedding_bag-offsets{off}{'-last' if last else ''}",
+            consumer="embedding_bag",
+            call=lambda d, o=off, la=last: {
+                "x": _ids([0, 1, 2], d),
+                "weight": _table(d),
+                "offsets": _ids(o, d),
+                "include_last_offset": la,
+            },
+            match=match,
+            metal=READ,
+            kernels=frozenset({"embedding_bag", "embedding"}),
+            exc=exc,
+        )
+        for off, last, exc, match in (
+            ([0, 5], False, IndexError, "offset 5 is out of range for 3 indices"),
+            ([0, -1], False, IndexError, "offset -1 is out of range for 3"),
+            ([0, 2, 4], True, IndexError, "offset 4 is out of range for 3"),
+            ([0, 3, 1], False, ValueError, "offsets must not decrease"),
+            ([1, 2], False, ValueError, r"offsets\[0\] must be 0"),
+        )
+    ],
+    # Parameters naming a row or a class count: refused before anything is
+    # read, on both devices.
+    *[
+        Row(
+            id=f"{name}-padding_idx{bad}",
+            consumer=name,
+            call=lambda d, b=bad: {
+                "x": _ids([[0, 1]], d),
+                "weight": _table(d),
+                "padding_idx": b,
+            },
+            match=rf"{name}: padding_idx must be within \[-4, 4\); got {bad}",
+            metal=REFUSE,
+            kernels=frozenset({"embedding_bag", "embedding"}),
+            exc=ValueError,
+        )
+        for name in ("embedding", "embedding_bag")
+        for bad in (C, -C - 1)
+    ],
     Row(
-        id="ctc_loss-concatenated-target_lengths-1",
-        consumer="ctc_loss",
-        call=lambda d: {
-            "log_probs": _log_probs(d),
-            "targets": _ids([1, 2, 2, 3], d),
-            "input_lengths": [T, T],
-            "target_lengths": [-1, 5],
-        },
-        match="ctc_loss: each of target_lengths must be non-negative, got -1",
-        metal=READ,
-        kernels=frozenset({"gather", "maximum", "div"}),
+        id="one_hot-num_classes0",
+        consumer="one_hot",
+        call=lambda d: {"tensor": _ids([0], d), "num_classes": 0},
+        match="one_hot: num_classes must be positive",
+        metal=REFUSE,
+        kernels=frozenset({"one_hot"}),
+        exc=ValueError,
     ),
 ]
 
@@ -331,7 +358,7 @@ def test_the_cpu_refuses_before_any_kernel(row: Row) -> None:
     fn = getattr(F, row.consumer)
     syncs = _C_engine.host_sync_count()
     with lucid.profiler.profile() as prof:
-        with pytest.raises(IndexError, match=row.match):
+        with pytest.raises(row.exc, match=row.match):
             fn(**kwargs)
     dispatched = {event.name for event in prof.events()}
     assert dispatched <= GUARD_READS, f"not a guard read: {dispatched - GUARD_READS}"
@@ -339,14 +366,31 @@ def test_the_cpu_refuses_before_any_kernel(row: Row) -> None:
     assert _C_engine.host_sync_count() == syncs
 
 
-@pytest.mark.parametrize("consumer", ["cross_entropy", "nll_loss", "multi_margin_loss"])
-def test_a_cpu_int64_target_past_int32_is_refused_not_wrapped(consumer: str) -> None:
+@pytest.mark.parametrize(
+    ("consumer", "wide"),
+    [
+        ("cross_entropy", 2**40),
+        ("nll_loss", 2**40),
+        ("multi_margin_loss", 2**40),
+        # 2**31 is -2**31 in int32: a mask read there ended the label list.
+        ("multilabel_margin_loss", 2**31),
+    ],
+)
+def test_a_cpu_int64_target_past_int32_is_refused_not_wrapped(
+    consumer: str, wide: int
+) -> None:
     # 2**40 cast to int32 is 0, and used to be scored as class 0.  A CPU
     # target is checked at its own width.  (Metal checks at the int32 its
     # gather reads with; the owner's docstring says why.)
-    x, target = _scores("cpu"), _ids([1, 2**40], "cpu")
+    x = _scores("cpu")
+    values = (
+        [[wide, 0, -1, 0], [0, -1, 0, 0]]
+        if consumer.startswith("multil")
+        else [1, wide]
+    )
+    target = _ids(values, "cpu")
     with lucid.profiler.profile() as prof:
-        with pytest.raises(IndexError, match=f"Target {2**40} is out of bounds"):
+        with pytest.raises(IndexError, match=f"Target {wide} is out of bounds"):
             getattr(F, consumer)(x, target)
     assert {event.name for event in prof.events()} <= GUARD_READS
 
@@ -357,16 +401,21 @@ def test_a_cpu_int64_target_past_int32_is_refused_not_wrapped(consumer: str) -> 
 def _flat(values: object) -> list[float]:
     if isinstance(values, list):
         return [v for item in values for v in _flat(item)]
-    return [float(values)]  # type: ignore[arg-type]
+    assert isinstance(values, int | float)
+    return [float(values)]
 
 
 @_needs_metal
 @pytest.mark.parametrize("row", ROWS, ids=_ids_of(ROWS))
 def test_metal_follows_the_documented_policy(row: Row) -> None:
     fn = getattr(F, row.consumer)
-    if row.metal == READ:
-        with pytest.raises(IndexError, match=row.match):
-            fn(**row.call("metal"))
+    if row.metal in (READ, REFUSE):
+        kwargs = row.call("metal")
+        syncs = _C_engine.host_sync_count()
+        with pytest.raises(row.exc, match=row.match):
+            fn(**kwargs)
+        if row.metal == REFUSE:
+            assert _C_engine.host_sync_count() == syncs, "read back on Metal"
         return
     kwargs, again = row.call("metal"), row.call("metal")
     syncs = _C_engine.host_sync_count()
@@ -531,11 +580,11 @@ def test_only_the_owner_raises_index_error_in_nn_functional() -> None:
 # ── the reference ──────────────────────────────────────────────────────────
 
 
-def _ref_kwargs(R: object, row: Row) -> Kwargs:
+def _ref_kwargs(R: ModuleType, row: Row) -> Kwargs:
     out: Kwargs = {}
     for key, value in row.call("cpu").items():
         if isinstance(value, lucid.Tensor):
-            out[key] = R.tensor(value.tolist())  # type: ignore[attr-defined]
+            out[key] = R.tensor(value.tolist())
         else:
             out[key] = value
     return out
@@ -543,7 +592,7 @@ def _ref_kwargs(R: object, row: Row) -> Kwargs:
 
 @pytest.mark.parity
 @pytest.mark.parametrize("row", ROWS, ids=_ids_of(ROWS))
-def test_the_reference_refuses_the_same_rows(ref: object, row: Row) -> None:
+def test_the_reference_refuses_the_same_rows(ref: ModuleType, row: Row) -> None:
     R = ref
     kwargs = _ref_kwargs(R, row)
     args: list[object] = []
@@ -553,7 +602,7 @@ def test_the_reference_refuses_the_same_rows(ref: object, row: Row) -> None:
         args = [kwargs.pop("x")]
     elif "tensor" in kwargs:
         args = [kwargs.pop("tensor")]
-    fn = getattr(R.nn.functional, row.consumer)  # type: ignore[attr-defined]
+    fn = getattr(R.nn.functional, row.consumer)
     if row.stricter:
         # The reference reads past the class axis and answers; Lucid
         # refuses, as the owner documents.
@@ -566,7 +615,7 @@ def test_the_reference_refuses_the_same_rows(ref: object, row: Row) -> None:
 @pytest.mark.parity
 @pytest.mark.parametrize("blank", [0, C - 1])
 def test_ctc_at_the_ends_of_its_axes_matches_the_reference(
-    ref: object, blank: int
+    ref: ModuleType, blank: int
 ) -> None:
     R = ref
     lp = _log_probs("cpu")
@@ -575,15 +624,15 @@ def test_ctc_at_the_ends_of_its_axes_matches_the_reference(
         got = F.ctc_loss(
             lp, _ids(targets, "cpu"), il, tl, blank=blank, reduction="none"
         )
-        want = R.nn.functional.ctc_loss(  # type: ignore[attr-defined]
-            R.tensor(lp.tolist()),  # type: ignore[attr-defined]
-            R.tensor(targets),  # type: ignore[attr-defined]
+        want = R.nn.functional.ctc_loss(
+            R.tensor(lp.tolist()),
+            R.tensor(targets),
             il,
             tl,
             blank=blank,
             reduction="none",
         )
-        for g, w in zip(got.tolist(), want.tolist()):  # type: ignore[union-attr]
+        for g, w in zip(_flat(got.tolist()), _flat(want.tolist()), strict=True):
             assert math.isclose(g, w, rel_tol=1e-4, abs_tol=1e-5) or (
                 math.isinf(g) and math.isinf(w)
             )
@@ -595,7 +644,9 @@ def test_ctc_at_the_ends_of_its_axes_matches_the_reference(
     raises=NotImplementedError,
     reason="LCD-257: the ctc kernel cannot run an empty input sequence yet",
 )
-def test_ctc_takes_an_empty_input_sequence_as_the_reference_does(ref: object) -> None:
+def test_ctc_takes_an_empty_input_sequence_as_the_reference_does(
+    ref: ModuleType,
+) -> None:
     R = ref
     lp = _log_probs("cpu")
     for zero_infinity in (False, True):
@@ -607,9 +658,9 @@ def test_ctc_takes_an_empty_input_sequence_as_the_reference_does(ref: object) ->
             reduction="none",
             zero_infinity=zero_infinity,
         )
-        want = R.nn.functional.ctc_loss(  # type: ignore[attr-defined]
-            R.tensor(lp.tolist()),  # type: ignore[attr-defined]
-            R.tensor([[1, 2], [2, 3]]),  # type: ignore[attr-defined]
+        want = R.nn.functional.ctc_loss(
+            R.tensor(lp.tolist()),
+            R.tensor([[1, 2], [2, 3]]),
             [0, 0],
             [0, 1],
             reduction="none",
