@@ -213,44 +213,115 @@ def test_conversion_carries_state_into_new_dtype() -> None:
     run.step()
     state = run.opt.state_dict()["state"][0]
     assert state["exp_avg"].dtype == np.float64
-    assert state["step"] == 2
+    # The per-parameter count stays an integer and keeps counting.
+    assert state["step"].dtype == np.int64
+    assert int(state["step"]) == 2
 
 
-def test_stateless_sgd_rebuilds_without_warning() -> None:
-    run = _Run("SGD", {"lr": 0.05}, "cpu")
-    run.step()
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_uneven_step_counts_survive_a_conversion(device: str) -> None:
+    """Each parameter keeps its own count across the rebuild."""
+    run = _Run("Adam", {"lr": 0.05}, device)
+    run.model.weight.requires_grad_(False)
+    run.step()  # only the bias moves: steps (weight, bias) = (0, 1)
+    run.model.weight.requires_grad_(True)
+    run.step()  # (1, 2)
+    _module_move(run)
+    run.step()  # (2, 3)
+    state = run.opt.state_dict()["state"]
+    assert [int(state[i]["step"]) for i in (0, 1)] == [2, 3]
+
+
+_ALL_ENGINES: list[tuple[str, dict[str, Any]]] = [
+    ("SGD", {"lr": 0.05, "momentum": 0.9}),
+    ("Adam", {"lr": 0.05}),
+    ("AdamW", {"lr": 0.05}),
+    ("RMSprop", {"lr": 0.05}),
+    ("Adagrad", {"lr": 0.05}),
+    ("Adadelta", {"lr": 1.0}),
+    ("Adamax", {"lr": 0.05}),
+    ("RAdam", {"lr": 0.05}),
+    ("NAdam", {"lr": 0.05}),
+    ("ASGD", {"lr": 0.05}),
+    ("Rprop", {"lr": 0.05}),
+]
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize(
+    ("name", "kwargs"), _ALL_ENGINES, ids=[n for n, _ in _ALL_ENGINES]
+)
+def test_every_engine_carries_its_state_across_a_move(
+    name: str, kwargs: dict[str, Any], device: str
+) -> None:
+    want = _uninterrupted(name, kwargs, device)
+    run = _Run(name, kwargs, device)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        got = [run.step()]
+        _module_move(run)
+        got += [run.step() for _ in range(_STEPS - 1)]
+    np.testing.assert_allclose(np.stack(got), want, rtol=0, atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    ("name", "kwargs"),
+    [("SGD", {"lr": 0.05}), *_OPTIMIZERS],
+    ids=["SGD-plain", *_OPT_IDS],
+)
+def test_rebuild_with_nothing_to_carry_does_not_warn(
+    name: str, kwargs: dict[str, Any]
+) -> None:
+    """No state yet — a step() before any backward — is nothing lost."""
+    run = _Run(name, kwargs, "cpu")
+    run.opt.step()
     run.model.double()
     run.dtype = lucid.float64
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
         run.step()
+        run.step()
 
 
-@pytest.mark.parametrize("device", ["cpu", "metal"])
-def test_state_reset_is_announced_when_it_cannot_be_carried(device: str) -> None:
-    """RMSprop's engine keeps state it does not export (yet).
+class _HooklessEngine:
+    """An engine optimizer that keeps state but cannot export it."""
 
-    Rebuilding it after a conversion starts that state over, which the
-    optimizer has to say.  Once the engine exports its state this becomes
-    a test of the trajectory instead.
-    """
-    kwargs = {"lr": 0.05}
-    want = _uninterrupted("RMSprop", kwargs, device)
-    run = _Run("RMSprop", kwargs, device)
-    got = [run.step()]
-    exported = bool(run.opt._engine_optims[0].state_buffers())
+    def __init__(self, params: list[Any]) -> None:
+        self.params = params
+
+    def step(self) -> None:
+        """Nothing to do: the test only rebuilds it."""
+
+    def state_buffers(self) -> list[tuple[str, list[Any]]]:
+        return []
+
+
+class _HooklessOptimizer(optim.Optimizer):
+    def __init__(self, params: list[nn.Parameter]) -> None:
+        super().__init__(params, {"lr": 0.1})
+
+    def _append_engine_optim(self, group: dict[str, object]) -> None:
+        params: list[nn.Parameter] = group["params"]  # type: ignore[assignment]
+        self._engines.append(_HooklessEngine([p._impl for p in params]))
+
+    def step(self, closure: Any = None) -> None:  # type: ignore[override]
+        for engine in self._engine_optims:
+            engine.step()  # type: ignore[attr-defined]
+
+
+def test_engine_without_state_hooks_warns_once() -> None:
+    model = nn.Linear(2, 1)
+    opt = _HooklessOptimizer(list(model.parameters()))
+    opt.step()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _module_move(run)
-        got += [run.step() for _ in range(_STEPS - 1)]
+        model.double()
+        opt.step()
+        model.float()
+        opt.step()
     resets = [w for w in caught if issubclass(w.category, RuntimeWarning)]
-    if exported:
-        assert not resets
-        np.testing.assert_allclose(np.stack(got), want, rtol=0, atol=1e-6)
-    else:
-        assert len(resets) == 1
-        assert "state restarted" in str(resets[0].message)
-        assert np.abs(got[-1] - got[-2]).max() > 0
+    assert len(resets) == 1
+    assert "state restarted" in str(resets[0].message)
 
 
 def test_engine_free_optimizer_is_untouched() -> None:

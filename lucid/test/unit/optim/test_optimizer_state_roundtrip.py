@@ -383,15 +383,10 @@ def test_uneven_step_counts_round_trip_through_the_engine(
         _assert_bit_identical(_values(live), _values(resumed), name)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Optimizer._load_engine_state folds the per-parameter 'step' entries into "
-        "one count per group (their maximum) instead of passing them to "
-        "load_state_buffers, so uneven counts come back even."
-    ),
-)
 def test_uneven_step_counts_round_trip_through_state_dict(device: str) -> None:
+    # Each parameter's own "step" goes back through load_state_buffers; the
+    # loader used to fold them to their maximum, so uneven counts came back
+    # even.
     grads = _grads()
     live = _params(_init(), device)
     opt = _late_unfreeze_run(

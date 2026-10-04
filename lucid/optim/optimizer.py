@@ -13,16 +13,33 @@ from lucid.nn.parameter import Parameter
 
 from lucid._C import engine as _C_engine
 
+_INTEGER_DTYPES = frozenset(
+    {
+        _C_engine.Dtype.I8,
+        _C_engine.Dtype.I16,
+        _C_engine.Dtype.I32,
+        _C_engine.Dtype.I64,
+        _C_engine.Dtype.Bool,
+    }
+)
+
 
 def _state_like(state: object, param: object) -> object | None:
-    """Return optimizer state buffer ``state`` cast and moved to match ``param``.
+    """Return optimizer state entry ``state`` ready for ``param``'s new impl.
 
-    Both are engine ``TensorImpl`` objects.  ``None`` when the shapes no
-    longer agree: the buffer belonged to a differently shaped parameter
-    and cannot be reused.
+    Both are engine ``TensorImpl`` objects.  A buffer shaped like the
+    parameter (``exp_avg``, ``momentum_buffer`` ...) is cast to the
+    parameter's dtype and moved to its device.  A per-parameter scalar — a
+    0-d entry of a parameter that is not 0-d, such as ``step`` or NAdam's
+    ``mu_product`` — and any integer entry (a count) pass unchanged: the
+    engine reads them as numbers wherever they live, and ``step`` stays an
+    integer.  ``None`` when a buffer's shape no longer matches: it belonged
+    to a differently shaped parameter and cannot be reused.
     """
     src = cast(_C_engine.TensorImpl, state)
     dst = cast(_C_engine.TensorImpl, param)
+    if src.dtype in _INTEGER_DTYPES or (not src.shape and dst.shape):
+        return src
     if list(src.shape) != list(dst.shape):
         return None
     out: _C_engine.TensorImpl = src
@@ -315,10 +332,11 @@ class Optimizer:
         The engine optimizer binds ``TensorImpl`` pointers at construction
         and has no way to re-point them, so a new one is built from the
         group (whose hyperparameters are the live ones — schedulers write
-        there) and the old one's state is carried over: momentum and moment
-        buffers are matched by ``Parameter`` identity, cast to the new
-        impl's dtype and moved to its device, and the step counter is
-        copied.
+        there) and the old one's state is carried over through
+        ``state_buffers`` / ``load_state_buffers``: entries are matched by
+        ``Parameter`` identity, buffers are cast to the new impl's dtype and
+        moved to its device, and per-parameter scalars (``step``,
+        ``mu_product``) pass as they are (see :func:`_state_like`).
 
         Moving the state is a deliberate superset of the reference
         framework, which leaves state where it was after ``module.to()``
@@ -335,8 +353,9 @@ class Optimizer:
             return
 
         buffers: list[tuple[str, list[object | None]]] = old.state_buffers()  # type: ignore[attr-defined]
-        step_count: int = int(getattr(old, "step_count", 0) or 0)
-        if not buffers and step_count == 0:
+        if not buffers:
+            # Nothing exported: no state yet, or an engine that keeps state
+            # it cannot hand over — which only this optimizer can tell.
             if self._engine_holds_state(group):
                 self._warn_engine_state_reset()
             return
@@ -353,16 +372,16 @@ class Optimizer:
             carried.append((name, moved))
         if any(t is not None for _, moved in carried for t in moved):
             fresh.load_state_buffers(carried)  # type: ignore[attr-defined]
-        if step_count and hasattr(fresh, "step_count"):
-            fresh.step_count = step_count
 
     def _engine_holds_state(self, group: dict[str, object]) -> bool:
-        """Whether this optimizer's engine keeps per-parameter state for ``group``.
+        """Whether ``group``'s engine may hold state while exporting none.
 
-        Read only to decide whether a rebuilt engine lost something: an
-        engine that reports no state while this is ``True`` keeps state it
-        cannot hand over.  Override for configurations with no state at
-        all (plain SGD).
+        Read only when a rebuilt engine's ``state_buffers()`` came back
+        empty, to tell "nothing to carry" from "state that could not be
+        carried".  Every Lucid engine but SGD names its buffers even before
+        it has any, so an empty export from one of them would be an engine
+        without the hooks; the default assumes that.  SGD overrides it: its
+        engine exports nothing until a momentum buffer exists.
         """
         return True
 
@@ -470,13 +489,15 @@ class Optimizer:
         self._load_engine_state(state)
 
     def _save_engine_state(self) -> dict[int, dict[str, object]]:
-        """Snapshot every engine optimizer's state buffers + step_count.
+        """Snapshot every engine optimizer's per-parameter state.
 
-        Output is keyed by flat parameter index. Each entry stores:
-        - one numpy array per state buffer (``exp_avg``, ``exp_avg_sq``,
-          ``momentum_buffer`` ...) keyed by buffer name
-        - ``step``: per-group step counter (broadcast across all params in
-          that group, so it's available wherever you look it up)
+        Output is keyed by flat parameter index.  Each entry holds one
+        numpy array per entry the engine exports for that parameter, keyed
+        by the reference framework's names: buffers shaped like the
+        parameter (``exp_avg``, ``exp_avg_sq``, ``momentum_buffer`` ...)
+        and per-parameter scalars as 0-d arrays — ``step``, the parameter's
+        own step count (int64), and e.g. NAdam's ``mu_product``.  A
+        parameter that has never been updated has no entry.
 
         Before the engines exist there is no state to save, and building
         them here would bind whatever impls the parameters hold now — a
@@ -505,7 +526,8 @@ class Optimizer:
                         snapshot[name] = _np.asarray(
                             tensors[slot].data_as_python()  # type: ignore[attr-defined]
                         ).copy()
-                if step_count != 0:
+                if step_count != 0 and "step" not in snapshot:
+                    # An engine with one count per group, not per parameter.
                     snapshot["step"] = step_count
                 if snapshot:
                     out[flat_idx + slot] = snapshot
@@ -513,7 +535,13 @@ class Optimizer:
         return out
 
     def _load_engine_state(self, state: dict[int, dict[str, object]]) -> None:
-        """Push numpy-backed state buffers back into each engine optimizer."""
+        """Push numpy-backed state entries back into each engine optimizer.
+
+        Every entry, ``step`` included, goes back to its own parameter
+        through ``load_state_buffers``.  A ``step`` that is a plain number
+        is the older layout, one count for the whole group, and is set as
+        that group's count.
+        """
         if not state:
             return
         flat_idx: int = 0
@@ -528,8 +556,10 @@ class Optimizer:
             for slot, p in enumerate(params):
                 snapshot: dict[str, object] = state.get(flat_idx + slot, {})
                 for k, v in snapshot.items():
-                    if k == "step":
-                        step_count = max(step_count, int(v))  # type: ignore[call-overload]
+                    if k == "step" and isinstance(v, (int, float)):
+                        # Folding per-parameter arrays to their maximum here
+                        # gave every parameter the furthest one's count.
+                        step_count = max(step_count, int(v))
                         continue
                     by_name.setdefault(k, [None] * len(params))
                     # Wrap as TensorImpl on the param's device so the engine
@@ -556,9 +586,11 @@ class Optimizer:
 
         Mirrors reference framework's optimizer state_dict layout:
 
-        - ``state``: ``{param_index: {key: value, ...}}`` — Python-side per-
-          parameter state (e.g. LBFGS history). Engine-managed moments (Adam)
-          are not currently captured.
+        - ``state``: ``{param_index: {key: value, ...}}`` — each parameter's
+          optimizer state under the reference framework's keys: the engine's
+          buffers and per-parameter scalars (``exp_avg``,
+          ``momentum_buffer``, ``step`` ...) as numpy arrays, or the
+          Python-side state of an optimizer that keeps its own (LBFGS).
         - ``param_groups``: list of group dicts; each group's ``params`` is a
           list of integer indices into the flat parameter list.
         """
@@ -574,9 +606,10 @@ class Optimizer:
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
         """Restore from a state_dict produced by :meth:`state_dict`.
 
-        Hyperparameters in ``param_groups`` are restored. Python-side state
-        (returned from :meth:`_save_state`) is restored via :meth:`_load_state`.
-        Engine-managed moment buffers are not restored — see class docstring.
+        Hyperparameters in ``param_groups`` are restored, and each
+        parameter's state (returned from :meth:`_save_state`) is restored
+        via :meth:`_load_state` — for the engine optimizers, every buffer
+        and per-parameter ``step`` goes back into the engine.
         """
         loaded_groups: list[dict[str, object]] = state_dict["param_groups"]  # type: ignore[assignment]
         if len(loaded_groups) != len(self.param_groups):

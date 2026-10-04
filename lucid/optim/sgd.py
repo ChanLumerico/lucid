@@ -130,8 +130,12 @@ class SGD(Optimizer):
 
     @override
     def _engine_holds_state(self, group: dict[str, object]) -> bool:
-        """Only momentum gives SGD per-parameter state; plain SGD has none."""
-        return cast(float, group.get("momentum", 0.0)) != 0.0
+        """Never: SGD's engine exports its momentum buffer whenever it has one.
+
+        An empty export therefore means plain SGD, or momentum that has not
+        been allocated yet (no step with a gradient) — nothing to lose.
+        """
+        return False
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
