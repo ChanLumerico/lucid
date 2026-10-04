@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - open a .mlmodelc in place, and compile without loading
 
+- a loaded model holds its cache lock until it is destroyed
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

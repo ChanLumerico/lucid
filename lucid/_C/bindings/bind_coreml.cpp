@@ -14,12 +14,17 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -47,10 +52,20 @@ lucid::coreml::MilTensorType to_type(const TypeSpec& spec) {
 // Objective-C objects), so pybind11 cannot bind it directly.  This owns
 // the handle and is complete here — the same shape as
 // ``PyCompiledExecutable`` in bind_compile.cpp.
+//
+// ``lock_fd`` is a descriptor this handle owns, closed together with the
+// model: a duplicate of the shared lock that keeps Lucid's compile cache
+// from evicting the compiled model the handle opened.  Tied to the model
+// rather than to ``close`` so a prediction still running on another
+// thread keeps the files it may read in place until it returns.
 class PyCoreMLModel {
 public:
-    explicit PyCoreMLModel(lucid::coreml::CoreMLModel* handle)
-        : handle_(handle, &lucid::coreml::destroy_model) {}
+    PyCoreMLModel(lucid::coreml::CoreMLModel* handle, int lock_fd)
+        : handle_(handle, [lock_fd](lucid::coreml::CoreMLModel* model) {
+              lucid::coreml::destroy_model(model);
+              if (lock_fd >= 0)
+                  ::close(lock_fd);
+          }) {}
     ~PyCoreMLModel() { close(); }
 
     PyCoreMLModel(const PyCoreMLModel&) = delete;
@@ -526,7 +541,7 @@ void register_coreml(py::module_& m) {
     cm.def(
         "load_model",
         [](const std::string& path, lucid::coreml::ComputeUnits units,
-           const std::string& function_name) {
+           const std::string& function_name, int lock_fd) {
             lucid::coreml::CoreMLModel* handle = nullptr;
             {
                 // Compilation is the longest call in the subsystem —
@@ -535,13 +550,29 @@ void register_coreml(py::module_& m) {
                 py::gil_scoped_release unlocked;
                 handle = lucid::coreml::load_model(path, units, function_name);
             }
-            return std::make_shared<PyCoreMLModel>(handle);
+            // The caller's descriptor stays the caller's: the handle holds
+            // a duplicate, which shares the lock, so nothing crosses the
+            // boundary that a failed call could leave unowned.
+            int held = -1;
+            if (lock_fd >= 0) {
+                held = ::fcntl(lock_fd, F_DUPFD_CLOEXEC, 0);
+                if (held < 0) {
+                    const int failure = errno;
+                    lucid::coreml::destroy_model(handle);
+                    throw std::runtime_error(
+                        "lucid.coreml: could not hold the compiled model's cache lock: " +
+                        std::string(std::strerror(failure)));
+                }
+            }
+            return std::make_shared<PyCoreMLModel>(handle, held);
         },
         py::arg("path"), py::arg("units") = lucid::coreml::ComputeUnits::All,
-        py::arg("function_name") = "",
+        py::arg("function_name") = "", py::arg("lock_fd") = -1,
         "Load a model. A .mlmodelc is opened in place and left on disk; a "
         ".mlpackage is compiled into a temporary directory the handle removes "
-        "when it is closed.");
+        "when it is closed. ``lock_fd``, when given, is duplicated and the "
+        "duplicate closed with the model — after the last call using it "
+        "returns, not at ``close`` — so a cache lock lasts as long as the model.");
 
     cm.attr("BLOB_INT8") = static_cast<int>(lucid::coreml::BlobDataType::Int8);
     cm.attr("BLOB_UINT8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8);
