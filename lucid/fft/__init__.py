@@ -23,6 +23,10 @@ the *dual* normalisation (``backward ↔ forward``, ``ortho ↔ ortho``),
 taken at the transform size and then cropped or zero-padded back to the
 input's size along every transformed axis — the adjoint of what ``n`` /
 ``s`` does to the input.
+
+Input: an integer or boolean tensor is promoted to the default floating
+dtype, and with ``dim`` omitted an ``s`` shorter than the rank names the
+last ``len(s)`` axes.
 """
 
 import math
@@ -113,6 +117,44 @@ def _normalise_axes(axes: list[int], rank: int) -> list[int]:
 def _validate_axes_and_s(axes: list[int], s: list[int], op: str) -> None:
     if s and len(s) != len(axes):
         raise ValueError(f"{op}: len(s)={len(s)} must match len(dim)={len(axes)}")
+
+
+def _promote(x: Tensor) -> Tensor:
+    """An integer or boolean input in the default floating dtype.
+
+    The engine transforms take only floating and complex input; the
+    reference reads an integer signal as the real signal it denotes, so
+    ``fft(arange(4))`` is a ``complex64`` spectrum rather than an error.
+    """
+    if x.is_floating_point() or x.is_complex():
+        return x
+    return x.to(lucid.get_default_dtype())
+
+
+def _prepare(
+    input: Tensor,
+    s: int | Sequence[int] | None,
+    dim: int | Sequence[int] | None,
+    op: str,
+) -> tuple[Tensor, list[int], list[int]]:
+    """The promoted input, its normalised transform axes, and ``s`` as a list.
+
+    With ``dim`` omitted the transform covers every axis — or, when ``s``
+    is given, the last ``len(s)`` axes, which is what ``s`` then names.
+    """
+    input = _promote(input)
+    rank = input.ndim
+    s_list = _as_size_list(s)
+    if dim is None and s_list:
+        if len(s_list) > rank:
+            raise ValueError(
+                f"{op}: len(s)={len(s_list)} exceeds the input's {rank} dimensions"
+            )
+        axes = list(range(rank - len(s_list), rank))
+    else:
+        axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
+    _validate_axes_and_s(axes, s_list, op)
+    return input, axes, s_list
 
 
 def _input_sizes_along_axes(x_shape: tuple[int, ...], axes: list[int]) -> list[int]:
@@ -501,7 +543,8 @@ def fftn(
     Parameters
     ----------
     input : Tensor
-        Input tensor of any shape.  May be real or complex.
+        Input tensor of any shape.  May be real or complex; an integer or
+        boolean input is promoted to the default floating dtype first.
     s : int or sequence of int, optional
         Signal length(s) along each transformed axis.  When given, each
         axis is zero-padded (if ``s[i] > input.shape[dim[i]]``) or
@@ -510,7 +553,8 @@ def fftn(
         axis is transformed at its current size.
     dim : int or sequence of int, optional
         Axis or axes over which to compute the transform.  Negative
-        indices are supported.  Defaults to all axes when ``None``.
+        indices are supported.  ``None`` (the default) means every axis,
+        or the last ``len(s)`` axes when ``s`` is given.
     norm : str or None, optional
         Normalisation mode.  One of:
 
@@ -573,10 +617,7 @@ def fftn(
     >>> # lucid.fft.ifftn(X, norm="ortho") recovers x exactly
     """
     norm_v = _check_norm(norm)
-    rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    s_list = _as_size_list(s)
-    _validate_axes_and_s(axes, s_list, "fftn")
+    input, axes, s_list = _prepare(input, s, dim, "fftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
     return cast("Tensor", _FftnAutograd.apply(input, s_list, axes, norm_v, N))
@@ -614,7 +655,8 @@ def ifftn(
         are sequences.  If ``None``, each axis keeps its current size.
     dim : int or sequence of int, optional
         Axis or axes over which to compute the inverse transform.
-        Negative indices are supported.  Defaults to all axes.
+        Negative indices are supported.  ``None`` (the default) means
+        every axis, or the last ``len(s)`` axes when ``s`` is given.
     norm : str or None, optional
         Normalisation mode.  One of:
 
@@ -664,10 +706,7 @@ def ifftn(
     (8, 8)
     """
     norm_v = _check_norm(norm)
-    rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    s_list = _as_size_list(s)
-    _validate_axes_and_s(axes, s_list, "ifftn")
+    input, axes, s_list = _prepare(input, s, dim, "ifftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
     return cast("Tensor", _IfftnAutograd.apply(input, s_list, axes, norm_v, N))
@@ -1028,7 +1067,8 @@ def rfftn(
     dim : int or sequence of int, optional
         Axis or axes over which to compute the transform.  The *last*
         element of ``dim`` is the axis that gets the conjugate-symmetry
-        compression.  Defaults to all axes when ``None``.
+        compression.  ``None`` (the default) means every axis, or the
+        last ``len(s)`` axes when ``s`` is given.
     norm : str or None, optional
         Normalisation mode — ``"backward"`` (default), ``"forward"``, or
         ``"ortho"``.  :math:`N` is the product of the *full* (uncompressed)
@@ -1088,10 +1128,7 @@ def rfftn(
     (33,)
     """
     norm_v = _check_norm(norm)
-    rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    s_list = _as_size_list(s)
-    _validate_axes_and_s(axes, s_list, "rfftn")
+    input, axes, s_list = _prepare(input, s, dim, "rfftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     full_sizes: list[int] = list(s_list) if s_list else list(in_sizes)
     N = _transform_size(s_list, in_sizes)
@@ -1132,7 +1169,8 @@ def irfftn(
         the input last-axis length; all other axes keep their input sizes.
     dim : int or sequence of int, optional
         Axis or axes over which to compute the inverse transform.
-        Defaults to all axes.
+        ``None`` (the default) means every axis, or the last ``len(s)``
+        axes when ``s`` is given.
     norm : str or None, optional
         Normalisation mode — ``"backward"`` (default), ``"forward"``, or
         ``"ortho"``.  See :func:`fftn` for the full description.
@@ -1187,10 +1225,7 @@ def irfftn(
     (16, 32, 64)
     """
     norm_v = _check_norm(norm)
-    rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    s_list = _as_size_list(s)
-    _validate_axes_and_s(axes, s_list, "irfftn")
+    input, axes, s_list = _prepare(input, s, dim, "irfftn")
     out_sizes: list[int]
     if s_list:
         out_sizes = list(s_list)
@@ -1535,8 +1570,9 @@ def hfftn(
         ``None``, the last axis defaults to :math:`2(m-1)` where
         :math:`m` is the input last-axis length.
     dim : int or sequence of int, optional
-        Axis or axes over which to compute the transform.  Defaults to
-        all axes.
+        Axis or axes over which to compute the transform.  ``None`` (the
+        default) means every axis, or the last ``len(s)`` axes when ``s``
+        is given.
     norm : str or None, optional
         Normalisation mode — ``"backward"`` (default), ``"forward"``, or
         ``"ortho"``.  Note that the dual normalisation is applied
@@ -1583,7 +1619,7 @@ def hfftn(
     (16, 64)
     """
     norm_v = _check_norm(norm)
-    return irfftn(_conj(input), s=s, dim=dim, norm=_dual_norm(norm_v))
+    return irfftn(_conj(_promote(input)), s=s, dim=dim, norm=_dual_norm(norm_v))
 
 
 def ihfftn(
@@ -1619,8 +1655,9 @@ def ihfftn(
         determines the full real length, and the output last axis will
         be ``s[-1] // 2 + 1``.  If ``None``, current axis sizes are used.
     dim : int or sequence of int, optional
-        Axis or axes over which to compute the transform.  Defaults to
-        all axes.
+        Axis or axes over which to compute the transform.  ``None`` (the
+        default) means every axis, or the last ``len(s)`` axes when ``s``
+        is given.
     norm : str or None, optional
         Normalisation mode — ``"backward"`` (default), ``"forward"``, or
         ``"ortho"``.  See :func:`fftn` for the full description.

@@ -19,6 +19,11 @@ The sweep below holds every transform to the reference: the six 1-D
 transforms and their 2-D / N-D forms, ``n`` / ``s`` smaller, equal, larger
 and odd, each norm, more than one ``dim``, real and complex input, on each
 device.
+
+Two inputs the reference accepts were refused outright and are checked
+at the end: an integer or boolean signal (promoted to the default float
+dtype), and an ``s`` shorter than the rank with ``dim`` omitted (the last
+``len(s)`` axes).
 """
 
 import numpy as np
@@ -134,7 +139,7 @@ def test_one_d_gradient_has_the_input_shape(name: str, n: int, device: str) -> N
 @pytest.mark.parametrize("s", [(2, 3), (4, 9), (3, 6)])
 def test_multi_d_gradient_has_the_input_shape(name: str, s: tuple[int, int], device: str) -> None:
     x = lucid.randn(2, 3, 6, device=device, requires_grad=True)
-    out = getattr(lucid.fft, name)(x, s=s, dim=(-2, -1))
+    out = getattr(lucid.fft, name)(x, s=s)
     (lucid.abs(out) if out.is_complex() else out).sum().backward()
     assert tuple(x.grad.shape) == (2, 3, 6)
 
@@ -166,9 +171,10 @@ def test_one_d_gradients_match_the_reference(name: str, n: int | None, device: s
 )
 def test_multi_d_gradients_match_the_reference(name: str, s, device: str, ref) -> None:
     """Input ``(4, 3, 6)``.  The 2-D forms transform the last two axes;
-    the N-D forms transform axes ``(0, 2)``."""
+    the N-D forms transform axes ``(0, 2)`` explicitly and, when ``s`` is
+    given, the last ``len(s)`` axes when ``dim`` is omitted."""
     complex_cases = [False] if name in REAL_ONLY else [False, True]
-    dims: list[object] = [(-2, -1)] if name.endswith("2") else [(0, 2)]
+    dims: list[object] = [(-2, -1)] if name.endswith("2") else [(0, 2), None]
     seed = 100
     for norm in NORMS:
         for dim in dims:
@@ -176,3 +182,46 @@ def test_multi_d_gradients_match_the_reference(name: str, s, device: str, ref) -
                 seed += 2
                 kwargs = {"s": s, "dim": dim, "norm": norm}
                 _check(ref, name, (4, 3, 6), kwargs, device, complex_in, seed)
+
+
+# ── Integer input, and an ``s`` shorter than the rank ────────────────────────
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("name", ONE_D)
+@pytest.mark.parametrize("dtype", ["int64", "bool"])
+def test_integer_and_bool_input_is_promoted(name: str, dtype: str, device: str, ref) -> None:
+    values = [3, 0, 1, 4, 1, 5]
+    if dtype == "bool":
+        values = [v % 2 == 1 for v in values]
+    got = getattr(lucid.fft, name)(lucid.tensor(values, device=device))
+    want = getattr(ref.fft, name)(ref.tensor(values))
+    assert str(got.dtype).split(".")[-1] == str(want.dtype).split(".")[-1]
+    got_np = got.to("cpu")
+    a = (
+        lucid.real(got_np).numpy() + 1j * lucid.imag(got_np).numpy()
+        if got_np.is_complex()
+        else got_np.numpy()
+    )
+    np.testing.assert_allclose(a, want.resolve_conj().numpy(), atol=1e-4)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("name", ["fftn", "ifftn", "rfftn", "irfftn", "hfftn", "ihfftn"])
+def test_a_short_s_without_dim_names_the_last_axes(name: str, device: str, ref) -> None:
+    re, _ = _data(7, (2, 3, 4))
+    got = getattr(lucid.fft, name)(lucid.tensor(re, device=device), s=(3, 5))
+    want = getattr(ref.fft, name)(ref.tensor(re), s=(3, 5))
+    assert tuple(got.shape) == tuple(want.shape)
+    got_np = got.to("cpu")
+    a = (
+        lucid.real(got_np).numpy() + 1j * lucid.imag(got_np).numpy()
+        if got_np.is_complex()
+        else got_np.numpy()
+    )
+    np.testing.assert_allclose(a, want.resolve_conj().numpy(), atol=1e-4)
+
+
+def test_an_s_longer_than_the_rank_is_refused() -> None:
+    with pytest.raises(ValueError, match="exceeds the input's 2 dimensions"):
+        lucid.fft.fftn(lucid.ones(2, 3), s=(1, 2, 3))
