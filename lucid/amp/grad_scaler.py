@@ -13,6 +13,10 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.optim.optimizer import Optimizer
 
+# Gradient dtypes ``unscale_`` divides.  float16 is refused with the reference
+# framework's ``ValueError``.  Every other dtype is refused as unsupported.
+_UNSCALABLE = frozenset({_C_engine.BF16, _C_engine.F32, _C_engine.F64})
+
 
 class _Stage(enum.Enum):
     """Where one optimizer stands in the current scale → step → update cycle."""
@@ -41,8 +45,8 @@ class _OptimizerState:
 class GradScaler:
     r"""Dynamic loss-scaling helper for mixed-precision training.
 
-    Mixed-precision training keeps activations and weights in fp16 to
-    halve memory bandwidth and exploit fp16-fast hardware paths, but
+    Mixed-precision training runs the forward pass in fp16 to halve
+    memory bandwidth and exploit fp16-fast hardware paths, but
     fp16's narrow dynamic range causes small gradients to underflow to
     zero — the network stops learning.  :class:`GradScaler` works
     around this by multiplying the loss by a large constant :math:`s`
@@ -113,6 +117,13 @@ class GradScaler:
     With several optimizers on one scaler, an overflow in one optimizer's
     gradients skips only that optimizer's step; :meth:`update` backs the
     scale off if any optimizer overflowed.
+
+    The parameters themselves stay float32: :class:`lucid.amp.autocast`
+    moves the forward pass into half precision, not the weights, so the
+    gradients arrive in float32 too.  bfloat16 and float64 gradients are
+    unscaled as well, and unscaling never changes a gradient's dtype.  A
+    float16 gradient — from a float16 parameter — makes :meth:`unscale_`
+    and :meth:`step` raise :class:`ValueError`.
 
     Examples
     --------
@@ -233,6 +244,12 @@ class GradScaler:
         RuntimeError
             If :meth:`unscale_` already ran for ``optimizer`` since the last
             :meth:`update`, or :meth:`step` already ran for it.
+        ValueError
+            If any of ``optimizer``'s gradients is float16.  Nothing is
+            unscaled and the optimizer's stage does not change.
+        NotImplementedError
+            If any of ``optimizer``'s gradients is complex, again before
+            anything is unscaled.
 
         Notes
         -----
@@ -241,19 +258,20 @@ class GradScaler:
         the overflow is recorded for this optimizer and its :meth:`step`
         is skipped.
 
-        The inverse-scale coefficient is always built in **float32** even
-        when the gradient is float16.  At ``init_scale=2**16=65536`` the
-        unscale factor is ``1/65536 ≈ 1.526e-5``, which is **subnormal**
-        in float16 (the smallest normal F16 value is ``6.1e-5``).  Apple
-        Silicon's Metal backend flushes F16 subnormals to zero, so a
-        naive ``full(shape, inv_scale, F16, ...)`` coefficient becomes the
-        zero tensor and every unscaled gradient collapses to 0 → the
-        model stops learning even though the wall-clock looks great.
-        Casting the gradient to F32 first keeps the unscale exact and
-        also gives the optimizer F32 gradients to update the F32
-        parameter slots with — matching the reference framework's AMP
-        path.  The finiteness check also runs on that F32 copy, so it does
-        not depend on half-precision ``isfinite`` kernels.
+        Every gradient keeps its dtype.  A bfloat16 gradient is cast to
+        float32, divided and finiteness-checked there, then rounded back to
+        bfloat16 once.  float32 and float64 gradients are unscaled in their
+        own dtype.
+
+        Float16 gradients are refused, as the reference framework refuses
+        them.  They come from float16 *parameters*, and loss scaling
+        assumes float32 master weights: :class:`lucid.amp.autocast` runs
+        the forward in half precision while the parameters and their
+        gradients stay float32.  Dividing a float16 gradient by the default
+        scale ``2**16`` puts most of its entries below float16's smallest
+        normal value ``6.1e-5``.  Metal flushes those subnormals to zero.
+        Keep the parameters in float32 and let :class:`lucid.amp.autocast`
+        choose the half-precision ops.
         """
         if not self._enabled:
             return
@@ -276,49 +294,70 @@ class GradScaler:
         Returns whether any gradient held an ``inf`` or ``NaN``.  The check
         reads one flag per device rather than one per parameter, so a model
         on a single device costs a single host synchronisation.
+
+        Each gradient is written back in its own dtype: ``set_grad``
+        replaces the gradient's storage with the new tensor's bytes without
+        checking the dtype, so a float32 result written over a bfloat16
+        gradient would be read back as bfloat16 bit patterns (CHA-72).
+        All dtypes are checked before any gradient is touched, so a refused
+        call leaves the optimizer's gradients and stage as they were.
         """
         from lucid._dispatch import _unwrap, _wrap
 
+        grads: list[tuple[Tensor, _C_engine.TensorImpl]] = []
+        for group in optimizer.param_groups:
+            for p in group["params"]:  # type: ignore[attr-defined]
+                if p.grad is None:
+                    continue
+                g_impl = _unwrap(p.grad)
+                if g_impl.dtype == _C_engine.F16:
+                    raise ValueError("Attempting to unscale FP16 gradients.")
+                if g_impl.dtype not in _UNSCALABLE:
+                    # Complex: an autocast-eligible multiply would cast it
+                    # to a real dtype.  The reference framework has no
+                    # complex unscale kernel either.
+                    raise NotImplementedError(
+                        f"GradScaler cannot unscale {p.grad.dtype} gradients."
+                    )
+                grads.append((p, g_impl))
+
         inv_scale = 1.0 / self._scale
+        amp_active = _C_engine.amp_is_active()
         nonfinite: dict[_C_engine.Device, _C_engine.TensorImpl] = {}
-        # ``mul`` is an AmpPolicy.Promote op: called inside an autocast scope
-        # it would cast the float32 gradient back down to the autocast dtype,
-        # where ``1/65536`` is subnormal.  A float32 guard pins it for the
-        # duration and is dropped (restoring the caller's state) at the end.
-        guard = (
-            _C_engine.AutocastGuard(_C_engine.F32)
-            if _C_engine.amp_is_active()
-            else None
-        )
-        try:
-            for group in optimizer.param_groups:
-                for p in group["params"]:  # type: ignore[attr-defined]
-                    if p.grad is None:
-                        continue
-                    g_impl = _unwrap(p.grad)
-                    # Unscale in F32 (F64 stays F64).  Mixed-dtype multiply
-                    # is not supported (BinaryKernel validates same-dtype
-                    # operands), and an F16 coefficient at the default scale
-                    # is subnormal — see the Notes of unscale_().
-                    work_dtype = (
-                        _C_engine.F64 if g_impl.dtype == _C_engine.F64 else _C_engine.F32
-                    )
-                    g_work = (
-                        g_impl
-                        if g_impl.dtype == work_dtype
-                        else _C_engine.astype(g_impl, work_dtype)
-                    )
-                    bad = _C_engine.any(_C_engine.logical_not(_C_engine.isfinite(g_work)))
-                    seen = nonfinite.get(g_work.device)
-                    nonfinite[g_work.device] = (
-                        bad if seen is None else _C_engine.logical_or(seen, bad)
-                    )
-                    coef = _C_engine.full(
-                        list(g_work.shape), inv_scale, work_dtype, g_work.device
-                    )
-                    p._impl.set_grad(_C_engine.mul(g_work, coef))
-        finally:
-            del guard
+        for p, g_impl in grads:
+            grad_dtype = g_impl.dtype
+            # bfloat16 is unscaled in float32 and rounded back once, as the
+            # reference framework's fused unscale computes in its float
+            # op-math type.  float32 / float64 are unscaled in their own
+            # dtype: mixed-dtype multiply is not supported (BinaryKernel
+            # validates same-dtype operands).
+            work_dtype = _C_engine.F32 if grad_dtype == _C_engine.BF16 else grad_dtype
+            # ``mul`` is an AmpPolicy.Promote op: inside an autocast scope it
+            # would cast the gradient to the autocast dtype (float16, where
+            # ``1/65536`` is subnormal) — and a float32 scope would cast a
+            # float64 gradient down.  A guard on the work dtype pins it;
+            # dropping the guard restores the caller's state.
+            guard = _C_engine.AutocastGuard(work_dtype) if amp_active else None
+            try:
+                g_work = (
+                    g_impl
+                    if grad_dtype == work_dtype
+                    else _C_engine.astype(g_impl, work_dtype)
+                )
+                bad = _C_engine.any(_C_engine.logical_not(_C_engine.isfinite(g_work)))
+                seen = nonfinite.get(g_work.device)
+                nonfinite[g_work.device] = (
+                    bad if seen is None else _C_engine.logical_or(seen, bad)
+                )
+                coef = _C_engine.full(
+                    list(g_work.shape), inv_scale, work_dtype, g_work.device
+                )
+                unscaled = _C_engine.mul(g_work, coef)
+            finally:
+                del guard
+            if unscaled.dtype != grad_dtype:
+                unscaled = _C_engine.astype(unscaled, grad_dtype)
+            p._impl.set_grad(unscaled)
         return any(bool(_wrap(flag).item()) for flag in nonfinite.values())
 
     def step(
@@ -353,6 +392,12 @@ class GradScaler:
         RuntimeError
             If :meth:`step` already ran for ``optimizer`` since the last
             :meth:`update`, or ``closure`` is passed while enabled.
+        ValueError
+            If the gradients still need unscaling and one of them is
+            float16 — see :meth:`unscale_`.
+        NotImplementedError
+            If the gradients still need unscaling and one of them is
+            complex.
         """
         if not self._enabled:
             return optimizer.step(*args, **kwargs)  # type: ignore[arg-type]

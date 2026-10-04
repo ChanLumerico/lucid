@@ -312,7 +312,13 @@ def _half_grad(values: list[float], dtype: lucid.dtype, device: str) -> lucid.Te
     return p
 
 
-@pytest.mark.parametrize("device,dtype", _cells(_HALVES))
+# bfloat16 only: like the reference framework, ``GradScaler`` refuses float16
+# gradients with ``ValueError`` (CHA-72) — covered in
+# lucid/test/unit/amp/test_grad_scaler_half_grads.py.
+_SCALER_HALVES = [lucid.bfloat16]
+
+
+@pytest.mark.parametrize("device,dtype", _cells(_SCALER_HALVES))
 @pytest.mark.parametrize("bad", [math.inf, -math.inf, float("nan")], ids=str)
 def test_grad_scaler_sees_half_overflow(device: str, dtype: lucid.dtype, bad: float) -> None:
     """The overflow step is skipped and the scale backs off."""
@@ -324,7 +330,7 @@ def test_grad_scaler_sees_half_overflow(device: str, dtype: lucid.dtype, bad: fl
     assert scaler.get_scale() == 2.0
 
 
-@pytest.mark.parametrize("device,dtype", _cells(_HALVES))
+@pytest.mark.parametrize("device,dtype", _cells(_SCALER_HALVES))
 def test_grad_scaler_steps_on_finite_half_gradient(device: str, dtype: lucid.dtype) -> None:
     """The dtype's largest value is finite: no false alarm at the edge."""
     top = _LIMITS[dtype][0]

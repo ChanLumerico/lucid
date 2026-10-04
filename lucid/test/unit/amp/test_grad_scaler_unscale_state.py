@@ -8,9 +8,9 @@ now moves through *ready → unscaled → stepped* once per iteration,
 ``update()`` returns it to *ready*, and an overflow is recorded per
 optimizer so it skips only that optimizer's step.
 
-The finiteness check runs on a float32 copy of each gradient, so it works on
-CPU float16 gradients too — it does not go through the half-precision
-``isfinite`` kernel (CHA-34).
+The finiteness check of a bfloat16 gradient runs on a float32 copy, so it
+does not go through the half-precision ``isfinite`` kernel (CHA-34).
+float16 gradients are refused (CHA-72, test_grad_scaler_half_grads.py).
 """
 
 import math
@@ -176,11 +176,11 @@ def test_unscale_divides_every_entry_even_on_overflow(device: str) -> None:
     assert _same(p.grad.tolist(), [1.0, INF])
 
 
-@pytest.mark.parametrize("dtype", [lucid.float16, lucid.bfloat16], ids=["f16", "bf16"])
-def test_overflow_in_half_precision_gradients_is_caught(device: str, dtype: lucid.dtype) -> None:
-    # The check reads a float32 copy, so a CPU float16 ``inf`` is seen even
-    # though the CPU half ``isfinite`` kernel misses it (CHA-34).
-    p = _param([1.0, 2.0], device, dtype)
+def test_overflow_in_bfloat16_gradients_is_caught(device: str) -> None:
+    # The check reads a float32 copy, so it does not depend on the half
+    # ``isfinite`` kernels (CHA-34).  float16 gradients are refused outright
+    # (CHA-72) — see test_grad_scaler_half_grads.py.
+    p = _param([1.0, 2.0], device, lucid.bfloat16)
     opt = optim.SGD([p], lr=1.0)
     scaler = GradScaler(init_scale=4.0)
     _backward(scaler, p, [1.0, INF])
