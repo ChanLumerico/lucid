@@ -10,9 +10,8 @@ A built-in op records each saved tensor's version and its backward refuses
 a mismatch (``VersionMismatch``); the reference refuses this one too.  The
 context now records the versions once ``forward`` has returned and checks
 them when ``backward`` reads ``ctx.saved_tensors``, with the engine's
-message.  What it does not catch yet is pinned near the bottom: an in-place
-op under grad mode on a tensor that already has a graph leaves the version
-where it was.
+message.  An in-place op under grad mode on a tensor that already has a
+graph is caught as well, now that it moves the version (near the bottom).
 """
 
 from collections.abc import Callable
@@ -323,46 +322,37 @@ def test_saved_tensors_read_inside_forward_are_the_saved_objects(device: str) ->
     assert x.grad.tolist() == [2.0, 2.0]
 
 
-# ── not caught yet: an in-place op under grad mode ───────────────────────────
+# ── an in-place op under grad mode ───────────────────────────────────────────
 #
 # An in-place op on a tensor that already has a graph makes that tensor its
-# output (the "adopt" path) and leaves the version alone, because the op saved
-# the pre-write state in a buffer of its own.  A built-in op's node holds the
-# buffer it saved and still reads the forward-time values; a custom Function's
-# context holds the tensor and reads the new ones.  The reference refuses all
-# three.  Each test states what must happen once the engine bumps the version
-# on that path.
-
-_ADOPT = pytest.mark.xfail(
-    strict=True, reason="CHA-32: adopt path does not bump the version"
-)
+# output (the "adopt" path).  That path used to leave the version alone,
+# because the op saved the pre-write state in a buffer of its own; a custom
+# Function's context holds the tensor and read the new values.  The version
+# moves there now (CHA-32), and the reference refuses all three.
 
 
-@_ADOPT
 def test_a_grad_mode_mul_into_a_saved_output_is_refused(device: str) -> None:
     x = lucid.tensor([0.0, 1.0], requires_grad=True, device=device)
     y = _Exp.apply(x)
-    y.mul_(2.0)  # today: x.grad == 4 * exp(x), the right answer is 2 * exp(x)
+    y.mul_(2.0)  # was: x.grad == 4 * exp(x), the right answer is 2 * exp(x)
     with pytest.raises(RAISED, match=r"VersionMismatch \(_Exp output 0\)"):
         y.sum().backward()
 
 
-@_ADOPT
 def test_a_grad_mode_exp_into_a_saved_output_is_refused(device: str) -> None:
     x = lucid.tensor([0.0, 1.0], requires_grad=True, device=device)
     y = _Exp.apply(x)
-    y.exp_()  # today: backward reads exp(exp(x)) where it saved exp(x)
+    y.exp_()  # was: backward read exp(exp(x)) where it saved exp(x)
     with pytest.raises(RAISED, match=r"VersionMismatch \(_Exp output 0\)"):
         y.sum().backward()
 
 
-@_ADOPT
 def test_a_grad_mode_relu_into_a_saved_input_is_refused(device: str) -> None:
     x = lucid.tensor([-1.0, 2.0], requires_grad=True, device=device)
     w = lucid.tensor([1.0, 1.0], requires_grad=True, device=device)
     h = x * 1.0
     y = _Mul.apply(w, h)
-    h.relu_()  # today: w.grad == relu(x) == [0, 2], the right answer is [-1, 2]
+    h.relu_()  # was: w.grad == relu(x) == [0, 2], the right answer is [-1, 2]
     with pytest.raises(RAISED, match=r"VersionMismatch \(_Mul input 1\)"):
         y.sum().backward()
 
