@@ -165,23 +165,37 @@ def _check_unit_interval(t: Tensor, what: str, op: str) -> None:
 # ── reduction ───────────────────────────────────────────────────────────────
 
 
-def _reduce(t: Tensor, reduction: str, out_dtype: _dtype | None = None) -> Tensor:
+def _reduce(
+    t: Tensor,
+    reduction: str,
+    out_dtype: _dtype | None = None,
+    *,
+    weight: Tensor | None = None,
+) -> Tensor:
     """Apply ``reduction`` to the per-element losses ``t`` — the one place a
     loss reduces.
 
     ``"none"`` returns ``t``, ``"mean"`` its mean and ``"sum"`` its sum over
     every element; the engine accumulates a half-precision reduction in
-    float32 on both devices.  ``out_dtype`` is the dtype to round the result
-    to, for a loss that computed a half input in float32.  The caller has
-    checked ``reduction`` at its boundary; an unknown one raises here too
-    rather than falling through to ``"none"``.
+    float32 on both devices.  With ``weight`` (the class-index losses'
+    per-sample weights) ``"mean"`` divides by the total weight kept rather
+    than by the count (:func:`_weighted_mean`), summed in float32 for a half
+    ``t``.  ``out_dtype`` is the dtype to round the result to — by default
+    ``t``'s own — for a loss that computed a half input in float32.  The
+    caller has checked ``reduction`` at its boundary; an unknown one raises
+    here too rather than falling through to ``"none"``.
 
-    Four reductions are part of a loss's own definition, and are built on
-    this one rather than beside it:
+    Under autocast a ``"mean"`` or ``"sum"`` runs, and answers, in float32,
+    the dtype the reference's autocast runs every loss in.  Autocast gives
+    ``sum`` and ``mean`` the autocast dtype even for a float32 operand, so a
+    float16 count of more than 65504 kept samples was inf: the class-index
+    mean came out ``inf / inf = NaN`` with a gradient of 0, and a float16
+    sum past 65504 was inf.  Outside autocast the scope is not entered and
+    nothing changes.
 
-    - the ``"mean"`` of a class-index ``cross_entropy`` / ``nll_loss``
-      divides by the total weight of the samples kept, not by their count
-      (``_weighted_mean``);
+    Three more reductions are part of a loss's own definition, and are
+    built on this one rather than beside it:
+
     - ``ctc_loss``'s ``"mean"`` divides each sample by its target length
       before taking this mean;
     - ``kl_div``'s ``"batchmean"`` is this sum divided by the batch size;
@@ -189,13 +203,29 @@ def _reduce(t: Tensor, reduction: str, out_dtype: _dtype | None = None) -> Tenso
       the reduction as an argument (``_KERNEL_REDUCTION``), so a training
       step built on them dispatches one op, not two.
     """
-    if reduction == "mean":
-        t = t.mean()
-    elif reduction == "sum":
-        t = t.sum()
-    elif reduction != "none":
+    if reduction not in _REDUCTIONS:
         _check_reduction(reduction, "loss")
-    if out_dtype is not None and t.dtype != out_dtype:
+    if reduction == "none":
+        return t if out_dtype is None or t.dtype == out_dtype else t.to(dtype=out_dtype)
+    out_dtype = t.dtype if out_dtype is None else out_dtype
+    autocast = bool(_C_engine.amp_is_active())
+    weighted = weight is not None and reduction == "mean"
+    acc = _accumulation_dtype(t)
+    # Half is widened under autocast (its answer is float32) and for a
+    # weighted mean (its count of kept samples is a sum of its own); the
+    # float32 scope keeps autocast from casting the sums back down.
+    if (autocast or weighted) and acc != t.dtype:
+        t = t.to(dtype=acc)
+        if weighted and weight is not None:
+            weight = weight.to(dtype=acc)
+    with _float32_scope():
+        if reduction == "sum":
+            t = t.sum()
+        elif weighted and weight is not None:
+            t = _weighted_mean(t, weight)
+        else:
+            t = t.mean()
+    if t.dtype != out_dtype and not autocast:
         t = t.to(dtype=out_dtype)
     return t
 
@@ -439,7 +469,11 @@ def smooth_l1_loss(
     if beta == 0.0:
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
-    return huber_loss(x, target, delta=beta, reduction=reduction) / beta
+    loss: Tensor = huber_loss(x, target, delta=beta, reduction=reduction)
+    # In float32 under autocast, as the reduction was: autocast gives
+    # ``div`` its own dtype, and a float16 sum past 65504 came back inf.
+    with _float32_scope():
+        return loss / beta
 
 
 def huber_loss(
@@ -617,24 +651,14 @@ def _class_nll(
             smooth = smooth * keep
         nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth
 
-    if reduction != "mean" or sample_weight is None:
-        return _reduce(nll, reduction)
-    # The mean divides by the total weight of the samples kept — this
-    # loss's own definition of the mean (see ``_reduce``).  Half precision
-    # is summed in float32: a float16 count of kept samples is inf past
-    # 65504, and so is the summed loss, so a mean over a long sequence
-    # batch came out inf / inf = NaN though every term was small.
-    out_dtype = nll.dtype
-    acc = _accumulation_dtype(nll)
-    if acc != out_dtype:
-        nll = nll.to(dtype=acc)
-        sample_weight = sample_weight.to(dtype=acc)
-    return _reduce(_weighted_mean(nll, sample_weight), "none", out_dtype)
+    # The mean divides by the total weight of the samples kept.
+    return _reduce(nll, reduction, weight=sample_weight)
 
 
 def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
-    """``nll.sum() / sample_weight.sum()`` — the mean of :func:`_class_nll`,
-    whose divisor is the total weight of the samples kept."""
+    """``nll.sum() / sample_weight.sum()`` — :func:`_reduce`'s weighted
+    ``"mean"``, the one of :func:`_class_nll`, whose divisor is the total
+    weight of the samples kept."""
     total: Tensor = nll.sum()
     denom: Tensor = sample_weight.sum()
     # A batch with nothing kept — all padding, as one micro-batch of an
@@ -1207,7 +1231,10 @@ def kl_div(
     # no batch dimension, and its batchmean is the sum, as in the
     # reference; reading ``x.shape[0]`` there raised IndexError.
     total: Tensor = _reduce(_wrap(kl), "sum")
-    return total / int(x.shape[0]) if x.ndim > 0 else total
+    if x.ndim == 0:
+        return total
+    with _float32_scope():  # the sum's float32 under autocast, kept
+        return total / int(x.shape[0])
 
 
 def triplet_margin_loss(
