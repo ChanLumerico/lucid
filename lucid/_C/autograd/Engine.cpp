@@ -394,6 +394,15 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         TensorImplPtr grad_in = std::move(it->second);
         pending.erase(it);
 
+        // The hooks of the tensors this node produced, and retain_grad, see
+        // their whole gradient before the node does — and before the checks
+        // below (see Engine::backward).
+        SlotGrads<TensorImplPtr> slots;
+        if (node->is_barrier())
+            slots = fire_held_for_graph(*node, held);
+        else if (node->tensor_hooks() != nullptr)
+            grad_in = run_slot_hooks_for_graph(*node, 0, std::move(grad_in));
+
         refuse_released(*node);
         node->validate_versions();
         // What eager backward reads by value, graph mode reads through the
@@ -402,12 +411,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         // saved output, or any input while the check is waived.
         node->restore_saved_for_graph();
 
-        // The hooks of the tensors this node produced, and retain_grad, see
-        // their whole gradient before the node does.
         if (node->is_barrier())
-            deliver_held_for_graph(*node, fire_held_for_graph(*node, held), grad_in);
-        else if (node->tensor_hooks() != nullptr)
-            grad_in = run_slot_hooks_for_graph(*node, 0, std::move(grad_in));
+            deliver_held_for_graph(*node, std::move(slots), grad_in);
 
         // apply_for_graph throws NotImplementedError if the op doesn't support
         // graph mode — gives the user a clear, actionable message.
@@ -492,21 +497,29 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         Storage grad_in = std::move(it->second);
         pending.erase(it);
 
-        // Detect in-place mutations that would corrupt the backward pass.
-        refuse_released(*node);
-        node->validate_versions();
-
         // The hooks of the tensors this node produced, and retain_grad, see
         // their whole gradient — and may replace it — before the node runs on
         // it.  A node with no hooks pays a null test.
+        SlotGrads<Storage> slots;
+        if (node->is_barrier())
+            slots = fire_held(*node, held);
+        else if (node->tensor_hooks() != nullptr)
+            grad_in = run_slot_hooks(*node, 0, std::move(grad_in));
+
+        // Detect in-place mutations that would corrupt the backward pass, and
+        // a second pass over freed saved state.  After the hooks, not before:
+        // a hook can run a backward of its own through this node, which frees
+        // what it saved, or write into a tensor it saved — checked first, the
+        // node then read freed storage and took the process down.
+        refuse_released(*node);
+        node->validate_versions();
+
         std::vector<Storage> input_grads;
         if (node->is_barrier()) {
-            for (auto& [slot, grad] : fire_held(*node, held))
+            for (auto& [slot, grad] : slots)
                 node->accumulate_barrier_grad(slot, std::move(grad));
             input_grads = node->apply_barrier();
         } else {
-            if (node->tensor_hooks() != nullptr)
-                grad_in = run_slot_hooks(*node, 0, std::move(grad_in));
             input_grads = node->apply(std::move(grad_in));
         }
 
@@ -767,12 +780,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
                 continue;
 
             const bool runs = propagates(node.get(), reaching);
-            if (runs) {
-                refuse_released(*node);
-                node->validate_versions();
-                node->restore_saved_for_graph();
-            }
 
+            // Hooks before the checks, as in backward().
             SlotGrads<TensorImplPtr> slots;
             if (node->is_barrier())
                 slots = fire_held_for_graph(*node, held);
@@ -801,6 +810,9 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             if (!runs)
                 continue;
 
+            refuse_released(*node);
+            node->validate_versions();
+            node->restore_saved_for_graph();
             if (node->is_barrier())
                 deliver_held_for_graph(*node, std::move(slots), grad_in);
             const auto input_grads =
@@ -833,11 +845,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             continue;
 
         const bool runs = propagates(node.get(), reaching);
-        if (runs) {
-            refuse_released(*node);
-            node->validate_versions();
-        }
 
+        // Hooks before the checks, as in backward().
         SlotGrads<Storage> slots;
         if (node->is_barrier())
             slots = fire_held(*node, held);
@@ -870,6 +879,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         if (!runs)
             continue;
 
+        refuse_released(*node);
+        node->validate_versions();
         std::vector<Storage> input_grads;
         if (node->is_barrier()) {
             for (auto& [slot, grad] : slots)

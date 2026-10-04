@@ -304,7 +304,20 @@ void register_tensor_impl(py::module_& m) {
             "Return the gradient as a TensorImpl (set when backward was called with "
             "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
-        .def("assign_from", &TensorImpl::assign_from)
+        .def(
+            "assign_from",
+            [](TensorImpl& self, const TensorImpl& other, const char* name) {
+                self.assign_from(other, name);
+                // The write gives ``self`` the source's place in the graph.
+                // A tensor that asked to keep its gradient keeps the one of
+                // its new place, as after an engine in-place op
+                // (inplace::adopt_graph_position) — left on the old slot,
+                // ``.grad`` stayed None.  The core layer cannot reach the
+                // hook slots, so it happens here.
+                if (self.retains_grad() && !self.is_leaf())
+                    lucid::retain_grad(self.shared_from_this());
+            },
+            py::arg("other"), py::arg("name"))
         .def("zero_grad", &TensorImpl::zero_grad)
         .def(
             "eval", [](TensorImpl& self) { evaluate_without_gil(self); },

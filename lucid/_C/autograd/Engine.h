@@ -41,7 +41,9 @@ namespace lucid {
 //    keeps that value in the tensor's ``.grad``.  The gradients of a hooked
 //    barrier slot are held by the engine until the barrier's turn so the
 //    hooks see their sum (TensorHooks.h).  A node with no hooks pays one
-//    null test and Python is never called.
+//    null test and Python is never called.  The node's own checks (saved
+//    state already freed, saved inputs written in place) come after its
+//    hooks, which may themselves run a backward through it.
 // 5. Leaves (tensors with no ``grad_fn``) are reached through their
 //    :class:`AccumulateGrad` sentinel, which runs the leaf's own hooks and
 //    then writes the final gradient into ``leaf.grad``.

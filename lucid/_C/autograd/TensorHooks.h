@@ -143,6 +143,26 @@ LUCID_API TensorImplPtr run_leaf_hooks_for_graph(const TensorImpl& leaf, TensorI
 // every consumer — made before the hook or after — sends its gradient through
 // it.  ``t``'s shape is recorded with it.
 //
+// Notes
+// -----
+// A non-leaf's runner lives on its producer for as long as the node does.
+// The engine drops it once ``backward(retain_graph=False)`` has released the
+// node's saved state (:meth:`Node::release_tensor_hooks`) — the node can never
+// run again, and dropping it breaks the cycle tensor → node → runner → hook
+// closure → tensor that Python's collector cannot see through the engine.
+// Two consequences the caller should know:
+//
+// * a hook registered on the output of a node that was *already* released
+//   that way is installed but never fires (any further backward through the
+//   node is refused), and it keeps that cycle until the node itself goes;
+// * a node that saved nothing for backward is never released, so a hook on
+//   its output that refers to the output keeps the cycle while the graph
+//   lives — as does a hook on a graph that never runs backward at all.
+//
+// A leaf's runner lives in its own AutogradMeta, so a leaf hook that refers
+// to the leaf keeps the leaf alive the same way.  The Python side
+// (CHA-151-A) should hold the tensor weakly in its runner.
+//
 // Raises
 // ------
 // LucidError
