@@ -32,6 +32,7 @@ Subcommands::
   bootstrap [PATH]            make a worktree runnable (.so, light .venv, vault)
   doctor                      show where `import lucid` resolves from here
   land WORKTREE [--check] [--cleanup] [--skip-stub-check] [--no-changelog]
+                [--allow-slop REASON]   (refuses a quality-gate increase, exit 6)
   heavy -- CMD...             run CMD under the machine-wide heavy-job lock
   build                       build the C++ engine in place in a worktree
   hook                        Claude Code PreToolUse entry point (stdin JSON)
@@ -70,7 +71,24 @@ GENERATED = (
     "lucid/test/audit/doctest.json",
     "lucid/test/audit/suite.json",
     "CHANGELOG.md",
+    # Every branch that lowers a count writes it; the `lucid-quality-baseline`
+    # merge driver (setup) merges it per key, so it must not serialise them.
+    "tools/quality_baseline.json",
 )
+
+# git merge drivers registered by `setup` (and re-checked by `land`).  Repo-local
+# config, so the shared .git/config carries them to every worktree and .sync
+# carries them to the other Mac.
+MERGE_DRIVERS = {
+    "merge.lucid-generated.name": "Lucid generated file: keep one side, regenerate after",
+    "merge.lucid-generated.driver": "true",
+    "merge.lucid-quality-baseline.name": "Lucid quality baseline: per-key 3-way, lower wins",
+    "merge.lucid-quality-baseline.driver": (
+        '"$(test -x .venv/bin/python3 && echo .venv/bin/python3 || echo python3)" '
+        "-m tools.quality_gate --merge-baseline %O %A %B"
+    ),
+}
+SLOP_EXIT = 6
 
 # Machine-local and outside the synced project tree: locks must never travel
 # to the other Mac through .sync.
@@ -82,6 +100,7 @@ STATE_DIR = Path(
 HEAVY_LOCK = STATE_DIR / "heavy.lock"
 LAND_LOCK = STATE_DIR / "land.lock"
 HOOK_LOG = STATE_DIR / "hook.log"
+SLOP_LOG = STATE_DIR / "slop-overrides.log"  # every `land --allow-slop`, with its reason
 SELF = Path(__file__).resolve()
 
 USER_FACING_RE = r"^(feat|fix|perf|refactor|revert|remove|deprec|sec)(\([^)]*\))?!?:\s"
@@ -714,6 +733,9 @@ def cmd_land(args: argparse.Namespace) -> int:
         print(f"{wt.name}: nothing to land (no commits ahead of {MAIN_BRANCH})")
         return 0
 
+    venv_py = wt / ".venv/bin/python3"
+    py = str(venv_py) if venv_py.exists() else sys.executable
+
     if args.check:
         proc = subprocess.run(
             ["git", "merge-tree", "--write-tree", "--name-only", MAIN_BRANCH, "HEAD"],
@@ -724,15 +746,19 @@ def cmd_land(args: argparse.Namespace) -> int:
             check=False,
         )
         print(f"{wt.name}: {len(commits)} commit(s) ahead")
-        if proc.returncode == 0:
-            print("✓ merges cleanly onto main")
-            return 0
-        # --name-only: tree OID, then one conflicted path per line, then a blank line.
-        lines = proc.stdout.splitlines()[1:]
-        conflicted = lines[: lines.index("")] if "" in lines else lines
-        print("✗ would conflict: " + ", ".join(conflicted or ["(see git merge-tree)"]))
-        return 3
+        if proc.returncode != 0:
+            # --name-only: tree OID, then one conflicted path per line, then a blank line.
+            lines = proc.stdout.splitlines()[1:]
+            conflicted = lines[: lines.index("")] if "" in lines else lines
+            print("✗ would conflict: " + ", ".join(conflicted or ["(see git merge-tree)"]))
+            return 3
+        print("✓ merges cleanly onto main")
+        # The branch's own delta: against where it forked, so main's later
+        # fixes do not read as this branch's slop.
+        fork = git("merge-base", MAIN_BRANCH, "HEAD", cwd=wt).strip()
+        return judge_slop(wt, py, fork, args.allow_slop)
 
+    ensure_merge_drivers(main.path)
     with held_lock(LAND_LOCK, f"land {wt.name}", wait=True):
         # 1. Rebase onto the current main.  Claims make this conflict-free except
         #    for generated files, which the merge driver settles (setup).
@@ -754,8 +780,7 @@ def cmd_land(args: argparse.Namespace) -> int:
             )
         if needs_bootstrap(wt):
             bootstrap(wt, main.path)
-        venv_py = wt / ".venv/bin/python3"
-        py = str(venv_py) if venv_py.exists() else sys.executable
+            py = str(venv_py) if venv_py.exists() else sys.executable
         touched = diff_names(wt, MAIN_BRANCH, "HEAD")
 
         # 2. Stubs must match the combined source; a stale stub fails CI.
@@ -778,6 +803,14 @@ def cmd_land(args: argparse.Namespace) -> int:
                     + (stubs.stdout + stubs.stderr)[-1500:],
                     code=4,
                 )
+
+        # 2b. Quality ratchet: the rebased branch against main (now its fork
+        #     point) — no measured count may rise, and the actual counts may
+        #     not exceed the baseline the rebase merged.  tools/README.md.
+        if judge_slop(wt, py, MAIN_BRANCH, args.allow_slop):
+            raise WorkspaceError(
+                "quality gate refused the land (SLOP DELTA above)", code=SLOP_EXIT
+            )
 
         # 3. CHANGELOG: on branches the post-commit hook stands down, so the
         #    entries are folded in here — replaying the branch with an exec
@@ -914,18 +947,64 @@ def cmd_build(args: argparse.Namespace) -> int:
         return subprocess.call(command, cwd=root, env=env)
 
 
+def ensure_merge_drivers(root: Path) -> list[str]:
+    """Register the merge drivers in repo-local config; idempotent.  Returns what changed."""
+    changed = []
+    for key, value in MERGE_DRIVERS.items():
+        if git("config", "--local", "--get", key, cwd=root, check=False).strip() != value:
+            git("config", "--local", key, value, cwd=root)
+            changed.append(key)
+    return changed
+
+
 def cmd_setup(args: argparse.Namespace) -> int:
     root, _ = here()
-    settings = {
-        "rerere.enabled": "true",
-        "rerere.autoupdate": "true",
-        "merge.lucid-generated.name": "Lucid generated file: keep one side, regenerate after",
-        "merge.lucid-generated.driver": "true",
-    }
+    settings = {"rerere.enabled": "true", "rerere.autoupdate": "true", **MERGE_DRIVERS}
     for key, value in settings.items():
-        git("config", key, value, cwd=root)
+        git("config", "--local", key, value, cwd=root)
         print(f"git config {key} = {value}")
     return 0
+
+
+def quality_delta(wt: Path, py: str, base: str) -> tuple[int, str]:
+    """Run the ratchet gate's ``--diff`` in *wt* against *base*: (exit code, output).
+
+    Exit 0 = no count rose, 1 = slop added (or over the baseline), 2 = the
+    gate could not measure.  A branch from before the gate existed has
+    nothing to run and passes with a note.
+    """
+    if not (wt / "tools/quality_gate/__main__.py").exists():
+        return 0, "(no tools/quality_gate on this branch — skipped)"
+    proc = subprocess.run(
+        [py, "-m", "tools.quality_gate", "--diff", base],
+        cwd=wt,
+        env=repo_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return proc.returncode, (proc.stdout + proc.stderr[-3000:]).rstrip()
+
+
+def judge_slop(wt: Path, py: str, base: str, allow: str | None) -> int:
+    """Print the SLOP DELTA; 0 to go on, SLOP_EXIT to refuse.  ``allow`` overrides, logged."""
+    code, output = quality_delta(wt, py, base)
+    print(output)
+    if code == 0:
+        return 0
+    if allow:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with SLOP_LOG.open("a") as log:
+            log.write(f"{stamp}\t{wt.name}\texit {code}\t{allow}\n")
+        print(f"⚠️  quality gate overridden (--allow-slop): {allow!r} — logged to {SLOP_LOG}")
+        return 0
+    why = "added slop" if code == 1 else "could not measure"
+    print(
+        f"✗ the quality gate {why} (exit {code}). The worker fixes it at the owner, or the "
+        "orchestrator lands anyway with --allow-slop \"<reason>\"."
+    )
+    return SLOP_EXIT
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -955,6 +1034,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--skip-stub-check", action="store_true")
     p.add_argument("--no-changelog", action="store_true")
+    p.add_argument(
+        "--allow-slop",
+        metavar="REASON",
+        help="land despite a quality-gate increase (orchestrator only; logged)",
+    )
     p.set_defaults(func=cmd_land)
     p = sub.add_parser("heavy", help="run a command under the heavy-job lock")
     p.add_argument("--no-wait", action="store_true", help="fail instead of queueing")

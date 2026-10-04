@@ -9,3 +9,7 @@ lucid/__init__.pyi             merge=lucid-generated
 lucid/test/audit/coverage.json merge=lucid-generated
 lucid/test/audit/doctest.json  merge=lucid-generated
 lucid/test/audit/suite.json    merge=lucid-generated
+
+# The quality ratchet baseline merges per key (both sides only ever lower a
+# count): tools/quality_gate --merge-baseline, registered by agent_ws.py setup.
+tools/quality_baseline.json    merge=lucid-quality-baseline
