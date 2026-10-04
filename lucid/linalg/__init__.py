@@ -375,6 +375,10 @@ def norm(
         ambiguous whether one norm or one per matrix was meant.  Also if
         ``dim`` names more than two axes, or if a matrix order is asked
         of a vector.
+    NotImplementedError
+        If a complex input is asked for a singular-value order (``"nuc"``
+        or a matrix ``ord`` of :math:`\pm 2`), which :func:`matrix_norm`
+        cannot take yet.
 
     Notes
     -----
@@ -404,6 +408,9 @@ def norm(
     Overflow is not a failure mode here: the input is rescaled by its
     largest magnitude before reducing, so a norm whose value is
     representable is computed even when its squares are not.
+
+    A complex input is reduced through its magnitudes :math:`|x_i|` by
+    whichever of the two norms runs, and the result is real.
 
     Examples
     --------
@@ -2044,6 +2051,9 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
     ValueError
         For an unknown ``p``, an input with fewer than two dimensions, or a
         non-square input under any order but :math:`\pm 2`.
+    NotImplementedError
+        For a complex ``A``: every order needs its singular values or its
+        inverse, and neither has a complex kernel yet.
 
     Notes
     -----
@@ -2081,6 +2091,16 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
         raise ValueError(
             f"cond(p={p!r}): A must be a square matrix or a batch of them, got "
             f"shape {tuple(A.shape)}"
+        )
+    if A.is_complex():
+        # Every order needs a kernel linalg has only for real input: the
+        # singular values (spectral orders, "nuc") or the inverse (the
+        # rest).  Said here, once and by name, rather than by whichever of
+        # ``svd`` / ``inv_ex`` happens to fail first.
+        needs = "SVD" if p is None or p in (2, -2, "nuc") else "inverse"
+        raise NotImplementedError(
+            f"cond(p={p!r}): a complex A needs a complex {needs}, which linalg "
+            "does not have yet"
         )
     if A.numel() == 0:
         # No entries, no singular values to compare: 0, as the reference
@@ -2487,8 +2507,17 @@ def vector_norm(
     xi = _unwrap(x)
     if dtype is not None:
         xi = _cast_for_norm(x, dtype)
-    if xi.dtype in (_C_engine.C64, _C_engine.C128):
-        xi = _C_engine.abs(xi)
+    # Every order below is a function of the magnitudes |x_i| alone, and
+    # this is the one place in linalg where a norm takes them: a complex
+    # input is replaced by its (real) magnitudes before any order sees it.
+    # ``matrix_norm``'s entry-wise orders and ``norm``'s dispatch reduce
+    # through this function instead of repeating the step — repeating it
+    # is how ``matrix_norm(·, "fro")`` went on squaring complex entries
+    # (a complex "norm" on Metal, an error on the CPU) after this function
+    # had stopped (CHA-147, CHA-231).  ``r`` is real from here on.  A real
+    # input keeps its signs, which no order can see: each one goes
+    # through ``abs``, a square, or a comparison with zero.
+    r = _C_engine.abs(xi) if xi.dtype in (_C_engine.C64, _C_engine.C128) else xi
     axes: list[int] = []
     if dim is None:
         # Every axis, rather than a flatten.
@@ -2497,7 +2526,7 @@ def vector_norm(
         # left to keep and a (2, 3) input reduced to shape (1,) where it
         # should hold its place as (1, 1).  Naming the axes gives the same
         # numbers and the right shape.
-        axes = list(range(len(xi.shape)))
+        axes = list(range(len(r.shape)))
     elif isinstance(dim, (list, tuple)):
         axes = [int(d) for d in dim]
     else:
@@ -2508,30 +2537,31 @@ def vector_norm(
         # every other order here produces a float; a norm whose dtype
         # depends on its order is a trap for anything downstream that
         # divides by it, so the count is cast to match.
-        zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
-        nz = _C_engine.not_equal(xi, zeros)
+        zeros = _C_engine.zeros(r.shape, r.dtype, r.device)
+        nz = _C_engine.not_equal(r, zeros)
         counted = _C_engine.sum(nz, axes, keepdim)
-        if xi.dtype in (_C_engine.F16, _C_engine.BF16, _C_engine.F64):
-            return _wrap(_C_engine.astype(counted, xi.dtype))
+        if r.dtype in (_C_engine.F16, _C_engine.BF16, _C_engine.F64):
+            return _wrap(_C_engine.astype(counted, r.dtype))
         return _wrap(_C_engine.astype(counted, _C_engine.F32))
 
     if ord == float("inf"):
-        return _wrap(_C_engine.max(_C_engine.abs(xi), axes, keepdim))
+        return _wrap(_C_engine.max(_C_engine.abs(r), axes, keepdim))
 
     if ord == float("-inf"):
-        return _wrap(_C_engine.min(_C_engine.abs(xi), axes, keepdim))
+        return _wrap(_C_engine.min(_C_engine.abs(r), axes, keepdim))
 
     if ord == 1:
-        return _wrap(_C_engine.sum(_C_engine.abs(xi), axes, keepdim))
+        return _wrap(_C_engine.sum(_C_engine.abs(r), axes, keepdim))
 
     if ord == 2:
-        sq = _C_engine.mul(xi, xi)
+        # r² = |x|² for real and complex input alike, and one product
+        # cheaper than going through ``abs`` first for a real one.
+        sq = _C_engine.mul(r, r)
         return _wrap(_C_engine.sqrt(_C_engine.sum(sq, axes, keepdim)))
 
     # General p-norm: sum(|x|^p)^(1/p)
     p = float(ord)
-    abs_xi = _C_engine.abs(xi)
-    powered = _C_engine.pow_scalar(abs_xi, p)
+    powered = _C_engine.pow_scalar(_C_engine.abs(r), p)
     s = _C_engine.sum(powered, axes, keepdim)
     return _wrap(_C_engine.pow_scalar(s, 1.0 / p))
 
@@ -2807,7 +2837,17 @@ def matrix_norm(
     Returns
     -------
     Tensor
-        Matrix norm of each batch.
+        Matrix norm of each batch — real, also for a complex ``x``.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` has fewer than two dimensions, ``dim`` does not name two
+        distinct axes, or ``ord`` is not one of the orders above.
+    NotImplementedError
+        If ``ord`` is ``"nuc"``, ``2`` or ``-2`` and ``x`` is complex:
+        those orders are read off the singular values, and :func:`svd`
+        has no complex kernel yet.
 
     Notes
     -----
@@ -2815,12 +2855,18 @@ def matrix_norm(
     :math:`O(\min(m,n)^2 \max(m,n))`.  Entry-wise norms reduce in a
     single pass.
 
+    The entry-wise orders (``"fro"``, :math:`\pm 1`, :math:`\pm\infty`)
+    are taken through :func:`vector_norm`, so a complex ``x`` is reduced
+    through its magnitudes :math:`|A_{ij}|` exactly as a vector would be.
+
     Examples
     --------
     >>> import lucid
     >>> from lucid.linalg import matrix_norm
     >>> A = lucid.tensor([[3.0, 4.0], [0.0, 0.0]])
     >>> matrix_norm(A, ord="fro")
+    tensor(5.)
+    >>> matrix_norm(lucid.tensor([[3 + 4j, 0j], [0j, 0j]]), ord="fro")
     tensor(5.)
     """
     xi = _unwrap(x)
@@ -2859,25 +2905,34 @@ def matrix_norm(
             impl, [n for i, n in enumerate(shape) if i not in (d0, d1)]
         )
 
+    # The entry-wise orders are vector norms of the entries, and reduce
+    # through ``vector_norm``, which owns taking |x| — so a complex input
+    # is handled there, once, and not by a second copy of the step here.
+    # This branch used to square the entries itself, which for a complex
+    # input summed x·x instead of |x|²: ``(3.37-0.59j)`` on Metal where
+    # the answer is a real 4.123, and an error on the CPU (CHA-231).
     if ord == "fro":
-        sq = _C_engine.mul(xi, xi)
-        return _wrap(_drop(_C_engine.sqrt(_C_engine.sum(sq, [d0, d1], True))))
+        return vector_norm(x, 2, [d0, d1], keepdim)
 
-    if ord == 1 or ord == -1:
-        # Absolute column sums: sum down the rows (d0), then take the
-        # extreme across the columns (d1).
-        col_sums = _C_engine.sum(_C_engine.abs(xi), [d0], True)
-        pick = _C_engine.max if ord == 1 else _C_engine.min
-        return _wrap(_drop(pick(col_sums, [d1], True)))
-
-    if ord == float("inf") or ord == float("-inf"):
-        # Absolute row sums: the same, with the axes exchanged.
-        row_sums = _C_engine.sum(_C_engine.abs(xi), [d1], True)
-        pick = _C_engine.max if ord == float("inf") else _C_engine.min
-        return _wrap(_drop(pick(row_sums, [d0], True)))
+    if ord == 1 or ord == -1 or ord == float("inf") or ord == float("-inf"):
+        # Absolute column sums (ord ±1) are vector 1-norms down the rows
+        # (d0), and the extreme is taken across the columns (d1); the
+        # absolute row sums of ord ±inf exchange the two axes.
+        along, across = (d0, d1) if ord == 1 or ord == -1 else (d1, d0)
+        sums = _unwrap(vector_norm(x, 1, along, True))
+        pick = _C_engine.max if ord == 1 or ord == float("inf") else _C_engine.min
+        return _wrap(_drop(pick(sums, [across], True)))
 
     if ord not in ("nuc", 2, -2):
         raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
+    if xi.dtype in (_C_engine.C64, _C_engine.C128):
+        # Refused here rather than inside ``svd``, which would say only
+        # that it has no complex kernel and not which norms still work.
+        raise NotImplementedError(
+            f"matrix_norm: ord={ord!r} is read off the singular values, and "
+            "svd has no complex kernel yet; ord='fro', 1, -1, inf and -inf "
+            "reduce through |x| and accept a complex input"
+        )
 
     # Singular-value orders.  ``svd`` reads the matrix off the trailing two
     # axes, so an arbitrary ``dim`` has to be moved there first; the
