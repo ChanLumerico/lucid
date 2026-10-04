@@ -427,11 +427,28 @@ def _class_nll(
 
     if reduction == "none":
         return nll
+    # Half precision is summed in float32.  A float16 count of kept samples
+    # is inf past 65504, and so is the summed loss, so a mean over a long
+    # sequence batch came out inf / inf = NaN though every term was small.
+    out_dtype = nll.dtype
+    acc = _accumulation_dtype(nll)
+    if acc != out_dtype:
+        nll = nll.to(dtype=acc)
+        if sample_weight is not None:
+            sample_weight = sample_weight.to(dtype=acc)
+    reduced: Tensor
     if reduction == "sum":
-        return nll.sum()
-    # mean — the divisor is the total weight of the samples kept.
-    if sample_weight is None:
-        return nll.mean()
+        reduced = nll.sum()
+    elif sample_weight is None:
+        reduced = nll.mean()
+    else:
+        reduced = _weighted_mean(nll, sample_weight)
+    return reduced if acc == out_dtype else reduced.to(dtype=out_dtype)
+
+
+def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
+    """``nll.sum() / sample_weight.sum()`` — the mean of :func:`_class_nll`,
+    whose divisor is the total weight of the samples kept."""
     total: Tensor = nll.sum()
     denom: Tensor = sample_weight.sum()
     # A batch with nothing kept — all padding, as one micro-batch of an

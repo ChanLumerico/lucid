@@ -465,3 +465,48 @@ class TestABatchWithEveryTargetIgnored:
         assert _close(lo.item(), ro.item())
         assert lx.grad is not None
         assert _close(_vals(lx.grad), rx.grad.tolist())
+
+
+# ── CHA-35 (found while fixing it in the engine) ───────────────────────────
+
+
+class TestHalfPrecisionClassLossesSumInFloat32:
+    """A float16 ``cross_entropy`` over more than 65504 rows was NaN.
+
+    The count of kept samples and the summed loss were both float16, so
+    both were ``inf`` past 65504 and the mean was ``inf / inf``.  They are
+    summed in float32 now and the result rounded back to float16.  (The
+    reference's CPU kernel keeps the float16 count and is NaN here too, so
+    this is held to the float32 answer rather than to the reference.)
+    """
+
+    ROWS = 70_000
+
+    def _case(self, device: str) -> tuple[lucid.Tensor, lucid.Tensor]:
+        x = lucid.zeros(self.ROWS, 4, dtype=lucid.float16, device=device)
+        t = lucid.zeros(self.ROWS, dtype=lucid.int64, device=device)
+        return x, t
+
+    def test_cross_entropy_mean_is_finite(self, device: str) -> None:
+        x, t = self._case(device)
+        x.requires_grad_()
+        loss = F.cross_entropy(x, t)
+        assert loss.dtype == lucid.float16
+        assert _close(loss.item(), math.log(4.0), tol=1e-3)
+        loss.backward()
+        assert x.grad is not None
+        row = _vals(x.grad[0])
+        assert _close(row, [-0.75 / self.ROWS] + [0.25 / self.ROWS] * 3, tol=1e-2)
+
+    def test_nll_loss_mean_with_a_weight_is_finite(self, device: str) -> None:
+        x, t = self._case(device)
+        w = lucid.tensor([2.0, 1.0, 1.0, 1.0], dtype=lucid.float16, device=device)
+        loss = F.nll_loss(F.log_softmax(x, dim=1), t, weight=w)
+        assert loss.dtype == lucid.float16
+        assert _close(loss.item(), math.log(4.0), tol=1e-3)
+
+    def test_a_float16_sum_past_65504_is_inf(self, device: str) -> None:
+        # The sum itself does not fit: rounded back, it is inf, as in the
+        # reference — only the mean's intermediate overflow was the bug.
+        x, t = self._case(device)
+        assert math.isinf(F.cross_entropy(x, t, reduction="sum").item())
