@@ -313,8 +313,13 @@ def _to_impl(
         if impl.requires_grad != _rg:
             from lucid._dispatch import _impl_with_grad
 
-            impl = _impl_with_grad(impl, _rg)
-        return impl
+            return _impl_with_grad(impl, _rg)
+        # ``Tensor(x)`` used to hand back ``x``'s own TensorImpl here, so
+        # the new tensor was ``x`` under another name: a flag flipped or a
+        # gradient accumulated on either showed up on both.  A view shares
+        # the storage without sharing the tensor, and keeps a source that
+        # requires grad in the graph, as the reference's ``Tensor(x)`` does.
+        return _C_engine.view(impl, list(impl.shape))
 
     if isinstance(data, _C_engine.TensorImpl):
         if data.requires_grad != _rg:

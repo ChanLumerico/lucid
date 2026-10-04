@@ -634,14 +634,21 @@ def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
     # Check for advanced indexing (any Tensor element)
     has_advanced = any(hasattr(i, "_impl") for i in idx)
 
+    expanded = _expand_ellipsis(idx, len(impl.shape))
     if not has_advanced:
         # Pure basic indexing
-        expanded = _expand_ellipsis(idx, len(impl.shape))
-        return _wrap(_apply_basic_index(impl, expanded))
-
-    # Advanced indexing
-    expanded = _expand_ellipsis(idx, len(impl.shape))
-    return _wrap(_advanced_getitem(impl, expanded))
+        out = _apply_basic_index(impl, expanded)
+    else:
+        out = _advanced_getitem(impl, expanded)
+    if out is impl:
+        # An index that selects everything (``x[:]``, ``x[...]``, ``x[()]``,
+        # ``x[0:n]``) came back as ``t``'s own TensorImpl, so the result
+        # was ``t`` under another name: ``x[:].requires_grad_(True)`` turned
+        # on ``x``'s flag and ``x[:].grad`` was ``x.grad``.  The reference's
+        # result is a view — a tensor of its own over the same storage, in
+        # ``t``'s graph when ``t`` requires grad — and so is this one.
+        out = _C_engine.view(impl, list(impl.shape))
+    return _wrap(out)
 
 
 def _dim_indicator(

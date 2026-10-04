@@ -46,6 +46,22 @@ if TYPE_CHECKING:
 _Impl = _C_engine.TensorImpl
 
 
+def _own_impl(out: _Impl, a_impl: _Impl) -> _Impl:
+    """``out``, or a same-shape view of ``a_impl`` when an op handed it back.
+
+    A no-op view (``narrow`` over a whole dimension, ``squeeze`` of a dim
+    that is not size 1) returned its input's own ``TensorImpl``, so two
+    Python tensors shared one: flipping ``requires_grad`` on the result
+    flipped it on the input, and a gradient accumulated into either landed
+    on both.  A view is a tensor of its own — the reference framework's
+    result is a distinct view too — that still reads and writes the input's
+    storage and, when the input requires grad, carries it through autograd.
+    """
+    if out is a_impl:
+        return _C_engine.view(a_impl, list(a_impl.shape))
+    return out
+
+
 # ── Binary dtype-promotion helpers ───────────────────────────────────────────
 # Mirrors the same table in ``_tensor/_dunders.py``.  Kept in sync manually;
 # both live in Python-only infrastructure (no external deps, H4-safe).
@@ -548,7 +564,9 @@ def _kthvalue_adapter(
 
 def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     """narrow(a, dim, start, length)."""
-    return _C_engine.narrow(a_impl, int(dim), int(start), int(length))
+    return _own_impl(
+        _C_engine.narrow(a_impl, int(dim), int(start), int(length)), a_impl
+    )
 
 
 def _as_strided_adapter(
@@ -687,9 +705,13 @@ def _squeeze_adapter(
     x_impl: _Impl,
     dim: int | Sequence[int] | None = None,
 ) -> _Impl:
-    """squeeze(x, dim=None) — None drops all size-1; list squeezes multiple."""
+    """squeeze(x, dim=None) — None drops all size-1; list squeezes multiple.
+
+    A dim that is not size 1 is left alone, as the reference does — and the
+    result is still a view of its own (see :func:`_own_impl`).
+    """
     if dim is None:
-        return _C_engine.squeeze_all(x_impl)
+        return _own_impl(_C_engine.squeeze_all(x_impl), x_impl)
     if isinstance(dim, (list, tuple)):
         ndim = len(x_impl.shape)
         result = x_impl
@@ -699,13 +721,13 @@ def _squeeze_adapter(
             if 0 <= nd < ndim and int(x_impl.shape[nd]) == 1:
                 result = _C_engine.squeeze(result, nd)
                 ndim -= 1
-        return result
+        return _own_impl(result, x_impl)
     ndim = len(x_impl.shape)
     d = int(cast(int, dim))
     nd = d if d >= 0 else ndim + d
     # Silently no-op on non-unit dim (matches reference behaviour).
     if nd < 0 or nd >= ndim or int(x_impl.shape[nd]) != 1:
-        return x_impl
+        return _own_impl(x_impl, x_impl)
     return _C_engine.squeeze(x_impl, nd)
 
 
