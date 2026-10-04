@@ -518,7 +518,9 @@ def cross_entropy(
         ``"mean"`` (default), ``"sum"``, or ``"none"``.  Under
         ``"mean"``, the divisor is the sum of effective sample weights
         (after ``weight`` and ``ignore_index``), not the raw element
-        count.
+        count — for class-index targets.  For class-probability targets
+        it is the number of samples, and ``ignore_index`` must be left
+        negative.
     label_smoothing : float, optional
         Interpolation factor :math:`\alpha \in [0, 1)` between hard
         one-hot targets and a uniform distribution
@@ -567,8 +569,54 @@ def cross_entropy(
 
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
     log_p: Tensor = _log_softmax(x, dim=1)
+    if tuple(target.shape) == tuple(x.shape):
+        # A target of the input's own shape holds class probabilities, as
+        # in the reference; the docstring said so, and the gather path
+        # refused it with a rank mismatch.
+        return _soft_target_nll(
+            log_p, target, weight, ignore_index, reduction, label_smoothing
+        )
     return _class_nll(
         log_p, target, weight, ignore_index, reduction, label_smoothing, "cross_entropy"
+    )
+
+
+def _soft_target_nll(
+    log_p: Tensor,
+    target: Tensor,
+    weight: Tensor | None,
+    ignore_index: int | None,
+    reduction: str,
+    label_smoothing: float,
+) -> Tensor:
+    """Cross-entropy against per-class probabilities ``target`` of the
+    shape of ``log_p``: ``-sum_c w_c y_c log p_c`` per sample, and a
+    ``"mean"`` over the samples (not over their weights)."""
+    if not target.is_floating_point():
+        raise TypeError(
+            "cross_entropy: a target of the input's shape holds class "
+            f"probabilities and must be floating point, got {target.dtype}"
+        )
+    if ignore_index is not None and ignore_index >= 0:
+        raise ValueError(
+            "cross_entropy: ignore_index is not supported for a target of "
+            "class probabilities"
+        )
+    num_classes: int = int(log_p.shape[1])
+    if label_smoothing > 0.0:
+        target = target * (1.0 - label_smoothing) + label_smoothing / num_classes
+    prod: Tensor = log_p * target
+    if weight is not None:
+        prod = prod * weight.reshape([1, num_classes] + [1] * (log_p.ndim - 2))
+    per_sample: Tensor = -prod.sum(dim=1)
+    if reduction == "none":
+        return per_sample
+    out_dtype = per_sample.dtype
+    acc = _accumulation_dtype(per_sample)
+    return _reduce_in(
+        per_sample if acc == out_dtype else per_sample.to(dtype=acc),
+        reduction,
+        out_dtype,
     )
 
 

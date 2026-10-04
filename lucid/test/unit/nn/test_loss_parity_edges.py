@@ -752,3 +752,89 @@ class TestAnUnknownReductionIsRefused:
         fn = _reduction_cases()[name]
         for reduction in ("none", "mean", "sum"):
             fn(reduction)  # type: ignore[operator]
+
+
+# ── CHA-94 (b) ─────────────────────────────────────────────────────────────
+
+
+class TestCrossEntropyWithClassProbabilities:
+    """A target of the input's shape holds class probabilities.
+
+    The docstring said so; the gather path refused it with a rank mismatch.
+    """
+
+    X = [[1.0, 2.0, 3.0], [0.5, 0.1, 0.2]]
+    Q = [[0.2, 0.3, 0.5], [1.0, 0.0, 0.0]]
+
+    @staticmethod
+    def _by_hand(x: list[list[float]], q: list[list[float]], w: list[float]) -> list[float]:
+        out = []
+        for row, probs in zip(x, q):
+            lse = math.log(sum(math.exp(v) for v in row))
+            out.append(-sum(wc * pc * (v - lse) for wc, pc, v in zip(w, probs, row)))
+        return out
+
+    def test_the_value_is_the_expected_log_likelihood(self, device: str) -> None:
+        x = lucid.tensor(self.X, device=device)
+        q = lucid.tensor(self.Q, device=device)
+        per = self._by_hand(self.X, self.Q, [1.0, 1.0, 1.0])
+        assert _close(_vals(F.cross_entropy(x, q, reduction="none")), per)
+        assert _close(F.cross_entropy(x, q).item(), sum(per) / 2)
+
+    def test_a_weighted_mean_divides_by_the_samples(self, device: str) -> None:
+        x = lucid.tensor(self.X, device=device)
+        q = lucid.tensor(self.Q, device=device)
+        w = [1.0, 2.0, 3.0]
+        per = self._by_hand(self.X, self.Q, w)
+        got = F.cross_entropy(x, q, weight=lucid.tensor(w, device=device))
+        assert _close(got.item(), sum(per) / 2)
+
+    def test_a_one_hot_probability_target_is_the_index_target(self, device: str) -> None:
+        x = lucid.tensor(self.X, device=device)
+        hard = F.cross_entropy(x, lucid.tensor([2, 0], device=device))
+        soft = F.cross_entropy(
+            x, lucid.tensor([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]], device=device)
+        )
+        assert _close(soft.item(), hard.item())
+
+    def test_a_k_d_probability_target(self, device: str) -> None:
+        x = lucid.randn(2, 3, 4, device=device)
+        q = F.softmax(lucid.randn(2, 3, 4, device=device), dim=1)
+        assert F.cross_entropy(x, q, reduction="none").shape == (2, 4)
+
+    def test_an_integer_target_of_the_input_shape_is_refused(self, device: str) -> None:
+        x = lucid.tensor(self.X, device=device)
+        with pytest.raises(TypeError, match="floating point"):
+            F.cross_entropy(x, lucid.tensor([[0, 1, 0], [1, 0, 0]], device=device))
+
+    def test_ignore_index_is_refused(self, device: str) -> None:
+        x = lucid.tensor(self.X, device=device)
+        with pytest.raises(ValueError, match="ignore_index"):
+            F.cross_entropy(x, lucid.tensor(self.Q, device=device), ignore_index=1)
+
+    @pytest.mark.parity
+    @pytest.mark.parametrize("option", ["plain", "weight", "smoothing", "none", "sum"])
+    def test_matches_the_reference(self, ref: object, device: str, option: str) -> None:
+        R = ref
+        lx = lucid.tensor(self.X, requires_grad=True, device=device)
+        lq = lucid.tensor(self.Q, device=device)
+        rx = R.tensor(self.X, requires_grad=True)  # type: ignore[attr-defined]
+        rq = R.tensor(self.Q)  # type: ignore[attr-defined]
+        rf = R.nn.functional  # type: ignore[attr-defined]
+        if option == "weight":
+            lo = F.cross_entropy(lx, lq, weight=lucid.tensor([1.0, 2.0, 3.0], device=device))
+            ro = rf.cross_entropy(rx, rq, weight=R.tensor([1.0, 2.0, 3.0]))  # type: ignore[attr-defined]
+        elif option == "smoothing":
+            lo = F.cross_entropy(lx, lq, label_smoothing=0.2)
+            ro = rf.cross_entropy(rx, rq, label_smoothing=0.2)
+        elif option in ("none", "sum"):
+            lo = F.cross_entropy(lx, lq, reduction=option)
+            ro = rf.cross_entropy(rx, rq, reduction=option)
+        else:
+            lo = F.cross_entropy(lx, lq)
+            ro = rf.cross_entropy(rx, rq)
+        lo.sum().backward()
+        ro.sum().backward()
+        assert _close(_vals(lo), ro.tolist())
+        assert lx.grad is not None
+        assert _close(_vals(lx.grad), rx.grad.tolist())
