@@ -61,6 +61,7 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -83,6 +84,7 @@
 #include "GeluGrad.h"
 #include "Im2Col.h"
 #include "Lapack.h"
+#include "NonFinite.h"
 #include "Norm.h"
 #include "Parallel.h"
 #include "Pool.h"
@@ -2399,64 +2401,56 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
+    // isinf / isnan / isfinite share one body.  The dtype picks the bit
+    // layout and the question is a template argument (see NonFinite.h).
+    // Only float32 and float64 used to be tested.  Every other dtype got the
+    // integer answer, so a float16 or bfloat16 infinity read as finite.  An
+    // integer or bool tensor really does hold no NaN and no infinity, so
+    // that answer is kept for those dtypes only.
+    template <cpu::NonFiniteProbe P>
+    static Storage nonfinite_probe(const Storage& a, const Shape& shape, Dtype dt) {
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
+        const std::size_t n = shape_numel(shape);
         auto ptr = allocate_aligned_bytes(n, Device::CPU);
         auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isinf(p[i]) ? 1u : 0u;
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isinf(p[i]) ? 1u : 0u;
-        } else {
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = 0u;
+        const void* src = cs.ptr.get();
+        switch (dt) {
+        case Dtype::F16:
+            cpu::probe_nonfinite<P, cpu::HalfFormat>(src, dst, n, kStreamGrain);
+            break;
+        case Dtype::BF16:
+            cpu::probe_nonfinite<P, cpu::BrainFormat>(src, dst, n, kStreamGrain);
+            break;
+        case Dtype::F32:
+            cpu::probe_nonfinite<P, cpu::SingleFormat>(src, dst, n, kStreamGrain);
+            break;
+        case Dtype::F64:
+            cpu::probe_nonfinite<P, cpu::DoubleFormat>(src, dst, n, kStreamGrain);
+            break;
+        case Dtype::C64:
+            cpu::probe_nonfinite<P, cpu::SingleFormat, true>(src, dst, n, kStreamGrain);
+            break;
+        case Dtype::C128:
+            cpu::probe_nonfinite<P, cpu::DoubleFormat, true>(src, dst, n, kStreamGrain);
+            break;
+        default:
+            std::fill_n(dst, n,
+                        P == cpu::NonFiniteProbe::IsFinite ? std::uint8_t{1} : std::uint8_t{0});
+            break;
         }
         return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+    }
+
+    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
+        return nonfinite_probe<cpu::NonFiniteProbe::IsInf>(a, shape, dt);
     }
 
     Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(n, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isnan(p[i]) ? 1u : 0u;
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isnan(p[i]) ? 1u : 0u;
-        } else {
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = 0u;
-        }
-        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+        return nonfinite_probe<cpu::NonFiniteProbe::IsNan>(a, shape, dt);
     }
 
     Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(n, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isfinite(p[i]) ? 1u : 0u;
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = std::isfinite(p[i]) ? 1u : 0u;
-        } else {
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = 1u;
-        }
-        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
+        return nonfinite_probe<cpu::NonFiniteProbe::IsFinite>(a, shape, dt);
     }
 
     // Truth of element ``i`` in its own dtype.  ``any`` / ``all`` handled
@@ -2551,31 +2545,58 @@ public:
                        double posinf_val,
                        double neginf_val) override {
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto replace = [&](auto* dst, const auto* src, auto nan_v, auto pi_v, auto ni_v) {
-            for (std::size_t i = 0; i < n; ++i) {
-                auto v = src[i];
-                if (std::isnan(v))
-                    dst[i] = nan_v;
-                else if (v == std::numeric_limits<decltype(v)>::infinity())
-                    dst[i] = pi_v;
-                else if (v == -std::numeric_limits<decltype(v)>::infinity())
-                    dst[i] = ni_v;
-                else
-                    dst[i] = v;
-            }
+        const void* src = cs.ptr.get();
+        void* dst = ptr.get();
+        // Each replacement is rounded into the dtype once, as a cast rounds
+        // it (through float for the 16-bit formats, as the reference
+        // framework's half types do).  A value the dtype cannot hold becomes
+        // its infinity, as an explicit out-of-range replacement does in the
+        // reference framework.  When no replacement is given, the op passes
+        // the dtype's own extremes, which every format holds exactly.
+        //
+        // Only float32 and float64 used to be replaced.  float16 and bfloat16
+        // came back untouched.  A complex tensor is replaced part by part:
+        // its 2n interleaved floats go through the real kernel.
+        auto run = [&](auto format, std::size_t words, auto to_bits) {
+            using Format = decltype(format);
+            cpu::replace_nonfinite<Format>(src, dst, words, to_bits(nan_val), to_bits(posinf_val),
+                                           to_bits(neginf_val), kStreamGrain);
         };
-        if (dt == Dtype::F32) {
-            replace(reinterpret_cast<float*>(ptr.get()),
-                    reinterpret_cast<const float*>(cs.ptr.get()), static_cast<float>(nan_val),
-                    static_cast<float>(posinf_val), static_cast<float>(neginf_val));
-        } else if (dt == Dtype::F64) {
-            replace(reinterpret_cast<double*>(ptr.get()),
-                    reinterpret_cast<const double*>(cs.ptr.get()), nan_val, posinf_val, neginf_val);
-        } else {
-            std::memcpy(ptr.get(), cs.ptr.get(), nb);
+        auto half_bits = [](double v) { return detail::float_to_half_bits(static_cast<float>(v)); };
+        auto brain_bits = [](double v) {
+            return detail::float_to_bfloat_bits(static_cast<float>(v));
+        };
+        auto single_bits = [](double v) {
+            return std::bit_cast<std::uint32_t>(static_cast<float>(v));
+        };
+        auto double_bits = [](double v) { return std::bit_cast<std::uint64_t>(v); };
+        switch (dt) {
+        case Dtype::F16:
+            run(cpu::HalfFormat{}, n, half_bits);
+            break;
+        case Dtype::BF16:
+            run(cpu::BrainFormat{}, n, brain_bits);
+            break;
+        case Dtype::F32:
+            run(cpu::SingleFormat{}, n, single_bits);
+            break;
+        case Dtype::F64:
+            run(cpu::DoubleFormat{}, n, double_bits);
+            break;
+        case Dtype::C64:
+            run(cpu::SingleFormat{}, 2 * n, single_bits);
+            break;
+        case Dtype::C128:
+            run(cpu::DoubleFormat{}, 2 * n, double_bits);
+            break;
+        default:
+            // An integer or bool tensor holds nothing to replace.
+            if (nb != 0)
+                std::memcpy(dst, src, nb);
+            break;
         }
         return Storage{CpuStorage{ptr, nb, dt}};
     }
