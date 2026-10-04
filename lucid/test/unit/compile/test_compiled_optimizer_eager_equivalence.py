@@ -402,3 +402,88 @@ def test_a_compiled_checkpoint_loads_into_an_eager_optimizer() -> None:
         reference.step(x, t)
         eager.step(x, t)
     assert _drift(_snapshot(reference.model), _snapshot(eager.model)) < TOL
+
+
+# ── CHA-177: parameters without a gradient do not move ─────────────
+
+
+FREEZABLE = [
+    pytest.param(
+        lambda m: optim.SGD(m.parameters(), lr=0.1, momentum=0.9, weight_decay=0.1),
+        id="SGD",
+    ),
+    pytest.param(
+        lambda m: optim.AdamW(m.parameters(), lr=0.05, weight_decay=0.1), id="AdamW"
+    ),
+    pytest.param(
+        lambda m: optim.Adam(m.parameters(), lr=0.05, weight_decay=0.1), id="Adam"
+    ),
+    pytest.param(lambda m: optim.NAdam(m.parameters(), lr=0.05), id="NAdam"),
+]
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+@pytest.mark.parametrize("make_opt", FREEZABLE)
+def test_a_frozen_parameter_stays_put(make_opt: OptFactory, mode: str) -> None:
+    """``requires_grad=False`` with every parameter in the optimizer: no update."""
+    x, t = _data()
+    eager, comp = _both(mode, make_opt)
+    for r in (eager, comp):
+        r.model.fc1.weight.requires_grad_(False)
+    frozen = comp.model.fc1.weight.detach().clone()
+    for _ in range(3):
+        eager.step(x, t)
+        comp.step(x, t)
+    assert float((comp.model.fc1.weight - frozen).abs().max().item()) == 0.0
+    assert _drift(_snapshot(eager.model), _snapshot(comp.model)) < TOL
+    # Never stepped, so no state for it (flat index 0), as in eager.
+    assert 0 not in comp.opt.state_dict()["state"]
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+@pytest.mark.parametrize("make_opt", FREEZABLE)
+def test_freezing_and_unfreezing_mid_run_follows_eager(
+    make_opt: OptFactory, mode: str
+) -> None:
+    """Train, freeze the first layer, unfreeze it: each parameter keeps its own
+    step count, so bias corrections after the unfreeze match eager too."""
+    x, t = _data()
+    eager, comp = _both(mode, make_opt)
+    plan = [True, True, False, False, True, True]
+    for k, trainable in enumerate(plan):
+        for r in (eager, comp):
+            r.model.fc1.weight.requires_grad_(trainable)
+            r.model.fc1.bias.requires_grad_(trainable)
+        eager.step(x, t)
+        comp.step(x, t)
+        drift = _drift(_snapshot(eager.model), _snapshot(comp.model))
+        assert drift < TOL, f"step {k + 1}: drift {drift:.3e}"
+    _assert_same_state(comp.opt.state_dict(), eager.opt.state_dict())
+    # One executable per participant set, plus one once the unfrozen layer's
+    # step count trails the rest (its bias corrections are its own).
+    assert comp.executables() <= 3
+
+
+def test_an_active_set_that_keeps_changing_uses_one_masked_executable() -> None:
+    """Gradients present for a different subset every step (a routed model):
+    after a few exact executables one masked executable serves every set."""
+    lucid.manual_seed(0)
+    experts_e = [nn.Linear(4, 4).to(COMPILE_DEVICE) for _ in range(4)]
+    lucid.manual_seed(0)
+    experts_c = [nn.Linear(4, 4).to(COMPILE_DEVICE) for _ in range(4)]
+    params_e = [p for e in experts_e for p in e.parameters()]
+    params_c = [p for e in experts_c for p in e.parameters()]
+    eager = optim.Adam(params_e, lr=0.05, weight_decay=0.01)
+    comp = compile_optimizer(optim.Adam(params_c, lr=0.05, weight_decay=0.01))
+    lucid.manual_seed(2)
+    x = lucid.randn(5, 4).to(COMPILE_DEVICE)
+    routes = [(0,), (1, 2), (3,), (0, 3), (1,), (2, 3), (0, 1, 2), (2,), (0, 1)]
+    for route in routes:
+        for experts, opt in ((experts_e, eager), (experts_c, comp)):
+            opt.zero_grad()
+            sum(experts[i](x).square().mean() for i in route).backward()  # type: ignore[union-attr]
+            opt.step()
+        drift = _drift(params_e, params_c)  # type: ignore[arg-type]
+        assert drift < TOL, f"route {route}: drift {drift:.3e}"
+    _assert_same_state(comp.state_dict(), eager.state_dict())
+    assert len(comp._plans) <= comp._EXACT_PLAN_LIMIT + 1
