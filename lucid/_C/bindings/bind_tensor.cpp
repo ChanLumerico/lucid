@@ -279,9 +279,12 @@ void register_tensor_impl(py::module_& m) {
         .def(
             "grad_to_tensor",
             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> { return t.grad_to_tensor(); },
-            "Wrap the accumulated gradient as a fresh TensorImpl sharing "
-            "the same Storage.  Returns None when no gradient has been "
-            "accumulated.  Replaces the prior numpy round-trip in "
+            "Return the accumulated gradient as a TensorImpl reading the "
+            "gradient's own buffer (no copy).  On the CPU the same TensorImpl "
+            "comes back for as long as it lives, and an in-place op on it "
+            "writes into the gradient.  The graph-mode gradient is returned "
+            "as is when ``backward(create_graph=True)`` set one.  Returns "
+            "None when no gradient has been accumulated.  Backs "
             "``Tensor.grad``.")
         .def(
             "item",
