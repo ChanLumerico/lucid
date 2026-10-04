@@ -33,6 +33,7 @@ MPSGraph dispatch time alone, beating eager once the parameter
 count is large enough to amortise the per-call overhead.
 """
 
+import struct
 from typing import TYPE_CHECKING, Callable, Sequence, cast, final, override
 
 from lucid._C import engine as _C_engine
@@ -67,8 +68,8 @@ def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
           decoupled weight decay respectively.  AMSGrad variant of
           Adam is rejected at construct time (a planned follow-up).
         * :class:`~lucid.optim.RMSprop` — exponentially-smoothed
-          squared gradient.  ``centered=True`` is rejected loudly
-          here even though the eager backend silently drops it.
+          squared gradient; ``centered=True`` keeps the running
+          gradient mean as one more state buffer.
         * :class:`~lucid.optim.Adagrad` — per-parameter cumulative
           squared gradient; ``lr_decay`` is fed as a per-step
           scalar so the trace stays signature-stable.
@@ -1215,21 +1216,19 @@ class _CompiledRMSprop(_CompiledStepBase):
 
         g_t       &\leftarrow g_t + \lambda \theta_t \\
         s_t       &= \alpha s_{t-1} + (1-\alpha) g_t^{2} \\
-        \tilde g  &= g_t / (\sqrt{s_t} + \varepsilon) \\
+        \bar g_t  &= \alpha \bar g_{t-1} + (1-\alpha) g_t
+                       \quad\text{(only when centered)} \\
+        v_t       &= s_t \text{, or } s_t - \bar g_t^{2}
+                       \text{ when centered} \\
+        \tilde g  &= g_t / (\sqrt{v_t} + \varepsilon) \\
         b_t       &= \mu b_{t-1} + \tilde g
                        \quad\text{(only when } \mu \ne 0 \text{)} \\
         \theta_t  &= \theta_{t-1} - \eta \,
                        (b_t \text{ or } \tilde g)
 
-    The ``centered=True`` variant (which subtracts a running gradient
-    mean to compute a *centered* second moment) is rejected at
-    construct time — the eager backend silently drops the flag, so
-    surfacing it loudly here keeps compile + eager in agreement.
-
-    Raises (at construct time)
-    --------------------------
-    NotImplementedError
-        When ``centered=True`` is set.
+    ``centered=True`` keeps the running gradient mean ``grad_avg`` as
+    one more state buffer, advanced as a lerp toward :math:`g_t` exactly
+    as the eager engine does.
 
     See Also
     --------
@@ -1237,11 +1236,10 @@ class _CompiledRMSprop(_CompiledStepBase):
     """
 
     def __init__(self, opt: Optimizer) -> None:
-        """Capture RMSprop hyperparameters + allocate ``square_avg`` (+ momentum) buffers.
+        """Capture RMSprop hyperparameters + allocate its state buffers.
 
-        Raises :class:`NotImplementedError` for ``centered=True`` —
-        the eager backend silently drops that flag, so surfacing it
-        loudly here keeps the compile + eager paths in agreement.
+        ``square_avg`` always; the momentum buffer when ``momentum != 0``
+        and ``grad_avg`` when ``centered``.
         """
         from lucid.optim.others import RMSprop
 
@@ -1251,38 +1249,41 @@ class _CompiledRMSprop(_CompiledStepBase):
             )
         super().__init__(opt)
         g = opt.param_groups[0]
-        if g.get("centered", False):
-            raise NotImplementedError(
-                "compile_optimizer: RMSprop(centered=True) is not yet "
-                "supported.  The Lucid eager backend silently drops the "
-                "flag too; we surface it as a compile-time error so "
-                "callers know to switch to centered=False."
-            )
         self._lr = _hp(g, "lr", 0.0)
         self._alpha = _hp(g, "alpha", 0.99)
         self._eps = _hp(g, "eps", 1e-8)
         self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._momentum = _hp(g, "momentum", 0.0)
-        # State: square_avg (always); momentum buffer when momentum != 0.
+        self._centered = bool(g.get("centered", False))
+        # State: square_avg (always); momentum buffer when momentum != 0;
+        # grad_avg when centered.
         self._square_avg = [_zeros_like(p) for p in self._params]
         if self._momentum != 0.0:
             self._momenta = [_zeros_like(p) for p in self._params]
         else:
             self._momenta = []
+        if self._centered:
+            self._grad_avg = [_zeros_like(p) for p in self._params]
+        else:
+            self._grad_avg = []
         for i in range(len(self._params)):
             self._buffer_table[("square_avg", i)] = _list_getter(self._square_avg, i)
         for i in range(len(self._momenta)):
             self._buffer_table[("mom", i)] = _list_getter(self._momenta, i)
+        for i in range(len(self._grad_avg)):
+            self._buffer_table[("grad_avg", i)] = _list_getter(self._grad_avg, i)
 
     @override
     def _register_state_in_inputs(
         self, register: Callable[[str, int, Tensor], None]
     ) -> None:
-        """Register the ``square_avg`` (and optional ``mom``) buffers as trace inputs."""
+        """Register ``square_avg``, ``mom`` and ``grad_avg`` as trace inputs."""
         for i, sa in enumerate(self._square_avg):
             register("square_avg", i, sa)
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
+        for i, ga in enumerate(self._grad_avg):
+            register("grad_avg", i, ga)
 
     @override
     def _trace_update(
@@ -1294,26 +1295,42 @@ class _CompiledRMSprop(_CompiledStepBase):
         """Emit the RMSprop update — exponentially smoothed squared gradient.
 
         When ``momentum != 0`` a Polyak-momentum buffer is also
-        updated and used in the parameter step.  Returns
-        ``new_params + new_sq + new_mom`` in that order.
+        updated and used in the parameter step; when centered the
+        running gradient mean is advanced and its square subtracted.
+        Returns ``new_params + new_sq + new_mom + new_grad_avg`` in
+        that order.
         """
         params = self._params
         sq = self._square_avg
         mom = self._momenta
+        gavg = self._grad_avg
         lr = self._lr
         alpha = self._alpha
         eps = self._eps
         wd = self._weight_decay
         mu = self._momentum
+        w = 1.0 - alpha
         new_params: list[Tensor] = []
         new_sq: list[Tensor] = []
         new_mom: list[Tensor] = []
+        new_gavg: list[Tensor] = []
         for i, (p, g) in enumerate(zip(params, grads)):
             if wd != 0.0:
                 g = g + wd * p
             new_v = alpha * sq[i] + (1.0 - alpha) * (g * g)
-            denom = new_v.sqrt() + eps
             new_sq.append(new_v)
+            avg = new_v
+            if self._centered:
+                # The eager engine's lerp: from + w * (to - from) while
+                # |w| < 0.5, else to - (to - from) * (1 - w).
+                diff = g - gavg[i]
+                if abs(w) < 0.5:
+                    new_ga = gavg[i] + w * diff
+                else:
+                    new_ga = g - diff * (1.0 - w)
+                new_gavg.append(new_ga)
+                avg = new_v - new_ga * new_ga
+            denom = avg.sqrt() + eps
             if mu != 0.0:
                 new_b = mu * mom[i] + g / denom
                 new_mom.append(new_b)
@@ -1321,12 +1338,17 @@ class _CompiledRMSprop(_CompiledStepBase):
             else:
                 new_p = p - lr * g / denom
             new_params.append(new_p)
-        return new_params + new_sq + new_mom
+        return new_params + new_sq + new_mom + new_gavg
 
     @override
     def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
-        """Map outputs to ``params`` then ``square_avg`` then (optional) ``momenta``."""
-        return list(self._params) + list(self._square_avg) + list(self._momenta)
+        """Map outputs to params, ``square_avg``, ``momenta``, ``grad_avg``."""
+        return (
+            list(self._params)
+            + list(self._square_avg)
+            + list(self._momenta)
+            + list(self._grad_avg)
+        )
 
 
 # ── Adagrad ─────────────────────────────────────────────────────────
@@ -1387,7 +1409,13 @@ class _CompiledAdagrad(_CompiledStepBase):
         self._lr_decay = _hp(g, "lr_decay", 0.0)
         self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._eps = _hp(g, "eps", 1e-10)
-        self._state_sum = [_zeros_like(p) for p in self._params]
+        init = _hp(g, "initial_accumulator_value", 0.0)
+        import lucid as _lucid
+
+        self._state_sum = [
+            _lucid.full(tuple(p.shape), init, dtype=p.dtype, device=p.device)
+            for p in self._params
+        ]
         self._t = 0
         for i in range(len(self._params)):
             self._buffer_table[("state_sum", i)] = _list_getter(self._state_sum, i)
@@ -2133,36 +2161,41 @@ class _CompiledRprop(_CompiledStepBase):
 
 @final
 class _CompiledASGD(_CompiledStepBase):
-    r"""Compiled :class:`~lucid.optim.ASGD` — averaged SGD with iteration-dependent
-    learning rate and averaging coefficient.
+    r"""Compiled :class:`~lucid.optim.ASGD` — averaged SGD with a decaying
+    step size and a running average of the iterates.
 
     The per-step scalars
 
     .. math::
 
-        \eta_t &= \frac{\eta_0}{(1 + \lambda \eta_0 t)^\alpha} \\
-        \mu_t  &= \frac{1}{\max(1,\; t - t_0)}
+        \eta_{t+1} &= \frac{\eta_0}{(1 + \lambda \eta_0 t)^\alpha} \\
+        \mu_{t+1}  &= \frac{1}{\max(1,\; t - t_0)}
 
-    depend on the iteration count and are computed in Python each
-    step + written into stable 0-D scalar holders via ``copy_`` (the
-    same mechanism Adam's bias-correction factors use).
+    depend on the iteration count only, so they are computed in Python
+    after each step (starting from :math:`\eta_1 = \eta_0`,
+    :math:`\mu_1 = 1`) and written into stable 0-D scalar holders via
+    ``copy_`` (the same mechanism Adam's bias-correction factors use).
+    Both are rounded to the precision the eager engine keeps them at
+    (float32, or float64 for a float64 parameter), so the two paths take
+    the same steps.
 
     Update rule
     -----------
     ::
 
-        g_t           = grad + λ_wd · param           (weight_decay)
-        new_param     = (1 - λ · η_t) · param - η_t · g_t
-        new_ax        = ax + μ_t · (new_param - ax)
+        g_t       = grad + w · param                 (weight_decay)
+        new_param = param · (1 - λ · η_t) - η_t · g_t
+        base      = ax · keep_t                       (keep_t = 0 while μ_t = 1)
+        new_ax    = base + μ_t · (new_param - base)
 
-    ``ax`` is the Polyak–Ruppert running average buffer — held as a
-    state tensor but never mixed back into the model's parameters
-    (matches the reference framework's behaviour: the average is a
-    separate tensor available via the state dict).
+    While :math:`\mu_t = 1` (before :math:`t_0`) the average is the
+    parameter itself — ``keep_t = 0`` makes ``new_ax`` exactly
+    ``new_param`` — and afterwards it is the running mean.
 
     State buffers
     -------------
-    Per-parameter ``ax`` (averaged trajectory).
+    Per-parameter ``ax`` (averaged trajectory), zero until the first step
+    copies the parameter in.
 
     See Also
     --------
@@ -2189,19 +2222,19 @@ class _CompiledASGD(_CompiledStepBase):
         self._t0 = _hp(g, "t0", 1e6)
         self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._ax = [_zeros_like(p) for p in self._params]
-        # Initialise ax to the current param value (the reference
-        # framework's ASGD does this lazily on first call — we
-        # eager-allocate here so the graph has a stable input tensor).
-        # At t=0 the ax = param initialisation makes the first
-        # averaging step a no-op.
-        import lucid as _lucid
-
-        with _lucid.no_grad():
-            for axb, p in zip(self._ax, self._params):
-                axb.copy_(p)
         self._t = 0
+        self._eta = self._as_state_scalar(self._lr)
+        self._mu = 1.0
         for i in range(len(self._params)):
             self._buffer_table[("ax", i)] = _list_getter(self._ax, i)
+
+    def _as_state_scalar(self, value: float) -> float:
+        """Round ``value`` to the precision eager keeps ``eta`` / ``mu`` at."""
+        import lucid as _lucid
+
+        if self._params[0].dtype == _lucid.float64:
+            return value
+        return float(struct.unpack("f", struct.pack("f", value))[0])
 
     @override
     def _register_state_in_inputs(
@@ -2215,39 +2248,51 @@ class _CompiledASGD(_CompiledStepBase):
     def _register_scalars(
         self, register: Callable[[str, int, Tensor], None]
     ) -> dict[str, Tensor]:
-        """Stable 0-D placeholder for ``coef`` — the active averaging
-        weight, which is ``0`` before ``t >= t0`` and ``1/(α·t+1)``
-        afterwards.  Refreshed via :meth:`_refresh_scalars` each step
-        so the cached executable hits the same input slot.
+        """Stable 0-D placeholders for the step's ``decay`` (``1 - λη``),
+        ``eta``, ``mu`` and ``keep``.  Refreshed via
+        :meth:`_refresh_scalars` each step so the cached executable hits
+        the same input slots.
         """
         dt = self._params[0].dtype
         dev = self._params[0].device
-        coef = _zero_scalar(dt, dev)
-        register("scalar", 0, coef)
-        scalars = {"coef": coef}
+        names = ("decay", "eta", "mu", "keep")
+        scalars: dict[str, Tensor] = {}
+        for idx, name in enumerate(names):
+            holder = _zero_scalar(dt, dev)
+            register("scalar", idx, holder)
+            scalars[name] = holder
         self._scalar_slots = scalars
         return scalars
 
     @override
     def _refresh_scalars(self) -> None:
-        """Advance ``t`` + write the gated averaging coefficient.
+        """Feed this step's scalars, then advance ``eta`` / ``mu`` for the next one.
 
-        Mirrors Lucid's eager ASGD (``ASGD::update_one`` in
-        ``lucid/_C/optim/SGD.cpp``): the running-average update only
-        fires once ``step >= t0``, and the coefficient is
-        ``1/(α·t+1)`` (NOT the reference framework's
-        ``1/max(1, t-t0)``).
+        Mirrors the eager ``ASGD::update_one`` in
+        ``lucid/_C/optim/SGD.cpp``: the step uses the values carried over
+        from the previous step, and the schedule advances with the new
+        step count.
         """
         import lucid as _lucid
 
         self._t += 1
-        if self._t >= int(self._t0):
-            coef_val = 1.0 / (self._alpha * self._t + 1.0)
-        else:
-            coef_val = 0.0
+        eta = self._eta
+        mu = self._mu
+        values = {
+            "decay": 1.0 - self._lambd * eta,
+            "eta": eta,
+            "mu": mu,
+            "keep": 0.0 if mu == 1.0 else 1.0,
+        }
         dt = self._params[0].dtype
         dev = self._params[0].device
-        self._scalar_slots["coef"].copy_(_lucid.tensor(coef_val, dtype=dt, device=dev))
+        for name, value in values.items():
+            self._scalar_slots[name].copy_(_lucid.tensor(value, dtype=dt, device=dev))
+        t = float(self._t)
+        self._eta = self._as_state_scalar(
+            self._lr / ((1.0 + self._lambd * self._lr * t) ** self._alpha)
+        )
+        self._mu = self._as_state_scalar(1.0 / max(1.0, t - self._t0))
 
     @override
     def _trace_update(
@@ -2256,12 +2301,14 @@ class _CompiledASGD(_CompiledStepBase):
         grads: Sequence[Tensor],
         scalars: dict[str, Tensor],
     ) -> list[Tensor]:
-        """Emit Lucid's eager ASGD update math (fixed-lr SGD + gated
-        Polyak average).
+        """Emit the ASGD update: decayed SGD step, then the running average.
 
         Returns ``new_params + new_ax`` matching ``_outputs_to_targets``.
         """
-        coef = scalars["coef"]
+        decay = scalars["decay"]
+        eta = scalars["eta"]
+        mu = scalars["mu"]
+        keep = scalars["keep"]
         params = self._params
         ax = self._ax
         new_params: list[Tensor] = []
@@ -2269,16 +2316,9 @@ class _CompiledASGD(_CompiledStepBase):
         for i, (p, g) in enumerate(zip(params, grads)):
             if self._weight_decay != 0.0:
                 g = g + self._weight_decay * p
-            # Fixed-lr SGD step — Lucid's eager ASGD does NOT use
-            # the reference framework's time-decaying learning rate.
-            new_p = p - self._lr * g
-            # Gated Polyak running average — when ``coef == 0`` (the
-            # ``t < t0`` warmup phase), this collapses to
-            # ``new_ax = (1 - λ) · ax`` (the lambd-decay term still
-            # fires, matching eager semantics); when ``coef > 0`` the
-            # weighted average activates.  Matches eager Lucid's
-            # ``new_ax = (1-coef)·ax + coef·new_p - lambd·ax``.
-            new_a = (1.0 - coef) * ax[i] + coef * new_p - self._lambd * ax[i]
+            new_p = p * decay - eta * g
+            base = ax[i] * keep
+            new_a = base + (new_p - base) * mu
             new_params.append(new_p)
             new_ax.append(new_a)
         return new_params + new_ax

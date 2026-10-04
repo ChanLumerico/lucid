@@ -66,7 +66,14 @@ OPTIMIZER_FACTORIES = [
     pytest.param(lambda p: optim.Adam(p, lr=0.05, amsgrad=True), id="Adam_amsgrad"),
     pytest.param(lambda p: optim.AdamW(p, lr=0.05, amsgrad=True), id="AdamW_amsgrad"),
     pytest.param(lambda p: optim.RMSprop(p, lr=0.05), id="RMSprop"),
+    pytest.param(
+        lambda p: optim.RMSprop(p, lr=0.05, centered=True), id="RMSprop_centered"
+    ),
     pytest.param(lambda p: optim.Adagrad(p, lr=0.05), id="Adagrad"),
+    pytest.param(
+        lambda p: optim.Adagrad(p, lr=0.05, initial_accumulator_value=0.1),
+        id="Adagrad_initial_accumulator",
+    ),
     pytest.param(lambda p: optim.Adadelta(p, lr=0.05), id="Adadelta"),
     pytest.param(lambda p: optim.Adamax(p, lr=0.05), id="Adamax"),
     pytest.param(lambda p: optim.NAdam(p, lr=0.05), id="NAdam"),
@@ -97,14 +104,8 @@ OPTIMIZER_FACTORIES = [
 # without closure / line search; SparseAdam runs dense Adam math without
 # the zero-grad-skip shortcut) are still listed in the supported set
 # because the fused-step usage doesn't exercise those caveats.
-#
-# What is still refused is a configuration flag the compiled update
-# does not implement.  Each would otherwise be dropped without a word.
-UNSUPPORTED_OPTIMIZERS = [
-    pytest.param(
-        lambda p: optim.RMSprop(p, lr=0.05, centered=True), id="RMSprop_centered"
-    ),
-]
+# RMSprop(centered=True), the last refused configuration, compiles since
+# CHA-64.
 
 
 def _clone_state(model: nn.Module) -> dict[str, lucid.Tensor]:
@@ -234,17 +235,74 @@ def test_compiled_amsgrad_tracks_the_running_maximum(cls: object) -> None:
     assert float((eager - plain).abs().max().item()) > 1e-2
 
 
-@pytest.mark.parametrize("mk_opt", UNSUPPORTED_OPTIMIZERS)
-def test_compile_optimizer_rejects_unsupported(mk_opt: object) -> None:
-    """Unsupported optimizer configurations must raise NotImplementedError.
+# Options whose effect shows only over several steps: a decaying step size,
+# a schedule that switches at t0, a running mean that needs history.
+MULTI_STEP_FACTORIES = [
+    pytest.param(
+        lambda p: optim.RMSprop(p, lr=0.01, centered=True), id="RMSprop_centered"
+    ),
+    pytest.param(
+        lambda p: optim.RMSprop(p, lr=0.01, centered=True, momentum=0.9, alpha=0.3),
+        id="RMSprop_centered_momentum",
+    ),
+    pytest.param(
+        lambda p: optim.Adagrad(
+            p, lr=0.05, lr_decay=0.1, initial_accumulator_value=0.1
+        ),
+        id="Adagrad_lr_decay",
+    ),
+    pytest.param(lambda p: optim.ASGD(p, lr=0.05, lambd=0.1), id="ASGD"),
+    pytest.param(
+        lambda p: optim.ASGD(p, lr=0.05, lambd=0.1, t0=2.0, weight_decay=0.1),
+        id="ASGD_averaging",
+    ),
+]
 
-    Silent fallback to eager would mask user expectations of compile
-    speedup.  An informative error is the production-safe contract.
+
+@pytest.mark.parametrize("mk_opt", MULTI_STEP_FACTORIES)
+def test_compiled_trajectory_follows_eager(mk_opt: object) -> None:
+    """Several compiled steps track the eager ones, state included.
+
+    One step cannot show a schedule: ASGD's averaging starts at ``t0``,
+    Adagrad's step size decays per step, and RMSprop's centred mean needs
+    history.  The parameters and the optimizer's own buffers are compared
+    after every step.
     """
-    model = _tiny_model()
-    opt = mk_opt(list(model.parameters()))
-    with pytest.raises(NotImplementedError, match="not yet supported"):
-        compile_optimizer(opt)
+    lucid.manual_seed(0)
+    w0 = lucid.randn(4, 3)
+    grads = [lucid.randn(4, 3) for _ in range(6)]
+
+    def run(compiled: bool) -> tuple[list[lucid.Tensor], object]:
+        p = nn.Parameter(w0.to(COMPILE_DEVICE).detach().clone())
+        opt = mk_opt([p])  # type: ignore[operator]
+        stepper = compile_optimizer(opt) if compiled else opt
+        trail = []
+        for g in grads:
+            p.grad = g.to(COMPILE_DEVICE)
+            stepper.step()
+            trail.append(p.detach().clone())
+        return trail, stepper
+
+    eager, eager_opt = run(False)
+    compiled, copt = run(True)
+    for k, (a, b) in enumerate(zip(eager, compiled)):
+        drift = float((a - b).abs().max().item())
+        assert drift < 1e-5, f"step {k + 1}: compiled drift = {drift:.3e}"
+
+    # The compiled step keeps its own buffers; they hold the same values as
+    # the eager engine's state under the reference framework's names.
+    state = eager_opt.state_dict()["state"][0]  # type: ignore[attr-defined]
+    buffers = {
+        "ax": "_ax",
+        "grad_avg": "_grad_avg",
+        "square_avg": "_square_avg",
+        "sum": "_state_sum",
+    }
+    for key, attr in buffers.items():
+        if key not in state:
+            continue
+        ours = getattr(copt, attr)[0].to("cpu").numpy()
+        assert abs(ours - state[key]).max() < 1e-5, key
 
 
 def test_compile_optimizer_lbfgs_convergence() -> None:
