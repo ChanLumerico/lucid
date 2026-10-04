@@ -6040,6 +6040,11 @@ public:
         auto s_ptr = allocate_aligned_bytes(s_nbytes, Device::CPU);
         const auto& cs = std::get<CpuStorage>(a);
 
+        // A matrix holding a NaN or an infinity has an all-NaN decomposition
+        // (the reference result, and the Metal stream's).  It is not handed
+        // to LAPACK, whose gesdd rejects a NaN as an illegal argument — that
+        // used to surface as "LAPACK invalid argument", which blames the
+        // caller's argument marshalling for the caller's data.
         if (!compute_uv) {
             int info = 0;
             if (dt == Dtype::F32) {
@@ -6047,6 +6052,10 @@ public:
                 const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
                 auto* s_p = reinterpret_cast<float*>(s_ptr.get());
                 for (std::int64_t b = 0; b < batch; ++b) {
+                    if (!all_finite(in_p + b * in_per, in_per)) {
+                        fill_nan(s_p + b * s_per, s_per);
+                        continue;
+                    }
                     cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
                                         vt.data(), &info);
                     check_lapack_info(info, "svd");
@@ -6056,6 +6065,10 @@ public:
                 const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
                 auto* s_p = reinterpret_cast<double*>(s_ptr.get());
                 for (std::int64_t b = 0; b < batch; ++b) {
+                    if (!all_finite(in_p + b * in_per, in_per)) {
+                        fill_nan(s_p + b * s_per, s_per);
+                        continue;
+                    }
                     cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
                                         vt.data(), &info);
                     check_lapack_info(info, "svd");
@@ -6077,6 +6090,12 @@ public:
             auto* s_p = reinterpret_cast<float*>(s_ptr.get());
             auto* vt_p = reinterpret_cast<float*>(vt_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
+                if (!all_finite(in_p + b * in_per, in_per)) {
+                    fill_nan(u_p + b * u_per, u_per);
+                    fill_nan(s_p + b * s_per, s_per);
+                    fill_nan(vt_p + b * vt_per, vt_per);
+                    continue;
+                }
                 cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u_p + b * u_per,
                                     s_p + b * s_per, vt_p + b * vt_per, &info);
                 check_lapack_info(info, "svd");
@@ -6087,6 +6106,12 @@ public:
             auto* s_p = reinterpret_cast<double*>(s_ptr.get());
             auto* vt_p = reinterpret_cast<double*>(vt_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
+                if (!all_finite(in_p + b * in_per, in_per)) {
+                    fill_nan(u_p + b * u_per, u_per);
+                    fill_nan(s_p + b * s_per, s_per);
+                    fill_nan(vt_p + b * vt_per, vt_per);
+                    continue;
+                }
                 cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u_p + b * u_per,
                                     s_p + b * s_per, vt_p + b * vt_per, &info);
                 check_lapack_info(info, "svd");
@@ -12217,6 +12242,18 @@ private:
             ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
     }
 
+    // Whether every one of the ``n`` values is finite.  LAPACK's drivers
+    // reject a NaN as an illegal argument, so the linalg kernels ask first.
+    template <typename T>
+    static bool all_finite(const T* p, std::size_t n) {
+        return std::all_of(p, p + n, [](T v) { return std::isfinite(v); });
+    }
+
+    template <typename T>
+    static void fill_nan(T* p, std::size_t n) {
+        std::fill(p, p + n, std::numeric_limits<T>::quiet_NaN());
+    }
+
     template <typename T>
     static void set_matrix_identity(T* out, int n) {
         const std::size_t total = static_cast<std::size_t>(n) * n;
@@ -12227,6 +12264,12 @@ private:
 
     template <typename T>
     static void pinv_one(const T* a, int m, int n, T* aplus) {
+        // A NaN or an infinity makes the pseudo-inverse all NaN, as it does
+        // the SVD it is built from (see ``linalg_svd``).
+        if (!all_finite(a, static_cast<std::size_t>(m) * n)) {
+            fill_nan(aplus, static_cast<std::size_t>(n) * m);
+            return;
+        }
         const int k = std::min(m, n);
         std::vector<T> u(static_cast<std::size_t>(m) * k);
         std::vector<T> s(k);

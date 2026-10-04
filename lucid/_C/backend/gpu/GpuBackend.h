@@ -2756,9 +2756,25 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
-    Storage linalg_pinv(const Storage& a, const Shape&, Dtype dt) override {
+    // Moore-Penrose pseudo-inverse through MLX's SVD.
+    //
+    // A matrix with a NaN or an infinity gets an all-NaN pseudo-inverse —
+    // the reference answer — and never reaches the SVD, which aborts the
+    // process on one (see ``gpu_nonfinite_matrices``).
+    Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = ::mlx::core::linalg::pinv(*ga.arr, k_linalg_stream);
+        if (ga.arr->size() == 0) {
+            // A batch of none: MLX's pinv reduces over the empty singular
+            // values and raises.  The answer is the transposed empty shape.
+            Shape out_shape(shape.begin(), shape.end() - 2);
+            out_shape.push_back(shape[shape.size() - 1]);
+            out_shape.push_back(shape[shape.size() - 2]);
+            return Storage{gpu::wrap_mlx_array(
+                ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), ga.arr->dtype()), dt)};
+        }
+        auto bad = gpu_nonfinite_matrices(*ga.arr);
+        auto clean = gpu_zero_where(bad, *ga.arr);
+        auto out = gpu_nan_where(bad, ::mlx::core::linalg::pinv(clean, k_linalg_stream));
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -2836,7 +2852,14 @@ public:
                                     const Shape& vt_shape,
                                     Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto pieces = ::mlx::core::linalg::svd(*ga.arr, compute_uv, k_linalg_stream);
+        // A matrix holding a NaN makes LAPACK's gesvdx report an illegal
+        // argument, which MLX throws from its worker thread — the process
+        // aborts.  Such a matrix is decomposed as zeros and its factors are
+        // then replaced with NaN, the reference result (an infinity behaves
+        // the same, so it is treated the same).  No host round trip.
+        auto bad = gpu_nonfinite_matrices(*ga.arr);
+        auto pieces =
+            ::mlx::core::linalg::svd(gpu_zero_where(bad, *ga.arr), compute_uv, k_linalg_stream);
         std::vector<Storage> out;
         out.reserve(pieces.size());
         // MLX returns the FULL decomposition (U is m×m, Vh is n×n) whereas the
@@ -2852,6 +2875,9 @@ public:
                 if (hi != p.shape())
                     p = ::mlx::core::slice(p, lo, hi);
             }
+            // The singular values have one axis fewer than the mask.
+            const bool is_values = !compute_uv || i == 1;
+            p = gpu_nan_where(is_values ? ::mlx::core::squeeze(bad, -1) : bad, p);
             out.push_back(Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(p), dt)});
         }
         return out;
@@ -5852,6 +5878,48 @@ private:
     // default GPU stream would stall; using Device::cpu tells MLX to schedule
     // them on the CPU dispatch queue while still returning mlx::core::array.
     inline static const ::mlx::core::Device k_linalg_stream{::mlx::core::Device::cpu};
+
+    // ── Keeping MLX's LAPACK failures out of its worker thread ────────────
+    //
+    // MLX evaluates a CPU-stream linalg primitive on that stream's worker
+    // thread, and a failing LAPACK call there is a ``throw`` nothing
+    // catches: the process ends in ``std::terminate``, whichever Lucid call
+    // happened to force the evaluation.  A try/catch around ``eval()`` does
+    // not help — the exception never reaches this thread.  The failures
+    // seen are:
+    //
+    //   Inverse  — ``getrf`` / ``trtri`` meet an exactly zero pivot
+    //              (``inv``, ``solve`` and ``tri_inv`` on a singular matrix);
+    //   SVD      — ``gesvdx`` rejects a NaN as an illegal argument
+    //              (``svd``, ``pinv``, and the norms built on them);
+    //   Eig      — ``geev`` rejects a NaN as an illegal argument.
+    //
+    // So the inputs these routines see are made safe before the graph is
+    // built: the pivots are checked before anything is inverted, and a
+    // non-finite matrix never reaches the SVD or eigen solver.
+
+    // Per-matrix flag, shaped ``(..., 1, 1)``: true where the matrix holds a
+    // NaN or an infinity.
+    static ::mlx::core::array gpu_nonfinite_matrices(const ::mlx::core::array& a) {
+        auto finite =
+            ::mlx::core::all(::mlx::core::isfinite(a, k_linalg_stream), std::vector<int>{-2, -1},
+                             /*keepdims=*/true, k_linalg_stream);
+        return ::mlx::core::logical_not(finite, k_linalg_stream);
+    }
+
+    // ``a`` with every flagged matrix replaced by zeros.
+    static ::mlx::core::array gpu_zero_where(const ::mlx::core::array& bad,
+                                             const ::mlx::core::array& a) {
+        return ::mlx::core::where(bad, ::mlx::core::zeros_like(a, k_linalg_stream), a,
+                                  k_linalg_stream);
+    }
+
+    // ``a`` with every flagged matrix (or vector) replaced by NaN.
+    static ::mlx::core::array gpu_nan_where(const ::mlx::core::array& bad,
+                                            const ::mlx::core::array& a) {
+        const ::mlx::core::array nan(std::numeric_limits<float>::quiet_NaN(), a.dtype());
+        return ::mlx::core::where(bad, nan, a, k_linalg_stream);
+    }
 
     // Builds a permutation for NCHW → NHWC transpose: [0, 2,..,N+1, 1].
     // N is the number of spatial dimensions (1, 2, or 3).
