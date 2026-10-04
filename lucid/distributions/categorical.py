@@ -8,6 +8,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
     integer_interval,
+    one_hot,
     real,
     simplex,
 )
@@ -504,15 +505,16 @@ class OneHotCategorical(Distribution):
     @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        """Support of the distribution: the probability simplex.
+        """Support of the distribution: one-hot vectors.
 
         Returns
         -------
         Constraint
-            The ``simplex`` constraint, as each sample is a one-hot vector
-            whose entries are non-negative and sum to 1.
+            The ``one_hot`` constraint — every entry 0 or 1, summing to 1.
+            ``simplex`` admitted interior points such as ``[0.2, 0.3, 0.5]``,
+            which no draw can be, and was not discrete.
         """
-        return simplex
+        return one_hot
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

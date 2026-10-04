@@ -20,6 +20,7 @@ from lucid.distributions.bernoulli import (
 from lucid.distributions.constraints import (
     Constraint,
     half_open_interval,
+    integer_interval,
     nonnegative,
     nonnegative_integer,
     real,
@@ -377,20 +378,16 @@ class Binomial(Distribution):
     @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        r"""Support of the Binomial distribution: non-negative integers.
-
-        Although the strict support is :math:`\{0, 1, \ldots, n\}` per element,
-        this property returns ``nonnegative_integer`` because ``total_count``
-        may differ across the batch.
+        r"""Support of the Binomial distribution: :math:`\{0, 1, \ldots, n\}`.
 
         Returns
         -------
         Constraint
-            The ``nonnegative_integer`` constraint.
+            ``integer_interval(0, total_count)`` — the bound is the
+            ``total_count`` tensor, so each batch member is held to its own
+            :math:`n`.
         """
-        # Per-element {0, 1, …, total_count}; we report nonneg-integer
-        # since ``total_count`` may differ across the batch.
-        return nonnegative_integer
+        return integer_interval(0, self.total_count)
 
     @property
     def _probs(self) -> Tensor:

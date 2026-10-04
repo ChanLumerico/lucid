@@ -11,6 +11,7 @@ multivariate distribution with diagonal covariance, e.g.
 from typing import override
 
 from lucid._tensor.tensor import Tensor
+from lucid.distributions.constraints import Constraint, independent
 from lucid.distributions.distribution import Distribution
 
 
@@ -157,15 +158,20 @@ class Independent(Distribution):
 
     @override
     @property
-    def support(self) -> object:  # type: ignore[override]
-        """Support of the distribution — delegates to ``base_dist.support``.
+    def support(self) -> Constraint | None:  # type: ignore[override]
+        """Support of the distribution — the base support, read per event.
 
         Returns
         -------
-        object
-            The support constraint of the underlying base distribution.
+        Constraint or None
+            ``independent(base_dist.support, reinterpreted_batch_ndims)``:
+            its ``event_dim`` counts the reinterpreted axes, and it answers
+            once per event.  ``None`` when the base declares no support.
         """
-        return self.base_dist.support
+        base = self.base_dist.support
+        if base is None:
+            return None
+        return independent(base, self.reinterpreted_batch_ndims)
 
     @override
     @property

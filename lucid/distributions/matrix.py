@@ -17,6 +17,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions.constraints import (
     Constraint,
+    corr_cholesky,
     positive,
     positive_definite,
 )
@@ -419,8 +420,8 @@ class LKJCholesky(Distribution):
     @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        """Constraint: positive-definite matrices (proxy for correlation-Cholesky support)."""
-        return positive_definite  # approximate — actual support is corr-cholesky
+        """Constraint: Cholesky factors of correlation matrices (``corr_cholesky``)."""
+        return corr_cholesky
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

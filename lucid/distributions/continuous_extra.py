@@ -15,6 +15,7 @@ from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
 from lucid.distributions.constraints import (
     Constraint,
+    greater_than_eq,
     nonnegative,
     positive,
 )
@@ -122,20 +123,15 @@ class Pareto(Distribution):
     @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        r"""Support of the Pareto distribution: positive reals :math:`(0, \infty)`.
-
-        The true support is :math:`[x_m, \infty)` per element, but since the
-        lower bound varies across the batch a bare ``positive`` constraint is
-        returned.
+        r"""Support of the Pareto distribution: :math:`[x_m, \infty)`.
 
         Returns
         -------
         Constraint
-            The ``positive`` constraint.
+            ``greater_than_eq(scale)`` — the bound is the ``scale`` tensor,
+            so each batch member is held to its own :math:`x_m`.
         """
-        # Lower bound varies per element with ``scale``; report a bare
-        # positive constraint and rely on the user to know the family.
-        return positive
+        return greater_than_eq(self.scale)
 
     @override
     @property
@@ -281,7 +277,7 @@ class Weibull(Distribution):
         p(x; \lambda, k) = \frac{k}{\lambda}
         \left(\frac{x}{\lambda}\right)^{k-1}
         \exp\!\left(-\left(\frac{x}{\lambda}\right)^k\right),
-        \quad x \geq 0
+        \quad x > 0
 
     **Log-PDF**:
 
@@ -351,14 +347,16 @@ class Weibull(Distribution):
     @override
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        r"""Support of the Weibull distribution: :math:`[0, \infty)`.
+        r"""Support of the Weibull distribution: :math:`(0, \infty)`.
 
         Returns
         -------
         Constraint
-            The ``nonnegative`` constraint.
+            The ``positive`` constraint, as in the reference framework.  At
+            0 the density is infinite for :math:`k < 1` and 0 for
+            :math:`k > 1`, and the closed form is not evaluated there.
         """
-        return nonnegative
+        return positive
 
     @override
     @property
@@ -425,7 +423,7 @@ class Weibull(Distribution):
         Parameters
         ----------
         value : Tensor
-            Non-negative points :math:`x \geq 0` at which to evaluate.
+            Positive points :math:`x > 0` at which to evaluate.
 
         Returns
         -------

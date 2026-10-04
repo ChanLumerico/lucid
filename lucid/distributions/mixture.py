@@ -5,6 +5,7 @@ from typing import override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.categorical import Categorical
+from lucid.distributions.constraints import Constraint
 from lucid.distributions.distribution import Distribution
 
 
@@ -142,6 +143,20 @@ class MixtureSameFamily(Distribution):
             event_shape=tuple(component_distribution.event_shape),
             validate_args=validate_args,
         )
+
+    @property
+    @override
+    def support(self) -> Constraint | None:  # type: ignore[override]
+        """Support of the distribution — that of the components.
+
+        Returns
+        -------
+        Constraint or None
+            ``component_distribution.support``: every component shares a
+            family, so a value the mixture can produce is one a component
+            can.
+        """
+        return self.component_distribution.support
 
     @property
     @override
