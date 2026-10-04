@@ -2,12 +2,13 @@
 Worker utilities for DataLoader multi-process data loading.
 """
 
-import threading
 from dataclasses import dataclass
 from lucid.utils.data.dataset import Dataset
 
-# Thread-local storage: each worker process stores its WorkerInfo here.
-_worker_local = threading.local()
+# Set once in each worker process, before the dataset is touched; never in
+# the main process.  Process-wide rather than thread-local, so a thread the
+# dataset starts inside a worker still finds it.
+_worker_info: WorkerInfo | None = None
 
 
 @dataclass(slots=True)
@@ -26,9 +27,13 @@ class WorkerInfo:
     num_workers : int
         Total number of worker processes for this :class:`DataLoader`.
     seed : int
-        The per-worker random seed (typically ``base_seed + id``).  The
-        loader seeds Python ``random`` and (when available) ``numpy``
-        with this value before invoking ``worker_init_fn``.
+        The per-worker random seed, ``base_seed + id``, where
+        ``base_seed`` is drawn once per iterator from the loader's
+        ``generator`` (or the global generator).  The loader seeds
+        Lucid's generator (:func:`lucid.manual_seed`), Python ``random``
+        and (when available) ``numpy`` with this value before invoking
+        ``worker_init_fn``, so random augmentations differ between
+        workers and between epochs.
     dataset : Dataset
         The dataset copy owned by this worker.  Because ``spawn`` is
         used, this is a deep-copied instance — mutations in one worker
@@ -88,9 +93,10 @@ def get_worker_info() -> WorkerInfo | None:
     >>> list(ShardedStream(5))        # main process: no worker info, whole stream
     [0, 1, 2, 3, 4]
     """
-    return getattr(_worker_local, "info", None)
+    return _worker_info
 
 
 def _set_worker_info(info: WorkerInfo | None) -> None:
-    """Internal: set the WorkerInfo for the current thread/process."""
-    _worker_local.info = info
+    """Internal: set the WorkerInfo for the current (worker) process."""
+    global _worker_info
+    _worker_info = info

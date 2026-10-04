@@ -6,16 +6,25 @@ boundaries (external data ingest), so an ``np.ndarray`` input is
 expected, but ``import lucid.utils.data`` itself stays numpy-free.
 """
 
+import itertools
 import multiprocessing as _mp
+import multiprocessing.queues as _mpq
+from multiprocessing.process import BaseProcess
+import pickle
 import queue
 import random
-from typing import Callable, Iterator, cast, final
+import time
+import traceback
+from dataclasses import dataclass
+from typing import Callable, Iterator, Protocol, cast, final, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
+from lucid._factories.random import Generator, manual_seed as _manual_seed
 from lucid import stack
 from lucid.utils.data.dataset import Dataset, IterableDataset
-from lucid.utils.data._worker import WorkerInfo, _set_worker_info
+from lucid.utils.data._rng import _as_generator, _draw_seed
+from lucid.utils.data._worker import WorkerInfo, _set_worker_info, get_worker_info
 from lucid.utils.data.sampler import (
     Sampler,
     SequentialSampler,
@@ -26,18 +35,36 @@ from lucid.utils.data.sampler import (
 # Sentinel pushed to index queues to signal workers to shut down.
 _SHUTDOWN = None
 
+# How long a blocked wait runs before it checks that the other side is
+# still alive — the main process checks its workers, a worker its parent
+# and whether it has been told to stop.
+_STATUS_INTERVAL = 1.0
+_WORKER_POLL_INTERVAL = 0.25
+
+# How long a shutdown waits for workers to exit before terminating them.
+_SHUTDOWN_GRACE = 5.0
+
 
 # ── collation ─────────────────────────────────────────────────────────────────
 
 
-def _is_ndarray(obj: object) -> bool:
-    """True iff ``obj`` quacks like a NumPy ndarray, without importing numpy
-    when it isn't installed.  Avoids triggering a numpy import for batches
-    that are pure Lucid tensors / scalars / strings."""
-    cls = type(obj)
-    if cls.__module__ == "numpy" and cls.__name__ == "ndarray":
-        return True
-    return False
+# dtype kinds that become a Tensor: bool, signed / unsigned int, float, complex.
+# String, bytes, object, datetime and void arrays stay as they are.
+_NUMERIC_KINDS = "biufc"
+
+
+def _is_numpy_numeric(obj: object) -> bool:
+    """True for a numeric NumPy array or NumPy scalar (``np.int64(3)``).
+
+    Decided from the type's module and the value's ``dtype`` alone, so a
+    batch of pure Lucid tensors, Python scalars or strings never triggers
+    a numpy import.  ``np.float64`` subclasses ``float`` and must be
+    caught here, before the Python-scalar branch claims it.
+    """
+    if type(obj).__module__ != "numpy":
+        return False
+    kind = getattr(getattr(obj, "dtype", None), "kind", None)
+    return isinstance(kind, str) and kind in _NUMERIC_KINDS
 
 
 def default_convert(data: object) -> object:
@@ -54,8 +81,9 @@ def default_convert(data: object) -> object:
     ----------
     data : object
         A sample, possibly nested.  Supported leaf types are
-        :class:`Tensor`, ``np.ndarray``, ``int``, ``float``, ``bool``,
-        ``str``, and ``bytes``.  Container types ``dict``, ``list``,
+        :class:`Tensor`, ``np.ndarray``, NumPy scalars (``np.int64``,
+        ``np.float32``, ...), ``int``, ``float``, ``bool``, ``str``, and
+        ``bytes``.  Container types ``dict``, ``list``,
         ``tuple``, and ``NamedTuple`` are walked recursively and their
         original type is preserved.
 
@@ -63,7 +91,8 @@ def default_convert(data: object) -> object:
     -------
     object
         Same nested structure as ``data`` with leaf ndarrays / scalars
-        promoted to :class:`Tensor`.
+        promoted to :class:`Tensor`.  A NumPy scalar becomes a 0-d
+        :class:`Tensor` of its own dtype.
 
     Notes
     -----
@@ -79,8 +108,12 @@ def default_convert(data: object) -> object:
     """
     if isinstance(data, Tensor):
         return data
-    if _is_ndarray(data):
-        return _tensor_fn(data)
+    if _is_numpy_numeric(data):
+        import numpy as np  # noqa: PLC0415 — lazy bridge import
+
+        # ``asarray`` turns a numpy scalar into a 0-d array, which keeps its
+        # dtype and its zero rank; the bare scalar converts to neither.
+        return _tensor_fn(np.asarray(data))
     if isinstance(data, (str, bytes)):
         return data
     if isinstance(data, dict):
@@ -178,6 +211,8 @@ def default_collate(
         * :class:`Tensor` leaves → stacked along a new leading axis.
         * ``np.ndarray`` leaves → stacked then wrapped as :class:`Tensor`
           (numpy bridge — :class:`DataLoader` is an H4 carve-out).
+        * NumPy scalar leaves (``np.int64``, ``np.float32``, ...) → 1-D
+          :class:`Tensor` of their dtype.
         * ``int`` / ``float`` leaves → 1-D :class:`Tensor`.
         * ``str`` / ``bytes`` leaves → kept as a Python list.
         * ``dict`` / ``list`` / ``tuple`` / ``NamedTuple`` containers
@@ -204,8 +239,9 @@ def default_collate(
     if isinstance(elem, Tensor):
         return stack(batch, 0)  # type: ignore[arg-type]
 
-    if _is_ndarray(elem):
-        # User opted into a numpy bridge by handing us an ndarray.
+    if _is_numpy_numeric(elem):
+        # User opted into a numpy bridge by handing us an ndarray or a
+        # numpy scalar (``y[i]`` on a label array); stacking keeps its dtype.
         import numpy as np  # noqa: PLC0415 — lazy bridge import
 
         return Tensor(np.stack(batch, axis=0))  # type: ignore[arg-type]
@@ -232,57 +268,298 @@ def default_collate(
     return batch
 
 
+# ── fetching ──────────────────────────────────────────────────────────────────
+# The same fetchers run in the main process (``num_workers=0``) and in every
+# worker, so a loader yields the same batches whatever ``num_workers`` is.
+
+
+@dataclass(frozen=True, slots=True)
+class _FetchSpec:
+    """What a fetcher needs from its loader; small and picklable for workers."""
+
+    iterable: bool
+    auto_collation: bool
+    collate_fn: Callable[..., object]
+    batch_size: int
+    drop_last: bool
+    use_getitems: bool
+
+    def make(self, dataset: object) -> _MapFetcher | _IterableFetcher:
+        if self.iterable:
+            return _IterableFetcher(dataset, self)
+        return _MapFetcher(dataset, self)
+
+
+@final
+class _MapFetcher:
+    """Turn one entry of the index sampler into a batch (or a sample)."""
+
+    def __init__(self, dataset: object, spec: _FetchSpec) -> None:
+        self._dataset = cast(Dataset, dataset)
+        self._auto = spec.auto_collation
+        self._collate_fn = spec.collate_fn
+        # 3.2.0: the optional vectorised batch-fetch protocol.  A dataset
+        # that implements ``__getitems__(indices) -> already-batched`` owns
+        # its own collation — but only when the caller did not ask for a
+        # different one.  The fast path *is* a collation, so taking it with
+        # a user-supplied ``collate_fn`` in hand would silently discard it.
+        self._getitems: Callable[[list[int]], object] | None = (
+            getattr(dataset, "__getitems__", None) if spec.use_getitems else None
+        )
+
+    def fetch(self, index: object) -> object:
+        if not self._auto:
+            # ``batch_size=None``: one sample per step, through
+            # ``collate_fn`` (``default_convert`` unless overridden).
+            return self._collate_fn(self._dataset[cast(int, index)])
+        indices = cast(list[int], index)
+        if self._getitems is not None:
+            return self._getitems(indices)
+        return self._collate_fn([self._dataset[i] for i in indices])
+
+
+@final
+class _IterableFetcher:
+    """Pull the next batch (or sample) off an iterable dataset's iterator.
+
+    Raises ``StopIteration`` once the stream is spent — and keeps raising
+    it, without touching the iterator again, so a stream that would
+    restart on a further ``next`` cannot leak a second pass.
+    """
+
+    def __init__(self, dataset: object, spec: _FetchSpec) -> None:
+        self._iter: Iterator[object] = iter(cast(IterableDataset, dataset))
+        self._auto = spec.auto_collation
+        self._collate_fn = spec.collate_fn
+        self._batch_size = spec.batch_size
+        self._drop_last = spec.drop_last
+        self._ended = False
+
+    def fetch(self, index: object = None) -> object:
+        if self._ended:
+            raise StopIteration
+        if not self._auto:
+            try:
+                item = next(self._iter)
+            except StopIteration:
+                self._ended = True
+                raise
+            return self._collate_fn(item)
+        batch: list[object] = []
+        while len(batch) < self._batch_size:
+            try:
+                batch.append(next(self._iter))
+            except StopIteration:
+                self._ended = True
+                break
+        if not batch or (self._drop_last and len(batch) < self._batch_size):
+            self._ended = True
+            raise StopIteration
+        return self._collate_fn(batch)
+
+
+# ── worker ⇄ main-process messages ────────────────────────────────────────────
+
+
+class _KeyErrorMessage(str):
+    """A ``KeyError`` prints its argument with ``repr``, which would fold a
+    multi-line worker traceback into one escaped line."""
+
+    @override
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class _WorkerError:
+    """An exception raised in a worker, in a form that survives the pipe.
+
+    The exception object itself may not pickle (or may pickle without its
+    traceback), so the worker sends its type and the formatted traceback,
+    and the main process raises a fresh exception of the same type whose
+    message carries the worker's traceback.  A type that cannot be sent
+    or rebuilt from one message falls back to ``RuntimeError``.
+    """
+
+    def __init__(self, exc: BaseException, where: str) -> None:
+        try:
+            self.type_bytes: bytes | None = pickle.dumps(type(exc))
+        except Exception:  # noqa: BLE001 — a local class, say
+            self.type_bytes = None
+        trace = "".join(traceback.format_exception(exc))
+        self.message = f"Caught {type(exc).__name__} {where}.\nOriginal {trace}"
+
+    def to_exception(self) -> BaseException:
+        """The exception to raise in the main process for this one."""
+        exc_type: object = None
+        if self.type_bytes is not None:
+            try:
+                exc_type = pickle.loads(self.type_bytes)
+            except Exception:  # noqa: BLE001 — not importable here
+                exc_type = None
+        message: str = self.message
+        if exc_type is KeyError:
+            message = _KeyErrorMessage(message)
+        if isinstance(exc_type, type) and issubclass(exc_type, BaseException):
+            try:
+                return exc_type(message)
+            except Exception:  # noqa: BLE001 — needs more than a message
+                pass
+        return RuntimeError(message)
+
+
+class _IterableEnd:
+    """A worker's reply once its copy of an iterable dataset is spent."""
+
+
+class _ResultQueue(_mpq.Queue):  # type: ignore[type-arg]
+    """The shared result queue, reporting a batch it cannot send.
+
+    ``Queue.put`` pickles in a background feeder thread.  When a batch does
+    not pickle, the stock queue prints the error and drops the batch, and
+    the main process then waits for it forever.  This sends the error in
+    the batch's place — through the hook ``concurrent.futures`` overrides
+    for the same reason.
+    """
+
+    def _on_queue_feeder_error(self, e: Exception, obj: object) -> None:
+        if (
+            isinstance(obj, tuple)
+            and len(obj) == 3
+            and not isinstance(obj[2], _WorkerError)
+        ):
+            info = get_worker_info()
+            worker = info.id if info is not None else "?"
+            where = f"while sending a batch from DataLoader worker process {worker}"
+            self.put((obj[0], obj[1], _WorkerError(e, where)))
+        else:
+            traceback.print_exception(e)  # the stock queue's behaviour
+
+
+class _Flag(Protocol):
+    def is_set(self) -> bool: ...
+
+
+class _SharedInt(Protocol):
+    value: int
+
+
 # ── worker process entry point ────────────────────────────────────────────────
 # Must be a top-level function so `spawn` can pickle it.
 
 
-def _worker_loop(
+def _init_worker(
     worker_id: int,
-    dataset: Dataset,
-    index_queue: object,
-    result_queue: object,
-    collate_fn: Callable[..., object],
-    worker_init_fn: Callable[..., object] | None,
-    seed: int,
-) -> None:
-    """Worker process: pull index batches, fetch data, push collated results."""
-    # Seed this worker independently for reproducibility.
+    num_workers: int,
+    dataset: object,
+    worker_init_fn: Callable[[int], object] | None,
+    base_seed: int,
+) -> _WorkerError | None:
+    """Everything a worker sets up before its first task, in this order.
+
+    The one place per-worker randomness is decided: every RNG a dataset
+    or transform may draw from — Lucid's generator (and through it every
+    ``lucid.utils.transforms`` augmentation), Python's ``random``, NumPy's
+    legacy global RNG — is seeded with ``base_seed + worker_id``.  The
+    main process draws ``base_seed`` once per iterator, so the streams
+    differ between workers and between epochs, and reproduce under
+    :func:`lucid.manual_seed` or the loader's ``generator``.  Then
+    :func:`get_worker_info` is published, and only then does
+    ``worker_init_fn`` run, so it can read both.
+
+    Returns the ``worker_init_fn`` failure, to be reported for every task.
+    """
+    seed = base_seed + worker_id
     random.seed(seed)
-    # Best-effort: also seed numpy's RNG when numpy is available (so user
-    # code in __getitem__ that calls np.random.* is reproducible).  We
-    # don't require numpy to load — workers without numpy installed just
-    # skip this seeding step.
+    _manual_seed(seed)
     try:
-        import numpy as np  # noqa: PLC0415 — lazy
+        import numpy as np  # noqa: PLC0415 — lazy, optional
 
         np.random.seed(seed % (2**32))
     except ImportError:
         pass
-
-    # Publish WorkerInfo so user code can call get_worker_info().
     _set_worker_info(
         WorkerInfo(
             id=worker_id,
-            num_workers=index_queue.maxsize if hasattr(index_queue, "maxsize") else 0,
+            num_workers=num_workers,
             seed=seed,
-            dataset=dataset,
+            dataset=cast(Dataset, dataset),
         )
     )
+    try:
+        if worker_init_fn is not None:
+            worker_init_fn(worker_id)
+    except Exception as exc:  # noqa: BLE001 — reported for every task
+        return _WorkerError(exc, f"in DataLoader worker process {worker_id}")
+    return None
 
-    if worker_init_fn is not None:
-        worker_init_fn(worker_id)
 
-    while True:
-        msg = index_queue.get()  # type: ignore[attr-defined]
-        if msg is _SHUTDOWN:
-            return
-        seq_num, indices = msg
-        try:
-            batch = [dataset[i] for i in indices]
-            result = collate_fn(batch)
-            result_queue.put((seq_num, result))  # type: ignore[attr-defined]
-        except Exception as exc:  # noqa: BLE001
-            result_queue.put((seq_num, exc))  # type: ignore[attr-defined]
+def _worker_loop(
+    worker_id: int,
+    num_workers: int,
+    dataset: object,
+    index_queue: _mpq.Queue[object],
+    result_queue: _ResultQueue,
+    done_event: _Flag,
+    current_epoch: _SharedInt,
+    spec: _FetchSpec,
+    worker_init_fn: Callable[[int], object] | None,
+    base_seed: int,
+) -> None:
+    """Worker process: pull tasks, fetch data, push ``(epoch, seq, result)``."""
+    init_error = _init_worker(
+        worker_id, num_workers, dataset, worker_init_fn, base_seed
+    )
+    parent = _mp.parent_process()
+    fetcher: _MapFetcher | _IterableFetcher | None = None
+    fetcher_epoch = -1
+    try:
+        while True:
+            try:
+                msg = index_queue.get(timeout=_WORKER_POLL_INTERVAL)
+            except queue.Empty:
+                # An orphaned worker would wait here forever.  And the
+                # ``_SHUTDOWN`` message can be lost: when the iterator is
+                # freed by the garbage collector, its queues' own
+                # finalizers may already have stopped their feeder threads,
+                # so the stop event is the signal that always arrives.
+                if done_event.is_set():
+                    break
+                if parent is not None and not parent.is_alive():
+                    break
+                continue
+            if msg is _SHUTDOWN:
+                break
+            epoch, seq, index = cast(tuple[int, int, object], msg)
+            # Shutting down, or a task the main process has abandoned (the
+            # epoch it belonged to was broken out of): its result would
+            # only be thrown away.
+            if done_event.is_set() or epoch != current_epoch.value:
+                continue
+            data: object
+            if init_error is not None:
+                data = init_error
+            else:
+                try:
+                    if fetcher is None or fetcher_epoch != epoch:
+                        # An iterable dataset restarts its stream each epoch.
+                        fetcher = spec.make(dataset)
+                        fetcher_epoch = epoch
+                    data = fetcher.fetch(index)
+                except StopIteration:
+                    data = _IterableEnd()
+                except Exception as exc:  # noqa: BLE001 — re-raised in main
+                    data = _WorkerError(
+                        exc, f"in DataLoader worker process {worker_id}"
+                    )
+            result_queue.put((epoch, seq, data))
+            del data
+    except KeyboardInterrupt:
+        # Ctrl-C reaches the whole process group; the main process reports it.
+        pass
+    if done_event.is_set():
+        # Nobody will read what is still buffered; exit without flushing it.
+        result_queue.cancel_join_thread()
+    result_queue.close()
 
 
 # ── single-process iterator ───────────────────────────────────────────────────
@@ -291,83 +568,20 @@ def _worker_loop(
 @final
 class _SingleProcessDataLoaderIter:
     def __init__(self, loader: DataLoader) -> None:
-        self._dataset = loader.dataset
-        self._collate_fn = loader.collate_fn
-        # Not ``None`` here: ``__iter__`` routes an iterable-style loader
-        # to ``_IterableDataLoaderIter`` before this class is constructed.
-        assert loader.batch_sampler is not None
-        self._batch_sampler = loader.batch_sampler
-        self._iter = iter(self._batch_sampler)
-        # 3.2.0: detect the optional vectorised batch-fetch protocol.  A
-        # dataset that implements ``__getitems__(indices) -> already-batched``
-        # owns its own collation — we bypass ``collate_fn`` for it.  The
-        # check happens once at iterator construction so the per-batch
-        # dispatch is a single attribute lookup, not a ``hasattr`` call.
-        # ...but only when the caller did not ask for a different one.  The
-        # fast path *is* a collation, so taking it with a user-supplied
-        # ``collate_fn`` in hand silently discards it: the loader returns
-        # default-collated batches and the function is never called once.
-        # A custom collate is how variable-length sequences, dicts and
-        # graphs get batched, so speed must not decide this.
-        self._getitems_fn = (
-            getattr(self._dataset, "__getitems__", None)
-            if loader.collate_fn is default_collate
-            else None
+        spec = loader._fetch_spec()
+        self._fetcher = spec.make(loader.dataset)
+        self._index_iter: Iterator[object] = (
+            itertools.repeat(None)
+            if loader._iterable_style
+            else iter(cast(Sampler, loader._index_sampler))
         )
 
     def __iter__(self) -> _SingleProcessDataLoaderIter:
         return self
 
     def __next__(self) -> Tensor | tuple[Tensor, ...]:
-        indices = next(self._iter)
-        # Vectorised batch-fetch fast path: when the dataset implements
-        # ``__getitems__``, it returns the already-collated batch and we
-        # skip the per-sample loop + collate_fn entirely.  cProfile on
-        # LeNet-5/MNIST measured ~30 ms / batch in this path; the fast
-        # path collapses it to ~1 ms (1 fancy-index per wrapped tensor).
-        # BatchSampler overrides ``__iter__`` to yield ``list[int]`` — the
-        # base ``Sampler`` declares ``Iterator[int]`` so mypy can't see this
-        # without a localised cast.
-        idx_list = cast(list[int], indices)
-        if self._getitems_fn is not None:
-            batched = cast(Tensor | tuple[Tensor, ...], self._getitems_fn(idx_list))
-            return batched
-        batch = [self._dataset[i] for i in indices]  # type: ignore[attr-defined]
-        return self._collate_fn(batch)  # type: ignore[arg-type, return-value]
-
-
-# ── iterable-style iterator ──────────────────────────────────────────────────
-
-
-@final
-class _IterableDataLoaderIter:
-    """Chunk an iterable-style dataset into batches.
-
-    No sampler and no indices: the dataset decides its own order and its
-    own length, and all the loader does is group what comes out and hand
-    each group to ``collate_fn``.  ``drop_last`` still applies — a short
-    trailing batch is a real thing to want to discard whether or not the
-    length was known in advance.
-    """
-
-    def __init__(self, loader: DataLoader) -> None:
-        self._iter: Iterator[object] = iter(loader.dataset)
-        self._collate_fn = loader.collate_fn
-        self._batch_size = loader.batch_size or 1
-        self._drop_last = loader.drop_last
-
-    def __iter__(self) -> _IterableDataLoaderIter:
-        return self
-
-    def __next__(self) -> Tensor | tuple[Tensor, ...]:
-        batch: list[object] = []
-        for item in self._iter:
-            batch.append(item)
-            if len(batch) == self._batch_size:
-                return cast("Tensor | tuple[Tensor, ...]", self._collate_fn(batch))
-        if batch and not self._drop_last:
-            return cast("Tensor | tuple[Tensor, ...]", self._collate_fn(batch))
-        raise StopIteration
+        index = next(self._index_iter)
+        return cast(Tensor | tuple[Tensor, ...], self._fetcher.fetch(index))
 
 
 # ── multi-process iterator ────────────────────────────────────────────────────
@@ -378,17 +592,31 @@ class _MultiProcessDataLoaderIter:
     """Multi-worker iterator with prefetching and ordered delivery.
 
     Design:
-    - Each worker owns one index queue; main process round-robins index batches.
-    - Workers push (seq_num, batch) onto a single shared result queue.
-    - Main process reorders via a dict buffer, yielding batches in original order.
-    - Prefetch depth: num_workers × prefetch_factor batches kept in flight.
+    - Each worker owns one index queue; tasks go round-robin to the
+      workers that still have data (an iterable dataset's copy may run
+      out on one worker before another).
+    - Workers push ``(epoch, seq, result)`` onto one shared result queue;
+      the main process reorders by ``seq`` and yields in sampler order.
+    - At most ``num_workers * prefetch_factor`` tasks are in flight.
+    - Every task and result carries the epoch it belongs to.  A
+      persistent pool reused after a ``break`` skips, and the main process
+      discards, whatever the abandoned epoch still had in flight — so the
+      next epoch neither repeats nor loses samples.
+    - A blocked wait wakes every ``_STATUS_INTERVAL`` seconds to check the
+      workers: one that died raises instead of hanging the loader.
+    - An exception in a worker is re-raised here with the worker's
+      traceback; the pool survives it, so the next epoch runs.
     """
 
-    def __init__(self, loader: DataLoader) -> None:
+    def __init__(self, loader: DataLoader, base_seed: int) -> None:
+        # Nothing to shut down until the pool exists (``__del__`` runs even
+        # when this constructor fails part-way).
+        self._shutdown = True
         self._num_workers: int = loader.num_workers
-        self._prefetch_factor: int = loader.prefetch_factor or 2
+        self._window: int = loader.num_workers * (loader.prefetch_factor or 2)
         self._persistent: bool = loader.persistent_workers
         self._timeout: float = loader.timeout
+        self._iterable: bool = loader._iterable_style
 
         # multiprocessing_context: use caller's choice if provided,
         # otherwise default to 'spawn' (safe on macOS/Apple Silicon).
@@ -400,62 +628,172 @@ class _MultiProcessDataLoaderIter:
         else:
             ctx = mp_ctx  # type: ignore[assignment]
 
-        # One index queue per worker to avoid contention.
-        self._index_queues = [ctx.Queue() for _ in range(self._num_workers)]
-        self._result_queue: object = ctx.Queue()
+        self._epoch = 0
+        self._result_queue = _ResultQueue(ctx=ctx)
+        self._done_event = ctx.Event()
+        self._current_epoch = ctx.Value("q", 0, lock=False)
+        self._index_queues: list[_mpq.Queue[object]] = []
+        self._workers: list[BaseProcess] = []
+        self._shutdown = False
+        spec = loader._fetch_spec()
+        try:
+            for wid in range(self._num_workers):
+                index_queue: _mpq.Queue[object] = ctx.Queue()
+                # A task still buffered when the main process exits is moot.
+                index_queue.cancel_join_thread()
+                worker = ctx.Process(
+                    target=_worker_loop,
+                    args=(
+                        wid,
+                        self._num_workers,
+                        loader.dataset,
+                        index_queue,
+                        self._result_queue,
+                        self._done_event,
+                        self._current_epoch,
+                        spec,
+                        loader.worker_init_fn,
+                        base_seed,
+                    ),
+                    daemon=True,
+                )
+                worker.start()
+                self._index_queues.append(index_queue)
+                self._workers.append(worker)
+        except BaseException:
+            self._shutdown_workers()
+            raise
+        self._begin_epoch(loader)
 
-        # Sequence counters.
-        self._send_idx: int = 0  # next batch index to dispatch
-        self._rcvd_idx: int = 0  # next batch index to yield
-        self._reorder: dict[int, Tensor | tuple[Tensor, ...]] = {}
+    # ── epoch bookkeeping ─────────────────────────────────────────────────────
 
-        # Materialise the full batch list once per epoch.
-        self._batches: list[list[int]] = list(loader.batch_sampler)  # type: ignore[arg-type]
-        self._n_batches: int = len(self._batches)
-
-        base_seed = random.randint(0, 2**31)
-        self._workers = [
-            ctx.Process(
-                target=_worker_loop,
-                args=(
-                    wid,
-                    loader.dataset,
-                    self._index_queues[wid],
-                    self._result_queue,
-                    loader.collate_fn,
-                    loader.worker_init_fn,
-                    base_seed + wid,
-                ),
-                daemon=True,
-            )
-            for wid in range(self._num_workers)
-        ]
-        for w in self._workers:
-            w.start()
-
-        # Prefill the pipeline.
-        prefill = min(self._num_workers * self._prefetch_factor, self._n_batches)
-        for _ in range(prefill):
-            self._dispatch_next()
-
-    # ── internal helpers ───────────────────────────────────────────────────────
-
-    def _dispatch_next(self) -> None:
-        if self._send_idx >= self._n_batches:
-            return
-        worker_id = self._send_idx % self._num_workers
-        self._index_queues[worker_id].put(
-            (self._send_idx, self._batches[self._send_idx])
+    def _begin_epoch(self, loader: DataLoader) -> None:
+        self._index_iter: Iterator[object] = (
+            itertools.repeat(None)
+            if self._iterable
+            else iter(cast(Sampler, loader._index_sampler))
         )
+        self._index_exhausted = False
+        self._send_idx = 0  # next task to dispatch
+        self._rcvd_idx = 0  # next task to yield
+        self._task_worker: dict[int, int] = {}  # dispatched, not yet received
+        self._reorder: dict[int, object] = {}  # received, not yet yielded
+        self._active = [True] * self._num_workers
+        self._worker_cycle = itertools.cycle(range(self._num_workers))
+        self._fill()
+
+    def _reset(self, loader: DataLoader) -> None:
+        """Start the next epoch on the same (persistent) pool."""
+        self._epoch += 1
+        # Before the first new task is sent, so a worker that reads one
+        # already sees the new epoch and skips the old epoch's leftovers.
+        self._current_epoch.value = self._epoch
+        self._begin_epoch(loader)
+
+    def _dispatch(self) -> bool:
+        if self._index_exhausted:
+            return False
+        for _ in range(self._num_workers):
+            worker_id = next(self._worker_cycle)
+            if self._active[worker_id]:
+                break
+        else:
+            return False  # every worker's stream is spent
+        try:
+            index = next(self._index_iter)
+        except StopIteration:
+            self._index_exhausted = True
+            return False
+        self._index_queues[worker_id].put((self._epoch, self._send_idx, index))
+        self._task_worker[self._send_idx] = worker_id
         self._send_idx += 1
+        return True
+
+    def _fill(self) -> None:
+        while self._send_idx - self._rcvd_idx < self._window and self._dispatch():
+            pass
+
+    # ── receiving ─────────────────────────────────────────────────────────────
+
+    def _check_workers(self) -> None:
+        dead = [w for w in self._workers if not w.is_alive()]
+        if not dead:
+            return
+        which = ", ".join(f"pid {w.pid} (exit code {w.exitcode})" for w in dead)
+        self._shutdown_workers()
+        raise RuntimeError(
+            f"DataLoader worker(s) {which} exited unexpectedly.  A negative "
+            "exit code is the signal that ended it — -9 is usually the "
+            "system running out of memory."
+        )
+
+    def _get(self) -> tuple[int, int, object]:
+        deadline = None if self._timeout <= 0 else time.monotonic() + self._timeout
+        while True:
+            wait = _STATUS_INTERVAL
+            if deadline is not None:
+                wait = min(wait, max(deadline - time.monotonic(), 0.0))
+            try:
+                return cast(
+                    tuple[int, int, object], self._result_queue.get(timeout=wait)
+                )
+            except queue.Empty:
+                pass
+            except Exception:
+                # A non-timeout failure (a result that does not unpickle
+                # here, a closed queue) — shut the pool down, then surface
+                # the real error.
+                self._shutdown_workers()
+                raise
+            self._check_workers()
+            if deadline is not None and time.monotonic() >= deadline:
+                self._shutdown_workers()
+                raise RuntimeError(
+                    f"DataLoader timed out after {self._timeout} seconds waiting "
+                    "for a batch from its workers.  Increase timeout or reduce "
+                    "batch size."
+                )
+
+    def _receive(self) -> None:
+        epoch, seq, data = self._get()
+        if epoch != self._epoch:
+            return  # a batch from an epoch that was broken out of
+        worker_id = self._task_worker.pop(seq, None)
+        if isinstance(data, _IterableEnd) and worker_id is not None:
+            self._active[worker_id] = False
+        self._reorder[seq] = data
+
+    # ── shutdown ──────────────────────────────────────────────────────────────
 
     def _shutdown_workers(self) -> None:
-        for q in self._index_queues:
-            q.put(_SHUTDOWN)
-        for w in self._workers:
-            w.join(timeout=10)
-            if w.is_alive():
-                w.terminate()
+        if self._shutdown:
+            return
+        self._shutdown = True
+        try:
+            # Workers poll this between tasks, so it stops them even when
+            # the ``_SHUTDOWN`` message below never reaches them.
+            self._done_event.set()
+            for index_queue in self._index_queues:
+                try:
+                    index_queue.put(_SHUTDOWN)
+                except Exception:  # noqa: BLE001 — already closed
+                    pass
+            deadline = time.monotonic() + _SHUTDOWN_GRACE
+            for w in self._workers:
+                w.join(timeout=max(deadline - time.monotonic(), 0.0))
+        finally:
+            # Whatever interrupted the graceful path (Ctrl-C included), no
+            # worker outlives the shutdown.
+            for w in self._workers:
+                if w.is_alive():
+                    w.terminate()
+                    w.join(timeout=1.0)
+                if w.is_alive():
+                    w.kill()
+                    w.join(timeout=1.0)
+            for index_queue in self._index_queues:
+                index_queue.close()
+            self._result_queue.close()
 
     # ── iteration ─────────────────────────────────────────────────────────────
 
@@ -463,38 +801,28 @@ class _MultiProcessDataLoaderIter:
         return self
 
     def __next__(self) -> Tensor | tuple[Tensor, ...]:
-        if self._rcvd_idx >= self._n_batches:
-            if not self._persistent:
-                self._shutdown_workers()
+        if self._shutdown:
             raise StopIteration
-
-        # Collect from the result queue until the in-order batch is ready.
-        # Apply timeout if set (>0), otherwise block indefinitely.
-        get_kwargs = {"timeout": self._timeout} if self._timeout > 0 else {}
-        while self._rcvd_idx not in self._reorder:
-            try:
-                seq, result = self._result_queue.get(**get_kwargs)  # type: ignore[attr-defined]
-            except queue.Empty:
-                self._shutdown_workers()
-                raise RuntimeError(
-                    f"DataLoader worker timed out after {self._timeout}s. "
-                    "Increase timeout or reduce batch size."
-                ) from None
-            except Exception:
-                # A non-timeout failure (worker crash / closed queue) — shut
-                # the pool down, then surface the *real* error instead of
-                # masking it behind a bogus "timed out" message.
-                self._shutdown_workers()
-                raise
-            if isinstance(result, Exception):
-                self._shutdown_workers()
-                raise result
-            self._reorder[seq] = result
-
-        batch = self._reorder.pop(self._rcvd_idx)
-        self._rcvd_idx += 1
-        self._dispatch_next()  # keep the pipeline full
-        return batch
+        while True:
+            self._fill()
+            if self._rcvd_idx == self._send_idx:
+                # Nothing in flight and nothing left to send.
+                if not self._persistent:
+                    self._shutdown_workers()
+                raise StopIteration
+            if self._rcvd_idx not in self._reorder:
+                self._receive()
+                continue
+            data = self._reorder.pop(self._rcvd_idx)
+            self._rcvd_idx += 1
+            if isinstance(data, _IterableEnd):
+                continue
+            if isinstance(data, _WorkerError):
+                # The pool survives: a caller that catches this may go on
+                # to the next batch, and a persistent loader to the next
+                # epoch.
+                raise data.to_exception()
+            return cast(Tensor | tuple[Tensor, ...], data)
 
     def __del__(self) -> None:
         try:
@@ -519,9 +847,11 @@ class DataLoader:
     dataset : Dataset
         Dataset to load data from.  May be either map-style
         (:class:`Dataset`) or iterable-style (:class:`IterableDataset`).
-    batch_size : int, default=1
+    batch_size : int or None, default=1
         Number of samples per batch.  Ignored when ``batch_sampler`` is
-        provided.
+        provided.  ``None`` turns automatic batching off: each step
+        yields one sample, passed through ``collate_fn``
+        (:func:`default_convert` by default).
     shuffle : bool, optional
         If ``True``, the default sampler is :class:`RandomSampler`;
         otherwise :class:`SequentialSampler`.  Mutually exclusive with
@@ -536,18 +866,31 @@ class DataLoader:
     num_workers : int, default=0
         Worker processes for parallel data loading.  ``0`` runs
         single-process in the main thread; ``> 0`` spawns a worker pool.
+        With an :class:`IterableDataset` every worker iterates its own
+        copy of the dataset — shard it with :func:`get_worker_info`, or
+        each sample arrives ``num_workers`` times.
     collate_fn : callable, optional
         Merge a list of samples into a batch (default:
-        :func:`default_collate`).
+        :func:`default_collate`, or :func:`default_convert` when
+        ``batch_size=None``).
     drop_last : bool, default=False
         If ``True``, drop the trailing batch when the dataset length is
         not divisible by ``batch_size``.
     timeout : float, default=0.0
         Seconds to wait for a worker to deliver a batch before raising
-        ``RuntimeError``.  ``0`` blocks indefinitely.
+        ``RuntimeError``.  ``0`` waits indefinitely — for a live worker:
+        a worker that dies raises either way.
     worker_init_fn : callable, optional
-        Called as ``worker_init_fn(worker_id)`` at the start of each
-        worker process — useful for per-worker RNG seeding.
+        Called as ``worker_init_fn(worker_id)`` in each worker process,
+        after the worker's random generators are seeded and
+        :func:`get_worker_info` is available.
+    multiprocessing_context : str or context, optional
+        Start method (or context) for the workers; default ``"spawn"``.
+    generator : lucid.Generator or int, optional
+        Generator the loader's randomness is drawn from: the default
+        :class:`RandomSampler`'s order and the workers' base seed.
+        ``None`` (default) uses the global generator, so
+        :func:`lucid.manual_seed` reproduces both.
     prefetch_factor : int, optional
         Batches pre-loaded per worker (default ``2`` when
         ``num_workers > 0``).  Higher values trade memory for throughput.
@@ -555,10 +898,9 @@ class DataLoader:
         Keep worker processes alive between epochs to avoid repeated
         process-startup overhead.  Requires ``num_workers > 0``.
     pin_memory : bool, default=False
-        Accepted for API compatibility.  Pinning is a no-op on Apple
-        Silicon (unified memory architecture).
-    generator : optional
-        RNG handle forwarded to the default :class:`RandomSampler`.
+        Accepted for compatibility with code written for discrete-memory
+        accelerators; a no-op here, since Apple Silicon's CPU and GPU
+        share one unified memory.
 
     Notes
     -----
@@ -567,6 +909,19 @@ class DataLoader:
     queue, and the main process reorders results back into sampler
     order before yielding.  Sequence numbers ensure deterministic
     delivery regardless of completion order across workers.
+
+    **Randomness in workers.**  Each iterator draws one ``base_seed``
+    from ``generator`` (or the global generator), and worker ``i`` seeds
+    Lucid's generator, Python's :mod:`random` and — when installed —
+    NumPy's legacy global RNG with ``base_seed + i`` before
+    ``worker_init_fn`` runs.  Random augmentations therefore differ
+    between workers and between epochs, and the whole run reproduces
+    under :func:`lucid.manual_seed`.  A persistent pool is seeded once
+    and its streams carry on from epoch to epoch.
+
+    An exception raised in a worker is re-raised in the main process, as
+    the same exception type where possible, with the worker's traceback
+    in its message.
 
     Examples
     --------
@@ -578,12 +933,18 @@ class DataLoader:
     ...     x, y = batch
     >>> x.shape, y.shape                     # the last, short batch: 100 = 3 * 32 + 4
     ((4, 8), (4,))
+
+    One sample per step, without automatic batching:
+
+    >>> x, y = next(iter(DataLoader(dataset, batch_size=None)))
+    >>> x.shape, y.shape
+    ((8,), ())
     """
 
     def __init__(
         self,
         dataset: Dataset,
-        batch_size: int = 1,
+        batch_size: int | None = 1,
         shuffle: bool | None = None,
         sampler: Sampler | None = None,
         batch_sampler: Sampler | None = None,
@@ -593,9 +954,11 @@ class DataLoader:
         timeout: float = 0.0,
         worker_init_fn: Callable[..., object] | None = None,
         multiprocessing_context: object = None,
-        generator: object = None,
+        generator: Generator | int | None = None,
         prefetch_factor: int | None = None,
         persistent_workers: bool = False,
+        *,
+        pin_memory: bool = False,
     ) -> None:
         """Configure a ``DataLoader``; see the class docstring for parameter
         semantics.
@@ -607,44 +970,75 @@ class DataLoader:
         other four; passing ``sampler`` precludes ``shuffle``. When no
         sampler is supplied, a :class:`SequentialSampler` (``shuffle=False``)
         or :class:`RandomSampler` (``shuffle=True``) is constructed
-        automatically. ``persistent_workers`` requires ``num_workers > 0``.
+        automatically. ``persistent_workers`` requires ``num_workers > 0``;
+        ``batch_size=None`` precludes ``drop_last``.
 
         Raises
         ------
         ValueError
-            On any of the above mutual-exclusion / range violations.
+            On any of the above mutual-exclusion / range violations, a
+            ``batch_size`` that is not a positive integer or ``None``, a
+            negative ``num_workers`` or ``timeout``, or an unknown
+            ``multiprocessing_context`` start method.
+        TypeError
+            If ``generator`` is neither a :class:`lucid.Generator`, a
+            seed, nor ``None``.
         """
-        if num_workers < 0:
-            raise ValueError(f"num_workers must be >= 0, got {num_workers}")
+        if batch_size is not None and (
+            isinstance(batch_size, bool)
+            or not isinstance(batch_size, int)
+            or batch_size <= 0
+        ):
+            raise ValueError(
+                f"batch_size must be a positive integer or None, got {batch_size!r}"
+            )
+        if (
+            isinstance(num_workers, bool)
+            or not isinstance(num_workers, int)
+            or num_workers < 0
+        ):
+            raise ValueError(
+                f"num_workers must be an integer >= 0, got {num_workers!r}"
+            )
+        if isinstance(multiprocessing_context, str):
+            # An unknown start method fails here, not at the first epoch.
+            _mp.get_context(multiprocessing_context)
+        if timeout < 0:
+            raise ValueError(f"timeout must be >= 0, got {timeout}")
         if prefetch_factor is not None and prefetch_factor <= 0:
             raise ValueError(f"prefetch_factor must be > 0, got {prefetch_factor}")
         if persistent_workers and num_workers == 0:
             raise ValueError("persistent_workers requires num_workers > 0")
+        if batch_size is None and drop_last:
+            raise ValueError(
+                "batch_size=None turns automatic batching off, so there is no "
+                "short last batch for drop_last to drop."
+            )
 
         self.dataset = dataset
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.collate_fn = collate_fn or default_collate
         self.drop_last = drop_last
         self.timeout = timeout
         self.worker_init_fn = worker_init_fn
         self.multiprocessing_context = multiprocessing_context
-        self.generator = generator
+        # Shared by the default RandomSampler and the workers' base seed, so
+        # one generator reproduces the order and the augmentations together.
+        self.generator: Generator | None = _as_generator(generator, "DataLoader")
         # Match reference framework: prefetch_factor=None when num_workers=0, else default 2
         if prefetch_factor is None:
             self.prefetch_factor = 2 if num_workers > 0 else None
         else:
             self.prefetch_factor = prefetch_factor
         self.persistent_workers = persistent_workers
+        # Unified memory: there is no pageable/pinned distinction to act on.
+        self.pin_memory = pin_memory
 
         # An iterable-style dataset has no length and no indices, so there
-        # is nothing for a sampler to sample.  The class docstring has
-        # always said both styles are accepted; until now the constructor
-        # built a ``SequentialSampler`` unconditionally and the first
-        # iteration died on ``len()``.
+        # is nothing for a sampler to sample.
         self.batch_sampler: Sampler | None
         self.sampler: Sampler | None
-        self._persistent_iter: _MultiProcessDataLoaderIter | None
+        self._persistent_iter: _MultiProcessDataLoaderIter | None = None
         self._iterable_style = isinstance(dataset, IterableDataset)
         if self._iterable_style:
             if shuffle:
@@ -660,84 +1054,108 @@ class DataLoader:
                 )
             self.batch_sampler = None
             self.sampler = None
-            self._persistent_iter = None
-            return
-
-        if batch_sampler is not None:
+        elif batch_sampler is not None:
             if batch_size != 1 or shuffle or sampler is not None or drop_last:
                 raise ValueError(
                     "batch_sampler is mutually exclusive with "
                     "batch_size, shuffle, sampler, and drop_last."
                 )
             self.batch_sampler = batch_sampler
-            self.batch_size = None  # type: ignore[assignment]
+            self.batch_size = None
+            self.sampler = sampler
         else:
             if sampler is not None and shuffle:
                 raise ValueError("sampler and shuffle are mutually exclusive.")
             if sampler is None:
                 sampler = (
-                    RandomSampler(dataset, generator=generator)
+                    RandomSampler(dataset, generator=self.generator)
                     if shuffle  # None and False both → SequentialSampler
                     else SequentialSampler(dataset)
                 )
-            self.batch_sampler = BatchSampler(sampler, batch_size, drop_last)
+            self.batch_sampler = (
+                BatchSampler(sampler, batch_size, drop_last)
+                if batch_size is not None
+                else None
+            )
+            self.sampler = sampler
 
-        self.sampler = sampler
-        self._persistent_iter = None
+        if collate_fn is None:
+            collate_fn = default_collate if self._auto_collation else default_convert
+        self.collate_fn: Callable[..., object] = collate_fn
+
+    @property
+    def _auto_collation(self) -> bool:
+        """Whether samples are grouped into batches before ``collate_fn``."""
+        if self._iterable_style:
+            return self.batch_size is not None
+        return self.batch_sampler is not None
+
+    @property
+    def _index_sampler(self) -> Sampler | None:
+        """What one step draws: a batch of indices, or one index."""
+        return self.batch_sampler if self.batch_sampler is not None else self.sampler
+
+    def _fetch_spec(self) -> _FetchSpec:
+        auto = self._auto_collation
+        return _FetchSpec(
+            iterable=self._iterable_style,
+            auto_collation=auto,
+            collate_fn=self.collate_fn,
+            batch_size=self.batch_size or 1,
+            drop_last=self.drop_last,
+            use_getitems=(
+                not self._iterable_style and auto and self.collate_fn is default_collate
+            ),
+        )
 
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
-        """Yield collated mini-batches for one full pass over the dataset.
+        """Return an iterator over one full pass of collated mini-batches.
 
         Dispatches to either the single-process iterator (``num_workers ==
         0``) or the multi-process iterator. When ``persistent_workers`` is
-        enabled the multi-process worker pool survives between epochs;
-        otherwise workers are spawned and joined per call.
+        enabled the multi-process worker pool survives between epochs and
+        the same iterator is reset for each pass; otherwise workers are
+        spawned per pass and shut down when it ends or the iterator is
+        dropped.
 
-        Yields
-        ------
-        Tensor or tuple of Tensor
-            Output of ``collate_fn`` applied to each sampled batch of
-            dataset items.
+        Returns
+        -------
+        Iterator
+            Yields the output of ``collate_fn`` applied to each sampled
+            batch of dataset items.
         """
-        if self._iterable_style:
-            yield from _IterableDataLoaderIter(self)
-            return
-
+        it = self._persistent_iter
+        if it is not None and not it._shutdown:
+            # A persistent pool keeps the streams it was seeded with; they
+            # carry on into the new epoch rather than restart.
+            it._reset(self)
+            return it
+        # The one place a base seed is drawn: once per new iterator, from
+        # ``generator`` (default: the global generator).  Drawn with no
+        # workers to use it too, so a seed gives the same shuffle whatever
+        # ``num_workers`` is.
+        base_seed = _draw_seed(self.generator)
         if self.num_workers == 0:
-            yield from _SingleProcessDataLoaderIter(self)
-            return
-
+            return _SingleProcessDataLoaderIter(self)
+        # A first epoch, or a pool shut down by a timeout or a dead worker:
+        # start a fresh one rather than feed dead queues.
+        it = _MultiProcessDataLoaderIter(self, base_seed)
         if self.persistent_workers:
-            if self._persistent_iter is None:
-                self._persistent_iter = _MultiProcessDataLoaderIter(self)
-            else:
-                # Reset counters for a new epoch while workers stay alive.
-                it = self._persistent_iter
-                it._batches = list(self.batch_sampler)  # type: ignore[arg-type]
-                it._n_batches = len(it._batches)
-                it._send_idx = 0
-                it._rcvd_idx = 0
-                it._reorder.clear()
-                prefill = min(
-                    self.num_workers * (self.prefetch_factor or 2), it._n_batches
-                )
-                for _ in range(prefill):
-                    it._dispatch_next()
-            yield from self._persistent_iter
-        else:
-            yield from _MultiProcessDataLoaderIter(self)
+            self._persistent_iter = it
+        return it
 
     def __len__(self) -> int:
-        """Return the number of batches per epoch (``len(batch_sampler)``).
+        """Return the number of steps per epoch (``len`` of the index sampler).
 
         An iterable-style dataset has no length to divide, so neither has
         the loader over it.  ``TypeError`` rather than a guess: a wrong
         ``len`` silently truncates a progress bar, a learning-rate
         schedule, or an epoch.
         """
-        if self.batch_sampler is None:
+        index_sampler = self._index_sampler
+        if self._iterable_style or index_sampler is None:
             raise TypeError(
                 "this DataLoader wraps an IterableDataset, which has no "
                 "length — iterate it instead of asking how long it is."
             )
-        return len(self.batch_sampler)
+        return len(index_sampler)
