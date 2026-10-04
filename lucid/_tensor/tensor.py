@@ -1,14 +1,4 @@
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    ClassVar,
-    Iterator,
-    Protocol,
-    Self,
-    cast,
-    final,
-    overload,
-)
+from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, overload
 
 if TYPE_CHECKING:
     import numpy as np
@@ -75,14 +65,6 @@ if TYPE_CHECKING:
 _DLPACK_METAL = 8
 
 
-class _RequiresGradFlip(Protocol):
-    """The engine's in-place ``requires_grad`` setter on ``TensorImpl``."""
-
-    def _set_requires_grad(self, requires_grad: bool) -> None:
-        """Set the flag on this TensorImpl itself."""
-        ...
-
-
 def _set_requires_grad(t: Tensor, requires_grad: bool, *, setter: bool) -> None:
     """Change ``t``'s ``requires_grad`` flag in place, by the leaf rules.
 
@@ -131,8 +113,7 @@ def _set_requires_grad(t: Tensor, requires_grad: bool, *, setter: bool) -> None:
             "take x.detach()"
         )
         raise RuntimeError(f"requires_grad can only be changed on a leaf tensor{hint}.")
-    # TODO(CHA-44 follow-up): direct call once engine.pyi has _set_requires_grad (gen_pyi _ENGINE_HEADER)
-    cast(_RequiresGradFlip, impl)._set_requires_grad(requires_grad)
+    impl._set_requires_grad(requires_grad)
 
 
 class Tensor:
