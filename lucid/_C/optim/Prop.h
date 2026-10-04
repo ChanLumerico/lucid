@@ -184,9 +184,10 @@ public:
     // -------
     // vector of NamedBuffers
     //     ``step`` (0-d I64 per slot) and ``square_avg``, plus
-    //     ``momentum_buffer`` when ``momentum != 0`` and ``grad_avg``
-    //     when ``centered``.  Slots that have not stepped contribute
-    //     null entries.
+    //     ``momentum_buffer`` and ``grad_avg`` while a slot holds one —
+    //     with momentum / ``centered`` on, and after it is switched off,
+    //     as the reference framework's state keeps them.  Slots that have
+    //     not stepped contribute null entries.
     std::vector<NamedBuffers> state_buffers() const override;
 
     // Restore the state captured by ``state_buffers``.

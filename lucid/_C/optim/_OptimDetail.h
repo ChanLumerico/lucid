@@ -45,6 +45,26 @@ inline void require(bool ok, const char* op, const char* msg) {
         ErrorBuilder(op).invalid_argument(msg);
 }
 
+// The reference framework's constructor checks shared by the Adam family
+// (Adam, AdamW, NAdam, RAdam, Adamax).
+//
+// Written as ``x >= 0`` so a NaN fails, as the reference's ``not 0.0 <= x``
+// does.
+//
+// Raises
+// ------
+// InvalidArgument
+//     If ``lr``, ``eps`` or ``weight_decay`` is negative or NaN, or a beta
+//     lies outside ``[0, 1)``.
+inline void check_adam_family(
+    const char* op, double lr, double beta1, double beta2, double eps, double weight_decay) {
+    require(lr >= 0.0, op, "lr must be >= 0");
+    require(eps >= 0.0, op, "eps must be >= 0");
+    require(beta1 >= 0.0 && beta1 < 1.0, op, "beta1 must be in [0, 1)");
+    require(beta2 >= 0.0 && beta2 < 1.0, op, "beta2 must be in [0, 1)");
+    require(weight_decay >= 0.0, op, "weight_decay must be >= 0");
+}
+
 // Typed mutable pointer into a CPU storage buffer.
 //
 // Convenience wrapper around ``std::get<CpuStorage>(s).ptr.get()`` that

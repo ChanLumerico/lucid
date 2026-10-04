@@ -22,6 +22,7 @@ for every optimizer, at construction and at an edit alike.
 
 import copy
 import math
+import pickle
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -467,6 +468,147 @@ def test_an_edited_value_survives_a_checkpoint(device: str) -> None:
         resumed.step()
         for a, b in zip(_values(params), _values(resumed_params)):
             np.testing.assert_array_equal(a, b)
+
+
+# A buffer whose feature is switched off is kept — in the state, in a
+# checkpoint, and through a restore — and resumes when the feature is
+# switched back on, as the reference's state keeps it.
+_KEPT: list[tuple[str, dict[str, Any], str, object, object, str]] = [
+    ("SGD", {"lr": 0.1, "momentum": 0.9}, "momentum", 0.0, 0.5, "momentum_buffer"),
+    ("Adam", {"lr": 0.05, "amsgrad": True}, "amsgrad", False, True, "max_exp_avg_sq"),
+    ("AdamW", {"lr": 0.05, "amsgrad": True}, "amsgrad", False, True, "max_exp_avg_sq"),
+    ("RMSprop", {"lr": 0.01, "momentum": 0.9}, "momentum", 0.0, 0.5, "momentum_buffer"),
+    ("RMSprop", {"lr": 0.01, "centered": True}, "centered", False, True, "grad_avg"),
+]
+
+
+@pytest.mark.parametrize(
+    "name, kw, key, off, on, kept",
+    [pytest.param(*c, id=f"{c[0]}-{c[2]}") for c in _KEPT],
+)
+def test_a_switched_off_buffer_survives_a_checkpoint_and_resumes(
+    name: str,
+    kw: dict[str, Any],
+    key: str,
+    off: object,
+    on: object,
+    kept: str,
+    device: str,
+) -> None:
+    params = _params(_arrays(0, _SHAPES), device)
+    opt = getattr(optim, name)(params, **kw)
+    for k in range(_PHASE):
+        _feed(params, _grads(name, k), device)
+        opt.step()
+    opt.param_groups[0][key] = off
+    for k in range(_PHASE, 2 * _PHASE):
+        _feed(params, _grads(name, k), device)
+        opt.step()
+
+    saved = copy.deepcopy(opt.state_dict())
+    assert all(kept in entry for entry in saved["state"].values())
+    # Restored into an optimizer built with the feature off.
+    resumed_params = _params(_values(params), device)
+    resumed = getattr(optim, name)(resumed_params, **{**kw, key: off})
+    resumed.load_state_dict(saved)
+    again = resumed.state_dict()["state"]
+    for idx, entry in saved["state"].items():
+        np.testing.assert_array_equal(again[idx][kept], entry[kept])
+
+    opt.param_groups[0][key] = on
+    resumed.param_groups[0][key] = on
+    for k in range(2 * _PHASE, 4 * _PHASE):
+        grads = _grads(name, k)
+        _feed(params, grads, device)
+        opt.step()
+        _feed(resumed_params, grads, device)
+        resumed.step()
+        for a, b in zip(_values(params), _values(resumed_params)):
+            np.testing.assert_array_equal(a, b)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(
+    "name, kw, key, off, on, kept",
+    [pytest.param(*c, id=f"{c[0]}-{c[2]}") for c in _KEPT],
+)
+def test_a_switched_off_buffer_is_in_the_state_as_in_the_reference(
+    name: str,
+    kw: dict[str, Any],
+    key: str,
+    off: object,
+    on: object,
+    kept: str,
+    ref: Any,
+) -> None:
+    init = _arrays(0, _SHAPES)
+    params = _params(init, "cpu")
+    opt = getattr(optim, name)(params, **kw)
+    ref_params = [ref.nn.Parameter(ref.from_numpy(a.copy())) for a in init]
+    ref_opt = getattr(ref.optim, name)(ref_params, **kw)
+    for k in range(2 * _PHASE):
+        if k == _PHASE:
+            opt.param_groups[0][key] = off
+            ref_opt.param_groups[0][key] = off
+        grads = _grads(name, k)
+        _feed(params, grads, "cpu")
+        opt.step()
+        for p, g in zip(ref_params, grads):
+            p.grad = ref.from_numpy(g.copy())
+        ref_opt.step()
+    state = opt.state_dict()["state"]
+    ref_state = ref_opt.state_dict()["state"]
+    for idx, entry in ref_state.items():
+        np.testing.assert_allclose(
+            state[idx][kept], entry[kept].numpy(), rtol=_RTOL, atol=_ATOL
+        )
+
+
+def test_a_rejected_edit_also_stops_a_checkpoint() -> None:
+    params = _params(_arrays(0, _SHAPES), "cpu")
+    opt = optim.Adam(params, lr=0.05)
+    _step("Adam", opt, params, 0)
+    opt.param_groups[0]["beta1"] = 1.5
+    with pytest.raises(_C_engine.InvalidArgument, match="beta1 must be in"):
+        opt.state_dict()
+    opt.param_groups[0]["beta1"] = 0.9
+    assert opt.state_dict()["state"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "SGD",
+        "Adam",
+        "AdamW",
+        "LBFGS",
+        "RMSprop",
+        "Adagrad",
+        "Adadelta",
+        "Adamax",
+        "RAdam",
+        "NAdam",
+        "ASGD",
+        "Rprop",
+        "SparseAdam",
+    ],
+)
+def test_a_fresh_optimizer_pickles(name: str) -> None:
+    params = _params(_arrays(0, _shapes(name)), "cpu")
+    opt = getattr(optim, name)(params, lr=0.1)
+    loaded = pickle.loads(pickle.dumps(opt))
+    assert type(loaded) is type(opt)
+    for mine, theirs in zip(loaded.param_groups, opt.param_groups):
+        assert {k: v for k, v in mine.items() if k != "params"} == {
+            k: v for k, v in theirs.items() if k != "params"
+        }
+    # The copy reads its own groups: an edit to it is checked and applied.
+    loaded_params = loaded.param_groups[0]["params"]
+    loaded.param_groups[0]["lr"] = 0.05
+    _step(name, loaded, loaded_params, 0)
+    loaded.param_groups[0]["lr"] = -1.0
+    with pytest.raises(_C_engine.InvalidArgument):
+        _step(name, loaded, loaded_params, 1)
 
 
 # ── what a step costs ──────────────────────────────────────────────────────

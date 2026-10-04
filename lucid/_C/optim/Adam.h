@@ -269,9 +269,11 @@ public:
     // -------
     // vector of NamedBuffers
     //     ``step`` (0-d I64 per slot), ``exp_avg`` ($m$) and
-    //     ``exp_avg_sq`` ($v$), plus ``max_exp_avg_sq`` with AMSGrad.
-    //     Each list runs parallel to the parameters; slots that have not
-    //     stepped contribute null entries.
+    //     ``exp_avg_sq`` ($v$), plus ``max_exp_avg_sq`` while a slot holds
+    //     one — with AMSGrad on, and after it is switched off, as the
+    //     reference framework's state keeps it.  Each list runs parallel to
+    //     the parameters; slots that have not stepped contribute null
+    //     entries.
     std::vector<NamedBuffers> state_buffers() const override;
 
     // Restore per-parameter state from a previous ``state_buffers``.
@@ -326,8 +328,9 @@ private:
 
     std::vector<Storage> m_;  // Per-parameter first-moment estimates.
     std::vector<Storage> v_;  // Per-parameter second-moment estimates.
-    // AMSGrad only: per-parameter running maximum of ``v`` (the reference
-    // framework's ``max_exp_avg_sq``).  Empty storages otherwise.
+    // Per-parameter running maximum of ``v`` (the reference framework's
+    // ``max_exp_avg_sq``), held from AMSGrad's first use on and kept when
+    // it is switched off.  Empty storages otherwise.
     std::vector<Storage> vmax_;
 
     // 3.4 perf: see AdamScalarCache documentation above.

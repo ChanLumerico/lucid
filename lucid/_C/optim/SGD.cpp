@@ -225,19 +225,9 @@ void SGD::update_one(std::size_t slot_idx,
 // Every buffer a slot holds is exported, including one kept after momentum
 // was set to zero; slots without one contribute null.
 std::vector<Optimizer::NamedBuffers> SGD::state_buffers() const {
-    std::vector<std::shared_ptr<TensorImpl>> mom(params_.size());
-    bool any = false;
-    for (std::size_t i = 0; i < params_.size(); ++i) {
-        if (!slot_has_state(i) || i >= moment_.size() || !holds_buffer(moment_[i]))
-            continue;
-        const auto& p = params_[i];
-        mom[i] = clone_state_storage(moment_[i], p->shape(), p->dtype(), p->device());
-        any = true;
-    }
-    if (!any)
-        return {};
     std::vector<NamedBuffers> out;
-    out.emplace_back("momentum_buffer", std::move(mom));
+    if (auto mom = clone_held_slots(moment_); !mom.empty())
+        out.emplace_back("momentum_buffer", std::move(mom));
     return out;
 }
 

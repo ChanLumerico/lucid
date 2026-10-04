@@ -194,6 +194,22 @@ Optimizer::clone_state_slots(const std::vector<Storage>& bufs) const {
     return out;
 }
 
+std::vector<std::shared_ptr<TensorImpl>>
+Optimizer::clone_held_slots(const std::vector<Storage>& bufs) const {
+    std::vector<std::shared_ptr<TensorImpl>> out(params_.size());
+    bool any = false;
+    for (std::size_t i = 0; i < params_.size() && i < bufs.size(); ++i) {
+        if (!slot_has_state(i) || !optim_detail::holds_buffer(bufs[i]))
+            continue;
+        const auto& p = params_[i];
+        out[i] = clone_state_storage(bufs[i], p->shape(), p->dtype(), p->device());
+        any = true;
+    }
+    if (!any)
+        out.clear();
+    return out;
+}
+
 void Optimizer::load_state_slots(std::vector<Storage>& bufs,
                                  const std::vector<std::shared_ptr<TensorImpl>>& saved) {
     for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {

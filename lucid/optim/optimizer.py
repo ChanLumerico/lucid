@@ -4,7 +4,6 @@ Optimizer base class.
 
 import operator
 import warnings
-from collections.abc import Callable
 from typing import Any, ClassVar, Iterable, Protocol, cast, override
 
 import lucid as _lucid
@@ -38,20 +37,46 @@ class _TunableEngine(Protocol):
     def set_hyperparams(self, values: dict[str, float]) -> None: ...
 
 
+class _GroupReader(Protocol):
+    """Reads a class's ``_HYPERPARAMS`` out of a param group, as one tuple.
+
+    A callable object rather than a function, so a reader stored on the
+    class is not bound to the instances that call it.
+    """
+
+    def __call__(self, group: dict[str, object], /) -> Any: ...
+
+
+class _OneKey:
+    """Reads one param-group key as a 1-tuple.
+
+    ``operator.itemgetter`` with a single key returns the bare value; this
+    keeps the tuple every hyper-parameter reader returns.
+    """
+
+    __slots__ = ("_key",)
+
+    def __init__(self, key: str) -> None:
+        self._key = key
+
+    def __call__(self, group: dict[str, object]) -> tuple[object, ...]:
+        return (group[self._key],)
+
+
 def _hyperparam_reader(
     keys: tuple[str, ...],
-) -> Callable[[dict[str, object]], Any] | None:
+) -> _GroupReader | None:
     """Return a reader of ``keys`` out of a param group, as one tuple.
 
     ``operator.itemgetter`` does the reading in C, so comparing a group with
     the values last handed over costs one call and one tuple comparison.
-    ``None`` when there are no keys to read.
+    ``None`` when there are no keys to read.  Neither reader is a function,
+    so stored on a class it is not bound to the instances that read it.
     """
     if not keys:
         return None
     if len(keys) == 1:
-        (key,) = keys
-        return lambda group: (group[key],)
+        return _OneKey(keys[0])
     return operator.itemgetter(*keys)
 
 
@@ -190,6 +215,11 @@ class Optimizer:
     # :meth:`_check_hyperparams`.
     _ENGINE_RULES: ClassVar[_EngineRules | None] = None
 
+    # The reader of ``_HYPERPARAMS`` out of a group, derived once per class
+    # by :meth:`__init_subclass__`.  On the class rather than the instance,
+    # so an optimizer pickles without it.
+    _read_hparams: ClassVar[_GroupReader | None] = None
+
     @override
     def __init_subclass__(cls, **kwargs: object) -> None:
         """Wrap every concrete ``step()`` *only when* ``AUTO_EVAL_AFTER_STEP``
@@ -207,8 +237,11 @@ class Optimizer:
         first declared; the wrapper is then installed.  Toggling the
         flag at runtime is still possible — see ``step()``'s post-hoc
         wrapping in subclasses that need it.
+
+        Also derives the class's ``_HYPERPARAMS`` reader.
         """
         super().__init_subclass__(**kwargs)
+        cls._read_hparams = _hyperparam_reader(cls._HYPERPARAMS)
         if not cls.AUTO_EVAL_AFTER_STEP:
             # Default path: no wrapper, user's step() runs raw.
             return
@@ -285,9 +318,6 @@ class Optimizer:
         # Parallel to ``param_groups``: each group's hyper-parameters as they
         # were last checked or handed to its engine.
         self._group_hparams: list[tuple[object, ...]] = []
-        self._read_hparams: Callable[[dict[str, object]], Any] | None = (
-            _hyperparam_reader(self._HYPERPARAMS)
-        )
         self.state: dict[int, dict[str, object]] = {}
         self.defaults: dict[str, object] = defaults
 

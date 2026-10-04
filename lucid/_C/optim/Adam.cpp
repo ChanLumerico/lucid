@@ -193,18 +193,6 @@ void adam_step_gpu_cached(GpuStorage& param_g,
     param_g.arr = gpu::wrap_mlx_array(std::move(new_param), dt).arr;
 }
 
-// The reference framework's constructor checks for every Adam-family
-// optimizer: written as ``x >= 0`` so a NaN fails, as its ``not 0.0 <= x``
-// does.
-void check_adam_family(
-    const char* op, double lr, double beta1, double beta2, double eps, double weight_decay) {
-    require(lr >= 0.0, op, "lr must be >= 0");
-    require(eps >= 0.0, op, "eps must be >= 0");
-    require(beta1 >= 0.0 && beta1 < 1.0, op, "beta1 must be in [0, 1)");
-    require(beta2 >= 0.0 && beta2 < 1.0, op, "beta2 must be in [0, 1)");
-    require(weight_decay >= 0.0, op, "weight_decay must be >= 0");
-}
-
 }  // namespace
 
 void Adam::check_hyperparams(
@@ -319,8 +307,9 @@ std::vector<Optimizer::NamedBuffers> Adam::state_buffers() const {
     out.emplace_back("step", clone_step_slots());
     out.emplace_back("exp_avg", clone_state_slots(m_));
     out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    if (amsgrad_)
-        out.emplace_back("max_exp_avg_sq", clone_state_slots(vmax_));
+    // Kept after AMSGrad is switched off, as the reference's state keeps it.
+    if (auto vmax = clone_held_slots(vmax_); !vmax.empty())
+        out.emplace_back("max_exp_avg_sq", std::move(vmax));
     return out;
 }
 
@@ -332,7 +321,7 @@ void Adam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
             load_state_slots(m_, tensors);
         else if (name == "exp_avg_sq")
             load_state_slots(v_, tensors);
-        else if (name == "max_exp_avg_sq" && amsgrad_)
+        else if (name == "max_exp_avg_sq")
             load_state_slots(vmax_, tensors);
     }
 }
@@ -446,8 +435,9 @@ std::vector<Optimizer::NamedBuffers> AdamW::state_buffers() const {
     out.emplace_back("step", clone_step_slots());
     out.emplace_back("exp_avg", clone_state_slots(m_));
     out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    if (amsgrad_)
-        out.emplace_back("max_exp_avg_sq", clone_state_slots(vmax_));
+    // Kept after AMSGrad is switched off, as the reference's state keeps it.
+    if (auto vmax = clone_held_slots(vmax_); !vmax.empty())
+        out.emplace_back("max_exp_avg_sq", std::move(vmax));
     return out;
 }
 
@@ -459,7 +449,7 @@ void AdamW::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
             load_state_slots(m_, tensors);
         else if (name == "exp_avg_sq")
             load_state_slots(v_, tensors);
-        else if (name == "max_exp_avg_sq" && amsgrad_)
+        else if (name == "max_exp_avg_sq")
             load_state_slots(vmax_, tensors);
     }
 }

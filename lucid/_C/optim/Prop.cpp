@@ -198,10 +198,12 @@ std::vector<Optimizer::NamedBuffers> RMSprop::state_buffers() const {
     std::vector<NamedBuffers> out;
     out.emplace_back("step", clone_step_slots());
     out.emplace_back("square_avg", clone_state_slots(square_avg_));
-    if (momentum_ != 0.0)
-        out.emplace_back("momentum_buffer", clone_state_slots(moment_buf_));
-    if (centered_)
-        out.emplace_back("grad_avg", clone_state_slots(grad_avg_));
+    // Kept after momentum or centering is switched off, as the reference's
+    // state keeps them.
+    if (auto mom = clone_held_slots(moment_buf_); !mom.empty())
+        out.emplace_back("momentum_buffer", std::move(mom));
+    if (auto avg = clone_held_slots(grad_avg_); !avg.empty())
+        out.emplace_back("grad_avg", std::move(avg));
     return out;
 }
 
@@ -211,9 +213,9 @@ void RMSprop::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
             load_step_slots(tensors);
         else if (name == "square_avg")
             load_state_slots(square_avg_, tensors);
-        else if (name == "momentum_buffer" && momentum_ != 0.0)
+        else if (name == "momentum_buffer")
             load_state_slots(moment_buf_, tensors);
-        else if (name == "grad_avg" && centered_)
+        else if (name == "grad_avg")
             load_state_slots(grad_avg_, tensors);
     }
 }

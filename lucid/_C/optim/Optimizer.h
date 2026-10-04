@@ -499,6 +499,28 @@ protected:
     std::vector<std::shared_ptr<TensorImpl>>
     clone_state_slots(const std::vector<Storage>& bufs) const;
 
+    // Snapshot a state vector only some slots hold a buffer in.
+    //
+    // For a buffer a slot makes on its first use of a feature (SGD's
+    // momentum) or keeps after the feature is switched off (AMSGrad's
+    // running maximum, RMSprop's ``grad_avg``): the reference framework's
+    // state carries such a buffer for as long as the parameter has one,
+    // whatever the feature's current setting.
+    //
+    // Parameters
+    // ----------
+    // bufs : const std::vector<Storage>&
+    //     A state vector parallel to ``params_``.
+    //
+    // Returns
+    // -------
+    // std::vector<std::shared_ptr<TensorImpl>>
+    //     Parallel to ``params_``: a clone for every slot that holds state
+    //     and a buffer in ``bufs``, null elsewhere.  Empty when no slot
+    //     holds one, so the caller exports no entry at all.
+    std::vector<std::shared_ptr<TensorImpl>>
+    clone_held_slots(const std::vector<Storage>& bufs) const;
+
     // Restore one per-slot state vector from a ``state_buffers`` snapshot.
     //
     // Parameters

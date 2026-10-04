@@ -24,11 +24,7 @@ using namespace lucid::optim_detail;
 
 void Adamax::check_hyperparams(
     double lr, double beta1, double beta2, double eps, double weight_decay) {
-    require(lr >= 0.0, "Adamax", "lr must be >= 0");
-    require(eps >= 0.0, "Adamax", "eps must be >= 0");
-    require(beta1 >= 0.0 && beta1 < 1.0, "Adamax", "beta1 must be in [0, 1)");
-    require(beta2 >= 0.0 && beta2 < 1.0, "Adamax", "beta2 must be in [0, 1)");
-    require(weight_decay >= 0.0, "Adamax", "weight_decay must be >= 0");
+    check_adam_family("Adamax", lr, beta1, beta2, eps, weight_decay);
 }
 
 Adamax::Adamax(std::vector<std::shared_ptr<TensorImpl>> p,
