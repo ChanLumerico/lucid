@@ -9,18 +9,133 @@ All ops here follow the reference-framework API surface:
 * ``masked_scatter`` — copy source elements into positions where mask is True.
 
 All implementations use only engine primitives — no numpy at the Python level.
+
+The in-place forms (``Tensor.index_add_`` and the rest, and
+:func:`index_put_`) run the out-of-place op and write its result into the
+destination through :func:`_write_inplace`.
 """
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, final, override
 
 import lucid
 from lucid._dispatch import _unwrap, _wrap
 import lucid._C.engine as _C_engine
+from lucid.autograd.function import Function, FunctionCtx
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 # ── helpers ────────────────────────────────────────────────────────────────
+
+
+@final
+class _Snapshot(Function):
+    """``x``'s values in a buffer of their own, standing in for ``x`` in the graph.
+
+    What an in-place index op reads its destination through while autograd
+    records.  An engine op applied to the destination itself records its
+    version, and the write that follows bumps it, so the op's own backward
+    refused the write as an in-place modification of a tensor it saved.
+    This node saves nothing, and its derivative is the identity.
+    """
+
+    @override
+    @staticmethod
+    def forward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, x: Tensor
+    ) -> Tensor:
+        return x.detach().clone()
+
+    @override
+    @staticmethod
+    def backward(  # type: ignore[override]  # narrower signature than Function by design
+        ctx: FunctionCtx, grad: Tensor
+    ) -> Tensor:
+        return grad
+
+
+def _like_input(source: Tensor, input: Tensor) -> Tensor:
+    """``source`` in ``input``'s dtype.
+
+    The engine's scatter kernels read ``source``'s buffer as if it held
+    ``input``'s dtype: a float64 source added into a float32 tensor landed
+    as 1.875 where 1.0 was meant, and an int64 one as 1e-45.  Cast first,
+    so the result keeps ``input``'s dtype, as a write into ``input`` must.
+    """
+    if source._impl.dtype == input._impl.dtype:
+        return source
+    return source.to(input.dtype)
+
+
+def _write_inplace[T: Tensor](
+    input: T, name: str, result_of: Callable[[Tensor], Tensor], *operands: Tensor
+) -> T:
+    """Run an out-of-place index op and make its result ``input``'s values.
+
+    A leaf that requires grad is refused while autograd records, as every
+    in-place op refuses it; under :func:`lucid.no_grad` it is written and
+    stays a trainable leaf.  Otherwise the result lands one of three ways,
+    the ones ``Tensor.__setitem__`` takes:
+
+    * ``input`` shares its buffer with a live view: the values go into the
+      buffer, where the views read them, and the engine moves ``input``
+      and its views to the result's place in the graph;
+    * autograd records: ``input`` takes the result's tensor, and with it
+      the result's place in the graph.  Copied into ``input``'s buffer
+      instead, a tensor that only *received* a gradient-carrying ``source``
+      kept its leaf flag, and every later in-place op refused it;
+    * otherwise the values are copied into ``input``'s buffer.
+
+    In the first case, while autograd records, the op reads ``input``
+    through a :class:`_Snapshot`.  Its nodes save what they read — ``where``
+    does — and the write bumps the buffer's version, so read directly,
+    ``input`` made backward refuse (``VersionMismatch``) the very op that
+    wrote it.
+
+    Parameters
+    ----------
+    input : Tensor
+        The destination, written in place and returned.
+    name : str
+        The in-place op's name, for errors.
+    result_of : callable
+        The out-of-place op, given the tensor to read ``input`` from.
+    *operands : Tensor
+        The op's other differentiable inputs (``source``, ``values``).
+
+    Returns
+    -------
+    Tensor
+        ``input``, now holding the result.
+
+    Raises
+    ------
+    RuntimeError
+        If ``input`` is a leaf that requires grad and autograd is recording.
+    """
+    records = _C_engine.grad_enabled() and (
+        input.requires_grad or any(o.requires_grad for o in operands)
+    )
+    if records and input.requires_grad and input.is_leaf:
+        raise RuntimeError(
+            f"{name}: a leaf tensor that requires grad cannot be modified in place — "
+            "wrap the call in lucid.no_grad(), or use the out-of-place form"
+        )
+    aliased = input._impl.is_aliased()
+    base: Tensor = input
+    if records and aliased:
+        snapshot = _Snapshot.apply(input)
+        assert isinstance(snapshot, lucid.Tensor)
+        base = snapshot
+    result = result_of(base)
+    if aliased:
+        _C_engine.assign_inplace(input._impl, result._impl, name)
+    elif records:
+        input._impl = result._impl
+    else:
+        input._impl.assign_from(result._impl, name)
+    return input
 
 
 def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
@@ -126,7 +241,8 @@ def index_add(
         ``dim`` to accumulate into.
     source : Tensor
         Per-slice update tensor; same shape as ``input`` except
-        ``source.shape[dim] == m`` (matching ``index`` length).
+        ``source.shape[dim] == m`` (matching ``index`` length).  Cast to
+        ``input``'s dtype first.
     alpha : float, optional
         Scalar multiplier applied to ``source`` before accumulation.
         Default ``1.0``.
@@ -137,6 +253,7 @@ def index_add(
         Same shape and dtype as ``input``; positions listed in
         ``index`` carry ``input[..., index[i], ...] + alpha * source[..., i, ...]``.
     """
+    source = _like_input(source, input)
     ndim = input.ndim
     if dim < 0:
         dim += ndim
@@ -180,6 +297,7 @@ def index_copy(
     source : Tensor
         Replacement slices.  All non-``dim`` dimensions must match
         ``input``; ``source.shape[dim]`` must equal ``index.shape[0]``.
+        Cast to ``input``'s dtype first.
 
     Returns
     -------
@@ -187,6 +305,7 @@ def index_copy(
         Same shape and dtype as ``input``; values at the indexed
         positions are taken from ``source``, others from ``input``.
     """
+    source = _like_input(source, input)
     ndim = input.ndim
     if dim < 0:
         dim += ndim
@@ -455,24 +574,25 @@ def index_put_(
     values: Tensor,
     accumulate: bool = False,
 ) -> Tensor:
-    """In-place variant of :func:`index_put` — mutates ``input`` so the
-    write is visible through the same Tensor reference.
+    """In-place variant of :func:`index_put`: writes into ``input``'s storage.
 
-    Internally this rebinds ``input._impl`` to the freshly-built result,
-    matching the convention Lucid already uses for engine-level in-place
-    ops (``add_``, ``mul_``).  Storage-level mutation is not currently
-    available for composite indexing — autograd consumers should treat
-    the returned tensor as a new node.
+    The values land in ``input``'s own buffer, so a view of ``input`` (or
+    the tensor ``input`` is a view of) sees them, and ``input`` takes the
+    write's place in the autograd graph, as the engine's in-place ops do.
+    A leaf that requires grad is refused while autograd records — wrap the
+    write in :func:`lucid.no_grad`, which leaves a Parameter a trainable
+    leaf.
 
     Parameters
     ----------
     input : Tensor
-        Destination; mutated in place via ``_impl`` rebind.
+        Destination; written in place.
     indices : list of Tensor or tuple of Tensor
-        Per-axis index tensors (one per dimension of ``input``); same
-        contract as :func:`index_put`.
+        Per-axis index tensors (one per leading dimension of ``input``);
+        same contract as :func:`index_put`.
     values : Tensor
-        Values to write at the addressed positions.
+        Values to write at the addressed positions; cast to ``input``'s
+        dtype.
     accumulate : bool, optional
         When ``True`` add to existing values (duplicate indices sum);
         when ``False`` (default) overwrite (duplicate indices resolve
@@ -482,17 +602,18 @@ def index_put_(
     -------
     Tensor
         The same ``input`` tensor, now holding the updated values.
+
+    Raises
+    ------
+    RuntimeError
+        If ``input`` is a leaf that requires grad and autograd is recording.
     """
-    new_t: Tensor = index_put(input, indices, values, accumulate=accumulate)
-    # Keep the flag the destination carried.  Under ``no_grad`` the result
-    # does not require grad, and swapping it in wholesale froze a Parameter
-    # — the defect ``Tensor.__setitem__`` had too (see its ``_rebind``).
-    keep = input._impl.requires_grad
-    impl = new_t._impl
-    input._impl = (
-        impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
+    return _write_inplace(
+        input,
+        "index_put_",
+        lambda base: index_put(base, indices, values, accumulate=accumulate),
+        values,
     )
-    return input
 
 
 def argwhere(x: Tensor) -> Tensor:

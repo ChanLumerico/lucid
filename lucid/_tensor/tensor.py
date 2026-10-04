@@ -3228,6 +3228,425 @@ class Tensor:
             _C_engine.gather(self._impl, idx_bc, dim)
         )
 
+    # ── index writes (index_add / index_copy / index_fill / index_put) ────────
+    # Each in-place form runs its out-of-place op and writes the result into
+    # ``self`` through ``_write_inplace``: into the buffer ``self``'s views
+    # share, with the result's place in the autograd graph, refused on a leaf
+    # that requires grad while autograd records — as ``fill_`` and ``copy_``.
+
+    def index_add(
+        self, dim: int, index: Tensor, source: Tensor, *, alpha: float = 1.0
+    ) -> Tensor:
+        r"""Return a copy of ``self`` with ``alpha * source`` added at ``index`` along ``dim``.
+
+        Slice ``i`` of ``source`` along ``dim`` is added to slice
+        ``index[i]`` of the copy.  Repeated indices accumulate.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor of length ``m`` naming the slices to add to.
+        source : Tensor
+            Same shape as ``self`` except ``source.shape[dim] == m``.  Cast
+            to ``self``'s dtype.
+        alpha : float, optional
+            Scale applied to ``source`` before it is added.  Default ``1.0``.
+
+        Returns
+        -------
+        Tensor
+            A new tensor with ``self``'s shape and dtype; ``self`` is
+            unchanged.
+
+        Notes
+        -----
+        With ``dim = 0``,
+
+        .. math::
+
+            \text{out}[\text{index}[i]] \mathrel{+}= \alpha \cdot \text{source}[i].
+
+        Differentiable through ``self`` and ``source``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.ones(5)
+        >>> x.index_add(0, lucid.tensor([0, 0, 4]), lucid.tensor([1.0, 2.0, 3.0]))
+        tensor([4., 1., 1., 1., 4.])
+        """
+        from lucid._ops.composite.indexing import index_add as _index_add
+
+        return _index_add(self, dim, index, source, alpha)
+
+    def index_add_(
+        self, dim: int, index: Tensor, source: Tensor, *, alpha: float = 1.0
+    ) -> Self:
+        r"""Add ``alpha * source`` into ``self`` at ``index`` along ``dim``, in place.
+
+        In-place form of :meth:`index_add`: the sums are written into
+        ``self``'s storage, so a view of ``self`` sees them.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor of length ``m`` naming the slices to add to.
+        source : Tensor
+            Same shape as ``self`` except ``source.shape[dim] == m``.  Cast
+            to ``self``'s dtype.
+        alpha : float, optional
+            Scale applied to ``source`` before it is added.  Default ``1.0``.
+
+        Returns
+        -------
+        Tensor
+            ``self``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self`` is a leaf that requires grad and autograd is
+            recording — wrap the call in :func:`lucid.no_grad`.
+
+        Notes
+        -----
+        With ``dim = 0``,
+
+        .. math::
+
+            \text{self}[\text{index}[i]] \mathrel{+}= \alpha \cdot \text{source}[i],
+
+        repeated indices accumulating.  ``self`` takes the sum's place in
+        the autograd graph, so the gradient reaches ``source`` and whatever
+        produced ``self``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(3, 2)
+        >>> src = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        >>> _ = x.index_add_(0, lucid.tensor([0, 2]), src, alpha=2.0)
+        >>> x
+        tensor([[2., 4.], [0., 0.], [6., 8.]])
+        """
+        from lucid._ops.composite.indexing import _write_inplace, index_add
+
+        return _write_inplace(
+            self,
+            "index_add_",
+            lambda base: index_add(base, dim, index, source, alpha),
+            source,
+        )
+
+    def index_copy(self, dim: int, index: Tensor, source: Tensor) -> Tensor:
+        r"""Return a copy of ``self`` with the slices at ``index`` along ``dim`` replaced.
+
+        Slice ``i`` of ``source`` along ``dim`` replaces slice ``index[i]``
+        of the copy.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor of length ``m`` naming the slices to replace.
+        source : Tensor
+            Same shape as ``self`` except ``source.shape[dim] == m``.  Cast
+            to ``self``'s dtype.
+
+        Returns
+        -------
+        Tensor
+            A new tensor with ``self``'s shape and dtype; ``self`` is
+            unchanged.
+
+        Notes
+        -----
+        With ``dim = 0``,
+
+        .. math::
+
+            \text{out}[\text{index}[i]] = \text{source}[i].
+
+        The gradient reaches ``source`` at the copied slices and ``self``
+        everywhere else.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(2, 3)
+        >>> src = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        >>> x.index_copy(1, lucid.tensor([2, 0]), src)
+        tensor([[2., 0., 1.], [4., 0., 3.]])
+        """
+        from lucid._ops.composite.indexing import index_copy as _index_copy
+
+        return _index_copy(self, dim, index, source)
+
+    def index_copy_(self, dim: int, index: Tensor, source: Tensor) -> Self:
+        r"""Replace the slices of ``self`` at ``index`` along ``dim`` with ``source``, in place.
+
+        In-place form of :meth:`index_copy`: the slices are written into
+        ``self``'s storage, so a view of ``self`` sees them.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor of length ``m`` naming the slices to replace.
+        source : Tensor
+            Same shape as ``self`` except ``source.shape[dim] == m``.  Cast
+            to ``self``'s dtype.
+
+        Returns
+        -------
+        Tensor
+            ``self``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self`` is a leaf that requires grad and autograd is
+            recording — wrap the call in :func:`lucid.no_grad`.
+
+        Notes
+        -----
+        With ``dim = 0``,
+
+        .. math::
+
+            \text{self}[\text{index}[i]] \leftarrow \text{source}[i].
+
+        The overwritten slices pass no gradient back to what produced
+        ``self``; ``source`` receives it there instead.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(2, 3)
+        >>> src = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        >>> _ = x.index_copy_(1, lucid.tensor([2, 0]), src)
+        >>> x
+        tensor([[2., 0., 1.], [4., 0., 3.]])
+        """
+        from lucid._ops.composite.indexing import _write_inplace, index_copy
+
+        return _write_inplace(
+            self,
+            "index_copy_",
+            lambda base: index_copy(base, dim, index, source),
+            source,
+        )
+
+    def index_fill(self, dim: int, index: Tensor, value: float) -> Tensor:
+        r"""Return a copy of ``self`` with the slices at ``index`` along ``dim`` set to ``value``.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor naming the slices to fill.
+        value : float
+            The scalar every element of those slices becomes, in ``self``'s
+            dtype.
+
+        Returns
+        -------
+        Tensor
+            A new tensor with ``self``'s shape and dtype; ``self`` is
+            unchanged.
+
+        Notes
+        -----
+        With ``dim = 0``,
+
+        .. math::
+
+            \text{out}[j] = \begin{cases} v & j \in \text{index} \\
+            \text{self}[j] & \text{otherwise.} \end{cases}
+
+        The filled slices pass no gradient back to ``self``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.arange(6, dtype=lucid.float32).reshape(2, 3)
+        >>> x.index_fill(1, lucid.tensor([0, 2]), -1.0)
+        tensor([[-1., 1., -1.], [-1., 4., -1.]])
+        """
+        from lucid._ops.composite.indexing import index_fill as _index_fill
+
+        return _index_fill(self, dim, index, value)
+
+    def index_fill_(self, dim: int, index: Tensor, value: float) -> Self:
+        r"""Set the slices of ``self`` at ``index`` along ``dim`` to ``value``, in place.
+
+        In-place form of :meth:`index_fill`: the value is written into
+        ``self``'s storage, so a view of ``self`` sees it.
+
+        Parameters
+        ----------
+        dim : int
+            Axis along which ``index`` addresses slices.  Negative values
+            count from the end.
+        index : Tensor
+            1-D integer tensor naming the slices to fill.
+        value : float
+            The scalar every element of those slices becomes, in ``self``'s
+            dtype.
+
+        Returns
+        -------
+        Tensor
+            ``self``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self`` is a leaf that requires grad and autograd is
+            recording — wrap the call in :func:`lucid.no_grad`.
+
+        Notes
+        -----
+        With ``dim = 0``, :math:`\text{self}[j] \leftarrow v` for every
+        :math:`j \in \text{index}`.  The filled slices pass no gradient
+        back to what produced ``self``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.ones(2, 3)
+        >>> row = x[1]
+        >>> _ = x.index_fill_(1, lucid.tensor([1]), 0.0)
+        >>> row
+        tensor([1., 0., 1.])
+        """
+        from lucid._ops.composite.indexing import _write_inplace, index_fill
+
+        return _write_inplace(
+            self, "index_fill_", lambda base: index_fill(base, dim, index, value)
+        )
+
+    def index_put(
+        self,
+        indices: tuple[Tensor, ...] | list[Tensor],
+        values: Tensor,
+        accumulate: bool = False,
+    ) -> Tensor:
+        r"""Return a copy of ``self`` with ``values`` written at ``indices``.
+
+        The out-of-place spelling of ``out[indices] = values``: one
+        integer index tensor per leading dimension, broadcast together;
+        the dimensions after them are taken whole.
+
+        Parameters
+        ----------
+        indices : tuple of Tensor or list of Tensor
+            Integer index tensors, one per leading dimension of ``self``.
+        values : Tensor
+            Values to write, broadcastable to the indexed shape.  Cast to
+            ``self``'s dtype.
+        accumulate : bool, optional
+            ``True`` adds at each position, so repeated positions sum;
+            ``False`` (default) overwrites.
+
+        Returns
+        -------
+        Tensor
+            A new tensor with ``self``'s shape and dtype; ``self`` is
+            unchanged.
+
+        Notes
+        -----
+        For two index tensors :math:`r, c`,
+
+        .. math::
+
+            \text{out}[r_k, c_k] = v_k
+            \quad\text{or, accumulating,}\quad
+            \text{out}[r_k, c_k] \mathrel{+}= v_k.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(2, 3)
+        >>> rows, cols = lucid.tensor([0, 1]), lucid.tensor([2, 0])
+        >>> x.index_put((rows, cols), lucid.tensor([5.0, 7.0]))
+        tensor([[0., 0., 5.], [7., 0., 0.]])
+        """
+        from lucid._ops.composite.indexing import index_put as _index_put
+
+        return _index_put(self, indices, values, accumulate=accumulate)
+
+    def index_put_(
+        self,
+        indices: tuple[Tensor, ...] | list[Tensor],
+        values: Tensor,
+        accumulate: bool = False,
+    ) -> Self:
+        r"""Write ``values`` into ``self`` at ``indices``, in place.
+
+        In-place form of :meth:`index_put`, and the spelling of
+        ``self[indices] = values`` (or ``+=`` with ``accumulate=True``)
+        that returns ``self``.
+
+        Parameters
+        ----------
+        indices : tuple of Tensor or list of Tensor
+            Integer index tensors, one per leading dimension of ``self``.
+        values : Tensor
+            Values to write, broadcastable to the indexed shape.  Cast to
+            ``self``'s dtype.
+        accumulate : bool, optional
+            ``True`` adds at each position, so repeated positions sum;
+            ``False`` (default) overwrites.
+
+        Returns
+        -------
+        Tensor
+            ``self``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self`` is a leaf that requires grad and autograd is
+            recording — wrap the call in :func:`lucid.no_grad`.
+
+        Notes
+        -----
+        For one index tensor :math:`r`,
+        :math:`\text{self}[r_k] \mathrel{+}= v_k` when accumulating, so a
+        position named twice receives both values.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(4)
+        >>> rows = lucid.tensor([1, 1, 3])
+        >>> _ = x.index_put_((rows,), lucid.tensor([1.0, 2.0, 3.0]), accumulate=True)
+        >>> x
+        tensor([0., 3., 0., 3.])
+        """
+        from lucid._ops.composite.indexing import _write_inplace, index_put
+
+        return _write_inplace(
+            self,
+            "index_put_",
+            lambda base: index_put(base, indices, values, accumulate=accumulate),
+            values,
+        )
+
     def masked_select(self, mask: Self) -> Self:
         r"""Flatten and select elements where ``mask`` is ``True``.
 

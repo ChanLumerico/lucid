@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - gather takes the reference order, gather(input, dim, index)
 
+- index_add, index_copy, index_fill, index_put as methods
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
