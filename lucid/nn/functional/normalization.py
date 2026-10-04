@@ -11,6 +11,15 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _check_batch_norm_sample_count(x: Tensor, training: bool) -> None:
+    """Reject training batches with no variance estimate per channel."""
+    if training and x.ndim in (2, 3, 4, 5) and x.shape[1] > 0 and x.numel() == x.shape[1]:
+        raise ValueError(
+            "batch_norm: expected more than one value per channel when training, "
+            f"got input size {tuple(x.shape)}"
+        )
+
+
 def batch_norm(
     x: Tensor,
     running_mean: Tensor | None,
@@ -85,6 +94,8 @@ def batch_norm(
     (8, 16, 32, 32)
     """
     from lucid._factories.creation import ones, zeros
+
+    _check_batch_norm_sample_count(x, training)
 
     C = x.shape[1]
     ndim = x.ndim

@@ -51,6 +51,29 @@ def test_batch_norm_refuses_an_unsupported_rank() -> None:
         F.batch_norm(lucid.randn(2, 3, 4, 5, 6, 7), None, None, training=True)
 
 
+def test_batch_norm_functional_rejects_one_value_per_channel_in_training() -> None:
+    x = lucid.tensor(np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+    with pytest.raises(ValueError, match="more than one value per channel"):
+        F.batch_norm(x, None, None, training=True)
+
+
+def test_batch_norm_functional_allows_single_batch_with_spatial_values() -> None:
+    x = lucid.tensor(np.array([[[1.0, 2.0], [3.0, 4.0]]], dtype=np.float32))
+    out = F.batch_norm(x, None, None, training=True)
+    assert out.shape == x.shape
+
+
+def test_batch_norm_functional_allows_single_value_per_channel_in_eval() -> None:
+    x = lucid.tensor(np.array([[1.0, 2.0, 3.0]], dtype=np.float32))
+    out = F.batch_norm(
+        x,
+        lucid.zeros(3),
+        lucid.ones(3),
+        training=False,
+    )
+    assert out.shape == x.shape
+
+
 # ── rms_norm over more than one axis ─────────────────────────────────────────
 
 

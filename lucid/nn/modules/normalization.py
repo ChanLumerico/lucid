@@ -17,6 +17,7 @@ from lucid.nn.functional.normalization import (
     rms_norm,
     group_norm,
     batch_norm,
+    _check_batch_norm_sample_count,
     instance_norm,
 )
 
@@ -625,6 +626,7 @@ class _BatchNormBase(Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        _check_batch_norm_sample_count(x, self.training)
         # Update running stats before the forward when training with
         # tracking enabled.  Detach to avoid linking the buffer into the
         # autograd graph; buffers are never differentiated through.
