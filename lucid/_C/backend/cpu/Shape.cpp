@@ -1,18 +1,26 @@
 // lucid/_C/backend/cpu/Shape.cpp
 //
-// Implements the N-D permute_copy operation for f32, f64, i32, and i64 types.
-// The generic permute_typed template uses two auxiliary stride vectors:
-//   in_strides  — C-order strides of the input layout
-//   out_strides — C-order strides of the output layout (permuted shape)
-// For each output flat index it back-computes the N-D coordinate in the output
-// shape, maps that coordinate to an input flat index via in_strides[perm[d]],
-// and copies the single element.  This is O(numel * ndim) but avoids any
-// additional memory allocation beyond the two stride vectors.
+// Implements the N-D permute_copy operation for every element width.  The
+// permuted tensor is the input read through reordered strides, so the copy
+// is :func:`strided::pack` of that view: axes merged, the innermost run moved
+// as one memcpy when it is contiguous, a merged 2-D transpose copied in
+// cache-sized tiles.
+//
+// It used to rebuild each output element's N-D coordinate with a division
+// per axis and copy one element at a time — 4-6 ns an element, single core.
+// Every CPU permute is a view in the forward pass, so this copy is what the
+// *backward* of permute / transpose / swapaxes / mT costs: splitting a small
+// transformer's attention heads, ``(b, t, 3, h, d) -> (3, b, h, t, d)``, took
+// 2.5 ms to backpropagate where the forward view costs microseconds — half
+// of the whole CPU backward pass.
 
 #include "Shape.h"
 
 #include <cstddef>
 #include <vector>
+
+#include "../../core/Shape.h"
+#include "../../core/StridedCopy.h"
 
 namespace lucid::backend::cpu {
 
@@ -32,50 +40,28 @@ std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     return s;
 }
 
-// Generic N-D permutation: iterates over all output positions in flat order,
-// maps each back to an N-D coordinate, then reads from the corresponding
-// input position by applying the inverse permutation through in_strides.
+// Generic N-D permutation: the output is the input viewed with its axes in
+// ``perm`` order (shape ``in_shape[perm[d]]``, stride ``in_strides[perm[d]]``),
+// packed dense and row-major.  Bitwise a copy, so the result is the same as
+// the element walk it replaces for every dtype, NaN payload included.
 template <typename T>
 void permute_typed(const T* in,
                    T* out,
                    const std::vector<std::int64_t>& in_shape,
                    const std::vector<int>& perm) {
     const std::size_t ndim = in_shape.size();
-    if (ndim == 0) {
-        out[0] = in[0];
-        return;
-    }
-
-    std::vector<std::int64_t> out_shape(ndim);
-    for (std::size_t d = 0; d < ndim; ++d)
-        out_shape[d] = in_shape[static_cast<std::size_t>(perm[d])];
-
     const auto in_strides = elem_strides(in_shape);
-    const auto out_strides = elem_strides(out_shape);
-
-    std::size_t numel = 1;
-    for (auto d : out_shape)
-        numel *= static_cast<std::size_t>(d);
-    if (numel == 0)
-        return;
-
-    std::vector<std::int64_t> out_idx(ndim);
-    for (std::size_t flat = 0; flat < numel; ++flat) {
-        std::size_t rem = flat;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            const std::size_t s = static_cast<std::size_t>(out_strides[d]);
-            const std::size_t k = (s == 0) ? 0 : (rem / s);
-            out_idx[d] = static_cast<std::int64_t>(k);
-            if (s)
-                rem -= k * s;
-        }
-
-        std::int64_t in_flat = 0;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            in_flat += out_idx[d] * in_strides[static_cast<std::size_t>(perm[d])];
-        }
-        out[flat] = in[in_flat];
+    Shape view_shape(ndim);
+    Stride view_stride(ndim);
+    for (std::size_t d = 0; d < ndim; ++d) {
+        const auto axis = static_cast<std::size_t>(perm[d]);
+        view_shape[d] = in_shape[axis];
+        view_stride[d] = in_strides[axis] * static_cast<std::int64_t>(sizeof(T));
     }
+    if (shape_numel(view_shape) == 0)
+        return;
+    strided::pack(reinterpret_cast<const std::byte*>(in), reinterpret_cast<std::byte*>(out),
+                  view_shape, view_stride, sizeof(T));
 }
 
 }  // namespace

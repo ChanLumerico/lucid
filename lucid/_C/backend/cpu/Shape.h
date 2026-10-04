@@ -2,8 +2,8 @@
 //
 // CPU shape-transformation helper: permute_copy performs an N-D transpose by
 // copying elements in the permuted order into a fresh densely-packed buffer.
-// This is used by CpuBackend::permute_cpu() and by the GPU backend's tensordot
-// data-layout preparation path.
+// This is used by CpuBackend::permute(), which on the CPU runs only for the
+// backward of permute / transpose / swapaxes / mT (the forward is a view).
 //
 // The permutation perm[d] specifies which input axis maps to output axis d,
 // following NumPy conventions (e.g. perm = {2, 0, 1} maps (H, W, C) → (C, H, W)).
@@ -22,12 +22,10 @@ namespace lucid::backend::cpu {
 // Copies a single-precision tensor into a permuted, densely-packed output
 // buffer using the supplied axis permutation.
 //
-// The implementation iterates the output in flat row-major order and, for
-// each output flat index, back-computes its N-D coordinate and reads from
-// the matching input position via the inverse permutation expressed through
-// the input's C-order strides.  No intermediate allocation beyond two stride
-// vectors of size ``ndim`` is performed.  This is an out-of-place layout
-// transform — there is no in-place fast path.
+// The output is the input viewed through its C-order strides reordered by
+// ``perm``, packed by :func:`strided::pack` — axes merged, contiguous runs
+// moved by memcpy, a merged 2-D transpose copied in tiles.  This is an
+// out-of-place layout transform — there is no in-place fast path.
 //
 // Parameters
 // ----------
@@ -56,10 +54,9 @@ namespace lucid::backend::cpu {
 //
 // Notes
 // -----
-// Cost is ``O(numel * ndim)`` due to per-element coordinate back-projection.
-// For frequently used permutations (e.g. matrix transpose) consider a
-// dimension-specialised kernel; this routine is the generic fallback used by
-// :cpp:class:`CpuBackend` and the GPU tensordot pre-layout path.
+// Cost is one pass over the bytes plus one odometer step per run, not per
+// element; a permutation that keeps the last axis in place moves whole rows.
+// Single-threaded.
 //
 // See Also
 // --------
