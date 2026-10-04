@@ -11,8 +11,13 @@ the reference framework through the ``ref`` fixture and is marked
 * ``TestSupportBoundaries`` (CHA-144) — ``-inf`` from overflowing
   ``log(1 + exp(l))``, NaN from ``0 · log 0`` at the edge of a support, and
   ``-inf`` logits (masked categories) refused by ``constraints.real``.
-* ``TestScalarConstantsFollowTheDevice`` (CHA-148) — Python numbers held as
-  0-dim host tensors that raised ``DeviceMismatch`` against Metal tensors.
+* ``TestReferenceDomains`` (CHA-236) — parameter domains as wide as the
+  reference's under default validation, and the closed forms at their
+  edges.
+
+CHA-148's cases — Python numbers held as 0-dim host tensors that raised
+``DeviceMismatch`` against Metal tensors — are now one sweep over every
+distribution, ``test_distributions_metal_scalar_params.py``.
 """
 
 from typing import Any
@@ -371,17 +376,16 @@ class TestSupportBoundaries:
         )
 
     def test_poisson_geometric_negative_binomial_at_zero(self, device: str) -> None:
-        """Validation off: their stricter parameter constraints are CHA-145."""
-        poisson = D.Poisson(_t(0.0, device), validate_args=False)
+        """Built with default validation: these domains are the reference's
+        (CHA-236), so the boundary is reachable without opting out."""
+        poisson = D.Poisson(_t(0.0, device))
         np.testing.assert_allclose(
             _np(poisson.log_prob(_t([0.0, 1.0], device))), [0.0, -_INF], atol=2e-6
         )
-        geom = D.Geometric(_t(1.0, device), validate_args=False)
+        geom = D.Geometric(_t(1.0, device))
         np.testing.assert_allclose(_np(geom.log_prob(_t(0.0, device))), 0.0, atol=1e-6)
         np.testing.assert_allclose(_np(geom.entropy()), 0.0, atol=1e-6)
-        nb = D.NegativeBinomial(
-            _t(3.0, device), probs=_t(0.0, device), validate_args=False
-        )
+        nb = D.NegativeBinomial(_t(3.0, device), probs=_t(0.0, device))
         np.testing.assert_allclose(_np(nb.log_prob(_t(0.0, device))), 0.0, atol=2e-6)
 
     def test_negative_binomial_large_logits(self, device: str) -> None:
@@ -512,9 +516,7 @@ class TestSupportBoundaries:
             RD.Beta(rt([1.0, 1.0]), rt([1.0, 3.0])).log_prob(rt([0.0, 1.0])),
         )
         same(
-            D.Poisson(_t([0.0, 2.0], device), validate_args=False).log_prob(
-                _t([0.0, 3.0], device)
-            ),
+            D.Poisson(_t([0.0, 2.0], device)).log_prob(_t([0.0, 3.0], device)),
             RD.Poisson(rt([0.0, 2.0])).log_prob(rt([0.0, 3.0])),
         )
         same(
@@ -560,143 +562,277 @@ class TestSupportBoundaries:
         )
 
 
-# ── CHA-148: constants on the wrong device ───────────────────────────────────
+# ── CHA-236: the reference's domains, and the closed forms at their edges ────
 
 
-def _on(t: lucid.Tensor, device: str) -> lucid.Tensor:
-    assert t.device.type == device, f"result on {t.device}, expected {device}"
-    return t
+def _softplus(x: float) -> float:
+    return float(np.logaddexp(0.0, x))
+
+
+def _flags(t: lucid.Tensor) -> list[bool]:
+    return [bool(b) for b in np.atleast_1d(t.numpy())]
 
 
 @pytest.mark.parametrize("device", DEVICES)
-class TestScalarConstantsFollowTheDevice:
-    """CHA-148 — a Python number held as a 0-dim host tensor met a Metal
-    tensor and raised ``DeviceMismatch``.  Values are the reference's."""
+class TestReferenceDomains:
+    """CHA-236 — every parameter domain is the reference's under default
+    validation, and the closed forms hold at its edges.
 
-    def test_student_t_entropy(self, device: str) -> None:
-        d = D.StudentT(_t([3.0, 5.0], device))
-        np.testing.assert_allclose(
-            _np(_on(d.entropy(), device)), [1.77347744, 1.62750196], atol=1e-5
-        )
+    The domain comparison itself, class by class, is
+    ``lucid/test/parity/test_distribution_constraints_parity.py``; the
+    Python-number device sweep that replaced CHA-148's five cases is
+    ``test_distributions_metal_scalar_params.py``.
+    """
 
-    def test_multinomial_with_an_int_count(self, device: str) -> None:
-        d = D.Multinomial(5, probs=_t([0.2, 0.3, 0.5], device))
-        np.testing.assert_allclose(_np(_on(d.mean, device)), [1.0, 1.5, 2.5])
-        np.testing.assert_allclose(
-            _np(_on(d.variance, device)), [0.8, 1.05, 1.25], atol=1e-6
-        )
-        np.testing.assert_allclose(
-            _np(_on(d.log_prob(_t([1.0, 2.0, 2.0], device)), device)),
-            -2.00248051,
-            atol=1e-5,
-        )
-        lucid.manual_seed(0)
-        sample = _on(d.sample((4,)), device)
-        assert (_np(sample).sum(axis=-1) == 5).all()
+    def test_widened_domains_construct(self, device: str) -> None:
+        D.Poisson(_t([0.0, 2.0], device))
+        D.Geometric(_t([1.0, 0.5], device))
+        D.NegativeBinomial(_t([0.0, 3.0], device), probs=_t([0.5, 0.0], device))
+        D.RelaxedBernoulli(_t(0.5, device), probs=_t([0.0, 1.0], device))
+        for refused in (
+            lambda: D.Poisson(_t(-1.0, device)),
+            lambda: D.Geometric(_t(0.0, device)),
+            lambda: D.NegativeBinomial(_t(3.0, device), probs=_t(1.0, device)),
+            lambda: D.NegativeBinomial(_t(-1.0, device), probs=_t(0.5, device)),
+            lambda: D.RelaxedBernoulli(_t(0.5, device), probs=_t(1.5, device)),
+        ):
+            with pytest.raises(ValueError):
+                refused()
 
-    def test_affine_and_power_transforms_with_number_parameters(
+    def test_parameters_the_reference_refuses(self, device: str) -> None:
+        for refused in (
+            lambda: D.Uniform(_t(2.0, device), _t(1.0, device)),
+            lambda: D.ContinuousBernoulli(probs=_t(1.5, device)),
+            lambda: D.ContinuousBernoulli(logits=_t(np.nan, device)),
+            lambda: D.Categorical(logits=_t([-_INF, -_INF, -_INF], device)),
+            lambda: D.Categorical(logits=_t([_INF, 0.0, 0.0], device)),
+            lambda: D.Binomial(_t(_INF, device), probs=_t(0.5, device)),
+        ):
+            with pytest.raises(ValueError):
+                refused()
+        # The stored logits are log-probabilities, as the reference stores them.
+        logits = D.Categorical(logits=_t([-_INF, 0.0, 1.0], device)).logits
+        np.testing.assert_allclose(_np(logits.exp()).sum(), 1.0, atol=1e-6)
+
+    def test_bernoulli_kl_at_the_boundary(self, device: str) -> None:
+        """A 1e-7 clip made ``KL(Bernoulli(0.3) || Bernoulli(0))`` 4.22."""
+        p = [0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 1.0, 1.0, 1.0]
+        q = [0.0, 0.3, 1.0, 0.0, 0.3, 1.0, 0.0, 0.3, 1.0]
+        kl = D.kl_divergence(
+            D.Bernoulli(probs=_t(p, device)), D.Bernoulli(probs=_t(q, device))
+        )
+        want = [0.0, -np.log(0.7), _INF, _INF, 0.0, _INF, _INF, -np.log(0.3), 0.0]
+        np.testing.assert_allclose(_np(kl), want, atol=1e-6)
+
+    def test_bernoulli_kl_from_large_logits(self, device: str) -> None:
+        """``1 - sigmoid(15)`` keeps one digit in float32; ``sigmoid(-15)``
+        keeps all of them."""
+        kl = D.kl_divergence(
+            D.Bernoulli(logits=_t(0.0, device)), D.Bernoulli(logits=_t(15.0, device))
+        )
+        want = np.log(0.5) + 0.5 * (_softplus(-15.0) + _softplus(15.0))
+        np.testing.assert_allclose(_np(kl), want, atol=1e-5)
+
+    def test_bernoulli_kl_gradient_is_finite_at_zero(self, device: str) -> None:
+        probs = _t([0.0, 0.3], device)
+        probs.requires_grad_(True)
+        D.kl_divergence(
+            D.Bernoulli(probs=probs), D.Bernoulli(probs=_t([0.4, 0.4], device))
+        ).sum().backward()
+        assert np.isfinite(_np(probs.grad)).all()
+
+    def test_poisson_and_geometric_kl_at_the_boundary(self, device: str) -> None:
+        """At rate 0 the reference answers NaN, and ``inf`` for
+        ``Geometric(1)`` against itself.  These are the exact divergences."""
+        poisson = D.kl_divergence(
+            D.Poisson(_t([0.0, 0.0, 1.5], device)),
+            D.Poisson(_t([1.5, 0.0, 0.0], device)),
+        )
+        np.testing.assert_allclose(_np(poisson), [1.5, 0.0, _INF], atol=1e-6)
+        geometric = D.kl_divergence(
+            D.Geometric(_t([1.0, 1.0, 0.3], device)),
+            D.Geometric(_t([0.3, 1.0, 1.0], device)),
+        )
+        np.testing.assert_allclose(_np(geometric), [-np.log(0.3), 0.0, _INF], atol=1e-6)
+
+    def test_negative_binomial_with_no_successes_to_wait_for(self, device: str) -> None:
+        """``r = 0`` is the point mass at 0: ``lgamma(0) - lgamma(0)`` was NaN."""
+        r = _t(0.0, device)
+        r.requires_grad_(True)
+        nb = D.NegativeBinomial(r, probs=_t(0.5, device))
+        np.testing.assert_allclose(
+            _np(nb.log_prob(_t([0.0, 1.0, 2.0], device))),
+            [0.0, -_INF, -_INF],
+            atol=1e-6,
+        )
+        np.testing.assert_allclose(_np(nb.mean), 0.0)
+        np.testing.assert_allclose(_np(nb.variance), 0.0)
+        nb.log_prob(_t(0.0, device)).backward()
+        assert np.isfinite(_np(r.grad)).all()
+
+    def test_relaxed_bernoulli_at_degenerate_probs_and_the_ends(
         self, device: str
     ) -> None:
-        x = _t([1.0, 2.0], device)
-        affine = D.transforms.AffineTransform(2.0, -3.0)
-        np.testing.assert_allclose(_np(_on(affine(x), device)), [-1.0, -4.0])
-        np.testing.assert_allclose(_np(_on(affine.inv(x), device)), [1 / 3, 0.0])
-        np.testing.assert_allclose(
-            _np(_on(affine.log_abs_det_jacobian(x, affine(x)), device)),
-            [np.log(3.0)] * 2,
-            atol=1e-6,
-        )
-        power = D.transforms.PowerTransform(2.5)
-        np.testing.assert_allclose(
-            _np(_on(power(x), device)), [1.0, 2.0**2.5], rtol=1e-6
+        """An unclamped probability of 0 or 1 gave an infinite logit, and the
+        ends of the support ``log 0``: NaN either way."""
+        d = D.RelaxedBernoulli(_t(0.5, device), probs=_t([0.0, 1.0, 0.3], device))
+        for v in (0.0, 0.3, 1.0):
+            assert np.isfinite(_np(d.log_prob(_t(v, device)))).all(), v
+
+    def test_kumaraswamy_at_the_ends(self, device: str) -> None:
+        """The density's limits, by shape; ``(a, b) = (1, 1)`` is uniform."""
+        d = D.Kumaraswamy(
+            _t([1.0, 0.5, 2.0, 2.0], device), _t([1.0, 2.0, 0.5, 3.0], device)
         )
         np.testing.assert_allclose(
-            _np(_on(power.inv(x), device)), [1.0, 2.0**0.4], rtol=1e-6
+            _np(d.log_prob(_t(0.0, device))), [0.0, _INF, -_INF, -_INF]
         )
         np.testing.assert_allclose(
-            _np(_on(power.log_abs_det_jacobian(x, power(x)), device)),
-            np.log(2.5) + 1.5 * np.log([1.0, 2.0]),
-            atol=1e-6,
+            _np(d.log_prob(_t(1.0, device))), [0.0, -_INF, _INF, -_INF]
         )
 
-    def test_transformed_distributions_built_on_them(self, device: str) -> None:
-        base = D.Normal(_t([0.0, 1.0], device), _t([1.0, 0.5], device))
-        affine = D.TransformedDistribution(
-            base, [D.transforms.AffineTransform(2.0, 3.0)]
-        )
-        lucid.manual_seed(0)
-        _on(affine.rsample((3,)), device)
-        y = _t([2.5, 4.0], device)
-        # N(2 + 3·loc, 3·scale) scored directly.
-        want = _np(D.Normal(_t([2.0, 5.0], device), _t([3.0, 1.5], device)).log_prob(y))
+    def test_supports_have_the_reference_edges(self, device: str) -> None:
+        # ``Exponential.log_prob`` validates its value; ``positive`` refused 0.
         np.testing.assert_allclose(
-            _np(_on(affine.log_prob(y), device)), want, atol=1e-5
+            _np(D.Exponential(_t(2.0, device)).log_prob(_t(0.0, device))), np.log(2.0)
         )
-        power = D.TransformedDistribution(
-            D.Exponential(_t([1.0, 2.0], device)), [D.transforms.PowerTransform(2.5)]
-        )
-        lucid.manual_seed(0)
-        _on(power.sample((3,)), device)
-        assert np.isfinite(
-            _np(_on(power.log_prob(_t([0.5, 2.0], device)), device))
-        ).all()
 
-    def test_relaxed_distributions_with_a_number_temperature(self, device: str) -> None:
-        rb = D.RelaxedBernoulli(0.7, probs=_t([0.3], device))
-        np.testing.assert_allclose(
-            _np(_on(rb.log_prob(_t([0.1, 0.5, 0.9], device)), device)),
-            [0.54798782, -0.53102827, -0.51020932],
-            atol=1e-5,
-        )
+        def admits(dist: Any, v: Any) -> list[bool]:
+            return _flags(dist.support.check(_t(v, device)))
+
+        gamma = D.Gamma(_t(2.0, device), _t(1.0, device))
+        assert admits(gamma, [0.0, -1.0]) == [True, False]
+        kumaraswamy = D.Kumaraswamy(_t(2.0, device), _t(3.0, device))
+        assert admits(kumaraswamy, [0.0, 1.0]) == [True, True]
+        weibull = D.Weibull(_t(1.0, device), _t(2.0, device))
+        assert admits(weibull, [0.0, 1.0]) == [False, True]
+        binomial = D.Binomial(_t([2.0, 5.0], device), probs=_t(0.5, device))
+        assert admits(binomial, [3.0, 3.0]) == [False, True]
+        pareto = D.Pareto(_t([1.0, 2.0], device), _t(3.0, device))
+        assert admits(pareto, [1.5, 1.5]) == [True, False]
+        uniform = D.Uniform(_t(0.0, device), _t(2.0, device))
+        assert admits(uniform, [-0.1, 2.0]) == [False, True]
+        one_hot = D.OneHotCategorical(probs=_t([0.2, 0.3, 0.5], device))
+        assert admits(one_hot, [[0.0, 1.0, 0.0], [0.2, 0.3, 0.5]]) == [True, False]
+        lkj = D.LKJCholesky(3, _t(1.5, device))
         lucid.manual_seed(0)
-        _on(rb.rsample((3,)), device)
-        roc = D.RelaxedOneHotCategorical(0.5, probs=_t([0.2, 0.3, 0.5], device))
-        lucid.manual_seed(0)
-        sample = _on(roc.rsample((3,)), device)
-        assert np.isfinite(_np(_on(roc.log_prob(sample), device))).all()
+        assert all(_flags(lkj.support.check(lkj.sample((4,)))))
+
+    def test_integer_constraints_refuse_infinity(self, device: str) -> None:
+        c = D.constraints
+        values = _t([0.0, 2.0, _INF, 1.5, -1.0], device)
+        assert _flags(c.nonnegative_integer.check(values)) == [
+            True,
+            True,
+            False,
+            False,
+            False,
+        ]
+        assert _flags(c.integer_interval(0, 5).check(_t(_INF, device))) == [False]
+
+    def test_positive_definite_requires_symmetry(self, device: str) -> None:
+        """Cholesky reads the lower triangle only, so a Cholesky factor passed."""
+        pd = D.constraints.positive_definite
+        assert _flags(pd.check(_t([[1.0, 0.0], [0.6, 0.8]], device))) == [False]
+        batch = _t([[[2.0, 0.5], [0.5, 1.0]], [[1.0, 2.0], [2.0, 1.0]]], device)
+        assert _flags(pd.check(batch)) == [True, False]
+
+    def test_reference_constraints_added(self, device: str) -> None:
+        c = D.constraints
+        half_open = c.half_open_interval(0.0, 1.0)
+        assert _flags(half_open.check(_t([0.0, 0.5, 1.0], device))) == [
+            True,
+            True,
+            False,
+        ]
+        assert c.one_hot.is_discrete and c.one_hot.event_dim == 1
+        vectors = _t([[0.0, 1.0], [1.0, 1.0], [0.5, 0.5]], device)
+        assert _flags(c.one_hot.check(vectors)) == [True, False, False]
+        assert c.corr_cholesky.event_dim == 2
+        factors = _t([[[1.0, 0.0], [0.6, 0.8]], [[1.0, 0.0], [0.5, 0.5]]], device)
+        assert _flags(c.corr_cholesky.check(factors)) == [True, False]
+        counts = c.independent(c.nonnegative_integer, 1)
+        assert counts.is_discrete and counts.event_dim == 1
+        assert _flags(counts.check(_t([[0.0, 2.0], [1.0, 0.5]], device))) == [
+            True,
+            False,
+        ]
+        with pytest.raises(ValueError):
+            c.independent(c.real, -1)
 
     @pytest.mark.parity
     def test_parity(self, device: str, ref: Any) -> None:
         RD = ref.distributions
         rt = lambda v: ref.tensor(np.asarray(v, dtype=np.float32))  # noqa: E731
-        np.testing.assert_allclose(
-            _np(D.StudentT(_t([3.0, 5.0], device), 1.0, 2.0).entropy()),
-            _ref_np(RD.StudentT(rt([3.0, 5.0]), 1.0, 2.0).entropy()),
-            atol=1e-5,
-        )
-        counts = [1.0, 2.0, 2.0]
-        np.testing.assert_allclose(
-            _np(
-                D.Multinomial(5, probs=_t([0.2, 0.3, 0.5], device)).log_prob(
-                    _t(counts, device)
-                )
+
+        def same(lucid_value: lucid.Tensor, ref_value: Any) -> None:
+            np.testing.assert_allclose(
+                _np(lucid_value), _ref_np(ref_value), atol=1e-5, rtol=1e-5
+            )
+
+        p = [0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 1.0, 1.0, 1.0]
+        q = [0.0, 0.3, 1.0, 0.0, 0.3, 1.0, 0.0, 0.3, 1.0]
+        same(
+            D.kl_divergence(
+                D.Bernoulli(probs=_t(p, device)), D.Bernoulli(probs=_t(q, device))
             ),
-            _ref_np(RD.Multinomial(5, probs=rt([0.2, 0.3, 0.5])).log_prob(rt(counts))),
-            atol=1e-5,
+            RD.kl_divergence(RD.Bernoulli(probs=rt(p)), RD.Bernoulli(probs=rt(q))),
         )
-        y = [2.5, 4.0]
-        lucid_td = D.TransformedDistribution(
-            D.Normal(_t([0.0, 1.0], device), _t([1.0, 0.5], device)),
-            [D.transforms.AffineTransform(2.0, 3.0)],
+        # Not a ``q`` whose probability rounds to 1: the reference answers
+        # ``inf`` there, from ``q.probs == 1``, where the logits say ~20.
+        lp, lq = [0.0, 3.0, -20.0, 15.0], [15.0, -4.0, 10.0, 0.0]
+        same(
+            D.kl_divergence(
+                D.Bernoulli(logits=_t(lp, device)), D.Bernoulli(logits=_t(lq, device))
+            ),
+            RD.kl_divergence(RD.Bernoulli(logits=rt(lp)), RD.Bernoulli(logits=rt(lq))),
         )
-        ref_td = RD.TransformedDistribution(
-            RD.Normal(rt([0.0, 1.0]), rt([1.0, 0.5])),
-            [RD.transforms.AffineTransform(2.0, 3.0)],
+        # Only where the reference is right: it answers NaN at rate 0 and
+        # ``inf`` for KL(Geometric(1) || Geometric(1)).
+        same(
+            D.kl_divergence(
+                D.Poisson(_t([1.5, 2.0], device)), D.Poisson(_t([0.0, 0.5], device))
+            ),
+            RD.kl_divergence(RD.Poisson(rt([1.5, 2.0])), RD.Poisson(rt([0.0, 0.5]))),
         )
-        np.testing.assert_allclose(
-            _np(lucid_td.log_prob(_t(y, device))),
-            _ref_np(ref_td.log_prob(rt(y))),
-            atol=1e-5,
+        same(
+            D.kl_divergence(
+                D.Geometric(_t([1.0, 0.3], device)), D.Geometric(_t([0.3, 1.0], device))
+            ),
+            RD.kl_divergence(
+                RD.Geometric(rt([1.0, 0.3])), RD.Geometric(rt([0.3, 1.0]))
+            ),
         )
-        y = [0.5, 2.0]
-        lucid_td = D.TransformedDistribution(
-            D.Exponential(_t([1.0, 2.0], device)), [D.transforms.PowerTransform(2.5)]
+        counts = [0.0, 1.0, 2.0]
+        for r, probs in ((0.0, 0.5), (3.0, 0.0)):
+            same(
+                D.NegativeBinomial(_t(r, device), probs=_t(probs, device)).log_prob(
+                    _t(counts, device)
+                ),
+                RD.NegativeBinomial(rt(r), probs=rt(probs)).log_prob(rt(counts)),
+            )
+        same(
+            D.Poisson(_t(0.0, device)).log_prob(_t(counts, device)),
+            RD.Poisson(rt(0.0)).log_prob(rt(counts)),
         )
-        ref_td = RD.TransformedDistribution(
-            RD.Exponential(rt([1.0, 2.0])), [RD.transforms.PowerTransform(2.5)]
+        same(
+            D.Geometric(_t(1.0, device)).log_prob(_t(counts, device)),
+            RD.Geometric(rt(1.0)).log_prob(rt(counts)),
         )
-        np.testing.assert_allclose(
-            _np(lucid_td.log_prob(_t(y, device))),
-            _ref_np(ref_td.log_prob(rt(y))),
-            atol=1e-5,
+        values = [0.0, 0.3, 1.0]
+        for probs in (0.0, 1.0, 0.3):
+            same(
+                D.RelaxedBernoulli(_t(0.5, device), probs=_t(probs, device)).log_prob(
+                    _t(values, device)
+                ),
+                RD.RelaxedBernoulli(rt(0.5), probs=rt(probs)).log_prob(rt(values)),
+            )
+        same(
+            D.Exponential(_t(2.0, device)).log_prob(_t(0.0, device)),
+            RD.Exponential(rt(2.0)).log_prob(rt(0.0)),
+        )
+        logits = [-_INF, 0.0, 1.0]
+        same(
+            D.Categorical(logits=_t(logits, device)).logits,
+            RD.Categorical(logits=rt(logits)).logits,
         )
