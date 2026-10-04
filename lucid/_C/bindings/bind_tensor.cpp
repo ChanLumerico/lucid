@@ -21,6 +21,7 @@
 #include <mlx/transforms.h>  // mlx::core::eval(std::vector<array>)
 
 #include "../autograd/Node.h"
+#include "../autograd/TensorHooks.h"
 #include "../backend/Dispatcher.h"
 #include "../backend/gpu/MetalAllocator.h"
 #include "../backend/gpu/MlxBridge.h"
@@ -53,41 +54,6 @@ void evaluate_without_gil(const lucid::TensorImpl& t) {
         return;
     py::gil_scoped_release release;
     t.eval();
-}
-
-// The buffer ``self.grad = g`` installs, once g may be ``self``'s gradient.
-//
-// Every write of a whole gradient from Python lands in set_grad: ``.grad =``,
-// a tensor hook's replacement, clip_grad and GradScaler writing back.  The
-// slot is a bare Storage — no dtype, shape or device of its own — and
-// ``.grad``, the optimizers and the next backward read it as ``self``'s.  A
-// buffer of any other kind was read as if it were one: float32 bits taken
-// for float16 values (``[1, 2, 4]`` came back ``[0, 1.875, 1.875]``), three
-// elements read out of a buffer of two, a Metal array labelled CPU.  The
-// reference refuses each of these, in this order, and so does this, before
-// the slot changes.
-lucid::Storage assignable_grad(const lucid::TensorImpl& self, const lucid::TensorImpl& g) {
-    const lucid::ErrorBuilder err("Tensor.grad");
-    if (&g == &self)
-        err.fail("a tensor cannot be assigned as its own gradient");
-    if (g.dtype() != self.dtype())
-        err.dtype_mismatch(self.dtype(), g.dtype(),
-                           "an assigned gradient must have the tensor's dtype");
-    if (g.device() != self.device())
-        err.device_mismatch(self.device(), g.device(),
-                            "an assigned gradient must be on the tensor's device");
-    if (g.shape() != self.shape())
-        err.shape_mismatch(self.shape(), g.shape(),
-                           "an assigned gradient must have the tensor's shape");
-    // The slot is read from its first byte, in row-major order.  A CPU view
-    // answers storage() with a packed copy of the elements it reads; a Metal
-    // tensor's array is its elements — unless it is a window at an offset
-    // or with strides into another tensor's array, which only the private
-    // ``_make_view`` builds, and which has no such buffer to hand over.
-    if (!lucid::storage_is_cpu(g.raw_storage()) && (g.storage_offset() != 0 || !g.is_contiguous()))
-        err.not_implemented("assigning a Metal gradient that is a strided view of another "
-                            "tensor's array — pass a contiguous copy");
-    return g.storage();
 }
 }  // namespace
 
@@ -186,9 +152,10 @@ void register_tensor_impl(py::module_& m) {
             "for leaf tensors.")
         .def_property_readonly("retains_grad", [](const TensorImpl& t) { return t.retains_grad(); })
         .def(
-            "retain_grad_", [](TensorImpl& t) { t.set_retain_grad(true); },
+            "retain_grad_", [](TensorImpl& t) { lucid::retain_grad(t.shared_from_this()); },
             "Mark this tensor to retain its gradient during backward, even if "
-            "it is not a leaf tensor.")
+            "it is not a leaf tensor.  What is kept is everything that reaches "
+            "the tensor's producer slot, after the tensor's hooks.")
         .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf(); })
         // version is a mutation counter; the autograd engine reads it to
         // detect in-place modifications to saved tensors.
@@ -418,7 +385,7 @@ void register_tensor_impl(py::module_& m) {
                 if (!g)
                     ErrorBuilder("Tensor.grad")
                         .invalid_argument("expected a tensor; zero_grad() clears a gradient");
-                self.set_grad_storage(assignable_grad(self, *g));
+                self.set_grad_storage(lucid::assignable_grad(self, *g));
             },
             py::arg("grad"),
             "Replace this tensor's gradient with grad's values.  grad must have "

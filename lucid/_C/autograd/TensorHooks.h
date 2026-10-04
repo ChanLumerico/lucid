@@ -1,0 +1,183 @@
+// lucid/_C/autograd/TensorHooks.h
+//
+// Tensor gradient hooks and ``retain_grad``, run by the engine where the
+// tensor's gradient is complete.
+//
+// A non-leaf tensor's gradient is the sum of everything that reaches its
+// producer's output slot ``(grad_fn, grad_output_nr)``, so its hooks live on
+// that node, slot by slot — the node holds them strongly, since the tensor
+// itself is often gone by the time backward runs (consumers keep only weak
+// handles on their inputs).  The engine runs them once the slot's gradient
+// has arrived, before the node does, and what they return is what flows on.
+// ``retain_grad`` is the same kind of slot entry, run after the hooks, so a
+// retained gradient is the hooked one.
+//
+// A leaf's hooks live in its :class:`AutogradMeta` instead: its
+// :class:`AccumulateGrad` is made lazily and dropped by ``release_root`` and
+// ``detach_``, so a hook stored there would be lost.  They run before the
+// gradient is accumulated into ``.grad``.
+//
+// What a hook *is* — the list of callables, their order, their removal — is
+// Python's business.  Each slot holds one Python ``runner(grad) -> grad |
+// None`` that Python installs once, and the engine calls only that.  A slot
+// that was never asked for does not exist, so a backward pass with no hooks
+// never touches Python.
+
+#pragma once
+
+#include <pybind11/pybind11.h>
+
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+#include "../api.h"
+#include "../core/Device.h"
+#include "../core/Dtype.h"
+#include "../core/Shape.h"
+#include "../core/Storage.h"
+#include "../core/TensorImpl.h"
+#include "Node.h"
+
+namespace py = pybind11;
+
+namespace lucid {
+
+// One tensor's hooks and retained-gradient target.
+//
+// Attributes
+// ----------
+// runner : py::object
+//     The Python callable that runs the tensor's hooks, or a null handle
+//     while it has none (a slot made by ``retain_grad`` alone).
+// retain : std::weak_ptr<TensorImpl>
+//     The non-leaf tensor whose ``.grad`` keeps this slot's gradient, when
+//     ``retain_grad`` asked for it.  Weak: the slot must not keep it alive.
+// shape : Shape
+//     The tensor's shape, to give a gradient Storage a shape again.
+//
+// Notes
+// -----
+// The runner is dropped under the GIL, wherever the last owner lets go of the
+// slot — a node or a tensor can die on a thread that does not hold it.
+struct LUCID_API TensorHookSlot {
+    py::object runner;
+    std::weak_ptr<TensorImpl> retain;
+    Shape shape;
+
+    TensorHookSlot() = default;
+    ~TensorHookSlot();
+
+    TensorHookSlot(const TensorHookSlot&) = delete;
+    TensorHookSlot& operator=(const TensorHookSlot&) = delete;
+};
+
+// The hook slots of one node, by output slot.
+//
+// Slots are held through ``shared_ptr`` so that the engine can keep the one it
+// is running alive: a hook may register another one (growing this list) or run
+// a backward pass of its own that releases this node's hooks.
+class LUCID_API NodeHooks {
+public:
+    // The slot of output ``output_nr``, or null when nothing was registered
+    // there.
+    std::shared_ptr<TensorHookSlot> find(std::uint32_t output_nr) const;
+
+    // The slot of output ``output_nr``, made empty if it does not exist yet.
+    std::shared_ptr<TensorHookSlot> ensure(std::uint32_t output_nr);
+
+private:
+    std::vector<std::shared_ptr<TensorHookSlot>> slots_;
+};
+
+// Whether output ``output_nr`` of ``node`` has a hook slot.  For a node with
+// no hooks this is a null test and nothing else.
+inline bool has_slot_hooks(const Node& node, std::uint32_t output_nr) {
+    const NodeHooks* hooks = node.tensor_hooks();
+    return hooks != nullptr && hooks->find(output_nr) != nullptr;
+}
+
+// ── Running them ─────────────────────────────────────────────────────────────
+//
+// One pair of helpers for every traversal: eager backward and ``grad()`` hand
+// over Storage, their ``create_graph`` forms hand over tensors.  Each returns
+// the gradient that flows on.
+
+// Run the hooks of output ``output_nr`` of ``producer`` on that slot's whole
+// gradient, then retain the result if the tensor asked for it.
+//
+// The hooks run with the GIL held and grad mode off.  A hook that returned a
+// tensor replaces the gradient — after the checks ``Tensor.grad =`` makes —
+// and one that returned ``None`` leaves it as the hook left it, in-place
+// writes included.  Once a hook has run, a CPU gradient is copied before it
+// flows on: the hook may keep what it was handed, or hand back a tensor
+// somebody else reads, and the engine adds into gradients in place.
+//
+// Raises
+// ------
+// py::error_already_set
+//     A hook raised; the exception reaches the caller of backward as it was.
+// DtypeMismatch, DeviceMismatch, ShapeMismatch
+//     A hook returned a gradient of another kind than it was given.
+LUCID_API Storage run_slot_hooks(Node& producer, std::uint32_t output_nr, Storage grad);
+
+// :func:`run_slot_hooks` for ``create_graph``: the hooks run with grad mode on
+// and see the gradient with its graph, and what they return keeps its own.
+LUCID_API TensorImplPtr run_slot_hooks_for_graph(Node& producer,
+                                                 std::uint32_t output_nr,
+                                                 TensorImplPtr grad);
+
+// Run a leaf's hooks on the gradient about to be accumulated into its
+// ``.grad`` (already in the leaf's dtype).  Same contract as
+// :func:`run_slot_hooks`, without the retain step a leaf does not have.
+LUCID_API Storage run_leaf_hooks(const TensorImpl& leaf, Storage grad);
+
+// :func:`run_leaf_hooks` for ``create_graph``.
+LUCID_API TensorImplPtr run_leaf_hooks_for_graph(const TensorImpl& leaf, TensorImplPtr grad);
+
+// ── Registering them ─────────────────────────────────────────────────────────
+
+// The runner of ``t``'s hooks, installed from ``make()`` the first time.
+//
+// A leaf's slot is its own; a non-leaf's is its producer's output slot, so
+// every consumer — made before the hook or after — sends its gradient through
+// it.  ``t``'s shape is recorded with it.
+//
+// Raises
+// ------
+// LucidError
+//     ``t`` does not require grad, so no gradient will ever reach it.
+LUCID_API py::object tensor_hook_runner(const TensorImplPtr& t, const py::object& make);
+
+// Whether ``t``'s slot has a runner installed.
+LUCID_API bool has_tensor_hooks(const TensorImpl& t);
+
+// Keep ``t``'s gradient in its ``.grad`` during backward, even though it is not
+// a leaf.  Sets the flag and, for a non-leaf, registers ``t`` at its producer's
+// output slot — called again after an in-place op moves ``t`` to a new one.
+// A leaf keeps its gradient anyway; only the flag changes.
+LUCID_API void retain_grad(const TensorImplPtr& t);
+
+// ── Shared with the rest of the engine ───────────────────────────────────────
+
+// A gradient buffer its holder alone owns, for a holder that keeps adding
+// into it.  A metal add replaces the array rather than writing into it, so a
+// metal gradient comes back as it is.
+LUCID_API Storage own_grad_copy(const Storage& s);
+
+// The buffer ``self.grad = g`` installs.
+//
+// The gradient slot is a bare Storage, read as ``self``'s dtype, device and
+// shape; ``g`` must have all three — checked in that order, as the reference
+// does — and may not be ``self``.  A hook's returned gradient passes the same
+// checks against the gradient it replaces.
+//
+// Raises
+// ------
+// DtypeMismatch, DeviceMismatch, ShapeMismatch
+//     ``g`` is of another kind.
+// LucidError
+//     ``g`` is ``self``, or a Metal strided view with no buffer of its own.
+LUCID_API Storage assignable_grad(const TensorImpl& self, const TensorImpl& g);
+
+}  // namespace lucid

@@ -39,6 +39,7 @@
 namespace lucid {
 
 class Node;
+struct TensorHookSlot;
 
 // Geometric and type description of a tensor.
 //
@@ -185,7 +186,15 @@ struct TensorMeta {
 // retain_grad : bool
 //     When ``true``, the engine accumulates incoming gradients into
 //     :attr:`grad` even for non-leaf tensors — mirroring the
-//     reference framework's ``Tensor.retain_grad()`` opt-in.
+//     reference framework's ``Tensor.retain_grad()`` opt-in.  The engine
+//     finds the tensor through its producer's hook slot
+//     (``autograd/TensorHooks.h``); this flag is what says it still asks.
+// leaf_hooks : std::shared_ptr<TensorHookSlot>
+//     A leaf's gradient hooks, run before each accumulation into
+//     :attr:`grad`.  Here rather than on the leaf's ``AccumulateGrad``,
+//     which is made lazily and dropped by ``release_root`` / ``detach_``.
+//     Null for a leaf without hooks — and for every non-leaf, whose hooks
+//     live on its producer node.
 //
 // Notes
 // -----
@@ -210,6 +219,8 @@ struct AutogradMeta {
     // When true, Engine accumulates the incoming gradient into this tensor's
     // grad storage even if it is not a leaf (mirrors reference tensor.retain_grad()).
     bool retain_grad = false;
+    // A leaf's gradient hooks; the type is complete only in the autograd layer.
+    std::shared_ptr<TensorHookSlot> leaf_hooks;
 };
 
 }  // namespace lucid

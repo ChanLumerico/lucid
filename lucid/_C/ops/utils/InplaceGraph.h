@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "../../autograd/TensorHooks.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -141,6 +142,10 @@ LUCID_API void rebase_views(const TensorImplPtr& a);
 // ``y`` on both devices.  The op's own node is not among those that
 // refuse: it was handed a snapshot (:func:`snapshot`), a tensor of its own
 // whose count no write to ``a`` reaches.
+//
+// The hooks registered on ``a`` stay on its old slot, as the reference's do:
+// they were asked about the values before the write.  ``retain_grad`` follows
+// the tensor to its new slot.
 inline bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
     if (!out->requires_grad() && !out->grad_fn())
         return false;
@@ -154,6 +159,8 @@ inline bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& ou
     // tensor starts out a leaf, and one left marked so looked, to the next
     // write into its family, like a parameter's view — which was refused.
     a->set_leaf(false);
+    if (a->retains_grad())
+        retain_grad(a);
     if (a->is_aliased())
         rebase_views(a);
     a->bump_version();

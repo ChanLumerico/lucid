@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cross_entropy, nll, multi_margin and ctc take unbatched input (CHA-94)
 
+- run tensor hooks where the gradient is complete (CHA-151)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

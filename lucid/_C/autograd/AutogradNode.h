@@ -60,7 +60,7 @@ class TensorImpl;
 //     as a value (e.g. when constructing the ``next_edges`` vector).
 // input_tensors_ : std::array<std::weak_ptr<TensorImpl>, N_IN>
 //     Weak references to the original input :class:`TensorImpl` objects,
-//     used by :meth:`validate_versions` and :meth:`retainable_inputs`.
+//     used by :meth:`validate_versions`.
 //     Weak so the backward graph never extends an input's lifetime.
 // input_shapes_ : std::array<Shape, N_IN>
 //     Shapes of the forward inputs, captured so that broadcasts and
@@ -146,22 +146,6 @@ public:
     //     error messages, profiler traces, and ``create_graph`` failure
     //     reports.
     std::string_view name() const noexcept { return Derived::schema_v1.name; }
-
-    // Return weak pointers to the forward-input :class:`TensorImpl`
-    // objects so that the engine can honour ``retain_grad`` on non-leaf
-    // tensors.
-    //
-    // Returns
-    // -------
-    // std::vector<std::weak_ptr<TensorImpl>>
-    //     One weak pointer per forward input, in input order.
-    std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const override {
-        std::vector<std::weak_ptr<TensorImpl>> result;
-        result.reserve(N_IN);
-        for (std::size_t i = 0; i < N_IN; ++i)
-            result.push_back(input_tensors_[i]);
-        return result;
-    }
 
     // Verify that no saved input has been mutated in-place since forward.
     //

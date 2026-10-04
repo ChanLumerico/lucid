@@ -662,6 +662,18 @@ public:
     //     New ``retain_grad`` value.
     void set_retain_grad(bool v) noexcept { ensure_autograd()->retain_grad = v; }
 
+    // A leaf's gradient hooks (``autograd/TensorHooks.h``), or null.
+    const std::shared_ptr<TensorHookSlot>& leaf_hooks() const noexcept {
+        static const std::shared_ptr<TensorHookSlot> kNull;
+        return autograd_ ? autograd_->leaf_hooks : kNull;
+    }
+
+    // The leaf-hook slot itself, constructing the :class:`AutogradMeta` on
+    // demand — for registering the first hook.
+    std::shared_ptr<TensorHookSlot>& mutable_leaf_hooks() noexcept {
+        return ensure_autograd()->leaf_hooks;
+    }
+
     // Increments the autograd version counter.
     //
     // Called by every in-place op so autograd can detect mutations of

@@ -33,10 +33,24 @@ namespace lucid {
 //    (e.g. ``LinearBackward`` + ``ReluBackward``) into a single fused node.
 // 3. Walk the ordering once, calling each node's ``apply()``; gradients
 //    arriving at a node from multiple producers are summed into a pending
-//    map before the node is executed.
-// 4. Leaves (tensors with no ``grad_fn``) are reached through their
-//    :class:`AccumulateGrad` sentinel, which writes the final gradient into
-//    ``leaf.grad``.
+//    map before the node is executed.  A barrier (a node with several
+//    output slots) takes them slot by slot instead.
+// 4. When a node is popped, before it runs, the hooks of the tensors it
+//    produced (``Tensor.register_hook``) run on their slot's whole gradient
+//    and what they return is what the node receives; then ``retain_grad``
+//    keeps that value in the tensor's ``.grad``.  The gradients of a hooked
+//    barrier slot are held by the engine until the barrier's turn so the
+//    hooks see their sum (TensorHooks.h).  A node with no hooks pays one
+//    null test and Python is never called.
+// 5. Leaves (tensors with no ``grad_fn``) are reached through their
+//    :class:`AccumulateGrad` sentinel, which runs the leaf's own hooks and
+//    then writes the final gradient into ``leaf.grad``.
+//
+// All four traversals — ``backward``, ``backward(create_graph=True)``,
+// ``grad`` and ``grad(create_graph=True)`` — run the hooks the same way;
+// ``grad`` only on the nodes on a path to a requested input, and what it
+// captures is the hooked value.  Under ``create_graph`` a hook runs with grad
+// mode on and sees the gradient's graph; otherwise grad mode is off.
 //
 // Thread Safety
 // -------------
@@ -90,12 +104,15 @@ public:
     //     vector whose size disagrees with its outgoing edges (and both
     //     are non-empty), or if ``validate_versions()`` detects an
     //     in-place mutation of a saved input tensor.
+    // py::error_already_set
+    //     A tensor hook raised; the Python exception propagates unchanged.
     //
     // Notes
     // -----
     // The engine consumes nodes destructively when ``retain_graph=false``:
     // ``release_saved()`` frees the forward tensors each node had stashed
-    // for its backward formula, and ``clear_grad_fn()`` on ``root``
+    // for its backward formula — and, the node being impossible to run
+    // again, the tensor hooks it held — and ``clear_grad_fn()`` on ``root``
     // severs the producer→graph reference so the chain of shared_ptrs
     // collapses.
     //
@@ -115,9 +132,10 @@ public:
     // The functional counterpart to :func:`backward`.  It walks the same
     // graph, but instead of letting gradients terminate in the
     // :class:`AccumulateGrad` nodes that own each leaf's ``.grad`` slot, it
-    // intercepts them and returns them to the caller.  No tensor's gradient
+    // intercepts them and returns them to the caller.  No leaf's gradient
     // state is read or modified — not the requested inputs', and not any
-    // other leaf's.
+    // other leaf's.  A non-leaf that asked for ``retain_grad`` on a path to a
+    // requested input does keep what reaches it, as the reference does.
     //
     // That last part is the reason this exists.  Emulating it in Python by
     // running a full :func:`backward` and then restoring ``.grad`` can only

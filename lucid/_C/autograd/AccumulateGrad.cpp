@@ -10,31 +10,43 @@
 #include "../backend/Dispatcher.h"
 #include "../core/Storage.h"
 #include "Helpers.h"
+#include "TensorHooks.h"
 
 namespace lucid {
 
 AccumulateGrad::AccumulateGrad(std::weak_ptr<TensorImpl> leaf) : leaf_(std::move(leaf)) {}
 
-// Write grad_out into the leaf's gradient storage.
-//
-// Three early-exit cases:
-//   1. The leaf TensorImpl has been destroyed (weak_ptr expired) — nothing
-//      to accumulate into; silently discard the gradient.
-//   2. The leaf no longer requires a gradient (e.g. the user called
-//      requires_grad_(False) after the forward pass) — discard.
-//   3. Normal case: if leaf has no gradient yet, move grad_out in as-is;
-//      otherwise call accumulate_into() which does an in-place += using the
-//      appropriate backend (CPU element-wise loop or MLX add for GPU).
-//
-// Returns an empty vector because AccumulateGrad has no outgoing edges.
+// Write grad_out into the leaf's gradient storage, or drop it when the leaf
+// TensorImpl has been destroyed (weak_ptr expired) — there is nothing to
+// accumulate into.  Returns an empty vector because AccumulateGrad has no
+// outgoing edges.
 std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
-    auto t = leaf_.lock();
-    if (!t) {
-        // Leaf was deallocated before backward completed; drop gradient.
-        return {};
-    }
-    if (!t->requires_grad()) {
-        return {};
+    if (auto t = leaf_.lock())
+        accumulate_leaf(*t, std::move(grad_out));
+    return {};
+}
+
+// Store grad_out (a TensorImplPtr with its own grad_fn) into the leaf's
+// grad_impl slot so the gradient tensor itself is differentiable.
+// This path is taken when Engine::backward is called with create_graph=true.
+std::vector<TensorImplPtr> AccumulateGrad::apply_for_graph(const TensorImplPtr& grad_out) {
+    if (auto t = leaf_.lock())
+        accumulate_leaf_for_graph(t, grad_out);
+    return {};
+}
+
+// Three cases:
+//   1. The leaf no longer requires a gradient (e.g. the user called
+//      requires_grad_(False) after the forward pass) — discard.
+//   2. Its hooks run on the gradient, cast to its dtype, and may replace it.
+//   3. If the leaf has no gradient yet, move the gradient in as-is;
+//      otherwise call accumulate_into() which does an in-place += using the
+//      appropriate backend (CPU element-wise loop or MLX add for GPU).  A
+//      gradient a hook saw is a copy of its own (run_leaf_hooks), so the +=
+//      of a later pass never reaches a tensor the hook kept.
+void accumulate_leaf(TensorImpl& leaf, Storage grad_out) {
+    if (!leaf.requires_grad()) {
+        return;
     }
 
     // 3.3 AMP fix: under autocast, the same leaf parameter can be reached
@@ -45,10 +57,10 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     // to the leaf parameter's own dtype before storing/accumulating —
     // this matches the reference framework's policy of keeping the
     // gradient slot at the parameter's dtype.
-    const Dtype target_dt = t->dtype();
+    const Dtype target_dt = leaf.dtype();
     const Dtype src_dt = storage_dtype(grad_out);
     if (src_dt != target_dt) {
-        auto& be = backend::Dispatcher::for_device(t->device());
+        auto& be = backend::Dispatcher::for_device(leaf.device());
         if (is_complex(src_dt) && !is_complex(target_dt)) {
             // A complex gradient arriving at a real leaf keeps its real
             // part.  That is a projection, not a cast, and it is the
@@ -61,16 +73,18 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
             // arrived here as ``astype: complex64 -> float32``, an
             // unimplemented cast standing in for a well-defined
             // operation.
-            grad_out = be.complex_real(grad_out, t->shape());
+            grad_out = be.complex_real(grad_out, leaf.shape());
             const Dtype lane = real_lane_of(src_dt);
             if (lane != target_dt)
-                grad_out = be.astype(grad_out, t->shape(), lane, target_dt);
+                grad_out = be.astype(grad_out, leaf.shape(), lane, target_dt);
         } else {
-            grad_out = be.astype(grad_out, t->shape(), src_dt, target_dt);
+            grad_out = be.astype(grad_out, leaf.shape(), src_dt, target_dt);
         }
     }
 
-    auto& grad = t->mutable_grad_storage();
+    grad_out = run_leaf_hooks(leaf, std::move(grad_out));
+
+    auto& grad = leaf.mutable_grad_storage();
     if (!grad.has_value()) {
         // First gradient arriving at this leaf — take ownership directly
         // rather than allocating a zero buffer and immediately adding to it.
@@ -79,19 +93,13 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
         // Subsequent gradient: add in-place into the existing accumulator.
         accumulate_into(*grad, grad_out);
     }
-    return {};
 }
 
-// Store grad_out (a TensorImplPtr with its own grad_fn) into the leaf's
-// grad_impl slot so the gradient tensor itself is differentiable.
-// This path is taken when Engine::backward is called with create_graph=true.
-std::vector<TensorImplPtr> AccumulateGrad::apply_for_graph(const TensorImplPtr& grad_out) {
-    auto t = leaf_.lock();
-    if (!t || !t->requires_grad()) {
-        return {};
+void accumulate_leaf_for_graph(const TensorImplPtr& leaf, const TensorImplPtr& grad) {
+    if (!leaf || !leaf->requires_grad()) {
+        return;
     }
-    t->accumulate_grad_impl(gradient_in_dtype_of(grad_out, t));
-    return {};
+    leaf->accumulate_grad_impl(run_leaf_hooks_for_graph(*leaf, gradient_in_dtype_of(grad, leaf)));
 }
 
 TensorImplPtr gradient_in_dtype_of(const TensorImplPtr& grad, const TensorImplPtr& like) {

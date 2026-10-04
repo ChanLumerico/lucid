@@ -432,9 +432,13 @@ void rebase_views(const TensorImplPtr& a) {
         if (same) {
             // The same elements in the same order: a reshape of ``a``.
             kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, m, false);
-            continue;
+        } else {
+            attach(m, a, covered, differentiable, std::move(node));
         }
-        attach(m, a, covered, differentiable, std::move(node));
+        // A member that asked to keep its gradient keeps the one of its new
+        // place in the graph.
+        if (m->retains_grad())
+            retain_grad(m);
     }
 }
 

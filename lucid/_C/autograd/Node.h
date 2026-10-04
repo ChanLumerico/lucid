@@ -28,6 +28,7 @@
 namespace lucid {
 
 class Node;
+class NodeHooks;
 class TensorImpl;
 using TensorImplPtr = std::shared_ptr<TensorImpl>;
 
@@ -112,6 +113,9 @@ struct LUCID_API Edge {
 //     Version counters of the input tensors as observed during forward.
 //     Compared against the live counters in :meth:`validate_versions` to
 //     catch in-place mutations that would silently corrupt gradients.
+// tensor_hooks_ : std::unique_ptr<NodeHooks>
+//     Hooks and ``retain_grad`` targets of the tensors this node produced,
+//     by output slot; null for the common node that has none.
 //
 // Notes
 // -----
@@ -137,7 +141,9 @@ public:
     Node();
 
     // Polymorphic destructor; subclasses are deleted through ``Node*``.
-    virtual ~Node() = default;
+    // Out of line: the tensor hooks it owns are a complete type only in
+    // Node.cpp, which keeps pybind11 out of this header.
+    virtual ~Node();
 
     // Compute input gradients from the upstream output gradient.
     //
@@ -334,22 +340,6 @@ public:
         return name.empty() ? "unknown" : name;
     }
 
-    // Return weak references to the forward-input :class:`TensorImpl`
-    // objects that the engine may need to accumulate into.
-    //
-    // Returns
-    // -------
-    // std::vector<std::weak_ptr<TensorImpl>>
-    //     One weak pointer per input.  Empty by default — :class:`AccumulateGrad`
-    //     and similar leaf nodes have nothing to retain.
-    //
-    // Notes
-    // -----
-    // The engine uses these to honour ``retain_grad=True`` on non-leaf
-    // tensors.  Weak references avoid extending lifetime beyond what the
-    // user's Python references already hold.
-    virtual std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const { return {}; }
-
     // Assert that no saved input has been modified in-place since forward.
     //
     // The default implementation is a no-op for nodes that do not save
@@ -470,10 +460,27 @@ public:
         return saved_versions_.empty() && saved_versions_.capacity() > 0;
     }
 
+    // The hooks and ``retain_grad`` targets of the tensors this node
+    // produced, by output slot (TensorHooks.h), or null when there are none
+    // — the only cost a node without hooks pays.
+    NodeHooks* tensor_hooks() const noexcept { return tensor_hooks_.get(); }
+
+    // The hook slots, made empty on first use.
+    NodeHooks& ensure_tensor_hooks();
+
+    // Drop every hook slot.  Called by the engine once :meth:`release_saved`
+    // has made this node impossible to run again: a hook's closure that
+    // refers to the tensor it is on closes a cycle — tensor, node, hook,
+    // tensor — that Python's collector cannot see through the engine.
+    void release_tensor_hooks() noexcept;
+
 protected:
     std::uint64_t sequence_nr_;
     std::vector<Edge> next_edges_;
     std::vector<std::int64_t> saved_versions_;
+
+private:
+    std::unique_ptr<NodeHooks> tensor_hooks_;
 };
 
 // Return the next globally-unique node sequence number and advance the

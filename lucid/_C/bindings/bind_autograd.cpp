@@ -8,6 +8,8 @@
 //     CustomFunction.h for the heavy lifting)
 //   - _run_fusion_pass() — testing helper that runs the op-fusion pass on the
 //     backward graph and returns the number of fusions detected
+//   - _tensor_hook_runner() / _has_tensor_hooks() — the engine side of
+//     Tensor.register_hook (autograd/TensorHooks.h)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -19,6 +21,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/ModuleHookNode.h"
 #include "../autograd/Node.h"
+#include "../autograd/TensorHooks.h"
 #include "../core/TensorImpl.h"
 
 namespace py = pybind11;
@@ -73,8 +76,31 @@ void register_autograd(py::module_& m) {
         py::arg("root"), py::arg("inputs"), py::arg("grad_seed") = nullptr,
         py::arg("retain_graph") = false, py::arg("create_graph") = false,
         "Gradients of `root` w.r.t. `inputs`, returned rather than accumulated. "
-        "Never reads or writes any tensor's .grad. An entry is None when that "
+        "Never reads or writes a leaf's .grad (a non-leaf that asked for "
+        "retain_grad keeps what reaches it). An entry is None when that "
         "input lies outside the graph.");
+
+    // The engine half of ``Tensor.register_hook``.  A tensor's hooks run where
+    // its gradient is complete — its producer's output slot, or a leaf's
+    // accumulation — through one Python runner per slot, which Python
+    // installs here and keeps the hook list in.
+    m.def(
+        "_tensor_hook_runner",
+        [](const std::shared_ptr<TensorImpl>& t, const py::object& make) {
+            return lucid::tensor_hook_runner(t, make);
+        },
+        py::arg("tensor"), py::arg("make"),
+        "The runner of `tensor`'s gradient hooks, installed from `make()` the "
+        "first time. A leaf's runner is its own; a non-leaf's sits on its "
+        "producer's output slot, so every consumer's gradient goes through it. "
+        "The engine calls `runner(grad)` once the slot's gradient is complete, "
+        "with grad mode on only under create_graph; a returned tensor replaces "
+        "the gradient, None keeps it. Raises if `tensor` does not require grad.");
+
+    m.def(
+        "_has_tensor_hooks",
+        [](const std::shared_ptr<TensorImpl>& t) { return t && lucid::has_tensor_hooks(*t); },
+        py::arg("tensor"), "Whether a hook runner is installed on `tensor`'s gradient slot.");
 
     // register_custom_function installs the Python-side CustomFunction class
     // and the _register_python_backward_node() hook used by lucid.autograd.Function.

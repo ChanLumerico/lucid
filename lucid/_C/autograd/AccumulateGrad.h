@@ -35,10 +35,15 @@ namespace lucid {
 // 3. Incoming gradients are cast to the leaf's own dtype to handle AMP /
 //    autocast paths where the same parameter may be reached via different
 //    effective dtypes (e.g. F16 from a Conv and F32 from a ForceFP32 branch).
-// 4. If the leaf has no gradient yet, ``grad_out`` is moved in directly —
+// 4. The leaf's own hooks (``Tensor.register_hook``) run on that gradient,
+//    and what they return is what is accumulated.
+// 5. If the leaf has no gradient yet, ``grad_out`` is moved in directly —
 //    avoiding the cost of allocating a zero buffer and adding to it.
 //    Otherwise ``accumulate_into()`` performs an in-place ``+=`` using the
 //    appropriate backend (Accelerate on CPU, MLX on GPU).
+//
+// Steps 2–5 are :func:`accumulate_leaf`, which a backward pass rooted at a
+// leaf with no ``AccumulateGrad`` of its own runs directly.
 //
 // Ownership
 // ---------
@@ -115,6 +120,21 @@ public:
 private:
     std::weak_ptr<TensorImpl> leaf_;
 };
+
+// Accumulate ``grad`` into ``leaf``'s ``.grad``: nothing unless the leaf
+// requires grad, then the cast to its dtype, its hooks, and the sum.
+//
+// Parameters
+// ----------
+// leaf : TensorImpl&
+//     The leaf the gradient is for.
+// grad : Storage
+//     The gradient, in any floating dtype.
+LUCID_API void accumulate_leaf(TensorImpl& leaf, Storage grad);
+
+// :func:`accumulate_leaf` for ``create_graph``: the gradient keeps its graph
+// and is summed into ``grad_impl`` by ``add_op``.
+LUCID_API void accumulate_leaf_for_graph(const TensorImplPtr& leaf, const TensorImplPtr& grad);
 
 // A graph-mode gradient in the dtype of the tensor it is for.
 //
