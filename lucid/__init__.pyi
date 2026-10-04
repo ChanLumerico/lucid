@@ -2044,7 +2044,7 @@ def sort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
     Notes
     -----
     NaN sorts as the largest value: last ascending, first descending.
-    ``lucid.gather(input, lucid.argsort(input, dim), dim)`` equals
+    ``lucid.gather(input, dim, lucid.argsort(input, dim))`` equals
     ``lucid.sort(input, dim)``.  Gradients flow back to the positions the
     values came from.
     

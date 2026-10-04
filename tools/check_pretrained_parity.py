@@ -568,7 +568,7 @@ def _compare_vjepa2(model_name: str, repo: str) -> dict[str, object]:
             )
             predicted = getattr(
                 ours.predictor(
-                    lucid.gather(encoded, gather, dim=1),
+                    lucid.gather(encoded, 1, gather),
                     indices,
                     lucid.from_numpy(target.copy()),
                 ),
