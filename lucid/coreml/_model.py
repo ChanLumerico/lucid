@@ -13,12 +13,13 @@ subsystem fails rather than what it does:
   operations, runs at CPU speed, and warns about nothing.
 """
 
+import weakref
 from typing import TYPE_CHECKING, NamedTuple, Self, override
 
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.coreml import _spec
+from lucid.coreml import _cache, _spec
 from lucid.coreml._build import (
     _floor_of,
     _apply_image_normalisation,
@@ -278,9 +279,11 @@ class CoreMLModel:
     """A Core ML package written by Lucid, loaded and ready to run.
 
     Holds the ``.mlpackage`` on disk plus the compiled model Core ML
-    produced from it. Compilation happens once, when the handle is
-    created, because it is the expensive step — hundreds of milliseconds
-    for a real network — and every prediction afterwards reuses it.
+    produced from it. Compilation happens once per package content, not
+    once per handle: the compiled model is kept in Lucid's cache and every
+    later handle on the same content — in this process or another — opens
+    it, which also lets Core ML reuse the bundle it specialised the model
+    into rather than writing another (see :func:`lucid.coreml.empty_cache`).
 
     Attributes
     ----------
@@ -392,24 +395,7 @@ class CoreMLModel:
         # A classifier returns a string and a dictionary, not arrays, so
         # it is read through ``classify`` rather than ``predict``.
         self.classifier = classifier
-        # Inputs that stand in for a draw the model used to make itself.
-        # A caller who passes nothing for them gets a fresh sample, so
-        # the package behaves like the model it came from; a caller who
-        # passes one gets a deterministic function, which is the other
-        # reason to want this.
-        self.noise_inputs = [(name, shape) for name, shape, _k, _s in noise or []]
-        self._noise_kind = {name: kind for name, _shape, kind, _s in noise or []}
-        # The samples the trace itself drew. A comparison against the
-        # eager model needs the numbers that model actually used — it
-        # cannot be asked to draw them again — and a handle that reopened
-        # the file does not have them, so it refuses instead.
-        # ``None`` for a handle that reopened the file: the samples are
-        # not in it, which is why a comparison there refuses.
-        self._traced_noise = {
-            name: sample
-            for name, _shape, _k, sample in noise or []
-            if sample is not None
-        }
+        self._declare_noise(noise or [])
         # What the traced run answered with those samples. A model that
         # draws cannot be re-run for a reference — it would draw again —
         # so this is the only comparison that has both sides computing
@@ -424,9 +410,42 @@ class CoreMLModel:
         self.deployment_target = (
             deployment_target if deployment_target is not None else _floor_of(path)
         )
-        self._handle = _C_engine.coreml.load_model(
-            path, _UNITS[compute_units], function_name
-        )
+        # The compiled model is shared by every handle on the same package
+        # content, in this process and others, and stays after this one
+        # closes: Core ML keys the bundle it specialises a model into by
+        # the compiled model's path, so reopening that path is what lets
+        # the bundle be read again instead of written again. See _cache.
+        self._lease = _cache.open_compiled(path)
+        try:
+            self._handle = _C_engine.coreml.load_model(
+                self._lease.path, _UNITS[compute_units], function_name
+            )
+        except RuntimeError as exc:
+            self._lease.release()
+            # Named after the package the caller gave, not the cache entry.
+            raise RuntimeError(str(exc).replace(self._lease.path, path)) from None
+        self._release = weakref.finalize(self, self._lease.release)
+
+    def _declare_noise(
+        self, noise: list[tuple[str, tuple[int, ...], str, Tensor | None]]
+    ) -> None:
+        """Record which inputs stand in for a draw, and what the trace drew."""
+        # Inputs that stand in for a draw the model used to make itself.
+        # A caller who passes nothing for them gets a fresh sample, so
+        # the package behaves like the model it came from; a caller who
+        # passes one gets a deterministic function, which is the other
+        # reason to want this.
+        self.noise_inputs = [(name, shape) for name, shape, _k, _s in noise]
+        self._noise_kind = {name: kind for name, _shape, kind, _s in noise}
+        # The samples the trace itself drew. A comparison against the
+        # eager model needs the numbers that model actually used — it
+        # cannot be asked to draw them again — and a handle that reopened
+        # the file does not have them, so it refuses instead.
+        # Empty for a handle that reopened the file: the samples are
+        # not in it, which is why a comparison there refuses.
+        self._traced_noise = {
+            name: sample for name, _shape, _k, sample in noise if sample is not None
+        }
 
     def _feed(self, x: object) -> list[tuple[str, TensorImpl]]:
         """Pair each input feature with its tensor.
@@ -936,8 +955,11 @@ class CoreMLModel:
         Requires macOS 14.4+; an empty plan there means *unknown*, not
         *unaccelerated*.
         """
+        # The model this handle opened, rather than the package compiled
+        # again; a closed handle no longer holds it, and compiles afresh.
         placements = _C_engine.coreml.compute_plan(
-            self.path, _UNITS[self.compute_units]
+            self._lease.path if self._lease.held else self.path,
+            _UNITS[self.compute_units],
         )
         return PlacementSummary(
             [(op, device) for op, device in placements],
@@ -946,11 +968,14 @@ class CoreMLModel:
         )
 
     def close(self) -> None:
-        """Release the compiled model and the artifacts Core ML cached.
+        """Release the compiled model.
 
+        The compiled model itself stays in Lucid's cache for the next
+        handle on the same package — see :func:`lucid.coreml.empty_cache`.
         Safe to call twice, so a ``finally`` beside a ``with`` is fine.
         """
         self._handle.close()
+        self._release()
 
     def __enter__(self) -> Self:
         """Return the handle, so a package can be opened in a ``with``.

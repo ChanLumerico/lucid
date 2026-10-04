@@ -50,6 +50,14 @@ quantization is carried into the package as arithmetic or left out; Core
 ML quantizes weights only, so carrying it is faithful and is work the
 accelerator did not ask for.
 
+**A package is compiled once.**  Loading one makes Core ML write a bundle
+into its own cache — for a GPU segment a full copy of the weights — keyed
+by where the compiled model is.  The compiled model is therefore kept, one
+per package content, in ``~/.cache/lucid/coreml`` (bounded by
+``LUCID_COREML_CACHE_LIMIT``, default 4G), and every later load opens that
+one; see :func:`empty_cache`.  A load that would run the disk out raises
+``OSError`` first, because Core ML ends the process instead.
+
 Examples
 --------
 ::
@@ -143,6 +151,7 @@ __all__ = [
     "Precision",
     "UnsupportedOp",
     "UnsupportedRank",
+    "empty_cache",
     "export",
     "export_functions",
     "load",
@@ -281,6 +290,9 @@ def export(
         around a float32 body.
     UnsupportedOp
         The trace contains an operation with no MIL translation.
+    OSError
+        ``ENOSPC``: the package is written, but there is not the room to
+        compile and load it — see :func:`load`.
 
     Examples
     --------
@@ -800,6 +812,15 @@ def load(
     the body's and the interface's — which a package from elsewhere, or
     from a release that did not record it, reports as ``"UNKNOWN"``.
 
+    The package is compiled once per content and the compiled model kept
+    in ``~/.cache/lucid/coreml`` (``LUCID_COREML_CACHE_DIR``, or
+    ``$LUCID_HOME/coreml``), so loading it again — in this process or the
+    next — skips the compile and lets Core ML reuse the bundle it
+    specialised the model into, instead of writing a new copy of the
+    weights into its own cache each time. The cache keeps to
+    ``LUCID_COREML_CACHE_LIMIT`` bytes (default 4G, least recently used
+    first; ``0`` turns it off) and :func:`empty_cache` clears it.
+
     Parameters
     ----------
     path : str
@@ -819,6 +840,12 @@ def load(
     RuntimeError
         Core ML could not compile or load the package; its own message
         names the offending layer.
+    OSError
+        ``ENOSPC``: a volume the load writes to — the temporary space
+        Core ML compiles into, the cache, Core ML's own caches — has less
+        free than the package's size plus a margin. Core ML ends the
+        process when it runs out of disk part way, so the load refuses
+        before it starts.
 
     Examples
     --------
@@ -853,12 +880,21 @@ def load(
     >>> shutil.rmtree(room)
 
     """
-    from lucid._C import engine as _C_engine
-
-    from lucid.coreml._model import _UNITS
-
-    handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
-    input_names, output_names = handle.input_names, handle.output_names
+    # Opened once, and everything below is read off that handle. Opening
+    # a throwaway handle first to learn the feature names cost a second
+    # load — and, with each load compiling afresh, a second full copy of
+    # the weights in Core ML's cache.
+    model = CoreMLModel(
+        path,
+        [],
+        [],
+        compute_units=compute_units,
+        precision="UNKNOWN",
+        io_precision="UNKNOWN",
+    )
+    handle = model._handle
+    model.input_names = list(handle.input_names)
+    model.output_names = list(handle.output_names)
     # An exported handle carries what the export knew: that an input is
     # a picture and not an array, that the outputs are labels and not
     # scores. Reopening the file used to lose both, so the same package
@@ -867,39 +903,84 @@ def load(
     # all of it, so it is read back rather than asked for again.
     images = list(handle.image_input_names)
     labels = list(handle.class_labels)
+    # ``predict`` needs only to know the input is a picture; ``verify``
+    # needs the scale and bias, which the program applies and the file
+    # does not declare. Left unset so the comparison refuses rather than
+    # measuring a normalisation it guessed.
+    model.image_input = ImageInput() if images else None
+    model.image_normalisation = None
+    model.classifier = Classifier(labels=tuple(labels)) if labels else None
     # Which inputs stand in for a random draw, written by the export
     # into the creator-defined metadata because nothing else in the file
     # distinguishes them from an ordinary input.
     declared = dict(handle.user_metadata)
-    declared_draws = declared.get(_DRAWN_KEY, "")
-    # The precision the export recorded. A package Lucid did not write —
-    # or wrote before it recorded one — says nothing, and a guess would
-    # be repeated back as a diagnosis: the float32 advice a compute plan
-    # gives is wrong for a float16 program.
-    precision = declared.get(_PRECISION_KEY, "UNKNOWN")
-    io_precision = declared.get(_IO_PRECISION_KEY, "UNKNOWN")
-    handle.close()
     noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] = []
-    for entry in declared_draws.split(","):
+    for entry in declared.get(_DRAWN_KEY, "").split(","):
         if not entry:
             continue
         name, kind, extent = entry.split(":")
         noise.append((name, tuple(int(d) for d in extent.split("x")), kind, None))
-    model = CoreMLModel(
-        path,
-        list(input_names),
-        list(output_names),
-        compute_units=compute_units,
-        precision=precision,
-        io_precision=io_precision,
-        image_input=ImageInput() if images else None,
-        classifier=Classifier(labels=tuple(labels)) if labels else None,
-        noise=noise,
-    )
-    # ``predict`` needs only to know the input is a picture; ``verify``
-    # needs the scale and bias, which the program applies and the file
-    # does not declare. Cleared so the comparison refuses rather than
-    # measuring a normalisation it guessed.
-    if images:
-        model.image_normalisation = None
+    model._declare_noise(noise)
+    # The precision the export recorded. A package Lucid did not write —
+    # or wrote before it recorded one — says nothing, and a guess would
+    # be repeated back as a diagnosis: the float32 advice a compute plan
+    # gives is wrong for a float16 program.
+    model.precision = declared.get(_PRECISION_KEY, "UNKNOWN")
+    model.io_precision = declared.get(_IO_PRECISION_KEY, "UNKNOWN")
     return model
+
+
+def empty_cache() -> int:
+    """Remove the compiled models Lucid keeps for packages it has loaded.
+
+    Core ML runs a *compiled* model, and loading one makes Core ML write a
+    specialised bundle — for a GPU segment, a full copy of the weights —
+    into its own cache, keyed by where the compiled model is. So Lucid
+    compiles each package once, keeps the compiled model, and opens that
+    same one on every later load; the bundle is then read again rather
+    than written again. Before, every load compiled to a fresh path and
+    left Core ML a bundle nothing would read: a development machine's
+    cache reached 121 GB.
+
+    The kept models live in ``LUCID_COREML_CACHE_DIR`` — by default
+    ``$LUCID_HOME/coreml`` or ``~/.cache/lucid/coreml`` — and keep to
+    ``LUCID_COREML_CACHE_LIMIT`` bytes (``4G`` unless set; ``0`` turns
+    the cache off), dropping the least recently used first. This empties
+    it now. A model an open handle holds, in this process or another,
+    stays.
+
+    The bundles Core ML made from the removed models stay in Core ML's
+    own cache, which macOS purges when the disk runs low; a package loaded
+    again after this is compiled again and gets a new one.
+
+    Returns
+    -------
+    int
+        Bytes freed.
+
+    Examples
+    --------
+    >>> import os, shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> room = tempfile.mkdtemp()
+    >>> saved = os.environ.get("LUCID_COREML_CACHE_DIR")
+    >>> os.environ["LUCID_COREML_CACHE_DIR"] = f"{room}/cache"   # one of its own
+    >>> model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU()).eval()
+    >>> x = lucid.randn(1, 3, 16, 16)
+    >>> cml.export(model, x, f"{room}/m.mlpackage").close()    # compiles, keeps it
+    >>> with cml.load(f"{room}/m.mlpackage") as again:        # opens the kept one
+    ...     print(again.predict(x).shape)
+    (1, 8, 14, 14)
+    >>> cml.empty_cache() > 0
+    True
+    >>> cml.empty_cache()                                     # nothing left
+    0
+    >>> if saved is None:
+    ...     del os.environ["LUCID_COREML_CACHE_DIR"]
+    ... else:
+    ...     os.environ["LUCID_COREML_CACHE_DIR"] = saved
+    >>> shutil.rmtree(room)
+    """
+    from lucid.coreml import _cache
+
+    return _cache.empty_cache()

@@ -25,11 +25,15 @@ On the disk
 Every package Core ML loads is compiled and then specialised into a
 bundle under ``~/Library/Caches/<app>/com.apple.e5rt.e5bundlecache`` that
 holds a full copy of the weights — 1.1 GB for YOLO v1.  The bundle is
-keyed by the compiled model's path, and the runtime compiles to a fresh
-path on every load, so no bundle is ever read twice; they stay until
-macOS purges them.  By 41% of one run of this directory there were 7 GB
-of them, beside 14 GB of packages kept in ``tmp_path`` for the rest of
-the session, and the disk that had 38 GB free was down to 118 MB.
+keyed by the compiled model's path, and the runtime used to compile to a
+fresh path on every load, so no bundle was ever read twice; they stay
+until macOS purges them.  By 41% of one run of this directory there were
+7 GB of them, beside 14 GB of packages kept in ``tmp_path`` for the rest
+of the session, and the disk that had 38 GB free was down to 118 MB.
+(``lucid.coreml`` now keeps one compiled model per package content, so a
+package opened again reuses its bundle — but every *distinct* package a
+test writes still costs a compiled model and a bundle, and this
+directory writes hundreds.)
 
 Long before full, the disk crosses macOS's near-low-disk mark, and
 ``cache_delete`` purges those bundles — 3.4 GB in under a second.  Twice
@@ -41,9 +45,10 @@ what Lucid controls is how much disk the suite eats.
 
 So the session gives Core ML a home of its own inside the session's
 temporary directory — ``CFFIXED_USER_HOME``, which Core ML reads once, at
-the first load in the process — and every test removes the packages it
-wrote and the bundles they produced.  A failing test keeps both, to be
-looked at.
+the first load in the process — and Lucid's compile cache a directory of
+its own beside it (``LUCID_COREML_CACHE_DIR``), and every test removes the
+packages it wrote, the compiled models kept for them and the bundles they
+produced.  A failing test keeps all three, to be looked at.
 """
 
 import os
@@ -71,6 +76,7 @@ def _no_core_ml_runtime_in_a_vm() -> Iterator[None]:
         return
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(_C_engine.coreml, "load_model", _refuse)
+        patch.setattr(_C_engine.coreml, "compile_model", _refuse)
         yield
 
 
@@ -103,16 +109,42 @@ def core_ml_home(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path | No
         shutil.rmtree(home, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True, scope="session")
+def compile_cache(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path | None]:
+    """Where this session's compiled models are kept, or ``None``.
+
+    ``None`` when the caller already chose with ``LUCID_COREML_CACHE_DIR``;
+    that choice is theirs to clean up.
+    """
+    if os.environ.get("LUCID_COREML_CACHE_DIR"):
+        yield None
+        return
+    root = tmp_path_factory.mktemp("coreml-cache")
+    os.environ["LUCID_COREML_CACHE_DIR"] = str(root)
+    try:
+        yield root
+    finally:
+        os.environ.pop("LUCID_COREML_CACHE_DIR", None)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _cache_files(root: Path | None) -> set[Path]:
+    return set(root.iterdir()) if root is not None and root.is_dir() else set()
+
+
 @pytest.fixture(autouse=True)
 def _nothing_written_outlives_its_test(
-    request: pytest.FixtureRequest, core_ml_home: Path | None
+    request: pytest.FixtureRequest,
+    core_ml_home: Path | None,
+    compile_cache: Path | None,
 ) -> Iterator[None]:
     room: Path | None = None
     if "tmp_path" in request.fixturenames:
         room = request.getfixturevalue("tmp_path")
     # A module-scoped handle is set up before this snapshot, so its bundle
-    # is in it and survives the tests that share the handle.
+    # and its compiled model are in it and survive the tests that share it.
     before = bundles_under(core_ml_home) if core_ml_home is not None else set()
+    kept = _cache_files(compile_cache)
     yield
     if request.node.stash.get(_FAILED, False):
         return
@@ -121,3 +153,8 @@ def _nothing_written_outlives_its_test(
     if core_ml_home is not None:
         for bundle in bundles_under(core_ml_home) - before:
             shutil.rmtree(bundle, ignore_errors=True)
+    for left in _cache_files(compile_cache) - kept:
+        if left.is_dir():
+            shutil.rmtree(left, ignore_errors=True)
+        else:
+            left.unlink(missing_ok=True)

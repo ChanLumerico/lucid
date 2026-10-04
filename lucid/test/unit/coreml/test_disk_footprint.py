@@ -8,9 +8,11 @@ landed under a prediction Core ML was preparing — the process aborted
 inside Core ML's GPU encoder (CHA-22; the conftest has the account).
 
 So the conftest gives Core ML a home inside the session's temporary
-directory and removes, after each passing test, the packages it wrote
-and the bundles they produced.  These tests hold it to that: the first
-writes and loads a package, the second looks for what the first left.
+directory, and Lucid's compile cache a directory beside it, and removes,
+after each passing test, the packages it wrote, the compiled models kept
+for them and the bundles they produced.  These tests hold it to that: the
+first writes and loads a package, the second looks for what the first
+left.
 """
 
 import os
@@ -49,7 +51,16 @@ def test_core_ml_is_given_a_home_inside_the_session(core_ml_home, tmp_path_facto
     assert core_ml_home.is_relative_to(tmp_path_factory.getbasetemp())
 
 
-def test_a_test_writes_a_package_and_core_ml_specialises_it(tmp_path, core_ml_home):
+def test_and_the_compile_cache_a_directory_inside_it(compile_cache, tmp_path_factory):
+    if compile_cache is None:
+        pytest.skip("LUCID_COREML_CACHE_DIR was chosen by whoever started the session")
+    assert os.environ["LUCID_COREML_CACHE_DIR"] == str(compile_cache)
+    assert compile_cache.is_relative_to(tmp_path_factory.getbasetemp())
+
+
+def test_a_test_writes_a_package_and_core_ml_specialises_it(
+    tmp_path, core_ml_home, compile_cache
+):
     lucid.manual_seed(0)
     model = _Small().eval()
     x = lucid.randn(1, 3, 16, 16)
@@ -59,11 +70,17 @@ def test_a_test_writes_a_package_and_core_ml_specialises_it(tmp_path, core_ml_ho
     exported = cml.export(model, x, str(path))
     try:
         assert tuple(exported.predict(x).shape) == (1, 4)
+        kept = exported._lease.path
     finally:
         exported.close()
 
     assert path.exists()
     _WRITTEN["paths"] = [str(path)]
+    if compile_cache is not None:
+        # The compiled model outlives the handle by design — the next load
+        # of this package opens it — but not the test.
+        assert os.path.isdir(kept)
+        _WRITTEN["paths"].append(kept)
     if core_ml_home is None:
         return
     made = sorted(bundles_under(core_ml_home) - before)
