@@ -19,10 +19,9 @@ from lucid.distributions.bernoulli import (
 )
 from lucid.distributions.constraints import (
     Constraint,
+    half_open_interval,
     nonnegative,
     nonnegative_integer,
-    open_unit_interval,
-    positive,
     real,
     unit_interval,
 )
@@ -590,10 +589,10 @@ class NegativeBinomial(Distribution):
     Parameters
     ----------
     total_count : Tensor | float
-        Dispersion / number of successes :math:`r > 0`.  May be non-integer
+        Dispersion / number of successes :math:`r \geq 0`.  May be non-integer
         for the generalised version.
     probs : Tensor | float | None, optional
-        Probability of failure :math:`p \in (0, 1)`.  Mutually exclusive
+        Probability of failure :math:`p \in [0, 1)`.  Mutually exclusive
         with ``logits``.
     logits : Tensor | float | None, optional
         Log-odds of failure :math:`l = \log(p / (1-p)) \in \mathbb{R}`.
@@ -655,8 +654,10 @@ class NegativeBinomial(Distribution):
     """
 
     arg_constraints = {
-        "total_count": positive,
-        "probs": open_unit_interval,
+        # ``r = 0`` or ``p = 0`` is the point mass at 0; ``p = 1`` (every
+        # trial a failure) never reaches the ``r``-th success.
+        "total_count": nonnegative,
+        "probs": half_open_interval(0.0, 1.0),
         "logits": real,
     }
     support: Constraint | None = nonnegative_integer
@@ -673,10 +674,10 @@ class NegativeBinomial(Distribution):
         Parameters
         ----------
         total_count : Tensor | float
-            Dispersion / number of successes :math:`r > 0`.  May be
+            Dispersion / number of successes :math:`r \geq 0`.  May be
             non-integer for the generalised version.
         probs : Tensor | float | None, optional
-            Probability of failure :math:`p \in (0, 1)`.  Mutually exclusive
+            Probability of failure :math:`p \in [0, 1)`.  Mutually exclusive
             with ``logits``.
         logits : Tensor | float | None, optional
             Log-odds of failure :math:`l = \log(p / (1-p))`.  Mutually
@@ -734,7 +735,7 @@ class NegativeBinomial(Distribution):
         Returns
         -------
         Tensor
-            Failure probability values in :math:`(0, 1)`, shape ``batch_shape``.
+            Failure probability values in :math:`[0, 1)`, shape ``batch_shape``.
         """
         return self.probs if not self._is_logits else _logits_to_probs(self.logits)
 
@@ -837,6 +838,12 @@ class NegativeBinomial(Distribution):
         1 is held one epsilon inside :math:`[0, 1]` first, as the reference
         framework does.
 
+        At :math:`r = 0` the distribution is the point mass at 0: the
+        coefficient :math:`\log\Gamma(k + r) - \log\Gamma(r)` is
+        :math:`\infty - \infty` at :math:`k = 0` and is taken as its limit
+        0, so :math:`\log P(X = 0) = 0` and every :math:`k > 0` scores
+        ``-inf``, as in the reference framework.
+
         Parameters
         ----------
         value : Tensor
@@ -851,13 +858,20 @@ class NegativeBinomial(Distribution):
         r: Tensor = self.total_count
         l: Tensor = self.logits
         # ``k · softplus(−ℓ)`` is ``0 · inf`` for a zero count at ``ℓ = −inf``
-        # (a logit given as ``-inf``); guarded on the operand, as in
+        # (a logit given as ``-inf``), and ``r · softplus(ℓ)`` the same for
+        # ``r = 0`` at ``ℓ = inf``; guarded on the operand, as in
         # :class:`Binomial`, so the gradient never sees the infinity.
         neg_log_p: Tensor = lucid.where(k == 0, 0.0, (-l).softplus())
+        neg_log_q: Tensor = lucid.where(r == 0, 0.0, l.softplus())
+        # ``lgamma(0) − lgamma(0)`` at r = k = 0 — both arguments swapped
+        # for 1 there, where the coefficient's limit is log 1 = 0.
+        empty: Tensor = (k + r) == 0
+        k_plus_r: Tensor = lucid.where(empty, 1.0, k + r)
+        r_safe: Tensor = lucid.where(empty, 1.0, r)
         return (
-            lucid.lgamma(k + r)
-            - lucid.lgamma(r)
+            lucid.lgamma(k_plus_r)
+            - lucid.lgamma(r_safe)
             - lucid.lgamma(k + 1.0)
-            - r * l.softplus()
+            - r * neg_log_q
             - k * neg_log_p
         )
