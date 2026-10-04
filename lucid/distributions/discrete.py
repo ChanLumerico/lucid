@@ -19,6 +19,7 @@ from lucid.distributions.bernoulli import (
 )
 from lucid.distributions.constraints import (
     Constraint,
+    nonnegative,
     nonnegative_integer,
     open_unit_interval,
     positive,
@@ -40,7 +41,7 @@ class Poisson(ExponentialFamily):
     Parameters
     ----------
     rate : Tensor | float
-        Mean rate :math:`\lambda > 0`.  Determines both the mean and the
+        Mean rate :math:`\lambda \geq 0`.  Determines both the mean and the
         variance of the distribution.
     validate_args : bool | None, optional
         If ``True``, validate parameter constraints at construction time.
@@ -85,7 +86,9 @@ class Poisson(ExponentialFamily):
     tensor(-1.667)
     """
 
-    arg_constraints = {"rate": positive}
+    # ``λ = 0`` is the point mass at 0, and every closed form below holds
+    # there (``xlogy`` scores it).
+    arg_constraints = {"rate": nonnegative}
     support: Constraint | None = nonnegative_integer
 
     def __init__(
@@ -98,7 +101,7 @@ class Poisson(ExponentialFamily):
         Parameters
         ----------
         rate : Tensor | float
-            Mean rate parameter :math:`\lambda > 0`.  Determines both the
+            Mean rate parameter :math:`\lambda \geq 0`.  Determines both the
             mean and the variance.
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
