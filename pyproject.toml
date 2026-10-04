@@ -137,6 +137,23 @@ docs = [
     "sphinx-notfound-page>=1.0",
 ]
 
+# Dev tools only, never imported by lucid/ (H4 is untouched).  The ratchet
+# gate (tools/quality_gate, tools/README.md) counts their findings, so the
+# ones whose output feeds a count are pinned exactly: another version counts
+# differently and the baseline records which one it was written with.
+# jscpd comes from npx at the version in tools/quality_gate/config.py.
+# `pip install --group quality` (pip >= 25.1).
+[dependency-groups]
+quality = [
+    "ruff==0.16.0",
+    "mypy==2.3.0",
+    "lizard==1.24.0",
+    "vulture==2.16",
+    "semgrep==1.179.0",
+    "hypothesis>=6.100",
+    "diff-cover>=9",
+]
+
 [tool.setuptools.packages.find]
 # Only ship the `lucid` package tree itself — dev tooling (`tools/`,
 # `scripts/`, `web/`, `obsidian/`, `benchmarks/`) and the test tier
