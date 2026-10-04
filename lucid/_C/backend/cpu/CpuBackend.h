@@ -80,6 +80,7 @@
 #include "../IBackend.h"
 #include "Blas.h"
 #include "ErfPoly.h"
+#include "GeluGrad.h"
 #include "Im2Col.h"
 #include "Lapack.h"
 #include "Norm.h"
@@ -1907,25 +1908,15 @@ public:
             const float* x = reinterpret_cast<const float*>(cs.ptr.get());
             const float* g = reinterpret_cast<const float*>(gs.ptr.get());
             float* q = reinterpret_cast<float*>(ptr.get());
-            const float k1 = static_cast<float>(kInvSqrt2);
-            const float k2 = static_cast<float>(kInvSqrt2Pi);
-            // The exp goes through vForce a tile at a time, so no scalar libm
-            // call is left in the loop; the erf is branch-free (ErfPoly.h)
-            // and stays inline.
+            // Two passes over an L1 tile, neither of which calls out: the
+            // CDF (erf_f32), then the density (normal_pdf_f32), the sum and
+            // the incoming gradient.  See GeluGrad.h for why two.
             cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                float pdf[kTanhTile];
+                float cdf[kTanhTile];
                 for (std::size_t base = lo; base < hi; base += kTanhTile) {
                     const std::size_t m = std::min(kTanhTile, hi - base);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const float xi = x[base + i];
-                        pdf[i] = -0.5f * xi * xi;
-                    }
-                    cpu::vexp_f32(pdf, pdf, m);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const float xi = x[base + i];
-                        const float cdf = 0.5f * (1.f + cpu::erf_f32(xi * k1));
-                        q[base + i] = (cdf + xi * (k2 * pdf[i])) * g[base + i];
-                    }
+                    cpu::gelu_exact_cdf_f32(x + base, cdf, m);
+                    cpu::gelu_exact_grad_f32(x + base, cdf, g + base, q + base, m);
                 }
             });
         } else if (dt == Dtype::F64) {
