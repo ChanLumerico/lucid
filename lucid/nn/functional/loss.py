@@ -2003,14 +2003,24 @@ def ctc_loss(
     targets : Tensor
         Target indices, shape :math:`(N, S)` (padded) or
         :math:`(\sum_i \text{target\_lengths}_i,)` (concatenated).
-        ``int32``.
+        ``int32``.  Every label read must lie in :math:`[0, C)`, else
+        ``IndexError``.  This is stricter than the reference, which reads
+        past the class axis.  The padding past a row's target length is
+        not read and may hold anything.
     input_lengths : Tensor
         Effective input lengths :math:`(N,)`, ``int32``.  Enables
-        padding-aware batching.
+        padding-aware batching.  Each must lie in :math:`[1, T]`, else
+        ``IndexError``.  A length of 0 raises ``NotImplementedError`` for
+        now.
     target_lengths : Tensor
-        Effective target lengths :math:`(N,)`, ``int32``.
+        Effective target lengths :math:`(N,)`, ``int32``.  Each must lie in
+        :math:`[0, S]` for padded targets, and they must add up to the
+        number of concatenated targets.  A length outside its range
+        raises ``IndexError``; a count that does not match raises
+        ``ValueError``.
     blank : int, optional
-        Index of the blank symbol (default ``0``).
+        Index of the blank symbol (default ``0``), in :math:`[0, C)`,
+        else ``IndexError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.  Under
         ``"mean"``, each sample's loss is divided by its target

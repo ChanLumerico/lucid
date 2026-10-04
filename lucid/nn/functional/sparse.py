@@ -87,7 +87,11 @@ def embedding(
     Parameters
     ----------
     x : Tensor
-        Integer index tensor of arbitrary shape ``(*)``.
+        Integer index tensor of arbitrary shape ``(*)``, with entries in
+        ``[0, num_embeddings)``.  An entry outside that range raises
+        ``IndexError`` before the lookup (see
+        :func:`check_embedding_indices`), and a float tensor raises
+        ``TypeError``.
     weight : Tensor
         Embedding table of shape ``(num_embeddings, embedding_dim)``.
     padding_idx : int, optional
