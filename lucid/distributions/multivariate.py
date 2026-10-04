@@ -12,6 +12,30 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution
 
 
+def _precision_to_scale_tril(precision: Tensor) -> Tensor:
+    r"""The *lower*-triangular :math:`L` with :math:`L L^\top = P^{-1}`.
+
+    The direct route — ``inv(chol(P)).mT`` — gives an *upper*-triangular
+    factor: from :math:`P = C C^\top`,
+    :math:`\Sigma = P^{-1} = C^{-\top} C^{-1}`, and :math:`C^{-\top}` is
+    upper.  It squares back to :math:`\Sigma` but every consumer of
+    ``scale_tril`` (the lower-triangular solve in :meth:`log_prob`, the KL
+    pair) reads it as lower, so the density came out wrong.
+
+    Reversing both axes turns the lower Cholesky factor of the flipped
+    matrix into an upper factor :math:`U` with :math:`P = U U^\top`; then
+    :math:`\Sigma = U^{-\top} U^{-1}` and :math:`L = U^{-\top}` is lower,
+    obtained by one triangular solve of :math:`U^\top L = I`.
+    """
+    flipped = lucid.linalg.cholesky(lucid.flip(precision, (-2, -1)))
+    l_inv = lucid.flip(flipped, (-2, -1)).mT
+    eye = lucid.eye(
+        int(precision.shape[-1]), dtype=precision.dtype, device=precision.device
+    )
+    eye = eye.broadcast_to(tuple(l_inv.shape))
+    return lucid.linalg.solve_triangular(l_inv, eye, upper=False)
+
+
 class MultivariateNormal(Distribution):
     r"""Multivariate Normal (Gaussian) distribution in :math:`\mathbb{R}^D`.
 
@@ -161,9 +185,7 @@ class MultivariateNormal(Distribution):
             self.scale_tril = lucid.linalg.cholesky(covariance_matrix)
         else:
             assert precision_matrix is not None
-            # P = Lᵀ⁻¹ · L⁻¹  ⇒  L = (chol(P)⁻ᵀ).
-            l_p = lucid.linalg.cholesky(precision_matrix)
-            self.scale_tril = lucid.linalg.inv(l_p).mT  # type: ignore[attr-defined]
+            self.scale_tril = _precision_to_scale_tril(precision_matrix)
 
         D = int(self.loc.shape[-1])
         self._D = D

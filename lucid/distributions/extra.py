@@ -31,6 +31,14 @@ from lucid.distributions.distribution import Distribution
 # ── Euler–Mascheroni constant ─────────────────────────────────────────────────
 _EULER_GAMMA: float = 0.5772156649015329
 
+# Half-width of the window around ``λ = ½`` where ``ContinuousBernoulli``'s
+# mean and variance switch from their closed forms to Taylor series.  At
+# ``|λ − ½| = 0.1`` the closed forms lose under 2e-6 to cancellation in
+# float32 and the truncated series are within 2e-7 of the exact value;
+# nearer ½ the closed forms degrade fast (a float32 variance off by more
+# than 1 at ``λ = 0.499``), farther out the series do.
+_CB_TAYLOR_HALF_WIDTH: float = 0.1
+
 
 # ── Gumbel ────────────────────────────────────────────────────────────────────
 
@@ -819,6 +827,21 @@ class ContinuousBernoulli(Distribution):
             \tfrac{1}{2} & \lambda = \tfrac{1}{2}
         \end{cases}
 
+    Variance (closed form, :math:`\ell = \operatorname{logit}\lambda`):
+
+    .. math::
+
+        \mathrm{Var}[X] = \frac{\lambda(\lambda - 1)}{(1 - 2\lambda)^2}
+                        + \frac{1}{\ell^2}
+        \quad (\lambda \neq \tfrac{1}{2}), \qquad
+        \mathrm{Var}[X] = \tfrac{1}{12} \quad (\lambda = \tfrac{1}{2})
+
+    Both closed forms are differences of terms of order
+    :math:`1/(1 - 2\lambda)`, which cancel catastrophically as
+    :math:`\lambda \to \tfrac{1}{2}`; within :math:`|\lambda - \tfrac{1}{2}|
+    < 0.1` the mean and variance are evaluated from their Taylor series in
+    :math:`\lambda - \tfrac{1}{2}` instead.
+
     Important properties:
 
     * Support: :math:`[0, 1]` (continuous, not just :math:`\{0, 1\}`).
@@ -938,47 +961,80 @@ class ContinuousBernoulli(Distribution):
 
     # -- distribution interface ------------------------------------------------
 
+    def _moment_operands(self) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        r"""What :attr:`mean` and :attr:`variance` are evaluated from.
+
+        Returns ``(t, near, p_far, l_far)``: :math:`t = \lambda - \tfrac12`,
+        the mask of the Taylor window, and :math:`\lambda` and its logit
+        with the window's entries replaced by a harmless point, so the
+        closed form — evaluated everywhere and then discarded inside the
+        window — never divides by zero.  An infinity in the discarded
+        branch would still reach the gradient through the mask.
+        """
+        p: Tensor = self._probs
+        t: Tensor = p - 0.5
+        near: Tensor = t.abs() < _CB_TAYLOR_HALF_WIDTH
+        p_far: Tensor = lucid.where(near, 0.25, p)
+        l_far: Tensor = lucid.where(near, 1.0, self._logits)
+        return t, near, p_far, l_far
+
     @property
     @override
     def mean(self) -> Tensor:
-        """``p / (2p−1) + 1 / (2 atanh(1−2p))``; ``½`` when ``p = ½``."""
-        p: Tensor = self._probs
-        u: Tensor = 2.0 * p - 1.0
-        abs_u: Tensor = u.abs()
-        eps: float = 1e-4
-        safe_u: Tensor = lucid.where(abs_u < eps, lucid.full_like(u, eps), u)
-        # mean = p/(2p−1) + 1/(2·atanh(1−2p))
-        # Note: atanh(1−2p) = atanh(−u) = −atanh(u)
-        stable: Tensor = p / u - 1.0 / (2.0 * lucid.atanh(safe_u))
-        near: Tensor = lucid.full_like(p, 0.5)
-        return lucid.where(abs_u < eps, near, stable)
+        r"""Mean :math:`\lambda/(2\lambda - 1) + 1/(2\tanh^{-1}(1 - 2\lambda))`.
+
+        The second term is :math:`-1/\operatorname{logit}\lambda`.  Near
+        :math:`\lambda = \tfrac12` the two terms cancel, so there the
+        Taylor series
+        :math:`\tfrac12 + \tfrac{t}{3} + \tfrac{16 t^3}{45}
+        + \tfrac{704 t^5}{945} + \tfrac{27392 t^7}{14175}` in
+        :math:`t = \lambda - \tfrac12` is used.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import ContinuousBernoulli
+        >>> ContinuousBernoulli(probs=lucid.tensor([0.2, 0.5, 0.7])).mean
+        tensor([0.388, 0.5, 0.5698])
+        """
+        t, near, p_far, l_far = self._moment_operands()
+        closed: Tensor = p_far / (2.0 * p_far - 1.0) - 1.0 / l_far
+        x: Tensor = t * t
+        series: Tensor = 0.5 + t * (
+            1.0 / 3.0 + x * (16.0 / 45.0 + x * (704.0 / 945.0 + x * 27392.0 / 14175.0))
+        )
+        return lucid.where(near, series, closed)
 
     @property
     @override
     def variance(self) -> Tensor:
-        """``E[X²] − E[X]²``; ``E[X²]`` computed via the same normaliser trick."""
-        p: Tensor = self._probs
-        u: Tensor = 2.0 * p - 1.0
-        abs_u: Tensor = u.abs()
-        eps: float = 1e-4
-        lucid.where(abs_u < eps, lucid.full_like(u, eps), u)
-        # E[X^2] = C(p)*(1-p)*(exp(l)*(l^2-2l+2) - 2) / l^3 — complex to derive;
-        # numerically stable shortcut: Var = mean*(1-mean) + ... is not closed-form.
-        # Use: Var = E[X^2] - E[X]^2 where E[X^2] from the normaliser.
-        # Simpler direct formula (closed-form shortcut):
-        # Var = mean - mean^2 - mean*(2p-1)/(2*atanh(1-2p)) ... equally complex.
-        # Implement via the second moment integral result:
-        # E[X^2] = p/(2p-1) + p*(p-1)/(l*(2p-1)) where l = logit(p)
-        # = C*(1-p)*[l*e^l - e^l + 1] / l^2 ... let's use a direct stable form.
-        mean_val: Tensor = self.mean
-        l: Tensor = self._logits
-        safe_l: Tensor = lucid.where(abs_u < eps, lucid.full_like(l, eps), l)
-        # E[X^2] formula: 2nd moment = mean + (mean - 2*p*mean) / l
-        # = mean*(1 + (1-2p)/l) = mean + mean*(1-2p)/l
-        sq_mean_stable: Tensor = mean_val + mean_val * (-u) / safe_l
-        sq_mean_near: Tensor = lucid.full_like(p, 1.0 / 3.0)
-        sq_mean: Tensor = lucid.where(abs_u < eps, sq_mean_near, sq_mean_stable)
-        return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)
+        r"""Variance :math:`\lambda(\lambda-1)/(1-2\lambda)^2 + 1/\ell^2`.
+
+        :math:`\ell = \operatorname{logit}\lambda`.  The two terms are each
+        of order :math:`1/(1-2\lambda)^2` and cancel near
+        :math:`\lambda = \tfrac12`, so there the Taylor series
+        :math:`\tfrac1{12} - \tfrac{x}{15} - \tfrac{128 x^2}{945}
+        - \tfrac{4864 x^3}{14175}` in :math:`x = (\lambda - \tfrac12)^2`
+        is used.  Nothing is clamped: the variance is positive for every
+        :math:`\lambda`, and a negative value would be a defect to see,
+        not to hide.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import ContinuousBernoulli
+        >>> ContinuousBernoulli(probs=lucid.tensor([0.2, 0.5, 0.7])).variance
+        tensor([0.0759, 0.08333, 0.08043])
+        """
+        t, near, p_far, l_far = self._moment_operands()
+        closed: Tensor = p_far * (p_far - 1.0) / (1.0 - 2.0 * p_far) ** 2 + 1.0 / (
+            l_far * l_far
+        )
+        x: Tensor = t * t
+        series: Tensor = 1.0 / 12.0 - x * (
+            1.0 / 15.0 + x * (128.0 / 945.0 + x * 4864.0 / 14175.0)
+        )
+        return lucid.where(near, series, closed)
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

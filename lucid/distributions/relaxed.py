@@ -80,15 +80,17 @@ class RelaxedBernoulli(Distribution):
     where :math:`\sigma(\cdot)` is the sigmoid function.  Gradients
     propagate through both :math:`l` and :math:`\tau`.
 
-    **Log-PDF** (Maddison et al. 2017, Eq. 2):
+    **Log-PDF** (Maddison et al. 2017, the binary Concrete density):
 
     .. math::
 
-        \log p(y; l, \tau) = \log\tau + l
-                             - (\tau+1)\log\!\left(e^{\tau\,\text{logit}(y) - l} + 1\right)
-                             - \tau\,\text{logit}(y)
+        \log p(y; l, \tau) = \log\tau + d - 2\log\!\left(1 + e^{d}\right)
+                             - \log y - \log(1 - y),
+        \qquad d = l - \tau\,\text{logit}(y)
 
-    where :math:`\text{logit}(y) = \log(y/(1-y))`.
+    where :math:`\text{logit}(y) = \log(y/(1-y))`.  The first three terms
+    are the logistic density of :math:`\text{logit}(Y)`; the last two are
+    the Jacobian of the sigmoid that maps it into :math:`(0, 1)`.
 
     Examples
     --------
@@ -227,6 +229,12 @@ class RelaxedBernoulli(Distribution):
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the Concrete/RelaxedBernoulli distribution.
 
+        .. math::
+
+            \log p(y) = \log\tau + d - 2\,\mathrm{softplus}(d)
+                        - \log y - \log(1 - y),
+            \qquad d = l - \tau \log\frac{y}{1 - y}
+
         Parameters
         ----------
         value : Tensor
@@ -236,19 +244,23 @@ class RelaxedBernoulli(Distribution):
         -------
         Tensor
             Log-density values of the same shape as ``value``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import RelaxedBernoulli
+        >>> d = RelaxedBernoulli(temperature=0.7, probs=0.3)
+        >>> d.log_prob(lucid.tensor([0.1, 0.5, 0.9]))
+        tensor([0.548, -0.531, -0.5102])
         """
-        # Density of the logistic-transformed Concrete (Maddison et al.):
-        #   log p(y) = log τ + (logits − τ·log(y/(1−y))) − 2·log(...)
-        # We implement the standard form via the unconstrained logit_y.
-        logit_y: Tensor = value.log() - (1.0 - value).log()
+        # ``logit(Y)`` is logistic with location ``l`` and scale ``1/τ``;
+        # ``Y = sigmoid(logit(Y))`` adds the Jacobian ``−log y − log(1−y)``.
+        log_y: Tensor = value.log()
+        log_1my: Tensor = (-value).log1p()
         l: Tensor = self._logits
         tau: Tensor = self.temperature
-        return (
-            tau.log()
-            + l
-            - (tau + 1.0) * (logit_y * tau - l).exp().log1p()
-            - tau * logit_y
-        )
+        diff: Tensor = l - tau * (log_y - log_1my)
+        return tau.log() + diff - 2.0 * diff.softplus() - log_y - log_1my
 
 
 class RelaxedOneHotCategorical(Distribution):

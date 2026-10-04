@@ -995,10 +995,14 @@ class Dirichlet(ExponentialFamily):
             Entropy in nats, shape ``batch_shape``.
         """
         a = self.concentration
-        s = a.sum(dim=-1, keepdim=True)
+        s = a.sum(dim=-1)
         k = a.shape[-1]
-        log_b = lucid.lgamma(a).sum(dim=-1, keepdim=True) - lucid.lgamma(s)
-        digamma_diff = (a - 1.0) * (lucid.digamma(a) - lucid.digamma(s))
+        log_b = lucid.lgamma(a).sum(dim=-1) - lucid.lgamma(s)
+        # Each term of the formula once: ψ(α₀) appears only in
+        # ``(α₀ − K) ψ(α₀)``.  Writing the last sum as
+        # ``Σ (αᵢ − 1)(ψ(αᵢ) − ψ(α₀))`` counted it a second time.
         return (
-            log_b + (s - k) * lucid.digamma(s) - digamma_diff.sum(dim=-1, keepdim=True)
-        ).squeeze(-1)
+            log_b
+            + (s - k) * lucid.digamma(s)
+            - ((a - 1.0) * lucid.digamma(a)).sum(dim=-1)
+        )
