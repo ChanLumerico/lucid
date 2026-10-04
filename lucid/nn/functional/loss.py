@@ -12,6 +12,7 @@ inherit both.
 
 import contextlib
 import math
+import warnings
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, cast
 
@@ -82,16 +83,79 @@ def _check_broadcasts_to(
         )
 
 
-def _check_target_shape(x: Tensor, target: Tensor, op: str) -> None:
-    """``target`` holds one value per element of ``x``: the same shape.
+#: How each elementwise loss's ``target`` has to relate to its input's
+#: shape — one rule per loss, the reference's:
+#:
+#: - ``"same"``: equal shapes.  Another shape is refused, not broadcast:
+#:   broadcasting a BCE target scores a different problem.
+#: - ``"within"``: the target broadcasts to the input's shape without
+#:   enlarging it.  (For ``multilabel_soft_margin_loss`` this is stricter
+#:   than the reference, which broadcasts the loss up.)
+#: - ``"broadcast"``: input and target broadcast together.
+#: - ``"broadcast-warn"``: the same, with a ``UserWarning`` when the shapes
+#:   differ, as the reference's regression losses give — an ``(N, 1)``
+#:   prediction against an ``(N,)`` target scores ``N * N`` pairs.
+#:
+#: The class-index losses take one index per sample instead
+#: (:func:`_check_class_target`); the pair losses check their operands
+#: together (:func:`_check_same_rank`).
+_TARGET_SHAPE: dict[str, str] = {
+    "binary_cross_entropy": "same",
+    "binary_cross_entropy_with_logits": "same",
+    "multilabel_margin_loss": "same",
+    "soft_margin_loss": "within",
+    "multilabel_soft_margin_loss": "within",
+    "gaussian_nll_loss": "broadcast",
+    "hinge_embedding_loss": "broadcast",
+    "kl_div": "broadcast",
+    "poisson_nll_loss": "broadcast",
+    "huber_loss": "broadcast-warn",
+    "l1_loss": "broadcast-warn",
+    "mse_loss": "broadcast-warn",
+    "smooth_l1_loss": "broadcast-warn",
+}
 
-    A target of another shape is refused rather than broadcast, as the
-    reference does — broadcasting it scores a different problem."""
-    if _shape(target) != _shape(x):
+
+def _check_target(x: Tensor, target: Tensor, op: str) -> tuple[int, ...]:
+    """Check ``target``'s shape against ``x``'s by ``op``'s rule in
+    ``_TARGET_SHAPE``, and return the shape of the elementwise loss."""
+    rule = _TARGET_SHAPE[op]
+    x_shape, t_shape = _shape(x), _shape(target)
+    if rule == "same":
+        if t_shape != x_shape:
+            raise ValueError(
+                f"{op}: target size {t_shape} must be the same as input size "
+                f"{x_shape}"
+            )
+        return x_shape
+    shape = _broadcast_shape(x_shape, t_shape)
+    if shape is None or (rule == "within" and shape != x_shape):
         raise ValueError(
-            f"{op}: target size {_shape(target)} must be the same as input "
-            f"size {_shape(x)}"
+            f"{op}: target of shape {t_shape} does not broadcast "
+            f"{'to' if rule == 'within' else 'with'} the input's shape {x_shape}"
         )
+    if rule == "broadcast-warn" and t_shape != x_shape:
+        warnings.warn(
+            f"{op}: using a target size {t_shape} that is different to the "
+            f"input size {x_shape}; the two are broadcast together, which "
+            "is rarely what a regression means",
+            UserWarning,
+            stacklevel=3,
+        )
+    return shape
+
+
+def _broadcast_operands(
+    x: Tensor, target: Tensor, shape: tuple[int, ...]
+) -> tuple[Tensor, Tensor]:
+    """``x`` and ``target`` at the loss's ``shape``, for a fused kernel that
+    takes operands of one shape.  An operand already at ``shape`` is passed
+    through untouched, so the ordinary call dispatches nothing extra."""
+    if _shape(x) != shape:
+        x = _lucid.broadcast_to(x, shape)
+    if _shape(target) != shape:
+        target = _lucid.broadcast_to(target, shape)
+    return x, target
 
 
 def _check_same_rank(op: str, *, broadcast: bool = True, **tensors: Tensor) -> None:
@@ -292,7 +356,9 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     x : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values; must be broadcast-compatible with ``x``.
+        Target values that broadcast with ``x``.  A target of another
+        shape is broadcast with a ``UserWarning``, as the reference
+        does; one that does not broadcast raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -300,7 +366,8 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     -------
     Tensor
         Scalar loss for ``"mean"`` / ``"sum"``, or a per-element
-        tensor with ``x``'s shape for ``"none"``.
+        tensor of ``x`` and ``target``'s broadcast shape for
+        ``"none"``.
 
     Notes
     -----
@@ -333,7 +400,11 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     >>> mse_loss(pred, target)
     tensor(0.25)
     """
-    _check_reduction(reduction, "mse_loss")
+    op = "mse_loss"
+    _check_reduction(reduction, op)
+    # The fused kernel takes operands of one shape; a target that
+    # broadcasts (as l1_loss's and the reference's do) is expanded first.
+    x, target = _broadcast_operands(x, target, _check_target(x, target, op))
     red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
@@ -355,7 +426,9 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     x : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values; broadcast-compatible with ``x``.
+        Target values that broadcast with ``x``.  A target of another
+        shape is broadcast with a ``UserWarning``, as the reference
+        does; one that does not broadcast raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -363,7 +436,8 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     -------
     Tensor
         Scalar loss for ``"mean"`` / ``"sum"``, or a per-element
-        tensor with ``x``'s shape for ``"none"``.
+        tensor of ``x`` and ``target``'s broadcast shape for
+        ``"none"``.
 
     Notes
     -----
@@ -387,6 +461,7 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     tensor(0.5)
     """
     _check_reduction(reduction, "l1_loss")
+    _check_target(x, target, "l1_loss")
     diff: _C_engine.TensorImpl = _C_engine.abs(
         _C_engine.sub(_unwrap(x), _unwrap(target))
     )
@@ -415,12 +490,14 @@ def smooth_l1_loss(
     x : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values; broadcast-compatible with ``x``.
+        Target values that broadcast with ``x``.  A target of another
+        shape is broadcast with a ``UserWarning``, as the reference
+        does; one that does not broadcast raises ``ValueError``.
     beta : float, optional
         Transition point between quadratic and linear regions
         (default ``1.0``).  Smaller ``beta`` makes the loss behave
         more like :func:`l1_loss`; larger ``beta`` makes it behave
-        more like :func:`mse_loss`.  A negative ``beta`` raises
+        more like :func:`mse_loss`.  A negative (or NaN) ``beta`` raises
         ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
@@ -461,11 +538,15 @@ def smooth_l1_loss(
     # 1 at the default, so the default was right and every other ``beta``
     # was scaled.  The ``1/beta`` this restores is the one the docstring
     # above has always described.
-    _check_reduction(reduction, "smooth_l1_loss")
+    op = "smooth_l1_loss"
+    _check_reduction(reduction, op)
     # A negative beta reached huber_loss as its delta, whose refusal named
-    # the wrong function and the wrong argument.
-    if beta < 0.0:
-        raise ValueError(f"smooth_l1_loss: beta must be non-negative, got {beta!r}")
+    # the wrong function and the wrong argument.  Written so NaN fails too.
+    if not beta >= 0.0:
+        raise ValueError(f"{op}: beta must be non-negative, got {beta!r}")
+    # Broadcast here, once, so the loss below sees operands of one shape
+    # (and warns about the caller's shapes, not its own).
+    x, target = _broadcast_operands(x, target, _check_target(x, target, op))
     if beta == 0.0:
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
@@ -499,7 +580,9 @@ def huber_loss(
     x : Tensor
         Predicted values.
     target : Tensor
-        Target values; broadcast-compatible with ``x``.
+        Target values that broadcast with ``x``.  A target of another
+        shape is broadcast with a ``UserWarning``, as the reference
+        does; one that does not broadcast raises ``ValueError``.
     delta : float, optional
         Threshold at which the loss transitions from quadratic to
         linear (default ``1.0``).
@@ -535,7 +618,9 @@ def huber_loss(
     >>> huber_loss(pred, target, delta=1.0)
     tensor(2.312)
     """
-    _check_reduction(reduction, "huber_loss")
+    op = "huber_loss"
+    _check_reduction(reduction, op)
+    x, target = _broadcast_operands(x, target, _check_target(x, target, op))
     red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
@@ -984,7 +1069,7 @@ def binary_cross_entropy(
     """
     op = "binary_cross_entropy"
     _check_reduction(reduction, op)
-    _check_target_shape(x, target, op)
+    _check_target(x, target, op)
     _check_broadcasts_to(weight, _shape(x), "weight", op)
     # Last: the only check that reads values, and only on the CPU.
     _check_unit_interval(x, "input", op)
@@ -1109,7 +1194,7 @@ def binary_cross_entropy_with_logits(
     """
     op = "binary_cross_entropy_with_logits"
     _check_reduction(reduction, op)
-    _check_target_shape(x, target, op)
+    _check_target(x, target, op)
     _check_broadcasts_to(weight, _shape(x), "weight", op)
     _check_broadcasts_to(pos_weight, _shape(x), "pos_weight", op)
     # ``max(x, 0) - x y + log(1 + exp(-|x|))`` has the right value and the
@@ -1159,7 +1244,8 @@ def kl_div(
         :math:`\log q`, any shape.
     target : Tensor
         Probabilities of the *target* distribution :math:`p`,
-        or its log when ``log_target=True``.  Same shape as ``x``.
+        or its log when ``log_target=True``.  Same shape as ``x``, or
+        one that broadcasts with it (another raises ``ValueError``).
     size_average : bool or None, optional
         Deprecated.  Retained for signature compatibility; ignored
         — use ``reduction`` instead.
@@ -1210,6 +1296,7 @@ def kl_div(
     tensor(0.02391)
     """
     _check_reduction(reduction, "kl_div", batchmean=True)
+    _check_target(x, target, "kl_div")
     # `x` is log_q (log of predicted probability) per the standard contract.
     # When log_target=False, target is the raw probability p; when True it
     # is log(p).  Loss elementwise = target * (log(target) - log_q).
@@ -1508,9 +1595,15 @@ def cosine_embedding_loss(
     if x1.ndim != y.ndim + 1 or x2.ndim != y.ndim + 1 or pair is None:
         raise ValueError(
             f"{op}: a {y.ndim}-D target expects two {y.ndim + 1}-D inputs of "
-            f"one shape, got {_shape(x1)} and {_shape(x2)}"
+            f"broadcastable shapes, got {_shape(x1)} and {_shape(x2)}"
         )
-    _check_broadcasts_to(y, pair[:-1], "target", op)
+    # The target broadcasts with the pairs' batch, either way: a batch of
+    # one against N labels is N losses, as in the reference.
+    if _broadcast_shape(_shape(y), pair[:-1]) is None:
+        raise ValueError(
+            f"{op}: target of shape {_shape(y)} does not broadcast with the "
+            f"inputs' batch shape {pair[:-1]}"
+        )
     cos = _unwrap(cosine_similarity(x1, x2, dim=-1))
     ones = _C_engine.full(cos.shape, 1.0, cos.dtype, cos.device)
     zeros = _C_engine.zeros(cos.shape, cos.dtype, cos.device)
@@ -1615,7 +1708,8 @@ def hinge_embedding_loss(
     x : Tensor
         Per-pair score (distance) tensor, any shape.
     y : Tensor
-        Label tensor :math:`\pm 1` with the same shape as ``x``.
+        Label tensor :math:`\pm 1` with the same shape as ``x`` (one
+        that does not broadcast with it raises ``ValueError``).
     margin : float, optional
         Margin enforced for negative pairs (default ``1.0``).
     reduction : str, optional
@@ -1653,6 +1747,7 @@ def hinge_embedding_loss(
     tensor(0.2)
     """
     _check_reduction(reduction, "hinge_embedding_loss")
+    _check_target(x, y, "hinge_embedding_loss")
     xi = _unwrap(x)
     yi = _unwrap(y)
     zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
@@ -1689,7 +1784,8 @@ def poisson_nll_loss(
         set ``log_input=False`` to pass the rate :math:`\lambda`
         directly.
     target : Tensor
-        Observed counts, broadcast-compatible with ``x``.
+        Observed counts that broadcast with ``x``; a shape that does not
+        raises ``ValueError``.
     log_input : bool, optional
         Whether ``x`` is :math:`\log \lambda` (default) or
         :math:`\lambda`.  The log-form avoids exponentiating an
@@ -1736,6 +1832,7 @@ def poisson_nll_loss(
     tensor(-0.2976)
     """
     _check_reduction(reduction, "poisson_nll_loss")
+    _check_target(x, target, "poisson_nll_loss")
     xi = _unwrap(x)
     ti = _unwrap(target)
     if log_input:
@@ -1809,7 +1906,8 @@ def gaussian_nll_loss(
     x : Tensor
         Predicted means :math:`\mu`, any shape.
     target : Tensor
-        Observed values :math:`y`, broadcast-compatible with ``x``.
+        Observed values :math:`y` that broadcast with ``x``; a shape that
+        does not raises ``ValueError``.
     var : Tensor or float
         Predicted variances :math:`\sigma^2 \ge 0`.  Either the shape of
         ``x``; or that shape without its last dimension — one variance
@@ -1861,6 +1959,7 @@ def gaussian_nll_loss(
     tensor(-0.2841)
     """
     _check_reduction(reduction, "gaussian_nll_loss")
+    _check_target(x, target, "gaussian_nll_loss")
     if isinstance(var, (int, float)):
         if var < 0:
             raise ValueError("var has negative entry/entries")
@@ -2245,7 +2344,7 @@ def multilabel_margin_loss(
     _num_classes(x, op, max_ndim=2)
     # A target of another shape was read column by column against x's
     # classes, and scored whatever lined up.
-    _check_target_shape(x, target, op)
+    _check_target(x, target, op)
     unbatched: bool = x.ndim == 1
     xb: Tensor = x.reshape([1, -1]) if unbatched else x
     # Any integer dtype is taken: a ``lucid.tensor([...ints...])`` target
@@ -2312,8 +2411,10 @@ def soft_margin_loss(
     input : Tensor
         Raw scores (logits), any shape.
     target : Tensor
-        Target tensor of the same shape, conventionally holding
-        :math:`\pm 1` (any real values are accepted).
+        Target tensor of the same shape, or one that broadcasts to it,
+        conventionally holding :math:`\pm 1` (any real values are
+        accepted).  A target that does not broadcast to ``input``'s shape,
+        or would enlarge it, raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
@@ -2346,6 +2447,7 @@ def soft_margin_loss(
     tensor(0.2201)
     """
     _check_reduction(reduction, "soft_margin_loss")
+    _check_target(input, target, "soft_margin_loss")
     return _reduce(_lucid.nn.functional.softplus(-target * input), reduction)
 
 
@@ -2416,7 +2518,7 @@ def multilabel_soft_margin_loss(
     """
     op = "multilabel_soft_margin_loss"
     _check_reduction(reduction, op)
-    _check_broadcasts_to(target, _shape(input), "target", op)
+    _check_target(input, target, op)
     _check_broadcasts_to(weight, _shape(input), "weight", op)
     # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
     # are numerically stable for large |x|.
