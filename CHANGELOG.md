@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cross_entropy takes class-probability targets (CHA-94)
 
+- cross_entropy, nll, multi_margin and ctc take unbatched input (CHA-94)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

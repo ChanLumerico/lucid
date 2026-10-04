@@ -838,3 +838,82 @@ class TestCrossEntropyWithClassProbabilities:
         assert _close(_vals(lo), ro.tolist())
         assert lx.grad is not None
         assert _close(_vals(lx.grad), rx.grad.tolist())
+
+
+# ── CHA-94 (c) ─────────────────────────────────────────────────────────────
+
+
+class TestUnbatchedInputs:
+    """One sample without its batch dimension was refused.
+
+    ``cross_entropy`` on ``(C,)`` and ``multi_margin_loss`` on ``(C,)``
+    raised ``IndexError``; ``ctc_loss`` on ``(T, C)`` said "must be 3-D".
+    The reference takes all three as a batch of one.
+    """
+
+    def test_cross_entropy_on_one_sample(self, device: str) -> None:
+        x = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        lse = math.log(math.exp(1.0) + math.exp(2.0) + math.exp(3.0))
+        out = F.cross_entropy(x, lucid.tensor(1, device=device), reduction="none")
+        assert out.shape == ()
+        assert _close(out.item(), lse - 2.0)
+        soft = F.cross_entropy(x, lucid.tensor([0.0, 1.0, 0.0], device=device))
+        assert _close(soft.item(), lse - 2.0)
+        assert _close(nn.CrossEntropyLoss()(x, lucid.tensor([1], device=device)).item(), lse - 2.0)
+
+    def test_nll_loss_on_one_sample(self, device: str) -> None:
+        x = lucid.tensor([-1.0, -2.0, -3.0], device=device)
+        out = F.nll_loss(x, lucid.tensor(1, device=device), reduction="none")
+        assert out.shape == () and _close(out.item(), 2.0)
+        assert math.isnan(F.nll_loss(x, lucid.tensor(-100, device=device)).item())
+
+    def test_multi_margin_on_one_sample_keeps_the_target_shape(self, device: str) -> None:
+        x = lucid.tensor([0.1, 0.2, 0.4], device=device)
+        scalar = F.multi_margin_loss(x, lucid.tensor(2, device=device), reduction="none")
+        single = F.multi_margin_loss(x, lucid.tensor([2], device=device), reduction="none")
+        assert scalar.shape == () and single.shape == (1,)
+        assert _close(scalar.item(), 0.5)
+        w = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        assert _close(F.multi_margin_loss(x, lucid.tensor(2, device=device), weight=w).item(), 1.5)
+
+    def test_ctc_on_one_sequence(self, device: str) -> None:
+        lp = F.log_softmax(lucid.randn(5, 4, device=device), dim=1)
+        target = lucid.tensor([1, 2], device=device)
+        one = F.ctc_loss(lp, target, lucid.tensor(5), lucid.tensor(2), reduction="none")
+        batched = F.ctc_loss(
+            lp.unsqueeze(1), target.reshape(1, 2), [5], [2], reduction="none"
+        )
+        assert one.shape == ()
+        assert _close(one.item(), batched.tolist()[0])
+        mean = F.ctc_loss(lp, target, lucid.tensor(5), lucid.tensor(2))
+        assert _close(mean.item(), one.item() / 2)
+
+    @pytest.mark.parity
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        rf = R.nn.functional  # type: ignore[attr-defined]
+        xs = [1.0, 2.0, 3.0]
+        for reduction in ("none", "mean", "sum"):
+            lo = F.cross_entropy(
+                lucid.tensor(xs, device=device), lucid.tensor(1, device=device),
+                reduction=reduction,
+            )
+            ro = rf.cross_entropy(R.tensor(xs), R.tensor(1), reduction=reduction)  # type: ignore[attr-defined]
+            assert lo.shape == tuple(ro.shape) and _close(lo.item(), ro.item())
+            lo = F.multi_margin_loss(
+                lucid.tensor(xs, device=device), lucid.tensor([2], device=device),
+                reduction=reduction,
+            )
+            ro = rf.multi_margin_loss(R.tensor(xs), R.tensor([2]), reduction=reduction)  # type: ignore[attr-defined]
+            assert lo.shape == tuple(ro.shape) and _close(_vals(lo), ro.tolist())
+        logits = [[0.1, -0.4, 1.2, 0.3], [0.5, 0.9, -1.0, 0.2], [2.0, -0.3, 0.0, 0.7],
+                  [-0.6, 0.4, 0.8, 1.1], [0.3, -0.2, 0.6, -0.9]]
+        lp = F.log_softmax(lucid.tensor(logits, device=device), dim=1)
+        rp = R.tensor(logits).log_softmax(1)  # type: ignore[attr-defined]
+        for reduction in ("none", "mean", "sum"):
+            lo = F.ctc_loss(
+                lp, lucid.tensor([1, 2], device=device), lucid.tensor(5), lucid.tensor(2),
+                reduction=reduction,
+            )
+            ro = rf.ctc_loss(rp, R.tensor([1, 2]), R.tensor(5), R.tensor(2), reduction=reduction)  # type: ignore[attr-defined]
+            assert lo.shape == tuple(ro.shape) and _close(lo.item(), ro.item(), tol=1e-4)

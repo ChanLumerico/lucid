@@ -500,7 +500,9 @@ def cross_entropy(
     Parameters
     ----------
     x : Tensor
-        Raw logits of shape :math:`(N, C)` or :math:`(N, C, d_1, \dots, d_k)`.
+        Raw logits of shape :math:`(N, C)` or :math:`(N, C, d_1, \dots, d_k)`,
+        or :math:`(C,)` for one unbatched sample (with a 0-d target, and a
+        0-d loss under ``"none"``).
     target : Tensor
         Either integer class indices of shape :math:`(N,)` /
         :math:`(N, d_1, \dots, d_k)` or per-class probabilities of
@@ -567,18 +569,31 @@ def cross_entropy(
     if label_smoothing < 0.0 or label_smoothing >= 1.0:
         raise ValueError(f"label_smoothing must be in [0, 1), got {label_smoothing!r}")
 
+    # A target of the input's own shape holds class probabilities, as in
+    # the reference; the docstring said so, and the gather path refused it
+    # with a rank mismatch.
+    soft: bool = tuple(target.shape) == tuple(x.shape)
+    # An unbatched (C,) input is one sample; it raised in log_softmax.
+    unbatched: bool = x.ndim == 1
+    if unbatched:
+        x = x.unsqueeze(0)
+        target = target.unsqueeze(0) if soft else target.reshape([1])
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
     log_p: Tensor = _log_softmax(x, dim=1)
-    if tuple(target.shape) == tuple(x.shape):
-        # A target of the input's own shape holds class probabilities, as
-        # in the reference; the docstring said so, and the gather path
-        # refused it with a rank mismatch.
-        return _soft_target_nll(
-            log_p, target, weight, ignore_index, reduction, label_smoothing
+    out: Tensor = (
+        _soft_target_nll(log_p, target, weight, ignore_index, reduction, label_smoothing)
+        if soft
+        else _class_nll(
+            log_p,
+            target,
+            weight,
+            ignore_index,
+            reduction,
+            label_smoothing,
+            "cross_entropy",
         )
-    return _class_nll(
-        log_p, target, weight, ignore_index, reduction, label_smoothing, "cross_entropy"
     )
+    return out.reshape([]) if unbatched and reduction == "none" else out
 
 
 def _soft_target_nll(
@@ -639,7 +654,8 @@ def nll_loss(
     ----------
     x : Tensor
         Log-probabilities of shape :math:`(N, C)` or
-        :math:`(N, C, d_1, \dots, d_k)`.
+        :math:`(N, C, d_1, \dots, d_k)`, or :math:`(C,)` for one unbatched
+        sample (with a 0-d target, and a 0-d loss under ``"none"``).
     target : Tensor
         Integer class indices of shape :math:`(N,)` /
         :math:`(N, d_1, \dots, d_k)`.  An index outside :math:`[0, C)`
@@ -680,7 +696,13 @@ def nll_loss(
     tensor(0.3597)
     """
     _validate_reduction(reduction)
-    return _class_nll(x, target, weight, ignore_index, reduction, 0.0, "nll_loss")
+    # An unbatched (C,) input is one sample.
+    unbatched: bool = x.ndim == 1
+    if unbatched:
+        x = x.unsqueeze(0)
+        target = target.reshape([1])
+    out: Tensor = _class_nll(x, target, weight, ignore_index, reduction, 0.0, "nll_loss")
+    return out.reshape([]) if unbatched and reduction == "none" else out
 
 
 def binary_cross_entropy(
@@ -1654,7 +1676,8 @@ def ctc_loss(
         batch size, and :math:`C` is the number of classes
         (including the blank).  Typically produced by
         :func:`~lucid.nn.functional.log_softmax` over the class
-        axis.
+        axis.  :math:`(T, C)` is one unbatched sequence, with a
+        :math:`(S,)` target, 0-d lengths, and a 0-d loss under ``"none"``.
     targets : Tensor
         Target indices, shape :math:`(N, S)` (padded) or
         :math:`(\sum_i \text{target\_lengths}_i,)` (concatenated).
@@ -1725,6 +1748,15 @@ def ctc_loss(
     input_lengths = _as_lengths(input_lengths)
     target_lengths = _as_lengths(target_lengths)
 
+    # An unbatched (T, C) input is one sequence, with a (S,) target and
+    # 0-d (or one-element) lengths; it raised "must be 3-D".
+    unbatched: bool = log_probs.ndim == 2
+    if unbatched:
+        log_probs = log_probs.unsqueeze(1)
+        targets = targets.reshape([1, -1])
+        input_lengths = input_lengths.reshape([1])
+        target_lengths = target_lengths.reshape([1])
+
     tgt_impl = _unwrap(targets)
     if len(list(tgt_impl.shape)) > 1:
         # Padded (N, S): row b's first target_lengths[b] entries are its
@@ -1761,6 +1793,8 @@ def ctc_loss(
         per_sample = _wrap(loss_t)
         lengths = target_lengths.to(per_sample.dtype).to(per_sample.device)
         return (per_sample / lengths.clamp(min=1.0)).mean()
+    if unbatched:
+        loss_t = _C_engine.reshape(loss_t, [])
     return _apply_reduction(loss_t, reduction)
 
 
@@ -1784,7 +1818,9 @@ def multi_margin_loss(
     Parameters
     ----------
     x : Tensor
-        Class scores of shape :math:`(N, C)`.
+        Class scores of shape :math:`(N, C)`, or :math:`(C,)` for one
+        unbatched sample (the ``"none"`` loss then takes the target's
+        shape, ``()`` or ``(1,)``).
     target : Tensor
         Integer class indices of shape :math:`(N,)`.  An index outside
         :math:`[0, C)` raises ``IndexError`` for a CPU tensor and makes
@@ -1830,6 +1866,12 @@ def multi_margin_loss(
     >>> multi_margin_loss(scores, target)
     tensor(0.)
     """
+    # An unbatched (C,) input is one sample; its loss takes the target's
+    # shape, () or (1,), as in the reference.  It raised in the gather.
+    unbatched: bool = x.ndim == 1
+    target_shape: list[int] = list(target.shape)
+    if unbatched:
+        x = x.unsqueeze(0)
     num_classes: int = int(x.shape[1])
     tgt: Tensor = target.to(dtype=_lucid.int32).reshape(-1)
     safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
@@ -1856,6 +1898,8 @@ def multi_margin_loss(
     loss_n: Tensor = hinge.sum(dim=1) / num_classes  # (N,)
     if poison is not None:
         loss_n = loss_n * poison
+    if unbatched:
+        loss_n = loss_n.reshape(target_shape)
     return _apply_reduction(_unwrap(loss_n), reduction)
 
 
