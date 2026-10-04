@@ -242,3 +242,38 @@ def test_duplicated_block_fails_full_and_diff(tmp_path: Path) -> None:
         assert out.returncode == 1 and "clone-pair" in out.stdout, out.stdout + out.stderr
     git(root, "commit", "-qam", "dup")
     assert gate(root, "--diff", "HEAD~1", "--collectors", "jscpd").returncode == 1
+
+
+def test_rebase_merges_concurrent_lowerings_through_the_driver(tmp_path: Path) -> None:
+    """Two branches lower neighbouring keys; the rebase neither conflicts nor loses either."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "pkg").mkdir(parents=True)
+    (root / "tools").mkdir()
+    ignores = "".join(f"x{i} = 1  # type: ignore[misc]\n" for i in range(3))
+    for name in ("a.py", "b.py"):
+        (root / "lucid" / "pkg" / name).write_text(CLEAN + ignores)
+    (root / ".gitattributes").write_text(
+        "tools/quality_baseline.json merge=lucid-quality-baseline\n"
+    )
+    git(root, "init", "-q", "-b", "main")
+    driver = f"{sys.executable} -m tools.quality_gate --merge-baseline %O %A %B"
+    git(root, "config", "merge.lucid-quality-baseline.driver", driver)
+    assert gate(root, "--rebaseline", "--reason", "t", "--collectors", FAST).returncode == 0
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    def lower(name: str, keep: int) -> None:
+        kept = "x0 = 1  # type: ignore[misc]\n" * keep
+        (root / "lucid" / "pkg" / name).write_text(CLEAN + kept)
+        assert gate(root, "--update", "--collectors", FAST).returncode == 0
+        git(root, "commit", "-qam", f"lower {name}")
+
+    git(root, "checkout", "-q", "-b", "side")
+    lower("a.py", 1)
+    git(root, "checkout", "-q", "main")
+    lower("b.py", 2)
+    git(root, "checkout", "-q", "side")
+    git(root, "rebase", "-q", "main")  # git() asserts it succeeded
+    counts = json.loads((root / "tools" / "quality_baseline.json").read_text())["counts"]
+    assert counts["counters"]["type-ignore[misc]"] == {"lucid/pkg/a.py": 1, "lucid/pkg/b.py": 2}
+    assert gate(root, "--full", "--collectors", FAST).returncode == 0
