@@ -701,19 +701,21 @@ def binary_cross_entropy_with_logits(
 
     Notes
     -----
-    The numerically stable base form is
+    The numerically stable form is
 
     .. math::
 
-        L_i = \max(x_i, 0) - x_i\,y_i + \log\!\big(1 + e^{-|x_i|}\big),
+        L_i = (1 - y_i)\,x_i + \operatorname{softplus}(-x_i),
 
     equivalent to :math:`-(y\log\sigma(x) + (1-y)\log(1-\sigma(x)))`
-    but free of overflow.  With ``pos_weight``:
+    but free of overflow, and smooth at :math:`x = 0` (the
+    :math:`\max(x, 0) + \log(1 + e^{-|x|})` spelling has the same value
+    but a kink in each piece there).  With ``pos_weight``:
 
     .. math::
 
-        L_i = (1 - y_i)\,x_i + \big(1 + (w^{+} - 1) y_i\big)
-              \big(\log(1 + e^{-|x_i|}) + \max(-x_i, 0)\big).
+        L_i = (1 - y_i)\,x_i
+              + \big(1 + (w^{+} - 1) y_i\big)\operatorname{softplus}(-x_i).
 
     Gradient w.r.t. ``x`` is the clean :math:`\sigma(x_i) - y_i`
     (modulo weighting) — the canonical reason this form is used in
@@ -729,28 +731,24 @@ def binary_cross_entropy_with_logits(
     tensor(0.3048)
     """
     _validate_reduction(reduction)
-    one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
-    abs_x: Tensor = x.abs()
-    # log(1 + exp(-|x|)) — softplus(-|x|).
-    log1pexp: Tensor = (one + (-abs_x).exp()).log()
-    inf: float = float("inf")
-    max_x: Tensor = x.clamp(0.0, inf)
+    # ``max(x, 0) - x y + log(1 + exp(-|x|))`` has the right value and the
+    # wrong derivative at x = 0: the subgradients there are clamp' = 1 and
+    # sign(0) = 0, so d/dx came out 1 - y instead of 1/2 - y, and a
+    # zero-initialised head got no gradient at all from its positive
+    # labels.  ``(1 - y) x + softplus(-x)`` is the same function written
+    # with one smooth piece, and softplus is stable for any |x|.
+    out_dtype = x.dtype
+    acc = _accumulation_dtype(x)
+    xa: Tensor = x.to(dtype=acc)
+    y: Tensor = target.to(dtype=acc)
+    softplus_neg: Tensor = _wrap(_C_engine.softplus(_unwrap(-xa)))
     if pos_weight is None:
-        loss: Tensor = max_x - x * target + log1pexp
+        loss: Tensor = (1.0 - y) * xa + softplus_neg
     else:
-        # Reference implementation:
-        #   loss = (1 - y) * x + (1 + (pw - 1) * y) * (log(1 + exp(-|x|)) + max(-x, 0))
-        max_neg: Tensor = (-x).clamp(0.0, inf)
-        loss = (one - target) * x + (one + (pos_weight - one) * target) * (
-            log1pexp + max_neg
-        )
+        loss = (1.0 - y) * xa + (1.0 + (pos_weight - 1.0) * y) * softplus_neg
     if weight is not None:
         loss = loss * weight
-    if reduction == "none":
-        return loss
-    if reduction == "sum":
-        return loss.sum()
-    return loss.mean()
+    return _reduce_in(loss, reduction, out_dtype)
 
 
 def kl_div(

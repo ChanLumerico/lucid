@@ -109,3 +109,87 @@ class TestBinaryCrossEntropyAtTheBoundary:
             assert _close(_vals(lo), ro.tolist())
             assert lp.grad is not None
             assert _close(_vals(lp.grad), rp.grad.tolist(), tol=1e-4)
+
+
+# ── CHA-84 ─────────────────────────────────────────────────────────────────
+
+
+class TestBinaryCrossEntropyWithLogitsAtZero:
+    """The logit form had the wrong gradient at exactly ``x = 0``.
+
+    ``max(x, 0) - x y + log(1 + exp(-|x|))`` has subgradients 1 and 0 at
+    the origin, so ``d/dx`` was ``1 - y`` instead of ``1/2 - y``: a
+    zero-initialised head got no gradient from its positive labels.
+    """
+
+    def test_a_zero_logit_gets_half_minus_the_label(self, device: str) -> None:
+        z = lucid.tensor([0.0, 0.0], requires_grad=True, device=device)
+        nn.BCEWithLogitsLoss()(z, lucid.tensor([1.0, 0.0], device=device)).backward()
+        assert z.grad is not None
+        assert _close(_vals(z.grad), [-0.25, 0.25])
+
+    def test_pos_weight_at_zero(self, device: str) -> None:
+        z = lucid.tensor([0.0, 0.0], requires_grad=True, device=device)
+        y = lucid.tensor([1.0, 0.0], device=device)
+        pw = lucid.tensor(3.0, device=device)
+        out = F.binary_cross_entropy_with_logits(z, y, pos_weight=pw, reduction="none")
+        out.sum().backward()
+        assert _close(_vals(out), [3 * math.log(2.0), math.log(2.0)])
+        assert z.grad is not None
+        assert _close(_vals(z.grad), [-1.5, 0.5])
+
+    def test_a_zero_initialised_head_learns_from_positives(self, device: str) -> None:
+        head = nn.Linear(3, 1).to(device)
+        with lucid.no_grad():
+            head.weight.zero_()
+            head.bias.zero_()
+        x = lucid.ones(4, 3, device=device)
+        y = lucid.ones(4, 1, device=device)
+        nn.BCEWithLogitsLoss()(head(x), y).backward()
+        assert head.bias.grad is not None
+        assert _close(head.bias.grad.item(), -0.5)
+
+    def test_saturated_logits_stay_finite(self, device: str) -> None:
+        z = lucid.tensor([100.0, -100.0, 30.0, -30.0], requires_grad=True, device=device)
+        y = lucid.tensor([0.0, 1.0, 1.0, 0.0], device=device)
+        out = F.binary_cross_entropy_with_logits(z, y, reduction="none")
+        out.sum().backward()
+        assert _close(_vals(out), [100.0, 100.0, 9.357623e-14, 9.357623e-14])
+        assert z.grad is not None
+        assert _close(_vals(z.grad), [1.0, -1.0, -9.357623e-14, 9.357623e-14])
+
+    @pytest.mark.parity
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        vals_z = [0.0, 0.0, 30.0, -30.0, 1.5, -0.7]
+        vals_y = [1.0, 0.0, 0.0, 1.0, 0.25, 0.9]
+        w = [1.0, 2.0, 0.5, 1.0, 3.0, 1.0]
+        for pos_weight in (None, 3.0):
+            for reduction in ("none", "mean", "sum"):
+                lz = lucid.tensor(vals_z, requires_grad=True, device=device)
+                ly = lucid.tensor(vals_y, requires_grad=True, device=device)
+                lo = F.binary_cross_entropy_with_logits(
+                    lz,
+                    ly,
+                    weight=lucid.tensor(w, device=device),
+                    pos_weight=(
+                        None if pos_weight is None
+                        else lucid.tensor(pos_weight, device=device)
+                    ),
+                    reduction=reduction,
+                )
+                lo.sum().backward()
+                rz = R.tensor(vals_z, requires_grad=True)  # type: ignore[attr-defined]
+                ry = R.tensor(vals_y, requires_grad=True)  # type: ignore[attr-defined]
+                ro = R.nn.functional.binary_cross_entropy_with_logits(  # type: ignore[attr-defined]
+                    rz,
+                    ry,
+                    weight=R.tensor(w),  # type: ignore[attr-defined]
+                    pos_weight=None if pos_weight is None else R.tensor(pos_weight),  # type: ignore[attr-defined]
+                    reduction=reduction,
+                )
+                ro.sum().backward()
+                assert _close(_vals(lo), ro.tolist())
+                assert lz.grad is not None and ly.grad is not None
+                assert _close(_vals(lz.grad), rz.grad.tolist())
+                assert _close(_vals(ly.grad), ry.grad.tolist())
