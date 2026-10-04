@@ -188,6 +188,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("QConfig", "lucid.quantization.qconfig", "QConfig"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
+    "lucid.nn.module": (("_HasForward", "lucid._types", "_HasForward"),),
     "lucid.nn.modules._lazy": (("Module", "lucid.nn.module", "Module"),),
     "lucid.nn.qat.conv": (
         ("FakeQuantize", "lucid.quantization._fake_quantize", "FakeQuantize"),
