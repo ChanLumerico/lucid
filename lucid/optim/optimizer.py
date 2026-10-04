@@ -2,6 +2,8 @@
 Optimizer base class.
 """
 
+import operator
+import warnings
 from typing import ClassVar, Iterable, cast, override
 
 import lucid as _lucid
@@ -10,6 +12,25 @@ from lucid._types import _OptimizerClosure
 from lucid.nn.parameter import Parameter
 
 from lucid._C import engine as _C_engine
+
+
+def _state_like(state: object, param: object) -> object | None:
+    """Return optimizer state buffer ``state`` cast and moved to match ``param``.
+
+    Both are engine ``TensorImpl`` objects.  ``None`` when the shapes no
+    longer agree: the buffer belonged to a differently shaped parameter
+    and cannot be reused.
+    """
+    src = cast(_C_engine.TensorImpl, state)
+    dst = cast(_C_engine.TensorImpl, param)
+    if list(src.shape) != list(dst.shape):
+        return None
+    out: _C_engine.TensorImpl = src
+    if out.dtype != dst.dtype:
+        out = _C_engine.astype(out, dst.dtype)
+    if out.device != dst.device:
+        out = out.transfer_to_device(dst.device, False)
+    return out
 
 
 class Optimizer:
@@ -180,6 +201,10 @@ class Optimizer:
 
         self.param_groups: list[dict[str, object]] = []
         self._engines: list[object] = []
+        # Parallel to ``_engines``: the parameters each engine optimizer was
+        # built over, and the impls they held at that moment.
+        self._engine_binds: list[tuple[list[Parameter], list[object]]] = []
+        self._engine_state_reset_warned: bool = False
         self._engines_built: bool = False
         self.state: dict[int, dict[str, object]] = {}
         self.defaults: dict[str, object] = defaults
@@ -203,13 +228,24 @@ class Optimizer:
         the first forward by construction) and fixes the general case,
         not only lazy layers: any parameter whose impl is replaced
         between construction and the first step is now picked up.
+
+        Impls are also replaced *after* the first step — ``module.to()``,
+        ``.double()``, ``.half()`` and any other conversion through
+        ``Module._apply`` give each parameter a new buffer under the same
+        ``Parameter`` object.  An engine built before that kept stepping
+        the old buffer, so the parameter silently stopped training.  Every
+        use therefore re-checks each group's impls against the ones its
+        engine holds and rebuilds a group's engine when they differ,
+        carrying its state across (see :meth:`_rebuild_engine_optim`).
         """
         if not self._engines_built:
             # Set first: ``_append_engine_optim`` appends through this
             # same property, and a re-entrant build would recurse.
             self._engines_built = True
             for group in self.param_groups:
-                self._append_engine_optim(group)
+                self._bind_engine_optim(group)
+        else:
+            self._rebind_replaced_params()
         return self._engines
 
     def add_param_group(self, group: dict[str, object]) -> None:
@@ -220,7 +256,131 @@ class Optimizer:
         # Before the build, the group is simply on the list the build reads;
         # after it, the new group needs an engine of its own right now.
         if self._engines_built:
-            self._append_engine_optim(merged)
+            self._bind_engine_optim(merged)
+
+    @staticmethod
+    def _group_binding(
+        group: dict[str, object],
+    ) -> tuple[list[Parameter], list[object]]:
+        """Snapshot a group's parameters and the impls they hold right now."""
+        params: list[Parameter] = list(group["params"])  # type: ignore[call-overload]
+        return params, [p._impl for p in params]
+
+    def _bind_engine_optim(self, group: dict[str, object]) -> None:
+        """Build a group's engine optimizer and remember what it was built over."""
+        built: int = len(self._engines)
+        self._append_engine_optim(group)
+        if len(self._engines) > built:
+            self._engine_binds.append(self._group_binding(group))
+
+    def _build_engine_optim(self, group: dict[str, object]) -> object | None:
+        """Build one engine optimizer for ``group`` without appending it.
+
+        ``_append_engine_optim`` is the per-optimizer hook and appends to
+        ``_engines``; it runs against a scratch list here so the result can
+        replace a group's existing engine in place.
+        """
+        live: list[object] = self._engines
+        self._engines = []
+        try:
+            self._append_engine_optim(group)
+            built: list[object] = self._engines
+        finally:
+            self._engines = live
+        return built[-1] if built else None
+
+    def _rebind_replaced_params(self) -> None:
+        """Rebuild the engine of every group whose parameter impls changed.
+
+        One identity comparison per parameter, so the common case — nothing
+        replaced — stays a cheap scan.  An optimizer without engines (LBFGS,
+        SparseAdam) has no bindings and is skipped.
+        """
+        binds = self._engine_binds
+        if len(binds) != len(self.param_groups):
+            return
+        impl_of = operator.attrgetter("_impl")
+        for idx, group in enumerate(self.param_groups):
+            params: list[Parameter] = group["params"]  # type: ignore[assignment]
+            impls: list[object] = binds[idx][1]
+            if len(params) == len(impls) and all(
+                map(operator.is_, map(impl_of, params), impls)
+            ):
+                continue
+            self._rebuild_engine_optim(idx, group)
+
+    def _rebuild_engine_optim(self, idx: int, group: dict[str, object]) -> None:
+        """Replace group ``idx``'s engine with one over its current impls.
+
+        The engine optimizer binds ``TensorImpl`` pointers at construction
+        and has no way to re-point them, so a new one is built from the
+        group (whose hyperparameters are the live ones — schedulers write
+        there) and the old one's state is carried over: momentum and moment
+        buffers are matched by ``Parameter`` identity, cast to the new
+        impl's dtype and moved to its device, and the step counter is
+        copied.
+
+        Moving the state is a deliberate superset of the reference
+        framework, which leaves state where it was after ``module.to()``
+        and then fails at the next step for most optimizers.  State
+        following the parameter is its own ``load_state_dict`` policy too.
+        A buffer whose shape no longer matches its parameter is dropped.
+        """
+        old: object = self._engines[idx]
+        old_params: list[Parameter] = self._engine_binds[idx][0]
+        fresh: object | None = self._build_engine_optim(group)
+        self._engines[idx] = fresh
+        self._engine_binds[idx] = self._group_binding(group)
+        if old is None or fresh is None:
+            return
+
+        buffers: list[tuple[str, list[object | None]]] = old.state_buffers()  # type: ignore[attr-defined]
+        step_count: int = int(getattr(old, "step_count", 0) or 0)
+        if not buffers and step_count == 0:
+            if self._engine_holds_state(group):
+                self._warn_engine_state_reset()
+            return
+
+        slot_of: dict[int, int] = {id(p): j for j, p in enumerate(old_params)}
+        params: list[Parameter] = group["params"]  # type: ignore[assignment]
+        carried: list[tuple[str, list[object | None]]] = []
+        for name, tensors in buffers:
+            moved: list[object | None] = []
+            for p in params:
+                j: int | None = slot_of.get(id(p))
+                state = tensors[j] if j is not None and j < len(tensors) else None
+                moved.append(None if state is None else _state_like(state, p._impl))
+            carried.append((name, moved))
+        if any(t is not None for _, moved in carried for t in moved):
+            fresh.load_state_buffers(carried)  # type: ignore[attr-defined]
+        if step_count and hasattr(fresh, "step_count"):
+            fresh.step_count = step_count
+
+    def _engine_holds_state(self, group: dict[str, object]) -> bool:
+        """Whether this optimizer's engine keeps per-parameter state for ``group``.
+
+        Read only to decide whether a rebuilt engine lost something: an
+        engine that reports no state while this is ``True`` keeps state it
+        cannot hand over.  Override for configurations with no state at
+        all (plain SGD).
+        """
+        return True
+
+    def _warn_engine_state_reset(self) -> None:
+        """Say once that a rebuilt engine started over from empty state."""
+        if self._engine_state_reset_warned:
+            return
+        self._engine_state_reset_warned = True
+        warnings.warn(
+            f"{type(self).__name__}: a parameter's buffer was replaced after "
+            "the optimizer had stepped (module.to(), .double(), .half() or "
+            "another conversion), and this optimizer cannot carry its "
+            "per-parameter state over, so that state restarted from empty.  "
+            "Convert the model before building the optimizer to keep it.",
+            RuntimeWarning,
+            # warn ← rebuild ← rebind ← _engine_optims ← step() ← caller
+            stacklevel=6,
+        )
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
         """Create and append one engine optimizer for a single param group.
@@ -317,7 +477,13 @@ class Optimizer:
           ``momentum_buffer`` ...) keyed by buffer name
         - ``step``: per-group step counter (broadcast across all params in
           that group, so it's available wherever you look it up)
+
+        Before the engines exist there is no state to save, and building
+        them here would bind whatever impls the parameters hold now — a
+        model converted afterwards then needs a rebuild at the first step.
         """
+        if not self._engines_built:
+            return {}
         out: dict[int, dict[str, object]] = {}
         flat_idx: int = 0
         for group, eng in zip(self.param_groups, self._engine_optims):

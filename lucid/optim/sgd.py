@@ -129,6 +129,11 @@ class SGD(Optimizer):
         )
 
     @override
+    def _engine_holds_state(self, group: dict[str, object]) -> bool:
+        """Only momentum gives SGD per-parameter state; plain SGD has none."""
+        return cast(float, group.get("momentum", 0.0)) != 0.0
+
+    @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single SGD step."""
         loss: Tensor | None = closure() if closure is not None else None
