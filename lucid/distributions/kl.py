@@ -217,10 +217,21 @@ def _kl_categorical_categorical(p: Categorical, q: Categorical) -> Tensor:
     .. math::
 
         \mathrm{KL}(p \,\|\, q) = \sum_k p_k (\log p_k - \log q_k)
+
+    A category with :math:`p_k = 0` contributes ``0`` (not
+    ``0 · (-inf) = NaN``); one with :math:`p_k > 0 = q_k` makes the
+    divergence ``+inf``.  The log-probabilities are replaced *before* the
+    product wherever the term is decided by those rules, so the gradient
+    never multiplies an infinity by zero.
     """
-    p_log = p._log_probs
+    p_probs = p._probs
+    p_zero = p_probs == 0
     q_log = q._log_probs
-    return (p._probs * (p_log - q_log)).sum(dim=-1)
+    q_zero = lucid.isinf(q_log) & (q_log < 0)
+    p_log = lucid.where(p_zero, 0.0, p._log_probs)
+    q_log = lucid.where(p_zero | q_zero, 0.0, q_log)
+    terms = lucid.where(q_zero & ~p_zero, float("inf"), p_probs * (p_log - q_log))
+    return terms.sum(dim=-1)
 
 
 @register_kl(Exponential, Exponential)

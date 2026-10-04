@@ -15,7 +15,12 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
-from lucid.distributions._util import _as_tensor, _clamp_probs, _lazy_param
+from lucid.distributions._util import (
+    _as_tensor,
+    _clamp_probs,
+    _lazy_param,
+    _xlog1py,
+)
 
 
 def _probs_to_logits(probs: Tensor) -> Tensor:
@@ -233,9 +238,12 @@ class Bernoulli(ExponentialFamily):
         """Lazily resolved log-odds tensor.
 
         Returns ``self.logits`` directly when the distribution was constructed
-        with ``logits``; otherwise computes :math:`\\log(p/(1-p))` on demand.
+        with ``logits``; otherwise the log-odds of ``probs`` held one epsilon
+        inside :math:`[0, 1]`, as :attr:`logits` derives them.  Unclamped, a
+        probability of exactly 0 or 1 gave an infinite logit, and
+        ``log_prob`` then multiplied it by a zero count.
         """
-        return self.logits if self._is_logits else _probs_to_logits(self.probs)
+        return self.logits
 
     @override
     @property
@@ -336,16 +344,21 @@ class Bernoulli(ExponentialFamily):
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability of ``value`` under the Bernoulli distribution.
 
-        Uses the numerically stable logits form to avoid :math:`\log(0)`:
+        Uses the logits form, with the softplus evaluated so it cannot
+        overflow:
 
         .. math::
 
-            \log p(x \mid \ell) = x \cdot \ell - \log(1 + e^\ell)
+            \log p(x \mid \ell) = x \cdot \ell - \operatorname{softplus}(\ell),
+            \qquad \operatorname{softplus}(\ell) = \log(1 + e^\ell)
 
         where :math:`\ell = \log(p / (1-p))` is the log-odds.  This is
         equivalent to the cross-entropy form
-        :math:`x \log p + (1-x) \log(1-p)` but avoids numerical issues at
-        the boundaries :math:`p \in \{0, 1\}`.
+        :math:`x \log p + (1-x) \log(1-p)`; written with ``log(1 + exp(ℓ))``
+        it reached ``inf`` at :math:`\ell \approx 89` in float32 and scored
+        a certain outcome as ``-inf``.  A probability of exactly 0 or 1 is
+        held one epsilon inside :math:`[0, 1]` first, as the reference
+        framework does, so its logit is large but finite.
 
         Parameters
         ----------
@@ -363,10 +376,8 @@ class Bernoulli(ExponentialFamily):
         >>> d.log_prob(lucid.tensor(1.0))  # log(0.7)
         tensor(-0.3567)
         """
-        # Numerically stable form via logits + softplus identity:
-        #   log p(x | l) = x · l − softplus(l)
         l = self._logits
-        return value * l - (1.0 + l.exp()).log()
+        return value * l - l.softplus()
 
     @override
     def entropy(self) -> Tensor:
@@ -376,11 +387,11 @@ class Bernoulli(ExponentialFamily):
 
             H(X) = -p \log p - (1-p) \log(1-p)
 
-        Computed in the numerically stable softplus form:
+        Computed in the softplus form, which stays finite at any logit:
 
         .. math::
 
-            H = \log(1 + e^\ell) - p \cdot \ell
+            H = \operatorname{softplus}(\ell) - p \cdot \ell
 
         where :math:`\ell` is the log-odds.  The entropy is maximised at
         :math:`p = 0.5` (maximum uncertainty) and is zero at the degenerate
@@ -396,9 +407,8 @@ class Bernoulli(ExponentialFamily):
         >>> Bernoulli(probs=0.5).entropy()  # log(2) ≈ 0.693
         tensor(0.6931)
         """
-        # H = − p log p − (1−p) log(1−p), guarded by softplus form.
         l = self._logits
-        return (1.0 + l.exp()).log() - self._probs * l
+        return l.softplus() - self._probs * l
 
 
 class Geometric(Distribution):
@@ -630,6 +640,10 @@ class Geometric(Distribution):
 
             \log P(X = k) = k \log(1-p) + \log p
 
+        with :math:`k \log(1-p)` taken as ``0`` at :math:`k = 0`, so
+        :math:`p = 1` scores its only outcome as :math:`\log 1 = 0` rather
+        than ``0 · (-inf) = NaN``.
+
         Parameters
         ----------
         value : Tensor
@@ -646,7 +660,8 @@ class Geometric(Distribution):
         >>> d.log_prob(lucid.tensor(0.0))  # log(0.5) ≈ -0.693
         tensor(-0.6931)
         """
-        return value * (1.0 - self.probs).log() + self.probs.log()
+        p = self.probs
+        return _xlog1py(value, -p) + p.log()
 
     @override
     def entropy(self) -> Tensor:
@@ -655,6 +670,11 @@ class Geometric(Distribution):
         .. math::
 
             H(X) = \frac{-(1-p)\log(1-p) - p \log p}{p}
+                 = \frac{\operatorname{softplus}(\ell) - p\,\ell}{p}
+
+        The numerator is the Bernoulli entropy, evaluated in its logits form
+        so that :math:`p = 1` gives (almost exactly) ``0`` rather than
+        ``0 · log 0 = NaN``.
 
         The entropy grows without bound as :math:`p \to 0` (more uncertainty
         over many possible outcomes) and is zero at :math:`p = 1` (certain
@@ -671,4 +691,5 @@ class Geometric(Distribution):
         tensor(1.386)
         """
         p = self.probs
-        return -((1.0 - p) * (1.0 - p).log() + p * p.log()) / p
+        l = self.logits
+        return (l.softplus() - p * l) / p

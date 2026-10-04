@@ -3,6 +3,7 @@
 from typing import override
 
 import lucid
+from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
@@ -339,12 +340,32 @@ class Categorical(Distribution):
 
             H[X] = -\sum_{k=0}^{K-1} p_k \log p_k
 
+        with :math:`0 \log 0 = 0`: a category of probability zero — a zero
+        in ``probs``, or a logit of ``-inf`` masking an action out —
+        contributes nothing rather than ``0 · (-inf) = NaN``.
+
         Returns
         -------
         Tensor
             Entropy values of shape ``batch_shape`` (nats).
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import Categorical
+        >>> Categorical(probs=lucid.tensor([0.0, 0.5, 0.5])).entropy()
+        tensor(0.6931)
+        >>> Categorical(logits=lucid.tensor([float("-inf"), 0.0, 0.0])).entropy()
+        tensor(0.6931)
         """
-        log_p = self._log_probs
+        if self._is_logits:
+            # ``-inf`` raised to the most negative finite value: its weight is
+            # an exact 0, so the product is 0 and so is its gradient.
+            log_p = self._log_probs.clip(float(finfo(self.logits.dtype).min), None)
+        else:
+            # The log of ``probs`` held one epsilon inside [0, 1] — finite,
+            # with a finite derivative, where ``log 0`` has neither.
+            log_p = self.logits
         return -(self._probs * log_p).sum(dim=-1)
 
 
@@ -522,8 +543,10 @@ class OneHotCategorical(Distribution):
         Tensor
             Log-probabilities of shape ``batch_shape``.
         """
-        # value is one-hot — log_prob = sum(value * log_probs).
-        return (value * self._cat._log_probs).sum(dim=-1)
+        # Read the category off the one-hot vector and score it.  The sum
+        # ``Σ value · log p`` meets every *other* category's ``log p`` with a
+        # weight of 0, and a zero-probability category made that 0 · (-inf).
+        return self._cat.log_prob(value.argmax(dim=-1))
 
     @override
     def entropy(self) -> Tensor:

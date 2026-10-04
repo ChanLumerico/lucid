@@ -13,7 +13,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
-from lucid.distributions._util import _clamp_probs, _lazy_param
+from lucid.distributions._util import _clamp_probs, _lazy_param, _xlogy
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -741,14 +741,26 @@ class Multinomial(Distribution):
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
-        """``log C(n; k₁,…,kK) + Σ kᵢ log pᵢ``."""
+        r"""``log C(n; k₁,…,kK) + Σ kᵢ log pᵢ``.
+
+        A category with :math:`k_i = 0` contributes ``0`` even where
+        :math:`p_i = 0` (a zero in ``probs`` or a logit of ``-inf``), rather
+        than ``0 · (-inf) = NaN``.
+        """
         n: Tensor = self._total_count
         # Multinomial coefficient: lgamma(n+1) - sum_i lgamma(k_i+1)
         log_coeff: Tensor = lucid.lgamma(n + 1.0) - lucid.lgamma(value + 1.0).sum(
             dim=-1
         )
-        # Σ kᵢ log pᵢ — numerically stable via logits
-        log_p_term: Tensor = (value * self._probs.log()).sum(dim=-1)
+        if self._is_logits:
+            lp: Tensor = self._param
+            log_p: Tensor = lp - lucid.logsumexp(lp, dim=-1, keepdim=True)
+            # ``log_softmax`` differentiates without dividing by p, so the
+            # masked infinity can be swapped out after it is formed.
+            log_p = lucid.where((value == 0) & lucid.isinf(log_p), 0.0, log_p)
+            log_p_term: Tensor = (value * log_p).sum(dim=-1)
+        else:
+            log_p_term = _xlogy(value, self._probs).sum(dim=-1)
         return log_coeff + log_p_term
 
     @override
@@ -920,9 +932,11 @@ class ContinuousBernoulli(Distribution):
         """Lazily resolved logit parameter :math:`\\ell = \\log(p/(1-p))`.
 
         Returns the stored parameter when constructed from ``logits``;
-        otherwise computes the log-odds from the stored probs.
+        otherwise the log-odds of ``probs`` held one epsilon inside
+        :math:`[0, 1]` (:attr:`logits`), so a degenerate ``probs`` of 0 or 1
+        has a large finite logit, as in the reference framework.
         """
-        return self._param if self._is_logits else _probs_to_logits(self._param)
+        return self.logits
 
     @_lazy_param
     def probs(self) -> Tensor:
@@ -943,21 +957,23 @@ class ContinuousBernoulli(Distribution):
     # -- helpers ---------------------------------------------------------------
 
     def _log_normalizer(self) -> Tensor:
-        """Stable log C(p):
-        ``log(|logit(p)|) − log(|2p−1|)`` far from ½;
-        Taylor ``log(2) + (2p−1)²/3`` near ½.
+        r"""Log normaliser :math:`\log C = \log|\ell| - \log|\tanh(\ell/2)|`.
+
+        :math:`C(\lambda) = \ell / (2\lambda - 1)` and
+        :math:`2\lambda - 1 = \tanh(\ell/2)`, so the normaliser is read off
+        the logit without going through :math:`\lambda` — which rounds to
+        exactly 0 or 1 once :math:`|\ell| \gtrsim 17` in float32 and took
+        ``log_prob`` to ``inf`` with it.  Near :math:`\ell = 0` both logs
+        diverge, and the series :math:`\log 2 + \ell^2/12 - 7\ell^4/1440`
+        is used.
         """
-        p: Tensor = _logits_to_probs(lucid.clamp(self._logits, min=-20.0, max=20.0))
-        u: Tensor = 2.0 * p - 1.0  # u = 2p − 1 ∈ (−1, 1)
-        abs_u: Tensor = u.abs()
-        eps: float = 1e-4
-        # For the stable branch, replace u with a safe value when near zero.
-        safe_u: Tensor = lucid.where(abs_u < eps, lucid.full_like(u, eps), u)
-        log_norm_stable: Tensor = (
-            math.log(2.0) + lucid.atanh(safe_u).abs().log() - safe_u.abs().log()
-        )
-        log_norm_taylor: Tensor = math.log(2.0) + (u * u) / 3.0
-        return lucid.where(abs_u < eps, log_norm_taylor, log_norm_stable)
+        l: Tensor = self._logits
+        near: Tensor = l.abs() < 0.05
+        l_far: Tensor = lucid.where(near, 1.0, l)
+        closed: Tensor = l_far.abs().log() - (0.5 * l_far).tanh().abs().log()
+        x: Tensor = l * l
+        series: Tensor = math.log(2.0) + x * (1.0 / 12.0 - x * (7.0 / 1440.0))
+        return lucid.where(near, series, closed)
 
     # -- distribution interface ------------------------------------------------
 
@@ -1063,7 +1079,12 @@ class ContinuousBernoulli(Distribution):
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
-        """``x · l − softplus(l) + log C(p)``."""
+        """``x · l − softplus(l) + log C(p)``.
+
+        ``softplus`` rather than ``log(1 + exp(l))``, which reached ``inf``
+        at ``l ≈ 89`` in float32; and the logit of a ``probs`` of exactly
+        0 or 1 is taken one epsilon inside ``[0, 1]`` (:attr:`logits`), so it
+        is never multiplied by a zero ``x`` while infinite.
+        """
         l: Tensor = self._logits
-        # log p(x) = x * l - log(1 + exp(l)) + log C(p)
-        return value * l - (1.0 + l.exp()).log() + self._log_normalizer()
+        return value * l - l.softplus() + self._log_normalizer()

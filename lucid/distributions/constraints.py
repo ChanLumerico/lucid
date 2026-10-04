@@ -70,12 +70,19 @@ class Constraint:
 
 @final
 class _Real(Constraint):
-    """``ℝ`` — all finite reals."""
+    """``ℝ`` extended by ``±inf`` — everything except NaN.
+
+    Infinities are admitted on purpose, as the reference framework admits
+    them: a logit of ``-inf`` is how a category is masked out
+    (``Categorical(logits=[-inf, 0, 0])`` is the action-mask idiom), and a
+    ``Normal`` scores ``±inf`` as ``-inf`` rather than refusing it.  NaN is
+    the one value that is never a meaningful parameter or observation.
+    """
 
     @override
     def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``value`` is finite."""
-        return lucid.isfinite(value)
+        """Return ``True`` element-wise where ``value`` is not NaN."""
+        return ~lucid.isnan(value)
 
 
 @final

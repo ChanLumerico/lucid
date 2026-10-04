@@ -97,6 +97,60 @@ def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
     return a + z, b + z
 
 
+def _xlogy(x: Tensor, y: Tensor) -> Tensor:
+    r""":math:`x \log y`, taken as ``0`` wherever ``x == 0``.
+
+    The ``0 · log 0`` term of a log-density at the edge of its support —
+    ``Gamma(1, β)`` at ``0``, ``Beta(1, 1)`` at ``0`` and ``1``,
+    ``Poisson`` with a zero count — is ``0 · (-inf)``, which is NaN in IEEE
+    arithmetic although its limit is ``0``.
+
+    The guard is on the *operand*: where ``x == 0`` and ``log y`` would not
+    be finite (``y <= 0`` or ``y`` infinite), ``y`` is replaced by ``1``
+    before the logarithm, so the product is an exact ``0`` and neither
+    factor's gradient sees an infinity.  Masking the product afterwards
+    would leave ``0 · inf`` in the backward pass.  Where ``log y`` is
+    finite the product is left alone, so ``d/dx = log y`` there even at
+    ``x == 0``.  A NaN ``y`` still propagates.
+
+    Parameters
+    ----------
+    x, y : Tensor
+        Broadcast-compatible operands.
+
+    Returns
+    -------
+    Tensor
+        ``x * log(y)`` with the ``x == 0`` convention.
+    """
+    degenerate = (x == 0) & ((y <= 0) | lucid.isinf(y))
+    return x * lucid.where(degenerate, 1.0, y).log()
+
+
+def _xlog1py(x: Tensor, y: Tensor) -> Tensor:
+    r""":math:`x \log(1 + y)`, taken as ``0`` wherever ``x == 0``.
+
+    The ``log1p`` twin of :func:`_xlogy`, for terms such as
+    :math:`(\beta - 1)\log(1 - v)` whose argument is close to ``1`` — the
+    plain ``log(1 - v)`` loses the small ``v`` to rounding first.  Guarded
+    the same way: where ``x == 0`` and ``log1p(y)`` would not be finite
+    (``y <= -1`` or ``y`` infinite), ``y`` is replaced by ``0`` before the
+    logarithm.
+
+    Parameters
+    ----------
+    x, y : Tensor
+        Broadcast-compatible operands.
+
+    Returns
+    -------
+    Tensor
+        ``x * log1p(y)`` with the ``x == 0`` convention.
+    """
+    degenerate = (x == 0) & ((y <= -1) | lucid.isinf(y))
+    return x * lucid.log1p(lucid.where(degenerate, 0.0, y))
+
+
 def _clamp_probs(probs: Tensor) -> Tensor:
     """``probs`` held one machine epsilon inside ``[0, 1]``.
 

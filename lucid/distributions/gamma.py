@@ -24,6 +24,8 @@ _MAX_GAMMA_RETRIES: int = 8
 from lucid.distributions._util import (
     _as_tensor,
     _broadcast_pair,
+    _xlog1py,
+    _xlogy,
 )
 
 
@@ -316,10 +318,14 @@ class Gamma(ExponentialFamily):
             \log p(x; \alpha, \beta) = \alpha \log \beta
             + (\alpha - 1) \log x - \beta x - \log \Gamma(\alpha)
 
+        :math:`(\alpha - 1)\log x` is taken as ``0`` when :math:`\alpha = 1`,
+        so the density at :math:`x = 0` is the finite :math:`\beta` of the
+        exponential rather than ``0 · (-inf) = NaN``.
+
         Parameters
         ----------
         value : Tensor
-            Positive real values :math:`x > 0`.
+            Non-negative real values :math:`x \geq 0`.
 
         Returns
         -------
@@ -333,7 +339,7 @@ class Gamma(ExponentialFamily):
         """
         return (
             self.concentration * self.rate.log()
-            + (self.concentration - 1.0) * value.log()
+            + _xlogy(self.concentration - 1.0, value)
             - self.rate * value
             - lucid.lgamma(self.concentration)
         )
@@ -692,10 +698,14 @@ class Beta(ExponentialFamily):
             (\alpha - 1) \log x + (\beta - 1) \log(1-x)
             - \log B(\alpha, \beta)
 
+        Each power term is taken as ``0`` when its exponent is, so
+        ``Beta(1, 1)`` scores both endpoints as :math:`\log 1 = 0` rather
+        than ``0 · (-inf) = NaN``.
+
         Parameters
         ----------
         value : Tensor
-            Values in :math:`(0, 1)`.
+            Values in :math:`[0, 1]`.
 
         Returns
         -------
@@ -705,7 +715,7 @@ class Beta(ExponentialFamily):
         a = self.concentration1
         b = self.concentration0
         log_b = lucid.lgamma(a) + lucid.lgamma(b) - lucid.lgamma(a + b)
-        return (a - 1.0) * value.log() + (b - 1.0) * (1.0 - value).log() - log_b
+        return _xlogy(a - 1.0, value) + _xlog1py(b - 1.0, -value) - log_b
 
     @override
     def entropy(self) -> Tensor:
@@ -962,6 +972,9 @@ class Dirichlet(ExponentialFamily):
             \log p(\mathbf{x}; \boldsymbol{\alpha}) =
             \sum_i (\alpha_i - 1) \log x_i - \log B(\boldsymbol{\alpha})
 
+        A term with :math:`\alpha_i = 1` is ``0`` even where
+        :math:`x_i = 0`, on the boundary of the simplex.
+
         Parameters
         ----------
         value : Tensor
@@ -974,7 +987,7 @@ class Dirichlet(ExponentialFamily):
         """
         a = self.concentration
         log_b = lucid.lgamma(a).sum(dim=-1) - lucid.lgamma(a.sum(dim=-1))
-        return ((a - 1.0) * value.log()).sum(dim=-1) - log_b
+        return _xlogy(a - 1.0, value).sum(dim=-1) - log_b
 
     @override
     def entropy(self) -> Tensor:

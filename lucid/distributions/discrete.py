@@ -12,7 +12,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
-from lucid.distributions._util import _clamp_probs, _lazy_param
+from lucid.distributions._util import _clamp_probs, _lazy_param, _xlogy
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -189,6 +189,10 @@ class Poisson(ExponentialFamily):
 
             \log P(X = k) = k \log \lambda - \lambda - \log\Gamma(k + 1)
 
+        :math:`k \log \lambda` is taken as ``0`` at :math:`k = 0`, so a
+        zero rate scores a zero count as :math:`\log 1 = 0` rather than
+        ``0 · (-inf) = NaN``.
+
         Parameters
         ----------
         value : Tensor
@@ -199,8 +203,7 @@ class Poisson(ExponentialFamily):
         Tensor
             Log-probability values of the same shape as ``value``.
         """
-        # log p(k | λ) = k·log(λ) − λ − lgamma(k+1).
-        return value * self.rate.log() - self.rate - lucid.lgamma(value + 1.0)
+        return _xlogy(value, self.rate) - self.rate - lucid.lgamma(value + 1.0)
 
     @override
     def entropy(self) -> Tensor:
@@ -821,6 +824,16 @@ class NegativeBinomial(Distribution):
             \log P(X = k) = \log\Gamma(k+r) - \log\Gamma(r) - \log\Gamma(k+1)
                            + r \log(1-p) + k \log p
 
+        The two logarithms are evaluated from the logit :math:`\ell` as
+        :math:`\log p = -\operatorname{softplus}(-\ell)` and
+        :math:`\log(1-p) = -\operatorname{softplus}(\ell)`.  Through
+        ``probs`` they gave ``-inf`` once :math:`|\ell|` was large enough for
+        :math:`p` to round to 0 or 1 (:math:`|\ell| \gtrsim 17` in
+        float32), where the answer is a finite :math:`-|\ell|`-sized value;
+        and ``0 · log 0 = NaN`` at :math:`p = 0`.  A ``probs`` of exactly 0 or
+        1 is held one epsilon inside :math:`[0, 1]` first, as the reference
+        framework does.
+
         Parameters
         ----------
         value : Tensor
@@ -831,15 +844,17 @@ class NegativeBinomial(Distribution):
         Tensor
             Log-probability values of the same shape as ``value``.
         """
-        # log p(k) = lgamma(k+r) − lgamma(r) − lgamma(k+1)
-        #           + r·log(1−p) + k·log(p).
         k: Tensor = value
         r: Tensor = self.total_count
-        p: Tensor = self._probs
+        l: Tensor = self.logits
+        # ``k · softplus(−ℓ)`` is ``0 · inf`` for a zero count at ``ℓ = −inf``
+        # (a logit given as ``-inf``); guarded on the operand, as in
+        # :class:`Binomial`, so the gradient never sees the infinity.
+        neg_log_p: Tensor = lucid.where(k == 0, 0.0, (-l).softplus())
         return (
             lucid.lgamma(k + r)
             - lucid.lgamma(r)
             - lucid.lgamma(k + 1.0)
-            + r * (1.0 - p).log()
-            + k * p.log()
+            - r * l.softplus()
+            - k * neg_log_p
         )
