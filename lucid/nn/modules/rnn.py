@@ -34,6 +34,22 @@ def _cat_last(a: Tensor, b: Tensor) -> Tensor:
     return _lucid.cat([a, b], a.ndim - 1)
 
 
+def _slice(x: Tensor, *index: slice) -> Tensor:
+    """``x[index]`` — or ``x`` itself when every slice spans its whole dim.
+
+    Indexing that selects everything returns a view of its own, a separate
+    tensor over the same storage: one more dispatched op and, on Metal, one
+    more allocation.  The recurrences slice a batch prefix off every state
+    and input on every call so that a packed schedule can shrink it, but on
+    a dense batch the prefix is the whole tensor and the slice only feeds
+    the next op — nothing ever holds it as a tensor of its own.
+    """
+    for sl, n in zip(index, x.shape):
+        if sl.indices(int(n)) != (0, int(n), 1):
+            return x[index]
+    return x
+
+
 def _is_packed(x: object) -> bool:
     """Whether ``x`` is a :class:`~lucid.nn.utils.rnn.PackedSequence`."""
     return isinstance(x, PackedSequence)
@@ -622,11 +638,15 @@ class LSTM(Module):
         h, c = h0_layer, c0_layer
         blocks: list[tuple[int, Tensor]] = []
         for t0, t1, bs in segments:
-            chunk = layer_input[t0:t1, :bs]
+            chunk = _slice(layer_input, slice(t0, t1), slice(0, bs))
             if direction == 1:
                 chunk = self._reverse_along_time(chunk)
             out, h_new, c_new = self._run_single_layer_engine(
-                chunk, h[:, :bs], c[:, :bs], layer, direction
+                chunk,
+                _slice(h, slice(None), slice(0, bs)),
+                _slice(c, slice(None), slice(0, bs)),
+                layer,
+                direction,
             )
             if direction == 1:
                 out = self._reverse_along_time(out)
@@ -756,8 +776,8 @@ class LSTM(Module):
             for direction in range(num_dirs):
                 idx: int = layer * num_dirs + direction
                 # Slice (1, B, *) initial state for this layer/direction.
-                h0_slice: Tensor = h0_full[idx : idx + 1]
-                c0_slice: Tensor = c0_full[idx : idx + 1]
+                h0_slice: Tensor = _slice(h0_full, slice(idx, idx + 1))
+                c0_slice: Tensor = _slice(c0_full, slice(idx, idx + 1))
 
                 out, h_n, c_n = self._run_direction(
                     layer_input, h0_slice, c0_slice, layer, direction, batch_sizes
@@ -1514,7 +1534,10 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
             fwd_out: list[Tensor] = []
             for t in range(T):
                 bs = batch_sizes[t]
-                step = cast("Tensor", cell_fwd(inp[t][:bs], h_fwd[:bs]))
+                step = cast(
+                    "Tensor",
+                    cell_fwd(_slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))),
+                )
                 h_fwd = _carry(h_fwd, step, bs)
                 fwd_out.append(_pad_rows(step, B))
             h_n.append(h_fwd)
@@ -1526,7 +1549,12 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
                 rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     bs = batch_sizes[t]
-                    step = cast("Tensor", cell_rev(inp[t][:bs], h_rev[:bs]))
+                    step = cast(
+                        "Tensor",
+                        cell_rev(
+                            _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
+                        ),
+                    )
                     h_rev = _carry(h_rev, step, bs)
                     rev_out.append(_pad_rows(step, B))
                 rev_out.reverse()
@@ -1780,7 +1808,10 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
             fwd_out: list[Tensor] = []
             for t in range(T):
                 bs = batch_sizes[t]
-                step = cast("Tensor", cell_fwd(inp[t][:bs], h_fwd[:bs]))
+                step = cast(
+                    "Tensor",
+                    cell_fwd(_slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))),
+                )
                 h_fwd = _carry(h_fwd, step, bs)
                 fwd_out.append(_pad_rows(step, B))
             h_n.append(h_fwd)
@@ -1791,7 +1822,12 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
                 rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     bs = batch_sizes[t]
-                    step = cast("Tensor", cell_rev(inp[t][:bs], h_rev[:bs]))
+                    step = cast(
+                        "Tensor",
+                        cell_rev(
+                            _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
+                        ),
+                    )
                     h_rev = _carry(h_rev, step, bs)
                     rev_out.append(_pad_rows(step, B))
                 rev_out.reverse()
