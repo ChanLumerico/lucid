@@ -26,12 +26,31 @@ class itself is left untouched::
     @deprecated(since="3.16.0", removal="3.18.0", alternative="CausalLMMixin")
     class GenerationMixin(CausalLMMixin):
         pass
+
+A name that stays but stops accepting one way of being called — an
+argument order, a keyword — cannot be marked as a whole.  The code path
+that still accepts the old spelling calls :func:`warn_deprecated` instead,
+with the same window and the same message::
+
+    if index_first:
+        warn_deprecated(
+            "the argument order gather(input, indices, dim)",
+            since="3.16.0",
+            removal="3.18.0",
+            alternative="gather(input, dim, index)",
+        )
 """
 
+import os
 import warnings
 from collections.abc import Callable
 
-__all__ = ["LucidDeprecationWarning", "MIN_MINOR_RELEASES", "deprecated"]
+__all__ = [
+    "LucidDeprecationWarning",
+    "MIN_MINOR_RELEASES",
+    "deprecated",
+    "warn_deprecated",
+]
 
 #: A deprecated name stays at least this many minor releases, unless its
 #: removal waits for the next major version.
@@ -98,11 +117,7 @@ def deprecated[T: Callable[..., object]](
 
     def mark(target: T) -> T:
         name = getattr(target, "__qualname__", repr(target))
-        message = (
-            f"{name} is deprecated since Lucid {since} and will be removed in {removal}"
-        )
-        if alternative:
-            message += f"; use {alternative} instead"
+        message = _message(name, since, removal, alternative)
         marked = warnings.deprecated(message, category=LucidDeprecationWarning)(target)
         marked.__lucid_deprecation__ = {  # type: ignore[attr-defined]
             "since": since,
@@ -111,3 +126,63 @@ def deprecated[T: Callable[..., object]](
         return marked
 
     return mark
+
+
+def _message(what: str, since: str, removal: str, alternative: str | None) -> str:
+    message = f"{what} is deprecated since Lucid {since} and will be removed in {removal}"
+    if alternative:
+        message += f"; use {alternative} instead"
+    return message
+
+
+#: Frames under this directory are Lucid's own, never the code that has to
+#: change — :func:`warn_deprecated` names the first frame outside it.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep
+
+
+def warn_deprecated(
+    what: str, *, since: str, removal: str, alternative: str | None = None
+) -> None:
+    """Warn that one way of calling a public name is on its way out.
+
+    :func:`deprecated` retires a whole name.  When the name stays and only
+    one spelling of the call goes — an argument order, a keyword — the code
+    path that still accepts the old spelling calls this, once per call.
+    The window and the message are :func:`deprecated`'s, and the warning
+    is attributed to the first frame outside Lucid: the line that has to
+    change, however many of Lucid's own calls sit between it and here.
+
+    Parameters
+    ----------
+    what : str
+        The spelling on its way out, as the message should name it.
+    since : str
+        The release that first warns, ``MAJOR.MINOR.PATCH``.
+    removal : str
+        The first release the old spelling may stop working in.  At least
+        :data:`MIN_MINOR_RELEASES` minor releases after ``since``, or a
+        later major version.
+    alternative : str, optional
+        What to write instead, as the caller would spell it.
+
+    Raises
+    ------
+    ValueError
+        If either version is malformed or ``removal`` comes too soon.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     warn_deprecated("f(x, axis)", since="3.16.0", removal="3.18.0",
+    ...                     alternative="f(x, dim)")
+    >>> str(caught[0].message)
+    'f(x, axis) is deprecated since Lucid 3.16.0 and will be removed in 3.18.0; use f(x, dim) instead'
+    """
+    _check_window(since, removal)
+    warnings.warn(
+        _message(what, since, removal, alternative),
+        LucidDeprecationWarning,
+        skip_file_prefixes=(_PACKAGE_DIR,),
+    )
