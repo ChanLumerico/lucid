@@ -1658,7 +1658,15 @@ public:
 
     // Axis-scatter overwrite — out[..., idx[..., j, ...], ...] = src[..., j, ...]
     // along dim.  ``mlx::core::put_along_axis`` is the exact set-mode analogue
-    // of ``scatter_add_axis`` (single kernel); index_copy routes through it.
+    // of ``scatter_add_axis`` (single kernel); ``x[key] = v``, ``scatter`` and
+    // ``index_copy`` route through it.  A position named twice takes one of
+    // the values aimed at it, which one unspecified — the GPU threads race.
+    //
+    // MLX scatters no 8-byte element on Metal: int64 and complex64 both
+    // report "[ScatterAxis::eval_gpu] Does not support".  Writing each as
+    // two uint32 halves would be exact for distinct indices, but two writers
+    // racing for one position can land one's low half beside the other's
+    // high half — a value nobody wrote.  So those two go through the CPU.
     Storage scatter_set(const Storage& base,
                         const Storage& indices,
                         const Storage& src,
@@ -1666,7 +1674,7 @@ public:
                         const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
-        if (dt == Dtype::I64)
+        if (dt == Dtype::I64 || dt == Dtype::C64)
             return scatter_via_cpu(base, indices, src, base_shape, idx_shape,
                                    [&](const Storage& b, const Storage& i, const Storage& v) {
                                        return backend::Dispatcher::for_device(Device::CPU)
@@ -1690,7 +1698,7 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
-    // MLX's Metal scatter has no int64 kernel.
+    // MLX's Metal scatter has no int64 kernel (nor complex64 — see scatter_set).
     //
     // ``[ScatterAxis::eval_gpu] Does not support int64`` — the *values*,
     // not the indices, which it takes at either width.  There is no exact

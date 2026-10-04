@@ -4645,42 +4645,17 @@ public:
             dim += ndim;
 
         // The walk is over the *index's* extents, which may be shorter than
-        // base's on any axis but ``dim`` (src arrives cut to the index's
-        // shape).  It used base's, and read past the end of an index and a
-        // src shorter than base — out-of-range reads written into the
-        // answer.  Each outer and inner coordinate of the index is placed by
-        // base's strides instead; when the shapes agree this is the old
-        // ``(o * base_dim + tgt) * inner + j`` exactly.
-        const auto ext = [](const Shape& sh, int a) {
-            return static_cast<std::size_t>(sh[static_cast<std::size_t>(a)]);
-        };
-        std::vector<std::size_t> base_stride(static_cast<std::size_t>(ndim), 1);
-        for (int a = ndim - 2; a >= 0; --a)
-            base_stride[static_cast<std::size_t>(a)] =
-                base_stride[static_cast<std::size_t>(a + 1)] * ext(base_shape, a + 1);
-        // Base offset of every outer (before ``dim``) and inner (after) index
-        // coordinate, by mixed-radix decomposition over the index's extents.
-        const auto offsets = [&](int lo, int hi) {
-            std::size_t count = 1;
-            for (int a = lo; a < hi; ++a)
-                count *= ext(idx_shape, a);
-            std::vector<std::size_t> off(count, 0);
-            for (std::size_t f = 0; f < count; ++f) {
-                std::size_t rem = f;
-                for (int a = hi - 1; a >= lo; --a) {
-                    off[f] += (rem % ext(idx_shape, a)) * base_stride[static_cast<std::size_t>(a)];
-                    rem /= ext(idx_shape, a);
-                }
-            }
-            return off;
-        };
-        const std::vector<std::size_t> outer_off = offsets(0, dim);
-        const std::vector<std::size_t> inner_off = offsets(dim + 1, ndim);
+        // base's on any axis but ``dim`` — see AxisScatterWalk.  It used
+        // base's, and read past the end of an index and a src shorter than
+        // base: out-of-range reads written into the answer.
+        const AxisScatterWalk walk = axis_scatter_walk(base_shape, idx_shape, dim);
+        const std::vector<std::size_t>& outer_off = walk.outer_off;
+        const std::vector<std::size_t>& inner_off = walk.inner_off;
         const std::size_t outer = outer_off.size();
         const std::size_t inner = inner_off.size();
-        const std::size_t base_dim = ext(base_shape, dim);
-        const std::size_t dim_stride = base_stride[static_cast<std::size_t>(dim)];
-        const std::size_t idx_dim = ext(idx_shape, dim);
+        const std::size_t base_dim = walk.base_dim;
+        const std::size_t dim_stride = walk.dim_stride;
+        const std::size_t idx_dim = walk.idx_dim;
         // The index buffer used to be read as ``int32`` whatever its actual
         // dtype.  An int16 index tensor therefore had two of its values
         // read as one, giving a silently wrong result; an int8 one had
@@ -4738,6 +4713,126 @@ public:
     }
 
 private:
+    // Where an axis scatter's writes land in ``base``.
+    //
+    // The walk is over the *index's* extents, which may be shorter than
+    // base's on any axis but ``dim`` (src arrives cut to the index's shape),
+    // so each outer (before ``dim``) and inner (after) coordinate of the
+    // index is placed by base's strides.  When the shapes agree this is
+    // ``(o * base_dim + tgt) * inner + j`` exactly.  Index and src are dense
+    // in the index's shape: element ``(o, k, j)`` is at
+    // ``(o * idx_dim + k) * inner + j``.
+    struct AxisScatterWalk {
+        std::vector<std::size_t> outer_off;  // base offset of each outer coordinate
+        std::vector<std::size_t> inner_off;  // base offset of each inner coordinate
+        std::size_t idx_dim = 0;             // index extent along ``dim``
+        std::size_t base_dim = 0;            // base extent along ``dim``
+        std::size_t dim_stride = 0;          // base stride of ``dim``, in elements
+    };
+
+    static AxisScatterWalk
+    axis_scatter_walk(const Shape& base_shape, const Shape& idx_shape, int dim) {
+        const int ndim = static_cast<int>(base_shape.size());
+        const auto ext = [](const Shape& sh, int a) {
+            return static_cast<std::size_t>(sh[static_cast<std::size_t>(a)]);
+        };
+        std::vector<std::size_t> base_stride(static_cast<std::size_t>(ndim), 1);
+        for (int a = ndim - 2; a >= 0; --a)
+            base_stride[static_cast<std::size_t>(a)] =
+                base_stride[static_cast<std::size_t>(a + 1)] * ext(base_shape, a + 1);
+        // Base offset of every coordinate over axes [lo, hi), by mixed-radix
+        // decomposition over the index's extents.
+        const auto offsets = [&](int lo, int hi) {
+            std::size_t count = 1;
+            for (int a = lo; a < hi; ++a)
+                count *= ext(idx_shape, a);
+            std::vector<std::size_t> off(count, 0);
+            for (std::size_t f = 0; f < count; ++f) {
+                std::size_t rem = f;
+                for (int a = hi - 1; a >= lo; --a) {
+                    off[f] += (rem % ext(idx_shape, a)) * base_stride[static_cast<std::size_t>(a)];
+                    rem /= ext(idx_shape, a);
+                }
+            }
+            return off;
+        };
+        AxisScatterWalk w;
+        w.outer_off = offsets(0, dim);
+        w.inner_off = offsets(dim + 1, ndim);
+        w.idx_dim = ext(idx_shape, dim);
+        w.base_dim = ext(base_shape, dim);
+        w.dim_stride = base_stride[static_cast<std::size_t>(dim)];
+        return w;
+    }
+
+    // The overwrite scatter's loop, for ``W``-byte elements and index type
+    // ``I``.  It never does arithmetic on a value, so it moves bytes: one
+    // loop per element width serves every dtype of that width.  The
+    // ``memcpy`` of a constant ``W`` compiles to a single load and store.
+    //
+    // ``k`` ascends for every (outer, inner) line, so a position named twice
+    // keeps the value written last, as the reference's CPU kernel does.
+    // ``j`` innermost keeps the src reads and the base writes sequential.
+    template <std::size_t W, typename I>
+    static void scatter_set_lines(std::byte* dst,
+                                  const std::byte* src,
+                                  const I* idx,
+                                  const AxisScatterWalk& w) {
+        const std::size_t outer = w.outer_off.size();
+        const std::size_t inner = w.inner_off.size();
+        const auto len = static_cast<std::int64_t>(w.base_dim);
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t k = 0; k < w.idx_dim; ++k) {
+                const std::size_t row = (o * w.idx_dim + k) * inner;
+                for (std::size_t j = 0; j < inner; ++j) {
+                    auto tgt = static_cast<std::int64_t>(idx[row + j]);
+                    if (tgt < 0)
+                        tgt += len;
+                    // Refuse rather than write outside the buffer.
+                    if (tgt < 0 || tgt >= len)
+                        ErrorBuilder("cpu_backend::scatter_set")
+                            .index_error("index out of range for the scattered axis");
+                    const std::size_t at = w.outer_off[o] +
+                                           static_cast<std::size_t>(tgt) * w.dim_stride +
+                                           w.inner_off[j];
+                    std::memcpy(dst + at * W, src + (row + j) * W, W);
+                }
+            }
+        }
+    }
+
+    // ``scatter_set_lines`` for the index's own dtype.  An index read at the
+    // wrong width pairs or splits its values — a wrong answer, or a write
+    // far outside the base.
+    template <std::size_t W>
+    static void scatter_set_by_index(std::byte* dst,
+                                     const std::byte* src,
+                                     const CpuStorage& ci,
+                                     const AxisScatterWalk& w) {
+        const std::byte* ip = ci.ptr.get();
+        switch (ci.dtype) {
+        case Dtype::I32:
+            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int32_t*>(ip), w);
+            break;
+        case Dtype::I64:
+            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int64_t*>(ip), w);
+            break;
+        case Dtype::I16:
+            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int16_t*>(ip), w);
+            break;
+        case Dtype::I8:
+            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int8_t*>(ip), w);
+            break;
+        case Dtype::Bool:
+            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::uint8_t*>(ip), w);
+            break;
+        default:
+            ErrorBuilder("cpu_backend::scatter_set")
+                .fail("indices must be an integer tensor, got " +
+                      std::string(dtype_name(ci.dtype)));
+        }
+    }
+
     // Generic scatter-reduce loop shared by scatter_amax / scatter_amin / scatter_prod.
     // Op is a binary functor: (T& dst_elem, T src_elem) → void  (modifies dst in-place).
     template <typename Op>
@@ -4839,6 +4934,16 @@ public:
                                    "cpu_backend::scatter_prod", [](auto& d, auto s) { d *= s; });
     }
 
+    // Overwrite scatter: a copy of ``base`` with
+    // ``out[..., idx[..., k, ...], ...] = src[..., k, ...]`` along ``dim``.
+    //
+    // Every dtype, by element width.  It shared the reduce loop above, which
+    // instantiates f32 and f64 only, so ``index_copy`` of a bool, integer,
+    // half or complex tensor refused (CHA-27) — and ``x[key] = v`` had been
+    // routed around it through an additive delta that could not express an
+    // overwrite at all (CHA-158).  The index may be shorter than ``base`` on
+    // every axis but ``dim``, as for ``scatter_add``; a repeated index keeps
+    // the value written last.
     Storage scatter_set(const Storage& base,
                         const Storage& indices,
                         const Storage& src,
@@ -4846,8 +4951,56 @@ public:
                         const Shape& idx_shape,
                         int dim,
                         Dtype dt) override {
-        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_set", [](auto& d, auto s) { d = s; });
+        const auto& cb = std::get<CpuStorage>(base);
+        const auto& ci = std::get<CpuStorage>(indices);
+        const auto& cs = std::get<CpuStorage>(src);
+        // The bytes are moved, not converted: a src of another dtype would be
+        // reinterpreted, and one of another width read out of bounds.
+        if (cs.dtype != dt || cb.dtype != dt)
+            ErrorBuilder("cpu_backend::scatter_set")
+                .fail("source and destination must share a dtype, got " +
+                      std::string(dtype_name(cs.dtype)) + " into " +
+                      std::string(dtype_name(cb.dtype)));
+
+        const std::size_t esz = dtype_size(dt);
+        const std::size_t nbytes = shape_numel(base_shape) * esz;
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        if (nbytes > 0)
+            std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
+        const std::size_t count = shape_numel(idx_shape);
+        if (count == 0)
+            return Storage{CpuStorage{ptr, nbytes, dt}};
+        if (cs.nbytes < count * esz || ci.nbytes < count * dtype_size(ci.dtype))
+            ErrorBuilder("cpu_backend::scatter_set")
+                .fail("index and source must hold one "
+                      "element per index position");
+
+        const int ndim = static_cast<int>(base_shape.size());
+        if (dim < 0)
+            dim += ndim;
+        const AxisScatterWalk walk = axis_scatter_walk(base_shape, idx_shape, dim);
+        std::byte* dst = ptr.get();
+        const std::byte* sp = cs.ptr.get();
+        switch (esz) {
+        case 1:
+            scatter_set_by_index<1>(dst, sp, ci, walk);
+            break;
+        case 2:
+            scatter_set_by_index<2>(dst, sp, ci, walk);
+            break;
+        case 4:
+            scatter_set_by_index<4>(dst, sp, ci, walk);
+            break;
+        case 8:
+            scatter_set_by_index<8>(dst, sp, ci, walk);
+            break;
+        case 16:
+            scatter_set_by_index<16>(dst, sp, ci, walk);
+            break;
+        default:
+            ErrorBuilder("cpu_backend::scatter_set").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
     // Sliding-window view: out shape is (*in_shape[:dim], L, *in_shape[dim+1:], size)
