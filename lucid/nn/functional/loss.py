@@ -309,6 +309,111 @@ def huber_loss(
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
+def _first_out_of_range(
+    target: Tensor, num_classes: int, ignore_index: int | None
+) -> int | None:
+    """The first class index in ``target`` outside ``[0, num_classes)`` that
+    is not ``ignore_index``, or ``None`` when every index is usable.
+
+    A guard, not a value: it raises or passes, and nothing downstream reads
+    what it computed.  So, like the embedding table's range check, it runs
+    outside any active compile trace — a host read inside one would mark
+    the trace unsupported — and a compiled replay is checked at trace time.
+    """
+    if target.numel() == 0:
+        return None
+    tracer = _C_engine.compile.current_tracer()
+    _C_engine.compile.set_current_tracer(None)
+    try:
+        bad: Tensor = (target < 0) | (target >= num_classes)
+        if ignore_index is not None:
+            bad = bad & (target != ignore_index)
+        if not bool(bad.any().item()):
+            return None
+        return int(target[bad].reshape(-1)[0].item())
+    finally:
+        _C_engine.compile.set_current_tracer(tracer)
+
+
+def _class_nll(
+    log_p: Tensor,
+    target: Tensor,
+    weight: Tensor | None,
+    ignore_index: int | None,
+    reduction: str,
+    label_smoothing: float,
+    op: str,
+) -> Tensor:
+    """Negative log-likelihood of integer class targets — the shared body of
+    :func:`cross_entropy` and :func:`nll_loss`.
+
+    ``log_p`` holds log-probabilities of shape ``(N, C, *)`` and ``target``
+    class indices of shape ``(N, *)``.  Each sample is scaled by the weight
+    of its class, ``ignore_index`` samples are dropped, and ``"mean"``
+    divides by the total weight of the samples kept.
+    """
+    num_classes: int = int(log_p.shape[1])
+    tgt: Tensor = target.to(dtype=_lucid.int32)
+    bad = _first_out_of_range(tgt, num_classes, ignore_index)
+    if bad is not None:
+        raise IndexError(
+            f"{op}: target {bad} is out of bounds for {num_classes} classes"
+        )
+
+    # Clamped before every gather, not masked after it.
+    #
+    # ``ignore_index`` defaults to -100, and those sentinels used to be
+    # handed straight to ``gather``, which read that far outside the
+    # logits and returned whatever was in memory; on the CPU, once
+    # ``gather`` learned to bounds-check, the same call raised.  The class
+    # weight was gathered with the raw index too, and with a rank-matched
+    # ``gather`` that refused a K-d target outright.
+    #
+    # The value read at a clamped position is discarded by the mask below,
+    # so which valid index is used does not matter; that it is valid does.
+    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
+    nll: Tensor = -_lucid.gather(log_p, 1, safe.unsqueeze(1)).squeeze(1)
+
+    # Each sample's share of the mean: its class weight, times 0 when it
+    # is ignored.  ``None`` when every sample counts once.
+    sample_weight: Tensor | None = None
+    if weight is not None:
+        sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(
+            list(tgt.shape)
+        )
+    keep: Tensor | None = None
+    if ignore_index is not None:
+        keep = (tgt != ignore_index).to(dtype=log_p.dtype)
+        sample_weight = keep if sample_weight is None else sample_weight * keep
+    if sample_weight is not None:
+        nll = nll * sample_weight
+
+    if label_smoothing > 0.0:
+        # Smoothing term — uniform distribution NLL = -mean over classes
+        # of log_softmax, which is -sum/C.  When weight is set, the uniform
+        # term is weighted by (mean class weight) following the reference
+        # framework's behaviour.
+        smooth: Tensor = -log_p.mean(dim=1)  # (N, ...)
+        if weight is not None:
+            # Weighted-uniform: −Σ_c w_c · log_softmax / C
+            log_p_weighted: Tensor = log_p * weight.reshape(
+                [1, num_classes] + [1] * (log_p.ndim - 2)
+            )
+            smooth = -log_p_weighted.sum(dim=1) / num_classes
+        if keep is not None:
+            smooth = smooth * keep
+        nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth
+
+    if reduction == "none":
+        return nll
+    if reduction == "sum":
+        return nll.sum()
+    # mean — the divisor is the total weight of the samples kept.
+    if sample_weight is None:
+        return nll.mean()
+    return nll.sum() / sample_weight.sum()
+
+
 def cross_entropy(
     x: Tensor,
     target: Tensor,
@@ -393,80 +498,11 @@ def cross_entropy(
     if label_smoothing < 0.0 or label_smoothing >= 1.0:
         raise ValueError(f"label_smoothing must be in [0, 1), got {label_smoothing!r}")
 
-    log_p: Tensor = _log_softmax(x, dim=1)
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
-    num_classes: int = log_p.shape[1]
-
-    # Build a per-sample NLL by gathering along the class axis.
-    target_long: Tensor = target.to(dtype=_lucid.int32)
-    # Clamped before the gather, not masked after it.
-    #
-    # ``ignore_index`` defaults to -100, and those sentinels used to be
-    # handed straight to ``gather``, which read that far outside the
-    # logits and returned whatever was in memory.  The result was then
-    # multiplied by the keep-mask, so the garbage was zeroed and the loss
-    # came out right — while every masked token in every masked-language
-    # -model step read past the end of the allocation.  It surfaced only
-    # when ``gather`` learned to bounds-check itself.
-    #
-    # The gathered value at a clamped position is discarded by the mask
-    # below, so which valid index is used does not matter; that it is
-    # valid does.
-    safe_target: Tensor = _lucid.clip(target_long, 0, num_classes - 1)
-    target_unsq: Tensor = safe_target.unsqueeze(1)
-    gathered: Tensor = _lucid.gather(log_p, 1, target_unsq).squeeze(1)
-    nll: Tensor = -gathered  # (N, ...)
-
-    # ── weight (per-class) ──────────────────────────────────────────────
-    sample_weight: Tensor | None = None
-    if weight is not None:
-        sample_weight = _lucid.gather(weight, 0, target_long)
-        nll = nll * sample_weight
-
-    # ── ignore_index mask ───────────────────────────────────────────────
-    keep_mask_f: Tensor | None = None
-    if ignore_index is not None:
-        from lucid._factories.creation import full as _full
-
-        ig_t: Tensor = _full(
-            target_long.shape, int(ignore_index), dtype=_lucid.int32, device=x.device
-        )
-        keep_mask: Tensor = target_long != ig_t
-        keep_mask_f = keep_mask.to(dtype=x.dtype)
-        nll = nll * keep_mask_f
-
-    # ── label_smoothing ─────────────────────────────────────────────────
-    if label_smoothing > 0.0:
-        # Smoothing term — uniform distribution NLL = -mean over classes
-        # of log_softmax, which is -sum/C.  When weight is set, the uniform
-        # term is weighted by (mean class weight) following the reference
-        # framework's behaviour.
-        smooth_per_sample: Tensor = -log_p.mean(dim=1)  # (N, ...)
-        if weight is not None:
-            # Weighted-uniform: −Σ_c w_c · log_softmax / C
-            log_p_weighted: Tensor = log_p * weight.reshape(
-                [1, num_classes] + [1] * (log_p.ndim - 2)
-            )
-            smooth_per_sample = -log_p_weighted.sum(dim=1) / num_classes
-        if keep_mask_f is not None:
-            smooth_per_sample = smooth_per_sample * keep_mask_f
-        nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth_per_sample
-
-    # ── reduction ───────────────────────────────────────────────────────
-    if reduction == "none":
-        return nll
-    if reduction == "sum":
-        return nll.sum()
-    # mean — the divisor depends on weight + ignore_index.
-    if weight is None and keep_mask_f is None:
-        return nll.mean()
-    if weight is not None and keep_mask_f is not None:
-        denom: Tensor = (sample_weight * keep_mask_f).sum()
-    elif weight is not None:
-        denom = sample_weight.sum()
-    else:
-        denom = keep_mask_f.sum()
-    return nll.sum() / denom
+    log_p: Tensor = _log_softmax(x, dim=1)
+    return _class_nll(
+        log_p, target, weight, ignore_index, reduction, label_smoothing, "cross_entropy"
+    )
 
 
 def nll_loss(
@@ -527,40 +563,7 @@ def nll_loss(
     tensor(0.3597)
     """
     _validate_reduction(reduction)
-    target_long: Tensor = target.to(dtype=_lucid.int32)
-    target_unsq: Tensor = target_long.unsqueeze(1)
-    gathered: Tensor = _lucid.gather(x, 1, target_unsq).squeeze(1)
-    nll: Tensor = -gathered
-
-    sample_weight: Tensor | None = None
-    if weight is not None:
-        sample_weight = _lucid.gather(weight, 0, target_long)
-        nll = nll * sample_weight
-
-    keep_mask_f: Tensor | None = None
-    if ignore_index is not None:
-        from lucid._factories.creation import full as _full
-
-        ig_t: Tensor = _full(
-            target_long.shape, int(ignore_index), dtype=_lucid.int32, device=x.device
-        )
-        keep_mask: Tensor = target_long != ig_t
-        keep_mask_f = keep_mask.to(dtype=x.dtype)
-        nll = nll * keep_mask_f
-
-    if reduction == "none":
-        return nll
-    if reduction == "sum":
-        return nll.sum()
-    if weight is None and keep_mask_f is None:
-        return nll.mean()
-    if weight is not None and keep_mask_f is not None:
-        denom: Tensor = (sample_weight * keep_mask_f).sum()
-    elif weight is not None:
-        denom = sample_weight.sum()
-    else:
-        denom = keep_mask_f.sum()
-    return nll.sum() / denom
+    return _class_nll(x, target, weight, ignore_index, reduction, 0.0, "nll_loss")
 
 
 def binary_cross_entropy(
@@ -1680,57 +1683,37 @@ def multi_margin_loss(
     >>> multi_margin_loss(scores, target)
     tensor(0.)
     """
-    xi = _unwrap(x)
-    ti = _unwrap(target)
-    N = xi.shape[0]
-    C = xi.shape[1]
+    num_classes: int = int(x.shape[1])
+    tgt: Tensor = target.to(dtype=_lucid.int32)
+    bad = _first_out_of_range(tgt, num_classes, None)
+    if bad is not None:
+        raise IndexError(
+            f"multi_margin_loss: target {bad} is out of bounds for "
+            f"{num_classes} classes"
+        )
+    tgt_col: Tensor = tgt.reshape([-1, 1])  # (N, 1)
 
-    # Gather the score at the true class for each sample: (N, 1)
-    ti_2d = _C_engine.reshape(ti, [N, 1])
-    # gather along dim=1 → (N, 1) scores at true class
-    correct = _C_engine.gather(xi, ti_2d, 1)  # (N, 1)
-    correct_bc = _C_engine.broadcast_to(correct, [N, C])  # (N, C)
-
-    # margin + x[i,j] - x[i,y[i]]  for every j
-    margin_t = _C_engine.full([N, C], margin, xi.dtype, xi.device)
-    diff = _C_engine.add(_C_engine.sub(margin_t, correct_bc), xi)  # (N, C)
-
-    # Zero out the correct-class position: gather mask
-    loss_nc = _C_engine.relu(diff)  # max(0, ...)
-
+    # margin - x[i, y_i] + x[i, j] for every j, hinged and raised to p.
+    correct: Tensor = _lucid.gather(x, 1, tgt_col)  # (N, 1)
+    hinge: Tensor = (margin - correct + x).relu()
     if p > 1:
-        loss_nc = _C_engine.pow_scalar(loss_nc, float(p))
+        hinge = hinge ** float(p)
 
     if weight is not None:
-        # weight[y[i]] per sample: gather from weight vector
-        wi = _unwrap(weight)
-        w_per_sample = _C_engine.gather(
-            _C_engine.reshape(wi, [1, C]), _C_engine.reshape(ti, [N, 1]), 1
-        )  # (N,1)
-        w_bc = _C_engine.broadcast_to(w_per_sample, [N, C])
-        loss_nc = _C_engine.mul(loss_nc, w_bc)
+        # The weight of each sample's true class.  This was a gather of a
+        # (1, C) weight with an (N, 1) index, which the CPU refused for any
+        # N > 1 ("index is larger than the operand on a non-gathered axis").
+        hinge = hinge * _lucid.index_select(weight, 0, tgt.reshape(-1)).reshape(
+            [-1, 1]
+        )
 
-    # Zero out the correct-class position using a scatter mask
-    # Build (N, 1) zero update, scatter into a ones mask along dim=1
-    ones_mask = _C_engine.ones([N, C], xi.dtype, xi.device)
-    zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
-    _C_engine.scatter_add(ones_mask, ti_2d, zeros_nc, 1)
-    # After scatter_add the target column has 1+0=1, others are 1 — invert:
-    # We want to zero the target. Use: where(correct_class, 0, loss).
-    # Simpler: multiply by (1 - one_hot(target))
-    onehot_neg = _C_engine.scatter_add(
-        _C_engine.zeros([N, C], xi.dtype, xi.device),
-        ti_2d,
-        _C_engine.ones([N, 1], xi.dtype, xi.device),
-        1,
-    )  # one-hot for target class
-    keep_mask = _C_engine.sub(_C_engine.ones([N, C], xi.dtype, xi.device), onehot_neg)
-    loss_nc = _C_engine.mul(loss_nc, keep_mask)
+    # The true class is not one of its own competitors.
+    classes: Tensor = _lucid.arange(num_classes, device=x.device).reshape([1, -1])
+    is_target: Tensor = classes == tgt_col.to(dtype=classes.dtype)
+    hinge = _lucid.where(is_target, _lucid.zeros_like(hinge), hinge)
 
-    # Sum over classes and divide by C
-    c_t = _C_engine.full([N], float(C), xi.dtype, xi.device)
-    loss_n = _C_engine.div(_C_engine.sum(loss_nc, [1], False), c_t)  # (N,)
-    return _apply_reduction(loss_n, reduction)
+    loss_n: Tensor = hinge.sum(dim=1) / num_classes  # (N,)
+    return _apply_reduction(_unwrap(loss_n), reduction)
 
 
 def multilabel_margin_loss(

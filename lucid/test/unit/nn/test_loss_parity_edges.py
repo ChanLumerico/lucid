@@ -242,3 +242,124 @@ class TestKLDivWithZeroTargets:
             assert _close(_vals(lo), ro.tolist())
             assert lx.grad is not None
             assert _close(_vals(lx.grad), rx.grad.tolist())
+
+
+# ── CHA-86 ─────────────────────────────────────────────────────────────────
+
+
+def _kd_case(device: str) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tensor]:
+    """A K-d classification case with an ignored position: log-probs
+    ``(2, 3, 2, 2)``, targets ``(2, 2, 2)`` and a class weight."""
+    logits = [
+        [[[0.1, -0.4], [1.2, 0.3]], [[0.5, 0.9], [-1.0, 0.2]], [[2.0, -0.3], [0.0, 0.7]]],
+        [[[-0.6, 0.4], [0.8, 1.1]], [[0.3, -0.2], [0.6, -0.9]], [[1.4, 0.5], [-0.1, 0.0]]],
+    ]
+    target = [[[0, 2], [-100, 1]], [[2, 1], [0, 2]]]
+    x = F.log_softmax(lucid.tensor(logits, device=device), dim=1)
+    return x, lucid.tensor(target, device=device), lucid.tensor([1.0, 2.0, 0.5], device=device)
+
+
+def _kd_expected(reduction: str) -> object:
+    """The K-d case written out: ``-w[t] * log_p[t]`` per kept position."""
+    logits = [
+        [[[0.1, -0.4], [1.2, 0.3]], [[0.5, 0.9], [-1.0, 0.2]], [[2.0, -0.3], [0.0, 0.7]]],
+        [[[-0.6, 0.4], [0.8, 1.1]], [[0.3, -0.2], [0.6, -0.9]], [[1.4, 0.5], [-0.1, 0.0]]],
+    ]
+    target = [[[0, 2], [-100, 1]], [[2, 1], [0, 2]]]
+    w = [1.0, 2.0, 0.5]
+    per = [[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]]
+    total = wsum = 0.0
+    for n in range(2):
+        for i in range(2):
+            for j in range(2):
+                t = target[n][i][j]
+                if t == -100:
+                    continue
+                col = [logits[n][c][i][j] for c in range(3)]
+                lse = math.log(sum(math.exp(v) for v in col))
+                per[n][i][j] = -w[t] * (col[t] - lse)
+                total += per[n][i][j]
+                wsum += w[t]
+    if reduction == "none":
+        return per
+    return total if reduction == "sum" else total / wsum
+
+
+class TestClassTargetsAreNeverGatheredRaw:
+    """Every gather of a class index used it unclamped.
+
+    ``nll_loss`` gathered the log-probabilities at ``ignore_index`` itself
+    (an ``IndexError`` on the CPU with the default -100, an out-of-bounds
+    read on Metal); both losses gathered the class weight with the raw
+    index and a rank-matched ``gather`` that refused a K-d target; and
+    ``multi_margin_loss`` gathered a ``(1, C)`` weight with an ``(N, 1)``
+    index, which the CPU refused for any ``N > 1``.
+    """
+
+    def test_nll_loss_skips_the_default_ignore_index(self, device: str) -> None:
+        x = lucid.tensor([[-1.0, -2.0, -3.0], [-0.5, -1.0, -2.0]], device=device)
+        t = lucid.tensor([0, -100], device=device)
+        assert _close(F.nll_loss(x, t).item(), 1.0)
+        assert _close(nn.NLLLoss()(x, t).item(), 1.0)
+
+    @pytest.mark.parametrize("reduction", ["none", "mean", "sum"])
+    def test_a_weighted_k_d_target_with_an_ignored_position(
+        self, device: str, reduction: str
+    ) -> None:
+        x, t, w = _kd_case(device)
+        got = F.nll_loss(x, t, weight=w, reduction=reduction)
+        assert _close(_vals(got), _kd_expected(reduction))
+
+    def test_cross_entropy_weight_with_an_ignored_target(self, device: str) -> None:
+        logits = lucid.tensor([[1.0, 2.0, 0.5], [0.3, 0.1, 0.9]], device=device)
+        t = lucid.tensor([1, -100], device=device)
+        w = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        lse = math.log(math.exp(1.0) + math.exp(2.0) + math.exp(0.5))
+        assert _close(F.cross_entropy(logits, t, weight=w).item(), lse - 2.0)
+
+    def test_multi_margin_weight_for_a_batch(self, device: str) -> None:
+        x = lucid.tensor([[0.1, 0.2, 0.4], [0.3, 0.1, 0.2]], device=device)
+        t = lucid.tensor([2, 0], device=device)
+        w = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        assert _close(F.multi_margin_loss(x, t, weight=w).item(), 1.0333333)
+
+    @pytest.mark.parametrize("bad", [3, -1, 7])
+    def test_an_out_of_range_target_raises(self, device: str, bad: int) -> None:
+        x = lucid.tensor([[0.1, 0.2, 0.4], [0.3, 0.1, 0.2]], device=device)
+        t = lucid.tensor([0, bad], device=device)
+        for fn in (F.nll_loss, F.cross_entropy, F.multi_margin_loss):
+            with pytest.raises(IndexError, match="out of bounds"):
+                fn(x, t)
+
+    @pytest.mark.parity
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        x, t, w = _kd_case(device)
+        rx, rt, rw = (R.tensor(v.tolist()) for v in (x, t, w))  # type: ignore[attr-defined]
+        for reduction in ("none", "mean", "sum"):
+            lx = x.detach().requires_grad_()
+            lo = F.nll_loss(lx, t, weight=w, reduction=reduction)
+            lo.sum().backward()
+            rxx = rx.clone().requires_grad_()
+            ro = R.nn.functional.nll_loss(rxx, rt, weight=rw, reduction=reduction)  # type: ignore[attr-defined]
+            ro.sum().backward()
+            assert _close(_vals(lo), ro.tolist())
+            assert lx.grad is not None
+            assert _close(_vals(lx.grad), rxx.grad.tolist())
+        mm = [[0.1, 0.2, 0.4], [0.3, 0.1, 0.2], [0.9, -0.5, 0.0]]
+        mt, mw = [2, 0, 1], [1.0, 2.0, 3.0]
+        for p in (1, 2):
+            lx = lucid.tensor(mm, requires_grad=True, device=device)
+            lo = F.multi_margin_loss(
+                lx, lucid.tensor(mt, device=device), p=p,
+                weight=lucid.tensor(mw, device=device),
+            )
+            lo.backward()
+            rxx = R.tensor(mm, requires_grad=True)  # type: ignore[attr-defined]
+            ro = R.nn.functional.multi_margin_loss(  # type: ignore[attr-defined]
+                rxx, R.tensor(mt), p=p, weight=R.tensor(mw)  # type: ignore[attr-defined]
+            )
+            ro.backward()
+            assert _close(lo.item(), ro.item())
+            assert lx.grad is not None
+            assert _close(_vals(lx.grad), rxx.grad.tolist())
