@@ -31,16 +31,21 @@
     "peak_bytes": 65568
   },
   "cnn_sgd/cpu": {
-    "allocations": 70,
+    "allocations": 75,
     "forward_ops": {
       "add": 1,
+      "all": 1,
       "astype": 2,
       "batch_norm": 1,
+      "bitwise_or": 1,
+      "broadcast_to": 1,
       "clip": 1,
       "conv2d": 1,
       "div": 1,
+      "equal": 1,
       "full": 2,
       "gather": 1,
+      "invert": 1,
       "linear": 1,
       "log_softmax": 1,
       "max_pool2d": 1,
@@ -53,21 +58,24 @@
       "sum": 2,
       "unsqueeze": 1
     },
-    "frees": 70,
+    "frees": 75,
     "host_syncs": 0,
     "peak_bytes": 171156
   },
   "cnn_sgd/metal": {
-    "allocations": 80,
+    "allocations": 85,
     "forward_ops": {
       "add": 1,
       "astype": 2,
       "batch_norm": 1,
+      "bitwise_or": 1,
       "clip": 1,
       "conv2d": 1,
       "div": 1,
-      "full": 2,
+      "equal": 1,
+      "full": 3,
       "gather": 1,
+      "invert": 1,
       "linear": 1,
       "log_softmax": 1,
       "max_pool2d": 1,
@@ -78,9 +86,10 @@
       "reshape": 1,
       "squeeze": 1,
       "sum": 2,
-      "unsqueeze": 1
+      "unsqueeze": 1,
+      "where": 1
     },
-    "frees": 80,
+    "frees": 85,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 203924
@@ -174,13 +183,18 @@
     "peak_bytes": 36740
   },
   "mlp_adam/cpu": {
-    "allocations": 47,
+    "allocations": 52,
     "forward_ops": {
+      "all": 1,
       "astype": 2,
+      "bitwise_or": 1,
+      "broadcast_to": 1,
       "clip": 1,
       "div": 1,
+      "equal": 1,
       "full": 1,
       "gather": 1,
+      "invert": 1,
       "linear": 2,
       "log_softmax": 1,
       "mul": 1,
@@ -191,18 +205,21 @@
       "sum": 2,
       "unsqueeze": 1
     },
-    "frees": 47,
+    "frees": 52,
     "host_syncs": 0,
     "peak_bytes": 14404
   },
   "mlp_adam/metal": {
-    "allocations": 55,
+    "allocations": 60,
     "forward_ops": {
       "astype": 2,
+      "bitwise_or": 1,
       "clip": 1,
       "div": 1,
-      "full": 1,
+      "equal": 1,
+      "full": 2,
       "gather": 1,
+      "invert": 1,
       "linear": 2,
       "log_softmax": 1,
       "mul": 1,
@@ -211,9 +228,10 @@
       "relu": 1,
       "squeeze": 1,
       "sum": 2,
-      "unsqueeze": 1
+      "unsqueeze": 1,
+      "where": 1
     },
-    "frees": 55,
+    "frees": 60,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 8196

@@ -324,12 +324,28 @@ class TestClassTargetsAreNeverGatheredRaw:
         assert _close(F.multi_margin_loss(x, t, weight=w).item(), 1.0333333)
 
     @pytest.mark.parametrize("bad", [3, -1, 7])
-    def test_an_out_of_range_target_raises(self, device: str, bad: int) -> None:
-        x = lucid.tensor([[0.1, 0.2, 0.4], [0.3, 0.1, 0.2]], device=device)
-        t = lucid.tensor([0, bad], device=device)
+    def test_an_out_of_range_cpu_target_raises(self, bad: int) -> None:
+        # A CPU target is on the host already: checked, as the reference does.
+        x = lucid.tensor([[0.1, 0.2, 0.4], [0.3, 0.1, 0.2]])
+        t = lucid.tensor([0, bad])
         for fn in (F.nll_loss, F.cross_entropy, F.multi_margin_loss):
-            with pytest.raises(IndexError, match="out of bounds"):
+            with pytest.raises(IndexError, match=f"Target {bad} is out of bounds"):
                 fn(x, t)
+
+    @_needs_metal
+    @pytest.mark.parametrize("bad", [3, -1, 7])
+    def test_an_out_of_range_metal_target_poisons_the_loss(self, bad: int) -> None:
+        # Reading a Metal target back would stall every step; a bad label
+        # makes the loss NaN instead of being scored as some other class.
+        x = lucid.tensor([[0.1, 0.2, 0.4], [0.3, 0.1, 0.2]], device="metal")
+        t = lucid.tensor([0, bad], device="metal")
+        for fn in (F.nll_loss, F.cross_entropy, F.multi_margin_loss):
+            assert math.isnan(fn(x, t).item())
+            per = fn(x, t, reduction="none").tolist()
+            assert math.isfinite(per[0]) and math.isnan(per[1])
+        # The ignore_index sentinel is out of range too, and is not poison.
+        ok = lucid.tensor([0, -100], device="metal")
+        assert math.isfinite(F.cross_entropy(x, ok).item())
 
     @pytest.mark.parity
     def test_matches_the_reference(self, ref: object, device: str) -> None:

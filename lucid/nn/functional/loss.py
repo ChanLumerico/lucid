@@ -309,30 +309,48 @@ def huber_loss(
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
-def _first_out_of_range(
-    target: Tensor, num_classes: int, ignore_index: int | None
-) -> int | None:
-    """The first class index in ``target`` outside ``[0, num_classes)`` that
-    is not ``ignore_index``, or ``None`` when every index is usable.
+def _refuse_or_poison(
+    target: Tensor,
+    safe: Tensor,
+    counted: Tensor | None,
+    scale: Tensor | None,
+    dtype: _lucid.dtype,
+) -> Tensor | None:
+    """Deal with class indices outside the class range.
 
-    A guard, not a value: it raises or passes, and nothing downstream reads
-    what it computed.  So, like the embedding table's range check, it runs
-    outside any active compile trace — a host read inside one would mark
-    the trace unsupported — and a compiled replay is checked at trace time.
+    ``safe`` is ``target`` clamped to the class range, so the two differ
+    exactly where an index was out of range; ``counted`` is ``False`` at
+    the ``ignore_index`` positions, which are allowed to be.
+
+    A CPU target is on the host already, so it is checked for free and an
+    ``IndexError`` raised, as the reference does; ``scale`` comes back as
+    it was.  A Metal target is not read back — a host read in every loss
+    call stalls every training step — so ``scale`` (a per-sample factor,
+    ``None`` for all ones) comes back NaN at each such position instead,
+    and a bad label poisons the loss rather than being scored as class 0
+    or ``C - 1``; ``dtype`` is the factor's dtype when ``scale`` is
+    ``None``.  The CPU read runs outside any active compile trace, like the
+    embedding table's range check: it is a guard, not a value.
     """
-    if target.numel() == 0:
-        return None
-    tracer = _C_engine.compile.current_tracer()
-    _C_engine.compile.set_current_tracer(None)
-    try:
-        bad: Tensor = (target < 0) | (target >= num_classes)
-        if ignore_index is not None:
-            bad = bad & (target != ignore_index)
-        if not bool(bad.any().item()):
-            return None
-        return int(target[bad].reshape(-1)[0].item())
-    finally:
-        _C_engine.compile.set_current_tracer(tracer)
+    usable: Tensor = safe == target
+    if counted is not None:
+        usable = usable | ~counted
+    if target.device == "cpu":
+        tracer = _C_engine.compile.current_tracer()
+        _C_engine.compile.set_current_tracer(None)
+        try:
+            first: int | None = (
+                None
+                if bool(usable.all().item())
+                else int(target[~usable].reshape(-1)[0].item())
+            )
+        finally:
+            _C_engine.compile.set_current_tracer(tracer)
+        if first is not None:
+            raise IndexError(f"Target {first} is out of bounds.")
+        return scale
+    ones: Tensor = scale if scale is not None else _lucid.ones_like(safe, dtype=dtype)
+    return _lucid.where(usable, ones, _lucid.full_like(ones, math.nan))
 
 
 def _class_nll(
@@ -354,11 +372,6 @@ def _class_nll(
     """
     num_classes: int = int(log_p.shape[1])
     tgt: Tensor = target.to(dtype=_lucid.int32)
-    bad = _first_out_of_range(tgt, num_classes, ignore_index)
-    if bad is not None:
-        raise IndexError(
-            f"{op}: target {bad} is out of bounds for {num_classes} classes"
-        )
 
     # Clamped before every gather, not masked after it.
     #
@@ -374,16 +387,24 @@ def _class_nll(
     safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
     nll: Tensor = -_lucid.gather(log_p, 1, safe.unsqueeze(1)).squeeze(1)
 
-    # Each sample's share of the mean: its class weight, times 0 when it
-    # is ignored.  ``None`` when every sample counts once.
+    # ``keep`` is 1 for a sample that counts and 0 for an ignored one — and
+    # NaN for an out-of-range target on Metal, so a bad label poisons the
+    # loss rather than being scored as class 0 or C - 1.
+    keep: Tensor | None = None
+    counted: Tensor | None = None
+    if ignore_index is not None:
+        counted = tgt != ignore_index
+        keep = counted.to(dtype=log_p.dtype)
+    keep = _refuse_or_poison(tgt, safe, counted, keep, log_p.dtype)
+
+    # Each sample's share of the mean: its class weight times ``keep``.
+    # ``None`` when every sample counts once.
     sample_weight: Tensor | None = None
     if weight is not None:
         sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(
             list(tgt.shape)
         )
-    keep: Tensor | None = None
-    if ignore_index is not None:
-        keep = (tgt != ignore_index).to(dtype=log_p.dtype)
+    if keep is not None:
         sample_weight = keep if sample_weight is None else sample_weight * keep
     if sample_weight is not None:
         nll = nll * sample_weight
@@ -440,7 +461,10 @@ def cross_entropy(
     target : Tensor
         Either integer class indices of shape :math:`(N,)` /
         :math:`(N, d_1, \dots, d_k)` or per-class probabilities of
-        shape matching ``x``.
+        shape matching ``x``.  An index outside :math:`[0, C)` that is
+        not ``ignore_index`` raises ``IndexError`` for a CPU tensor; on
+        Metal, where reading the target back would stall every step, it
+        makes the loss NaN instead.
     weight : Tensor or None, optional
         Per-class weight vector of shape :math:`(C,)` — useful for
         class-imbalanced training.
@@ -527,7 +551,9 @@ def nll_loss(
         :math:`(N, C, d_1, \dots, d_k)`.
     target : Tensor
         Integer class indices of shape :math:`(N,)` /
-        :math:`(N, d_1, \dots, d_k)`.
+        :math:`(N, d_1, \dots, d_k)`.  An index outside :math:`[0, C)`
+        that is not ``ignore_index`` raises ``IndexError`` for a CPU
+        tensor and makes the loss NaN on Metal.
     weight : Tensor or None, optional
         Per-class weight vector :math:`(C,)`.
     ignore_index : int, optional
@@ -1641,7 +1667,9 @@ def multi_margin_loss(
     x : Tensor
         Class scores of shape :math:`(N, C)`.
     target : Tensor
-        Integer class indices of shape :math:`(N,)`.
+        Integer class indices of shape :math:`(N,)`.  An index outside
+        :math:`[0, C)` raises ``IndexError`` for a CPU tensor and makes
+        the loss NaN on Metal.
     p : int, optional
         Power applied to each hinge term — ``1`` for the standard
         hinge loss, ``2`` for the smoother squared-hinge variant
@@ -1684,14 +1712,10 @@ def multi_margin_loss(
     tensor(0.)
     """
     num_classes: int = int(x.shape[1])
-    tgt: Tensor = target.to(dtype=_lucid.int32)
-    bad = _first_out_of_range(tgt, num_classes, None)
-    if bad is not None:
-        raise IndexError(
-            f"multi_margin_loss: target {bad} is out of bounds for "
-            f"{num_classes} classes"
-        )
-    tgt_col: Tensor = tgt.reshape([-1, 1])  # (N, 1)
+    tgt: Tensor = target.to(dtype=_lucid.int32).reshape(-1)
+    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
+    poison: Tensor | None = _refuse_or_poison(tgt, safe, None, None, x.dtype)
+    tgt_col: Tensor = safe.reshape([-1, 1])  # (N, 1)
 
     # margin - x[i, y_i] + x[i, j] for every j, hinged and raised to p.
     correct: Tensor = _lucid.gather(x, 1, tgt_col)  # (N, 1)
@@ -1703,9 +1727,7 @@ def multi_margin_loss(
         # The weight of each sample's true class.  This was a gather of a
         # (1, C) weight with an (N, 1) index, which the CPU refused for any
         # N > 1 ("index is larger than the operand on a non-gathered axis").
-        hinge = hinge * _lucid.index_select(weight, 0, tgt.reshape(-1)).reshape(
-            [-1, 1]
-        )
+        hinge = hinge * _lucid.index_select(weight, 0, safe).reshape([-1, 1])
 
     # The true class is not one of its own competitors.
     classes: Tensor = _lucid.arange(num_classes, device=x.device).reshape([1, -1])
@@ -1713,6 +1735,8 @@ def multi_margin_loss(
     hinge = _lucid.where(is_target, _lucid.zeros_like(hinge), hinge)
 
     loss_n: Tensor = hinge.sum(dim=1) / num_classes  # (N,)
+    if poison is not None:
+        loss_n = loss_n * poison
     return _apply_reduction(_unwrap(loss_n), reduction)
 
 
