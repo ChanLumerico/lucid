@@ -409,6 +409,11 @@ class _CompiledStepBase:
         ``step``-th step.
     :meth:`_update(p, g, state, flags, gs, ps)`
         The update math, emitted under the active tracer.
+    :meth:`_class_key(i)`, :meth:`_exports_state(i, name)`,
+    :meth:`_loaded_state(i, name)`
+        For per-parameter state that is not a step count: what the
+        per-parameter scalars depend on, and which buffers a checkpoint
+        carries (SGD's momentum buffer only once it has started).
 
     Attributes
     ----------
@@ -437,6 +442,11 @@ class _CompiledStepBase:
     # it, steps for it and checkpoints it.  False only where the compiled
     # algorithm is not the eager one (LBFGS).
     _OWNS_EAGER_STATE: bool = True
+    # State buffers a parameter may hold whatever its group's flags are now:
+    # one kept after its feature was switched off (AMSGrad's running
+    # maximum, a momentum buffer), which the eager state keeps, exports and
+    # restores as the reference framework's does.
+    _OPTIONAL_STATE: tuple[str, ...] = ()
 
     def __init__(self, opt: Optimizer) -> None:
         """Set up the shared compile-step plumbing on top of ``opt``.
@@ -566,7 +576,8 @@ class _CompiledStepBase:
             g["params"] = [id_map[id(p)] for p in cast(list[Tensor], group["params"])]
             groups_out.append(g)
 
-        flags = self._flags_now()
+        # Checks an edited group, as the eager ``state_dict`` does.
+        self._flags_now()
         state: dict[int, dict[str, object]] = {}
         for i, p in enumerate(self._params):
             if not self._initialized[i]:
@@ -581,9 +592,10 @@ class _CompiledStepBase:
                 value = self._pstate[i].get(name)
                 if value is not None:
                     entry[name] = _lucid.tensor(value, dtype=scalar_dt).numpy()
-            for name in self._state_names(flags[self._group_of[i]]):
-                buf = self._state[i].get(name)
-                if buf is not None:
+            # Every buffer the parameter holds, including one kept after its
+            # feature was switched off — the eager state keeps it too.
+            for name, buf in self._state[i].items():
+                if self._exports_state(i, name):
                     entry[name] = buf.detach().numpy().copy()
             if entry:
                 state[i] = entry
@@ -645,8 +657,14 @@ class _CompiledStepBase:
                     self._pstate[i][name] = _round_state_scalar(
                         float(cast(float, value)), p._impl.dtype
                     )
-                elif name in self._state[i]:
-                    buf = self._state[i][name]
+                elif name in self._state[i] or name in self._OPTIONAL_STATE:
+                    # A kept buffer comes back whatever the flags are now,
+                    # as the eager loader restores it.
+                    buf = self._state[i].get(name)
+                    if buf is None:
+                        buf = self._state[i][name] = self._init_state(
+                            i, name, groups[gi]
+                        )
                     src = _lucid.tensor(value, dtype=buf.dtype, device=buf.device)
                     if tuple(src.shape) != tuple(buf.shape):
                         raise ValueError(
@@ -655,6 +673,7 @@ class _CompiledStepBase:
                         )
                     with no_grad():
                         buf.copy_(src)
+                    self._loaded_state(i, name)
         self._opt._sync_hyperparams()
 
     # ── Public step() ────────────────────────────────────────────
@@ -737,7 +756,16 @@ class _CompiledStepBase:
         self._exact_plans_built = 0
 
     def _flags_now(self) -> tuple[_Flags, ...]:
-        """Every group's structural flags, read from the live groups."""
+        """Every group's structural flags, read from the live groups.
+
+        Each step (``step`` and ``fused_step``) and each checkpoint reads the
+        groups here first, so an edited group is checked here: through the
+        eager optimizer, whose hyper-parameter table and rules are the one
+        statement of them, once per change.  A value the eager step would
+        refuse raises ``InvalidArgument`` before anything is initialised,
+        packed or run.
+        """
+        self._opt._sync_group_hyperparams()
         return tuple(self._flags(g) for g in self._opt.param_groups)
 
     def _ensure_state(self, i: int, flags: _Flags, group: dict[str, object]) -> None:
@@ -933,7 +961,7 @@ class _CompiledStepBase:
         seen: dict[tuple[object, ...], int] = {}
         out: list[int] = []
         for i in members:
-            key = (self._group_of[i], self._steps[i], self._pstate_key(i))
+            key = (self._group_of[i], *self._class_key(i))
             out.append(seen.setdefault(key, len(seen)))
         return tuple(out)
 
@@ -995,7 +1023,7 @@ class _CompiledStepBase:
         for i in layout.class_reps:
             gi = self._group_of[i]
             step = self._steps[i] + 1
-            mkey = (gi, step, self._pstate_key(i))
+            mkey = (gi, *self._class_key(i))
             vals = memo.get(mkey)
             if vals is None:
                 vals = memo[mkey] = self._param_values(i, step, gv[gi], flags[gi])
@@ -1014,6 +1042,14 @@ class _CompiledStepBase:
         """Parameter ``i``'s scalar state as a hashable key."""
         st = self._pstate[i]
         return tuple(st.get(n, 0.0) for n in self._PSTATE_NAMES)
+
+    def _class_key(self, i: int) -> tuple[object, ...]:
+        """What parameter ``i``'s per-parameter scalars depend on, within its group.
+
+        Parameters of one group with equal keys share their scalars (one
+        *class*): by default the step count and the scalar state.
+        """
+        return (self._steps[i], *self._pstate_key(i))
 
     # ── Trace ────────────────────────────────────────────────────
 
@@ -1111,6 +1147,14 @@ class _CompiledStepBase:
         """Update parameter ``i``'s scalar state after its ``step``-th step."""
         return None
 
+    def _exports_state(self, i: int, name: str) -> bool:
+        """Whether parameter ``i``'s buffer ``name`` goes into a checkpoint."""
+        return True
+
+    def _loaded_state(self, i: int, name: str) -> None:
+        """Note that a checkpoint wrote parameter ``i``'s buffer ``name``."""
+        return None
+
     def _update(
         self,
         p: Tensor,
@@ -1129,6 +1173,12 @@ def _wd_on(group: dict[str, object], default: float = 0.0) -> bool:
     return _hp(group, "weight_decay", default) != 0.0
 
 
+# SGD's per-parameter record of whether the momentum buffer has started —
+# kept with the scalar state, but not part of the eager checkpoint (the
+# buffer's presence there says the same thing).
+_MOMENTUM_STARTED = "momentum_started"
+
+
 # ── SGD ─────────────────────────────────────────────────────────────
 
 
@@ -1143,9 +1193,14 @@ class _CompiledSGD(_CompiledStepBase):
         \theta_{t+1} &= \theta_t - \eta \,(g_t + \mu v_{t+1}
                          \text{ (Nesterov) or } v_{t+1})
 
-    The momentum buffer exists only while ``momentum != 0``; the eager
-    optimizer's state holds no ``step`` for SGD, and neither does this
-    one's.
+    A parameter's first momentum step starts the buffer at the gradient,
+    :math:`v_1 = g_1`, undamped, as the eager engine and the reference
+    framework do — also when momentum is switched on part-way through.
+    Whether a parameter's buffer has started is a per-parameter scalar fed
+    to the executable, so it costs no retrace.  A buffer stays after
+    momentum is switched off, and resumes when it is switched back on.  The
+    eager optimizer's state holds no ``step`` for SGD, and neither does
+    this one's.
 
     See Also
     --------
@@ -1153,6 +1208,7 @@ class _CompiledSGD(_CompiledStepBase):
     """
 
     _EXPORTS_STEP = False
+    _OPTIONAL_STATE = ("momentum_buffer",)
 
     @override
     def _flags(self, group: dict[str, object]) -> _Flags:
@@ -1176,6 +1232,45 @@ class _CompiledSGD(_CompiledStepBase):
         return tuple(names)
 
     @override
+    def _param_scalar_names(self, flags: _Flags) -> tuple[str, ...]:
+        return ("first_momentum_step",) if flags[1] else ()
+
+    @override
+    def _param_values(
+        self, i: int, step: int, gv: dict[str, float], flags: _Flags
+    ) -> dict[str, float]:
+        return {"first_momentum_step": 0.0 if self._momentum_started(i) else 1.0}
+
+    @override
+    def _class_key(self, i: int) -> tuple[object, ...]:
+        # The step count does not enter SGD's update; only whether the
+        # momentum buffer has started does.
+        return (self._momentum_started(i),)
+
+    @override
+    def _init_pstate(self, i: int, group: dict[str, object]) -> None:
+        self._pstate[i][_MOMENTUM_STARTED] = 0.0
+
+    @override
+    def _advance(self, i: int, step: int, gv: dict[str, float]) -> None:
+        if gv["momentum"] != 0.0:
+            self._pstate[i][_MOMENTUM_STARTED] = 1.0
+
+    @override
+    def _exports_state(self, i: int, name: str) -> bool:
+        # The eager state has no momentum buffer before its first step.
+        return name != "momentum_buffer" or self._momentum_started(i)
+
+    @override
+    def _loaded_state(self, i: int, name: str) -> None:
+        if name == "momentum_buffer":
+            self._pstate[i][_MOMENTUM_STARTED] = 1.0
+
+    def _momentum_started(self, i: int) -> bool:
+        """Whether parameter ``i``'s momentum buffer has taken its first step."""
+        return self._pstate[i].get(_MOMENTUM_STARTED, 0.0) != 0.0
+
+    @override
     def _group_values(
         self, group: dict[str, object], flags: _Flags
     ) -> dict[str, float]:
@@ -1196,13 +1291,19 @@ class _CompiledSGD(_CompiledStepBase):
         gs: _ScalarFn,
         ps: _ScalarFn,
     ) -> tuple[Tensor, dict[str, Tensor]]:
+        import lucid as _lucid
+
         wd_on, mom_on, nesterov = flags
         if wd_on:
             g = g + gs("weight_decay") * p
         new_state: dict[str, Tensor] = {}
         if mom_on:
             mu = gs("momentum")
-            buf = mu * state["momentum_buffer"] + gs("one_minus_dampening") * g
+            buf = _lucid.where(
+                ps("first_momentum_step") > 0.5,
+                g,
+                mu * state["momentum_buffer"] + gs("one_minus_dampening") * g,
+            )
             new_state["momentum_buffer"] = buf
             eff = g + mu * buf if nesterov else buf
         else:
@@ -1239,6 +1340,7 @@ class _CompiledAdam(_CompiledStepBase):
 
     _DECOUPLED: bool = False
     _DEFAULT_WD: float = 0.0
+    _OPTIONAL_STATE = ("max_exp_avg_sq",)
 
     @override
     def _flags(self, group: dict[str, object]) -> _Flags:
@@ -1427,6 +1529,8 @@ class _CompiledRMSprop(_CompiledStepBase):
     --------
     :class:`lucid.optim.RMSprop` : eager counterpart.
     """
+
+    _OPTIONAL_STATE = ("momentum_buffer", "grad_avg")
 
     @override
     def _flags(self, group: dict[str, object]) -> _Flags:

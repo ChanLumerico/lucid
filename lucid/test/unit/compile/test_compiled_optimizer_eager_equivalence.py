@@ -28,6 +28,7 @@ import lucid.optim as optim
 from lucid.compile import compile_optimizer, fused_step
 from lucid.optim.lr_scheduler import CosineAnnealingLR, StepLR
 
+from lucid._C import engine as _C_engine
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 TOL = 1e-6
@@ -173,9 +174,8 @@ def test_a_scheduler_built_on_the_compiled_optimizer_works() -> None:
 def test_other_hyper_parameters_are_read_every_step(mode: str) -> None:
     """``beta1``, ``eps`` and ``weight_decay`` edited mid-run take effect.
 
-    The eager engines read only ``lr`` after they are built, so the eager
-    side of this run is rebuilt at the switch from a checkpoint carrying
-    the new values — which is what reading the group every step means.
+    Both sides take the same hand edit of the group: the eager step reads
+    it too (CHA-210).
     """
     x, t = _data()
 
@@ -186,17 +186,158 @@ def test_other_hyper_parameters_are_read_every_step(mode: str) -> None:
     new = {"beta1": 0.5, "eps": 1e-3, "weight_decay": 0.2, "lr": 0.02}
     for k in range(STEPS):
         if k == 2:
-            sd = eager.opt.state_dict()
-            sd["param_groups"][0].update(new)  # type: ignore[index]
-            eager.opt = optim.Adam(eager.model.parameters(), lr=0.05)
-            eager.opt.load_state_dict(sd)
-            eager.stepper = eager.opt
+            eager.opt.param_groups[0].update(new)
             comp.opt.param_groups[0].update(new)
         eager.step(x, t)
         comp.step(x, t)
         drift = _drift(_snapshot(eager.model), _snapshot(comp.model))
         assert drift < TOL, f"step {k + 1}: drift {drift:.3e}"
     assert comp.executables() == 1
+
+
+# Edits that change what SGD's momentum buffer starts from: the first
+# momentum step sets ``buf = g``, undamped, whether it is the run's first
+# step or momentum was switched on part-way (CHA-210).
+SGD_MOMENTUM_EDITS = [
+    pytest.param({"momentum": 0.9, "dampening": 0.5}, {}, id="damped-from-the-start"),
+    pytest.param({}, {"momentum": 0.9, "dampening": 0.5}, id="switched-on"),
+    pytest.param(
+        {"momentum": 0.9, "dampening": 0.3},
+        {"momentum": 0.0},
+        id="switched-off",
+    ),
+    pytest.param(
+        {"momentum": 0.9, "nesterov": True},
+        {"lr": 0.05, "weight_decay": 0.1},
+        id="nesterov",
+    ),
+]
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+@pytest.mark.parametrize("built, edit", SGD_MOMENTUM_EDITS)
+def test_sgd_momentum_starts_as_in_eager(
+    built: dict[str, object], edit: dict[str, object], mode: str
+) -> None:
+    """The compiled SGD starts and keeps its momentum buffer as eager does."""
+    x, t = _data()
+
+    def make(m: nn.Module) -> optim.Optimizer:
+        return optim.SGD(m.parameters(), lr=0.2, **built)  # type: ignore[arg-type]
+
+    eager, comp = _both(mode, make)
+    for k in range(STEPS):
+        if k == 2:
+            eager.opt.param_groups[0].update(edit)
+            comp.opt.param_groups[0].update(edit)
+        eager.step(x, t)
+        comp.step(x, t)
+        drift = _drift(_snapshot(eager.model), _snapshot(comp.model))
+        assert drift < TOL, f"step {k + 1}: drift {drift:.3e}"
+    _assert_same_state(comp.opt.state_dict(), eager.opt.state_dict())
+
+
+# A feature switched off and on again resumes the buffer it kept; a
+# checkpoint taken while it is off carries that buffer, eager and compiled.
+KEPT_BUFFERS = [
+    pytest.param(
+        lambda m: optim.SGD(m.parameters(), lr=0.2, momentum=0.9),
+        "momentum",
+        0.0,
+        0.9,
+        "momentum_buffer",
+        id="SGD-momentum",
+    ),
+    pytest.param(
+        lambda m: optim.Adam(m.parameters(), lr=0.05, amsgrad=True),
+        "amsgrad",
+        False,
+        True,
+        "max_exp_avg_sq",
+        id="Adam-amsgrad",
+    ),
+    pytest.param(
+        lambda m: optim.RMSprop(m.parameters(), lr=0.01, momentum=0.9),
+        "momentum",
+        0.0,
+        0.5,
+        "momentum_buffer",
+        id="RMSprop-momentum",
+    ),
+    pytest.param(
+        lambda m: optim.RMSprop(m.parameters(), lr=0.01, centered=True),
+        "centered",
+        False,
+        True,
+        "grad_avg",
+        id="RMSprop-centered",
+    ),
+]
+
+
+@pytest.mark.parametrize("make_opt, key, off, on, kept", KEPT_BUFFERS)
+def test_a_kept_buffer_is_checkpointed_and_resumed_as_in_eager(
+    make_opt: OptFactory, key: str, off: object, on: object, kept: str
+) -> None:
+    x, t = _data()
+    eager, comp = _both("compiled", make_opt)
+    for k in range(STEPS + 1):
+        if k == 2:
+            eager.opt.param_groups[0][key] = off
+            comp.opt.param_groups[0][key] = off
+        if k == 4:
+            want = eager.opt.state_dict()
+            assert all(kept in entry for entry in want["state"].values())  # type: ignore[attr-defined]
+            _assert_same_state(comp.opt.state_dict(), want)
+            eager.opt.param_groups[0][key] = on
+            comp.opt.param_groups[0][key] = on
+        eager.step(x, t)
+        comp.step(x, t)
+        drift = _drift(_snapshot(eager.model), _snapshot(comp.model))
+        assert drift < TOL, f"step {k + 1}: drift {drift:.3e}"
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+def test_a_rejected_edit_stops_the_compiled_step(mode: str) -> None:
+    """A value the eager step refuses, the compiled one refuses too."""
+    x, t = _data()
+    runner = _run(mode, lambda m: optim.SGD(m.parameters(), lr=0.2, momentum=0.9))
+    runner.step(x, t)
+    before = _snapshot(runner.model)
+    runner.opt.param_groups[0]["lr"] = -1.0
+    for _ in range(2):
+        with pytest.raises(_C_engine.InvalidArgument, match="SGD: lr must be >= 0"):
+            runner.step(x, t)
+    assert _drift(before, _snapshot(runner.model)) == 0.0
+    with pytest.raises(_C_engine.InvalidArgument):
+        runner.opt.state_dict()
+    runner.opt.param_groups[0]["lr"] = 0.2
+    runner.step(x, t)
+    assert _drift(before, _snapshot(runner.model)) > 0.0
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+def test_an_edit_is_checked_once_not_every_step(
+    mode: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    x, t = _data()
+    runner = _run(mode, lambda m: optim.Adam(m.parameters(), lr=0.05))
+    opt = runner.opt
+    checked: list[int] = []
+    hand_over = opt._apply_hyperparams
+
+    def counting(idx: int, values: dict[str, object]) -> None:
+        checked.append(idx)
+        hand_over(idx, values)
+
+    monkeypatch.setattr(opt, "_apply_hyperparams", counting)
+    for _ in range(3):
+        runner.step(x, t)
+    assert checked == []
+    opt.param_groups[0]["eps"] = 1e-4
+    for _ in range(3):
+        runner.step(x, t)
+    assert checked == [0]
 
 
 def _no_decay_groups(model: nn.Module, cls: type, **kw: object) -> optim.Optimizer:
