@@ -9878,6 +9878,18 @@ public:
                                const Shape& indices_shape,
                                int padding_idx,
                                Dtype dt) override {
+        // Accelerate has no half kernels, so half widens at the door, sums in
+        // float32 and rounds once on the way out.  The dispatch below used to
+        // name F32 and hand every other dtype to a bare ``else`` that walked
+        // the buffer in ``double`` lanes: a half gradient was summed four
+        // elements to a lane, into rows no index named and, from the last
+        // row, past the end of the allocation.  It now refuses what it does
+        // not name.  tools/check_dtype_dispatch.py keeps it that way.
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(embedding_backward(detail::as_f32(grad_out), indices,
+                                                          weight_shape, indices_shape, padding_idx,
+                                                          Dtype::F32),
+                                       dt);
         const std::int64_t N = weight_shape[0];
         const std::int64_t D = weight_shape[1];
         std::size_t M = 1;
@@ -9885,38 +9897,40 @@ public:
             M *= static_cast<std::size_t>(d);
         const auto& gs = std::get<CpuStorage>(grad_out);
         const auto& is = std::get<CpuStorage>(indices);
+        // The index buffer is read at its own width, so any other integer
+        // width would be misread the same way; the op hands over int64.
+        if (is.dtype != Dtype::I32 && is.dtype != Dtype::I64)
+            ErrorBuilder("cpu_backend::embedding_backward")
+                .not_implemented("indices dtype must be I32 or I64");
         auto dW = alloc_cpu(static_cast<std::size_t>(N) * static_cast<std::size_t>(D), dt);
         std::memset(dW.ptr.get(), 0, dW.nbytes);
         auto read_idx = [&](std::size_t i) -> std::int64_t {
             const auto* ip = is.ptr.get();
-            switch (is.dtype) {
-            case Dtype::I32:
+            if (is.dtype == Dtype::I32)
                 return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
-            case Dtype::I64:
-                return reinterpret_cast<const std::int64_t*>(ip)[i];
-            default:
-                return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
+            return reinterpret_cast<const std::int64_t*>(ip)[i];
+        };
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
+            T* wp = reinterpret_cast<T*>(dW.ptr.get());
+            const std::size_t width = static_cast<std::size_t>(D);
+            for (std::size_t i = 0; i < M; ++i) {
+                const std::int64_t id = read_idx(i);
+                if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx))
+                    continue;
+                const T* sp = gp + i * width;
+                T* dp = wp + static_cast<std::size_t>(id) * width;
+                for (std::size_t d = 0; d < width; ++d)
+                    dp[d] += sp[d];
             }
         };
-        const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(dt);
-        for (std::size_t i = 0; i < M; ++i) {
-            const std::int64_t id = read_idx(i);
-            if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx))
-                continue;
-            const std::byte* src = gs.ptr.get() + i * row_bytes;
-            std::byte* dst = dW.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
-            if (dt == Dtype::F32) {
-                const float* sp = reinterpret_cast<const float*>(src);
-                float* dp = reinterpret_cast<float*>(dst);
-                for (std::int64_t d = 0; d < D; ++d)
-                    dp[d] += sp[d];
-            } else {
-                const double* sp = reinterpret_cast<const double*>(src);
-                double* dp = reinterpret_cast<double*>(dst);
-                for (std::int64_t d = 0; d < D; ++d)
-                    dp[d] += sp[d];
-            }
-        }
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else
+            ErrorBuilder("cpu_backend::embedding_backward").not_implemented("dtype not supported");
         return Storage{std::move(dW)};
     }
 
