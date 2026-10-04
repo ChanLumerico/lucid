@@ -12,6 +12,7 @@
 
 #include "../bfunc/Add.h"
 #include "../bfunc/Sub.h"
+#include "../ufunc/Astype.h"
 #include "../ufunc/Exponential.h"
 #include "../ufunc/Reductions.h"
 #include "../utils/View.h"
@@ -19,6 +20,13 @@
 namespace lucid {
 
 TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
+    // A float16 / bfloat16 input is evaluated in float32 and the answer
+    // rounded back.  The sum of exp(x - max) is up to the length of the
+    // reduced axis, which float16 cannot hold past 65504: logsumexp of
+    // 70000 zeros came back inf where the reference gives log(70000).
+    if (a->dtype() == Dtype::F16 || a->dtype() == Dtype::BF16)
+        return astype_op(logsumexp_op(astype_op(a, Dtype::F32), axes, keepdims), a->dtype());
+
     // An empty reduced axis has no maximum to shift by — ``max`` refuses it,
     // having no identity — and needs none: the sum of nothing is 0 and its
     // log is -inf, which is logsumexp's identity and the reference's answer.

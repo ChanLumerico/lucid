@@ -20,6 +20,7 @@
 #include <mlx/ops.h>
 
 #include "../../backend/cpu/Reduce.h"
+#include "../../backend/gpu/HalfAccumulation.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -489,11 +490,19 @@ GpuStorage gpu_reduce_apply(const GpuStorage& a, Dtype dt, F&& f, const char* op
 }
 }  // namespace
 
-// GPU prod: delegate directly to mlx::core::prod with the requested axes.
+// GPU prod: mlx::core::prod with the requested axes.  MLX multiplies in the
+// input dtype, so a half input is multiplied in float32 and rounded back:
+// a float16 product of 1000 x 1.01 came to 15672 where the reference
+// gives 16624.
 GpuStorage ProdBackward::gpu_kernel(
     const GpuStorage& a, const Shape&, const std::vector<int>& axes, bool keepdims, Dtype dt) {
     return gpu_reduce_apply(
-        a, dt, [&axes, keepdims](const auto& x) { return ::mlx::core::prod(x, axes, keepdims); },
+        a, dt,
+        [&axes, keepdims](const auto& x) {
+            return backend::reduce_widened(x, [&](const ::mlx::core::array& w) {
+                return ::mlx::core::prod(w, axes, keepdims);
+            });
+        },
         "prod");
 }
 
