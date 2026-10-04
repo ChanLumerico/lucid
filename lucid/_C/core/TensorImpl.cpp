@@ -378,7 +378,16 @@ SlotWrite gradient_slot_write(const Storage& storage, long members) {
     // backward, a NumPy array, a tensor the gradient was taken from — and the
     // write would change them behind its back.
     const auto* owned = std::get_deleter<GradSlot>(ref->slot);
-    if (ref->slot.use_count() > 2 || (owned != nullptr && owned->buffer.use_count() > 1) ||
+    if (owned == nullptr)
+        return SlotWrite::kRefused;  // not a slot grad_to_tensor wrapped
+    // Nor may the slot's buffer be another gradient's, read through that
+    // gradient's own record — a hook that returned ``p.grad`` became this
+    // tensor's gradient as it was, and so does ``q.grad = p.grad``.  The
+    // count above sees only the outer pointer, so it would let the write
+    // change ``p``'s gradient in silence.
+    const bool another_gradient = std::get_deleter<GradSlotRef>(owned->buffer) != nullptr ||
+                                  std::get_deleter<GradSlot>(owned->buffer) != nullptr;
+    if (another_gradient || ref->slot.use_count() > 2 || owned->buffer.use_count() > 1 ||
         cpu->ptr.use_count() > members)
         return SlotWrite::kRefused;
     return SlotWrite::kInto;
@@ -387,8 +396,9 @@ SlotWrite gradient_slot_write(const Storage& storage, long members) {
 [[noreturn]] void refuse_shared_gradient_write(const char* name) {
     ErrorBuilder(name).fail(
         "an in-place write to a gradient is not supported while something else also reads "
-        "its storage (another tensor read from .grad, a tensor saved for backward, a NumPy "
-        "array) — write through a single .grad tensor, or clone() first");
+        "its storage: another tensor read from .grad, another gradient, a NumPy array, or a "
+        "tensor saved for backward — which the op saves itself when an operand requires grad "
+        "(run it under no_grad, or clone() first)");
 }
 
 }  // namespace
