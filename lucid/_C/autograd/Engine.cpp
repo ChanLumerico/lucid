@@ -299,6 +299,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         // graph mode — gives the user a clear, actionable message.
         const auto input_grads =
             keep_in_graph(apply_node_for_graph(*node, grad_in), node->next_edges());
+        // Collected before release_saved() clears them, as in eager backward.
+        const auto retain_ins = node->retainable_inputs();
 
         if (!retain_graph) {
             node->release_saved();
@@ -306,8 +308,18 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         }
 
         const auto& edges = node->next_edges();
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i)
+        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+            // retain_grad: a non-leaf that asked for its gradient gets it here
+            // as well, summed by add_op so it carries its graph as a leaf's
+            // does.  Graph mode had no such step, and left .grad at None.
+            if (i < retain_ins.size() && input_grads[i]) {
+                if (auto t = retain_ins[i].lock()) {
+                    if (t->retains_grad() && !t->is_leaf())
+                        t->accumulate_grad_impl(input_grads[i]);
+                }
+            }
             route_for_graph(pending, edges[i], input_grads[i]);
+        }
     }
 
     if (!retain_graph)
@@ -434,12 +446,14 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
             if (node->empty_grad_is_none() && storage_is_empty(input_grads[i]))
                 continue;
             // retain_grad: accumulate into non-leaf tensors that requested it.
+            // The retained gradient gets a buffer of its own: pending holds
+            // this one too, and adds the next arrival into it.
             if (i < retain_ins.size()) {
                 if (auto t = retain_ins[i].lock()) {
                     if (t->retains_grad() && !t->is_leaf()) {
                         auto& g = t->mutable_grad_storage();
                         if (!g.has_value())
-                            g = input_grads[i];
+                            g = own_copy(input_grads[i]);
                         else
                             accumulate_into(*g, input_grads[i]);
                     }
