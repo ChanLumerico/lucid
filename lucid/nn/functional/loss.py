@@ -1,11 +1,19 @@
 """
 nn.functional loss functions.
+
+Every public loss here checks its arguments at the top, before it computes
+anything, and refuses a malformed one with a typed exception — the same
+one on the CPU and on Metal.  The checks live in the private validators
+below (``_check_*``); a shape check reads only shapes, so it never waits on
+the GPU.  Every loss then applies ``reduction`` through :func:`_reduce`.
+The loss modules in :mod:`lucid.nn.modules.loss` delegate here, so they
+inherit both.
 """
 
 import contextlib
 import math
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Sequence, cast
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, cast
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -20,17 +28,172 @@ from lucid._types import Reduction, ReductionKL
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-_REDUCTION_MAP: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
+#: The reductions every loss defines.  ``kl_div`` adds ``"batchmean"``.
+_REDUCTIONS: tuple[str, ...] = ("none", "mean", "sum")
+
+#: The engine's code for each reduction, for the two losses whose fused
+#: kernel takes it as an argument (see :func:`_reduce`).
+_KERNEL_REDUCTION: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
 
 
-def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
-    valid: tuple[str, ...] = (
-        ("none", "mean", "sum", "batchmean")
-        if allow_batchmean
-        else ("none", "mean", "sum")
-    )
-    if reduction not in valid:
-        raise ValueError(f"reduction must be one of {valid}, got {reduction!r}")
+# ── boundary validators ─────────────────────────────────────────────────────
+#
+# Each raises before the loss dispatches a single op.  A wrong argument used
+# to reach the arithmetic: a class weight of the wrong length was gathered
+# out of bounds (a silent answer on the CPU, NaN or 0 on Metal), a BCE
+# target of another shape was broadcast into a different loss, and nine
+# losses looked at ``reduction`` only after computing.
+
+
+def _check_reduction(reduction: str, op: str, *, batchmean: bool = False) -> None:
+    """Refuse a ``reduction`` that the loss ``op`` does not define."""
+    valid = _REDUCTIONS + ("batchmean",) if batchmean else _REDUCTIONS
+    if not isinstance(reduction, str) or reduction not in valid:
+        raise ValueError(f"{op}: reduction must be one of {valid}, got {reduction!r}")
+
+
+def _shape(t: Tensor) -> tuple[int, ...]:
+    return tuple(int(d) for d in t.shape)
+
+
+def _broadcast_shape(*shapes: tuple[int, ...]) -> tuple[int, ...] | None:
+    """The shape ``shapes`` broadcast to, or ``None`` if they do not."""
+    rank = max((len(s) for s in shapes), default=0)
+    out: list[int] = []
+    for axis in range(-rank, 0):
+        sizes = {s[axis] for s in shapes if len(s) >= -axis} - {1}
+        if len(sizes) > 1:
+            return None
+        out.append(sizes.pop() if sizes else 1)
+    return tuple(out)
+
+
+def _check_broadcasts_to(
+    t: Tensor | None, shape: tuple[int, ...], what: str, op: str
+) -> None:
+    """``t`` scales a loss of ``shape`` element by element: it has to
+    broadcast to ``shape`` without making it any larger."""
+    if t is not None and _broadcast_shape(_shape(t), shape) != shape:
+        raise ValueError(
+            f"{op}: {what} of shape {_shape(t)} does not broadcast to the "
+            f"input's shape {shape}"
+        )
+
+
+def _check_target_shape(x: Tensor, target: Tensor, op: str) -> None:
+    """``target`` holds one value per element of ``x``: the same shape.
+
+    A target of another shape is refused rather than broadcast, as the
+    reference does — broadcasting it scores a different problem."""
+    if _shape(target) != _shape(x):
+        raise ValueError(
+            f"{op}: target size {_shape(target)} must be the same as input "
+            f"size {_shape(x)}"
+        )
+
+
+def _check_same_rank(op: str, **tensors: Tensor) -> None:
+    """The inputs of a pairwise loss line up element for element: one rank,
+    and shapes that broadcast together."""
+    shapes = {name: _shape(t) for name, t in tensors.items()}
+    if (
+        len({len(s) for s in shapes.values()}) > 1
+        or _broadcast_shape(*shapes.values()) is None
+    ):
+        got = ", ".join(f"{name} {s}" for name, s in shapes.items())
+        raise ValueError(
+            f"{op}: the inputs are expected to have the same number of "
+            f"dimensions and broadcastable shapes, got {got}"
+        )
+
+
+def _num_classes(x: Tensor, op: str, *, max_ndim: int | None = None) -> int:
+    """The class count of class scores ``x`` — dim 1 of ``(N, C, *)``, dim 0
+    of one unbatched sample ``(C,)`` — refusing a rank the loss does not
+    define."""
+    if x.ndim == 0 or (max_ndim is not None and x.ndim > max_ndim):
+        shapes = "(C,) or (N, C)" if max_ndim == 2 else "(C,), (N, C) or (N, C, *)"
+        raise ValueError(f"{op}: expected an input of shape {shapes}, got {_shape(x)}")
+    return int(x.shape[0] if x.ndim == 1 else x.shape[1])
+
+
+def _check_class_weight(weight: Tensor | None, num_classes: int, op: str) -> None:
+    """A per-class ``weight`` has exactly one entry per class.
+
+    Shape only — no value is read, so this costs nothing on Metal.  A
+    longer weight was silently cut to its first ``C`` entries, and a
+    shorter one gathered out of bounds."""
+    if weight is not None and (weight.ndim != 1 or int(weight.shape[0]) != num_classes):
+        raise ValueError(
+            f"{op}: weight tensor should be defined either for all {num_classes} "
+            f"classes or no classes but got weight tensor of shape: "
+            f"{list(_shape(weight))}"
+        )
+
+
+def _check_class_target(x: Tensor, target: Tensor, op: str) -> None:
+    """``target`` holds one class index per sample of ``x``: the shape of
+    ``x`` without its class dimension.  One unbatched ``(C,)`` sample takes a
+    0-d target, or one of shape ``(1,)``."""
+    want = (int(x.shape[0]),) + _shape(x)[2:] if x.ndim > 1 else ()
+    got = _shape(target)
+    if got != want and not (x.ndim == 1 and got == (1,)):
+        raise ValueError(
+            f"{op}: expected a target of shape {want} for an input of shape "
+            f"{_shape(x)}, got {got}"
+        )
+
+
+def _check_unit_interval(t: Tensor, what: str, op: str) -> None:
+    """Refuse a CPU ``t`` with an entry outside ``[0, 1]`` — NaN included —
+    as the reference's CPU kernel does.
+
+    A CPU tensor is on the host already, so the read costs no sync.  A
+    Metal tensor is not read back (a host read in every loss call stalls
+    every step), so it is not checked, and an entry outside the interval
+    makes the loss NaN there instead."""
+    if t.device != "cpu":
+        return
+    if not _on_host(lambda: bool(((t >= 0.0) & (t <= 1.0)).all().item())):
+        raise ValueError(f"{op}: all elements of {what} should be between 0 and 1")
+
+
+# ── reduction ───────────────────────────────────────────────────────────────
+
+
+def _reduce(t: Tensor, reduction: str, out_dtype: _dtype | None = None) -> Tensor:
+    """Apply ``reduction`` to the per-element losses ``t`` — the one place a
+    loss reduces.
+
+    ``"none"`` returns ``t``, ``"mean"`` its mean and ``"sum"`` its sum over
+    every element; the engine accumulates a half-precision reduction in
+    float32 on both devices.  ``out_dtype`` is the dtype to round the result
+    to, for a loss that computed a half input in float32.  The caller has
+    checked ``reduction`` at its boundary; an unknown one raises here too
+    rather than falling through to ``"none"``.
+
+    Four reductions are part of a loss's own definition, and are built on
+    this one rather than beside it:
+
+    - the ``"mean"`` of a class-index ``cross_entropy`` / ``nll_loss``
+      divides by the total weight of the samples kept, not by their count
+      (``_weighted_mean``);
+    - ``ctc_loss``'s ``"mean"`` divides each sample by its target length
+      before taking this mean;
+    - ``kl_div``'s ``"batchmean"`` is this sum divided by the batch size;
+    - ``mse_loss`` and ``huber_loss`` are each one fused kernel that takes
+      the reduction as an argument (``_KERNEL_REDUCTION``), so a training
+      step built on them dispatches one op, not two.
+    """
+    if reduction == "mean":
+        t = t.mean()
+    elif reduction == "sum":
+        t = t.sum()
+    elif reduction != "none":
+        _check_reduction(reduction, "loss")
+    if out_dtype is not None and t.dtype != out_dtype:
+        t = t.to(dtype=out_dtype)
+    return t
 
 
 def _accumulation_dtype(t: Tensor) -> _dtype:
@@ -45,17 +208,6 @@ def _accumulation_dtype(t: Tensor) -> _dtype:
     if t.dtype in (_float16, _bfloat16):
         return _float32
     return t.dtype
-
-
-def _reduce_in(t: Tensor, reduction: str, out_dtype: _dtype) -> Tensor:
-    """Reduce per-element losses held in their accumulation dtype, then
-    round the result back to ``out_dtype``."""
-    _validate_reduction(reduction)
-    if reduction == "mean":
-        t = t.mean()
-    elif reduction == "sum":
-        t = t.sum()
-    return t if t.dtype == out_dtype else t.to(dtype=out_dtype)
 
 
 def _float32_scope() -> contextlib.AbstractContextManager[object]:
@@ -147,8 +299,8 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     >>> mse_loss(pred, target)
     tensor(0.25)
     """
-    _validate_reduction(reduction)
-    red: int = _REDUCTION_MAP[reduction]
+    _check_reduction(reduction, "mse_loss")
+    red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
@@ -200,15 +352,11 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     >>> l1_loss(pred, target)
     tensor(0.5)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "l1_loss")
     diff: _C_engine.TensorImpl = _C_engine.abs(
         _C_engine.sub(_unwrap(x), _unwrap(target))
     )
-    if reduction == "mean":
-        return _wrap(_C_engine.mean(diff, [], False))
-    if reduction == "sum":
-        return _wrap(_C_engine.sum(diff, [], False))
-    return _wrap(diff)
+    return _reduce(_wrap(diff), reduction)
 
 
 def smooth_l1_loss(
@@ -278,6 +426,7 @@ def smooth_l1_loss(
     # 1 at the default, so the default was right and every other ``beta``
     # was scaled.  The ``1/beta`` this restores is the one the docstring
     # above has always described.
+    _check_reduction(reduction, "smooth_l1_loss")
     if beta == 0.0:
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
@@ -343,8 +492,8 @@ def huber_loss(
     >>> huber_loss(pred, target, delta=1.0)
     tensor(2.312)
     """
-    _validate_reduction(reduction)
-    red: int = _REDUCTION_MAP[reduction]
+    _check_reduction(reduction, "huber_loss")
+    red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
@@ -459,25 +608,19 @@ def _class_nll(
             smooth = smooth * keep
         nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth
 
-    if reduction == "none":
-        return nll
-    # Half precision is summed in float32.  A float16 count of kept samples
-    # is inf past 65504, and so is the summed loss, so a mean over a long
-    # sequence batch came out inf / inf = NaN though every term was small.
+    if reduction != "mean" or sample_weight is None:
+        return _reduce(nll, reduction)
+    # The mean divides by the total weight of the samples kept — this
+    # loss's own definition of the mean (see ``_reduce``).  Half precision
+    # is summed in float32: a float16 count of kept samples is inf past
+    # 65504, and so is the summed loss, so a mean over a long sequence
+    # batch came out inf / inf = NaN though every term was small.
     out_dtype = nll.dtype
     acc = _accumulation_dtype(nll)
     if acc != out_dtype:
         nll = nll.to(dtype=acc)
-        if sample_weight is not None:
-            sample_weight = sample_weight.to(dtype=acc)
-    reduced: Tensor
-    if reduction == "sum":
-        reduced = nll.sum()
-    elif sample_weight is None:
-        reduced = nll.mean()
-    else:
-        reduced = _weighted_mean(nll, sample_weight)
-    return reduced if acc == out_dtype else reduced.to(dtype=out_dtype)
+        sample_weight = sample_weight.to(dtype=acc)
+    return _reduce(_weighted_mean(nll, sample_weight), "none", out_dtype)
 
 
 def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
@@ -586,7 +729,7 @@ def cross_entropy(
     >>> cross_entropy(logits, target)
     tensor(0.3597)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "cross_entropy")
     from lucid.nn.functional.activations import log_softmax as _log_softmax
 
     if label_smoothing < 0.0 or label_smoothing >= 1.0:
@@ -647,16 +790,7 @@ def _soft_target_nll(
     prod: Tensor = log_p * target
     if weight is not None:
         prod = prod * weight.reshape([1, num_classes] + [1] * (log_p.ndim - 2))
-    per_sample: Tensor = -prod.sum(dim=1)
-    if reduction == "none":
-        return per_sample
-    out_dtype = per_sample.dtype
-    acc = _accumulation_dtype(per_sample)
-    return _reduce_in(
-        per_sample if acc == out_dtype else per_sample.to(dtype=acc),
-        reduction,
-        out_dtype,
-    )
+    return _reduce(-prod.sum(dim=1), reduction)
 
 
 def nll_loss(
@@ -719,7 +853,7 @@ def nll_loss(
     >>> nll_loss(log_softmax(logits, dim=1), target)
     tensor(0.3597)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "nll_loss")
     # An unbatched (C,) input is one sample.
     unbatched: bool = x.ndim == 1
     if unbatched:
@@ -794,7 +928,7 @@ def binary_cross_entropy(
     >>> binary_cross_entropy(p, y)
     tensor(0.2284)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "binary_cross_entropy")
     # The probability used to be clamped to [1e-12, 1 - 1e-12], and in
     # float32 ``1 - 1e-12`` rounds to 1.0: a sigmoid of a logit above ~17
     # is exactly 1, ``log(1 - 1)`` is -inf, and ``0 * -inf`` made the loss
@@ -837,7 +971,7 @@ def binary_cross_entropy(
         bce: Tensor = _lucid.where(inside, interior, edge)
         if weight is not None:
             bce = bce * weight
-        return _reduce_in(bce, reduction, out_dtype)
+        return _reduce(bce, reduction, out_dtype)
 
 
 def binary_cross_entropy_with_logits(
@@ -909,7 +1043,7 @@ def binary_cross_entropy_with_logits(
     >>> binary_cross_entropy_with_logits(logits, target)
     tensor(0.3048)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "binary_cross_entropy_with_logits")
     # ``max(x, 0) - x y + log(1 + exp(-|x|))`` has the right value and the
     # wrong derivative at x = 0: the subgradients there are clamp' = 1 and
     # sign(0) = 0, so d/dx came out 1 - y instead of 1/2 - y, and a
@@ -927,7 +1061,7 @@ def binary_cross_entropy_with_logits(
         loss = (1.0 - y) * xa + (1.0 + (pos_weight - 1.0) * y) * softplus_neg
     if weight is not None:
         loss = loss * weight
-    return _reduce_in(loss, reduction, out_dtype)
+    return _reduce(loss, reduction, out_dtype)
 
 
 def kl_div(
@@ -1006,7 +1140,7 @@ def kl_div(
     >>> kl_div(log_q, p, reduction="batchmean")
     tensor(0.02391)
     """
-    _validate_reduction(reduction, allow_batchmean=True)
+    _check_reduction(reduction, "kl_div", batchmean=True)
     # `x` is log_q (log of predicted probability) per the standard contract.
     # When log_target=False, target is the raw probability p; when True it
     # is log(p).  Loss elementwise = target * (log(target) - log_q).
@@ -1022,27 +1156,9 @@ def kl_div(
         # distillation target.  ``xlogy`` takes ``0 log 0`` as 0, the limit
         # the divergence is defined with.
         kl = _C_engine.sub(_unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi))
-    if reduction == "mean":
-        return _wrap(_C_engine.mean(kl, [], False))
-    if reduction == "sum":
-        return _wrap(_C_engine.sum(kl, [], False))
-    if reduction == "batchmean":
-        total: _C_engine.TensorImpl = _C_engine.sum(kl, [], False)
-        batch_size: int = int(x.shape[0])
-        return _wrap(total) / batch_size
-    return _wrap(kl)
-
-
-def _apply_reduction(t: _C_engine.TensorImpl, reduction: Reduction) -> Tensor:
-    """Apply reduction to a batch of per-sample losses."""
-    # Nine losses reduce here, and an unknown string used to fall through
-    # to "none": ``reduction="avg"`` returned the unreduced tensor.
-    _validate_reduction(reduction)
-    if reduction == "mean":
-        return _wrap(_C_engine.mean(t, [], False))
-    if reduction == "sum":
-        return _wrap(_C_engine.sum(t, [], False))
-    return _wrap(t)
+    if reduction != "batchmean":
+        return _reduce(_wrap(kl), reduction)
+    return _reduce(_wrap(kl), "sum") / int(x.shape[0])
 
 
 def triplet_margin_loss(
@@ -1124,6 +1240,7 @@ def triplet_margin_loss(
     """
     from lucid.nn.functional.activations import pairwise_distance
 
+    _check_reduction(reduction, "triplet_margin_loss")
     d_ap = _unwrap(pairwise_distance(anchor, positive, p=p, eps=eps))
     d_an = _unwrap(pairwise_distance(anchor, negative, p=p, eps=eps))
     if swap:
@@ -1131,7 +1248,7 @@ def triplet_margin_loss(
         d_an = _C_engine.minimum(d_an, d_pn)
     margin_t = _C_engine.full(d_ap.shape, margin, d_ap.dtype, d_ap.device)
     loss = _C_engine.relu(_C_engine.add(_C_engine.sub(d_ap, d_an), margin_t))
-    return _apply_reduction(loss, reduction)
+    return _reduce(_wrap(loss), reduction)
 
 
 def triplet_margin_with_distance_loss(
@@ -1209,6 +1326,7 @@ def triplet_margin_with_distance_loss(
     """
     from lucid.nn.functional.activations import pairwise_distance
 
+    _check_reduction(reduction, "triplet_margin_with_distance_loss")
     df: object = distance_function
     if df is None:
 
@@ -1223,14 +1341,7 @@ def triplet_margin_with_distance_loss(
         d_an = d_an.minimum(d_pn)
 
     zero: Tensor = _lucid.zeros_like(d_ap)
-    loss_t: Tensor = (d_ap - d_an + margin).maximum(zero)
-
-    _validate_reduction(reduction)
-    if reduction == "mean":
-        return loss_t.mean()
-    if reduction == "sum":
-        return loss_t.sum()
-    return loss_t
+    return _reduce((d_ap - d_an + margin).maximum(zero), reduction)
 
 
 def cosine_embedding_loss(
@@ -1297,6 +1408,7 @@ def cosine_embedding_loss(
     """
     from lucid.nn.functional.activations import cosine_similarity
 
+    _check_reduction(reduction, "cosine_embedding_loss")
     cos = _unwrap(cosine_similarity(x1, x2, dim=1))
     ones = _C_engine.full(cos.shape, 1.0, cos.dtype, cos.device)
     zeros = _C_engine.zeros(cos.shape, cos.dtype, cos.device)
@@ -1307,7 +1419,7 @@ def cosine_embedding_loss(
     # select by sign of y: y==1 → loss_pos, else → loss_neg
     mask = _C_engine.greater(yi, zeros)
     loss = _C_engine.where(mask, loss_pos, loss_neg)
-    return _apply_reduction(loss, reduction)
+    return _reduce(_wrap(loss), reduction)
 
 
 def margin_ranking_loss(
@@ -1368,11 +1480,12 @@ def margin_ranking_loss(
     >>> margin_ranking_loss(s1, s2, y, margin=1.0)
     tensor(0.75)
     """
+    _check_reduction(reduction, "margin_ranking_loss")
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
     margin_t = _C_engine.full(diff.shape, margin, diff.dtype, diff.device)
     neg_y_diff = _C_engine.mul(_C_engine.neg(_unwrap(y)), diff)
     loss = _C_engine.relu(_C_engine.add(neg_y_diff, margin_t))
-    return _apply_reduction(loss, reduction)
+    return _reduce(_wrap(loss), reduction)
 
 
 def hinge_embedding_loss(
@@ -1432,16 +1545,16 @@ def hinge_embedding_loss(
     >>> hinge_embedding_loss(dist, y, margin=1.0)
     tensor(0.2)
     """
+    _check_reduction(reduction, "hinge_embedding_loss")
     xi = _unwrap(x)
     yi = _unwrap(y)
-    _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
     zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
     margin_t = _C_engine.full(xi.shape, margin, xi.dtype, xi.device)
     loss_pos = xi  # y=1
     loss_neg = _C_engine.relu(_C_engine.sub(margin_t, xi))  # y=-1
     mask = _C_engine.greater(yi, zeros)
     loss = _C_engine.where(mask, loss_pos, loss_neg)
-    return _apply_reduction(loss, reduction)
+    return _reduce(_wrap(loss), reduction)
 
 
 def poisson_nll_loss(
@@ -1515,6 +1628,7 @@ def poisson_nll_loss(
     >>> poisson_nll_loss(log_lam, y, log_input=True)
     tensor(-0.2976)
     """
+    _check_reduction(reduction, "poisson_nll_loss")
     xi = _unwrap(x)
     ti = _unwrap(target)
     if log_input:
@@ -1556,7 +1670,7 @@ def poisson_nll_loss(
             loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero)
         )
 
-    return _apply_reduction(loss, reduction)
+    return _reduce(_wrap(loss), reduction)
 
 
 def gaussian_nll_loss(
@@ -1639,6 +1753,7 @@ def gaussian_nll_loss(
     >>> gaussian_nll_loss(mu, y, var)
     tensor(-0.2841)
     """
+    _check_reduction(reduction, "gaussian_nll_loss")
     if isinstance(var, (int, float)):
         if var < 0:
             raise ValueError("var has negative entry/entries")
@@ -1655,7 +1770,6 @@ def gaussian_nll_loss(
             pass
         else:
             raise ValueError("var is of incorrect size")
-    _validate_reduction(reduction)
 
     if var.device == "cpu" and _on_host(lambda: bool((var < 0.0).any().item())):
         raise ValueError("var has negative entry/entries")
@@ -1681,7 +1795,7 @@ def gaussian_nll_loss(
         # A negative variance makes the loss NaN on Metal: sqrt(min(v, 0))
         # is NaN exactly there and 0 elsewhere, off the graph.
         loss = loss + var_d.clamp(max=0.0).sqrt() * 0.0
-    return _apply_reduction(_unwrap(loss), reduction)
+    return _reduce(loss, reduction)
 
 
 def ctc_loss(
@@ -1777,7 +1891,7 @@ def ctc_loss(
     >>> ctc_loss(log_p, targets, il, tl)  # doctest: +SKIP
     Tensor(...)
     """
-    _validate_reduction(reduction)
+    _check_reduction(reduction, "ctc_loss")
 
     def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
         if isinstance(v, _lucid.Tensor):
@@ -1825,16 +1939,19 @@ def ctc_loss(
         _unwrap(_wrap(t).to(device)) for t in (tgt_impl, il_impl, tl_impl)
     )
 
-    loss_t = _C_engine.nn.ctc_loss(
-        _unwrap(log_probs), tgt_impl, il_impl, tl_impl, blank, zero_infinity
+    per_sample: Tensor = _wrap(
+        _C_engine.nn.ctc_loss(
+            _unwrap(log_probs), tgt_impl, il_impl, tl_impl, blank, zero_infinity
+        )
     )
     if reduction == "mean":
-        per_sample = _wrap(loss_t)
+        # Each sample over its own target length first — ctc's definition
+        # of the mean (see ``_reduce``).
         lengths = target_lengths.to(per_sample.dtype).to(per_sample.device)
-        return (per_sample / lengths.clamp(min=1.0)).mean()
-    if unbatched:
-        loss_t = _C_engine.reshape(loss_t, [])
-    return _apply_reduction(loss_t, reduction)
+        per_sample = per_sample / lengths.clamp(min=1.0)
+    elif unbatched:
+        per_sample = per_sample.reshape([])
+    return _reduce(per_sample, reduction)
 
 
 def multi_margin_loss(
@@ -1905,6 +2022,7 @@ def multi_margin_loss(
     >>> multi_margin_loss(scores, target)
     tensor(0.)
     """
+    _check_reduction(reduction, "multi_margin_loss")
     # An unbatched (C,) input is one sample; its loss takes the target's
     # shape, () or (1,), as in the reference.  It raised in the gather.
     unbatched: bool = x.ndim == 1
@@ -1939,7 +2057,7 @@ def multi_margin_loss(
         loss_n = loss_n * poison
     if unbatched:
         loss_n = loss_n.reshape(target_shape)
-    return _apply_reduction(_unwrap(loss_n), reduction)
+    return _reduce(loss_n, reduction)
 
 
 def multilabel_margin_loss(
@@ -2004,6 +2122,7 @@ def multilabel_margin_loss(
     >>> multilabel_margin_loss(scores, target)
     tensor(0.275)
     """
+    _check_reduction(reduction, "multilabel_margin_loss")
     unbatched: bool = x.ndim == 1
     xb: Tensor = x.reshape([1, -1]) if unbatched else x
     # Any integer dtype is taken: a ``lucid.tensor([...ints...])`` target
@@ -2040,7 +2159,7 @@ def multilabel_margin_loss(
     loss_n: Tensor = pairs.sum(dim=[1, 2]) / num_classes  # (N,)
     if unbatched:
         loss_n = loss_n.reshape([])
-    return _apply_reduction(_unwrap(loss_n), reduction)
+    return _reduce(loss_n, reduction)
 
 
 # ── P3 fills: soft_margin_loss / multilabel_soft_margin_loss ───────────────
@@ -2103,14 +2222,8 @@ def soft_margin_loss(
     >>> soft_margin_loss(x, y)
     tensor(0.2201)
     """
-    raw = _lucid.nn.functional.softplus(-target * input)
-    if reduction == "mean":
-        return _lucid.mean(raw)
-    if reduction == "sum":
-        return _lucid.sum(raw)
-    if reduction == "none":
-        return raw
-    raise ValueError(f"soft_margin_loss: unknown reduction={reduction!r}")
+    _check_reduction(reduction, "soft_margin_loss")
+    return _reduce(_lucid.nn.functional.softplus(-target * input), reduction)
 
 
 def multilabel_soft_margin_loss(
@@ -2175,6 +2288,7 @@ def multilabel_soft_margin_loss(
     >>> multilabel_soft_margin_loss(logits, target)
     tensor(0.3048)
     """
+    _check_reduction(reduction, "multilabel_soft_margin_loss")
     # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
     # are numerically stable for large |x|.
     log_sig = -_lucid.nn.functional.softplus(-input)
@@ -2182,12 +2296,4 @@ def multilabel_soft_margin_loss(
     per_class = -(target * log_sig + (1.0 - target) * log_one_minus_sig)
     if weight is not None:
         per_class = per_class * weight
-    per_sample = _lucid.mean(per_class, dim=-1, keepdim=False)
-
-    if reduction == "mean":
-        return _lucid.mean(per_sample)
-    if reduction == "sum":
-        return _lucid.sum(per_sample)
-    if reduction == "none":
-        return per_sample
-    raise ValueError(f"multilabel_soft_margin_loss: unknown reduction={reduction!r}")
+    return _reduce(_lucid.mean(per_class, dim=-1, keepdim=False), reduction)
