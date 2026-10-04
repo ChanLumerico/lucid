@@ -238,5 +238,3 @@ class TestANodeIsNamed:
         assert "_GLOBAL__N_" not in name, name
         assert "lucid" not in name, name
         assert name.isidentifier(), name
-
-
