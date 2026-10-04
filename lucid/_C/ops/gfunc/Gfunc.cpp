@@ -427,36 +427,37 @@ TensorImplPtr logspace_op(double start,
                     dt, device, requires_grad);
 }
 
-// ── scatter_add ───────────────────────────────────────────────────────────────
-// Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
+// ── axis-scatter operands ─────────────────────────────────────────────────────
+// scatter_add, scatter_amax, scatter_amin and scatter_prod share one shape
+// rule, the reference's.  It lived in scatter_add alone, so the other three
+// handed the backends any shapes: an index wider than the base off ``dim``
+// wrote past it, an index into an empty axis was refused on the CPU and
+// silently empty on Metal, and a src wider than the index was misplaced on
+// the CPU and a reshape error on Metal.
 
-TensorImplPtr scatter_add_op(const TensorImplPtr& base,
-                             const TensorImplPtr& indices,
-                             const TensorImplPtr& src,
-                             int dim) {
-    Validator::input(base, "scatter_add.base").non_null();
-    Validator::input(indices, "scatter_add.indices").non_null();
-    Validator::input(src, "scatter_add.src").non_null();
-    Validator::pair(base, indices, "scatter_add").same_device();
-    Validator::pair(base, src, "scatter_add").same_device();
+namespace {
 
-    const Dtype dt = base->dtype();
-    const Device dv = base->device();
+struct AxisScatterOperands {
+    int dim;               // normalised
+    TensorImplPtr values;  // src cut to the corner the index covers
+};
+
+AxisScatterOperands axis_scatter_operands(const char* op,
+                                          const TensorImplPtr& base,
+                                          const TensorImplPtr& indices,
+                                          const TensorImplPtr& src,
+                                          int dim) {
+    Validator::input(base, std::string(op) + ".base").non_null();
+    Validator::input(indices, std::string(op) + ".indices").non_null();
+    Validator::input(src, std::string(op) + ".src").non_null();
+    Validator::pair(base, indices, op).same_device();
+    Validator::pair(base, src, op).same_device();
+
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-
-    OpScopeFull scope{"scatter_add", dv, dt, bs};
-
-    // Normalise dim
-    const int ndim = static_cast<int>(bs.size());
-    int d = dim < 0 ? dim + ndim : dim;
-    scope.set_attr("dim", static_cast<std::int64_t>(d));
-
-    // The index walks src and lands in base, so it may be no larger than src
-    // on any axis, nor than base on any but ``dim`` — the reference's rule.
-    // Unchecked, a larger index read src and wrote base past their ends: an
-    // answer on the CPU, a crash on Metal, heap corruption either way.
     const Shape& ss = src->shape();
+    const int ndim = static_cast<int>(bs.size());
+    const int d = dim < 0 ? dim + ndim : dim;
     auto shape_str = [](const Shape& sh) {
         std::string out = "[";
         for (std::size_t i = 0; i < sh.size(); ++i)
@@ -464,34 +465,54 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
         return out + "]";
     };
     if (is.size() != bs.size() || ss.size() != bs.size())
-        ErrorBuilder("scatter_add")
-            .fail("index " + shape_str(is) + ", self " + shape_str(bs) + " and src " +
-                  shape_str(ss) + " must have the same number of dimensions");
+        ErrorBuilder(op).fail("index " + shape_str(is) + ", self " + shape_str(bs) + " and src " +
+                              shape_str(ss) + " must have the same number of dimensions");
     if (d < 0 || d >= ndim)
-        ErrorBuilder("scatter_add").index_error("dim " + std::to_string(dim) + " out of range");
+        ErrorBuilder(op).index_error("dim " + std::to_string(dim) + " out of range");
+    // The index walks src and lands in base, so it may be no larger than src
+    // on any axis, nor than base on any but ``dim``.  Unchecked, a larger
+    // index read src and wrote base past their ends.
     for (int i = 0; i < ndim; ++i) {
         const auto k = static_cast<std::size_t>(i);
         if (is[k] > ss[k] || (i != d && is[k] > bs[k]))
-            ErrorBuilder("scatter_add")
-                .fail("Expected index " + shape_str(is) + " to be no larger than self " +
-                      shape_str(bs) + " apart from dimension " + std::to_string(d) +
-                      " and to be no larger than src " + shape_str(ss));
+            ErrorBuilder(op).fail("Expected index " + shape_str(is) +
+                                  " to be no larger than self " + shape_str(bs) +
+                                  " apart from dimension " + std::to_string(d) +
+                                  " and to be no larger than src " + shape_str(ss));
     }
     // Any index into an empty axis is out of range; saying so needs only the
     // shapes, so Metal, which reads no index back, refuses it too (as
     // ``scatter`` and ``gather`` do).
     if (bs[static_cast<std::size_t>(d)] == 0 && shape_numel(is) > 0)
-        ErrorBuilder("scatter_add")
-            .index_error("index out of range: dimension " + std::to_string(d) + " has size 0");
-
-    // Only the corner of src the index covers is scattered; cut it to that
-    // corner so every backend reads src with the index's own layout.
+        ErrorBuilder(op).index_error("index out of range: dimension " + std::to_string(d) +
+                                     " has size 0");
+    // Only the corner of src the index covers is scattered; every backend
+    // reads src in the index's own layout.
     TensorImplPtr values = src;
     for (int i = 0; i < ndim; ++i) {
         const auto k = static_cast<std::size_t>(i);
         if (ss[k] > is[k])
             values = narrow_op(values, i, 0, is[k]);
     }
+    return {d, std::move(values)};
+}
+
+}  // namespace
+
+// ── scatter_add ───────────────────────────────────────────────────────────────
+// Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
+
+TensorImplPtr scatter_add_op(const TensorImplPtr& base,
+                             const TensorImplPtr& indices,
+                             const TensorImplPtr& src,
+                             int dim) {
+    auto [d, values] = axis_scatter_operands("scatter_add", base, indices, src, dim);
+    const Dtype dt = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    OpScopeFull scope{"scatter_add", dv, dt, bs};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
@@ -610,18 +631,14 @@ TensorImplPtr winner_mask(const TensorImplPtr& lhs, const TensorImplPtr& rhs) {
 // ── scatter_amax ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
-                              const TensorImplPtr& src,
+                              const TensorImplPtr& src_in,
                               int dim) {
-    Validator::input(base, "scatter_amax.base").non_null();
-    Validator::input(indices, "scatter_amax.indices").non_null();
-    Validator::input(src, "scatter_amax.src").non_null();
-
+    auto [d, values] = axis_scatter_operands("scatter_amax", base, indices, src_in, dim);
+    const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim = static_cast<int>(bs.size());
-    int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amax", dv, dt, bs};
     scope.set_attr("dim", static_cast<std::int64_t>(d));
 
@@ -710,18 +727,14 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
 // ── scatter_amin ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
-                              const TensorImplPtr& src,
+                              const TensorImplPtr& src_in,
                               int dim) {
-    Validator::input(base, "scatter_amin.base").non_null();
-    Validator::input(indices, "scatter_amin.indices").non_null();
-    Validator::input(src, "scatter_amin.src").non_null();
-
+    auto [d, values] = axis_scatter_operands("scatter_amin", base, indices, src_in, dim);
+    const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim = static_cast<int>(bs.size());
-    int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amin", dv, dt, bs};
     scope.set_attr("dim", static_cast<std::int64_t>(d));
 
@@ -797,18 +810,14 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
 // ── scatter_prod ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
-                              const TensorImplPtr& src,
+                              const TensorImplPtr& src_in,
                               int dim) {
-    Validator::input(base, "scatter_prod.base").non_null();
-    Validator::input(indices, "scatter_prod.indices").non_null();
-    Validator::input(src, "scatter_prod.src").non_null();
-
+    auto [d, values] = axis_scatter_operands("scatter_prod", base, indices, src_in, dim);
+    const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim = static_cast<int>(bs.size());
-    int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_prod", dv, dt, bs};
     scope.set_attr("dim", static_cast<std::int64_t>(d));
 

@@ -1737,14 +1737,8 @@ private:
         const auto& gs = std::get<GpuStorage>(src);
         const int ndim = static_cast<int>(base_shape.size());
         const int d = dim < 0 ? dim + ndim : dim;
-        // The coordinates off ``dim`` come from the index's shape, so an index
-        // wider than the base there would write past it however its values
-        // read.  That is known from the shapes alone.
-        for (int a = 0; a < ndim; ++a)
-            if (a != d &&
-                idx_shape[static_cast<std::size_t>(a)] > base_shape[static_cast<std::size_t>(a)])
-                ErrorBuilder("gpu_backend::scatter_reduce")
-                    .fail("index is larger than the base on a non-scattered axis");
+        // The op (``axis_scatter_operands`` in Gfunc.cpp) has already made the
+        // index no wider than the base off ``dim`` and cut src to its corner.
         const std::int64_t extent = base_shape[static_cast<std::size_t>(d)];
         if (extent == 0)
             return base;

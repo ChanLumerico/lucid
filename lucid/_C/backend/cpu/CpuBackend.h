@@ -4862,13 +4862,9 @@ private:
         const int ndim = static_cast<int>(base_shape.size());
         if (dim < 0)
             dim += ndim;
-        // Known from the shapes alone: an index wider than the base off
-        // ``dim`` writes past it, and a src with fewer elements than the
-        // index is read past its end, whatever the index values are.
-        for (int a = 0; a < ndim; ++a)
-            if (a != dim &&
-                idx_shape[static_cast<std::size_t>(a)] > base_shape[static_cast<std::size_t>(a)])
-                ErrorBuilder(name).fail("index is larger than the base on a non-scattered axis");
+        // The shape rule is the op's (``axis_scatter_operands`` in
+        // Gfunc.cpp); this only refuses to read a src buffer shorter than
+        // the index, as scatter_set does.
         const std::size_t count = shape_numel(idx_shape);
         if (cs.nbytes < count * dtype_size(dt))
             ErrorBuilder(name).fail("src must hold one element per index position");

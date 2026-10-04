@@ -174,19 +174,30 @@ _NARROWED_IN_PYTHON = {
 }
 
 
-def _maybe_narrowed(name: str, case: str) -> None:
-    family = name.removesuffix("_int64").removesuffix("_bool")
-    family = "scatter_reduce" if family.startswith("scatter_reduce") else family
-    if case == "huge" and family in _NARROWED_IN_PYTHON:
-        pytest.xfail(
-            "Python narrows the index to int32 before the engine checks it (LCD-273)"
-        )
+_LCD_273 = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-273: Python narrows the index to int32 before the engine checks it",
+)
 
 
-@pytest.mark.parametrize("case", list(_WRAPPING))
-@pytest.mark.parametrize("name", list(_gather_cases(0)))
+def _name_case_params(names: list[str], cases: list[str]) -> list[object]:
+    """Every (name, case) pair; the narrowed ``huge`` ones are strict xfails,
+    so they flip to XPASS, and fail, once LCD-273 lands."""
+    params: list[object] = []
+    for name in names:
+        family = name.removesuffix("_int64").removesuffix("_bool")
+        family = "scatter_reduce" if family.startswith("scatter_reduce") else family
+        for case in cases:
+            narrowed = case == "huge" and family in _NARROWED_IN_PYTHON
+            marks = [_LCD_273] if narrowed else []
+            params.append(pytest.param(name, case, marks=marks, id=f"{name}-{case}"))
+    return params
+
+
+@pytest.mark.parametrize(
+    ("name", "case"), _name_case_params(list(_gather_cases(0)), list(_WRAPPING))
+)
 def test_gather_family(device: str, name: str, case: str) -> None:
-    _maybe_narrowed(name, case)
     run, answer = _gather_cases(_WRAPPING[case])[name]
     _check(device, lambda: run(device), answer)
 
@@ -303,10 +314,10 @@ def _scatter_cases(bad: int) -> dict[str, tuple[Callable[[str], lucid.Tensor], o
     }
 
 
-@pytest.mark.parametrize("case", list(_WRAPPING))
-@pytest.mark.parametrize("name", list(_scatter_cases(0)))
+@pytest.mark.parametrize(
+    ("name", "case"), _name_case_params(list(_scatter_cases(0)), list(_WRAPPING))
+)
 def test_scatter_family(device: str, name: str, case: str) -> None:
-    _maybe_narrowed(name, case)
     run, answer = _scatter_cases(_WRAPPING[case])[name]
     _check(device, lambda: run(device), answer)
 
@@ -355,18 +366,7 @@ def test_engine_checks_the_full_width(device: str, name: str) -> None:
     _check(device, lambda: run(device), answer)
 
 
-@pytest.mark.parametrize("case", list(_WRAPPING))
-def test_setitem(device: str, case: str) -> None:
-    if device == "metal":
-        pytest.xfail(
-            "__setitem__ gathers the flat positions through the read path; an "
-            "integer gather answers 0 out of range, so the write lands on "
-            "position 0 (LCD-228 FOUND, filed against LCD-209)"
-        )
-    if case == "huge":
-        pytest.xfail(
-            "Python narrows the index to int32 before the engine checks it (LCD-273)"
-        )
+def _setitem(device: str, case: str) -> None:
     bad = _WRAPPING[case]
     x = lucid.zeros(N).to(device)
 
@@ -375,6 +375,25 @@ def test_setitem(device: str, case: str) -> None:
         return x
 
     _check(device, run, [0.0, 5.0, 0.0, 0.0])
+
+
+@pytest.mark.parametrize(
+    "case",
+    [pytest.param(c, marks=[_LCD_273] if c == "huge" else [], id=c) for c in _WRAPPING],
+)
+def test_setitem_cpu(device_cpu_only: str, case: str) -> None:
+    _setitem(device_cpu_only, case)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="LCD-209: __setitem__ gathers the flat positions through the read "
+    "path; an integer gather answers 0 out of range, so the write lands on "
+    "position 0 instead of being dropped",
+)
+@pytest.mark.parametrize("case", list(_WRAPPING))
+def test_setitem_metal(device_gpu_only: str, case: str) -> None:
+    _setitem(device_gpu_only, case)
 
 
 def test_scatter_leaves_its_base_alone(device_gpu_only: str) -> None:
@@ -432,7 +451,39 @@ def _empty_axis_cases() -> dict[str, Callable[[str], object]]:
         "scatter": lambda d: lucid.scatter(
             empty(d), 1, _ix([[0], [0]], d), lucid.ones(2, 1).to(d)
         ),
+        **{
+            f"scatter_reduce_{r}": (
+                lambda d, r=r: lucid.scatter_reduce(
+                    empty(d), 1, _ix([[0], [0]], d), lucid.zeros(2, 1).to(d), r
+                )
+            )
+            for r in ("amax", "amin", "prod")
+        },
     }
+
+
+# The reference's rule: only the corner of src the index covers is
+# scattered.  A src wider than the index was misplaced by the CPU reduce
+# loop and a reshape error on Metal, until the four axis scatters shared one
+# operand check (``axis_scatter_operands`` in Gfunc.cpp).
+_WIDE_SRC_CASES = {
+    "scatter_add": [[6.0, 1.0, 1.0], [1.0, -7.0, 1.0]],
+    "amax": [[5.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+    "amin": [[1.0, 1.0, 1.0], [1.0, -8.0, 1.0]],
+    "prod": [[5.0, 1.0, 1.0], [1.0, -8.0, 1.0]],
+}
+
+
+@pytest.mark.parametrize("name", list(_WIDE_SRC_CASES))
+def test_src_wider_than_the_index(device: str, name: str) -> None:
+    base = lucid.ones(2, 3).to(device)
+    idx = _ix([[0], [1]], device)
+    src = lucid.tensor([[5.0, 6.0, 7.0], [-8.0, 9.0, 10.0]]).to(device)
+    if name == "scatter_add":
+        out = lucid.scatter_add(base, 1, idx, src)
+    else:
+        out = lucid.scatter_reduce(base, 1, idx, src, name)
+    assert out.tolist() == _WIDE_SRC_CASES[name]
 
 
 @pytest.mark.parametrize("reduce", ["amax", "amin", "prod"])
