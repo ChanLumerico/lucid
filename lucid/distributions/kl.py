@@ -14,6 +14,7 @@ from lucid.distributions.exponential import Cauchy, Exponential, Laplace
 from lucid.distributions.gamma import Beta, Gamma
 from lucid.distributions.normal import Normal
 from lucid.distributions.student import StudentT
+from lucid.special import xlog1py
 
 _KLFn = Callable[[Distribution, Distribution], Tensor]
 _KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
@@ -193,6 +194,18 @@ def _kl_normal_normal(p: Normal, q: Normal) -> Tensor:
     )
 
 
+def _bernoulli_outcomes(d: Bernoulli) -> tuple[Tensor, Tensor]:
+    """``(P(X = 1), P(X = 0))`` of ``d``, each to full relative precision.
+
+    Built from logits, ``P(X = 0)`` is ``sigmoid(-ℓ)`` rather than
+    ``1 - sigmoid(ℓ)``: at ``ℓ = 15`` the subtraction keeps one significant
+    digit of a number near ``3e-7``, and its logarithm is off in the second.
+    """
+    if d._is_logits:
+        return d.logits.sigmoid(), (-d.logits).sigmoid()
+    return d.probs, 1.0 - d.probs
+
+
 @register_kl(Bernoulli, Bernoulli)
 def _kl_bernoulli_bernoulli(p: Bernoulli, q: Bernoulli) -> Tensor:
     r"""Closed-form KL divergence between two Bernoulli distributions.
@@ -201,12 +214,25 @@ def _kl_bernoulli_bernoulli(p: Bernoulli, q: Bernoulli) -> Tensor:
 
         \mathrm{KL}(p \,\|\, q) = p \log\frac{p}{q} + (1-p) \log\frac{1-p}{1-q}
 
-    Probabilities are clipped to ``[1e-7, 1 - 1e-7]`` for numerical safety.
+    Each :math:`x \log y` is :func:`lucid.xlogy`, which owns the boundary
+    convention: an outcome ``p`` cannot produce contributes ``0`` whatever
+    ``q`` says of it, and an outcome ``p`` can produce but ``q`` cannot makes
+    the divergence ``+inf`` (``KL(Bernoulli(0.3) || Bernoulli(0)) = inf``),
+    as the reference framework answers.  The probabilities are not clipped:
+    a clip at ``1e-7`` turned that ``inf`` into ``4.22``.
+
+    Notes
+    -----
+    Built from logits, each outcome's probability comes from its own
+    sigmoid, so a ``q`` whose probability rounds to 1 in float32 (a logit
+    above about 17) still has a positive ``1 - q``: ``KL(Bernoulli(logits=-20)
+    || Bernoulli(logits=20))`` is 20.  The reference framework tests
+    ``q.probs == 1`` and answers ``inf`` there.
     """
-    p_p = p._probs.clip(1e-7, 1.0 - 1e-7)
-    p_q = q._probs.clip(1e-7, 1.0 - 1e-7)
-    return p_p * (p_p.log() - p_q.log()) + (1.0 - p_p) * (
-        (1.0 - p_p).log() - (1.0 - p_q).log()
+    p1, p0 = _bernoulli_outcomes(p)
+    q1, q0 = _bernoulli_outcomes(q)
+    return (lucid.xlogy(p1, p1) - lucid.xlogy(p1, q1)) + (
+        lucid.xlogy(p0, p0) - lucid.xlogy(p0, q0)
     )
 
 
@@ -308,9 +334,19 @@ def _kl_poisson_poisson(p: Poisson, q: Poisson) -> Tensor:
 
         \mathrm{KL}(p \,\|\, q) = \lambda_p \log\frac{\lambda_p}{\lambda_q}
             - \lambda_p + \lambda_q
+
+    The :math:`\lambda_p \log \lambda` terms are :func:`lucid.xlogy`, so a
+    rate of 0 — all mass at 0 — has its exact divergence
+    :math:`\lambda_q`, and a :math:`\lambda_q` of 0 against a positive
+    :math:`\lambda_p` is ``+inf``.
+
+    Notes
+    -----
+    The reference framework multiplies :math:`\lambda_p` by
+    :math:`\log \lambda_p` directly and answers NaN when
+    :math:`\lambda_p = 0`.
     """
-    # KL(Pois(λ_p) || Pois(λ_q)) = λ_p · log(λ_p / λ_q) − λ_p + λ_q.
-    return p.rate * (p.rate.log() - q.rate.log()) - p.rate + q.rate
+    return lucid.xlogy(p.rate, p.rate) - lucid.xlogy(p.rate, q.rate) - p.rate + q.rate
 
 
 from lucid.distributions.gamma import Dirichlet
@@ -482,13 +518,27 @@ def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
 
     .. math::
 
-        \mathrm{KL}(p \,\|\, q) = -H(p)
-            - \frac{\log(1 - p_q)}{p_p} - \log\!\bigl(p_q / (1 - p_q)\bigr)
+        \mathrm{KL}(p \,\|\, q) = \log\frac{p}{q}
+            + m \log\frac{1 - p}{1 - q}, \qquad m = \mathbb{E}_p[X] = \frac{1 - p}{p}
+
+    with each :math:`m \log(1 - \cdot)` taken by
+    :func:`lucid.special.xlog1py`.  At :math:`p = 1` all mass is at 0, so
+    :math:`m = 0` and the divergence is :math:`-\log q` — ``0`` against
+    another :math:`q = 1`; a :math:`q = 1` against :math:`p < 1` is
+    ``+inf``.
+
+    Notes
+    -----
+    The reference framework evaluates :math:`-H(p) - \log(1-q)/p -
+    \mathrm{logit}(q)` and answers ``inf`` for
+    :math:`\mathrm{KL}(\mathrm{Geometric}(1) \,\|\, \mathrm{Geometric}(1))`,
+    which is 0.
     """
-    # KL(Geom(p1) || Geom(p2)) = -H(p) - log(1-p2)/p1 - log(p2)
-    p.probs.log() - (1.0 - p.probs).log()  # log(p/(1-p))
-    q_logits: Tensor = q.probs.log() - (1.0 - q.probs).log()
-    return -p.entropy() - lucid.log1p(-q.probs) / p.probs - q_logits
+    pp, qp = p.probs, q.probs
+    mean_failures = (1.0 - pp) / pp
+    return (
+        pp.log() - qp.log() + xlog1py(mean_failures, -pp) - xlog1py(mean_failures, -qp)
+    )
 
 
 @register_kl(Independent, Independent)
