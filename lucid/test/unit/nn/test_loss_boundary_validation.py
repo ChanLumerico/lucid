@@ -21,6 +21,7 @@ as stricter.
 import ast
 import inspect
 import math
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -31,6 +32,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
 from lucid.nn.functional import loss as _loss_module
+from lucid.nn.functional.loss import _TARGET_SHAPE
 from lucid.test._fixtures.devices import metal_available
 
 _needs_metal = pytest.mark.skipif(not metal_available(), reason="needs Metal")
@@ -164,7 +166,7 @@ class Bad:
     what: str
     edit: Callable[[str], Kwargs]
     exc: type[Exception] = ValueError
-    match: str = ""
+    match: str | None = None
     stricter: str = ""
 
     @property
@@ -305,6 +307,19 @@ _SPECIFIC: list[Bad] = [
         )
         for tag, value in (("above-1", 1.5), ("negative", -0.1), ("nan", math.nan))
     ),
+    *(
+        Bad(
+            name,
+            "input-0d",
+            _set(
+                x=lambda d: lucid.tensor(0.5, device=d),
+                target=lambda d: _class_target(d),
+            ),
+            match="input",
+            stricter="the reference takes a 0-d input: one class, a loss of 0",
+        )
+        for name in ("multi_margin_loss", "multilabel_margin_loss")
+    ),
     Bad(
         "multilabel_margin_loss",
         "target-narrower",
@@ -320,15 +335,6 @@ _SPECIFIC: list[Bad] = [
         ),
         match="input",
     ),
-    # elementwise targets: the same shape, not a broadcast
-    *(
-        row
-        for name in ("binary_cross_entropy", "binary_cross_entropy_with_logits")
-        for row in (
-            Bad(name, "target-row", _set(target=_ones(C)), match="target size"),
-            Bad(name, "target-column", _set(target=_ones(N, 1)), match="target size"),
-        )
-    ),
     Bad(
         "binary_cross_entropy_with_logits",
         "pos-weight-not-broadcast",
@@ -340,19 +346,6 @@ _SPECIFIC: list[Bad] = [
         "pos-weight-enlarges",
         _set(pos_weight=_ones(2, N, C)),
         match="pos_weight",
-    ),
-    Bad(
-        "multilabel_soft_margin_loss",
-        "target-not-broadcast",
-        _set(target=_ones(N, C + 1)),
-        match="target",
-    ),
-    Bad(
-        "multilabel_soft_margin_loss",
-        "target-enlarges",
-        _set(target=_ones(2, N, C)),
-        match="target",
-        stricter="the reference broadcasts the per-class loss up to the target's shape",
     ),
     # pair losses: one rank, shapes that line up
     Bad("cosine_embedding_loss", "target-2d", _set(y=_ones(N, 1)), match="target"),
@@ -400,7 +393,10 @@ _SPECIFIC: list[Bad] = [
         match="dimensions",
     ),
     # scalar arguments
-    Bad("smooth_l1_loss", "beta-negative", _set(beta=-1.0), match="beta"),
+    *(
+        Bad("smooth_l1_loss", f"beta-{tag}", _set(beta=value), match="beta")
+        for tag, value in (("negative", -1.0), ("nan", math.nan))
+    ),
     *(
         Bad("huber_loss", f"delta-{tag}", _set(delta=value), match="delta")
         for tag, value in (("zero", 0.0), ("negative", -1.0))
@@ -413,7 +409,83 @@ _SPECIFIC: list[Bad] = [
     ),
 ]
 
-BAD: list[Bad] = _reduction_rows() + _weight_rows() + _SPECIFIC
+
+def _data_params(name: str) -> tuple[str, str]:
+    """The names of loss ``name``'s input and target parameters."""
+    first, second = list(inspect.signature(getattr(F, name)).parameters)[:2]
+    return first, second
+
+
+def _target_shaped(
+    name: str, shape_of: Callable[[tuple[int, ...]], tuple[int, ...]]
+) -> Callable[[str], Kwargs]:
+    """An edit giving loss ``name`` a target of ``shape_of(input shape)``, at
+    the valid target's dtype (an index stays an index)."""
+
+    def edit(device: str) -> Kwargs:
+        x_name, t_name = _data_params(name)
+        call = valid_call(name, device)
+        x, t = call[x_name], call[t_name]
+        assert isinstance(x, lucid.Tensor) and isinstance(t, lucid.Tensor)
+        shape = shape_of(tuple(x.shape))
+        return {t_name: lucid.ones(*shape, dtype=t.dtype, device=device)}
+
+    return edit
+
+
+def _not_broadcast(shape: tuple[int, ...]) -> tuple[int, ...]:
+    return shape[:-1] + (shape[-1] + 1,)
+
+
+def _one(shape: tuple[int, ...]) -> tuple[int, ...]:
+    return (1,)
+
+
+def _enlarged(shape: tuple[int, ...]) -> tuple[int, ...]:
+    return (2, *shape)
+
+
+def _target_rows() -> list[Bad]:
+    """Rows from ``_TARGET_SHAPE`` itself, the loss module's one table of
+    how each elementwise loss's target relates to its input."""
+    rows = []
+    for name, rule in sorted(_TARGET_SHAPE.items()):
+        rows.append(
+            Bad(
+                name,
+                "target-not-broadcast",
+                _target_shaped(name, _not_broadcast),
+                match="target",
+            )
+        )
+        if rule == "same":
+            rows.append(
+                Bad(
+                    name,
+                    "target-broadcastable",
+                    _target_shaped(name, _one),
+                    match="target size",
+                )
+            )
+        if rule == "within":
+            rows.append(
+                Bad(
+                    name,
+                    "target-enlarges",
+                    _target_shaped(name, _enlarged),
+                    match="target",
+                    stricter=(
+                        "the reference broadcasts the per-class loss up to the "
+                        "target's shape"
+                        if name == "multilabel_soft_margin_loss"
+                        else ""
+                    ),
+                )
+            )
+    return rows
+
+
+BAD: list[Bad] = _reduction_rows() + _weight_rows() + _target_rows() + _SPECIFIC
 
 
 def _call(row: Bad, device: str) -> Kwargs:
@@ -431,6 +503,32 @@ def test_every_loss_has_a_valid_call() -> None:
 
 def test_every_weighted_loss_is_classified() -> None:
     assert set(losses_with("weight")) == CLASS_WEIGHT | ELEMENT_WEIGHT
+
+
+#: The losses whose target is not elementwise, and so not in
+#: ``_TARGET_SHAPE``: one class index per sample, the pair losses' operands
+#: (checked together), and ctc's label sequences.
+CLASS_INDEX = frozenset({"cross_entropy", "nll_loss", "multi_margin_loss"})
+PAIRED = frozenset(
+    {
+        "cosine_embedding_loss",
+        "margin_ranking_loss",
+        "triplet_margin_loss",
+        "triplet_margin_with_distance_loss",
+    }
+)
+
+
+def test_every_loss_has_one_target_rule() -> None:
+    elementwise = set(_TARGET_SHAPE)
+    assert elementwise | CLASS_INDEX | PAIRED | {"ctc_loss"} == set(LOSSES)
+    assert not elementwise & (CLASS_INDEX | PAIRED)
+    assert set(_TARGET_SHAPE.values()) <= {
+        "same",
+        "within",
+        "broadcast",
+        "broadcast-warn",
+    }
 
 
 def test_every_table_row_names_a_loss() -> None:
@@ -564,6 +662,119 @@ def test_cosine_embedding_takes_one_unbatched_pair(label: float, device: str) ->
     assert abs(one.item() - batched.tolist()[0]) < 1e-6
 
 
+def test_cosine_embedding_broadcasts_a_batch_of_one_against_its_labels(
+    device: str,
+) -> None:
+    # One pair against four labels is four losses, as on main and in the
+    # reference; only shapes that do not broadcast at all are refused.
+    a = lucid.randn(1, 3, device=device)
+    b = lucid.randn(1, 3, device=device)
+    labels = lucid.tensor([1.0, -1.0, 1.0, -1.0], device=device)
+    out = F.cosine_embedding_loss(a, b, labels, reduction="none")
+    assert out.shape == (4,)
+    one = F.cosine_embedding_loss(a, b, labels[:1], reduction="none")
+    assert abs(out.tolist()[0] - one.item()) < 1e-6
+
+
+_BROADCAST_TARGETS = sorted(
+    name for name, rule in _TARGET_SHAPE.items() if rule.startswith("broadcast")
+)
+
+
+@pytest.mark.parametrize("name", _BROADCAST_TARGETS)
+def test_a_broadcast_target_is_the_explicit_broadcast(name: str, device: str) -> None:
+    """A loss whose rule is ``broadcast`` takes a target that broadcasts —
+    smaller than the input or larger — as the reference does; the fused
+    ``mse_loss`` / ``huber_loss`` (and ``smooth_l1_loss`` over them)
+    refused it with a bare ShapeMismatch.  ``broadcast-warn`` warns."""
+    fn = getattr(F, name)
+    x_name, t_name = _data_params(name)
+    call = valid_call(name, device)
+    x, t = call[x_name], call[t_name]
+    assert isinstance(x, lucid.Tensor) and isinstance(t, lucid.Tensor)
+    warns = _TARGET_SHAPE[name] == "broadcast-warn"
+
+    one = t.reshape(-1)[:1]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        got = fn(**{**call, t_name: one}, reduction="sum")
+    assert any("target size" in str(w.message) for w in caught) == warns
+    full = lucid.broadcast_to(one, list(x.shape))
+    want = fn(**{**call, t_name: full}, reduction="sum")
+    assert abs(got.item() - want.item()) <= 1e-5 * max(1.0, abs(want.item()))
+
+    # A target that enlarges the loss: every input element is scored twice.
+    xg = x.detach().requires_grad_()
+    both = lucid.stack([t, t])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        twice = fn(**{**call, x_name: xg, t_name: both}, reduction="sum")
+        per = fn(**{**call, t_name: both}, reduction="none")
+    assert per.shape == (2, *x.shape)
+    twice.backward()
+    xo = x.detach().requires_grad_()
+    once = fn(**{**call, x_name: xo}, reduction="sum")
+    once.backward()
+    assert abs(twice.item() - 2 * once.item()) <= 1e-5 * max(1.0, abs(twice.item()))
+    assert xg.grad is not None and xo.grad is not None
+    assert xg.grad.shape == x.shape
+    assert (xg.grad - 2 * xo.grad).abs().max().item() <= 1e-5
+
+
+@_needs_metal
+@pytest.mark.parametrize("n", [66000, 70000])
+@pytest.mark.parametrize("half", [lucid.float16, lucid.bfloat16], ids=["f16", "bf16"])
+@pytest.mark.parametrize("reduction", ["mean", "sum"])
+def test_cross_entropy_under_autocast_past_65504_targets(
+    n: int, half: lucid.dtype, reduction: str
+) -> None:
+    """Autocast gave the class-index mean's two sums the autocast dtype: a
+    float16 count of 65504 kept samples is inf, and the mean was NaN with a
+    gradient of 0 (a float16 sum, inf).  ``_reduce`` runs them in float32
+    and answers in float32, as the reference's autocast does for a loss."""
+    lucid.manual_seed(0)
+    base = lucid.randn(n, 4, device="metal") * 0.1
+    target = lucid.randint(0, 4, (n,), device="metal")
+    x = base.detach().requires_grad_()
+    with lucid.amp.autocast("metal", half):
+        loss = F.cross_entropy(x, target, reduction=reduction)
+    loss.backward()
+    x32 = base.detach().requires_grad_()
+    want = F.cross_entropy(x32, target, reduction=reduction)
+    want.backward()
+    assert loss.dtype == lucid.float32
+    assert abs(loss.item() - want.item()) <= 1e-3 * abs(want.item())
+    assert x.grad is not None and x32.grad is not None
+    worst = (x.grad.float() - x32.grad).abs().max().item()
+    assert worst <= 2e-2 * x32.grad.abs().max().item()
+
+
+_AUTOCAST_SUMS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "l1_loss": lambda x: F.l1_loss(x, lucid.zeros_like(x), reduction="sum"),
+    "smooth_l1_loss": lambda x: F.smooth_l1_loss(
+        x, lucid.zeros_like(x), beta=0.5, reduction="sum"
+    ),
+    "binary_cross_entropy_with_logits": lambda x: (
+        F.binary_cross_entropy_with_logits(x, lucid.zeros_like(x), reduction="sum")
+    ),
+    "binary_cross_entropy": lambda x: F.binary_cross_entropy(
+        lucid.sigmoid(x), lucid.zeros_like(x), reduction="sum"
+    ),
+}
+
+
+@_needs_metal
+@pytest.mark.parametrize("name", list(_AUTOCAST_SUMS))
+def test_a_reduced_loss_under_autocast_is_float32(name: str) -> None:
+    x = lucid.full((70000,), 2.0, device="metal")
+    with lucid.amp.autocast("metal", lucid.float16):
+        got = _AUTOCAST_SUMS[name](x)
+    want = _AUTOCAST_SUMS[name](x)
+    assert got.dtype == lucid.float32
+    assert math.isfinite(got.item())
+    assert abs(got.item() - want.item()) <= 1e-3 * abs(want.item())
+
+
 @pytest.mark.parametrize(
     ("module", "args"),
     [
@@ -605,34 +816,76 @@ def test_the_modules_inherit_the_refusals(
 _REDUCERS = frozenset({"_reduce", "_weighted_mean"})
 
 
+def _is_everything(node: ast.expr | None) -> bool:
+    """A dimension argument that means "every dimension": absent, ``None``,
+    or an empty list or tuple."""
+    if node is None:
+        return True
+    if isinstance(node, ast.Constant):
+        return node.value is None
+    return isinstance(node, (ast.List, ast.Tuple)) and not node.elts
+
+
+def _reduces_everything(call: ast.Call) -> bool:
+    """Whether ``call`` is a ``mean`` / ``sum`` over a whole tensor: a
+    method (``t.sum()``, ``t.sum(None)``, ``t.mean(dim=None)``), the free
+    function (``lucid.mean(t)``, ``lucid.mean(t, dim=None)``) or the
+    engine's (``_C_engine.sum(x, [], False)`` — but not its per-dim
+    ``_C_engine.sum(x, [1], False)``)."""
+    func = call.func
+    if not isinstance(func, ast.Attribute) or func.attr not in ("mean", "sum"):
+        return False
+    base = func.value
+    named = {kw.arg: kw.value for kw in call.keywords}
+    dim_kw = named.get("dim", named.get("axis", named.get("axes")))
+    if isinstance(base, ast.Name) and base.id in ("_C_engine", "_lucid", "lucid"):
+        return _is_everything(call.args[1] if len(call.args) > 1 else dim_kw)
+    return _is_everything(call.args[0] if call.args else dim_kw)
+
+
 def _whole_reductions(tree: ast.Module) -> list[tuple[str, int]]:
-    """``(enclosing function, line)`` of every call in ``tree`` that reduces
-    a whole tensor: ``t.mean()`` / ``t.sum()`` with no argument, the
-    engine's ``mean`` / ``sum``, or ``lucid.mean(t)`` / ``lucid.sum(t)``
-    without a dimension."""
+    """``(enclosing top-level function, line)`` of every whole-tensor
+    reduction in ``tree`` (:func:`_reduces_everything`)."""
     found: list[tuple[str, int]] = []
 
     def visit(node: ast.AST, owner: str) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             owner = node.name if owner == "<module>" else owner
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            attr, base = node.func.attr, node.func.value
-            if attr in ("mean", "sum"):
-                plain = not node.args and not node.keywords
-                engine = isinstance(base, ast.Name) and base.id == "_C_engine"
-                free = (
-                    isinstance(base, ast.Name)
-                    and base.id == "_lucid"
-                    and len(node.args) == 1
-                    and not node.keywords
-                )
-                if plain or engine or free:
-                    found.append((owner, node.lineno))
+        if isinstance(node, ast.Call) and _reduces_everything(node):
+            found.append((owner, node.lineno))
         for child in ast.iter_child_nodes(node):
             visit(child, owner)
 
     visit(tree, "<module>")
     return found
+
+
+@pytest.mark.parametrize(
+    ("source", "whole"),
+    [
+        ("t.sum()", True),
+        ("t.mean()", True),
+        ("t.sum(None)", True),
+        ("t.mean(dim=None)", True),
+        ("t.sum(dim=())", True),
+        ("_lucid.mean(t)", True),
+        ("_lucid.mean(t, dim=None)", True),
+        ("_C_engine.sum(x, [], False)", True),
+        ("_C_engine.mean(x, None, False)", True),
+        ("t.sum(dim=1)", False),
+        ("t.mean(1)", False),
+        ("t.sum(dim=[1, 2])", False),
+        ("_lucid.mean(t, dim=-1, keepdim=False)", False),
+        ("_C_engine.sum(x, [1], False)", False),
+        ("t.all()", False),
+    ],
+)
+def test_the_guard_tells_a_whole_reduction_from_a_per_dim_one(
+    source: str, whole: bool
+) -> None:
+    call = ast.parse(source, mode="eval").body
+    assert isinstance(call, ast.Call)
+    assert _reduces_everything(call) == whole
 
 
 def test_one_helper_applies_every_reduction() -> None:
@@ -689,7 +942,13 @@ def _ref_call(R: object, name: str, kwargs: Kwargs) -> object:
     return getattr(R.nn.functional, name)(*args, **options)  # type: ignore[attr-defined]
 
 
+#: The reference's own advice (``kl_div``'s "mean", a broadcast regression
+#: target) is not what these two tests ask about.
+_QUIET_REFERENCE = pytest.mark.filterwarnings("ignore::UserWarning")
+
+
 @pytest.mark.parity
+@_QUIET_REFERENCE
 @pytest.mark.parametrize("name", LOSSES)
 def test_the_valid_calls_run_in_the_reference(ref: object, name: str) -> None:
     out = _ref_call(ref, name, valid_call(name, "cpu"))
@@ -697,12 +956,43 @@ def test_the_valid_calls_run_in_the_reference(ref: object, name: str) -> None:
 
 
 @pytest.mark.parity
+@_QUIET_REFERENCE
 @pytest.mark.parametrize("row", BAD, ids=[row.id for row in BAD])
 def test_the_reference_refuses_it_too(ref: object, row: Bad) -> None:
     if row.stricter:
         pytest.skip(f"Lucid is stricter here: {row.stricter}")
     with pytest.raises(Exception):  # noqa: B017 — its types differ from ours
         _ref_call(ref, row.loss, _call(row, "cpu"))
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("name", sorted(_TARGET_SHAPE))
+def test_the_target_rules_are_the_references(ref: object, name: str) -> None:
+    """Each loss's row of ``_TARGET_SHAPE`` is what the reference does: a
+    one-element target is refused under ``same`` and taken otherwise (with
+    a warning exactly under ``broadcast-warn``), and a target that enlarges
+    the loss is taken only under ``broadcast*``."""
+    rule = _TARGET_SHAPE[name]
+    _, t_name = _data_params(name)
+    call = valid_call(name, "cpu")
+    t = call[t_name]
+    assert isinstance(t, lucid.Tensor)
+
+    def taken(target: lucid.Tensor) -> tuple[bool, bool]:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                _ref_call(ref, name, {**call, t_name: target})
+            except Exception:  # noqa: BLE001 — its types differ from ours
+                return False, False
+        return True, any("target size" in str(w.message) for w in caught)
+
+    ok, warned = taken(t.reshape(-1)[:1])
+    assert ok == (rule != "same")
+    assert warned == (rule == "broadcast-warn")
+    enlarged, _ = taken(lucid.stack([t, t]))
+    if name != "multilabel_soft_margin_loss":  # stricter by design
+        assert enlarged == rule.startswith("broadcast")
 
 
 @pytest.mark.parity
@@ -750,3 +1040,18 @@ def test_the_accepted_cases_match_the_reference(ref: object, device: str) -> Non
             reduction="none",
         )
         assert lo.shape == tuple(ro.shape) and abs(lo.item() - ro.item()) < 1e-5
+    pa, pb, labels = [[0.3, -0.2, 0.9]], [[0.1, 0.5, 0.4]], [1.0, -1.0, 1.0, -1.0]
+    lo = F.cosine_embedding_loss(
+        lucid.tensor(pa, device=device),
+        lucid.tensor(pb, device=device),
+        lucid.tensor(labels, device=device),
+        reduction="none",
+    )
+    ro = rf.cosine_embedding_loss(
+        R.tensor(pa),  # type: ignore[attr-defined]
+        R.tensor(pb),  # type: ignore[attr-defined]
+        R.tensor(labels),  # type: ignore[attr-defined]
+        reduction="none",
+    )
+    assert lo.shape == tuple(ro.shape)
+    assert all(abs(a - b) < 1e-5 for a, b in zip(lo.tolist(), ro.tolist()))
