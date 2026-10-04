@@ -2,6 +2,7 @@
 nn.functional loss functions.
 """
 
+import contextlib
 import math
 from typing import TYPE_CHECKING, Sequence, cast
 
@@ -10,6 +11,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import bfloat16 as _bfloat16
 from lucid._dtype import dtype as _dtype
+from lucid._dtype import finfo as _finfo
 from lucid._dtype import float16 as _float16
 from lucid._dtype import float32 as _float32
 from lucid._types import Reduction, ReductionKL
@@ -53,6 +55,21 @@ def _reduce_in(t: Tensor, reduction: str, out_dtype: _dtype) -> Tensor:
     elif reduction == "sum":
         t = t.sum()
     return t if t.dtype == out_dtype else t.to(dtype=out_dtype)
+
+
+def _float32_scope() -> contextlib.AbstractContextManager[object]:
+    """A scope in which autocast resolves to float32, or a no-op outside
+    autocast.
+
+    Lucid's autocast gives ``mul`` / ``add`` / ``div`` / ``sum`` the autocast
+    dtype, so a loss written with constants float16 cannot hold (an
+    ``eps`` of 1e-12) runs out of range inside one.  The engine guard is
+    RAII and restores the enclosing state on exit.  Outside autocast it is
+    not entered: an active float32 guard would cast float64 operands down.
+    """
+    if _C_engine.amp_is_active():
+        return _C_engine.AutocastGuard(_C_engine.F32)
+    return contextlib.nullcontext()
 
 
 def _host_any(mask: Tensor) -> bool:
@@ -477,9 +494,14 @@ def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
     # the zero itself sent inf to every masked position, inf * 0 = NaN
     # reached every parameter, and one such batch under gradient
     # accumulation ruined the whole step.
-    empty: Tensor = denom == 0.0
-    safe_denom: Tensor = _lucid.where(empty, _lucid.ones_like(denom), denom)
-    return _lucid.where(empty, _lucid.full_like(total, math.nan), total / safe_denom)
+    #
+    # Written without a comparison: a compiled autocast step makes a bare
+    # scalar a float16 constant, and ``denom == 0.0`` against the float32
+    # denominator aborted the graph compiler.  ``1 - |sign(denom)|`` is 1
+    # only for an empty batch; ``(denom - denom) / denom`` is NaN only
+    # there, and carries no gradient to the losses.
+    safe_denom: Tensor = denom + (1.0 - denom.sign().abs())
+    return total / safe_denom + (denom - denom) / denom
 
 
 def cross_entropy(
@@ -732,7 +754,9 @@ def binary_cross_entropy(
     of exactly ``0`` or ``1`` costs at most ``100`` instead of an
     infinite or undefined loss, and the input gradient's denominator
     :math:`p(1-p)` is floored at :math:`\varepsilon = 10^{-12}`, so the
-    gradient stays finite at the boundaries too.
+    gradient stays finite at the boundaries too.  For a float16 input the
+    floor is :math:`1/65504`, the smallest that keeps a float16 gradient
+    finite.  Under autocast the loss is computed in float32.
 
     Parameters
     ----------
@@ -792,23 +816,34 @@ def binary_cross_entropy(
     #
     # Half precision is computed in float32 and rounded back: ``eps`` is 0
     # in float16, and the floored gradient (1e12) is not a float16 number.
+    # Under autocast the arithmetic below would run in float16 regardless
+    # (``mul`` / ``div`` take the autocast dtype), the floor became
+    # ``1 / 0 = inf``, and the ``0 * inf`` its unselected branch sent back
+    # made every gradient NaN — so it runs in a float32 autocast scope,
+    # as BatchNorm's running-statistics update does.
     out_dtype = x.dtype
     acc = _accumulation_dtype(x)
-    p: Tensor = x.to(dtype=acc)
-    y: Tensor = target.to(dtype=acc)
-    eps: float = 1e-12
-    p_d: Tensor = p.detach()
-    inside: Tensor = p_d * (1.0 - p_d) >= eps
-    p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
-    interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
-    log_p: Tensor = p_d.log().clamp(min=-100.0)
-    log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
-    grad_edge: Tensor = (p_d - y.detach()) / eps
-    edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
-    bce: Tensor = _lucid.where(inside, interior, edge)
-    if weight is not None:
-        bce = bce * weight
-    return _reduce_in(bce, reduction, out_dtype)
+    with _float32_scope():
+        p: Tensor = x.to(dtype=acc)
+        y: Tensor = target.to(dtype=acc)
+        # The floor is 1e-12, or 1 / 65504 for a float16 input: the
+        # gradient goes back to the input's dtype, and a float16 gradient
+        # of 1e12 is inf — a saturated float16 sigmoid (which rounds to
+        # exactly 0 or 1 past |logit| ~ 8) then sent ``inf * 0 = NaN`` to
+        # its logits.  The reference's float16 floor rounds to 0 instead.
+        eps: float = max(1e-12, 1.0 / float(_finfo(out_dtype).max))
+        p_d: Tensor = p.detach()
+        inside: Tensor = p_d * (1.0 - p_d) >= eps
+        p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
+        interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
+        log_p: Tensor = p_d.log().clamp(min=-100.0)
+        log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
+        grad_edge: Tensor = (p_d - y.detach()) / eps
+        edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
+        bce: Tensor = _lucid.where(inside, interior, edge)
+        if weight is not None:
+            bce = bce * weight
+        return _reduce_in(bce, reduction, out_dtype)
 
 
 def binary_cross_entropy_with_logits(
@@ -1628,16 +1663,18 @@ def gaussian_nll_loss(
             raise ValueError("var is of incorrect size")
     _validate_reduction(reduction)
 
-    negative: Tensor = var < 0.0
-    if var.device == "cpu" and _host_any(negative):
+    if var.device == "cpu" and _host_any(var < 0.0):
         raise ValueError("var has negative entry/entries")
 
     # Clamped at ``eps`` in value, not in gradient: the reference clamps a
     # copy under ``no_grad``, so the gradient flows to ``var`` unchanged.
     # ``maximum(var, eps)`` gave every variance below ``eps`` a zero
     # gradient, and a variance head that collapsed there stayed there.
+    # Written without a comparison: a compiled autocast step makes a bare
+    # scalar a float16 constant, and comparing a float32 tensor with one
+    # aborts the graph compiler.
     var_d: Tensor = var.detach()
-    var_c: Tensor = _lucid.where(var_d >= eps, var, (var - var_d) + eps)
+    var_c: Tensor = var + (var_d.clamp(min=eps) - var_d)
     loss: Tensor = 0.5 * (var_c.log() + (x - target) ** 2 / var_c)
     if full:
         # The omitted constant of the Gaussian log-density, 0.5 * log(2 pi)
@@ -1647,7 +1684,9 @@ def gaussian_nll_loss(
         # compared against another model's or reported as a likelihood.
         loss = loss + 0.5 * math.log(2.0 * math.pi)
     if var.device != "cpu":
-        loss = _lucid.where(negative, _lucid.full_like(loss, math.nan), loss)
+        # A negative variance makes the loss NaN on Metal: sqrt(min(v, 0))
+        # is NaN exactly there and 0 elsewhere, off the graph.
+        loss = loss + var_d.clamp(max=0.0).sqrt() * 0.0
     return _apply_reduction(_unwrap(loss), reduction)
 
 
@@ -1998,7 +2037,7 @@ def multilabel_margin_loss(
     counts: Tensor = _lucid.scatter_add(
         _lucid.zeros_like(xb), 1, safe.to(dtype=_lucid.int64), src
     )
-    negative: Tensor = (counts == 0.0).to(dtype=xb.dtype)
+    negative: Tensor = 1.0 - counts.clamp(max=1.0)
 
     # hinge[i, t, j] = max(0, 1 - x[i, t] + x[i, j]), for each positive t
     # (weighted by its count) against each negative j.

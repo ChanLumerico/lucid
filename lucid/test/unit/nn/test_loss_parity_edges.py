@@ -1100,3 +1100,76 @@ class TestLossWeightsAreBuffers:
         )
         for key in keys:
             assert _vals(getattr(fresh, key)) == _vals(getattr(module, key))
+
+
+# ── autocast: what the fixes above must survive ───────────────────────────
+
+
+def _autocast_loss(name: str, pred: lucid.Tensor, target: lucid.Tensor) -> lucid.Tensor:
+    if name == "binary_cross_entropy":
+        return F.binary_cross_entropy(lucid.sigmoid(pred), (target > 0).float())
+    if name == "binary_cross_entropy_with_logits":
+        return F.binary_cross_entropy_with_logits(pred, (target > 0).float())
+    if name == "cross_entropy":
+        return F.cross_entropy(pred, target.argmax(dim=1))
+    if name == "gaussian_nll_loss":
+        return F.gaussian_nll_loss(pred, target, pred.exp())
+    if name == "kl_div":
+        return F.kl_div(
+            F.log_softmax(pred, dim=1), F.softmax(target, dim=1), reduction="batchmean"
+        )
+    if name == "multi_margin_loss":
+        return F.multi_margin_loss(pred, target.argmax(dim=1))
+    raise AssertionError(name)
+
+
+_AUTOCAST_LOSSES = [
+    "binary_cross_entropy",
+    "binary_cross_entropy_with_logits",
+    "cross_entropy",
+    "gaussian_nll_loss",
+    "kl_div",
+    "multi_margin_loss",
+]
+
+
+@_needs_metal
+class TestLossesUnderAutocast:
+    """Under autocast, ``mul`` / ``div`` / comparisons take float16 operands.
+
+    Two of the fixes first broke there: the BCE gradient floor (1e12) is
+    inf in float16 and its masked branch sent back ``0 * inf = NaN``, and a
+    ``denom == 0.0`` against a float32 denominator aborted the graph
+    compiler of a compiled step.  Each loss trains through ``fused_step``
+    under autocast with finite, falling losses.
+    """
+
+    @pytest.mark.parametrize("name", _AUTOCAST_LOSSES)
+    def test_a_compiled_autocast_step_trains(self, name: str) -> None:
+        from lucid.compile import fused_step
+
+        lucid.manual_seed(0)
+        model = nn.Linear(8, 4).to("metal")
+        x = lucid.randn(4, 8).to("metal")
+        t = lucid.randn(4, 4).to("metal")
+        opt = lucid.optim.SGD(model.parameters(), lr=1e-1)
+        step = fused_step(model, lambda p, y: _autocast_loss(name, p, y), opt)
+        losses = []
+        for _ in range(3):
+            with lucid.amp.autocast(dtype=lucid.float16):
+                loss = step(x, t)
+            losses.append(float(loss.item()))
+        assert all(math.isfinite(v) for v in losses), losses
+        assert losses[-1] < losses[0], losses
+
+    def test_bce_of_a_saturated_float16_sigmoid(self) -> None:
+        # float16 rounds sigmoid(12) to exactly 1: the boundary is reached
+        # at ordinary logits there.
+        z = lucid.tensor([12.0, -12.0, 0.5], device="metal", requires_grad=True)
+        y = lucid.tensor([0.0, 1.0, 1.0], device="metal")
+        with lucid.amp.autocast(dtype=lucid.float16):
+            loss = F.binary_cross_entropy(lucid.sigmoid(z), y)
+        loss.backward()
+        assert math.isfinite(loss.item())
+        assert z.grad is not None
+        assert all(math.isfinite(v) for v in _vals(z.grad))  # type: ignore[union-attr]
