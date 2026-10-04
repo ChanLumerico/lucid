@@ -29,6 +29,12 @@ refuse them: a view whose elements overlap (``expand``, ``unfold`` with
 overlapping windows), and a view of a leaf that requires grad while autograd
 records.
 
+A view op has up to three spellings — the method ``x.squeeze(0)``, the free
+function ``lucid.squeeze(x, 0)`` and, for a whole view, the constructor
+``lucid.Tensor(x)`` — and each one links its result, from the one table of
+view ops below.  Only the method did at first: ``lucid.squeeze(x, 0).add_(1)``
+left ``x`` as it was on Metal while ``x.squeeze(0).add_(1)`` wrote through.
+
 One difference remains.  A view taken *before* its base is written does not
 see that write on Metal.
 
@@ -53,18 +59,21 @@ _RESHAPE = 2  # order-preserving: base.copy_(view.reshape(base.shape))
 _TRACED = 3  # anything else: replay on an index tensor, write by position
 _GRAD = 4  # .grad: the owner's gradient is set to the written value
 
-#: Methods whose result reads the base's elements in the base's order.
+#: View ops whose result reads the base's elements in the base's order.
 _RESHAPES = (
     "view",
     "reshape",
     "flatten",
     "unflatten",
+    "ravel",
     "squeeze",
+    "squeeze_all",
     "unsqueeze",
+    "expand_dims",
     "view_as",
     "reshape_as",
 )
-#: Methods whose result is a rearrangement or a part of the base.
+#: View ops whose result is a rearrangement or a part of the base.
 _REARRANGEMENTS = (
     "transpose",
     "swapaxes",
@@ -74,9 +83,9 @@ _REARRANGEMENTS = (
     "narrow",
     "diagonal",
 )
-#: Methods whose result may read one base element more than once.
-_OVERLAPPING = ("expand", "expand_as", "unfold")
-#: Methods that return several views of disjoint parts.
+#: View ops whose result may read one base element more than once.
+_OVERLAPPING = ("expand", "expand_as", "broadcast_to", "as_strided", "unfold")
+#: View ops that return several views of disjoint parts.
 _PIECES = ("split", "chunk", "unbind")
 #: In-place methods that set flags rather than values.
 _NOT_VALUE_WRITES = frozenset({"requires_grad_", "detach_", "share_memory_"})
@@ -137,11 +146,13 @@ class _Link:
 #: :class:`lucid.Tensor`, bound by :func:`install` — an import here would
 #: run on every view taken.
 _TENSOR: type[Tensor]
-_GPU = _C_engine.Device.GPU
+#: Compared by value: every view op on every device asks, and the enum's own
+#: ``==`` costs as much again as reading ``device`` (~0.23 µs each).
+_GPU = _C_engine.Device.GPU.value
 
 
 def _on_metal(t: Tensor) -> bool:
-    return bool(t._impl.device == _GPU)
+    return t._impl.device.value == _GPU
 
 
 def _link(view: object, base: Tensor, kind: int, **kwargs: object) -> None:
@@ -276,43 +287,158 @@ def _writer(original: Callable[..., object]) -> Callable[..., object]:
     return method
 
 
+def _metal_input(args: tuple[object, ...]) -> Tensor | None:
+    """The tensor a view op was taken from, if it is a Metal tensor.
+
+    It comes first in every spelling: ``self`` of the method, ``input`` of
+    the free function.  A free function may also be handed something that
+    is not a tensor at all, and then there is nothing to link.
+    """
+    if args:
+        base = args[0]
+        if isinstance(base, _TENSOR) and base._impl.device.value == _GPU:
+            return base
+    return None
+
+
 def _viewer(
     original: Callable[..., object], kind: int, name: str, overlap: bool = False
 ) -> Callable[..., object]:
+    """Wrap one spelling of a view op (method or free function) to link its result.
+
+    ``name`` is the method a traced view replays on an index tensor.  A free
+    function wrapped here has the same parameters after its input as the
+    method of that name, so ``lucid.name(x, *args)`` replays as
+    ``index.name(*args)``.
+    """
+
     @functools.wraps(original)
-    def method(self: Tensor, *args: object, **kwargs: object) -> object:
-        out = original(self, *args, **kwargs)
-        if _on_metal(self):
+    def view(*args: object, **kwargs: object) -> object:
+        out = original(*args, **kwargs)
+        # _metal_input, inlined: this runs on every view op on every device.
+        base = args[0] if args else None
+        if isinstance(base, _TENSOR) and base._impl.device.value == _GPU:
             if kind == _TRACED:
                 _link(
                     out,
-                    self,
+                    base,
                     kind,
-                    replay=(name, args, kwargs, None),
+                    replay=(name, args[1:], kwargs, None),
                     overlap=overlap,
                 )
             else:
-                _link(out, self, kind)
+                _link(out, base, kind)
         return out
 
-    return method
+    return view
 
 
 def _pieces(original: Callable[..., object], name: str) -> Callable[..., object]:
+    """:func:`_viewer` for a view op that returns several views of disjoint parts."""
+
     @functools.wraps(original)
-    def method(self: Tensor, *args: object, **kwargs: object) -> object:
-        out = original(self, *args, **kwargs)
-        if _on_metal(self) and isinstance(out, (tuple, list)):
+    def view(*args: object, **kwargs: object) -> object:
+        out = original(*args, **kwargs)
+        base = args[0] if args else None
+        if (
+            isinstance(base, _TENSOR)
+            and base._impl.device.value == _GPU
+            and isinstance(out, (tuple, list))
+        ):
             for i, piece in enumerate(out):
                 _link(
                     piece,
-                    self,
+                    base,
                     _TRACED,
-                    replay=(name, args, kwargs, i),
+                    replay=(name, args[1:], kwargs, i),
                 )
         return out
 
-    return method
+    return view
+
+
+def _constructor(original: Callable[..., object]) -> Callable[..., object]:
+    """Wrap ``Tensor.__init__`` so ``lucid.Tensor(x)`` of a Metal ``x`` is linked.
+
+    ``Tensor(x)`` is a whole view of ``x`` — the CPU shares the storage — and
+    an in-place write into it reaches ``x`` as a write into ``x.view(shape)``
+    does.  Anything that is not such a view (Python data, a copy to another
+    dtype) is left alone.
+    """
+
+    @functools.wraps(original)
+    def __init__(self: Tensor, *args: object, **kwargs: object) -> None:
+        original(self, *args, **kwargs)
+        base = _metal_input(args if args else (kwargs.get("data"),))
+        if base is not None:
+            impl, source = self._impl, base._impl
+            if (
+                impl.device.value == _GPU
+                and impl.dtype == source.dtype
+                and impl.shape == source.shape
+            ):
+                _link(self, base, _RESHAPE)
+
+    return __init__
+
+
+def _makers() -> dict[str, Callable[[Callable[..., object]], Callable[..., object]]]:
+    """Every view op by name, with the wrapper that links its result.
+
+    The one table both spellings of a view op are wrapped from, so a method
+    and its free function cannot disagree about whether — or how — a write
+    goes back.
+    """
+    makers: dict[str, Callable[[Callable[..., object]], Callable[..., object]]] = {}
+    for name in _RESHAPES:
+        makers[name] = functools.partial(_viewer, kind=_RESHAPE, name=name)
+    for name in _REARRANGEMENTS:
+        makers[name] = functools.partial(_viewer, kind=_TRACED, name=name)
+    for name in _OVERLAPPING:
+        makers[name] = functools.partial(_viewer, kind=_TRACED, name=name, overlap=True)
+    for name in _PIECES:
+        makers[name] = functools.partial(_pieces, name=name)
+    makers["detach"] = functools.partial(_viewer, kind=_DETACHED, name="detach")
+    return makers
+
+
+def _install_free_functions(
+    makers: dict[str, Callable[[Callable[..., object]], Callable[..., object]]],
+) -> None:
+    """Wrap ``lucid.<name>`` for every view op whose method is wrapped too.
+
+    Only a free function generated from the same registry entry as the
+    method of its name is wrapped: that is what makes ``lucid.name(x, *a)``
+    and ``x.name(*a)`` the same call, which a traced view's replay relies
+    on.  Free functions written by hand (``lucid.swapaxes``, ``lucid.t``,
+    ``lucid.hsplit`` ...) are built from these and are linked through them.
+    """
+    import sys
+
+    import lucid._ops as ops
+    from lucid._ops._registry import _REGISTRY, OpEntry
+
+    by_method: dict[str, OpEntry] = {}
+    by_free: dict[str, OpEntry] = {}
+    for entry in _REGISTRY:
+        if entry.method_name is not None:
+            by_method[entry.method_name] = entry  # the last one is the method
+        if entry.free_fn_name is not None:
+            by_free.setdefault(entry.free_fn_name, entry)  # the first one is free
+    top = sys.modules.get("lucid")
+    for name, make in makers.items():
+        shared = by_free.get(name)
+        if shared is None or by_method.get(name) is not shared:
+            continue
+        generated = ops.__dict__.get(name)
+        if generated is None:
+            continue
+        linked = make(generated)
+        setattr(ops, name, linked)
+        # ``lucid.<name>`` is copied from ``lucid._ops`` the first time any op
+        # is looked up there; if that already happened, replace the copy.
+        if top is not None and top.__dict__.get(name) is generated:
+            setattr(top, name, linked)
 
 
 def _getitem(original: Callable[..., object]) -> Callable[..., object]:
@@ -349,7 +475,11 @@ def _property(prop: property, kind: int) -> property:
 
 
 def install(cls: type) -> None:
-    """Wrap ``cls``'s view-producing and in-place methods; called once at import.
+    """Wrap every spelling of each view op and every in-place method, once at import.
+
+    The view-producing methods of ``cls``, its constructor, and the
+    ``lucid.<name>`` free functions of the same view ops are wrapped to link
+    their Metal results; the value-writing in-place methods to write back.
 
     Parameters
     ----------
@@ -371,20 +501,12 @@ def install(cls: type) -> None:
         if hasattr(cls, name):
             setattr(cls, name, _writer(getattr(cls, name)))
     setattr(cls, "__getitem__", _getitem(getattr(cls, "__getitem__")))
-    for name in _RESHAPES:
+    makers = _makers()
+    for name, make in makers.items():
         if hasattr(cls, name):
-            setattr(cls, name, _viewer(getattr(cls, name), _RESHAPE, name))
-    for name in _REARRANGEMENTS:
-        if hasattr(cls, name):
-            setattr(cls, name, _viewer(getattr(cls, name), _TRACED, name))
-    for name in _OVERLAPPING:
-        if hasattr(cls, name):
-            setattr(cls, name, _viewer(getattr(cls, name), _TRACED, name, overlap=True))
-    for name in _PIECES:
-        if hasattr(cls, name):
-            setattr(cls, name, _pieces(getattr(cls, name), name))
-    if hasattr(cls, "detach"):
-        setattr(cls, "detach", _viewer(getattr(cls, "detach"), _DETACHED, "detach"))
+            setattr(cls, name, make(getattr(cls, name)))
+    _install_free_functions(makers)
+    setattr(cls, "__init__", _constructor(getattr(cls, "__init__")))
     for name, kind in (
         ("T", _TRACED),
         ("mT", _TRACED),
