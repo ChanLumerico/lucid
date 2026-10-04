@@ -13,7 +13,12 @@ if TYPE_CHECKING:
 
 def _check_batch_norm_sample_count(x: Tensor, training: bool) -> None:
     """Reject training batches with no variance estimate per channel."""
-    if training and x.ndim in (2, 3, 4, 5) and x.shape[1] > 0 and x.numel() == x.shape[1]:
+    if (
+        training
+        and x.ndim in (2, 3, 4, 5)
+        and x.shape[1] > 0
+        and x.numel() == x.shape[1]
+    ):
         raise ValueError(
             "batch_norm: expected more than one value per channel when training, "
             f"got input size {tuple(x.shape)}"
