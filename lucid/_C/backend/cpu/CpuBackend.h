@@ -8401,7 +8401,10 @@ public:
                            static_cast<int>(Lk));
             apply_masks(Wp);
 
-            for (std::size_t r = 0; r < B * Lq; ++r) {
+            // With no keys there are no weights to normalise — and no
+            // ``row[0]`` to seed the max with; the product below then writes
+            // the zero output.
+            for (std::size_t r = 0; r < B * Lq && Lk > 0; ++r) {
                 double* row = Wp + r * Lk;
                 double m = row[0];
                 for (std::size_t j = 1; j < Lk; ++j)
