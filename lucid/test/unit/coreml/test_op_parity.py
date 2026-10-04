@@ -1396,6 +1396,26 @@ def test_scattering_into_a_row(tmp_path: object) -> None:
     _check(scattered, lucid.randn(3, 5), tmp_path)
 
 
+def test_overwriting_into_a_row(tmp_path: object) -> None:
+    """``scatter``, ``x[key] = v`` and ``index_copy`` trace as ``scatter_set``.
+
+    None had a translation; ``index_copy`` was refused by name, and once the
+    other two stopped tracing as a gather-subtract-scatter_add (CHA-158) a
+    model that wrote into a tensor was too.  Written over NaN, so the
+    overwrite cannot pass as an add.
+    """
+
+    def overwritten(x: lucid.Tensor) -> lucid.Tensor:
+        index = lucid.tensor([[2, 0, 1, 2, 0]]).to(lucid.int64)
+        out = lucid.scatter(x * float("nan"), 0, index, x[:1] * 2.0)
+        out = out.index_copy(1, lucid.tensor([4, 0]), x[:, 1:3])
+        out[:, 2] = 0.5
+        return lucid.nan_to_num(out, nan=-7.0)
+
+    lucid.manual_seed(0)
+    _check(overwritten, lucid.randn(3, 5), tmp_path)
+
+
 def test_a_model_that_does_nothing_is_refused(tmp_path: object) -> None:
     """``nn.Identity`` alone leaves no operation to export.
 

@@ -551,8 +551,10 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
 }
 
 // ── scatter_set ───────────────────────────────────────────────────────────────
-// Autograd: d/d(base)=grad_out with the overwritten positions zeroed;
-//           d/d(src)=gather(grad_out, dim, index).
+// ``index_copy``'s front door to the overwrite scatter: the reference's
+// stricter shape rule for it, then ``scatter_op`` (composite/Indexing.cpp),
+// which owns the kernel dispatch and the backward — d/d(base) = grad_out
+// with the overwritten positions zeroed, d/d(src) = gather(grad_out, index).
 
 TensorImplPtr scatter_set_op(const TensorImplPtr& base,
                              const TensorImplPtr& indices,
@@ -562,22 +564,17 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
     Validator::input(indices, "scatter_set.indices").non_null();
     Validator::input(src, "scatter_set.src").non_null();
 
-    const Dtype dt = base->dtype();
-    const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
     const Shape& ss = src->shape();
-
-    OpScopeFull scope{"scatter_set", dv, dt, bs};
-
     const int ndim = static_cast<int>(bs.size());
-    int d = dim < 0 ? dim + ndim : dim;
-    scope.set_attr("dim", static_cast<std::int64_t>(d));
+    const int d = dim < 0 ? dim + ndim : dim;
 
-    // The kernels place src by base's layout off ``dim``, so index and src
-    // must have one shape, equal to base's on every other axis — what
-    // ``index_copy`` documents and never checked.  A source of the wrong
-    // width was read and written out of bounds.
+    // ``index_copy`` writes whole slices: index and src have one shape, equal
+    // to base's on every axis but ``dim``.  ``scatter`` alone would take a
+    // narrower source and write the corner it covers, where the reference
+    // refuses — and before the kernels walked the index's own extents, a
+    // source of the wrong width was read and written out of bounds.
     bool fits = is == ss && is.size() == bs.size() && d >= 0 && d < ndim;
     for (int i = 0; fits && i < ndim; ++i)
         fits = i == d || is[static_cast<std::size_t>(i)] == bs[static_cast<std::size_t>(i)];
@@ -585,66 +582,7 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
         throw ShapeMismatch(bs, ss,
                             "scatter_set: source must match self on every axis but dim " +
                                 std::to_string(d) + ", and the index must match the source");
-
-    auto& be = backend::Dispatcher::for_device(dv);
-    Storage out_s =
-        be.scatter_set(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
-    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
-    if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({base, indices, src}, out);
-    }
-
-    const bool needs_grad =
-        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
-    if (!needs_grad)
-        return out;
-
-    // base_edge: gradient = grad_out with overwritten positions zeroed
-    // src_edge:  gradient = gather(grad_out, indices, dim)
-    auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge = lucid::detail::ensure_grad_fn(src);
-
-    struct ScatterSetNode : Node {
-        int dim_;
-        std::shared_ptr<TensorImpl> saved_indices_;
-        Shape base_shape_;
-        Shape idx_shape_;
-        Shape src_shape_;
-        Dtype dtype_;
-        Device device_;
-        std::string node_name() const override { return "scatter_set"; }
-        void release_saved() override { saved_indices_.reset(); }
-
-        std::vector<Storage> apply(Storage g) override {
-            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
-            // d/d(src) = gather(grad_out, indices, dim)
-            auto grad_src_impl = gather_op(g_impl, saved_indices_, dim_);
-            // d/d(base) = grad_out with the overwritten positions zeroed, i.e.
-            //             scatter_set(grad_out, indices, zeros-shaped-like-src).
-            auto zeros_src = zeros_op(src_shape_, dtype_, device_, false);
-            auto& be = backend::Dispatcher::for_device(device_);
-            Storage grad_base = be.scatter_set(g, saved_indices_->storage(), zeros_src->storage(),
-                                               base_shape_, idx_shape_, dim_, dtype_);
-            return {std::move(grad_base), grad_src_impl->storage()};
-        }
-    };
-
-    auto bwd = std::make_shared<ScatterSetNode>();
-    bwd->dim_ = d;
-    bwd->saved_indices_ = indices;
-    bwd->base_shape_ = bs;
-    bwd->idx_shape_ = is;
-    bwd->src_shape_ = ss;
-    bwd->dtype_ = dt;
-    bwd->device_ = dv;
-    bwd->set_next_edges(
-        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), src->version()});
-
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
-    return out;
+    return scatter_op(base, d, indices, src);
 }
 
 // ── scatter_amax / scatter_amin / scatter_prod ────────────────────────────────

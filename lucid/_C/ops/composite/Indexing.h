@@ -1,13 +1,13 @@
 // lucid/_C/ops/composite/Indexing.h
 //
-// Indexing convenience ops layered on top of ``gather``, ``scatter_add``,
-// ``split_at``, and ``sort``.  Each entry function below is a thin shape
-// shim — the underlying primitives carry the gradient.
+// Indexing convenience ops layered on top of ``gather``, ``split_at`` and
+// ``sort``.  Each entry function below but ``scatter`` is a thin shape shim —
+// the underlying primitives carry the gradient.
 //
 //   take(a, indices)            — gather over a flattened ``a``
 //   index_select(a, dim, idx)   — gather with a 1-D index broadcast to ``a``'s rank
 //   narrow(a, dim, start, len)  — slice a contiguous window via ``split_at``
-//   scatter(base, dim, idx, src)— overwrite-semantics scatter via ``scatter_add``
+//   scatter(base, dim, idx, src)— overwrite scatter on the backend's ``scatter_set``
 //   kthvalue(a, k, dim, keepdim)— sort + gather to pluck the k-th element
 
 #pragma once
@@ -150,12 +150,11 @@ LUCID_API TensorImplPtr narrow_op(const TensorImplPtr& a,
 
 // Overwrite-semantics scatter: $\mathrm{out}[..., \mathrm{idx}, ...] = \mathrm{src}$.
 //
-// Composite over :func:`gather_op` + :func:`sub_op` + :func:`scatter_add_op`.
-// The overwrite is encoded as a scatter-add of the *delta*
-// $\mathrm{src} - \mathrm{base}[\mathrm{idx}]$, so the result is identical
-// to assignment but reuses the existing additive scatter kernel.  Gradient
-// flows through ``ScatterAddBackward``, ``SubBackward``, and
-// ``GatherBackward``.
+// A true overwrite on the backend's ``scatter_set`` kernel, every dtype —
+// what ``x[key] = v`` and ``lucid.scatter`` run.  It was a scatter-add of the
+// delta $\mathrm{src} - \mathrm{base}[\mathrm{idx}]$, which is not one: NaN
+// or inf in ``base`` survived the write, a tiny value rounded away against a
+// large one, bool could not become False, and a repeated index summed.
 //
 // Math
 // ----
@@ -173,11 +172,12 @@ LUCID_API TensorImplPtr narrow_op(const TensorImplPtr& a,
 // dim : int
 //     Axis along which ``indices`` selects.
 // indices : TensorImplPtr
-//     Integer tensor (``int32`` or ``int64``) with the same shape as
-//     ``src``.
+//     Integer tensor (``int32`` or ``int64``) of ``base``'s rank, no larger
+//     than ``src`` on any axis nor than ``base`` on any but ``dim``.
 // src : TensorImplPtr
 //     Source values written into ``base`` at the positions given by
-//     ``indices``.
+//     ``indices``; only the corner the index covers is read.  Cast to
+//     ``base``'s dtype first.
 //
 // Returns
 // -------
@@ -187,20 +187,27 @@ LUCID_API TensorImplPtr narrow_op(const TensorImplPtr& a,
 // Raises
 // ------
 // Failure
-//     If any input is null or ``indices`` is not an integer dtype.
+//     If any input is null, ``indices`` is not an integer dtype, or the
+//     shapes break the rule above.
 // IndexError
-//     If ``dim`` is out of range.
+//     If ``dim`` is out of range, or (CPU) an index is.
 //
 // Notes
 // -----
-// Duplicate indices yield undefined ordering — the *last write wins*
-// guarantee of true scatter is not preserved here because the underlying
-// primitive is additive.  Use disjoint ``indices`` for deterministic
-// behaviour.
+// A position named more than once keeps the value written last on the CPU,
+// where each line along ``dim`` is written in index order — the reference's
+// CPU behaviour.  On Metal the writes race and which value survives is
+// unspecified, as on the reference's GPU backends.  int64 and complex64
+// scatter through the CPU on Metal (MLX has no 8-byte scatter there).
+//
+// Backward, the reference's rule: ``base`` takes the gradient with the
+// written positions zeroed, ``src`` the gradient gathered from where each
+// element landed — every duplicate included.  Differentiable twice.
 //
 // See Also
 // --------
-// :func:`scatter_add_op` — additive variant; canonical primitive.
+// :func:`scatter_add_op` — additive variant.
+// :func:`scatter_set_op` — ``index_copy``'s stricter-shaped entry to this op.
 LUCID_API TensorImplPtr scatter_op(const TensorImplPtr& base,
                                    int dim,
                                    const TensorImplPtr& indices,

@@ -1214,6 +1214,23 @@ def _scatter_add(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
 
 
+@_emitter("scatter_set")
+def _scatter_set(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """The overwrite — ``x[key] = v``, ``scatter`` and ``index_copy``.
+
+    MIL's ``update`` mode, the twin of ``scatter_add`` above.  A position
+    named twice keeps one of its values, which one unspecified, as on Metal.
+    """
+    return "scatter_along_axis", [
+        ("data", ins[0]),
+        ("indices", ins[1]),
+        ("updates", ins[2]),
+        ("axis", b.const_int(_as_int(_attr(op, "dim")))),
+        ("mode", b.const_str("update")),
+        ("validate_indices", b.const_bool(False)),
+    ]
+
+
 @_emitter("where")
 def _where(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "select", [("cond", ins[0]), ("a", ins[1]), ("b", ins[2])]

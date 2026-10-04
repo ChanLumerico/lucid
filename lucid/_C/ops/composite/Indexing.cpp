@@ -1,22 +1,29 @@
 // lucid/_C/ops/composite/Indexing.cpp
 //
-// All ops below decompose into existing primitives.  Index dtype is
-// validated up front so error messages name the failing op rather than the
-// underlying gather/scatter dispatch.
+// The ops below decompose into existing primitives, except ``scatter``, which
+// dispatches the backend's overwrite kernel and carries its own backward.
+// Index dtype is validated up front so error messages name the failing op
+// rather than the underlying gather/scatter dispatch.
 
 #include "Indexing.h"
 
 #include <cstring>
+#include <string>
 #include <variant>
 #include <vector>
 
+#include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
-#include "../bfunc/Sub.h"
+#include "../../kernel/BinaryKernel.h"  // detail::ensure_grad_fn
 #include "../gfunc/Gfunc.h"
+#include "../ufunc/Astype.h"
 #include "../utils/Concat.h"
 #include "../utils/Layout.h"
 #include "../utils/Select.h"
@@ -112,33 +119,149 @@ TensorImplPtr narrow_op(const TensorImplPtr& a, int dim, std::int64_t start, std
     return pieces[static_cast<std::size_t>(wanted)];
 }
 
+namespace {
+
+// The overwrite's backward.  ``out`` is ``base`` except where the index
+// points, which holds ``src``: so ``base`` takes the gradient with those
+// positions zeroed, and ``src`` takes the gradient read back from where each
+// of its elements landed.  That is the reference's rule, duplicates
+// included — every element aimed at one position gathers its gradient,
+// though only one of them survived the write.
+struct ScatterSetNode : Node {
+    int dim_ = 0;
+    TensorImplPtr saved_indices_;
+    Shape base_shape_;
+    Shape idx_shape_;
+    Dtype dtype_ = Dtype::F32;
+    Device device_ = Device::CPU;
+
+    std::string node_name() const override { return "scatter_set"; }
+    void release_saved() override { saved_indices_.reset(); }
+
+    std::vector<Storage> apply(Storage g) override {
+        auto& be = backend::Dispatcher::for_device(device_);
+        auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+        Storage grad_src = gather_op(g_impl, saved_indices_, dim_)->storage();
+        Storage grad_base =
+            be.scatter_set(g, saved_indices_->storage(), be.zeros(idx_shape_, dtype_), base_shape_,
+                           idx_shape_, dim_, dtype_);
+        return {std::move(grad_base), std::move(grad_src)};
+    }
+
+    // The same two halves as ops, so the gradient is differentiable again:
+    // zeroing positions is itself an overwrite, linear in ``g``.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& g) override {
+        auto zeros = zeros_op(idx_shape_, g->dtype(), g->device(), false);
+        return {scatter_op(g, dim_, saved_indices_, zeros), gather_op(g, saved_indices_, dim_)};
+    }
+};
+
+std::string shape_str(const Shape& sh) {
+    std::string out = "[";
+    for (std::size_t i = 0; i < sh.size(); ++i)
+        out += (i ? ", " : "") + std::to_string(sh[i]);
+    return out + "]";
+}
+
+}  // namespace
+
 TensorImplPtr scatter_op(const TensorImplPtr& base,
                          int dim,
                          const TensorImplPtr& indices,
                          const TensorImplPtr& src) {
     if (!base || !indices || !src)
         ErrorBuilder("scatter").fail("null input");
+    Validator::pair(base, indices, "scatter").same_device();
+    Validator::pair(base, src, "scatter").same_device();
     require_index_dtype(indices, "scatter");
 
-    const int d = wrap_dim(base, dim, "scatter");
-
-    // ``src`` may be larger than the index on any axis; only the corner the
-    // index covers is scattered.  Cut it to that corner first — the delta
-    // below is taken against a gather of the index's shape, and a larger
-    // ``src`` was refused as a broadcast mismatch the reference never raises.
-    // Too small a ``src`` is left for ``scatter_add`` to refuse.
-    TensorImplPtr values = src;
-    const Shape& is = indices->shape();
-    if (src->shape().size() == is.size()) {
-        for (std::size_t i = 0; i < is.size(); ++i)
-            if (src->shape()[i] > is[i])
-                values = narrow_op(values, static_cast<int>(i), 0, is[i]);
+    // A 0-d operand counts as one element along a single axis, as in the
+    // reference: a 0-d tensor scatters, and a 1-d one takes a 0-d index.
+    const bool scalar = base->shape().empty() || indices->shape().empty() || src->shape().empty();
+    if (scalar && base->shape().size() <= 1) {
+        if (dim < -1 || dim > 0)
+            ErrorBuilder("scatter").index_error("dim out of range");
+        const auto one = [](const TensorImplPtr& t) {
+            return t->shape().empty() ? reshape_op(t, Shape{1}) : t;
+        };
+        auto out = scatter_op(one(base), 0, one(indices), one(src));
+        return base->shape().empty() ? reshape_op(out, Shape{}) : out;
     }
 
-    // Overwrite via add: feed ``scatter_add`` the delta ``src - base[idx]``.
-    auto existing = gather_op(base, indices, d);
-    auto delta = sub_op(values, existing);
-    return scatter_add_op(base, indices, delta, d);
+    const int d = wrap_dim(base, dim, "scatter");
+    const int ndim = static_cast<int>(base->shape().size());
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const Shape& ss = src->shape();
+
+    // The index walks src and lands in base, so it may be no larger than src
+    // on any axis, nor than base on any but ``dim`` — the reference's rule,
+    // and ``scatter_add``'s.
+    if (is.size() != bs.size() || ss.size() != bs.size())
+        ErrorBuilder("scatter").fail("index " + shape_str(is) + ", self " + shape_str(bs) +
+                                     " and src " + shape_str(ss) +
+                                     " must have the same number of dimensions");
+    for (int i = 0; i < ndim; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (is[k] > ss[k] || (i != d && is[k] > bs[k]))
+            ErrorBuilder("scatter").fail("Expected index " + shape_str(is) +
+                                         " to be no larger than self " + shape_str(bs) +
+                                         " apart from dimension " + std::to_string(d) +
+                                         " and to be no larger than src " + shape_str(ss));
+    }
+    // Any index into an empty axis is out of range; saying so needs only the
+    // shapes, so Metal — which reads no index back — refuses it too.
+    if (bs[static_cast<std::size_t>(d)] == 0 && shape_numel(is) > 0)
+        ErrorBuilder("scatter").index_error("index out of range: dimension " + std::to_string(d) +
+                                            " has size 0");
+
+    // Only the corner of src the index covers is written; cut src to that
+    // corner so every backend reads it in the index's own layout.  The
+    // values are moved, not converted, so they take base's dtype first —
+    // the cast ``index_copy`` makes in Python (``_like_input``).
+    TensorImplPtr values = src;
+    for (int i = 0; i < ndim; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        if (ss[k] > is[k])
+            values = narrow_op(values, i, 0, is[k]);
+    }
+    const Dtype dt = base->dtype();
+    if (values->dtype() != dt)
+        values = astype_op(values, dt);
+
+    // A true overwrite.  This was a scatter-add of the delta
+    // ``src - base[idx]``, which is not one: NaN or inf in ``base`` stayed
+    // NaN (``x[isnan(x)] = 0`` did nothing), a value far smaller than the
+    // one it replaced rounded away (``x[0] = 1e-30`` wrote 0), bool could
+    // not become False, a half overflowed in the subtraction, and a
+    // repeated index summed its deltas (CHA-158).
+    const Device dv = base->device();
+    OpScopeFull scope{"scatter_set", dv, dt, bs};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s =
+        be.scatter_set(base->storage(), indices->storage(), values->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({base, indices, values}, out);
+
+    if (!GradMode::is_enabled() || !(base->requires_grad() || values->requires_grad()))
+        return out;
+
+    auto bwd = std::make_shared<ScatterSetNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->base_shape_ = bs;
+    bwd->idx_shape_ = is;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges({Edge(detail::ensure_grad_fn(base), base->grad_output_nr()),
+                         Edge(detail::ensure_grad_fn(values), values->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), values->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
 }
 
 TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim) {

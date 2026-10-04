@@ -1,16 +1,18 @@
 // lucid/_C/compile/VjpEmitters/shape/Reorder.mm
 //
 // VJPs for ops that move elements without combining them — ``roll``,
-// ``sort`` (and so ``kthvalue``, which traces as a sort), ``scatter_add``
-// (and ``scatter``, which traces as one) and ``repeat`` (repeat_interleave).
-// None had one, so a training step through them relied on MPSGraph's
-// autodiff, which a train-mode batch norm elsewhere rules out.
+// ``sort`` (and so ``kthvalue``, which traces as a sort), ``scatter_add``,
+// ``scatter_set`` (``scatter``, ``x[key] = v`` and ``index_copy``, which
+// trace as one) and ``repeat`` (repeat_interleave).  None had one, so a
+// training step through them relied on MPSGraph's autodiff, which a
+// train-mode batch norm elsewhere rules out.
 //
 //   roll(x, s)           dx = roll(g, −s)
 //   sort(x)              dx[perm[k]] = g[k]   (perm recomputed by argsort;
 //                                              a tie may pair differently
 //                                              from eager, with equal values)
 //   scatter_add(s, i, u) ds = g, du = gather(g, i)
+//   scatter_set(s, i, u) ds = g with g[i] = 0, du = gather(g, i)
 //   repeat(x, r, axis)   dx = g folded to (…, n, r, …) and summed over r
 //   detach(x)            nothing
 
@@ -158,6 +160,56 @@ public:
     }
 };
 
+// The overwrite: the written positions of ``s`` reach the output no more, so
+// its gradient is ``g`` with them zeroed — a Set of zeros at the same index —
+// and ``u`` takes the gradient from where each of its elements landed.  The
+// reference's rule, and eager's (composite/Indexing.cpp): an element aimed at
+// a position another one also wrote still gathers that position's gradient.
+class ScatterSetVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "scatter_set"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        std::int64_t d = 0;
+        if (node.inputs.size() != 3 || grad_outs.empty() || grad_outs[0] == nullptr ||
+            !int_attr_of(node, "dim", d) || node.inputs[1] < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
+        MPSGraphTensor* go = as_tensor(grad_outs[0]);
+        MPSGraphTensor* idx = as_tensor(bctx.forward(node.inputs[1]));
+        NSInteger axis = 0;
+        if (g == nil || go == nil || idx == nil || !known(idx) ||
+            !norm_axis(d, go.shape.count, axis) || idx.shape.count != go.shape.count)
+            return false;
+        // MPSGraph's along-axis ops want the index to match the data off
+        // ``axis``; an index shorter there (the corner rule) is not lowered.
+        for (NSUInteger i = 0; i < go.shape.count; ++i)
+            if ((NSInteger)i != axis &&
+                idx.shape[i].longLongValue != go.shape[i].longLongValue)
+                return false;
+        if (idx.dataType != MPSDataTypeInt32)
+            idx = [g castTensor:idx toType:MPSDataTypeInt32 name:nil];
+        if (node.inputs[0] >= 0) {
+            MPSGraphTensor* zeros = [g constantWithScalar:0.0 shape:idx.shape dataType:go.dataType];
+            MPSGraphTensor* ds = [g scatterAlongAxis:axis
+                                      withDataTensor:go
+                                       updatesTensor:zeros
+                                       indicesTensor:idx
+                                                mode:MPSGraphScatterModeSet
+                                                name:@"scatter_set_vjp_self"];
+            bctx.accumulate_grad(node.inputs[0], from_tensor(ds));
+        }
+        if (node.inputs[2] >= 0) {
+            MPSGraphTensor* du = [g gatherAlongAxis:axis
+                                  withUpdatesTensor:go
+                                      indicesTensor:idx
+                                               name:@"scatter_set_vjp_src"];
+            bctx.accumulate_grad(node.inputs[2], from_tensor(du));
+        }
+        return true;
+    }
+};
+
 // repeat_interleave with one repeat count: element i of ``axis`` becomes
 // positions i·r … i·r + r − 1.
 class RepeatVjp final : public VjpEmitter {
@@ -235,6 +287,7 @@ struct ReorderVjpRegistrar {
         register_vjp_emitter(std::make_unique<RollVjp>());
         register_vjp_emitter(std::make_unique<SortVjp>());
         register_vjp_emitter(std::make_unique<ScatterAddVjp>());
+        register_vjp_emitter(std::make_unique<ScatterSetVjp>());
         register_vjp_emitter(std::make_unique<RepeatVjp>());
         register_vjp_emitter(std::make_unique<DetachVjp>());
         register_vjp_emitter(std::make_unique<MeshgridVjp>());

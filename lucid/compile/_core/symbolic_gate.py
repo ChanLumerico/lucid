@@ -56,6 +56,9 @@ _AXIS_SENSITIVE_OPS: frozenset[str] = frozenset(
         "gather",
         "scatter",
         "scatter_add",
+        # The overwrite: ``x[key] = v`` (always along axis 0 of the flattened
+        # tensor), ``lucid.scatter`` and ``index_copy`` trace as it.
+        "scatter_set",
         "index_select",
         "take",
     }
