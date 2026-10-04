@@ -1141,6 +1141,8 @@ public:
 
     // Symmetric/Hermitian eigendecomposition (real eigenvalues guaranteed).
     // Returns (eigenvalues, eigenvectors); eigenvectors are column-ordered.
+    // Every backend reads only the lower triangle of ``a``; lucid.linalg
+    // maps UPLO onto that by transposing.
     virtual StoragePair linalg_eigh(const Storage& a,
                                     const Shape& shape,
                                     const Shape& values_shape,

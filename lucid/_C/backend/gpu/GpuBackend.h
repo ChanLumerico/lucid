@@ -2817,7 +2817,7 @@ public:
     StoragePair
     linalg_eigh(const Storage& a, const Shape&, const Shape&, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto [w, v] = ::mlx::core::linalg::eigh(*ga.arr, "L", k_linalg_stream);
+        auto [w, v] = ::mlx::core::linalg::eigh(*ga.arr, gpu::k_mlx_eigh_lower, k_linalg_stream);
         return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(w), dt)},
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
     }

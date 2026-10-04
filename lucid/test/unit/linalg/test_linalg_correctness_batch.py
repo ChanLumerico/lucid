@@ -75,25 +75,6 @@ def test_eigh_reads_the_triangle_uplo_names(
     np.testing.assert_allclose(_np(v) ** 2, rv.numpy() ** 2, atol=1e-3)
 
 
-@pytest.mark.parity
-@pytest.mark.parametrize("batch", _BATCHES, ids=str)
-def test_eigh_kernel_reads_the_triangle_the_table_says(
-    batch: tuple[int, ...], device: str, ref: Any
-) -> None:
-    """``eigh`` passes the input straight through when the device's kernel
-    already reads the requested triangle, and transposes it otherwise —
-    so it relies on knowing which triangle each kernel reads.  This pins
-    that knowledge: a kernel that changes sides fails here, not as a
-    silently flipped ``UPLO``."""
-    from lucid._dispatch import _unwrap, _wrap
-
-    a = _lopsided(4, batch)
-    w, _ = LA._la.eigh(_unwrap(lucid.tensor(a, device=device)))
-    reads = LA._EIGH_KERNEL_READS[device]
-    want = ref.linalg.eigvalsh(ref.tensor(a), UPLO=reads).numpy()
-    np.testing.assert_allclose(_np(_wrap(w)), want, rtol=_rtol(device), atol=1e-3)
-
-
 @pytest.mark.parametrize("uplo", ["L", "U"])
 def test_complex_eigh_is_refused_by_eigh_itself(uplo: str, device: str) -> None:
     """Whichever path ``UPLO`` takes, the refusal is the kernel's own dtype

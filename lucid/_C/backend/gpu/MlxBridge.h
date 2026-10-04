@@ -23,6 +23,7 @@
 #include <mlx/array.h>
 #include <mlx/dtype.h>
 #include <mlx/ops.h>
+#include <mlx/version.h>
 
 #include "../../api.h"
 #include "../../core/Dtype.h"
@@ -30,6 +31,17 @@
 #include "../../core/Storage.h"
 
 namespace lucid::gpu {
+
+// The ``UPLO`` flag that makes ``mlx::core::linalg::eigh`` read the lower
+// triangle, which is what ``IBackend::linalg_eigh`` promises.  MLX before
+// 0.32.1 read the triangle opposite the flag it was given
+// (ml-explore/mlx#3834).  The engine only loads the libmlx it was built
+// against, so the build-time version is the one that decides.
+#if MLX_VERSION_NUMERIC >= 32001
+inline constexpr const char* k_mlx_eigh_lower = "L";
+#else
+inline constexpr const char* k_mlx_eigh_lower = "U";
+#endif
 
 // Map a Lucid :enum:`Dtype` to the matching ``mlx::core::Dtype``.
 //

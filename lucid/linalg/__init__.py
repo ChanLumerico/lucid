@@ -1591,31 +1591,25 @@ class _EighVGrad(_AutogradFunction):
         return (dA + dA.mT) * 0.5
 
 
-#: The triangle each device's ``eigh`` kernel reads, whatever ``UPLO`` says.
-#: The CPU hands LAPACK ``syevd`` a column-major copy with ``'L'``; Metal
-#: hands MLX's row-major buffer to the same routine with ``'L'``, which
-#: LAPACK reads column-major — the upper triangle.  Pinned by
-#: ``test_linalg_correctness_batch.py``: a kernel that changes sides trips a
-#: test instead of silently flipping ``UPLO``.
-_EIGH_KERNEL_READS: dict[str, str] = {"cpu": "L", "metal": "U"}
+#: The triangle the engine's ``eigh`` kernel reads on every device.  The
+#: backend owns it: Metal picks the MLX flag that reads it, because MLX
+#: swapped the meaning of its ``UPLO`` in 0.32.1, and a table here keyed by
+#: device went stale with it.  Pinned by ``test_linalg_eigh_triangle.py``.
+_EIGH_KERNEL_READS = "L"
 
 
 def _from_triangle(x: Tensor, UPLO: str, op: str) -> _C_engine.TensorImpl:
     """The matrix to hand the ``eigh`` kernel so it reads ``UPLO``'s triangle.
 
     LAPACK reads one triangle and never looks at the other, so a
-    non-symmetric input is a request about that triangle alone.  The
-    kernels did not agree on which: the CPU read the lower triangle and
-    Metal the upper, whatever ``UPLO`` said — ``S + triu(10, 1)`` gave a
-    different spectrum per device and the documented ``UPLO`` did
-    nothing.
+    non-symmetric input is a request about that triangle alone.
 
-    When the device's kernel already reads the requested triangle the
-    input goes through untouched, so the default ``UPLO="L"`` on the CPU
-    costs nothing.  Otherwise the kernel gets the transpose (conjugated
-    for a Hermitian input), whose other triangle is the requested one: a
-    single view, where mirroring the triangle took four kernels and made
-    a 3x3 Metal ``eigh`` several times slower.
+    When the kernel already reads the requested triangle the input goes
+    through untouched, so the default ``UPLO="L"`` costs nothing.
+    Otherwise the kernel gets the transpose (conjugated for a Hermitian
+    input), whose other triangle is the requested one: a single view,
+    where mirroring the triangle took four kernels and made a 3x3 Metal
+    ``eigh`` several times slower.
 
     The gradient is attached by the caller's Function wrappers, which give
     the symmetric gradient whichever triangle was read — as the reference
@@ -1624,7 +1618,7 @@ def _from_triangle(x: Tensor, UPLO: str, op: str) -> _C_engine.TensorImpl:
     if UPLO not in ("L", "U"):
         raise ValueError(f"{op}: UPLO must be 'L' or 'U', got {UPLO!r}")
     xi = _unwrap(x)
-    if _EIGH_KERNEL_READS["metal" if x.is_metal else "cpu"] == UPLO:
+    if UPLO == _EIGH_KERNEL_READS:
         return xi
     shape = xi.shape
     if len(shape) < 2 or shape[-1] != shape[-2]:
