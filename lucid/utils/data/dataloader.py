@@ -9,6 +9,7 @@ expected, but ``import lucid.utils.data`` itself stays numpy-free.
 import itertools
 import multiprocessing as _mp
 import multiprocessing.queues as _mpq
+from multiprocessing.context import BaseContext
 from multiprocessing.process import BaseProcess
 import pickle
 import queue
@@ -271,6 +272,20 @@ def default_collate(
 # ── fetching ──────────────────────────────────────────────────────────────────
 # The same fetchers run in the main process (``num_workers=0``) and in every
 # worker, so a loader yields the same batches whatever ``num_workers`` is.
+#
+# A fetcher raises ``StopIteration`` for one reason only: an iterable
+# dataset's stream is spent.  The same exception escaping user code — a
+# ``__getitem__``, a ``collate_fn`` — would otherwise end the epoch early
+# and silently, or (in a worker) retire the worker with its share of the
+# data, so it becomes a ``RuntimeError`` here, as PEP 479 does for
+# generators.
+
+
+def _escaped_stop(source: str) -> RuntimeError:
+    return RuntimeError(
+        f"{source} raised StopIteration; a DataLoader would read that as the "
+        "end of the data and drop the rest of the epoch without a word."
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,14 +323,17 @@ class _MapFetcher:
         )
 
     def fetch(self, index: object) -> object:
-        if not self._auto:
-            # ``batch_size=None``: one sample per step, through
-            # ``collate_fn`` (``default_convert`` unless overridden).
-            return self._collate_fn(self._dataset[cast(int, index)])
-        indices = cast(list[int], index)
-        if self._getitems is not None:
-            return self._getitems(indices)
-        return self._collate_fn([self._dataset[i] for i in indices])
+        try:
+            if not self._auto:
+                # ``batch_size=None``: one sample per step, through
+                # ``collate_fn`` (``default_convert`` unless overridden).
+                return self._collate_fn(self._dataset[cast(int, index)])
+            indices = cast(list[int], index)
+            if self._getitems is not None:
+                return self._getitems(indices)
+            return self._collate_fn([self._dataset[i] for i in indices])
+        except StopIteration as exc:
+            raise _escaped_stop("the dataset or collate_fn") from exc
 
 
 @final
@@ -340,11 +358,11 @@ class _IterableFetcher:
             raise StopIteration
         if not self._auto:
             try:
-                item = next(self._iter)
+                item: object = next(self._iter)
             except StopIteration:
                 self._ended = True
                 raise
-            return self._collate_fn(item)
+            return self._collate(item)
         batch: list[object] = []
         while len(batch) < self._batch_size:
             try:
@@ -355,7 +373,13 @@ class _IterableFetcher:
         if not batch or (self._drop_last and len(batch) < self._batch_size):
             self._ended = True
             raise StopIteration
-        return self._collate_fn(batch)
+        return self._collate(batch)
+
+    def _collate(self, data: object) -> object:
+        try:
+            return self._collate_fn(data)
+        except StopIteration as exc:
+            raise _escaped_stop("collate_fn") from exc
 
 
 # ── worker ⇄ main-process messages ────────────────────────────────────────────
@@ -399,6 +423,9 @@ class _WorkerError:
         message: str = self.message
         if exc_type is KeyError:
             message = _KeyErrorMessage(message)
+        if isinstance(exc_type, type) and issubclass(exc_type, StopIteration):
+            # Raised from ``__next__`` it would end the epoch, not report.
+            exc_type = RuntimeError
         if isinstance(exc_type, type) and issubclass(exc_type, BaseException):
             try:
                 return exc_type(message)
@@ -512,6 +539,7 @@ def _worker_loop(
     parent = _mp.parent_process()
     fetcher: _MapFetcher | _IterableFetcher | None = None
     fetcher_epoch = -1
+    orphaned = False
     try:
         while True:
             try:
@@ -525,6 +553,7 @@ def _worker_loop(
                 if done_event.is_set():
                     break
                 if parent is not None and not parent.is_alive():
+                    orphaned = True
                     break
                 continue
             if msg is _SHUTDOWN:
@@ -545,8 +574,14 @@ def _worker_loop(
                         fetcher = spec.make(dataset)
                         fetcher_epoch = epoch
                     data = fetcher.fetch(index)
-                except StopIteration:
-                    data = _IterableEnd()
+                except StopIteration as exc:
+                    data = (
+                        _IterableEnd()
+                        if spec.iterable
+                        else _WorkerError(
+                            exc, f"in DataLoader worker process {worker_id}"
+                        )
+                    )
                 except Exception as exc:  # noqa: BLE001 — re-raised in main
                     data = _WorkerError(
                         exc, f"in DataLoader worker process {worker_id}"
@@ -556,8 +591,10 @@ def _worker_loop(
     except KeyboardInterrupt:
         # Ctrl-C reaches the whole process group; the main process reports it.
         pass
-    if done_event.is_set():
-        # Nobody will read what is still buffered; exit without flushing it.
+    if orphaned or done_event.is_set():
+        # Nobody will read what is still buffered.  Flushing it would block
+        # the exit for good: the feeder thread waits in ``send_bytes`` on a
+        # full pipe whose read end every worker still holds open.
         result_queue.cancel_join_thread()
     result_queue.close()
 
@@ -618,20 +655,11 @@ class _MultiProcessDataLoaderIter:
         self._timeout: float = loader.timeout
         self._iterable: bool = loader._iterable_style
 
-        # multiprocessing_context: use caller's choice if provided,
-        # otherwise default to 'spawn' (safe on macOS/Apple Silicon).
-        mp_ctx = loader.multiprocessing_context
-        if mp_ctx is None:
-            ctx = _mp.get_context("spawn")
-        elif isinstance(mp_ctx, str):
-            ctx = _mp.get_context(mp_ctx)  # type: ignore[assignment]
-        else:
-            ctx = mp_ctx  # type: ignore[assignment]
-
+        ctx = _mp_context(loader.multiprocessing_context)
         self._epoch = 0
         self._result_queue = _ResultQueue(ctx=ctx)
         self._done_event = ctx.Event()
-        self._current_epoch = ctx.Value("q", 0, lock=False)
+        self._current_epoch: _SharedInt = ctx.Value("q", 0, lock=False)
         self._index_queues: list[_mpq.Queue[object]] = []
         self._workers: list[BaseProcess] = []
         self._shutdown = False
@@ -641,7 +669,9 @@ class _MultiProcessDataLoaderIter:
                 index_queue: _mpq.Queue[object] = ctx.Queue()
                 # A task still buffered when the main process exits is moot.
                 index_queue.cancel_join_thread()
-                worker = ctx.Process(
+                # Every concrete context defines ``Process``; the base class
+                # the type stubs describe does not.
+                worker = ctx.Process(  # type: ignore[attr-defined]
                     target=_worker_loop,
                     args=(
                         wid,
@@ -831,6 +861,39 @@ class _MultiProcessDataLoaderIter:
             pass
 
 
+# ── argument checks ───────────────────────────────────────────────────────────
+
+
+def _require_count(
+    name: str, value: object, *, minimum: int, optional: bool = False
+) -> None:
+    """``value`` is an ``int`` (not a ``bool``) ``>= minimum`` — or ``None``."""
+    if optional and value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        allowed = f"an integer >= {minimum}" + (" or None" if optional else "")
+        raise ValueError(f"{name} must be {allowed}, got {value!r}")
+
+
+def _mp_context(context: object) -> BaseContext:
+    """The worker start context: ``None`` → ``spawn``, a start-method name, or
+    a ``multiprocessing`` context object.
+
+    ``spawn`` by default: ``fork`` is unsafe on macOS once Metal, Accelerate
+    or any other thread-owning framework is loaded.
+    """
+    if context is None:
+        return _mp.get_context("spawn")
+    if isinstance(context, str):
+        return _mp.get_context(context)  # ValueError for an unknown method
+    if isinstance(context, BaseContext):
+        return context
+    raise TypeError(
+        "multiprocessing_context must be a start-method name or a "
+        f"multiprocessing context, got {type(context).__name__}"
+    )
+
+
 # ── DataLoader ────────────────────────────────────────────────────────────────
 
 
@@ -976,44 +1039,54 @@ class DataLoader:
         Raises
         ------
         ValueError
-            On any of the above mutual-exclusion / range violations, a
-            ``batch_size`` that is not a positive integer or ``None``, a
-            negative ``num_workers`` or ``timeout``, or an unknown
-            ``multiprocessing_context`` start method.
+            On any of the above mutual-exclusion violations; a
+            ``batch_size`` or ``prefetch_factor`` that is not a positive
+            integer (or ``None``); a ``num_workers`` that is not an integer
+            ``>= 0``; a negative or NaN ``timeout``; ``prefetch_factor``,
+            ``multiprocessing_context`` or ``persistent_workers`` given
+            with ``num_workers=0``; or an unknown start-method name.
         TypeError
-            If ``generator`` is neither a :class:`lucid.Generator`, a
-            seed, nor ``None``.
+            If ``timeout`` is not a number, ``collate_fn`` or
+            ``worker_init_fn`` is not callable, ``multiprocessing_context``
+            is neither a name nor a context, or ``generator`` is neither a
+            :class:`lucid.Generator`, a seed, nor ``None`` (a ``bool`` is
+            not a seed).
         """
-        if batch_size is not None and (
-            isinstance(batch_size, bool)
-            or not isinstance(batch_size, int)
-            or batch_size <= 0
-        ):
-            raise ValueError(
-                f"batch_size must be a positive integer or None, got {batch_size!r}"
+        # The boundary: every argument is checked here, with an error naming
+        # it, before anything is stored or a worker exists.
+        _require_count("batch_size", batch_size, minimum=1, optional=True)
+        _require_count("num_workers", num_workers, minimum=0)
+        _require_count("prefetch_factor", prefetch_factor, minimum=1, optional=True)
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise TypeError(
+                f"timeout must be a number of seconds, got {type(timeout).__name__}"
             )
-        if (
-            isinstance(num_workers, bool)
-            or not isinstance(num_workers, int)
-            or num_workers < 0
-        ):
-            raise ValueError(
-                f"num_workers must be an integer >= 0, got {num_workers!r}"
-            )
-        if isinstance(multiprocessing_context, str):
-            # An unknown start method fails here, not at the first epoch.
-            _mp.get_context(multiprocessing_context)
-        if timeout < 0:
+        if not timeout >= 0:  # NaN included
             raise ValueError(f"timeout must be >= 0, got {timeout}")
-        if prefetch_factor is not None and prefetch_factor <= 0:
-            raise ValueError(f"prefetch_factor must be > 0, got {prefetch_factor}")
-        if persistent_workers and num_workers == 0:
-            raise ValueError("persistent_workers requires num_workers > 0")
+        for name, fn in (
+            ("collate_fn", collate_fn),
+            ("worker_init_fn", worker_init_fn),
+        ):
+            if fn is not None and not callable(fn):
+                raise TypeError(f"{name} must be callable, got {type(fn).__name__}")
+        if num_workers == 0:
+            for name, given in (
+                ("prefetch_factor", prefetch_factor is not None),
+                ("multiprocessing_context", multiprocessing_context is not None),
+                ("persistent_workers", bool(persistent_workers)),
+            ):
+                if given:
+                    raise ValueError(
+                        f"{name} only applies to worker processes; it needs "
+                        "num_workers > 0."
+                    )
+        _mp_context(multiprocessing_context)  # unknown or wrong type: refused now
         if batch_size is None and drop_last:
             raise ValueError(
                 "batch_size=None turns automatic batching off, so there is no "
                 "short last batch for drop_last to drop."
             )
+        generator = _as_generator(generator, "DataLoader")
 
         self.dataset = dataset
         self.batch_size = batch_size
@@ -1024,7 +1097,7 @@ class DataLoader:
         self.multiprocessing_context = multiprocessing_context
         # Shared by the default RandomSampler and the workers' base seed, so
         # one generator reproduces the order and the augmentations together.
-        self.generator: Generator | None = _as_generator(generator, "DataLoader")
+        self.generator: Generator | None = generator
         # Match reference framework: prefetch_factor=None when num_workers=0, else default 2
         if prefetch_factor is None:
             self.prefetch_factor = 2 if num_workers > 0 else None

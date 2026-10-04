@@ -16,14 +16,16 @@ import random
 from typing import Iterator, Sequence, cast, override
 
 import lucid
-from lucid._factories.random import Generator, randint
+from lucid._factories.random import Generator
 from lucid._tensor.tensor import Tensor
 from lucid.utils.data.dataset import Dataset
 from lucid.utils.data._rng import (
     _as_generator,
     _draw_seed,
+    _host_float64,
     _permutation,
     _uniform_doubles,
+    _uniform_indices,
 )
 
 
@@ -236,8 +238,7 @@ class RandomSampler(Sampler):
         if rng is None:
             rng = Generator(_draw_seed(None))
         if self.replacement:
-            draws = randint(0, n, (self.num_samples,), generator=rng)
-            yield from cast(list[int], draws.tolist())
+            yield from _uniform_indices(n, self.num_samples, rng)
             return
         for _ in range(self.num_samples // n):
             yield from _permutation(n, rng)
@@ -469,7 +470,7 @@ class WeightedRandomSampler(Sampler):
         # Efraimidis–Spirakis: the ``take`` largest keys log(u) / w are a
         # weighted draw without replacement, already in draw order.  A zero
         # weight's key is -inf, so it is never among them.
-        w = lucid.tensor(weights, dtype=lucid.float64)
+        w = _host_float64(weights)
         noise = _uniform_doubles(len(weights), self.generator)
         keys = noise.clamp(min=2.0**-60).log() / w
         _, order = lucid.topk(keys, take)
