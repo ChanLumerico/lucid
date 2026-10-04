@@ -3,7 +3,7 @@
   "name": "ijepa",
   "path": "lucid.models.vision.ijepa",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/__init__.py#L1",
   "members": [
     {
       "name": "IJEPAConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "IJEPAConfig(image_size: int = 224, patch_size: int = 16, in_channels: int = 3, num_classes: int = 1000, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, predictor_dim: int = 384, predictor_depth: int = 6, predictor_heads: int | None = None, num_target_blocks: int = 4, target_scale: tuple[float, float] = (0.15, 0.2), target_aspect: tuple[float, float] = (0.75, 1.5), context_scale: tuple[float, float] = (0.85, 1.0), min_keep: int = 10, allow_overlap: bool = False, ema: tuple[float, float] = (0.996, 1.0), objective: IJEPAObjective = 'smooth_l1', smooth_l1_beta: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_config.py#L29",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_config.py#L29",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "grid_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_config.py#L192",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_config.py#L192",
           "summary": "Patches along one side of the image.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "num_patches: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_config.py#L197",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_config.py#L197",
           "summary": "Patches in an image.  There is no class token to add to it.",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "resolved_predictor_heads: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_config.py#L202",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_config.py#L202",
           "summary": "Heads the predictor runs with, taking the encoder's when unset.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_size: int = 224, patch_size: int = 16, in_channels: int = 3, num_classes: int = 1000, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, predictor_dim: int = 384, predictor_depth: int = 6, predictor_heads: int | None = None, num_target_blocks: int = 4, target_scale: tuple[float, float] = (0.15, 0.2), target_aspect: tuple[float, float] = (0.75, 1.5), context_scale: tuple[float, float] = (0.85, 1.0), min_keep: int = 10, allow_overlap: bool = False, ema: tuple[float, float] = (0.996, 1.0), objective: IJEPAObjective = 'smooth_l1', smooth_l1_beta: float = 1.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_config.py#L1",
           "subcategory": "config",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -246,7 +246,7 @@
         ">>> from lucid.models.vision.ijepa import IJEPAConfig\n>>> config = IJEPAConfig()\n>>> config.num_patches, config.grid_size\n(196, 14)\n>>> config.predictor_dim, config.num_target_blocks\n(384, 4)\nThe predictor takes the encoder's head count when it is not given:\n>>> IJEPAConfig(num_heads=16, predictor_heads=None).resolved_predictor_heads\n16"
       ],
       "notes": [
-        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Table 1 for the variants and Appendix A.1 for the\nmasking and the momentum schedule."
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n(arXiv:2301.08243), Table 1 for the variants and Appendix A.1 for the\nmasking and the momentum schedule."
       ],
       "attributes": [],
       "warns": [],
@@ -263,7 +263,7 @@
       ],
       "labels": [],
       "signature": "IJEPAForImageClassification(config: IJEPAConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L584",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L584",
       "subcategory": "model",
       "methods": [
         {
@@ -272,7 +272,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: IJEPAConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L627",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L627",
           "subcategory": "model",
           "summary": "Build the probe. See the class docstring for parameters.",
           "extended": null,
@@ -294,7 +294,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L634",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L634",
           "subcategory": "model",
           "summary": "Classify images from the frozen representation.",
           "extended": null,
@@ -340,7 +340,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.ijepa import (\n...     IJEPAConfig, IJEPAForImageClassification)\n>>> config = IJEPAConfig(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, num_classes=10, min_keep=1)\n>>> model = IJEPAForImageClassification(config).eval()\n>>> model(lucid.rand(2, 3, 32, 32)).logits.shape\n(2, 10)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Appendix A.2 — the paper\nevaluates by linear probing the frozen target encoder, which is what\nthis is.  The target encoder cannot be trained through this class: its\nparameters are frozen where they are built, so an optimiser handed\neverything still only moves the head.\n\nIt carries the whole pretraining model — both encoders and the\npredictor — because that is what a checkpoint holds and what\ncontinuing to pretrain would need.  Inference uses one of the three,\nso an exported package is about three times the size it has to be."
+        "Reference: Assran et al., arXiv:2301.08243, Appendix A.2 — the paper\nevaluates by linear probing the frozen target encoder, which is what\nthis is.  The target encoder cannot be trained through this class: its\nparameters are frozen where they are built, so an optimiser handed\neverything still only moves the head.\n\nIt carries the whole pretraining model — both encoders and the\npredictor — because that is what a checkpoint holds and what\ncontinuing to pretrain would need.  Inference uses one of the three,\nso an exported package is about three times the size it has to be."
       ],
       "attributes": [
         {
@@ -368,7 +368,7 @@
       ],
       "labels": [],
       "signature": "IJEPAModel(config: IJEPAConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L338",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L338",
       "subcategory": "model",
       "methods": [
         {
@@ -377,7 +377,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: IJEPAConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L395",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L395",
           "subcategory": "model",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -401,7 +401,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L417",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L417",
           "summary": "One stage: patch tokens at the encoder's width.",
           "extended": null,
           "parameters": [],
@@ -422,7 +422,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L421",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L421",
           "subcategory": "model",
           "summary": "The average-pooled target encoder, which is `encode`.",
           "extended": "A backbone's features here are the representation the paper\nevaluates — the target encoder's, not the context encoder's.",
@@ -444,7 +444,7 @@
           "kind": "function",
           "labels": [],
           "signature": "trainable_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L432",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L432",
           "subcategory": "model",
           "summary": "Everything an optimiser should be given.",
           "extended": null,
@@ -466,7 +466,7 @@
           "kind": "function",
           "labels": [],
           "signature": "momentum(step: int, total_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L446",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L446",
           "subcategory": "model",
           "summary": "The target encoder's momentum at a training step.",
           "extended": null,
@@ -501,7 +501,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_target(momentum: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L469",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L469",
           "subcategory": "model",
           "summary": "Move the target encoder toward the context encoder.",
           "extended": "Call it after the optimiser step: this writes parameters in place,\nand doing that while a graph that read them is alive would sever\nthe two.",
@@ -530,7 +530,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L493",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L493",
           "subcategory": "model",
           "summary": "The representation downstream tasks use.",
           "extended": "Appendix A.1 evaluates the *target* encoder, average-pooled over\npatches — not the context encoder, which is a silent accuracy loss.",
@@ -561,7 +561,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L524",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L524",
           "subcategory": "model",
           "summary": "Run one pretraining step's worth of computation.",
           "extended": null,
@@ -601,7 +601,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.ijepa import IJEPAConfig, IJEPAModel\n>>> config = IJEPAConfig(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, min_keep=1,\n...     target_scale=(0.1, 0.2), context_scale=(0.8, 1.0))\n>>> model = IJEPAModel(config)\n>>> out = model(lucid.rand(2, 3, 32, 32))\n>>> out.prediction.shape == out.target.shape\nTrue\n>>> float(out.loss.item()) >= 0.0\nTrue\nThe representation a downstream task uses is the target encoder's,\naverage-pooled:\n>>> model.encode(lucid.rand(2, 3, 32, 32)).shape\n(2, 16)"
       ],
       "notes": [
-        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Section 3 and Appendix A.1.\n\nThe target encoder is not updated by the optimiser.  Call\n`update_target` after each step, with\n`momentum` for the value the schedule asks for.\n\nTwo details come from the released code rather than the paper: the\ntarget representations are layer-normalised (without affine terms)\nbefore the loss reads them, and that loss is smooth L1 where the paper\nwrites $\\ell_2$.  `config.objective` selects between them."
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n(arXiv:2301.08243), Section 3 and Appendix A.1.\n\nThe target encoder is not updated by the optimiser.  Call\n`update_target` after each step, with\n`momentum` for the value the schedule asks for.\n\nTwo details come from the released code rather than the paper: the\ntarget representations are layer-normalised (without affine terms)\nbefore the loss reads them, and that loss is smooth L1 where the paper\nwrites $\\ell_2$.  `config.objective` selects between them."
       ],
       "attributes": [
         {
@@ -633,7 +633,7 @@
       ],
       "labels": [],
       "signature": "IJEPAOutput(loss: Tensor, prediction: Tensor, target: Tensor, context_indices: Tensor, target_indices: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L295",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L295",
       "subcategory": "model",
       "methods": [
         {
@@ -642,7 +642,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, prediction: Tensor, target: Tensor, context_indices: Tensor, target_indices: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_model.py#L1",
           "subcategory": "model",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -704,7 +704,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_base_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L61",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L61",
       "subcategory": "pretrained",
       "summary": "I-JEPA with a ViT-B/16 encoder.",
       "extended": null,
@@ -731,7 +731,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_base_16\")\n>>> config.dim, config.depth, config.num_heads, config.predictor_depth\n(768, 12, 12, 6)\n>>> config.num_patches\n196"
       ],
       "notes": [
-        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Table 1 — 72.9% ImageNet-1k linear probe after 600\nepochs.  Its predictor is 6 blocks deep, the shallowest of the four."
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n(arXiv:2301.08243), Table 1 — 72.9% ImageNet-1k linear probe after 600\nepochs.  Its predictor is 6 blocks deep, the shallowest of the four."
       ],
       "attributes": [],
       "warns": [],
@@ -961,7 +961,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_base_16_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L105",
       "subcategory": "pretrained",
       "summary": "A linear probe on I-JEPA ViT-B/16.",
       "extended": null,
@@ -988,7 +988,7 @@
         ">>> from lucid.models import ijepa_base_16_cls\n>>> model = ijepa_base_16_cls(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, num_classes=10, min_keep=1)\n>>> model.config.num_classes\n10"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Appendix A.2 — the paper's\nevaluation protocol is a linear probe on the average-pooled target\nencoder."
+        "Reference: Assran et al., arXiv:2301.08243, Appendix A.2 — the paper's\nevaluation protocol is a linear probe on the average-pooled target\nencoder."
       ],
       "attributes": [],
       "warns": [],
@@ -1233,7 +1233,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_huge_14(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L233",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L233",
       "subcategory": "pretrained",
       "summary": "I-JEPA with a ViT-H/14 encoder.",
       "extended": null,
@@ -1260,7 +1260,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_huge_14\")\n>>> config.patch_size, config.grid_size, config.num_patches\n(14, 16, 256)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 79.3% ImageNet-1k\nlinear probe after 300 epochs, 73.3% on 1% of ImageNet (Table 2), and\nthe transfer results of Tables 3 and 4 (CIFAR-100 87.5, Places205\n58.4, Clevr/Count 86.7).\n\nA 14-pixel patch over 224 pixels is a 16×16 grid, the same token count\nas the /16 models at that resolution."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1 — 79.3% ImageNet-1k\nlinear probe after 300 epochs, 73.3% on 1% of ImageNet (Table 2), and\nthe transfer results of Tables 3 and 4 (CIFAR-100 87.5, Places205\n58.4, Clevr/Count 86.7).\n\nA 14-pixel patch over 224 pixels is a 16×16 grid, the same token count\nas the /16 models at that resolution."
       ],
       "attributes": [],
       "warns": [],
@@ -1490,7 +1490,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_huge_14_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L279",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L279",
       "subcategory": "pretrained",
       "summary": "A linear probe on I-JEPA ViT-H/14.",
       "extended": null,
@@ -1517,7 +1517,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_huge_14_cls\").dim\n1280"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1."
       ],
       "attributes": [],
       "warns": [],
@@ -1762,7 +1762,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_huge_16_448(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L319",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L319",
       "subcategory": "pretrained",
       "summary": "I-JEPA with a ViT-H/16 encoder at 448 pixels.",
       "extended": null,
@@ -1789,7 +1789,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_huge_16_448\")\n>>> config.image_size, config.num_patches\n(448, 784)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 81.1% ImageNet-1k\nlinear probe, the paper's best, and 77.3% on 1% of ImageNet (Table 2);\n87.1% when fine-tuned on all of it (Table 15).\n\nFour times the pixels is four times the tokens: 784 patches against\n196, which is where the accuracy comes from and what it costs."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1 — 81.1% ImageNet-1k\nlinear probe, the paper's best, and 77.3% on 1% of ImageNet (Table 2);\n87.1% when fine-tuned on all of it (Table 15).\n\nFour times the pixels is four times the tokens: 784 patches against\n196, which is where the accuracy comes from and what it costs."
       ],
       "attributes": [],
       "warns": [],
@@ -2019,7 +2019,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_huge_16_448_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L364",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L364",
       "subcategory": "pretrained",
       "summary": "A linear probe on I-JEPA ViT-H/16 at 448 pixels.",
       "extended": null,
@@ -2046,7 +2046,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_huge_16_448_cls\").image_size\n448"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 and Appendix A.2."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1 and Appendix A.2."
       ],
       "attributes": [],
       "warns": [],
@@ -2291,7 +2291,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_large_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L151",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L151",
       "subcategory": "pretrained",
       "summary": "I-JEPA with a ViT-L/16 encoder.",
       "extended": null,
@@ -2318,7 +2318,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_large_16\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 77.5% ImageNet-1k\nlinear probe after 600 epochs, and 69.4% on 1% of ImageNet (Table 2).\nTable 13 reports 77.8% for the same model under the weight-decay\nschedule it prefers, which is the paper disagreeing with itself by 0.3."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1 — 77.5% ImageNet-1k\nlinear probe after 600 epochs, and 69.4% on 1% of ImageNet (Table 2).\nTable 13 reports 77.8% for the same model under the weight-decay\nschedule it prefers, which is the paper disagreeing with itself by 0.3."
       ],
       "attributes": [],
       "warns": [],
@@ -2548,7 +2548,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ijepa_large_16_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/ijepa/_pretrained.py#L193",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/ijepa/_pretrained.py#L193",
       "subcategory": "pretrained",
       "summary": "A linear probe on I-JEPA ViT-L/16.",
       "extended": null,
@@ -2575,7 +2575,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_large_16_cls\").predictor_depth\n12"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1."
+        "Reference: Assran et al., arXiv:2301.08243, Table 1."
       ],
       "attributes": [],
       "warns": [],
@@ -2816,7 +2816,7 @@
     }
   ],
   "summary": "I-JEPA — self-supervised pretraining that predicts representations.",
-  "extended": "Assran et al., CVPR 2023 ([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)).  A context block is encoded,\nand a narrow predictor must say what an exponential moving average of that\nencoder would report about four blocks it was never shown.  Nothing is\nreconstructed in pixel space, which is the point.",
+  "extended": "Assran et al., CVPR 2023 (arXiv:2301.08243).  A context block is encoded,\nand a narrow predictor must say what an exponential moving average of that\nencoder would report about four blocks it was never shown.  Nothing is\nreconstructed in pixel space, which is the point.",
   "parameters": [],
   "returns": null,
   "raises": [],

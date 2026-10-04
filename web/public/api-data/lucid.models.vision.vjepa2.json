@@ -3,7 +3,7 @@
   "name": "vjepa2",
   "path": "lucid.models.vision.vjepa2",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/__init__.py#L1",
   "members": [
     {
       "name": "VJEPA2Config",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2Config(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, uniform_power: bool = False, drop_rate: float = 0.0, attn_drop_rate: float = 0.0, drop_path_rate: float = 0.0, predictor_dim: int = 384, predictor_out_dim: int | None = None, predictor_depth: int = 12, predictor_heads: int = 12, predictor_mlp_ratio: float = 4.0, predictor_num_mask_tokens: int = 10, zero_init_mask_tokens: bool = True, predictor_return_all_tokens: bool = False, num_pooler_layers: int = 3, normalize_targets: bool = True, objective: str = 'l1', ema: tuple[float, float] = (0.99925, 0.99925), ema_schedule_scale: float = 1.25)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "token_grid: tuple[int, int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_config.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_config.py#L142",
           "summary": "Number of tubelet positions along time, height and width.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "num_tokens: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_config.py#L151",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_config.py#L151",
           "summary": "Number of tokens in a full configured clip.",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "predictor_output_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_config.py#L157",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_config.py#L157",
           "summary": "Target width emitted by the predictor.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, uniform_power: bool = False, drop_rate: float = 0.0, attn_drop_rate: float = 0.0, drop_path_rate: float = 0.0, predictor_dim: int = 384, predictor_out_dim: int | None = None, predictor_depth: int = 12, predictor_heads: int = 12, predictor_mlp_ratio: float = 4.0, predictor_num_mask_tokens: int = 10, zero_init_mask_tokens: bool = True, predictor_return_all_tokens: bool = False, num_pooler_layers: int = 3, normalize_targets: bool = True, objective: str = 'l1', ema: tuple[float, float] = (0.99925, 0.99925), ema_schedule_scale: float = 1.25)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -229,7 +229,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2ForVideoClassification(config: VJEPA2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1261",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1261",
       "subcategory": "model",
       "methods": [
         {
@@ -238,7 +238,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VJEPA2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1291",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1291",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -260,7 +260,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1298",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1298",
           "subcategory": "model",
           "summary": "Classify a clip and optionally return cross-entropy loss.",
           "extended": "The backbone is the frozen target encoder, which is what the\npaper's probe reads.  Freezing is a property of those parameters,\nnot of this call: wrapping the pass in `no_grad` would also\nstop a caller who unfroze them deliberately.",
@@ -324,7 +324,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2Model(config: VJEPA2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1054",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1054",
       "subcategory": "model",
       "methods": [
         {
@@ -333,7 +333,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VJEPA2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1066",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1066",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -357,7 +357,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1124",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1124",
           "summary": "The single tubelet-token feature stage.",
           "extended": null,
           "parameters": [],
@@ -378,7 +378,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1128",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1128",
           "subcategory": "model",
           "summary": "Return the mean target representation for backbone consumers.",
           "extended": null,
@@ -400,7 +400,7 @@
           "kind": "function",
           "labels": [],
           "signature": "trainable_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1133",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1133",
           "subcategory": "model",
           "summary": "Return context-encoder and predictor parameters only.",
           "extended": null,
@@ -422,7 +422,7 @@
           "kind": "function",
           "labels": [],
           "signature": "momentum(step: int, total_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1137",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1137",
           "subcategory": "model",
           "summary": "The target encoder's momentum at a training step.",
           "extended": null,
@@ -459,7 +459,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_target(momentum: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1168",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1168",
           "subcategory": "model",
           "summary": "Update the non-gradient target encoder after an optimiser step.",
           "extended": null,
@@ -481,7 +481,7 @@
           "kind": "function",
           "labels": [],
           "signature": "tokens(x: Tensor, target: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1192",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1192",
           "subcategory": "model",
           "summary": "Return the full `(B, N, dim)` token map.",
           "extended": null,
@@ -503,7 +503,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1198",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1198",
           "subcategory": "model",
           "summary": "Return mean-pooled target-encoder representations `(B, dim)`.",
           "extended": null,
@@ -525,7 +525,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, context_indices: Tensor | None = None, target_indices: Tensor | None = None, mask_index: int = 1)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1209",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1209",
           "subcategory": "model",
           "summary": "Run representation extraction or a masked prediction step.",
           "extended": null,
@@ -563,7 +563,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2Output(tokens: Tensor | None = None, prediction: Tensor | None = None, target: Tensor | None = None, loss: Tensor | None = None, context_indices: Tensor | None = None, target_indices: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L923",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L923",
       "subcategory": "model",
       "methods": [
         {
@@ -572,7 +572,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(tokens: Tensor | None = None, prediction: Tensor | None = None, target: Tensor | None = None, loss: Tensor | None = None, context_indices: Tensor | None = None, target_indices: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -606,7 +606,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_giant(pretrained: bool | str = False, weights: VJEPA2ViTGiantWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L167",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L167",
       "subcategory": "pretrained",
       "summary": "The released V-JEPA 2 ViT-g/16 backbone at 256 pixels.",
       "extended": null,
@@ -639,7 +639,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> round(config.mlp_ratio, 4), config.predictor_mlp_ratio\n(4.3636, 4.0)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nViT-g/16 at 1B parameters and resolution 256.  This is the variant the\naction-conditioned model is post-trained from, and the only one whose\nencoder widens its feed-forward to `48 / 11` while keeping 22\nattention heads.  The FPC64-256 tag reproduces its source to `1.0e-4`\nrelative."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The release lists\nViT-g/16 at 1B parameters and resolution 256.  This is the variant the\naction-conditioned model is post-trained from, and the only one whose\nencoder widens its feed-forward to `48 / 11` while keeping 22\nattention heads.  The FPC64-256 tag reproduces its source to `1.0e-4`\nrelative."
       ],
       "attributes": [],
       "warns": [],
@@ -910,7 +910,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_giant_384(pretrained: bool | str = False, weights: VJEPA2ViTGiant384Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L223",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L223",
       "subcategory": "pretrained",
       "summary": "The released V-JEPA 2 ViT-g/16 backbone at 384 pixels.",
       "extended": null,
@@ -943,7 +943,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_384\")\n>>> config.image_size, config.token_grid\n(384, (32, 24, 24))\n>>> config.num_tokens\n18432"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The same network as\n`vjepa2_vit_giant` evaluated at a higher resolution: the rotary\ngeometry is computed from token positions rather than read from a\nlearned table, so the wider grid needs no interpolation and no new\nparameters — only more tokens, 18432 against 8192."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The same network as\n`vjepa2_vit_giant` evaluated at a higher resolution: the rotary\ngeometry is computed from token positions rather than read from a\nlearned table, so the wider grid needs no interpolation and no new\nparameters — only more tokens, 18432 against 8192."
       ],
       "attributes": [],
       "warns": [],
@@ -1214,7 +1214,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_giant_384_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L426",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L426",
       "subcategory": "pretrained",
       "summary": "V-JEPA 2 ViT-g/16 at 384 pixels under the paper's attentive probe.",
       "extended": null,
@@ -1241,7 +1241,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_384_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
       ],
       "attributes": [],
       "warns": [],
@@ -1660,7 +1660,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_giant_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L375",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L375",
       "subcategory": "pretrained",
       "summary": "V-JEPA 2 ViT-g/16 at 256 pixels under the paper's attentive probe.",
       "extended": null,
@@ -1687,7 +1687,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
       ],
       "attributes": [],
       "warns": [],
@@ -2106,7 +2106,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_huge(pretrained: bool | str = False, weights: VJEPA2ViTHugeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L112",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L112",
       "subcategory": "pretrained",
       "summary": "The released V-JEPA 2 ViT-H/16 backbone at 256 pixels.",
       "extended": null,
@@ -2139,7 +2139,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_huge\")\n>>> config.dim, config.depth, config.num_heads\n(1280, 32, 16)\n>>> config.token_grid, config.num_tokens\n((32, 16, 16), 8192)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nViT-H/16 at 600M parameters and resolution 256 — that figure counts one\nencoder, while this factory builds two of them and the predictor.  The\nFPC64-256 SafeTensors tag is hosted by Lucid and reproduces its source\nto `5.3e-5` relative."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The release lists\nViT-H/16 at 600M parameters and resolution 256 — that figure counts one\nencoder, while this factory builds two of them and the predictor.  The\nFPC64-256 SafeTensors tag is hosted by Lucid and reproduces its source\nto `5.3e-5` relative."
       ],
       "attributes": [],
       "warns": [],
@@ -2410,7 +2410,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_huge_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L324",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L324",
       "subcategory": "pretrained",
       "summary": "V-JEPA 2 ViT-H/16 under the paper's attentive probe.",
       "extended": null,
@@ -2437,7 +2437,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_huge_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1280, 32, 16)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
       ],
       "attributes": [],
       "warns": [],
@@ -2856,7 +2856,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_large(pretrained: bool | str = False, weights: VJEPA2ViTLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L57",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L57",
       "subcategory": "pretrained",
       "summary": "Construct the released V-JEPA 2 ViT-L/16 backbone at 256 pixels.",
       "extended": null,
@@ -2889,7 +2889,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_large\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)\n>>> config.token_grid, config.num_tokens\n((32, 16, 16), 8192)"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nthis variant as ViT-L/16, 300M parameters, resolution 256 — that figure\ncounts one encoder, while this factory builds two of them and the\npredictor.  The FPC64-256 tag reproduces its source to `1.7e-5`\nrelative, the closest of the four."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The release lists\nthis variant as ViT-L/16, 300M parameters, resolution 256 — that figure\ncounts one encoder, while this factory builds two of them and the\npredictor.  The FPC64-256 tag reproduces its source to `1.7e-5`\nrelative, the closest of the four."
       ],
       "attributes": [],
       "warns": [],
@@ -3160,7 +3160,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa2_vit_large_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_pretrained.py#L278",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_pretrained.py#L278",
       "subcategory": "pretrained",
       "summary": "V-JEPA 2 ViT-L/16 under the paper's attentive probe.",
       "extended": null,
@@ -3187,7 +3187,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa2_vit_large_cls\").num_classes\n400"
       ],
       "notes": [
-        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention\nblocks and one learned query, which is what `num_pooler_layers`\ndefaults to; `num_classes` defaults to 400, Kinetics-400's count."
+        "Reference: Assran et al., arXiv:2506.09985, 2025.  The released\nclassifiers read a frozen backbone through three self-attention\nblocks and one learned query, which is what `num_pooler_layers`\ndefaults to; `num_classes` defaults to 400, Kinetics-400's count."
       ],
       "attributes": [],
       "warns": [],
@@ -3610,7 +3610,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2ViTGiant384Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_weights.py#L184",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_weights.py#L184",
       "subcategory": "weights",
       "methods": [],
       "summary": "FPC64 ViT-g/16 representation weights at 384 pixels.",
@@ -3634,7 +3634,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2ViTGiantWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_weights.py#L152",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_weights.py#L152",
       "subcategory": "weights",
       "methods": [],
       "summary": "FPC64 ViT-g/16 representation weights at 256 pixels.",
@@ -3658,7 +3658,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2ViTHugeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_weights.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_weights.py#L122",
       "subcategory": "weights",
       "methods": [],
       "summary": "FPC64 ViT-H/16 representation weights at 256 pixels.",
@@ -3682,7 +3682,7 @@
       ],
       "labels": [],
       "signature": "VJEPA2ViTLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35e1de7fb/lucid/models/vision/vjepa2/_weights.py#L91",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa2/_weights.py#L91",
       "subcategory": "weights",
       "methods": [],
       "summary": "FPC64 ViT-L/16 representation weights at 256 pixels.",
@@ -3708,7 +3708,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "V-JEPA 2",
-  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.",
+  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" arXiv:2506.09985, 2025.",
   "theory": "V-JEPA 2 learns a video representation by predicting the target encoder's\nlatent features at hidden tubelet positions.  A 3-D patch embedding turns\na clip into a sequence of $2\\times16\\times16$ tubelets.  The context\nencoder sees only the unmasked indices, while the predictor inserts learned\nmask tokens and reconstructs the target encoder's representation at the\nheld-out indices.  The target encoder is an exponential moving average of\nthe context encoder and is not differentiated through.\n\nThe released backbone uses a pre-normalised transformer with three-axis\nrotary position encoding.  Each attention head gives one third of its\nwidth to time, row and column — rounded down to an even number, so a\nhead of 64 channels rotates 20 per axis and leaves the last four\nuntouched.  Because position enters through that rotation rather than a\nlearned table, a clip of a different length or resolution needs no\ninterpolation and no new parameters: the 384-pixel variant is the\n256-pixel network read over a wider grid.\n\nTwo details of the released rotation are reproduced rather than\ncorrected.  The frequency half is repeated as a block before adjacent\nfeature pairs are rotated, which pairs each rotation with a frequency\nthat a straightforward implementation would not choose; the upstream\nsource marks it as a bug and keeps it, because the published weights\nwere trained through it.  Fixing it yields a different model, not a\nbetter-implemented one.\n\nThe predictor is narrower than the video encoder — 384 channels and 12\nheads in every released checkpoint, whatever the encoder's width — and\nowns ten mask-token slots, one per block the mask generator samples.  It\nsees the context tokens and the mask tokens together, sorted into token\norder so that a position's identity reaches attention through the same\nrotary coordinates the encoder used, then answers only at the held-out\npositions.  Targets come from the momentum encoder and are\nlayer-normalised, so the objective compares directions in\nrepresentation space rather than magnitudes.",
   "tasks": [
     "image-classification"

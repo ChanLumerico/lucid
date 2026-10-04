@@ -3,7 +3,7 @@
   "name": "vjepa",
   "path": "lucid.models.vision.vjepa",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/__init__.py#L1",
   "members": [
     {
       "name": "VJEPAConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "VJEPAConfig(image_size: int = 224, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 16, sampling_rate: int = 4, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, uniform_power: bool = True, predictor_dim: int = 384, predictor_depth: int = 12, predictor_heads: int | None = None, short_range_blocks: int = 8, short_range_scale: tuple[float, float] = (0.15, 0.15), long_range_blocks: int = 2, long_range_scale: tuple[float, float] = (0.7, 0.7), aspect_ratio: tuple[float, float] = (0.75, 1.5), ema: tuple[float, float] = (0.998, 1.0), ema_schedule_scale: float = 1.25, objective: VJEPAObjective = 'l1', smooth_l1_beta: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_config.py#L27",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_config.py#L27",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "token_grid: tuple[int, int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_config.py#L198",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_config.py#L198",
           "summary": "Tokens along time, row and column.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "num_tokens: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_config.py#L204",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_config.py#L204",
           "summary": "Tokens in a clip.  There is no class token to add to it.",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "resolved_predictor_heads: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_config.py#L210",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_config.py#L210",
           "summary": "Heads the predictor runs with, taking the encoder's when unset.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_size: int = 224, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 16, sampling_rate: int = 4, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, uniform_power: bool = True, predictor_dim: int = 384, predictor_depth: int = 12, predictor_heads: int | None = None, short_range_blocks: int = 8, short_range_scale: tuple[float, float] = (0.15, 0.15), long_range_blocks: int = 2, long_range_scale: tuple[float, float] = (0.7, 0.7), aspect_ratio: tuple[float, float] = (0.75, 1.5), ema: tuple[float, float] = (0.998, 1.0), ema_schedule_scale: float = 1.25, objective: VJEPAObjective = 'l1', smooth_l1_beta: float = 1.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_config.py#L1",
           "subcategory": "config",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -270,7 +270,7 @@
         ">>> from lucid.models.vision.vjepa import VJEPAConfig\n>>> config = VJEPAConfig()\n>>> config.token_grid, config.num_tokens\n((8, 14, 14), 1568)\n>>> config.short_range_blocks, config.long_range_blocks\n(8, 2)\nFour times the pixels is four times the tokens:\n>>> VJEPAConfig(image_size=384).num_tokens\n4608"
       ],
       "notes": [
-        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024\n— Table 6 for the variants and their results, Table 8 for the\narchitecture and the schedules, Section 3.2 for the masking."
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, arXiv:2404.08471, 2024\n— Table 6 for the variants and their results, Table 8 for the\narchitecture and the schedules, Section 3.2 for the masking."
       ],
       "attributes": [],
       "warns": [],
@@ -287,7 +287,7 @@
       ],
       "labels": [],
       "signature": "VJEPAForVideoClassification(config: VJEPAConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L687",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L687",
       "subcategory": "model",
       "methods": [
         {
@@ -296,7 +296,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VJEPAConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L732",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L732",
           "subcategory": "model",
           "summary": "Build the probe. See the class docstring for parameters.",
           "extended": null,
@@ -318,7 +318,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L742",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L742",
           "subcategory": "model",
           "summary": "Classify clips from the frozen feature map.",
           "extended": null,
@@ -364,7 +364,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vjepa import (\n...     VJEPAConfig, VJEPAForVideoClassification)\n>>> config = VJEPAConfig(\n...     image_size=32, patch_size=8, tubelet_size=2, num_frames=4,\n...     dim=24, depth=1, num_heads=2, predictor_dim=12,\n...     predictor_depth=1, num_classes=10)\n>>> model = VJEPAForVideoClassification(config).eval()\n>>> model(lucid.rand(2, 4, 3, 32, 32)).logits.shape\n(2, 10)"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Section 4.3.  The paper\nevaluates a frozen backbone with this probe rather than with a linear\nmap on averaged tokens, and reports the gap at 17 points on\nKinetics-400 — so a linear probe compared against its tables would be\nmeasuring something else.\n\nRegistered under `image-classification` because that is the task\nthis zoo has; the input is a clip rather than an image, which is what\nthe class name says."
+        "Reference: Bardes et al., arXiv:2404.08471, Section 4.3.  The paper\nevaluates a frozen backbone with this probe rather than with a linear\nmap on averaged tokens, and reports the gap at 17 points on\nKinetics-400 — so a linear probe compared against its tables would be\nmeasuring something else.\n\nRegistered under `image-classification` because that is the task\nthis zoo has; the input is a clip rather than an image, which is what\nthe class name says."
       ],
       "attributes": [
         {
@@ -397,7 +397,7 @@
       ],
       "labels": [],
       "signature": "VJEPAModel(config: VJEPAConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L432",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L432",
       "subcategory": "model",
       "methods": [
         {
@@ -406,7 +406,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VJEPAConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L487",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L487",
           "subcategory": "model",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -430,7 +430,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L506",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L506",
           "summary": "One stage: tubelet tokens at the encoder's width.",
           "extended": null,
           "parameters": [],
@@ -451,7 +451,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L510",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L510",
           "subcategory": "model",
           "summary": "The average-pooled target encoder, which is `encode`.",
           "extended": null,
@@ -473,7 +473,7 @@
           "kind": "function",
           "labels": [],
           "signature": "trainable_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L517",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L517",
           "subcategory": "model",
           "summary": "Everything an optimiser should be given.",
           "extended": null,
@@ -495,7 +495,7 @@
           "kind": "function",
           "labels": [],
           "signature": "momentum(step: int, total_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L530",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L530",
           "subcategory": "model",
           "summary": "The target encoder's momentum at a training step.",
           "extended": null,
@@ -530,7 +530,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_target(momentum: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L557",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L557",
           "subcategory": "model",
           "summary": "Move the target encoder toward the context encoder.",
           "extended": "Call it after the optimiser step: this writes parameters in place.",
@@ -559,7 +559,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L577",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L577",
           "subcategory": "model",
           "summary": "The representation downstream tasks read.",
           "extended": null,
@@ -588,7 +588,7 @@
           "kind": "function",
           "labels": [],
           "signature": "tokens(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L595",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L595",
           "subcategory": "model",
           "summary": "The target encoder's whole feature map, `(B, N, dim)`.",
           "extended": "What the attentive probe reads, and what average-pooling in\n`encode` throws away.",
@@ -610,7 +610,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L625",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L625",
           "subcategory": "model",
           "summary": "Run one pretraining step's worth of computation.",
           "extended": null,
@@ -650,7 +650,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vjepa import VJEPAConfig, VJEPAModel\n>>> config = VJEPAConfig(\n...     image_size=32, patch_size=8, tubelet_size=2, num_frames=4,\n...     dim=24, depth=1, num_heads=2, predictor_dim=12,\n...     predictor_depth=1, short_range_blocks=2, long_range_blocks=1)\n>>> model = VJEPAModel(config)\n>>> out = model(lucid.rand(2, 4, 3, 32, 32))\n>>> out.short_prediction.shape == out.short_target.shape\nTrue\n>>> float(out.loss.item()) >= 0.0\nTrue\nThe representation a downstream task reads is the target encoder's:\n>>> model.encode(lucid.rand(2, 4, 3, 32, 32)).shape\n(2, 24)"
       ],
       "notes": [
-        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024,\nSections 3.1–3.3.\n\nClips are `(B, T, C, H, W)` with `T = config.num_frames`.  Call\n`update_target` after each optimiser step, with the value\n`momentum` gives.\n\nThe target features are layer-normalised without affine terms before\nany block is taken from them — that is in the released code and not\nin the paper, and it is the usual way a reimplementation fails."
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, arXiv:2404.08471, 2024,\nSections 3.1–3.3.\n\nClips are `(B, T, C, H, W)` with `T = config.num_frames`.  Call\n`update_target` after each optimiser step, with the value\n`momentum` gives.\n\nThe target features are layer-normalised without affine terms before\nany block is taken from them — that is in the released code and not\nin the paper, and it is the usual way a reimplementation fails."
       ],
       "attributes": [
         {
@@ -682,7 +682,7 @@
       ],
       "labels": [],
       "signature": "VJEPAOutput(loss: Tensor, short_prediction: Tensor, short_target: Tensor, long_prediction: Tensor, long_target: Tensor, short_context: Tensor, short_targets: Tensor, long_context: Tensor, long_targets: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L385",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L385",
       "subcategory": "model",
       "methods": [
         {
@@ -691,7 +691,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, short_prediction: Tensor, short_target: Tensor, long_prediction: Tensor, long_target: Tensor, short_context: Tensor, short_targets: Tensor, long_context: Tensor, long_targets: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_model.py#L1",
           "subcategory": "model",
           "summary": "Build the three networks. See the class docstring for parameters.",
           "extended": null,
@@ -753,7 +753,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_huge_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L135",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L135",
       "subcategory": "pretrained",
       "summary": "V-JEPA with a ViT-H/16 encoder at 224 pixels.",
       "extended": null,
@@ -780,7 +780,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_huge_16\")\n>>> config.dim, config.depth\n(1280, 32)\n>>> config.predictor_dim, config.predictor_depth\n(384, 12)"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6 — 82.0% on\nKinetics-400 and 71.4% on Something-Something-v2, the paper's best at\n224 pixels.  630M parameters in the encoder."
+        "Reference: Bardes et al., arXiv:2404.08471, Table 6 — 82.0% on\nKinetics-400 and 71.4% on Something-Something-v2, the paper's best at\n224 pixels.  630M parameters in the encoder."
       ],
       "attributes": [],
       "warns": [],
@@ -1017,7 +1017,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_huge_16_384(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L219",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L219",
       "subcategory": "pretrained",
       "summary": "V-JEPA with a ViT-H/16 encoder at 384 pixels.",
       "extended": null,
@@ -1044,7 +1044,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_huge_16_384\")\n>>> config.image_size, config.num_tokens\n(384, 4608)"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6 — 72.2% on\nSomething-Something-v2 and 77.4% on ImageNet-1k, the paper's best on\nboth.  Three times the tokens of the 224-pixel model: 4608 against\n1568."
+        "Reference: Bardes et al., arXiv:2404.08471, Table 6 — 72.2% on\nSomething-Something-v2 and 77.4% on ImageNet-1k, the paper's best on\nboth.  Three times the tokens of the 224-pixel model: 4608 against\n1568."
       ],
       "attributes": [],
       "warns": [],
@@ -1281,7 +1281,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_huge_16_384_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L262",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L262",
       "subcategory": "pretrained",
       "summary": "V-JEPA ViT-H/16 at 384 pixels under the paper's attentive probe.",
       "extended": null,
@@ -1308,7 +1308,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_huge_16_384_cls\").image_size\n384"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6.  The paper's\n77.9% on ImageNet-1k uses a two-layer probe; the 77.4% this one\nmatches is the single-layer setting."
+        "Reference: Bardes et al., arXiv:2404.08471, Table 6.  The paper's\n77.9% on ImageNet-1k uses a two-layer probe; the 77.4% this one\nmatches is the single-layer setting."
       ],
       "attributes": [],
       "warns": [],
@@ -1612,7 +1612,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_huge_16_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L179",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L179",
       "subcategory": "pretrained",
       "summary": "V-JEPA ViT-H/16 under the paper's attentive probe.",
       "extended": null,
@@ -1639,7 +1639,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_huge_16_cls\").dim\n1280"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6."
+        "Reference: Bardes et al., arXiv:2404.08471, Table 6."
       ],
       "attributes": [],
       "warns": [],
@@ -1943,7 +1943,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_large_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L48",
       "subcategory": "pretrained",
       "summary": "V-JEPA with a ViT-L/16 encoder at 224 pixels.",
       "extended": null,
@@ -1970,7 +1970,7 @@
         ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_large_16\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)\n>>> config.token_grid, config.num_tokens\n((8, 14, 14), 1568)"
       ],
       "notes": [
-        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024,\nTable 6 — frozen with an attentive probe: 80.8% on Kinetics-400,\n69.5% on Something-Something-v2, 74.8% on ImageNet-1k.  The paper\nreports 200M parameters for this encoder."
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, arXiv:2404.08471, 2024,\nTable 6 — frozen with an attentive probe: 80.8% on Kinetics-400,\n69.5% on Something-Something-v2, 74.8% on ImageNet-1k.  The paper\nreports 200M parameters for this encoder."
       ],
       "attributes": [],
       "warns": [],
@@ -2207,7 +2207,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vjepa_large_16_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c2b5e698e/lucid/models/vision/vjepa/_pretrained.py#L94",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/models/vision/vjepa/_pretrained.py#L94",
       "subcategory": "pretrained",
       "summary": "V-JEPA ViT-L/16 under the paper's attentive probe.",
       "extended": null,
@@ -2234,7 +2234,7 @@
         ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_large_16_cls\").num_classes\n400"
       ],
       "notes": [
-        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Section 4.3.  `num_classes`\ndefaults to 400, Kinetics-400's count."
+        "Reference: Bardes et al., arXiv:2404.08471, Section 4.3.  `num_classes`\ndefaults to 400, Kinetics-400's count."
       ],
       "attributes": [],
       "warns": [],
@@ -2534,7 +2534,7 @@
     }
   ],
   "summary": "V-JEPA — feature prediction for video.",
-  "extended": "Bardes et al., 2024 ([arXiv:2404.08471](https://arxiv.org/abs/2404.08471)).  A clip is cut into tubelets, two\ncollections of blocks hide most of them through the whole depth of the\nclip, and a predictor says what an averaged copy of the encoder would\nreport about what is hidden.  The image version is\n`lucid.models.vision.ijepa`; the transformer they share is in\n`vision/_common`.",
+  "extended": "Bardes et al., 2024 (arXiv:2404.08471).  A clip is cut into tubelets, two\ncollections of blocks hide most of them through the whole depth of the\nclip, and a predictor says what an averaged copy of the encoder would\nreport about what is hidden.  The image version is\n`lucid.models.vision.ijepa`; the transformer they share is in\n`vision/_common`.",
   "parameters": [],
   "returns": null,
   "raises": [],
@@ -2544,7 +2544,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "V-JEPA",
-  "citation": "Bardes, Adrien, et al. \"Revisiting Feature Prediction for Learning Visual Representations from Video.\" [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024.",
+  "citation": "Bardes, Adrien, et al. \"Revisiting Feature Prediction for Learning Visual Representations from Video.\" arXiv:2404.08471, 2024.",
   "theory": "V-JEPA learns from video by predicting *features* of what it cannot\nsee.  A clip of $T$ frames becomes $T/2 \\times H/16 \\times W/16$ tubelet tokens; a mask hides most of them; the encoder\n$f_\\theta$ reads what is left, and a predictor $g_\\phi$\nmust produce the output of an exponentially averaged encoder\n$f_{\\bar\\theta}$ at the hidden positions:\n\n\n\n$$\n\\mathcal{L} = \\frac{1}{M} \\sum_{k=1}^{M}\n\\bigl\\| g_\\phi\\bigl(f_\\theta(x_{\\text{context}}),\\, p_k\\bigr)\n- \\mathrm{sg}\\bigl[f_{\\bar\\theta}(x)\\bigr]_k \\bigr\\|_1 .\n$$\n\n**Two mask collections, not one.**  Eight blocks covering 15% of the\nframe each, and two covering 70%, both running the full depth of the\nclip in time.  Their union hides about 90% of the tokens.  A mask\nthat leaves a tube visible through time makes the task trivial ---\nthe answer is in the next frame --- so both collections extend\nthrough it, and the model is asked the two questions at once, with a\nlearned mask token of its own for each.\n\n**The target encoder sees everything; the context encoder does not.**\nMasking here removes tokens rather than attending around them, so the\ncontext encoder's sequence is genuinely shorter, while the averaged\nencoder reads the whole clip and its output is normalised before any\nblock is taken from it.  No gradient flows into it at all.\n\n**Prediction in feature space is what makes the video tractable.**\nA generative video objective must settle every detail that differs\nbetween plausible continuations; this one may drop whatever the\naveraged encoder has already learned to drop.  Frozen, with an\nattentive probe on top, the result reaches 82.0% on Kinetics-400 and\n71.4% on Something-Something-v2 --- the latter being the benchmark\nthat punishes models which only recognise appearance.",
   "tasks": [
     "image-classification"

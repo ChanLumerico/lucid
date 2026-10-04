@@ -3,7 +3,7 @@
   "name": "linalg",
   "path": "lucid.linalg",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1",
   "members": [
     {
       "name": "inv",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inv(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L50",
       "subcategory": null,
       "summary": "Compute the multiplicative inverse of a square matrix.",
       "extended": "Returns the unique matrix $A^{-1}$ such that\n\n$$\nA A^{-1} = A^{-1} A = I\n$$\n\nInversion is performed via LU decomposition with partial pivoting.\nWhen the goal is to apply $A^{-1}$ to a known right-hand side,\nprefer `solve` — explicit inversion is both slower and less\nnumerically stable than back-substitution.",
@@ -45,7 +45,7 @@
       "kind": "function",
       "labels": [],
       "signature": "det(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L110",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L111",
       "subcategory": null,
       "summary": "Compute the determinant of a square matrix.",
       "extended": "For a square matrix $A \\in \\mathbb{R}^{n \\times n}$ returns the\nscalar $\\det(A)$.  The determinant is the signed volume of the\nparallelepiped spanned by the rows (or columns) of $A$; it is\nnon-zero if and only if $A$ is invertible.",
@@ -78,7 +78,7 @@
       "kind": "function",
       "labels": [],
       "signature": "solve(A: Tensor, b: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L149",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L150",
       "subcategory": null,
       "summary": "Solve a square linear system $AX = B$.",
       "extended": "Returns the unique solution $X$ of the system\n\n$$\nA X = B\n$$\n\nwhere $A$ is a non-singular square matrix.  The system is\nsolved by LU decomposition with partial pivoting, which is both\nfaster and more accurate than forming $A^{-1}$ explicitly.",
@@ -117,7 +117,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cholesky(x: Tensor, upper: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L194",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L195",
       "subcategory": null,
       "summary": "Cholesky decomposition of a symmetric positive-definite matrix.",
       "extended": "For a real symmetric positive-definite (SPD) matrix $A$\nreturns the unique lower-triangular factor $L$ with positive\ndiagonal such that\n\n$$\nA = L L^\\top \\qquad \\text{(or } A = U^\\top U \\text{ if } \\texttt{upper=True}\\text{)}.\n$$\n\nThe Cholesky factor is the standard tool for solving SPD linear\nsystems, sampling from a multivariate Gaussian, and computing\nmatrix square roots.  It is roughly twice as fast as LU and avoids\nany pivoting.",
@@ -156,7 +156,7 @@
       "kind": "function",
       "labels": [],
       "signature": "norm(x: Tensor, ord: int | float | str | None = None, dim: int | list[int] | tuple[int, ...] | None = None, keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L330",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L331",
       "subcategory": null,
       "summary": "Compute a vector or matrix norm.",
       "extended": "Generic norm dispatcher that delegates to `vector_norm` or\n`matrix_norm` based on the input rank and reduction axes.\nThe default behaviour computes the Frobenius norm of a matrix input\nand the Euclidean ($\\ell_2$) norm of a vector input:\n\n$$\n\\|x\\|_2 \\,=\\, \\Big(\\sum_i |x_i|^2\\Big)^{1/2}, \\qquad\n\\|A\\|_F \\,=\\, \\Big(\\sum_{i,j} |A_{ij}|^2\\Big)^{1/2}.\n$$",
@@ -194,13 +194,17 @@
         {
           "annotation": "ValueError",
           "description": "If `ord` is given without `dim` and the input is neither a\nvector nor a single matrix — a batch of matrices leaves it\nambiguous whether one norm or one per matrix was meant.  Also if\n`dim` names more than two axes, or if a matrix order is asked\nof a vector."
+        },
+        {
+          "annotation": "NotImplementedError",
+          "description": "If a complex input is asked for a singular-value order (`\"nuc\"`\nor a matrix `ord` of $\\pm 2$), which `matrix_norm`\ncannot take yet."
         }
       ],
       "examples": [
         ">>> import lucid\n>>> from lucid.linalg import norm\n>>> norm(lucid.tensor([3.0, 4.0]))\ntensor(5.)\n>>> A = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])\n>>> norm(A, ord=1)          # max absolute column sum\ntensor(9.)\n>>> norm(A, ord=1, dim=1)   # per-row vector 1-norm\ntensor([6., 15.])"
       ],
       "notes": [
-        "Which of the two norms runs is decided as follows:\n\n============================  ==========================================\narguments                     reduction\n============================  ==========================================\n`dim=None, ord=None`        flatten, Euclidean norm, any rank\n`dim=None, ord` given       vector norm if 1-D, matrix norm if 2-D\n`dim` names one axis        vector norm along it\n`dim` names two axes        matrix norm over that plane\n`ord` is `\"fro\"`/`\"nuc\"`  matrix norm regardless\n============================  ==========================================\n\nSo `ord` means different things at different ranks, and the same\norder names two different quantities: `ord=2` is the Euclidean norm\nof a vector but the *spectral* norm — the largest singular value — of\na matrix, which is not its Frobenius norm.  Pass an explicit `dim`,\nor call `vector_norm` or `matrix_norm` directly, wherever\nthat distinction matters.\n\nMany norm orders (spectral, nuclear) require an SVD and therefore\ncost $O(\\min(m,n) \\cdot mn)$; entry-wise norms reduce in a\nsingle pass.\n\nOverflow is not a failure mode here: the input is rescaled by its\nlargest magnitude before reducing, so a norm whose value is\nrepresentable is computed even when its squares are not."
+        "Which of the two norms runs is decided as follows:\n\n============================  ==========================================\narguments                     reduction\n============================  ==========================================\n`dim=None, ord=None`        flatten, Euclidean norm, any rank\n`dim=None, ord` given       vector norm if 1-D, matrix norm if 2-D\n`dim` names one axis        vector norm along it\n`dim` names two axes        matrix norm over that plane\n`ord` is `\"fro\"`/`\"nuc\"`  matrix norm regardless\n============================  ==========================================\n\nSo `ord` means different things at different ranks, and the same\norder names two different quantities: `ord=2` is the Euclidean norm\nof a vector but the *spectral* norm — the largest singular value — of\na matrix, which is not its Frobenius norm.  Pass an explicit `dim`,\nor call `vector_norm` or `matrix_norm` directly, wherever\nthat distinction matters.\n\nMany norm orders (spectral, nuclear) require an SVD and therefore\ncost $O(\\min(m,n) \\cdot mn)$; entry-wise norms reduce in a\nsingle pass.\n\nOverflow is not a failure mode here: the input is rescaled by its\nlargest magnitude before reducing, so a norm whose value is\nrepresentable is computed even when its squares are not.\n\nA complex input is reduced through its magnitudes $|x_i|$ by\nwhichever of the two norms runs, and the result is real."
       ],
       "attributes": [],
       "warns": [],
@@ -212,7 +216,7 @@
       "kind": "function",
       "labels": [],
       "signature": "svd(x: Tensor, full_matrices: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L676",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L684",
       "subcategory": null,
       "summary": "Singular value decomposition of a matrix.",
       "extended": "Factorizes any (possibly rectangular) matrix $A \\in \\mathbb{R}^{m \\times n}$ into\n\n$$\nA \\,=\\, U \\,\\Sigma\\, V^\\top,\n$$\n\nwhere $U$ and $V$ are orthogonal and\n$\\Sigma = \\mathrm{diag}(\\sigma_1, \\ldots, \\sigma_k)$ with\n$\\sigma_1 \\ge \\sigma_2 \\ge \\cdots \\ge \\sigma_k \\ge 0$ and\n$k = \\min(m, n)$.  The SVD is the foundation of low-rank\napproximation, pseudo-inverse, matrix rank, condition number, and\nPCA.",
@@ -251,7 +255,7 @@
       "kind": "function",
       "labels": [],
       "signature": "svdvals(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L756",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L764",
       "subcategory": null,
       "summary": "Compute only the singular values of a matrix.",
       "extended": "Returns the singular values $\\sigma_1 \\ge \\cdots \\ge \\sigma_k \\ge 0$ (with $k = \\min(m, n)$) of an input matrix\n$A$ without forming $U$ or $V^\\top$.  Equivalent\nto `svd(A)[1]` but avoids the work of constructing the singular\nvectors.",
@@ -284,7 +288,7 @@
       "kind": "function",
       "labels": [],
       "signature": "qr(x: Tensor, mode: str = 'reduced')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1002",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1062",
       "subcategory": null,
       "summary": "QR decomposition of a matrix.",
       "extended": "Factorizes a matrix $A \\in \\mathbb{R}^{m \\times n}$ as\n\n$$\nA \\,=\\, Q\\,R,\n$$\n\nwhere $Q$ has orthonormal columns ($Q^\\top Q = I$) and\n$R$ is upper-triangular.  Used for orthogonalizing a basis,\nsolving least-squares ($\\min \\|Ax - b\\|_2$), and computing\neigenvalues via QR iteration.",
@@ -311,7 +315,7 @@
         ">>> import lucid\n>>> from lucid.linalg import qr\n>>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])\n>>> Q, R = qr(A)\n>>> lucid.allclose(Q.T @ Q, lucid.eye(2), atol=1e-5)   # Q is orthonormal\nTrue"
       ],
       "notes": [
-        "Computed via Householder reflections (LAPACK `geqrf`).  Cost is\n$O(2 m n^2 - \\tfrac{2}{3} n^3)$ for $m \\ge n$.\n\nThe diagonal of $R$ may carry arbitrary signs (LAPACK\nconvention) — the factorization is unique only up to a diagonal\nsign matrix.  Backward routes $R$ through a Cholesky of\n$A^\\top A$ (sign-robust) and $Q$ through the\nStiefel-manifold tangent projection."
+        "Computed via Householder reflections (LAPACK `geqrf`).  Cost is\n$O(2 m n^2 - \\tfrac{2}{3} n^3)$ for $m \\ge n$.\n\nThe diagonal of $R$ may carry arbitrary signs (LAPACK\nconvention) — the factorization is unique only up to a diagonal\nsign matrix.  Backward routes $R$ through a Cholesky of\n$A^\\top A$ (sign-robust) and $Q$ through the\nStiefel-manifold tangent projection.  A wide input\n($m < n$) splits as $A = [X \\mid Y]$, $R = [U \\mid V]$: $X = QU$ is differentiated as a square QR and\n$V = Q^\\top Y$ carries the rest."
       ],
       "attributes": [],
       "warns": [],
@@ -323,7 +327,7 @@
       "kind": "function",
       "labels": [],
       "signature": "matrix_power(x: Tensor, n: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1069",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1160",
       "subcategory": null,
       "summary": "Raise a square matrix to an integer power.",
       "extended": "Computes $A^n$ for an integer exponent $n$:\n\n$$\nA^n \\,=\\, \\begin{cases}\n    \\underbrace{A A \\cdots A}_{n\\ \\text{times}} & n > 0 \\\\\n    I & n = 0 \\\\\n    (A^{-1})^{|n|} & n < 0\n\\end{cases}\n$$",
@@ -350,7 +354,7 @@
         ">>> import lucid\n>>> from lucid.linalg import matrix_power\n>>> A = lucid.tensor([[1.0, 1.0], [0.0, 1.0]])\n>>> matrix_power(A, 5)\ntensor([[1., 5.], [0., 1.]])"
       ],
       "notes": [
-        "Uses binary exponentiation (repeated squaring) so the cost is\n$O(\\log |n|)$ matrix multiplies rather than $|n|$.\nImplemented as a Python composite over `matmul` and\n`inv` so autograd flows naturally — the engine\n`matrix_power_op` is not differentiable."
+        "Uses binary exponentiation (repeated squaring) so the cost is\n$O(\\log |n|)$ matrix multiplies rather than $|n|$.\nImplemented as a Python composite over `matmul` and\n`inv` so autograd flows naturally — the engine\n`matrix_power_op` is not differentiable.\n\nThe result is always a new tensor on `x`'s device: `n = 0` gives\nan identity per matrix (with a zero gradient) and `n = 1` a copy\nof `x`, never `x` itself."
       ],
       "attributes": [],
       "warns": [],
@@ -362,7 +366,7 @@
       "kind": "function",
       "labels": [],
       "signature": "pinv(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1153",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1244",
       "subcategory": null,
       "summary": "Moore-Penrose pseudo-inverse of a matrix.",
       "extended": "Returns the unique matrix $A^+$ satisfying the four\nMoore-Penrose conditions\n\n$$\nA A^+ A = A, \\quad A^+ A A^+ = A^+, \\quad\n(A A^+)^\\top = A A^+, \\quad (A^+ A)^\\top = A^+ A.\n$$\n\nFor a thin SVD $A = U\\Sigma V^\\top$, the pseudo-inverse is\n\n$$\nA^+ \\,=\\, V\\,\\Sigma^+\\,U^\\top, \\qquad\n\\Sigma^+_{ii} = \\begin{cases} 1/\\sigma_i & \\sigma_i > \\tau \\\\ 0 & \\text{else} \\end{cases}.\n$$",
@@ -395,7 +399,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eig(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1260",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1351",
       "subcategory": null,
       "summary": "Eigenvalue decomposition of a general square matrix.",
       "extended": "For a general (not necessarily symmetric) square matrix $A$\nreturns eigenvalues $\\lambda_i$ and right eigenvectors\n$v_i$ such that\n\n$$\nA v_i \\,=\\, \\lambda_i\\, v_i,\n\\qquad A \\,=\\, V\\,\\Lambda\\,V^{-1}.\n$$\n\nFor matrices with complex eigenvalues, the result is in general\ncomplex-valued.  When $A$ is known to be symmetric / Hermitian\nprefer `eigh` — it is faster, more stable, and produces real\neigenvalues with orthogonal eigenvectors.",
@@ -428,7 +432,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eigvals(x: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1313",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1404",
       "subcategory": null,
       "summary": "Compute only the eigenvalues of a general square matrix.",
       "extended": "Returns the roots $\\lambda_1, \\ldots, \\lambda_n$ of the\ncharacteristic polynomial $\\det(A - \\lambda I) = 0$ without\ncomputing the eigenvectors.  Equivalent to `eig(A)[0]` but skips\nthe eigenvector assembly.",
@@ -461,7 +465,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eigh(x: Tensor, UPLO: str = 'L')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1503",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1641",
       "subcategory": null,
       "summary": "Eigendecomposition of a Hermitian / symmetric matrix.",
       "extended": "Returns the eigenvalues and orthonormal eigenvectors of a real\nsymmetric (or complex Hermitian) matrix $A$.  Eigenvalues are\nreturned in **ascending order** and eigenvectors form an orthogonal\nmatrix $V$ such that\n\n$$\nA \\,=\\, V \\,\\Lambda\\, V^\\top,\n$$\n\nwhere $\\Lambda = \\mathrm{diag}(\\lambda_1, \\ldots, \\lambda_n)$\nwith $\\lambda_1 \\le \\cdots \\le \\lambda_n$.",
@@ -500,7 +504,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eigvalsh(x: Tensor, UPLO: str = 'L')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1573",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1711",
       "subcategory": null,
       "summary": "Eigenvalues of a Hermitian / symmetric matrix.",
       "extended": "Returns only the real eigenvalues $\\lambda_1 \\le \\cdots \\le \\lambda_n$ of a symmetric (real) or Hermitian (complex) matrix\nwithout forming the eigenvectors.  Equivalent to `eigh(A)[0]`\nbut skips eigenvector assembly when no gradients are requested.",
@@ -539,7 +543,7 @@
       "kind": "function",
       "labels": [],
       "signature": "lu_factor(A: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1613",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1751",
       "subcategory": null,
       "summary": "LU factorization with partial pivoting (packed form).",
       "extended": "Computes the packed LU factorization\n\n$$\nP\\,A \\,=\\, L\\,U,\n$$\n\nwhere $P$ is a row-permutation matrix, $L$ is\nunit-lower-triangular, and $U$ is upper-triangular.  The\nresult is returned in LAPACK's packed format suitable for repeated\nsolves via `lu_solve`.",
@@ -572,7 +576,7 @@
       "kind": "function",
       "labels": [],
       "signature": "slogdet(A: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1730",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1868",
       "subcategory": null,
       "summary": "Sign and natural log of the absolute determinant.",
       "extended": "Returns the pair $(\\mathrm{sign},\\, \\log|\\det A|)$ such that\n\n$$\n\\det(A) \\,=\\, \\mathrm{sign} \\cdot \\exp(\\log|\\det A|).\n$$\n\nNumerically stable for matrices whose determinant would overflow\nor underflow if computed directly — for instance, large covariance\nmatrices in log-likelihood calculations.",
@@ -605,7 +609,7 @@
       "kind": "function",
       "labels": [],
       "signature": "matrix_rank(A: Tensor, tol: float | None = None, hermitian: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1776",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L1914",
       "subcategory": null,
       "summary": "Compute the numerical rank of a matrix.",
       "extended": "The numerical rank is the number of singular values of $A$\nthat exceed a tolerance:\n\n$$\n\\mathrm{rank}(A) \\,=\\, |\\{\\,i : \\sigma_i > \\tau\\,\\}|.\n$$",
@@ -650,7 +654,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cond(A: Tensor, p: int | float | str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1864",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2015",
       "subcategory": null,
       "summary": "Compute the condition number of a matrix.",
       "extended": "The condition number under norm $\\|\\cdot\\|_p$ is\n\n$$\n\\kappa_p(A) \\,=\\, \\|A\\|_p \\,\\|A^{-1}\\|_p.\n$$\n\nFor the spectral ($p = 2$) norm this simplifies to the ratio\nof the largest to smallest singular value:\n\n$$\n\\kappa_2(A) \\,=\\, \\sigma_{\\max}(A) \\,/\\, \\sigma_{\\min}(A).\n$$\n\nThe condition number quantifies how sensitive the solution of\n$Ax = b$ is to perturbations in $A$ or $b$.",
@@ -664,7 +668,7 @@
         {
           "name": "p",
           "annotation": "(int, float, str or None)",
-          "description": "Norm order.  `None` (default) and `2` use the spectral\nnorm via SVD; `-2` returns the reciprocal $\\sigma_{\\min} / \\sigma_{\\max}$.  Other orders dispatch to `norm`.",
+          "description": "Norm order: `None` (default) or `2` for the spectral norm,\n`-2` for its reciprocal $\\sigma_{\\min} / \\sigma_{\\max}$,\n`\"nuc\"`, or one of the `matrix_norm` orders `\"fro\"`,\n`1`, `-1`, `inf`, `-inf`.",
           "default": "None"
         }
       ],
@@ -672,12 +676,21 @@
         "annotation": "Tensor",
         "description": "Condition number, shape `(*,)`."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "For an unknown `p`, an input with fewer than two dimensions, or a\nnon-square input under any order but $\\pm 2$."
+        },
+        {
+          "annotation": "NotImplementedError",
+          "description": "For a complex `A`: every order needs its singular values or its\ninverse, and neither has a complex kernel yet."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import cond\n>>> cond(lucid.tensor([[1.0, 0.0], [0.0, 1e-6]]))\ntensor(1e+06)"
+        ">>> import lucid\n>>> from lucid.linalg import cond\n>>> cond(lucid.tensor([[1.0, 0.0], [0.0, 1e-6]]))\ntensor(1e+06)\n>>> cond(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]), \"fro\")\ntensor(inf)"
       ],
       "notes": [
-        "A condition number near $1/\\varepsilon_{\\mathrm{mach}}$\nindicates numerical singularity.  Non-spectral orders require an\nexplicit `inv`, so prefer `p = 2` for rank-deficient or\nrectangular matrices."
+        "A condition number near $1/\\varepsilon_{\\mathrm{mach}}$\nindicates numerical singularity.  Non-spectral orders require an\nexplicit inverse, so prefer `p = 2` for rank-deficient or\nrectangular matrices.\n\nThe spectral orders and `\"nuc\"` are read off the singular values;\nthe others are $\\|A\\|_p \\|A^{-1}\\|_p$ with the inverse from\n`inv_ex`, so a singular matrix has condition number\n$\\infty$ rather than an error, each matrix of a batch on its\nown.  A matrix with no entries has condition number `0`."
       ],
       "attributes": [],
       "warns": [],
@@ -689,7 +702,7 @@
       "kind": "function",
       "labels": [],
       "signature": "multi_dot(tensors: list[Tensor])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1931",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2135",
       "subcategory": null,
       "summary": "Multiply a sequence of matrices as a single chained product.",
       "extended": "Computes the product of a list of matrices\n\n$$\nA_1 \\, A_2 \\, \\cdots \\, A_n,\n$$\n\nassociating left-to-right.  Optimal parenthesization can\nsubstantially reduce flops for chains with widely varying inner\ndimensions; the current implementation associates left-to-right\n(the most common case is already locally optimal).",
@@ -722,7 +735,7 @@
       "kind": "function",
       "labels": [],
       "signature": "solve_triangular(A: Tensor, B: Tensor, upper: bool = True, left: bool = True, unitriangular: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L1982",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2186",
       "subcategory": null,
       "summary": "Solve a triangular linear system by back/forward substitution.",
       "extended": "Solves the system $AX = B$ (or $XA = B$) in which the\ncoefficient matrix $A$ is triangular.  For upper-triangular\n$A$ the system is solved by back-substitution starting from\nthe last row; for lower-triangular $A$ by forward\nsubstitution from the first row.  Either direction runs in\n$O(n^2 k)$ time and is numerically stable when the diagonal\nof $A$ is well-conditioned.",
@@ -767,7 +780,7 @@
         ">>> import lucid\n>>> from lucid.linalg import solve_triangular\n>>> A = lucid.tensor([[2.0, 1.0], [0.0, 3.0]])  # upper\n>>> b = lucid.tensor([[5.0], [9.0]])\n>>> solve_triangular(A, b, upper=True)\ntensor([[1.], [3.]])"
       ],
       "notes": [
-        "Backed by LAPACK `trsm`.  Triangular solves are the workhorse\nused inside Cholesky, LU, and QR back-substitution paths."
+        "Backed by BLAS `trsm` on both devices.  Triangular solves are the\nworkhorse used inside Cholesky, LU, and QR back-substitution paths.\n\nA singular $A$ (an exact zero on the diagonal, with\n`unitriangular=False`) is not refused: substitution divides by the\nzero, so the solution holds $\\pm\\infty$, or NaN where it meets\n$0 / 0$, as the reference framework does."
       ],
       "attributes": [],
       "warns": [],
@@ -779,7 +792,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vander(x: Tensor, N: int | None = None, increasing: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2119",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2328",
       "subcategory": null,
       "summary": "Construct a Vandermonde matrix from a 1-D vector.",
       "extended": "Given a 1-D input $x = (x_1, \\ldots, x_n)$, returns the\n$n \\times N$ matrix whose $j$-th column is a power of\n$x$:\n\n$$\nV_{ij} \\,=\\, x_i^{\\,j} \\quad (\\text{increasing})\n\\qquad\\text{or}\\qquad\nV_{ij} \\,=\\, x_i^{\\,N-1-j} \\quad (\\text{decreasing, default}).\n$$\n\nVandermonde matrices arise naturally in polynomial fitting and\ninterpolation: the columns are the basis $\\{1, x, x^2, \\ldots\\}$ evaluated at the data points.",
@@ -824,7 +837,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vector_norm(x: Tensor, ord: int | float = 2, dim: int | list[int] | tuple[int, ...] | None = None, keepdim: bool = False, dtype: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2199",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2436",
       "subcategory": null,
       "summary": "Compute a vector $p$-norm along an axis.",
       "extended": "Reduces along `dim` (or all elements if `dim is None`) using\n\n$$\n\\|x\\|_p \\,=\\, \\Big(\\sum_i |x_i|^{\\,p}\\Big)^{1/p}\n$$\n\nfor any positive real $p$.  Special-cased values:\n\n* $p = 0$ — count of non-zero entries (not a true norm).\n* $p = 1$ — $\\sum_i |x_i|$.\n* $p = 2$ — Euclidean norm.\n* $p = +\\infty$ — $\\max_i |x_i|$.\n* $p = -\\infty$ — $\\min_i |x_i|$.",
@@ -855,21 +868,26 @@
         },
         {
           "name": "dtype",
-          "annotation": "optional",
-          "description": "Currently unused; reserved for future accumulation-dtype\ncontrol.",
+          "annotation": "dtype",
+          "description": "Cast `x` to this dtype before reducing, so the whole computation\n— and the result — is in it; a complex `dtype` gives its real\ncounterpart.  It must be complex for a complex `x` and real\notherwise, and must not narrow `x`.  `None` (default) reduces\nin `x`'s own dtype.",
           "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Norm along the specified axes."
+        "description": "Norm along the specified axes — real, also for a complex `x`."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "TypeError",
+          "description": "If `dtype` would narrow `x`, or its kind (real / complex)\ndiffers from `x`'s."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import vector_norm\n>>> vector_norm(lucid.tensor([3.0, 4.0]))\ntensor(5.)\n>>> vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)\ntensor(6.)"
+        ">>> import lucid\n>>> from lucid.linalg import vector_norm\n>>> vector_norm(lucid.tensor([3.0, 4.0]))\ntensor(5.)\n>>> vector_norm(lucid.tensor([1.0, -2.0, 3.0]), ord=1)\ntensor(6.)\n>>> vector_norm(lucid.tensor([3.0, 4.0]), dtype=lucid.float64)\ntensor(5., dtype=lucid.float64)\n>>> vector_norm(lucid.tensor([3 + 4j, 0j]))\ntensor(5.)"
       ],
       "notes": [
-        "All operations are routed through autograd-aware engine kernels, so\ngradients flow naturally even for non-integer $p$ (via\n$p$-power and root)."
+        "All operations are routed through autograd-aware engine kernels, so\ngradients flow naturally even for non-integer $p$ (via\n$p$-power and root).\n\nA complex `x` is reduced through its magnitudes $|x_i|$, as\nthe definition says.  Squaring the entries themselves gave a complex\n\"norm\" for `ord=2` on Metal and an error on the CPU."
       ],
       "attributes": [],
       "warns": [],
@@ -881,7 +899,7 @@
       "kind": "function",
       "labels": [],
       "signature": "cross(x: Tensor, y: Tensor, dim: int = -1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2306",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2574",
       "subcategory": null,
       "summary": "Compute the cross product of two 3-D vectors.",
       "extended": "Returns the standard 3-D vector cross product\n\n$$\nx \\times y \\,=\\, \\big(x_2 y_3 - x_3 y_2,\\;\n                      x_3 y_1 - x_1 y_3,\\;\n                      x_1 y_2 - x_2 y_1\\big).\n$$",
@@ -926,10 +944,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vecdot(x: Tensor, y: Tensor, dim: int = -1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2372",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2640",
       "subcategory": null,
       "summary": "Compute a batched vector dot product along an axis.",
-      "extended": "Reduces the chosen axis with a sum of element-wise products:\n\n$$\n(x \\cdot y)_{\\ldots} \\,=\\, \\sum_{k} x_{\\ldots, k, \\ldots}\\,\n                                      y_{\\ldots, k, \\ldots}.\n$$",
+      "extended": "Reduces the chosen axis with a sum of element-wise products, the\nfirst operand conjugated:\n\n$$\n(x \\cdot y)_{\\ldots} \\,=\\, \\sum_{k} \\overline{x_{\\ldots, k, \\ldots}}\\,\n                                      y_{\\ldots, k, \\ldots}.\n$$",
       "parameters": [
         {
           "name": "x",
@@ -956,10 +974,10 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import vecdot\n>>> x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])\n>>> y = lucid.tensor([[1.0, 0.0, -1.0], [0.0, 1.0, 0.0]])\n>>> vecdot(x, y)\ntensor([-2., 5.])"
+        ">>> import lucid\n>>> from lucid.linalg import vecdot\n>>> x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])\n>>> y = lucid.tensor([[1.0, 0.0, -1.0], [0.0, 1.0, 0.0]])\n>>> vecdot(x, y)\ntensor([-2., 5.])\n>>> vecdot(lucid.tensor([1 + 2j, 3 - 1j]), lucid.tensor([2 - 1j, 1 + 1j]))\ntensor((2.-1.j), dtype=lucid.complex64)"
       ],
       "notes": [
-        "Equivalent to `(x * y).sum(dim=dim)`.  Useful for computing many\nindependent dot products in one shot (e.g., per-row inner products\nof two matrices)."
+        "Equivalent to `(x.conj() * y).sum(dim=dim)` — for real inputs\nsimply `(x * y).sum(dim=dim)`.  Useful for computing many\nindependent dot products in one shot (e.g., per-row inner products\nof two matrices).\n\nThe conjugate makes `vecdot(x, x)` the squared norm\n$\\sum_k |x_k|^2$ of a complex vector.  Without it, the\ncomplex result was the bilinear $\\sum_k x_k y_k$ instead."
       ],
       "attributes": [],
       "warns": [],
@@ -971,7 +989,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dot(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2415",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2694",
       "subcategory": null,
       "summary": "Dot product of two 1-D tensors.",
       "extended": "Computes the scalar inner product\n\n$$\nx \\cdot y \\,=\\, \\sum_{i} x_i\\, y_i.\n$$",
@@ -1010,7 +1028,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inner(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2450",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2729",
       "subcategory": null,
       "summary": "Inner product over the last axes of two tensors.",
       "extended": "Behaves like `dot` for 1-D inputs and like a generalised\nouter-then-contract for higher ranks.",
@@ -1049,7 +1067,7 @@
       "kind": "function",
       "labels": [],
       "signature": "outer(x: Tensor, y: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2490",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2769",
       "subcategory": null,
       "summary": "Outer product of two 1-D tensors.",
       "extended": null,
@@ -1088,7 +1106,7 @@
       "kind": "function",
       "labels": [],
       "signature": "matrix_norm(x: Tensor, ord: int | float | str = 'fro', dim: tuple[int, int] = (-2, -1), keepdim: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2531",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2810",
       "subcategory": null,
       "summary": "Compute a matrix norm.",
       "extended": "Reduces the trailing two axes of an input to a scalar matrix norm.\nSupported orders:\n\n* `\"fro\"` — Frobenius norm\n  $\\|A\\|_F = \\big(\\sum_{ij} |A_{ij}|^2\\big)^{1/2}$.\n* `\"nuc\"` — nuclear norm\n  $\\|A\\|_* = \\sum_i \\sigma_i(A)$ (sum of singular values).\n* `1` / `-1` — max / min absolute column sum.\n* `inf` / `-inf` — max / min absolute row sum.\n* `2` / `-2` — largest / smallest singular value (spectral\n  norm and its reciprocal).",
@@ -1120,14 +1138,23 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Matrix norm of each batch."
+        "description": "Matrix norm of each batch — real, also for a complex `x`."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `x` has fewer than two dimensions, `dim` does not name two\ndistinct axes, or `ord` is not one of the orders above."
+        },
+        {
+          "annotation": "NotImplementedError",
+          "description": "If `ord` is `\"nuc\"`, `2` or `-2` and `x` is complex:\nthose orders are read off the singular values, and `svd`\nhas no complex kernel yet."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import matrix_norm\n>>> A = lucid.tensor([[3.0, 4.0], [0.0, 0.0]])\n>>> matrix_norm(A, ord=\"fro\")\ntensor(5.)"
+        ">>> import lucid\n>>> from lucid.linalg import matrix_norm\n>>> A = lucid.tensor([[3.0, 4.0], [0.0, 0.0]])\n>>> matrix_norm(A, ord=\"fro\")\ntensor(5.)\n>>> matrix_norm(lucid.tensor([[3 + 4j, 0j], [0j, 0j]]), ord=\"fro\")\ntensor(5.)"
       ],
       "notes": [
-        "Spectral and nuclear norms require an SVD and so cost\n$O(\\min(m,n)^2 \\max(m,n))$.  Entry-wise norms reduce in a\nsingle pass."
+        "Spectral and nuclear norms require an SVD and so cost\n$O(\\min(m,n)^2 \\max(m,n))$.  Entry-wise norms reduce in a\nsingle pass.\n\nThe entry-wise orders (`\"fro\"`, $\\pm 1$, $\\pm\\infty$)\nare taken through `vector_norm`, so a complex `x` is reduced\nthrough its magnitudes $|A_{ij}|$ exactly as a vector would be."
       ],
       "attributes": [],
       "warns": [],
@@ -1139,7 +1166,7 @@
       "kind": "function",
       "labels": [],
       "signature": "lstsq(A: Tensor, B: Tensor, rcond: float | None = None, driver: str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2666",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L2970",
       "subcategory": null,
       "summary": "Solve a least-squares linear system.",
       "extended": "Finds $X$ minimising the squared residual\n\n$$\n\\min_X \\,\\|A\\,X - B\\|_2^2,\n$$\n\nwhere $A \\in \\mathbb{R}^{m \\times n}$ may be over- or\nunderdetermined.  For full-rank $A$ and $m \\ge n$ the\nsolution is unique:\n\n$$\nX \\,=\\, (A^\\top A)^{-1} A^\\top B,\n$$\n\nobtained more stably via QR or SVD without forming the normal\nequations.",
@@ -1190,7 +1217,7 @@
       "kind": "function",
       "labels": [],
       "signature": "lu_solve(LU: Tensor, pivots: Tensor, B: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2778",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3082",
       "subcategory": null,
       "summary": "Solve a linear system from a precomputed LU factorization.",
       "extended": "Given the packed factorization $PA = LU$ returned by\n`lu_factor`, solves\n\n$$\nA\\,X \\,=\\, B\n$$\n\nby applying the permutation and performing two triangular solves\n(forward + back substitution).",
@@ -1235,7 +1262,7 @@
       "kind": "function",
       "labels": [],
       "signature": "householder_product(H: Tensor, tau: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2829",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3133",
       "subcategory": null,
       "summary": "Reconstruct an orthogonal matrix from Householder reflectors.",
       "extended": "Computes the implicit product\n\n$$\nQ \\,=\\, H_1\\,H_2\\,\\cdots\\,H_k,\n\\qquad H_i \\,=\\, I - \\tau_i\\, v_i\\, v_i^\\top,\n$$\n\nwhere each $v_i$ is a Householder vector stored in the\n$i$-th column of the packed input `H` and $\\tau_i$\nis its scalar factor.  This is the standard way to materialise the\n$Q$ factor from a packed QR (`geqrf`) result.",
@@ -1274,7 +1301,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ldl_factor(A: Tensor, hermitian: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L2925",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3229",
       "subcategory": null,
       "summary": "LDL factorization of a symmetric (or Hermitian) matrix.",
       "extended": "For a real symmetric matrix $A$ (possibly indefinite),\ncomputes a Bunch-Kaufman block factorization\n\n$$\nA \\,=\\, L\\,D\\,L^\\top,\n$$\n\nwhere $L$ is unit-lower-triangular and $D$ is\nblock-diagonal with $1 \\times 1$ or $2 \\times 2$\nblocks.  Unlike `cholesky`, this factorization exists for\n*indefinite* symmetric matrices (e.g., saddle-point systems).",
@@ -1294,14 +1321,14 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Packed factor of shape `(*, n, n)`.  The strict lower\ntriangle holds $L$; the diagonal holds $D$'s\nentries ($2 \\times 2$ blocks are stored in the\nsub-diagonal)."
+        "description": "Packed factor of shape `(*, n, n)`.  The strict lower\ntriangle holds $L$; the diagonal holds $D$'s\nentries ($2 \\times 2$ blocks are stored in the\nsub-diagonal).  The strict upper triangle is zero."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import ldl_factor\n>>> A = lucid.tensor([[1.0, 2.0], [2.0, 3.0]])\n>>> LD, piv = ldl_factor(A)"
+        ">>> import lucid\n>>> from lucid.linalg import ldl_factor\n>>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])\n>>> LD, piv = ldl_factor(A)\n>>> LD\ntensor([[4., 0.], [0.25, 2.75]])\n>>> piv\ntensor([1, 2], dtype=lucid.int32)"
       ],
       "notes": [
-        "Backed by LAPACK `sytrf`.  Cost is $O(n^3 / 3)$.  Pair\nwith `ldl_solve` for solving symmetric indefinite systems."
+        "Backed by LAPACK `sytrf`.  Cost is $O(n^3 / 3)$.  Pair\nwith `ldl_solve` for solving symmetric indefinite systems.\n\n`sytrf` writes the factor into the lower triangle and leaves the\nupper one as it found it — the input's own entries.  Those are\ncleared here, so `LD` holds the factorization and nothing else."
       ],
       "attributes": [],
       "warns": [],
@@ -1313,10 +1340,10 @@
       "kind": "function",
       "labels": [],
       "signature": "cholesky_ex(A: Tensor, upper: bool = False, check_errors: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3011",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3484",
       "subcategory": null,
       "summary": "Cholesky factorization with an explicit success flag.",
-      "extended": "Variant of `cholesky` that, instead of raising when the\ninput fails to be positive-definite, returns the factor together\nwith an integer `info` code following LAPACK's convention:\n\n* `info == 0` — success; $L$ (or $U$) is meaningful.\n* `info != 0` — numerical failure; $L$ is zero-filled.",
+      "extended": "Variant of `cholesky` that, instead of raising when the\ninput fails to be positive-definite, returns the factor together\nwith an integer `info` code following LAPACK's convention:\n\n* `info == 0` — success; $L$ (or $U$) is meaningful.\n* `info == k > 0` — the leading minor of order $k$ is not\n  positive-definite; that matrix's factor is zero-filled.",
       "parameters": [
         {
           "name": "A",
@@ -1333,20 +1360,20 @@
         {
           "name": "check_errors",
           "annotation": "(bool, keyword - only)",
-          "description": "If `True`, re-raise the underlying engine error instead of\nemitting a non-zero `info` — useful while debugging.",
+          "description": "If `True`, raise for the first matrix that fails instead of\nreporting it through `info` — useful while debugging.",
           "default": "False"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Cholesky factor (or zeros on failure), shape `(*, n, n)`."
+        "description": "Cholesky factor of shape `(*, n, n)` — zeros for the matrices\nthat failed."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import cholesky_ex\n>>> A = lucid.tensor([[4.0, 2.0], [2.0, 3.0]])\n>>> L, info = cholesky_ex(A)\n>>> int(info)\n0"
+        ">>> import lucid\n>>> from lucid.linalg import cholesky_ex\n>>> A = lucid.tensor([[4.0, 2.0], [2.0, 3.0]])\n>>> L, info = cholesky_ex(A)\n>>> int(info)\n0\n>>> _, info = cholesky_ex(lucid.tensor([[1.0, 0.0], [0.0, -1.0]]))\n>>> int(info)\n2"
       ],
       "notes": [
-        "Designed for code paths where a failed Cholesky is an expected\nevent (e.g., trial steps in trust-region optimisers).  Callers\nmust inspect `info` before trusting `L`."
+        "Designed for code paths where a failed Cholesky is an expected\nevent (e.g., trial steps in trust-region optimisers).  Callers\nmust inspect `info` before trusting `L`.\n\nEach matrix of a batch is judged on its own: one failure leaves the\nother factors, and their gradients, intact.  The batch is factorised\nonce; only when that fails is each matrix tried alone, and a failed\none bisected over its leading blocks to find the order LAPACK reports."
       ],
       "attributes": [],
       "warns": [],
@@ -1358,10 +1385,10 @@
       "kind": "function",
       "labels": [],
       "signature": "inv_ex(A: Tensor, check_errors: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3074",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3555",
       "subcategory": null,
       "summary": "Matrix inverse with an explicit success flag.",
-      "extended": "Variant of `inv` that returns an `info` code instead of\nraising on a singular input.\n\n* `info == 0` — success; `Ainv` is $A^{-1}$.\n* `info != 0` — $A$ was singular; `Ainv` is zero-filled.",
+      "extended": "Variant of `inv` that returns an `info` code instead of\nraising on a singular input.\n\n* `info == 0` — success; `Ainv` is $A^{-1}$.\n* `info == k > 0` — $U_{kk}$ of $PA = LU$ is exactly\n  zero, so $A$ is singular; that matrix's `Ainv` is\n  zero-filled.",
       "parameters": [
         {
           "name": "A",
@@ -1372,20 +1399,20 @@
         {
           "name": "check_errors",
           "annotation": "(bool, keyword - only)",
-          "description": "If `True`, re-raise the underlying engine error instead of\nemitting a non-zero `info`.",
+          "description": "If `True`, raise for the first singular matrix instead of\nreporting it through `info`.",
           "default": "False"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Inverse (or zero placeholder) of shape `(*, n, n)`."
+        "description": "Inverse of shape `(*, n, n)` — zeros for the singular matrices."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import inv_ex\n>>> Ainv, info = inv_ex(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))\n>>> int(info)\n0"
+        ">>> import lucid\n>>> from lucid.linalg import inv_ex\n>>> Ainv, info = inv_ex(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))\n>>> int(info)\n0\n>>> _, info = inv_ex(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))\n>>> int(info)\n2"
       ],
       "notes": [
-        "Useful in algorithms that occasionally probe near-singular\nmatrices (e.g., iterative refinement, regularisation grid\nsearches) without wanting to wrap every call in a `try`."
+        "Useful in algorithms that occasionally probe near-singular\nmatrices (e.g., iterative refinement, regularisation grid\nsearches) without wanting to wrap every call in a `try`.\n\nEach matrix of a batch is judged on its own: a singular one leaves the\nother inverses, and their gradients, intact.  The batch is inverted\ndirectly; only when that fails is it factorised again to find which\nmatrices failed and at which pivot."
       ],
       "attributes": [],
       "warns": [],
@@ -1397,10 +1424,10 @@
       "kind": "function",
       "labels": [],
       "signature": "solve_ex(A: Tensor, B: Tensor, left: bool = True, check_errors: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3125",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3616",
       "subcategory": null,
       "summary": "Solve $AX = B$ with an explicit success flag.",
-      "extended": "Variant of `solve` that returns an `info` code instead of\nraising on a singular coefficient matrix.\n\n* `info == 0` — success; $X$ is the unique solution.\n* `info != 0` — $A$ was singular; $X$ is zero-filled.",
+      "extended": "Variant of `solve` that returns an `info` code instead of\nraising on a singular coefficient matrix.\n\n* `info == 0` — success; $X$ is the unique solution.\n* `info == k > 0` — $U_{kk}$ of $PA = LU$ is exactly\n  zero, so $A$ is singular; that system's $X$ is\n  zero-filled.",
       "parameters": [
         {
           "name": "A",
@@ -1423,20 +1450,20 @@
         {
           "name": "check_errors",
           "annotation": "(bool, keyword - only)",
-          "description": "If `True`, re-raise the underlying engine error instead of\nemitting a non-zero `info`.",
+          "description": "If `True`, raise for the first singular matrix instead of\nreporting it through `info`.",
           "default": "False"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Solution (or zero placeholder) shaped like `B`."
+        "description": "Solution shaped like `solve`'s — zeros for the systems whose\n`A` was singular."
       },
       "raises": [],
       "examples": [
         ">>> import lucid\n>>> from lucid.linalg import solve_ex\n>>> A = lucid.tensor([[3.0, 1.0], [1.0, 2.0]])\n>>> b = lucid.tensor([9.0, 8.0])\n>>> X, info = solve_ex(A, b)\n>>> int(info)\n0"
       ],
       "notes": [
-        "Implementation calls `solve` under the hood and converts the\nraised exception into the `info` flag.  This is the recommended\nform when calling from inside a batched / jit-compiled / vmapped\nroutine where raising would break control flow; manually inspect\n`info` afterwards and decide whether to recover."
+        "This is the recommended form when calling from inside a batched /\njit-compiled / vmapped routine where raising would break control\nflow; manually inspect `info` afterwards and decide whether to\nrecover.\n\nEach system of a batch is judged on its own: a singular `A` leaves\nthe other solutions, and their gradients, intact.  The batch is solved\ndirectly; only when that fails is `A` factorised again to find which\nsystems failed and at which pivot."
       ],
       "attributes": [],
       "warns": [],
@@ -1448,7 +1475,7 @@
       "kind": "function",
       "labels": [],
       "signature": "lu(A: Tensor, pivot: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3196",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3694",
       "subcategory": null,
       "summary": "Full LU decomposition with explicit factors $(P, L, U)$.",
       "extended": "Decomposes a square matrix $A$ as\n\n$$\nA \\,=\\, P\\,L\\,U,\n$$\n\nwhere $P$ is a row permutation, $L$ is unit-lower\ntriangular (ones on the diagonal), and $U$ is upper\ntriangular.  Unlike `lu_factor` (which returns a packed\nfactor + integer pivots), this routine returns the three factors\nas explicit dense tensors — convenient for inspection or for\nre-using $P,L,U$ in downstream linear-algebra expressions.",
@@ -1456,7 +1483,7 @@
         {
           "name": "A",
           "annotation": "Tensor",
-          "description": "Square matrix of shape `(n, n)`.  Batched inputs are not\nyet exposed through the Python wrapper (will raise).",
+          "description": "Square matrix of shape `(*, n, n)` (batch dims allowed).",
           "default": null
         },
         {
@@ -1468,7 +1495,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Permutation matrix of shape `(n, n)`."
+        "description": "Permutation matrix of shape `(*, n, n)`."
       },
       "raises": [],
       "examples": [
@@ -1487,40 +1514,49 @@
       "kind": "function",
       "labels": [],
       "signature": "ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3376",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L3916",
       "subcategory": null,
       "summary": "Solve a symmetric linear system using an LDL factorization.",
-      "extended": "Given $A = L\\,D\\,L^\\top$ produced by `ldl_factor`,\nsolves\n\n$$\nA\\,X \\,=\\, B\n$$\n\nby chaining three substitutions:\n\n$$\nL\\,Y = P B, \\quad D\\,Z = Y, \\quad L^\\top X = Z,\n$$\n\nfollowed by an inverse permutation to undo the Bunch-Kaufman row\nswaps.",
+      "extended": "Given $A = L\\,D\\,L^\\top$ produced by `ldl_factor`,\nsolves\n\n$$\nA\\,X \\,=\\, B.\n$$\n\n`sytrf`'s $L$ is a product $P_1 L_1 P_2 L_2 \\cdots$ of\nelimination steps, each preceded by its own row interchange.  Moving\nevery interchange to the left gives\n\n$$\nA \\,=\\, P\\,\\tilde L\\,D\\,\\tilde L^\\top P^\\top,\n$$\n\nwith $\\tilde L$ unit-lower-triangular — $L$ with each\ncolumn carrying the interchanges of the steps after it, as LAPACK's\n`syconv` arranges it — so the solve is a permutation, two triangular\nsolves around the $1 \\times 1$ / $2 \\times 2$ blocks of\n$D$ (solved in closed form, as `sytrs` does), and the inverse\npermutation.",
       "parameters": [
         {
           "name": "LD",
           "annotation": "Tensor",
-          "description": "Packed LDL factor from `ldl_factor`, shape `(n, n)`.",
+          "description": "Packed LDL factor from `ldl_factor`, shape `(*, n, n)`.\nOnly its lower triangle is read.",
           "default": null
         },
         {
           "name": "pivots",
           "annotation": "Tensor",
-          "description": "Pivot indices from `ldl_factor`.  This implementation\nonly supports **1×1 (simple) pivots** — every entry must be\nstrictly positive.  Mixed 2×2 block pivots raise\n`NotImplementedError`.",
+          "description": "Integer pivot indices from `ldl_factor`, shape `(*, n)`\n(1-based, LAPACK convention).  Both $1 \\times 1$ and\n$2 \\times 2$ Bunch-Kaufman blocks are supported.",
           "default": null
         },
         {
           "name": "B",
           "annotation": "Tensor",
-          "description": "Right-hand side of shape `(n, k)` (or `(n,)`).",
+          "description": "Right-hand side of shape `(*, n, k)` (or `(n,)`).  Its batch\ndimensions broadcast with those of `LD`.",
           "default": null
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Solution $X$, same shape as `B`."
+        "description": "Solution $X$, shaped like `B` broadcast against `LD`'s\nbatch."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `LD` is not square, `pivots` does not match it, or a pivot\nis not one `sytrf` could have written."
+        },
+        {
+          "annotation": "TypeError",
+          "description": "If `pivots` is not an integer tensor."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.linalg import ldl_factor, ldl_solve\n>>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])\n>>> LD, piv = ldl_factor(A)\n>>> b = lucid.tensor([[5.0], [4.0]])\n>>> ldl_solve(LD, piv, b)"
+        ">>> import lucid\n>>> from lucid.linalg import ldl_factor, ldl_solve\n>>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])\n>>> LD, piv = ldl_factor(A)\n>>> b = lucid.tensor([[5.0], [4.0]])\n>>> ldl_solve(LD, piv, b)\ntensor([[1.], [1.]])"
       ],
       "notes": [
-        "Supports indefinite symmetric $A$ (unlike Cholesky), so it\nis appropriate for KKT / saddle-point systems where Cholesky\nwould fail.  Cost per solve is $O(n^2 k)$ once the LDL\nfactor is in hand."
+        "Supports indefinite symmetric $A$ (unlike Cholesky), so it\nis appropriate for KKT / saddle-point systems where Cholesky\nwould fail.  Cost per solve is $O(n^2 k)$ once the LDL\nfactor is in hand: two triangular solves, and $O(nk)$ for\n$D$.  The pivots are replayed on the host in $O(n)$ per\nmatrix; only when an interchange reaches earlier columns of\n$L$ is an $n \\times n$ gather index built for\n$\\tilde L$ ($O(n^2)$ host work).\n\nThe interchanges are applied in the order `sytrf` performed them\n(LAPACK `sytrs`).  Applying them as a single up-front row\npermutation of $B$ — as this function once did — is right only\nwhen no later step swaps rows an earlier column of $L$ has\nentries in, and silently wrong otherwise.  The pivots are read on the\nhost with `tolist`; the arithmetic stays on `LD`'s device and is\ndifferentiable in `LD` and `B`."
       ],
       "attributes": [],
       "warns": [],
@@ -1532,7 +1568,7 @@
       "kind": "function",
       "labels": [],
       "signature": "matrix_exp(A: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3470",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L4136",
       "subcategory": null,
       "summary": "Matrix exponential $e^A$.",
       "extended": "Returns the matrix exponential\n\n$$\ne^A \\,=\\, \\sum_{k=0}^{\\infty} \\frac{A^k}{k!},\n$$\n\nwhich solves the matrix ODE $\\dot Y = A Y$ with initial\ncondition $Y(0) = I$.  Computed by the scaling-and-squaring\nalgorithm of Higham (2005) with a Padé [6/6] rational approximant:\n\n1. Scale $A' = A / 2^s$ so that $\\|A'\\| \\le \\theta_6$.\n2. Approximate $R \\approx e^{A'}$ via Padé [6/6] using the\n   even/odd polynomial splitting $R = D^{-1} N$.\n3. Square $R$ a total of $s$ times to recover\n   $e^A = R^{2^s}$.",
@@ -1565,7 +1601,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diagonal(A: Tensor, offset: int = 0, dim1: int = -2, dim2: int = -1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/2b6d2e873/lucid/linalg/__init__.py#L3583",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b9410415e/lucid/linalg/__init__.py#L4249",
       "subcategory": null,
       "summary": "Extract a (off-)diagonal from each matrix in a batched input.",
       "extended": "Returns the elements of $A$ lying on the diagonal selected by\n`offset` from the matrix slice formed by `(dim1, dim2)`.  For\na 2-D matrix and `offset=0` this is\n\n$$\nd_i \\,=\\, A_{i,\\,i}.\n$$\n\nPositive `offset` selects super-diagonals ($A_{i, i + \\text{offset}}$); negative offsets select sub-diagonals.",

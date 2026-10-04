@@ -369747,8 +369747,8 @@
     ]
   },
   "yolo_v3_tiny": {
-    "name": "_YOLOV3Tiny",
-    "type": "_YOLOV3Tiny",
+    "name": "YOLOV3TinyForObjectDetection",
+    "type": "YOLOV3TinyForObjectDetection",
     "params": 8852366,
     "own_params": 0,
     "children": [
