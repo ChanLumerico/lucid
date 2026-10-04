@@ -2,7 +2,7 @@
 Loss function modules.
 """
 
-from typing import override
+from typing import ClassVar, override
 
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
@@ -219,7 +219,57 @@ class L1Loss(Module):
         return f"reduction={self.reduction!r}"
 
 
-class CrossEntropyLoss(Module):
+class _WeightedLoss(Module):
+    """Base of the losses that hold a ``weight`` (and ``pos_weight``) tensor.
+
+    The tensors are registered buffers, as in the reference: ``.to()`` moves
+    them with the module and ``state_dict`` saves them.  They used to be
+    plain attributes, so ``.to("metal")`` left them on the CPU — the first
+    forward raised ``DeviceMismatch`` — and a checkpoint did not hold them.
+
+    Version 2 is the version that saves them.  A checkpoint written before
+    (version 1, or a plain dict without metadata) has no key for them;
+    loading it, strict or not, keeps the tensors the module was built with
+    rather than reporting the keys missing.
+    """
+
+    _version: ClassVar[int] = 2
+    #: The buffers an older checkpoint may lack.
+    _weight_buffers: ClassVar[tuple[str, ...]] = ("weight",)
+
+    weight: Tensor | None
+
+    @override
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Load as usual, excusing the weight keys a version-1 checkpoint lacks."""
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+        version = local_metadata.get("version") if local_metadata else None
+        if isinstance(version, int) and version >= 2:
+            return
+        for name in self._weight_buffers:
+            key = f"{prefix}{name}"
+            if key not in state_dict and key in missing_keys:
+                missing_keys.remove(key)
+
+
+class CrossEntropyLoss(_WeightedLoss):
     r"""Cross-entropy loss for multi-class classification.
 
     This criterion combines a log-softmax and a negative log-likelihood
@@ -270,6 +320,8 @@ class CrossEntropyLoss(Module):
     ----------
     weight : Tensor or None
         Per-class weight tensor, or ``None`` if not provided.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     ignore_index : int
         Target index excluded from loss and gradient computation.
     reduction : str
@@ -327,7 +379,7 @@ class CrossEntropyLoss(Module):
     ) -> None:
         """Initialise the CrossEntropyLoss module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.weight = weight
+        self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
         self.reduction = reduction
         self.label_smoothing = label_smoothing
@@ -366,7 +418,7 @@ class CrossEntropyLoss(Module):
         )
 
 
-class NLLLoss(Module):
+class NLLLoss(_WeightedLoss):
     r"""Negative log-likelihood loss.
 
     Operates on **log-probabilities** — the input is expected to already
@@ -398,6 +450,8 @@ class NLLLoss(Module):
     ----------
     weight : Tensor or None
         Per-class weight tensor.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     ignore_index : int
         Excluded target index.
     reduction : str
@@ -451,7 +505,7 @@ class NLLLoss(Module):
     ) -> None:
         """Initialise the NLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.weight: Tensor | None = weight
+        self.register_buffer("weight", weight)
         self.ignore_index: int = ignore_index
         self.reduction: Reduction = reduction
 
@@ -488,7 +542,7 @@ class NLLLoss(Module):
         return s
 
 
-class BCELoss(Module):
+class BCELoss(_WeightedLoss):
     r"""Binary cross-entropy loss.
 
     Measures the element-wise binary cross-entropy between predictions
@@ -516,6 +570,8 @@ class BCELoss(Module):
     ----------
     weight : Tensor or None
         Optional element-wise weighting.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     reduction : str
         The reduction mode.
 
@@ -562,7 +618,7 @@ class BCELoss(Module):
     ) -> None:
         """Initialise the BCELoss module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.weight: Tensor | None = weight
+        self.register_buffer("weight", weight)
         self.reduction: Reduction = reduction
 
     @override
@@ -591,7 +647,7 @@ class BCELoss(Module):
         return f"reduction={self.reduction!r}"
 
 
-class BCEWithLogitsLoss(Module):
+class BCEWithLogitsLoss(_WeightedLoss):
     r"""Binary cross-entropy loss that accepts raw logits.
 
     Combines a ``Sigmoid`` activation with a binary cross-entropy loss in
@@ -633,10 +689,14 @@ class BCEWithLogitsLoss(Module):
     ----------
     weight : Tensor or None
         Element-wise weight.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     reduction : str
         The reduction mode.
     pos_weight : Tensor or None
         Positive-class weight.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
 
     Shape
     -----
@@ -676,6 +736,10 @@ class BCEWithLogitsLoss(Module):
     >>> loss = criterion(logits, targets)
     """
 
+    _weight_buffers: ClassVar[tuple[str, ...]] = ("weight", "pos_weight")
+
+    pos_weight: Tensor | None
+
     def __init__(
         self,
         weight: Tensor | None = None,
@@ -684,9 +748,9 @@ class BCEWithLogitsLoss(Module):
     ) -> None:
         """Initialise the BCEWithLogitsLoss module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.weight: Tensor | None = weight
+        self.register_buffer("weight", weight)
         self.reduction: Reduction = reduction
-        self.pos_weight: Tensor | None = pos_weight
+        self.register_buffer("pos_weight", pos_weight)
 
     @override
     def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
@@ -1880,7 +1944,7 @@ class CTCLoss(Module):
         return f"blank={self.blank}, reduction={self.reduction!r}"
 
 
-class MultiMarginLoss(Module):
+class MultiMarginLoss(_WeightedLoss):
     r"""Multi-class hinge (SVM-style) margin loss.
 
     For each sample with predicted scores :math:`x \in \mathbb{R}^C`
@@ -1917,6 +1981,8 @@ class MultiMarginLoss(Module):
         The score margin.
     weight : Tensor or None
         Per-class weight tensor.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     reduction : str
         The reduction mode.
 
@@ -1969,7 +2035,7 @@ class MultiMarginLoss(Module):
         super().__init__()
         self.p = p
         self.margin = margin
-        self.weight = weight
+        self.register_buffer("weight", weight)
         self.reduction = reduction
 
     @override
@@ -2241,7 +2307,7 @@ class SoftMarginLoss(Module):
         return f"reduction={self.reduction!r}"
 
 
-class MultiLabelSoftMarginLoss(Module):
+class MultiLabelSoftMarginLoss(_WeightedLoss):
     r"""Multi-label soft-margin loss (BCE with logits averaged over classes).
 
     Treats each class as an independent binary classification problem and
@@ -2271,6 +2337,8 @@ class MultiLabelSoftMarginLoss(Module):
     ----------
     weight : Tensor or None
         Per-class weight tensor.
+        A registered buffer: moved by ``.to()`` and saved in
+        ``state_dict``.
     reduction : str
         The reduction mode.
 
@@ -2320,7 +2388,7 @@ class MultiLabelSoftMarginLoss(Module):
     ) -> None:
         """Initialise the MultiLabelSoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.weight = weight
+        self.register_buffer("weight", weight)
         self.reduction = reduction
 
     @override

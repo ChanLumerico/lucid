@@ -917,3 +917,122 @@ class TestUnbatchedInputs:
             )
             ro = rf.ctc_loss(rp, R.tensor([1, 2]), R.tensor(5), R.tensor(2), reduction=reduction)  # type: ignore[attr-defined]
             assert lo.shape == tuple(ro.shape) and _close(lo.item(), ro.item(), tol=1e-4)
+
+
+# ── CHA-88 ─────────────────────────────────────────────────────────────────
+
+
+def _weighted_modules() -> dict[str, tuple[nn.Module, list[str]]]:
+    """Every loss module with a weight tensor, built with one, and the
+    ``state_dict`` keys it should have."""
+    w3 = lucid.tensor([1.0, 2.0, 3.0])
+    return {
+        "CrossEntropyLoss": (nn.CrossEntropyLoss(weight=w3), ["weight"]),
+        "NLLLoss": (nn.NLLLoss(weight=w3), ["weight"]),
+        "BCELoss": (nn.BCELoss(weight=w3), ["weight"]),
+        "BCEWithLogitsLoss": (
+            nn.BCEWithLogitsLoss(weight=w3, pos_weight=lucid.tensor([3.0, 1.0, 2.0])),
+            ["weight", "pos_weight"],
+        ),
+        "MultiMarginLoss": (nn.MultiMarginLoss(weight=w3), ["weight"]),
+        "MultiLabelSoftMarginLoss": (nn.MultiLabelSoftMarginLoss(weight=w3), ["weight"]),
+    }
+
+
+def _call(name: str, module: nn.Module, device: str) -> lucid.Tensor:
+    x = lucid.tensor([[0.2, 0.5, 0.3], [0.6, 0.1, 0.3]], device=device)
+    if name in ("CrossEntropyLoss", "NLLLoss", "MultiMarginLoss"):
+        return module(x, lucid.tensor([2, 0], device=device))
+    y = lucid.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], device=device)
+    return module(x, y)
+
+
+class TestLossWeightsAreBuffers:
+    """A loss module's ``weight`` / ``pos_weight`` was a plain attribute.
+
+    ``.to("metal")`` left it on the CPU, so the first forward raised
+    ``DeviceMismatch``, and ``state_dict`` did not hold it.
+    """
+
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_state_dict_holds_the_weights(self, name: str) -> None:
+        module, keys = _weighted_modules()[name]
+        assert sorted(module.state_dict()) == sorted(keys)
+
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_no_weight_is_no_key(self, name: str) -> None:
+        module = getattr(nn, name)()
+        assert list(module.state_dict()) == []
+        assert module.weight is None
+
+    @_needs_metal
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_to_metal_moves_the_weights(self, name: str) -> None:
+        module, keys = _weighted_modules()[name]
+        cpu_value = _call(name, module, "cpu").item()
+        module = module.to("metal")
+        for key in keys:
+            assert getattr(module, key).device == "metal"
+        assert _close(_call(name, module, "metal").item(), cpu_value)
+
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_a_checkpoint_round_trips(self, name: str) -> None:
+        module, keys = _weighted_modules()[name]
+        fresh = type(module)(weight=lucid.zeros(3))
+        if "pos_weight" in keys:
+            fresh = type(module)(weight=lucid.zeros(3), pos_weight=lucid.zeros(3))
+        fresh.load_state_dict(module.state_dict())
+        for key in keys:
+            assert _vals(getattr(fresh, key)) == _vals(getattr(module, key))
+
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_an_older_checkpoint_without_the_keys_still_loads(self, name: str) -> None:
+        # Written before the weights were buffers: no keys, and either no
+        # metadata or version 1.  Strict loading keeps the built weights.
+        module, keys = _weighted_modules()[name]
+        before = {k: _vals(getattr(module, k)) for k in keys}
+        from collections import OrderedDict
+
+        v1: OrderedDict[str, lucid.Tensor] = OrderedDict()
+        v1._metadata = {"": {"version": 1}}  # type: ignore[attr-defined]
+        for old in ({}, v1):
+            result = module.load_state_dict(old, strict=True)
+            assert list(result.missing_keys) == []  # type: ignore[attr-defined]
+        assert {k: _vals(getattr(module, k)) for k in keys} == before
+
+    def test_a_current_checkpoint_without_the_key_is_still_strict(self) -> None:
+        from collections import OrderedDict
+
+        module = nn.CrossEntropyLoss(weight=lucid.tensor([1.0, 2.0, 3.0]))
+        v2: OrderedDict[str, lucid.Tensor] = OrderedDict()
+        v2._metadata = {"": {"version": 2}}  # type: ignore[attr-defined]
+        with pytest.raises(RuntimeError, match="Missing key"):
+            module.load_state_dict(v2)
+
+    def test_a_loss_inside_a_model_moves_with_it(self) -> None:
+        class Head(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.fc = nn.Linear(4, 3)
+                self.criterion = nn.CrossEntropyLoss(weight=lucid.tensor([1.0, 2.0, 3.0]))
+
+        model = Head()
+        assert sorted(model.state_dict()) == ["criterion.weight", "fc.bias", "fc.weight"]
+        model.half()
+        assert model.criterion.weight.dtype == lucid.float16
+
+    @pytest.mark.parity
+    @pytest.mark.parametrize("name", list(_weighted_modules()))
+    def test_the_same_keys_as_the_reference(self, ref: object, name: str) -> None:
+        R = ref
+        module, keys = _weighted_modules()[name]
+        kw = {k: R.tensor(_vals(getattr(module, k))) for k in keys}  # type: ignore[attr-defined]
+        theirs = getattr(R.nn, name)(**kw)  # type: ignore[attr-defined]
+        assert sorted(theirs.state_dict()) == sorted(module.state_dict())
+        # And their checkpoint loads into ours, strictly.
+        fresh = type(module)(**{k: lucid.zeros(3) for k in keys})
+        fresh.load_state_dict(
+            {k: lucid.tensor(v.tolist()) for k, v in theirs.state_dict().items()}
+        )
+        for key in keys:
+            assert _vals(getattr(fresh, key)) == _vals(getattr(module, key))
