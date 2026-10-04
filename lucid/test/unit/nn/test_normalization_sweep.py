@@ -102,6 +102,20 @@ def test_training_output_is_standardised(cls, shape):
     assert np.allclose(out.var(axis=axes), 1.0, atol=1e-2)
 
 
+def test_batch_norm_single_value_error_does_not_update_running_stats():
+    layer = nn.BatchNorm1d(3)
+    before_mean = np.asarray(layer.running_mean.numpy()).copy()
+    before_var = np.asarray(layer.running_var.numpy()).copy()
+    before_count = int(np.asarray(layer.num_batches_tracked.numpy()))
+
+    with pytest.raises(ValueError, match="more than one value per channel"):
+        layer(_x((1, 3)))
+
+    np.testing.assert_array_equal(layer.running_mean.numpy(), before_mean)
+    np.testing.assert_array_equal(layer.running_var.numpy(), before_var)
+    assert int(np.asarray(layer.num_batches_tracked.numpy())) == before_count
+
+
 @pytest.mark.parametrize("momentum", [0.1, 0.5, 1.0])
 def test_momentum_controls_how_fast_the_average_moves(momentum):
     layer = nn.BatchNorm1d(6, momentum=momentum)
