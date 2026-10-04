@@ -590,18 +590,25 @@ def _hungarian_match(
     pred_xy = box_cxcywh_to_xyxy(pred_boxes)  # (N, 4)
     giou_mat = generalized_box_iou(pred_xy, gt_xy)  # (N, M)
 
+    # The solver is a data-dependent host loop (the H3 CPU round-trip), so each
+    # operand crosses to the host in one transfer.  Reading the matrix out one
+    # ``.item()`` at a time cost N·M·10 device syncs per image on Metal; the
+    # values are the same float32 entries either way.
+    scores_l = cast(list[list[float]], scores.tolist())
+    pred_l = cast(list[list[float]], pred_boxes.tolist())
+    gt_l = cast(list[list[float]], gt_boxes.tolist())
+    giou_l = cast(list[list[float]], giou_mat.tolist())
+    labels_l = [int(v) for v in cast(list[int], gt_labels.tolist())]
+
     # Build M × N cost matrix (rows = GTs, cols = queries — M ≤ N for DETR)
     cost: list[list[float]] = []
     for m in range(M):
-        gt_cls = int(gt_labels[m].item())
+        gt_cls = labels_l[m]
         row: list[float] = []
         for n in range(N):
-            c_cls = -float(scores[n, gt_cls].item())
-            c_l1 = sum(
-                abs(float(pred_boxes[n, d].item()) - float(gt_boxes[m, d].item()))
-                for d in range(4)
-            )
-            c_giou = -float(giou_mat[n, m].item())
+            c_cls = -scores_l[n][gt_cls]
+            c_l1 = sum(abs(pred_l[n][d] - gt_l[m][d]) for d in range(4))
+            c_giou = -giou_l[n][m]
             row.append(cost_cls * c_cls + cost_l1 * c_l1 + cost_giou * c_giou)
         cost.append(row)
 
@@ -870,9 +877,17 @@ class DETRForObjectDetection(ObjectDetectionModel):
         targets: list[dict[str, Tensor]],
         image_size: tuple[int, int],
     ) -> Tensor:
-        """Hungarian-matched set loss across the batch."""
+        """Hungarian-matched set loss across the batch.
+
+        Every tensor the loss builds itself — per-query targets and weights,
+        match indices, the zero fallbacks — is created on the predictions'
+        device.  Built without ``device=`` they landed on the CPU and the
+        first op mixing them with Metal predictions raised ``DeviceMismatch``.
+        ``targets`` must already be on that device, as the predictions are.
+        """
         B = int(logits.shape[0])
         N = int(logits.shape[1])
+        dev = logits.device.type
 
         cls_losses: list[Tensor] = []
         l1_losses: list[Tensor] = []
@@ -929,46 +944,41 @@ class DETRForObjectDetection(ObjectDetectionModel):
             # column).  Foreground labels are used as-is: they are 0-indexed and
             # address columns 0..num_classes-1 directly, which is what the
             # matcher above already assumes.
+            labels_l = [int(v) for v in cast(list[int], gt_labels.tolist())]
             cls_targets_data: list[int] = [bg_index] * N
             for pi, gi in zip(pred_idx, gt_idx):
-                cls_targets_data[pi] = int(gt_labels[gi].item())
+                cls_targets_data[pi] = labels_l[gi]
 
             # Weight mask: matched queries get full weight; background = bg_weight
             weight_data: list[float] = [bg_weight] * N
             for pi in pred_idx:
                 weight_data[pi] = 1.0
 
-            weight = lucid.tensor(weight_data)
+            weight = lucid.tensor(weight_data, device=dev)  # (N,)
+            cls_tgt = lucid.tensor(cls_targets_data, device=dev).long()  # (N,)
 
-            # Weighted CE (per-sample weight)
+            # Weighted CE (per-sample weight): pick each query's target column.
             log_sm = F.log_softmax(lg_b, dim=-1)  # (N, K+1)
-            ce_per_n: list[Tensor] = []
-            for n in range(N):
-                c = cls_targets_data[n]
-                ce_per_n.append(-log_sm[n, c] * weight[n])
+            picked = lucid.gather(log_sm, 1, cls_tgt.reshape(N, 1)).reshape(N)
             # ``cross_entropy(..., weight=w)`` with reduction='mean' divides by
             # ``sum_i w[target_i]``, not by N.  Accumulate the numerator and the
             # weight sum separately so the batch-level division matches.
             cls_num += float(sum(weight_data))
-            cls_losses.append(lucid.cat([l.reshape(1) for l in ce_per_n]).sum())
+            cls_losses.append((-picked * weight).sum())
 
             if not pred_idx:
                 continue
 
             # L1 loss on matched pairs.  The *predictions* have to be gathered
-            # by slicing: reading them out with ``.item()`` and rebuilding a
-            # tensor detaches the box head, and the 5·L1 + 2·GIoU terms would
-            # keep appearing in the reported loss while contributing no
-            # gradient at all.  The ground truth is a constant, so building it
-            # from floats is fine.
-            pred_matched = lucid.cat(
-                [pb_b[pi : pi + 1, :] for pi in pred_idx], dim=0
-            )  # (P, 4)
-            gt_matched_data = [
-                [float(gt_boxes_cxcywh[gi, d].item()) for d in range(4)]
-                for gi in gt_idx
-            ]
-            gt_matched = lucid.tensor(gt_matched_data)  # (P, 4)
+            # with a tensor op: reading them out with ``.item()`` and
+            # rebuilding a tensor detaches the box head, and the 5·L1 + 2·GIoU
+            # terms would keep appearing in the reported loss while
+            # contributing no gradient at all.  The ground truth is a constant
+            # and is gathered the same way, so it stays on its device.
+            pi_t = lucid.tensor(pred_idx, device=dev).long()
+            gi_t = lucid.tensor(gt_idx, device=dev).long()
+            pred_matched = pb_b.index_select(0, pi_t)  # (P, 4)
+            gt_matched = gt_boxes_cxcywh.index_select(0, gi_t)  # (P, 4)
             # sum over the 4 coordinates; the /num_boxes division happens
             # once at batch level, not per image and not over coordinates.
             l1_losses.append(lucid.abs(pred_matched - gt_matched).sum())
@@ -979,9 +989,11 @@ class DETRForObjectDetection(ObjectDetectionModel):
             pred_xyxy = box_cxcywh_to_xyxy(pred_matched)  # (P, 4)
             gt_xyxy = box_cxcywh_to_xyxy(gt_matched)  # (P, 4)
             giou_mat = generalized_box_iou(pred_xyxy, gt_xyxy)  # (P, P)
-            giou_diag = lucid.cat(
-                [giou_mat[i, i].reshape(1) for i in range(len(pred_idx))], dim=0
-            )
+            n_match = len(pred_idx)
+            diag = lucid.tensor(
+                [i * n_match + i for i in range(n_match)], device=dev
+            ).long()
+            giou_diag = giou_mat.reshape(-1).index_select(0, diag)  # (P,)
             giou_losses.append((1.0 - giou_diag).sum())
 
         denom_cls = max(cls_num, 1.0)
@@ -989,17 +1001,17 @@ class DETRForObjectDetection(ObjectDetectionModel):
         cls_l = (
             lucid.cat([l.reshape(1) for l in cls_losses]).sum() / denom_cls
             if cls_losses
-            else lucid.zeros(())
+            else lucid.zeros((), device=dev)
         )
         l1_l = (
             lucid.cat([l.reshape(1) for l in l1_losses]).sum() / denom_box
             if l1_losses
-            else lucid.zeros(())
+            else lucid.zeros((), device=dev)
         )
         giou_l = (
             lucid.cat([l.reshape(1) for l in giou_losses]).sum() / denom_box
             if giou_losses
-            else lucid.zeros(())
+            else lucid.zeros((), device=dev)
         )
 
         # Scalar in every branch — the zero fallbacks used to return shape (1,),
@@ -1027,6 +1039,8 @@ class DETRForObjectDetection(ObjectDetectionModel):
         """
         B = int(output.logits.shape[0])
         N = int(output.logits.shape[1])
+        # Results live where the predictions do, like every other output.
+        dev = output.logits.device.type
         results: list[dict[str, Tensor]] = []
 
         for b in range(B):
@@ -1035,6 +1049,11 @@ class DETRForObjectDetection(ObjectDetectionModel):
             iH, iW = image_sizes[b]
 
             probs = F.softmax(lg_b, dim=-1)  # (N, K+1)
+            num_fg = int(probs.shape[1]) - 1
+            # One host transfer per tensor; an ``.item()`` per entry was
+            # N·(K+4) device syncs per image on Metal.
+            probs_l = cast(list[list[float]], probs.tolist())
+            boxes_l = cast(list[list[float]], pb_b.tolist())
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
@@ -1047,9 +1066,8 @@ class DETRForObjectDetection(ObjectDetectionModel):
                 # shift every reported id by one against the shipped checkpoint.
                 best_cls = 0
                 best_sc = -1.0
-                num_fg = int(probs.shape[1]) - 1
                 for c in range(num_fg):
-                    sc = float(probs[n, c].item())
+                    sc = probs_l[n][c]
                     if sc > best_sc:
                         best_sc = sc
                         best_cls = c
@@ -1058,10 +1076,10 @@ class DETRForObjectDetection(ObjectDetectionModel):
                     continue
 
                 # Convert cxcywh [0,1] → xyxy pixels
-                cx = float(pb_b[n, 0].item()) * iW
-                cy = float(pb_b[n, 1].item()) * iH
-                w2 = float(pb_b[n, 2].item()) * iW / 2.0
-                h2 = float(pb_b[n, 3].item()) * iH / 2.0
+                cx = boxes_l[n][0] * iW
+                cy = boxes_l[n][1] * iH
+                w2 = boxes_l[n][2] * iW / 2.0
+                h2 = boxes_l[n][3] * iH / 2.0
                 box_data = [
                     [
                         max(0.0, cx - w2),
@@ -1070,9 +1088,9 @@ class DETRForObjectDetection(ObjectDetectionModel):
                         min(float(iH), cy + h2),
                     ]
                 ]
-                keep_boxes.append(lucid.tensor(box_data))
-                keep_scores.append(lucid.tensor([[best_sc]]))
-                keep_labels.append(lucid.tensor([[float(best_cls)]]))
+                keep_boxes.append(lucid.tensor(box_data, device=dev))
+                keep_scores.append(lucid.tensor([[best_sc]], device=dev))
+                keep_labels.append(lucid.tensor([[float(best_cls)]], device=dev))
 
             if keep_boxes:
                 results.append(
@@ -1085,9 +1103,9 @@ class DETRForObjectDetection(ObjectDetectionModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
         return results

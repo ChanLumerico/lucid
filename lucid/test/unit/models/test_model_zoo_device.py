@@ -1135,3 +1135,194 @@ def test_score_sde_trains_one_step_on_device(device):
     assert grads
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Set-prediction losses (DETR, MaskFormer)
+#
+# Both losses Hungarian-match on the host — the data-dependent CPU round-trip
+# H3 allows — and then build per-query targets, class weights and match
+# indices from the Python result.  Those tensors were created without
+# ``device=``, so they sat on the CPU and the first op mixing them with Metal
+# predictions raised ``DeviceMismatch`` (CHA-66): neither family could take a
+# training step on Metal, while every forward-only check above passed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DETR_SMALL = {
+    "num_classes": 4,
+    "backbone_layers": (1, 1, 1, 1),
+    "n_head": 2,
+    "num_encoder_layers": 1,
+    "num_decoder_layers": 1,
+    "dim_feedforward": 32,
+    "num_queries": 4,
+}
+_MASKFORMER_SMALL = {
+    "num_classes": 4,
+    "backbone_layers": (1, 1, 1, 1),
+    "n_head": 2,
+    "num_decoder_layers": 1,
+    "dim_feedforward": 32,
+    "num_queries": 4,
+    "fpn_out_channels": 32,
+}
+_SET_PREDICTION = {
+    "detr": ("detr_resnet50", _DETR_SMALL),
+    "maskformer": ("maskformer_resnet50", _MASKFORMER_SMALL),
+}
+
+
+def _set_targets(family, device):
+    """Fixed targets, built on the CPU and moved, so both devices see the same."""
+    if family == "detr":
+        boxes = [
+            [[0.25, 0.25, 0.75, 0.75], [0.1, 0.2, 0.4, 0.9]],
+            [[0.5, 0.1, 0.9, 0.6], [0.0, 0.0, 0.3, 0.3]],
+        ]
+        labels = [[1, 3], [0, 2]]
+        return [
+            {
+                "boxes": lucid.tensor(b).to(device),
+                "labels": lucid.tensor(lb).long().to(device),
+            }
+            for b, lb in zip(boxes, labels)
+        ]
+    masks = np.random.default_rng(3).integers(0, 4, (2, 64, 64))
+    return {"masks": lucid.tensor(masks.astype(np.int64)).to(device)}
+
+
+def _set_images(seed=2):
+    data = np.random.default_rng(seed).standard_normal((2, 3, 64, 64))
+    return lucid.tensor(data.astype(np.float32))
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("family", sorted(_SET_PREDICTION))
+def test_set_prediction_family_trains_one_step_on_device(family, device):
+    """Factory in, loss out, backward, step — every gradient on the device."""
+    factory, overrides = _SET_PREDICTION[family]
+    lucid.manual_seed(0)
+    model = M.create_model(factory, **overrides).to(device)
+    model.train()
+    optimizer = lucid.optim.SGD(model.parameters(), lr=1e-2)
+    before = {
+        n: p.detach().to("cpu").numpy().copy() for n, p in model.named_parameters()
+    }
+
+    out = model(_set_images().to(device), targets=_set_targets(family, device))
+    loss = out.loss
+    assert loss.ndim == 0, f"{family}: loss has shape {loss.shape}"
+    assert str(loss.device) == f"device('{device}')", family
+    assert np.isfinite(float(loss.item())), family
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads, f"{family}: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')", family
+    moved = [
+        n
+        for n, p in model.named_parameters()
+        if np.abs(p.detach().to("cpu").numpy() - before[n]).max() > 0
+    ]
+    assert moved, f"{family}: the step changed no parameter"
+
+
+@pytest.mark.parametrize("family", sorted(_SET_PREDICTION))
+def test_set_prediction_loss_matches_across_devices(family):
+    """Same weights, inputs and targets: the loss and its gradients agree.
+
+    Dropout is off — the two devices draw their own masks, and the
+    disagreement would be sampling, not a device bug.  Gradients that are
+    zero in exact arithmetic (a key-projection bias under softmax) come out
+    as ~1e-9 noise on both sides, so the bound has an absolute floor.
+    """
+    factory, overrides = _SET_PREDICTION[family]
+    cpu, metal = _paired(factory, **overrides, dropout=0.0)
+    x = _set_images()
+
+    cpu.train()
+    metal.train()
+    loss_cpu = cpu(x, targets=_set_targets(family, "cpu")).loss
+    loss_metal = metal(x.to("metal"), targets=_set_targets(family, "metal")).loss
+    _agree(loss_cpu, loss_metal, 1e-4, f"{family} loss")
+
+    loss_cpu.backward()
+    loss_metal.backward()
+    metal_params = dict(metal.named_parameters())
+    for name, p in cpu.named_parameters():
+        q = metal_params[name]
+        assert (p.grad is None) == (q.grad is None), f"{family} {name}"
+        if p.grad is None:
+            continue
+        assert str(q.grad.device) == "device('metal')", f"{family} {name}"
+        a = p.grad.numpy()
+        b = q.grad.to("cpu").numpy()
+        bound = 1e-6 + 1e-3 * float(np.abs(a).max())
+        assert np.abs(a - b).max() <= bound, f"{family} {name}"
+
+
+@pytest.mark.parametrize("family", sorted(_SET_PREDICTION))
+def test_set_prediction_inference_matches_across_devices(family):
+    factory, overrides = _SET_PREDICTION[family]
+    cpu, metal = _paired(factory, **overrides)
+    x = _set_images()
+    with lucid.no_grad():
+        out_cpu = cpu(x)
+        out_metal = metal(x.to("metal"))
+    _agree(out_cpu.logits, out_metal.logits, 1e-4, f"{family} logits")
+    if family == "detr":
+        _agree(out_cpu.pred_boxes, out_metal.pred_boxes, 1e-4, "detr boxes")
+
+
+def test_detr_postprocess_stays_on_device():
+    """Detections come back where the predictions are, not on the CPU."""
+    factory, overrides = _SET_PREDICTION["detr"]
+    cpu, metal = _paired(factory, **overrides, score_thresh=0.0)
+    x = _set_images()
+    with lucid.no_grad():
+        res_cpu = cpu.postprocess(cpu(x), [(64, 64), (64, 64)])
+        res_metal = metal.postprocess(metal(x.to("metal")), [(64, 64), (64, 64)])
+    for rc, rm in zip(res_cpu, res_metal):
+        for key in ("boxes", "scores", "labels"):
+            assert str(rm[key].device) == "device('metal')", key
+            np.testing.assert_allclose(
+                rm[key].to("cpu").numpy(), rc[key].numpy(), rtol=1e-4, atol=1e-4
+            )
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_detr_image_without_boxes_trains_on_device(device):
+    """The no-object-only branch, with the box terms' scalar zero fallbacks."""
+    factory, overrides = _SET_PREDICTION["detr"]
+    lucid.manual_seed(0)
+    model = M.create_model(factory, **overrides).to(device)
+    model.train()
+    empty = {
+        "boxes": lucid.zeros((0, 4), device=device),
+        "labels": lucid.zeros((0,), device=device).long(),
+    }
+    loss = model(_set_images().to(device), targets=[empty, empty]).loss
+    assert loss.ndim == 0
+    assert str(loss.device) == f"device('{device}')"
+    loss.backward()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_maskformer_ignore_only_batch_gives_scalar_loss_on_device(device):
+    """No valid class anywhere: only the class term, and still a scalar.
+
+    The mask-term fallback used to be a ``(1,)`` CPU zero, so this batch
+    produced a ``(1,)`` loss on the CPU and a ``DeviceMismatch`` on Metal.
+    """
+    factory, overrides = _SET_PREDICTION["maskformer"]
+    lucid.manual_seed(0)
+    model = M.create_model(factory, **overrides).to(device)
+    model.train()
+    ignore = lucid.full((2, 64, 64), 255, device=device).long()
+    loss = model(_set_images().to(device), targets={"masks": ignore}).loss
+    assert loss.ndim == 0, f"loss has shape {loss.shape}"
+    assert str(loss.device) == f"device('{device}')"
+    loss.backward()

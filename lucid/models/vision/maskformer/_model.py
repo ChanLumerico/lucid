@@ -1042,11 +1042,20 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
         targets: dict[str, Tensor],
         feat_size: tuple[int, int],
     ) -> Tensor:
-        """Compute Hungarian-matched mask + class loss across batch."""
+        """Compute Hungarian-matched mask + class loss across batch.
+
+        Every tensor the loss builds itself — class targets, the no-object
+        class weight, match indices, the zero fallback — is created on the
+        predictions' device.  Built without ``device=`` they landed on the
+        CPU and the cross-entropy gather against Metal logits raised
+        ``DeviceMismatch``.  ``targets["masks"]`` must already be on that
+        device, as the predictions are.
+        """
         B = int(class_logits.shape[0])
         N = int(class_logits.shape[1])
         K = self._cfg.num_classes
         fH, fW = feat_size
+        dev = class_logits.device.type
 
         gt_masks_full: Tensor = targets["masks"]  # (B, H, W) integer
 
@@ -1081,7 +1090,7 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
             if M == 0:
                 # Nothing but background / ignore.
                 bg_tgt_data: list[int] = [K] * N  # "no-object" class index = K
-                bg_tgt: Tensor = lucid.tensor(bg_tgt_data)
+                bg_tgt: Tensor = lucid.tensor(bg_tgt_data, device=dev)
                 cls_losses.append(F.cross_entropy(cl_b, bg_tgt, reduction="mean"))
                 continue
 
@@ -1112,8 +1121,10 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
             cls_tgt_data: list[int] = [K] * N
             for pi, gi in zip(pred_idx, gt_idx):
                 cls_tgt_data[pi] = unique_classes[gi]
-            cls_tgt: Tensor = lucid.tensor(cls_tgt_data)
-            cls_weight: Tensor = lucid.tensor([1.0] * K + [_NO_OBJECT_WEIGHT])
+            cls_tgt: Tensor = lucid.tensor(cls_tgt_data, device=dev)
+            cls_weight: Tensor = lucid.tensor(
+                [1.0] * K + [_NO_OBJECT_WEIGHT], device=dev
+            )
             cls_losses.append(
                 F.cross_entropy(cl_b, cls_tgt, weight=cls_weight, reduction="mean")
             )
@@ -1155,15 +1166,17 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
                     (_MASK_WEIGHT * focal_d + _DICE_WEIGHT * dice_d).mean()
                 )
 
+        # Scalar fallbacks: a (1,) zero made the loss shape (1,) whenever no
+        # image in the batch held a valid class, and a scalar everywhere else.
         cls_loss: Tensor = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()
             if cls_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((), device=dev)
         )
         mask_loss: Tensor = (
             lucid.cat([l.reshape(1) for l in mask_losses]).mean()
             if mask_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((), device=dev)
         )
 
         return cls_loss + mask_loss
