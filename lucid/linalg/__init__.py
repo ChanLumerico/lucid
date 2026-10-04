@@ -2226,8 +2226,13 @@ def solve_triangular(
 
     Notes
     -----
-    Backed by LAPACK ``trsm``.  Triangular solves are the workhorse
-    used inside Cholesky, LU, and QR back-substitution paths.
+    Backed by BLAS ``trsm`` on both devices.  Triangular solves are the
+    workhorse used inside Cholesky, LU, and QR back-substitution paths.
+
+    A singular :math:`A` (an exact zero on the diagonal, with
+    ``unitriangular=False``) is not refused: substitution divides by the
+    zero, so the solution holds :math:`\pm\infty`, or NaN where it meets
+    :math:`0 / 0`, as the reference framework does.
 
     Examples
     --------
