@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING, Sequence, cast
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._dtype import bfloat16 as _bfloat16
+from lucid._dtype import dtype as _dtype
+from lucid._dtype import float16 as _float16
+from lucid._dtype import float32 as _float32
 from lucid._types import Reduction, ReductionKL
 
 if TYPE_CHECKING:
@@ -26,7 +30,7 @@ def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
         raise ValueError(f"reduction must be one of {valid}, got {reduction!r}")
 
 
-def _accumulation_dtype(t: Tensor) -> _lucid.dtype:
+def _accumulation_dtype(t: Tensor) -> _dtype:
     """The dtype a loss over ``t`` is computed and summed in.
 
     Half precision is widened to float32.  A float16 sum overflows at
@@ -35,12 +39,12 @@ def _accumulation_dtype(t: Tensor) -> _lucid.dtype:
     needs (an ``eps`` of 1e-12, a gradient floor of 1e12) are not float16
     numbers at all.  The result is rounded back to the input's dtype.
     """
-    if t.dtype in (_lucid.float16, _lucid.bfloat16):
-        return _lucid.float32
+    if t.dtype in (_float16, _bfloat16):
+        return _float32
     return t.dtype
 
 
-def _reduce_in(t: Tensor, reduction: str, out_dtype: _lucid.dtype) -> Tensor:
+def _reduce_in(t: Tensor, reduction: str, out_dtype: _dtype) -> Tensor:
     """Reduce per-element losses held in their accumulation dtype, then
     round the result back to ``out_dtype``."""
     _validate_reduction(reduction)
@@ -330,7 +334,7 @@ def _refuse_or_poison(
     safe: Tensor,
     counted: Tensor | None,
     scale: Tensor | None,
-    dtype: _lucid.dtype,
+    dtype: _dtype,
 ) -> Tensor | None:
     """Deal with class indices outside the class range.
 
@@ -581,7 +585,9 @@ def cross_entropy(
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
     log_p: Tensor = _log_softmax(x, dim=1)
     out: Tensor = (
-        _soft_target_nll(log_p, target, weight, ignore_index, reduction, label_smoothing)
+        _soft_target_nll(
+            log_p, target, weight, ignore_index, reduction, label_smoothing
+        )
         if soft
         else _class_nll(
             log_p,
@@ -701,7 +707,9 @@ def nll_loss(
     if unbatched:
         x = x.unsqueeze(0)
         target = target.reshape([1])
-    out: Tensor = _class_nll(x, target, weight, ignore_index, reduction, 0.0, "nll_loss")
+    out: Tensor = _class_nll(
+        x, target, weight, ignore_index, reduction, 0.0, "nll_loss"
+    )
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
@@ -984,9 +992,7 @@ def kl_div(
         # target is 0 — every off-class entry of a one-hot or sparse
         # distillation target.  ``xlogy`` takes ``0 log 0`` as 0, the limit
         # the divergence is defined with.
-        kl = _C_engine.sub(
-            _unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi)
-        )
+        kl = _C_engine.sub(_unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi))
     if reduction == "mean":
         return _wrap(_C_engine.mean(kl, [], False))
     if reduction == "sum":

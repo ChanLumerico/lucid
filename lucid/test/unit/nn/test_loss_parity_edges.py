@@ -150,7 +150,9 @@ class TestBinaryCrossEntropyWithLogitsAtZero:
         assert _close(head.bias.grad.item(), -0.5)
 
     def test_saturated_logits_stay_finite(self, device: str) -> None:
-        z = lucid.tensor([100.0, -100.0, 30.0, -30.0], requires_grad=True, device=device)
+        z = lucid.tensor(
+            [100.0, -100.0, 30.0, -30.0], requires_grad=True, device=device
+        )
         y = lucid.tensor([0.0, 1.0, 1.0, 0.0], device=device)
         out = F.binary_cross_entropy_with_logits(z, y, reduction="none")
         out.sum().backward()
@@ -173,7 +175,8 @@ class TestBinaryCrossEntropyWithLogitsAtZero:
                     ly,
                     weight=lucid.tensor(w, device=device),
                     pos_weight=(
-                        None if pos_weight is None
+                        None
+                        if pos_weight is None
                         else lucid.tensor(pos_weight, device=device)
                     ),
                     reduction=reduction,
@@ -217,7 +220,9 @@ class TestKLDivWithZeroTargets:
         x = lucid.log(lucid.tensor(self.P, device=device))
         q = lucid.tensor(self.Q, device=device)
         out = F.kl_div(x, q, reduction="none")
-        assert _close(_vals(out), [[0.35667494, 0.0, 0.0], [0.25541281, 0.25541281, 0.0]])
+        assert _close(
+            _vals(out), [[0.35667494, 0.0, 0.0], [0.25541281, 0.25541281, 0.0]]
+        )
 
     def test_the_module_and_every_reduction_are_finite(self, device: str) -> None:
         x = lucid.log(lucid.tensor(self.P, device=device)).requires_grad_()
@@ -251,19 +256,39 @@ def _kd_case(device: str) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tensor]:
     """A K-d classification case with an ignored position: log-probs
     ``(2, 3, 2, 2)``, targets ``(2, 2, 2)`` and a class weight."""
     logits = [
-        [[[0.1, -0.4], [1.2, 0.3]], [[0.5, 0.9], [-1.0, 0.2]], [[2.0, -0.3], [0.0, 0.7]]],
-        [[[-0.6, 0.4], [0.8, 1.1]], [[0.3, -0.2], [0.6, -0.9]], [[1.4, 0.5], [-0.1, 0.0]]],
+        [
+            [[0.1, -0.4], [1.2, 0.3]],
+            [[0.5, 0.9], [-1.0, 0.2]],
+            [[2.0, -0.3], [0.0, 0.7]],
+        ],
+        [
+            [[-0.6, 0.4], [0.8, 1.1]],
+            [[0.3, -0.2], [0.6, -0.9]],
+            [[1.4, 0.5], [-0.1, 0.0]],
+        ],
     ]
     target = [[[0, 2], [-100, 1]], [[2, 1], [0, 2]]]
     x = F.log_softmax(lucid.tensor(logits, device=device), dim=1)
-    return x, lucid.tensor(target, device=device), lucid.tensor([1.0, 2.0, 0.5], device=device)
+    return (
+        x,
+        lucid.tensor(target, device=device),
+        lucid.tensor([1.0, 2.0, 0.5], device=device),
+    )
 
 
 def _kd_expected(reduction: str) -> object:
     """The K-d case written out: ``-w[t] * log_p[t]`` per kept position."""
     logits = [
-        [[[0.1, -0.4], [1.2, 0.3]], [[0.5, 0.9], [-1.0, 0.2]], [[2.0, -0.3], [0.0, 0.7]]],
-        [[[-0.6, 0.4], [0.8, 1.1]], [[0.3, -0.2], [0.6, -0.9]], [[1.4, 0.5], [-0.1, 0.0]]],
+        [
+            [[0.1, -0.4], [1.2, 0.3]],
+            [[0.5, 0.9], [-1.0, 0.2]],
+            [[2.0, -0.3], [0.0, 0.7]],
+        ],
+        [
+            [[-0.6, 0.4], [0.8, 1.1]],
+            [[0.3, -0.2], [0.6, -0.9]],
+            [[1.4, 0.5], [-0.1, 0.0]],
+        ],
     ]
     target = [[[0, 2], [-100, 1]], [[2, 1], [0, 2]]]
     w = [1.0, 2.0, 0.5]
@@ -367,7 +392,9 @@ class TestClassTargetsAreNeverGatheredRaw:
         for p in (1, 2):
             lx = lucid.tensor(mm, requires_grad=True, device=device)
             lo = F.multi_margin_loss(
-                lx, lucid.tensor(mt, device=device), p=p,
+                lx,
+                lucid.tensor(mt, device=device),
+                p=p,
                 weight=lucid.tensor(mw, device=device),
             )
             lo.backward()
@@ -452,7 +479,9 @@ class TestABatchWithEveryTargetIgnored:
         rt = R.tensor([-100, -100])  # type: ignore[attr-defined]
         rf = R.nn.functional  # type: ignore[attr-defined]
         if option == "weight":
-            lo = F.cross_entropy(lx, lt, weight=lucid.tensor([1.0, 2.0, 3.0], device=device))
+            lo = F.cross_entropy(
+                lx, lt, weight=lucid.tensor([1.0, 2.0, 3.0], device=device)
+            )
             ro = rf.cross_entropy(rx, rt, weight=R.tensor([1.0, 2.0, 3.0]))  # type: ignore[attr-defined]
         elif option == "smoothing":
             lo = F.cross_entropy(lx, lt, label_smoothing=0.1)
@@ -725,9 +754,7 @@ def _reduction_cases() -> dict[str, object]:
         "multilabel_margin": lambda r: F.multilabel_margin_loss(
             a, lucid.tensor([[0, -1, 0, 0]] * 3), reduction=r
         ),
-        "ctc": lambda r: F.ctc_loss(
-            lp, lucid.tensor([[1, 2]]), [5], [2], reduction=r
-        ),
+        "ctc": lambda r: F.ctc_loss(lp, lucid.tensor([[1, 2]]), [5], [2], reduction=r),
         "margin_ranking_module": lambda r: nn.MarginRankingLoss(reduction=r)(
             s1, s2, ones
         ),
@@ -767,7 +794,9 @@ class TestCrossEntropyWithClassProbabilities:
     Q = [[0.2, 0.3, 0.5], [1.0, 0.0, 0.0]]
 
     @staticmethod
-    def _by_hand(x: list[list[float]], q: list[list[float]], w: list[float]) -> list[float]:
+    def _by_hand(
+        x: list[list[float]], q: list[list[float]], w: list[float]
+    ) -> list[float]:
         out = []
         for row, probs in zip(x, q):
             lse = math.log(sum(math.exp(v) for v in row))
@@ -789,7 +818,9 @@ class TestCrossEntropyWithClassProbabilities:
         got = F.cross_entropy(x, q, weight=lucid.tensor(w, device=device))
         assert _close(got.item(), sum(per) / 2)
 
-    def test_a_one_hot_probability_target_is_the_index_target(self, device: str) -> None:
+    def test_a_one_hot_probability_target_is_the_index_target(
+        self, device: str
+    ) -> None:
         x = lucid.tensor(self.X, device=device)
         hard = F.cross_entropy(x, lucid.tensor([2, 0], device=device))
         soft = F.cross_entropy(
@@ -822,7 +853,9 @@ class TestCrossEntropyWithClassProbabilities:
         rq = R.tensor(self.Q)  # type: ignore[attr-defined]
         rf = R.nn.functional  # type: ignore[attr-defined]
         if option == "weight":
-            lo = F.cross_entropy(lx, lq, weight=lucid.tensor([1.0, 2.0, 3.0], device=device))
+            lo = F.cross_entropy(
+                lx, lq, weight=lucid.tensor([1.0, 2.0, 3.0], device=device)
+            )
             ro = rf.cross_entropy(rx, rq, weight=R.tensor([1.0, 2.0, 3.0]))  # type: ignore[attr-defined]
         elif option == "smoothing":
             lo = F.cross_entropy(lx, lq, label_smoothing=0.2)
@@ -859,7 +892,9 @@ class TestUnbatchedInputs:
         assert _close(out.item(), lse - 2.0)
         soft = F.cross_entropy(x, lucid.tensor([0.0, 1.0, 0.0], device=device))
         assert _close(soft.item(), lse - 2.0)
-        assert _close(nn.CrossEntropyLoss()(x, lucid.tensor([1], device=device)).item(), lse - 2.0)
+        assert _close(
+            nn.CrossEntropyLoss()(x, lucid.tensor([1], device=device)).item(), lse - 2.0
+        )
 
     def test_nll_loss_on_one_sample(self, device: str) -> None:
         x = lucid.tensor([-1.0, -2.0, -3.0], device=device)
@@ -867,14 +902,22 @@ class TestUnbatchedInputs:
         assert out.shape == () and _close(out.item(), 2.0)
         assert math.isnan(F.nll_loss(x, lucid.tensor(-100, device=device)).item())
 
-    def test_multi_margin_on_one_sample_keeps_the_target_shape(self, device: str) -> None:
+    def test_multi_margin_on_one_sample_keeps_the_target_shape(
+        self, device: str
+    ) -> None:
         x = lucid.tensor([0.1, 0.2, 0.4], device=device)
-        scalar = F.multi_margin_loss(x, lucid.tensor(2, device=device), reduction="none")
-        single = F.multi_margin_loss(x, lucid.tensor([2], device=device), reduction="none")
+        scalar = F.multi_margin_loss(
+            x, lucid.tensor(2, device=device), reduction="none"
+        )
+        single = F.multi_margin_loss(
+            x, lucid.tensor([2], device=device), reduction="none"
+        )
         assert scalar.shape == () and single.shape == (1,)
         assert _close(scalar.item(), 0.5)
         w = lucid.tensor([1.0, 2.0, 3.0], device=device)
-        assert _close(F.multi_margin_loss(x, lucid.tensor(2, device=device), weight=w).item(), 1.5)
+        assert _close(
+            F.multi_margin_loss(x, lucid.tensor(2, device=device), weight=w).item(), 1.5
+        )
 
     def test_ctc_on_one_sequence(self, device: str) -> None:
         lp = F.log_softmax(lucid.randn(5, 4, device=device), dim=1)
@@ -895,28 +938,40 @@ class TestUnbatchedInputs:
         xs = [1.0, 2.0, 3.0]
         for reduction in ("none", "mean", "sum"):
             lo = F.cross_entropy(
-                lucid.tensor(xs, device=device), lucid.tensor(1, device=device),
+                lucid.tensor(xs, device=device),
+                lucid.tensor(1, device=device),
                 reduction=reduction,
             )
             ro = rf.cross_entropy(R.tensor(xs), R.tensor(1), reduction=reduction)  # type: ignore[attr-defined]
             assert lo.shape == tuple(ro.shape) and _close(lo.item(), ro.item())
             lo = F.multi_margin_loss(
-                lucid.tensor(xs, device=device), lucid.tensor([2], device=device),
+                lucid.tensor(xs, device=device),
+                lucid.tensor([2], device=device),
                 reduction=reduction,
             )
             ro = rf.multi_margin_loss(R.tensor(xs), R.tensor([2]), reduction=reduction)  # type: ignore[attr-defined]
             assert lo.shape == tuple(ro.shape) and _close(_vals(lo), ro.tolist())
-        logits = [[0.1, -0.4, 1.2, 0.3], [0.5, 0.9, -1.0, 0.2], [2.0, -0.3, 0.0, 0.7],
-                  [-0.6, 0.4, 0.8, 1.1], [0.3, -0.2, 0.6, -0.9]]
+        logits = [
+            [0.1, -0.4, 1.2, 0.3],
+            [0.5, 0.9, -1.0, 0.2],
+            [2.0, -0.3, 0.0, 0.7],
+            [-0.6, 0.4, 0.8, 1.1],
+            [0.3, -0.2, 0.6, -0.9],
+        ]
         lp = F.log_softmax(lucid.tensor(logits, device=device), dim=1)
         rp = R.tensor(logits).log_softmax(1)  # type: ignore[attr-defined]
         for reduction in ("none", "mean", "sum"):
             lo = F.ctc_loss(
-                lp, lucid.tensor([1, 2], device=device), lucid.tensor(5), lucid.tensor(2),
+                lp,
+                lucid.tensor([1, 2], device=device),
+                lucid.tensor(5),
+                lucid.tensor(2),
                 reduction=reduction,
             )
             ro = rf.ctc_loss(rp, R.tensor([1, 2]), R.tensor(5), R.tensor(2), reduction=reduction)  # type: ignore[attr-defined]
-            assert lo.shape == tuple(ro.shape) and _close(lo.item(), ro.item(), tol=1e-4)
+            assert lo.shape == tuple(ro.shape) and _close(
+                lo.item(), ro.item(), tol=1e-4
+            )
 
 
 # ── CHA-88 ─────────────────────────────────────────────────────────────────
@@ -935,7 +990,10 @@ def _weighted_modules() -> dict[str, tuple[nn.Module, list[str]]]:
             ["weight", "pos_weight"],
         ),
         "MultiMarginLoss": (nn.MultiMarginLoss(weight=w3), ["weight"]),
-        "MultiLabelSoftMarginLoss": (nn.MultiLabelSoftMarginLoss(weight=w3), ["weight"]),
+        "MultiLabelSoftMarginLoss": (
+            nn.MultiLabelSoftMarginLoss(weight=w3),
+            ["weight"],
+        ),
     }
 
 
@@ -1014,10 +1072,16 @@ class TestLossWeightsAreBuffers:
             def __init__(self) -> None:
                 super().__init__()
                 self.fc = nn.Linear(4, 3)
-                self.criterion = nn.CrossEntropyLoss(weight=lucid.tensor([1.0, 2.0, 3.0]))
+                self.criterion = nn.CrossEntropyLoss(
+                    weight=lucid.tensor([1.0, 2.0, 3.0])
+                )
 
         model = Head()
-        assert sorted(model.state_dict()) == ["criterion.weight", "fc.bias", "fc.weight"]
+        assert sorted(model.state_dict()) == [
+            "criterion.weight",
+            "fc.bias",
+            "fc.weight",
+        ]
         model.half()
         assert model.criterion.weight.dtype == lucid.float16
 
