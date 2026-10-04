@@ -44,7 +44,7 @@ _ENGINE_HEADER = """\
 # fmt: off
 
 import builtins
-from typing import List, Optional, Sequence, SupportsFloat, SupportsInt
+from typing import Callable, List, Optional, Sequence, SupportsFloat, SupportsInt
 
 class Dtype:
     F16: Dtype
@@ -707,6 +707,16 @@ def _register_python_backward_node(
     node: _PythonBackwardNode,
     inputs: list[TensorImpl],
 ) -> None: ...
+
+# ── Tensor gradient hooks (``Tensor.register_hook``; autograd/TensorHooks.h) ──
+
+# Returns the runner installed on the tensor's slot: ``make()``'s result the
+# first time, the same object on every later call.  The engine calls
+# ``runner(grad)`` and accepts a tensor (or ``.impl`` holder) or ``None`` back.
+def _tensor_hook_runner[R: Callable[[TensorImpl], object]](
+    tensor: TensorImpl, make: Callable[[], R]
+) -> R: ...
+def _has_tensor_hooks(tensor: TensorImpl) -> bool: ...
 """
 
 
