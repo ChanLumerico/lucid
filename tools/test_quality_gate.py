@@ -200,6 +200,8 @@ def test_a_decrease_must_be_recorded_and_update_only_lowers(repo: Path) -> None:
     (repo / "lucid" / "pkg" / "other.py").write_text(CLEAN)
     out = gate(repo, "--fast")
     assert out.returncode == 1 and "out of date" in out.stdout
+    slack = gate(repo, "--fast", "--allow-slack")
+    assert slack.returncode == 0 and "higher than the code" in slack.stdout
     assert gate(repo, "--update", "--fast").returncode == 0
     assert gate(repo, "--fast").returncode == 0
     data = json.loads((repo / "tools" / "quality_baseline.json").read_text())

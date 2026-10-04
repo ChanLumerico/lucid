@@ -114,7 +114,14 @@ def _warn_versions(baseline: Baseline, collectors: Iterable[Collector]) -> None:
             )
 
 
-def check(root: Path, collectors: list[Collector], files: list[str] | None, workdir: Path) -> int:
+def check(
+    root: Path,
+    collectors: list[Collector],
+    files: list[str] | None,
+    workdir: Path,
+    allow_slack: bool = False,
+) -> int:
+    """Fail when a count rose; also when one fell unrecorded, unless *allow_slack*."""
     baseline_path = root / config.BASELINE_PATH
     baseline = load_baseline(baseline_path)
     _warn_versions(baseline, collectors)
@@ -131,11 +138,18 @@ def check(root: Path, collectors: list[Collector], files: list[str] | None, work
     if delta.decreases or stale:
         for old, new in stale.items():
             print(f"  moved: {old} -> {new}")
-        print(
-            "\n✗ the baseline is out of date (counts fell or files moved). Record it in this "
-            "commit:\n    .venv/bin/python3 -m tools.quality_gate --update"
+        record = (
+            "    .venv/bin/python3 -m tools.quality_gate --update"
             + ("" if files is None else " --fast")
             + f"\n    git add {config.BASELINE_PATH}"
+        )
+        if allow_slack:
+            print(f"\n⚠️  the baseline is higher than the code; lower it:\n{record}")
+            print("✓ no count rose")
+            return 0
+        print(
+            "\n✗ the baseline is out of date (counts fell or files moved). Record it in this "
+            f"commit:\n{record}"
         )
         return 1
     print("\n✓ no count rose; baseline is current")

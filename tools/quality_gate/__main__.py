@@ -63,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--update", action="store_true", help="lower the baseline (never raises)")
     p.add_argument("--rebaseline", action="store_true", help="rewrite it (orchestrator only)")
     p.add_argument("--reason", default="", help="why, for --rebaseline (recorded)")
+    p.add_argument(
+        "--allow-slack",
+        action="store_true",
+        help="a baseline higher than the code warns instead of failing (CI on main)",
+    )
     p.add_argument("--collectors", help="comma-separated subset, e.g. ruff,counters")
     p.add_argument("--top", type=int, default=25, help="rules listed by --report")
     p.add_argument("--root", default=".", help="repository root (default: cwd)")
@@ -98,7 +103,7 @@ def _run(args: argparse.Namespace, root: Path, workdir: Path) -> int:
     if args.rebaseline:
         print("⚠️  --rebaseline may RAISE counts: orchestrator only.", file=sys.stderr)
         return gate.rebaseline(root, collectors, args.reason, workdir)
-    return gate.check(root, collectors, files, workdir)
+    return gate.check(root, collectors, files, workdir, allow_slack=args.allow_slack)
 
 
 if __name__ == "__main__":

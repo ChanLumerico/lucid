@@ -138,11 +138,13 @@ jobs:
 
   # Ratchet quality gate (tools/quality_gate, tools/README.md "Quality gate"):
   # every collector over the whole tree against tools/quality_baseline.json.
-  # Fails when any (tool, rule, file) count rises — new slop — and when the
-  # committed baseline is higher than the code, so a fix that was not
-  # recorded cannot leave room for slop to come back.  No engine build: the
-  # tools read source only.  macOS so mypy sees the same platform and the
-  # same installed packages as the Macs that wrote the baseline.
+  # Fails when any (tool, rule, file) count rises — new slop.  A baseline
+  # higher than the code only warns here (--allow-slack): pre-commit makes
+  # the author record a fix in the files they touch, and the cross-file
+  # counts (mypy, vulture) are lowered by the orchestrator's `--update`
+  # after a land, rather than turning main red for an improvement.  No
+  # engine build: the tools read source only.  macOS so mypy sees the same
+  # platform and installed packages as the Macs that wrote the baseline.
   quality-gate:
     name: Quality gate (ratchet)
     runs-on: macos-26
@@ -163,7 +165,7 @@ jobs:
           python -m pip install numpy mlx safetensors
 
       - name: Gate (--full)
-        run: python -m tools.quality_gate --full
+        run: python -m tools.quality_gate --full --allow-slack
 
   coverage:
     name: Coverage
