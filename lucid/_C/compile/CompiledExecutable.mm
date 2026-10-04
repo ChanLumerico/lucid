@@ -27,6 +27,7 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "CompiledExecutable.h"
+#include "MpsDtype.h"
 #include "RngFeeds.h"
 
 namespace lucid::compile {
@@ -148,44 +149,6 @@ void destroy_executable(CompiledExecutable* exe) {
 // Helpers shared with Linear emitter / MpsBuilder (defined here so the
 // .mm can use them; not exported to other TUs).
 namespace detail {
-
-inline MPSDataType to_mps_dtype(Dtype dt) {
-    switch (dt) {
-    case Dtype::F32:
-        return MPSDataTypeFloat32;
-    case Dtype::F16:
-        return MPSDataTypeFloat16;
-    case Dtype::I64:
-        return MPSDataTypeInt64;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
-    case Dtype::I16:
-        return MPSDataTypeInt16;
-    // int8 codes (quantized weights) bound as a feed, then cast to float.
-    case Dtype::I8:
-        return MPSDataTypeInt8;
-    case Dtype::Bool:
-        return MPSDataTypeBool;
-    // Lucid stores complex interleaved — C64 is a pair of float32 lanes
-    // in one storage, eight bytes per element — which is exactly what
-    // MPSGraph means by ``MPSDataTypeComplexFloat32``.  The buffer needs
-    // no repacking; only this line was missing.
-    case Dtype::C64:
-        return MPSDataTypeComplexFloat32;
-    // C128 has no counterpart: MPSGraph's complex types are 32- and
-    // 16-bit lanes only.  In practice the tensor never gets this far —
-    // moving it to Metal already refuses, because MLX has no
-    // complex128 either — but the case says which dtype and why rather
-    // than falling into the generic message below.
-    case Dtype::C128:
-        throw std::runtime_error(
-            "lucid::compile: complex128 has no MPSGraph type (complex is float32 / "
-            "float16 lanes only) — cast to complex64 to compile this graph");
-    default:
-        throw std::runtime_error(
-            "lucid::compile: dtype not supported on the MPSGraph compile path");
-    }
-}
 
 inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
@@ -345,6 +308,29 @@ inline std::vector<std::string> feed_tensor_names(MPSGraphExecutable* exec) {
     return out;
 }
 
+// Run ``exe`` synchronously.  MPSGraph reports a failure by throwing an
+// Objective-C exception, which pybind11 can only call "Caught an unknown
+// exception!"; this hands Python the reason instead.  Every synchronous run
+// goes through here.
+inline void run_or_throw(MPSGraphExecutable* exe,
+                         id<MTLCommandQueue> queue,
+                         NSArray<MPSGraphTensorData*>* feeds,
+                         NSArray<MPSGraphTensorData*>* results,
+                         const char* who) {
+    MPSGraphExecutableExecutionDescriptor* desc =
+        [[MPSGraphExecutableExecutionDescriptor alloc] init];
+    desc.waitUntilCompleted = YES;
+    @try {
+        (void)[exe runWithMTLCommandQueue:queue
+                              inputsArray:feeds
+                             resultsArray:results
+                      executionDescriptor:desc];
+    } @catch (NSException* e) {
+        throw std::runtime_error(std::string(who) + ": MPSGraph failed: " +
+                                 (e.reason ? e.reason.UTF8String : e.name.UTF8String));
+    }
+}
+
 }  // namespace detail
 
 std::vector<std::string> executable_feed_names(const CompiledExecutable* exe) {
@@ -429,7 +415,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
             lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
             NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(feed_shape);
-            MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(exe->input_dtypes[i]);
             MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
                                                                              shape:ns_shape
                                                                           dataType:ns_dt];
@@ -481,7 +467,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
             out_bufs.push_back(out_buf);
 
             NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(realized_output_shapes[j]);
-            MPSDataType ns_dt = detail::to_mps_dtype(exe->output_dtypes[j]);
+            MPSDataType ns_dt = mps_dtype_or_throw(exe->output_dtypes[j]);
             MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
                                                                              shape:ns_shape
                                                                           dataType:ns_dt];
@@ -516,13 +502,13 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
         // threshold or (b) wrap every compile call with explicit
         // ``.sum().item()`` materialisation.  The sync default
         // protects the common case.
-        MPSGraphExecutableExecutionDescriptor* desc =
-            [[MPSGraphExecutableExecutionDescriptor alloc] init];
         static const bool force_async = []() {
             const char* s = std::getenv("LUCID_COMPILE_ASYNC");
             return s && std::string(s) == "1";
         }();
         if (force_async) {
+            MPSGraphExecutableExecutionDescriptor* desc =
+                [[MPSGraphExecutableExecutionDescriptor alloc] init];
             desc.waitUntilCompleted = NO;
             MPSCommandBuffer* mps_cb = [MPSCommandBuffer commandBufferFromCommandQueue:queue];
             (void)[exe->executable encodeToCommandBuffer:mps_cb
@@ -531,19 +517,7 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
                                      executionDescriptor:desc];
             [mps_cb commit];
         } else {
-            desc.waitUntilCompleted = YES;
-            // MPSGraph reports a failure by throwing an Objective-C
-            // exception, which pybind11 can only call "Caught an unknown
-            // exception!".  Hand Python the reason instead.
-            @try {
-                (void)[exe->executable runWithMTLCommandQueue:queue
-                                                  inputsArray:feeds
-                                                 resultsArray:results
-                                          executionDescriptor:desc];
-            } @catch (NSException* e) {
-                throw std::runtime_error(std::string("run_executable: MPSGraph failed: ") +
-                                         (e.reason ? e.reason.UTF8String : e.name.UTF8String));
-            }
+            detail::run_or_throw(exe->executable, queue, feeds, results, "run_executable");
         }
 
         // Wrap each output MTLBuffer back into a GpuStorage-backed
@@ -672,7 +646,7 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
             lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
             NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(feed_shape);
-            MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(exe->input_dtypes[i]);
             MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
                                                                              shape:ns_shape
                                                                           dataType:ns_dt];
@@ -714,7 +688,7 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
                 ns_shape = tgt_tensors[j].shape;
             else
                 ns_shape = detail::shape_to_nsarray(exe->output_shapes[j]);
-            MPSDataType ns_dt = detail::to_mps_dtype(exe->output_dtypes[j]);
+            MPSDataType ns_dt = mps_dtype_or_throw(exe->output_dtypes[j]);
 
             id<MTLBuffer> out_buf;
             if (alias_mode) {
@@ -752,13 +726,7 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
         // dance correct.  Cost: ~30-100μs/step for the host sync;
         // still cheap relative to the executable's GPU work for
         // anything bigger than a toy MLP.
-        MPSGraphExecutableExecutionDescriptor* desc =
-            [[MPSGraphExecutableExecutionDescriptor alloc] init];
-        desc.waitUntilCompleted = YES;
-        (void)[exe->executable runWithMTLCommandQueue:queue
-                                          inputsArray:feeds
-                                         resultsArray:results
-                                  executionDescriptor:desc];
+        detail::run_or_throw(exe->executable, queue, feeds, results, "run_executable_inplace");
 
         // Swap (or skip in alias mode): wrap each fresh MTLBuffer as
         // a leaf MLX array and overwrite the target's ``GpuStorage::arr``

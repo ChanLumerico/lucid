@@ -21,6 +21,7 @@
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "MpsBuilder.h"
+#include "MpsDtype.h"
 #include "OpEmitters/OpEmitter.h"
 #include "VjpEmitters/VjpEmitter.h"
 
@@ -32,43 +33,27 @@ class CompiledExecutable;
 
 namespace {
 
-inline MPSDataType to_mps_dtype(Dtype dt) {
-    switch (dt) {
-    case Dtype::F32:
-        return MPSDataTypeFloat32;
-    case Dtype::F16:
-        return MPSDataTypeFloat16;
-    case Dtype::I64:
-        return MPSDataTypeInt64;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
-    case Dtype::I16:
-        return MPSDataTypeInt16;
-    // int8 codes (quantized weights) enter the graph only as a feed that is
-    // immediately cast to float — MPSGraph supports the placeholder + cast.
-    case Dtype::I8:
-        return MPSDataTypeInt8;
-    case Dtype::Bool:
-        return MPSDataTypeBool;
-    // Lucid stores complex interleaved — C64 is a pair of float32 lanes
-    // in one storage, eight bytes per element — which is exactly what
-    // MPSGraph means by ``MPSDataTypeComplexFloat32``.  The buffer needs
-    // no repacking; only this line was missing.
-    case Dtype::C64:
-        return MPSDataTypeComplexFloat32;
-    // C128 has no counterpart: MPSGraph's complex types are 32- and
-    // 16-bit lanes only.  In practice the tensor never gets this far —
-    // moving it to Metal already refuses, because MLX has no
-    // complex128 either — but the case says which dtype and why rather
-    // than falling into the generic message below.
-    case Dtype::C128:
-        throw std::runtime_error(
-            "lucid::compile: complex128 has no MPSGraph type (complex is float32 / "
-            "float16 lanes only) — cast to complex64 to compile this graph");
-    default:
-        throw std::runtime_error(
-            "lucid::compile: dtype not supported on the MPSGraph compile path");
+// Emit ``node`` and hold every output it bound at the dtype the trace
+// declared (``held_at``).  Every op of every compile mode goes through here,
+// so an emitter whose MPSGraph primitive picks its own result type cannot
+// hand the next op a value of another width.  Returns the reason the build
+// fails, or an empty string.
+std::string emit_node(OpEmitter& emitter, BuilderContext& ctx, const OpNode& node) {
+    if (!emitter.emit(ctx, node))
+        return "emitter for op '" + node.name + "' returned false (unsupported variant)";
+    MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
+    for (const auto& meta : node.outputs) {
+        auto* bound = (__bridge MPSGraphTensor*)ctx.resolve(meta.id);
+        if (bound == nil)
+            continue;  // a dead piece of a multi-output op, never bound
+        MPSGraphTensor* held = held_at(g, bound, meta.dtype);
+        if (held == nil)
+            return "op '" + node.name + "' produced a value that cannot be held at its declared " +
+                   "dtype " + std::string(dtype_name(meta.dtype));
+        if (held != bound)
+            ctx.bind(meta.id, (__bridge void*)held);
     }
+    return {};
 }
 
 // Ops whose result is fixed by their arguments rather than by any
@@ -536,7 +521,7 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
             }
             MPSDataType ns_dt;
             try {
-                ns_dt = to_mps_dtype(feed_dtype);
+                ns_dt = mps_dtype_or_throw(feed_dtype);
             } catch (const std::exception& e) {
                 return fail(std::string("compile_trace: ") + e.what());
             }
@@ -685,9 +670,8 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
                 fputs(")\n", stderr);
             }
 
-            if (!emitter->emit(ctx, node))
-                return fail("compile_trace: emitter for op '" + node.name +
-                            "' returned false (unsupported variant)");
+            if (const std::string why = emit_node(*emitter, ctx, node); !why.empty())
+                return fail("compile_trace: " + why);
             // Emitters bind their own outputs explicitly via
             // ``ctx.bind(outputs[k].id, ...)`` — no auto-bind here.
             if (verbose && !node.outputs.empty()) {
@@ -786,7 +770,7 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
-            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
             MPSGraphShapedType* st = [[MPSGraphShapedType alloc] initWithShape:ns_shape
                                                                       dataType:ns_dt];
@@ -984,7 +968,7 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
             }
             MPSDataType ns_dt;
             try {
-                ns_dt = to_mps_dtype(feed_dtype);
+                ns_dt = mps_dtype_or_throw(feed_dtype);
             } catch (const std::exception& e) {
                 return fail(std::string("compile_trace_with_backward: ") + e.what());
             }
@@ -1027,9 +1011,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
                 return fail("compile_trace_with_backward: emitter vanished for op '" + node.name +
                             "'");
             }
-            if (!emitter->emit(ctx, node))
-                return fail("compile_trace_with_backward: emitter for op '" + node.name +
-                            "' returned false");
+            if (const std::string why = emit_node(*emitter, ctx, node); !why.empty())
+                return fail("compile_trace_with_backward: " + why);
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
@@ -1173,7 +1156,7 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
-            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
             feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
                                                                           dataType:ns_dt];
@@ -1476,7 +1459,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
             MPSDataType ns_dt;
             try {
-                ns_dt = to_mps_dtype(feed_dtype);
+                ns_dt = mps_dtype_or_throw(feed_dtype);
             } catch (const std::exception& e) {
                 return fail(std::string("compile_fused_training_step: ") + e.what());
             }
@@ -1500,9 +1483,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
                             "for op '" +
                             node.name + "'");
             }
-            if (!emitter->emit(ctx, node))
-                return fail("compile_fused_training_step: emitter '" + node.name +
-                            "' returned false");
+            if (const std::string why = emit_node(*emitter, ctx, node); !why.empty())
+                return fail("compile_fused_training_step: " + why);
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
@@ -1649,7 +1631,7 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
-            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
             feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
                                                                           dataType:ns_dt];
@@ -1817,7 +1799,7 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
             MPSDataType ns_dt;
             try {
-                ns_dt = to_mps_dtype(feed_dtype);
+                ns_dt = mps_dtype_or_throw(feed_dtype);
             } catch (const std::exception& e) {
                 return fail(std::string("compile_generic_fused_step: ") + e.what());
             }
@@ -1966,9 +1948,8 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
                             "for op '" +
                             node.name + "'");
             }
-            if (!emitter->emit(ctx, node))
-                return fail("compile_generic_fused_step: emitter '" + node.name +
-                            "' returned false");
+            if (const std::string why = emit_node(*emitter, ctx, node); !why.empty())
+                return fail("compile_generic_fused_step: " + why);
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
@@ -2044,7 +2025,7 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
-            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
             feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
                                                                           dataType:ns_dt];
@@ -2214,7 +2195,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
             MPSDataType ns_dt;
             try {
-                ns_dt = to_mps_dtype(feed_dtype);
+                ns_dt = mps_dtype_or_throw(feed_dtype);
             } catch (const std::exception& e) {
                 return fail(std::string("compile_generic_fused_step_with_vars: ") + e.what());
             }
@@ -2373,9 +2354,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                 return fail("compile_generic_fused_step_with_vars: emitter vanished for op '" +
                             node.name + "'");
             }
-            if (!emitter->emit(ctx, node))
-                return fail("compile_generic_fused_step_with_vars: emitter '" + node.name +
-                            "' returned false");
+            if (const std::string why = emit_node(*emitter, ctx, node); !why.empty())
+                return fail("compile_generic_fused_step_with_vars: " + why);
             // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
         if (!grads_derived && !ghost_grad_ids.empty()) {
@@ -2490,7 +2470,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
         for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
-            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            MPSDataType ns_dt = mps_dtype_or_throw(input_dtypes[i]);
             NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
             feed_dict[feed_tensors[i]] = [[MPSGraphShapedType alloc] initWithShape:ns_shape
                                                                           dataType:ns_dt];

@@ -15,33 +15,12 @@
 #include <variant>
 
 #include "../../../core/Dtype.h"
+#include "../../MpsDtype.h"
 #include "../OpEmitter.h"
 
 namespace lucid::compile {
 
 namespace {
-
-inline MPSDataType lucid_dtype_to_mps(Dtype dt) {
-    switch (dt) {
-        case Dtype::F32:
-            return MPSDataTypeFloat32;
-        case Dtype::F16:
-            return MPSDataTypeFloat16;
-        case Dtype::I64:
-            return MPSDataTypeInt64;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
-        case Dtype::I16:
-            return MPSDataTypeInt16;
-        // int8 (de)quantization cast: int8 codes ⇄ float weight.
-        case Dtype::I8:
-            return MPSDataTypeInt8;
-        case Dtype::Bool:
-            return MPSDataTypeBool;
-        default:
-            return MPSDataTypeFloat32;
-    }
-}
 
 class AstypeEmitter final : public OpEmitter {
 public:
@@ -59,16 +38,18 @@ public:
             return false;
 
         // Prefer the recorded ``dst_dtype`` attr; fall back to the
-        // output meta's dtype (always set by the tracer).
-        MPSDataType dst = lucid_dtype_to_mps(node.outputs[0].dtype);
+        // output meta's dtype (always set by the tracer).  A target MPSGraph
+        // has no type for declines: it used to become float32.
+        Dtype target = node.outputs[0].dtype;
         auto it = node.attrs.find("dst_dtype");
         if (it != node.attrs.end()) {
-            if (const auto* p = std::get_if<std::int64_t>(&it->second)) {
-                Dtype dt = static_cast<Dtype>(static_cast<int>(*p));
-                dst = lucid_dtype_to_mps(dt);
-            }
+            if (const auto* p = std::get_if<std::int64_t>(&it->second))
+                target = static_cast<Dtype>(static_cast<int>(*p));
         }
-        ctx.bind(node.outputs[0].id, (__bridge void*)([graph castTensor:x_t toType:dst name:@"astype"]));
+        const auto dst = mps_dtype_of(target);
+        if (!dst)
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph castTensor:x_t toType:*dst name:@"astype"]));
         return true;
     }
 };

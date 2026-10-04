@@ -26,36 +26,12 @@
 #include <string_view>
 #include <variant>
 
+#include "../../MpsDtype.h"
 #include "../OpEmitter.h"
 
 namespace lucid::compile {
 
 namespace {
-
-// Map a Lucid Dtype to an MPSDataType (local helper to avoid a sister
-// header pull-in for the single dtype enum mapping we need below).
-inline MPSDataType lucid_dtype_to_mps_local(Dtype dt) {
-    switch (dt) {
-    case Dtype::F16:
-        return MPSDataTypeFloat16;
-    case Dtype::F32:
-        return MPSDataTypeFloat32;
-    case Dtype::F64:
-        return MPSDataTypeFloat32;  // MPS has no F64
-    case Dtype::I8:
-        return MPSDataTypeInt8;
-    case Dtype::I16:
-        return MPSDataTypeInt16;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
-    case Dtype::I64:
-        return MPSDataTypeInt64;
-    case Dtype::Bool:
-        return MPSDataTypeBool;
-    default:
-        return MPSDataTypeFloat32;
-    }
-}
 
 template <class BuilderBlock>
 inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
@@ -81,7 +57,10 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     //
     // When all dtypes match the output's, both casts are no-ops and
     // this branch is free.
-    const MPSDataType target_dt = lucid_dtype_to_mps_local(node.outputs[0].dtype);
+    const auto held = mps_dtype_of(node.outputs[0].dtype);
+    if (!held)
+        return false;
+    const MPSDataType target_dt = *held;
     if (a_t.dataType != target_dt) {
         a_t = [graph castTensor:a_t toType:target_dt name:@"binop_cast_a"];
     }
@@ -120,6 +99,13 @@ class MulEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mul"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
+        // MPSGraph rewrites ``x * x`` to ``square``, which has no int64
+        // kernel: the executable then fails on its first run ("object
+        // cannot be nil (key: square_i64)").  Decline it here, as the square
+        // emitter does (Math.mm).
+        if (node.inputs.size() == 2 && node.inputs[0] == node.inputs[1] && !node.outputs.empty() &&
+            node.outputs[0].dtype == Dtype::I64)
+            return false;
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:@"mul"];
         });

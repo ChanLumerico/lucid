@@ -37,8 +37,14 @@ inline bool emit_cmp(BuilderContext& ctx, const OpNode& node, BuilderBlock build
     MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
     if (graph == nil || a_t == nil || b_t == nil)
         return false;
+    // MPSGraph aborts the process on a comparison of two dtypes (LCD-270).
+    // The builder holds every value at its declared dtype and the engine
+    // compares one dtype only, so a mismatch here is a broken trace:
+    // decline it to eager rather than let MPSGraph see it.
+    if (a_t.dataType != b_t.dataType)
+        return false;
     ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, a_t, b_t)));
-        return true;
+    return true;
 }
 
 class EqualEmitter final : public OpEmitter {

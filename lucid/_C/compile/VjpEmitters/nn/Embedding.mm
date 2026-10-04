@@ -19,7 +19,7 @@
 // grad-sink for free since we just don't accumulate onto it).
 //
 // ``padding_idx`` takes no gradient: rows whose index equals it are
-// multiplied by zero before the scatter, which is what eager's
+// selected away before the scatter, which is what eager's
 // ``embedding_backward`` does.  This used to be left out on the grounds
 // that the standard transformer path has no padding_idx — BERT and
 // RoFormer both have one, so a compiled training step moved the pad row
@@ -39,6 +39,7 @@
 #include <string_view>
 #include <vector>
 
+#include "../../OpEmitters/_IndexBounds.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -88,39 +89,41 @@ public:
             @[ [NSNumber numberWithLongLong:M], @1 ];
         MPSGraphTensor* idx_col =
             [g reshapeTensor:idx withShape:idx_col_shape name:nil];
-        // (M, 1) → (M, D)  — replicate the same scalar idx across D cols.
-        std::vector<std::int64_t> idx_grid_shape{ M, D };
-        NSArray<NSNumber*>* idx_grid_ns = shape_to_ns(idx_grid_shape);
-        MPSGraphTensor* idx_grid =
-            [g broadcastTensor:idx_col toShape:idx_grid_ns name:nil];
-
-        // grad: (Si..., D) → (M, D).
-        std::vector<std::int64_t> grad_grid_shape{ M, D };
-        NSArray<NSNumber*>* grad_grid_ns = shape_to_ns(grad_grid_shape);
-        MPSGraphTensor* grad_grid =
-            [g reshapeTensor:grad withShape:grad_grid_ns name:nil];
-
-        // Rows looked up at ``padding_idx`` contribute nothing, as in
-        // eager's ``embedding_backward``: (idx != pad) cast to the
-        // gradient's dtype, (M, 1) broadcast across the D columns.
+        // A row contributes when its index names a row of the table and is
+        // not ``padding_idx``, as in eager's ``embedding_backward``.  An
+        // index outside the table read NaN in the forward and sends nothing
+        // back (policy B, ``OpEmitters/_IndexBounds.h``).  The rest are
+        // selected away, not multiplied by 0: ``0 * inf`` is NaN.
+        const GraphAxisIndex ix = graph_axis_index(g, idx_col, V, NegativeIndex::OutOfRange);
+        if (ix.safe == nil) return false;
+        MPSGraphTensor* keep = ix.in_range;
         auto pad_it = node.attrs.find("padding_idx");
         if (pad_it != node.attrs.end()) {
             const auto* pad_p = std::get_if<std::int64_t>(&pad_it->second);
             if (pad_p != nullptr && *pad_p >= 0) {
                 MPSGraphTensor* pad_c =
                     [g constantWithScalar:static_cast<double>(*pad_p)
-                                 dataType:idx_col.dataType];
-                MPSGraphTensor* keep = [g notEqualWithPrimaryTensor:idx_col
-                                                   secondaryTensor:pad_c
-                                                              name:@"embedding_vjp_pad_ne"];
-                keep = [g castTensor:keep
-                              toType:grad_grid.dataType
-                                name:@"embedding_vjp_pad_mask"];
-                grad_grid = [g multiplicationWithPrimaryTensor:grad_grid
-                                               secondaryTensor:keep
-                                                          name:@"embedding_vjp_pad_apply"];
+                                 dataType:ix.safe.dataType];
+                keep = [g logicalANDWithPrimaryTensor:keep
+                                      secondaryTensor:[g notEqualWithPrimaryTensor:ix.safe
+                                                                   secondaryTensor:pad_c
+                                                                              name:nil]
+                                                 name:@"embedding_vjp_keep"];
             }
         }
+        // (M, 1) → (M, D)  — replicate the same scalar idx across D cols.
+        std::vector<std::int64_t> idx_grid_shape{ M, D };
+        NSArray<NSNumber*>* idx_grid_ns = shape_to_ns(idx_grid_shape);
+        MPSGraphTensor* idx_grid =
+            [g broadcastTensor:ix.safe toShape:idx_grid_ns name:nil];
+
+        // grad: (Si..., D) → (M, D).
+        std::vector<std::int64_t> grad_grid_shape{ M, D };
+        NSArray<NSNumber*>* grad_grid_ns = shape_to_ns(grad_grid_shape);
+        MPSGraphTensor* grad_grid = graph_drop_out_of_range(
+            g, [g reshapeTensor:grad withShape:grad_grid_ns name:nil],
+            [g broadcastTensor:keep toShape:grad_grid_ns name:nil], GraphScatter::Add);
+        if (grad_grid == nil) return false;
 
         // base = zeros((V, D))   dtype = grad's dtype (chain dtype
         // under autocast — W may be F32 master while grad is F16).
@@ -191,11 +194,18 @@ public:
                                                 shape:base_ns
                                              dataType:grad.dataType];
 
+        // The forward answered NaN where the index was out of range; nothing
+        // was read there, so nothing flows back (policy B).
+        const GraphAxisIndex ix =
+            graph_axis_index(g, idx, static_extent(data, axis), NegativeIndex::Wrap);
+        if (ix.safe == nil) return false;
+        MPSGraphTensor* updates = graph_drop_out_of_range(g, grad, ix.in_range, GraphScatter::Add);
+        if (updates == nil) return false;
         MPSGraphTensor* d_data =
             [g scatterAlongAxis:axis
                   withDataTensor:base
-                   updatesTensor:grad
-                   indicesTensor:idx
+                   updatesTensor:updates
+                   indicesTensor:ix.safe
                             mode:MPSGraphScatterModeAdd
                             name:@"gather_vjp"];
         bctx.accumulate_grad(d_id, from_tensor(d_data));

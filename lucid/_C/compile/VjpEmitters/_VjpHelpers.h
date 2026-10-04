@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "../../core/Dtype.h"
+#include "../MpsDtype.h"
 #include "../OpEmitters/OpEmitter.h"
 #include "../TraceIR.h"
 #include "VjpEmitter.h"
@@ -30,32 +31,6 @@ namespace lucid::compile {
 
 [[maybe_unused]] inline void* from_tensor(MPSGraphTensor* t) {
     return (__bridge void*)t;
-}
-
-// MPSDataType for Lucid dtype.  Mirrors the (private) helper in
-// :file:`MpsBuilder.mm`; F64 is not supported on the MPSGraph compile
-// path (Metal has no fp64), so we fall back to F32 if a F64 trace
-// reaches the VJP walker — but the walker never runs on F64 in
-// practice since the forward emit would already have rejected it.
-[[maybe_unused]] inline MPSDataType to_mps_dt_h(Dtype dt) {
-    switch (dt) {
-    case Dtype::F16:
-        return MPSDataTypeFloat16;
-    case Dtype::I8:
-        return MPSDataTypeInt8;
-    case Dtype::I16:
-        return MPSDataTypeInt16;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
-    case Dtype::I64:
-        return MPSDataTypeInt64;
-    case Dtype::Bool:
-        return MPSDataTypeBool;
-    case Dtype::F32:
-        return MPSDataTypeFloat32;
-    default:
-        return MPSDataTypeFloat32;
-    }
 }
 
 // Cast ``t`` to ``target`` if its dtype doesn't already match — no-op
@@ -104,7 +79,10 @@ cast_if_needed(MPSGraph* g, MPSGraphTensor* t, MPSDataType target) {
 // VJP and confuse the unreduce.
 [[maybe_unused]] inline MPSGraphTensor*
 ones_like_loss(MPSGraph* graph, const std::vector<std::int64_t>& loss_shape, Dtype dtype) {
-    return [graph constantWithScalar:1.0 shape:shape_to_ns(loss_shape) dataType:to_mps_dt_h(dtype)];
+    // A loss is a real float, which always has an MPSGraph type.
+    return [graph constantWithScalar:1.0
+                               shape:shape_to_ns(loss_shape)
+                            dataType:mps_dtype_of(dtype).value_or(MPSDataTypeFloat32)];
 }
 
 // Compute the axes that need to be reduce-summed in order to go from

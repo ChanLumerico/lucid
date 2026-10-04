@@ -27,27 +27,12 @@
 #include <variant>
 
 #include "../../../core/Dtype.h"
+#include "../../MpsDtype.h"
 #include "../OpEmitter.h"
 
 namespace lucid::compile {
 
 namespace {
-
-inline MPSDataType to_mps_dtype_local(Dtype dt) {
-    switch (dt) {
-        case Dtype::F16:
-            return MPSDataTypeFloat16;
-        case Dtype::I32:
-            return MPSDataTypeInt32;
-        case Dtype::I64:
-            return MPSDataTypeInt64;
-        case Dtype::Bool:
-            return MPSDataTypeBool;
-        case Dtype::F32:
-        default:
-            return MPSDataTypeFloat32;
-    }
-}
 
 inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
@@ -87,7 +72,9 @@ inline bool open_rng(BuilderContext& ctx, const OpNode& node, RngContext& rc) {
     if (rc.graph == nil) return false;
     const TensorMeta& meta = node.outputs[0];
     rc.ns_shape = shape_to_nsarray(meta.shape);
-    rc.ns_dt = to_mps_dtype_local(meta.dtype);
+    const auto ns_dt = mps_dtype_of(meta.dtype);
+    if (!ns_dt) return false;
+    rc.ns_dt = *ns_dt;
     rc.seed = static_cast<NSUInteger>(int_attr(node, "seed", 0));
     return true;
 }

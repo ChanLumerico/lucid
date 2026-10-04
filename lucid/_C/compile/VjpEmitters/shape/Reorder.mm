@@ -24,6 +24,7 @@
 #include <variant>
 #include <vector>
 
+#include "../../OpEmitters/_IndexBounds.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -130,6 +131,22 @@ public:
     }
 };
 
+// The gradient of a scatter's source: the output gradient read back at each
+// source element's index.  Eager reads it with ``gather_op``, so an
+// out-of-range index answers NaN there (policy B, ``_IndexBounds.h``).
+inline MPSGraphTensor* gather_grad_at(MPSGraph* g,
+                                      MPSGraphTensor* go,
+                                      MPSGraphTensor* idx,
+                                      NSInteger axis) {
+    const GraphAxisIndex ix =
+        graph_axis_index(g, idx, static_extent(go, axis), NegativeIndex::Wrap);
+    if (ix.safe == nil)
+        return nil;
+    return graph_fill_out_of_range(
+        g, [g gatherAlongAxis:axis withUpdatesTensor:go indicesTensor:ix.safe name:nil],
+        ix.in_range);
+}
+
 class ScatterAddVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "scatter_add"; }
@@ -148,12 +165,9 @@ public:
         if (node.inputs[0] >= 0)
             bctx.accumulate_grad(node.inputs[0], from_tensor(go));
         if (node.inputs[2] >= 0) {
-            if (idx.dataType != MPSDataTypeInt32)
-                idx = [g castTensor:idx toType:MPSDataTypeInt32 name:nil];
-            MPSGraphTensor* du = [g gatherAlongAxis:axis
-                                  withUpdatesTensor:go
-                                      indicesTensor:idx
-                                               name:@"scatter_add_vjp"];
+            MPSGraphTensor* du = gather_grad_at(g, go, idx, axis);
+            if (du == nil)
+                return false;
             bctx.accumulate_grad(node.inputs[2], from_tensor(du));
         }
         return true;
@@ -187,23 +201,20 @@ public:
             if ((NSInteger)i != axis &&
                 idx.shape[i].longLongValue != go.shape[i].longLongValue)
                 return false;
-        if (idx.dataType != MPSDataTypeInt32)
-            idx = [g castTensor:idx toType:MPSDataTypeInt32 name:nil];
         if (node.inputs[0] >= 0) {
+            // A write the forward dropped zeroes nothing.
+            const std::int64_t extent = static_extent(go, axis);
+            const GraphAxisIndex ix = graph_axis_index(g, idx, extent, NegativeIndex::Wrap);
+            if (ix.safe == nil)
+                return false;
             MPSGraphTensor* zeros = [g constantWithScalar:0.0 shape:idx.shape dataType:go.dataType];
-            MPSGraphTensor* ds = [g scatterAlongAxis:axis
-                                      withDataTensor:go
-                                       updatesTensor:zeros
-                                       indicesTensor:idx
-                                                mode:MPSGraphScatterModeSet
-                                                name:@"scatter_set_vjp_self"];
+            MPSGraphTensor* ds = graph_scatter_set_dropping(g, go, ix, zeros, axis, extent);
             bctx.accumulate_grad(node.inputs[0], from_tensor(ds));
         }
         if (node.inputs[2] >= 0) {
-            MPSGraphTensor* du = [g gatherAlongAxis:axis
-                                  withUpdatesTensor:go
-                                      indicesTensor:idx
-                                               name:@"scatter_set_vjp_src"];
+            MPSGraphTensor* du = gather_grad_at(g, go, idx, axis);
+            if (du == nil)
+                return false;
             bctx.accumulate_grad(node.inputs[2], from_tensor(du));
         }
         return true;

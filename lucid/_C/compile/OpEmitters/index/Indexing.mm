@@ -33,7 +33,10 @@ public:
         MPSGraphTensor* c_t = (__bridge MPSGraphTensor*)ctx.resolve(c_id);
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* y_t = (__bridge MPSGraphTensor*)ctx.resolve(y_id);
-        if (graph == nil || c_t == nil || x_t == nil || y_t == nil)
+        // Two branch dtypes abort MPSGraph's select; the engine never
+        // records one (see Compare.mm).
+        if (graph == nil || c_t == nil || x_t == nil || y_t == nil ||
+            x_t.dataType != y_t.dataType)
             return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)([graph selectWithPredicateTensor:c_t
                                             truePredicateTensor:x_t

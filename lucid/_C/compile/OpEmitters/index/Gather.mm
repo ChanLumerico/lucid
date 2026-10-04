@@ -19,29 +19,11 @@
 #include <variant>
 
 #include "../OpEmitter.h"
+#include "../_IndexBounds.h"
 
 namespace lucid::compile {
 
 namespace {
-
-// MPSGraph's along-axis gather and scatter want the index to match the data
-// on every axis but ``axis`` (and the updates to match the index).  The
-// reference — and Lucid's eager kernels — allow an index shorter there, and
-// MPSGraph handed one aborted the process: "updates shape and indices shape
-// must match except at axis".  Such a call is declined and runs eagerly.
-inline bool shapes_agree(MPSGraphTensor* a, MPSGraphTensor* b, NSInteger skip_axis) {
-    NSArray<NSNumber*>* sa = a.shape;
-    NSArray<NSNumber*>* sb = b.shape;
-    if (sa == nil || sb == nil || sa.count != sb.count)
-        return false;
-    for (NSUInteger i = 0; i < sa.count; ++i) {
-        if (static_cast<NSInteger>(i) == skip_axis)
-            continue;
-        if (sa[i].longLongValue != sb[i].longLongValue)
-            return false;
-    }
-    return true;
-}
 
 class GatherEmitter final : public OpEmitter {
 public:
@@ -67,13 +49,23 @@ public:
         MPSGraphTensor* idx_t = (__bridge MPSGraphTensor*)ctx.resolve(idx_id);
         if (graph == nil || data_t == nil || idx_t == nil)
             return false;
-        if (!shapes_agree(data_t, idx_t, static_cast<NSInteger>(axis)))
+        if (!shapes_agree_off_axis(data_t, idx_t, static_cast<NSInteger>(axis)))
             return false;
-
-        ctx.bind(node.outputs[0].id, (__bridge void*)([graph gatherAlongAxis:static_cast<NSInteger>(axis)
-                                   withUpdatesTensor:data_t
-                                       indicesTensor:idx_t
-                                                name:@"gather"]));
+        const GraphAxisIndex ix =
+            graph_axis_index(graph, idx_t, static_extent(data_t, static_cast<NSInteger>(axis)),
+                             NegativeIndex::Wrap);
+        if (ix.safe == nil)
+            return false;
+        MPSGraphTensor* out = graph_fill_out_of_range(
+            graph,
+            [graph gatherAlongAxis:static_cast<NSInteger>(axis)
+                 withUpdatesTensor:data_t
+                     indicesTensor:ix.safe
+                              name:@"gather"],
+            ix.in_range);
+        if (out == nil)
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)out);
         return true;
     }
 };
@@ -95,11 +87,27 @@ public:
         MPSGraphTensor* i_t = (__bridge MPSGraphTensor*)ctx.resolve(i_id);
         if (graph == nil || w_t == nil || i_t == nil)
             return false;
-        MPSGraphTensor* out = [graph gatherWithUpdatesTensor:w_t
-                                              indicesTensor:i_t
-                                                       axis:0
-                                            batchDimensions:0
-                                                     name:@"embedding"];
+        // A row outside the table, negative ones included, reads NaN
+        // (policy B, ``_IndexBounds.h``): eager's ``gpu_take`` with
+        // ``NegativeIndex::OutOfRange``.
+        const GraphAxisIndex ix =
+            graph_axis_index(graph, i_t, static_extent(w_t, 0), NegativeIndex::OutOfRange);
+        if (ix.safe == nil)
+            return false;
+        MPSGraphTensor* rows = [graph gatherWithUpdatesTensor:w_t
+                                                indicesTensor:ix.safe
+                                                         axis:0
+                                              batchDimensions:0
+                                                         name:@"embedding"];
+        // ``in_range`` has the index's shape; a row is the table's
+        // remaining axes, so the mask gains one unit axis per one of them.
+        NSMutableArray<NSNumber*>* mask_shape = [ix.in_range.shape mutableCopy];
+        for (NSUInteger d = 1; d < w_t.shape.count; ++d)
+            [mask_shape addObject:@1];
+        MPSGraphTensor* out = graph_fill_out_of_range(
+            graph, rows, [graph reshapeTensor:ix.in_range withShape:mask_shape name:nil]);
+        if (out == nil)
+            return false;
 
         // ``padding_idx`` does not mask the gather, here or in eager.
         //

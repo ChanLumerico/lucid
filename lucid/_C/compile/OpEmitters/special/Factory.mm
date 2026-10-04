@@ -18,28 +18,13 @@
 #include <variant>
 #include <vector>
 
+#include "../../MpsDtype.h"
 #include "../OpEmitter.h"
 #include "../_AttrHelpers.h"
 
 namespace lucid::compile {
 
 namespace {
-
-inline MPSDataType to_mps_dtype_local(Dtype dt) {
-    switch (dt) {
-    case Dtype::F16:
-        return MPSDataTypeFloat16;
-    case Dtype::I32:
-        return MPSDataTypeInt32;
-    case Dtype::I64:
-        return MPSDataTypeInt64;
-    case Dtype::Bool:
-        return MPSDataTypeBool;
-    case Dtype::F32:
-    default:
-        return MPSDataTypeFloat32;
-    }
-}
 
 inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
@@ -72,8 +57,10 @@ public:
 
         const TensorMeta& meta = node.outputs[0];
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
-        MPSDataType ns_dt = to_mps_dtype_local(meta.dtype);
-        MPSGraphTensor* y = [graph constantWithScalar:*v shape:ns_shape dataType:ns_dt];
+        const auto ns_dt = mps_dtype_of(meta.dtype);
+        if (!ns_dt)
+            return false;
+        MPSGraphTensor* y = [graph constantWithScalar:*v shape:ns_shape dataType:*ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -102,10 +89,12 @@ public:
             return false;
         const TensorMeta& meta = node.outputs[0];
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
-        MPSDataType ns_dt = to_mps_dtype_local(meta.dtype);
+        const auto ns_dt = mps_dtype_of(meta.dtype);
+        if (!ns_dt)
+            return false;
         MPSGraphTensor* y = [graph constantWithScalar:(double)FILL_VALUE
                                                 shape:ns_shape
-                                             dataType:ns_dt];
+                                             dataType:*ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
         return true;
     }
@@ -181,9 +170,11 @@ public:
                     static_cast<float>(start + static_cast<double>(i) * step);
             NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(float)];
             y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeFloat32];
-            MPSDataType mdt = to_mps_dtype_local(meta.dtype);
-            if (mdt != MPSDataTypeFloat32)
-                y = [graph castTensor:y toType:mdt name:nil];
+            const auto mdt = mps_dtype_of(meta.dtype);
+            if (!mdt)
+                return false;
+            if (*mdt != MPSDataTypeFloat32)
+                y = [graph castTensor:y toType:*mdt name:nil];
             break;
         }
         }
@@ -250,9 +241,11 @@ public:
                 buf[static_cast<std::size_t>(i)] = static_cast<float>(value(i));
             NSData* d = [NSData dataWithBytes:buf.data() length:buf.size() * sizeof(float)];
             y = [graph constantWithData:d shape:ns_shape dataType:MPSDataTypeFloat32];
-            MPSDataType mdt = to_mps_dtype_local(meta.dtype);
-            if (mdt != MPSDataTypeFloat32)
-                y = [graph castTensor:y toType:mdt name:nil];
+            const auto mdt = mps_dtype_of(meta.dtype);
+            if (!mdt)
+                return false;
+            if (*mdt != MPSDataTypeFloat32)
+                y = [graph castTensor:y toType:*mdt name:nil];
             break;
         }
         }
