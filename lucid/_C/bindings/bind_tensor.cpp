@@ -28,6 +28,7 @@
 #include "../compile/Tracer.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/MemoryStats.h"
 #include "../core/Storage.h"
@@ -52,6 +53,41 @@ void evaluate_without_gil(const lucid::TensorImpl& t) {
         return;
     py::gil_scoped_release release;
     t.eval();
+}
+
+// The buffer ``self.grad = g`` installs, once g may be ``self``'s gradient.
+//
+// Every write of a whole gradient from Python lands in set_grad: ``.grad =``,
+// a tensor hook's replacement, clip_grad and GradScaler writing back.  The
+// slot is a bare Storage — no dtype, shape or device of its own — and
+// ``.grad``, the optimizers and the next backward read it as ``self``'s.  A
+// buffer of any other kind was read as if it were one: float32 bits taken
+// for float16 values (``[1, 2, 4]`` came back ``[0, 1.875, 1.875]``), three
+// elements read out of a buffer of two, a Metal array labelled CPU.  The
+// reference refuses each of these, in this order, and so does this, before
+// the slot changes.
+lucid::Storage assignable_grad(const lucid::TensorImpl& self, const lucid::TensorImpl& g) {
+    const lucid::ErrorBuilder err("Tensor.grad");
+    if (&g == &self)
+        err.fail("a tensor cannot be assigned as its own gradient");
+    if (g.dtype() != self.dtype())
+        err.dtype_mismatch(self.dtype(), g.dtype(),
+                           "an assigned gradient must have the tensor's dtype");
+    if (g.device() != self.device())
+        err.device_mismatch(self.device(), g.device(),
+                            "an assigned gradient must be on the tensor's device");
+    if (g.shape() != self.shape())
+        err.shape_mismatch(self.shape(), g.shape(),
+                           "an assigned gradient must have the tensor's shape");
+    // The slot is read from its first byte, in row-major order.  A CPU view
+    // answers storage() with a packed copy of the elements it reads; a Metal
+    // tensor's array is its elements — unless it is a window at an offset
+    // or with strides into another tensor's array, which only the private
+    // ``_make_view`` builds, and which has no such buffer to hand over.
+    if (!lucid::storage_is_cpu(g.raw_storage()) && (g.storage_offset() != 0 || !g.is_contiguous()))
+        err.not_implemented("assigning a Metal gradient that is a strided view of another "
+                            "tensor's array — pass a contiguous copy");
+    return g.storage();
 }
 }  // namespace
 
@@ -374,16 +410,21 @@ void register_tensor_impl(py::module_& m) {
         .def(
             "set_grad",
             [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
-                // Copies g's Storage into self's gradient slot, replacing any
-                // existing gradient.  Used by clip_grad and grad_scaler to write
-                // back scaled gradients without going through numpy.
-                Storage s = g->storage();  // copy the Storage variant
-                self.set_grad_storage(std::move(s));
+                // Puts g's buffer in self's gradient slot, replacing any
+                // gradient there; refused, with the slot as it was, unless
+                // g has self's dtype, device and shape (assignable_grad).
+                // Backs ``Tensor.grad = g``; clip_grad and GradScaler write
+                // their results back through it too.
+                if (!g)
+                    ErrorBuilder("Tensor.grad")
+                        .invalid_argument("expected a tensor; zero_grad() clears a gradient");
+                self.set_grad_storage(assignable_grad(self, *g));
             },
             py::arg("grad"),
-            "Replace this tensor's gradient storage with a copy of grad's storage.\n"
-            "Used internally by clip_grad and GradScaler; prefer .grad = tensor for "
-            "normal use.");
+            "Replace this tensor's gradient with grad's values.  grad must have "
+            "this tensor's dtype, device and shape, and may not be this tensor "
+            "itself; anything else raises and leaves the gradient as it was.  "
+            "Backs ``Tensor.grad = grad``.");
 
     // to_shared_storage re-wraps the tensor's backing buffer as a Metal
     // MTLResourceStorageModeShared allocation.  The resulting tensor occupies
