@@ -115,7 +115,7 @@ struct ViewFamily {
 // autograd : std::optional<AutogradMeta>
 //     Autograd bookkeeping (``requires_grad``, ``is_leaf``, version,
 //     ``grad_fn``, accumulated gradient).  ``std::nullopt`` for tensors
-//     that have never participated in the autograd graph.
+//     that have never required grad nor been written in place.
 //
 // See Also
 // --------
@@ -445,8 +445,9 @@ public:
     // Returns
     // -------
     // std::int64_t
-    //     Current version.  ``0`` when no :class:`AutogradMeta` exists and no
-    //     shared buffer or view family has been written.
+    //     Current version.  ``0`` for a tensor that nothing has written in
+    //     place — no :class:`AutogradMeta` exists until something does
+    //     (:func:`bump_version`) or the tensor joins a graph.
     std::int64_t version() const noexcept {
         std::int64_t v = autograd_ ? autograd_->version : 0;
         if (shared_)
@@ -648,14 +649,22 @@ public:
     // Increments the autograd version counter.
     //
     // Called by every in-place op so autograd can detect mutations of
-    // tensors that were saved for backward.  The tensor's own count is left
-    // alone when no :class:`AutogradMeta` exists — it has never been in a
-    // graph — but a Metal shared buffer's counter always moves, because
-    // another alias of the same bytes may have been saved.  So does a view
-    // family's, for the same reason.
+    // tensors that were saved for backward.  The tensor's own count moves
+    // whether or not it has an :class:`AutogradMeta` yet.  Having none does
+    // not mean the tensor is outside every graph: ``w * buf`` saves ``buf``
+    // to differentiate with respect to ``w``, though ``buf`` never required
+    // grad.  When the count stayed put for such a tensor, a CPU write into
+    // its buffer (``fill_``, ``copy_``, the index writes) went unseen, and
+    // backward computed ``w``'s gradient from the values written after the
+    // forward.  The meta lives inside the tensor (``std::optional``), so
+    // making one here allocates nothing, and a forward that writes nothing
+    // never makes one.
+    //
+    // A Metal shared buffer's counter moves too, because another alias of
+    // the same bytes may have been saved.  So does a view family's, for the
+    // same reason.
     void bump_version() noexcept {
-        if (autograd_)
-            ++autograd_->version;
+        ++ensure_autograd()->version;
         if (shared_)
             shared_->bump_version();
         if (family_)

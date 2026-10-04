@@ -4,9 +4,15 @@
 // engine can own: CPU heap (Apple Accelerate), GPU lazy graph (MLX), and
 // Metal shared-mode unified-memory buffers (host + device aliased).
 //
-// All three variants carry a shared :type:`VersionCounter` so that autograd
-// can detect in-place mutations between forward and backward passes — see
-// :class:`AutogradMeta::version` in :file:`TensorMeta.h`.
+// All three variants carry a shared :type:`VersionCounter`.  Autograd reads
+// only :class:`SharedStorage`'s — the one buffer whose aliases are separate
+// tensors.  What it compares for everything else is
+// :func:`TensorImpl::version`: the tensor's own count
+// (:class:`AutogradMeta::version` in :file:`TensorMeta.h`) plus its view
+// family's.  A CPU or GPU storage's counter is bumped by the fused optimiser
+// kernels and read by nothing; it cannot stand in for the tensor's, because
+// an in-place op that gives a tensor a new buffer would start the count
+// again from that buffer's.
 //
 // Variant summary
 // ---------------
@@ -48,14 +54,14 @@ class array;
 namespace lucid {
 
 // Monotonically increasing counter incremented on every in-place write to a
-// storage buffer.
+// buffer that several tensors read.
 //
-// Autograd snapshots the counter value at forward time and compares it at
-// backward time — any mismatch raises :class:`VersionMismatch` (see
-// :file:`Error.h`), which detects illegal mutations of saved tensors.  The
-// counter is shared across all views of the same allocation via a
-// ``shared_ptr``, so a mutation through any view is observable from every
-// view.
+// A Metal shared buffer's and a CPU view family's (:class:`ViewFamily` in
+// :file:`TensorImpl.h`) are part of :func:`TensorImpl::version`, which
+// autograd snapshots at forward time and compares at backward time — any
+// mismatch raises :class:`VersionMismatch` (see :file:`Error.h`).  Shared
+// through a ``shared_ptr``, so a mutation through any alias is observable
+// from every alias.
 using VersionCounter = std::atomic<std::uint64_t>;
 
 // Flat untyped CPU buffer descriptor produced by the :class:`Allocator`.

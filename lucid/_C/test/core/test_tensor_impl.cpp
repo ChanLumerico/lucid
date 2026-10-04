@@ -65,18 +65,27 @@ TEST(TensorImplProps, NdimCorrect) {
 // ── Version tracking ──────────────────────────────────────────────────────────
 
 TEST(TensorImplVersion, InitialVersionZero) {
-    // Version counter tracks autograd mutations; requires_grad=true to activate.
     auto t = zeros_op({4}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
     EXPECT_EQ(t->version(), 0u);
 }
 
 TEST(TensorImplVersion, BumpVersionIncrements) {
-    // bump_version() is a no-op without AutogradMeta; requires_grad=true activates it.
     auto t = zeros_op({4}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
     t->bump_version();
     EXPECT_EQ(t->version(), 1u);
     t->bump_version();
     EXPECT_EQ(t->version(), 2u);
+}
+
+TEST(TensorImplVersion, BumpVersionCountsWithoutGrad) {
+    // A tensor that never required grad is still saved for backward when it
+    // meets one that does, so its writes have to be counted too.
+    auto t = cpu_zeros({4});
+    EXPECT_EQ(t->version(), 0u);
+    t->bump_version();
+    EXPECT_EQ(t->version(), 1u);
+    EXPECT_FALSE(t->requires_grad());
+    EXPECT_TRUE(t->is_leaf());
 }
 
 // ── Identity/zero ─────────────────────────────────────────────────────────────
