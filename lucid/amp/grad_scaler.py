@@ -4,11 +4,38 @@ GradScaler for mixed-precision training.
 Pure Python implementation — no engine changes required.
 """
 
+import enum
 from typing import TYPE_CHECKING
+
+from lucid._C import engine as _C_engine
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.optim.optimizer import Optimizer
+
+
+class _Stage(enum.Enum):
+    """Where one optimizer stands in the current scale → step → update cycle."""
+
+    READY = "ready"  # nothing has touched its gradients since the last update()
+    UNSCALED = "unscaled"  # unscale_() divided its gradients by the scale
+    STEPPED = "stepped"  # step() ran (or skipped) its update
+
+
+class _OptimizerState:
+    """What the scaler recorded about one optimizer since the last ``update()``.
+
+    ``found_inf`` is per optimizer because the skip is: an overflow in one
+    optimizer's gradients skips that optimizer's step only, while
+    :meth:`GradScaler.update` backs the scale off if *any* of them overflowed.
+    """
+
+    __slots__ = ("stage", "found_inf")
+
+    def __init__(self) -> None:
+        """Start a fresh cycle: nothing unscaled, nothing found."""
+        self.stage = _Stage.READY
+        self.found_inf = False
 
 
 class GradScaler:
@@ -74,6 +101,19 @@ class GradScaler:
     3. :meth:`update` adjusts :math:`s` according to the
        growth / backoff schedule for the next iteration.
 
+    To work on the real gradients between ``backward()`` and the step —
+    gradient clipping is the usual reason — call :meth:`unscale_` first.
+    The scaler remembers, per optimizer, that its gradients are already
+    unscaled, so the following :meth:`step` does not divide them a second
+    time.  Each optimizer moves through *ready → unscaled → stepped* once
+    per iteration and :meth:`update` returns every optimizer to *ready*;
+    calling :meth:`unscale_` twice, :meth:`unscale_` after :meth:`step`, or
+    :meth:`step` twice before :meth:`update` raises :class:`RuntimeError`.
+
+    With several optimizers on one scaler, an overflow in one optimizer's
+    gradients skips only that optimizer's step; :meth:`update` backs the
+    scale off if any optimizer overflowed.
+
     Examples
     --------
     >>> import lucid
@@ -96,6 +136,18 @@ class GradScaler:
     ...     scaler.scale(loss).backward()
     ...     scaler.step(optimizer)
     ...     scaler.update()
+
+    Clipping the unscaled gradients — :meth:`step` sees that
+    :meth:`unscale_` already ran and leaves them alone:
+
+    >>> from lucid.nn.utils import clip_grad_norm_
+    >>> x, y = dataloader[0]
+    >>> optimizer.zero_grad()
+    >>> scaler.scale(loss_fn(model(x), y)).backward()
+    >>> scaler.unscale_(optimizer)
+    >>> norm = clip_grad_norm_(model.parameters(), max_norm=1.0)
+    >>> scaler.step(optimizer)
+    >>> scaler.update()
     """
 
     def __init__(
@@ -129,7 +181,12 @@ class GradScaler:
         self._enabled = enabled
         self._growth_tracker = 0
         self._scale_seq_len: int = 0
+        # Whether any optimizer overflowed since the last update() — the one
+        # bit update() reads.  ``lucid.compile``'s fused step, which unscales
+        # inside its own graph, writes it directly before calling update().
         self._found_inf = False
+        # Keyed by ``id(optimizer)``; emptied by update().
+        self._per_optimizer_states: dict[int, _OptimizerState] = {}
 
     def scale(self, outputs: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
         """Multiply outputs by the current scale factor.
@@ -149,16 +206,41 @@ class GradScaler:
             return outputs * self._scale
         return [o * self._scale for o in outputs]
 
+    def _state_for(self, optimizer: Optimizer) -> _OptimizerState:
+        """Return this cycle's record for ``optimizer``, creating it if new."""
+        key = id(optimizer)
+        state = self._per_optimizer_states.get(key)
+        if state is None:
+            state = _OptimizerState()
+            self._per_optimizer_states[key] = state
+        return state
+
     def unscale_(self, optimizer: Optimizer) -> None:
-        """Divide gradients by the current scale in-place.
+        """Divide the optimizer's gradients by the current scale, in place.
 
-        Should be called before gradient clipping.
+        Call it between ``backward()`` and :meth:`step` when the real
+        gradients are needed — to clip them, or to inspect their norm.  The
+        scaler records that this optimizer's gradients are unscaled, so the
+        :meth:`step` that follows does not divide them again.
 
-        Args:
-            optimizer: The optimizer whose parameters' grads will be unscaled.
+        Parameters
+        ----------
+        optimizer : Optimizer
+            The optimizer whose parameters' gradients are unscaled.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`unscale_` already ran for ``optimizer`` since the last
+            :meth:`update`, or :meth:`step` already ran for it.
 
         Notes
         -----
+        Every gradient is divided, including those of a parameter whose
+        gradient holds an ``inf`` / ``NaN`` (those entries stay non-finite);
+        the overflow is recorded for this optimizer and its :meth:`step`
+        is skipped.
+
         The inverse-scale coefficient is always built in **float32** even
         when the gradient is float16.  At ``init_scale=2**16=65536`` the
         unscale factor is ``1/65536 ≈ 1.526e-5``, which is **subnormal**
@@ -167,92 +249,154 @@ class GradScaler:
         naive ``full(shape, inv_scale, F16, ...)`` coefficient becomes the
         zero tensor and every unscaled gradient collapses to 0 → the
         model stops learning even though the wall-clock looks great.
-        Casting the gradient to F32 first (via MLX's automatic
-        promotion on mixed-dtype multiply) keeps the unscale exact and
+        Casting the gradient to F32 first keeps the unscale exact and
         also gives the optimizer F32 gradients to update the F32
         parameter slots with — matching the reference framework's AMP
-        path.
+        path.  The finiteness check also runs on that F32 copy, so it does
+        not depend on half-precision ``isfinite`` kernels.
         """
         if not self._enabled:
             return
-        from lucid._C import engine as _C_engine
+        state = self._state_for(optimizer)
+        if state.stage is _Stage.UNSCALED:
+            raise RuntimeError(
+                "unscale_() has already been called on this optimizer "
+                "since the last update()."
+            )
+        if state.stage is _Stage.STEPPED:
+            raise RuntimeError("unscale_() is being called after step().")
+        found_inf = self._unscale_grads(optimizer)
+        state.found_inf = found_inf
+        state.stage = _Stage.UNSCALED
+        self._found_inf = self._found_inf or found_inf
+
+    def _unscale_grads(self, optimizer: Optimizer) -> bool:
+        """Multiply every gradient of ``optimizer`` by ``1 / scale``.
+
+        Returns whether any gradient held an ``inf`` or ``NaN``.  The check
+        reads one flag per device rather than one per parameter, so a model
+        on a single device costs a single host synchronisation.
+        """
         from lucid._dispatch import _unwrap, _wrap
 
         inv_scale = 1.0 / self._scale
-        self._found_inf = False
-        for group in optimizer.param_groups:
-            for p in group["params"]:  # type: ignore[attr-defined]
-                if p.grad is None:
-                    continue
-                g_impl = _unwrap(p.grad)
-                # Check for non-finite values using engine isfinite.
-                fin = _C_engine.isfinite(g_impl)
-                # all(fin): cast bool tensor to float, sum, compare to numel.
-                one = _C_engine.full(list(fin.shape), 1.0, _C_engine.F32, g_impl.device)
-                zero = _C_engine.zeros(list(fin.shape), _C_engine.F32, g_impl.device)
-                fin_f = _C_engine.where(fin, one, zero)
-                n_fin = float(_wrap(_C_engine.sum(fin_f, [], False)).item())
-                if n_fin < g_impl.numel():
-                    self._found_inf = True
-                else:
-                    # Unscale in F32 regardless of grad dtype.  Mixed-dtype
-                    # multiply via ``mul_op`` is not supported (BinaryKernel
-                    # validates same-dtype operands), and an F16-dtype coef
-                    # at ``init_scale=2**16`` is subnormal (1/65536 ≈
-                    # 1.526e-5 < F16 min-normal 6.1e-5) which Apple Metal
-                    # flushes to zero — wiping every gradient.  Two-step
-                    # promotion: cast grad → F32, then multiply by F32
-                    # coef.  The optimizer receives a clean F32 grad,
-                    # matching the reference framework's AMP path.
-                    g_f32 = (
+        nonfinite: dict[_C_engine.Device, _C_engine.TensorImpl] = {}
+        # ``mul`` is an AmpPolicy.Promote op: called inside an autocast scope
+        # it would cast the float32 gradient back down to the autocast dtype,
+        # where ``1/65536`` is subnormal.  A float32 guard pins it for the
+        # duration and is dropped (restoring the caller's state) at the end.
+        guard = (
+            _C_engine.AutocastGuard(_C_engine.F32)
+            if _C_engine.amp_is_active()
+            else None
+        )
+        try:
+            for group in optimizer.param_groups:
+                for p in group["params"]:  # type: ignore[attr-defined]
+                    if p.grad is None:
+                        continue
+                    g_impl = _unwrap(p.grad)
+                    # Unscale in F32 (F64 stays F64).  Mixed-dtype multiply
+                    # is not supported (BinaryKernel validates same-dtype
+                    # operands), and an F16 coefficient at the default scale
+                    # is subnormal — see the Notes of unscale_().
+                    work_dtype = (
+                        _C_engine.F64 if g_impl.dtype == _C_engine.F64 else _C_engine.F32
+                    )
+                    g_work = (
                         g_impl
-                        if g_impl.dtype == _C_engine.F32
-                        else _C_engine.astype(g_impl, _C_engine.F32)
+                        if g_impl.dtype == work_dtype
+                        else _C_engine.astype(g_impl, work_dtype)
+                    )
+                    bad = _C_engine.any(_C_engine.logical_not(_C_engine.isfinite(g_work)))
+                    seen = nonfinite.get(g_work.device)
+                    nonfinite[g_work.device] = (
+                        bad if seen is None else _C_engine.logical_or(seen, bad)
                     )
                     coef = _C_engine.full(
-                        list(g_f32.shape), inv_scale, _C_engine.F32, g_f32.device
+                        list(g_work.shape), inv_scale, work_dtype, g_work.device
                     )
-                    p._impl.set_grad(_C_engine.mul(g_f32, coef))
+                    p._impl.set_grad(_C_engine.mul(g_work, coef))
+        finally:
+            del guard
+        return any(bool(_wrap(flag).item()) for flag in nonfinite.values())
 
     def step(
         self, optimizer: Optimizer, *args: object, **kwargs: object
     ) -> Tensor | None:
-        """Unscale gradients and call optimizer.step() if no inf/nan detected.
+        """Unscale the gradients if needed, then step unless they overflowed.
 
-        If inf/nan is detected in gradients, skip the optimizer step.
+        If :meth:`unscale_` already ran for ``optimizer`` in this iteration
+        its gradients are used as they are; otherwise they are unscaled
+        here.  The optimizer's ``step()`` is skipped when its gradients held
+        an ``inf`` or ``NaN``.
 
-        Args:
-            optimizer: The optimizer to step.
+        Parameters
+        ----------
+        optimizer : Optimizer
+            The optimizer to step.
+        *args : object
+            Forwarded to ``optimizer.step()``.
+        **kwargs : object
+            Forwarded to ``optimizer.step()``.  ``closure`` is rejected
+            while the scaler is enabled: a closure re-runs ``backward()``
+            and its gradients would never be unscaled.
 
-        Returns:
-            The return value of optimizer.step(), or None if step was skipped.
+        Returns
+        -------
+        Tensor or None
+            What ``optimizer.step()`` returned, or ``None`` when the step
+            was skipped.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`step` already ran for ``optimizer`` since the last
+            :meth:`update`, or ``closure`` is passed while enabled.
         """
         if not self._enabled:
             return optimizer.step(*args, **kwargs)  # type: ignore[arg-type]
 
-        self.unscale_(optimizer)
-        if not self._found_inf:
-            return optimizer.step(*args, **kwargs)  # type: ignore[arg-type]
-        return None
+        if "closure" in kwargs:
+            raise RuntimeError(
+                "Closure use is not currently supported if GradScaler is enabled."
+            )
+        state = self._state_for(optimizer)
+        if state.stage is _Stage.STEPPED:
+            raise RuntimeError(
+                "step() has already been called since the last update()."
+            )
+        if state.stage is _Stage.READY:
+            self.unscale_(optimizer)
+        retval = (
+            None
+            if state.found_inf
+            else optimizer.step(*args, **kwargs)  # type: ignore[arg-type]
+        )
+        state.stage = _Stage.STEPPED
+        return retval
 
     def update(self, new_scale: float | None = None) -> None:
-        """Update the scale factor.
+        """Update the scale factor and start the next iteration.
 
         If a scale is provided, it is set directly. Otherwise, the scale
-        is grown if no overflow was found for growth_interval steps, or
-        reduced if overflow was found.
+        is reduced by ``backoff_factor`` if any optimizer's gradients
+        overflowed since the last update, or grown by ``growth_factor``
+        after ``growth_interval`` overflow-free updates.  Either way every
+        optimizer returns to the state where :meth:`unscale_` and
+        :meth:`step` may be called again.
 
-        Args:
-            new_scale: Explicit new scale value (optional).
+        Parameters
+        ----------
+        new_scale : float, optional
+            Explicit new scale value.
         """
         if not self._enabled:
             return
         if new_scale is not None:
             self._scale = float(new_scale)
             self._growth_tracker = 0
-            return
-
-        if self._found_inf:
+        elif self._found_inf:
             self._scale *= self._backoff_factor
             self._growth_tracker = 0
         else:
@@ -262,6 +406,7 @@ class GradScaler:
                 self._growth_tracker = 0
 
         self._found_inf = False
+        self._per_optimizer_states.clear()
 
     def get_scale(self) -> float:
         """Return the current scale factor."""
