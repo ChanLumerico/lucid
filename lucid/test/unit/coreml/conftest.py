@@ -59,6 +59,7 @@ from pathlib import Path
 import pytest
 
 from lucid._C import engine as _C_engine
+from lucid.coreml import _cache
 from lucid.test.unit.coreml._helpers import bundles_under, under_hypervisor
 
 #: Set on an item whose setup, call or teardown failed.
@@ -129,7 +130,11 @@ def compile_cache(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path | N
 
 
 def _cache_files(root: Path | None) -> set[Path]:
-    return set(root.iterdir()) if root is not None and root.is_dir() else set()
+    """What the compile cache holds: the versioned store under ``root``."""
+    if root is None:
+        return set()
+    store = Path(_cache.store_dir(str(root)))
+    return set(store.iterdir()) if store.is_dir() else set()
 
 
 @pytest.fixture(autouse=True)

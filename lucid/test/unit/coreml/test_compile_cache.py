@@ -7,11 +7,12 @@ on every load, into a fresh temporary path, so every load wrote a bundle
 nothing would read again; ``load`` opened the package twice besides.  A
 development machine's cache reached 121 GB (CHA-24).
 
-Now the compiled model is kept in ``LUCID_COREML_CACHE_DIR``, one per
+Now the compiled model is kept under ``LUCID_COREML_CACHE_DIR``, one per
 package content, and these tests hold the cache to what it promises: the
 same path and no new bundle on a reload, a new entry for new content, the
-limit, the concurrency, and an error instead of Core ML ending the process
-when the disk is short.
+limit, the concurrency, nothing removed that the cache did not write, no
+lock left behind by a failed load, and an error instead of Core ML ending
+the process when the disk is short.
 """
 
 import errno
@@ -67,8 +68,17 @@ def _write(path: Path, seed: int = 0) -> str:
     return str(path)
 
 
+def _store(root: Path) -> Path:
+    """Where the cache rooted at ``root`` keeps its entries."""
+    return Path(_cache.store_dir(str(root)))
+
+
 def _entries(root: Path) -> list[Path]:
-    return sorted(root.glob("*.mlmodelc")) if root.is_dir() else []
+    """The cache's own entries — a 64-digit hex key — and nothing else."""
+    store = _store(root)
+    if not store.is_dir():
+        return []
+    return sorted(path for path in store.glob("*.mlmodelc") if len(path.stem) == 64)
 
 
 class _Counting:
@@ -365,7 +375,7 @@ class TestTwoLoadsAtOnce:
         assert len(opened) == 2 and opened[0] == opened[1]
         assert compiles.calls == 1
         assert len(_entries(cache)) == 1
-        assert not list(cache.glob(".staging-*"))
+        assert not list(_store(cache).glob(".staging-*"))
 
     def test_a_process_that_loses_the_race_opens_the_winner(
         self, tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch
@@ -375,7 +385,7 @@ class TestTwoLoadsAtOnce:
         assert cml.empty_cache() > 0
         real = _C_engine.coreml.compile_model
         key, _size = _cache._identify(path)
-        entry = cache / f"{key}.mlmodelc"
+        entry = _store(cache) / f"{key}.mlmodelc"
 
         def compile_while_another_wins(package: str) -> str:
             shutil.move(real(package), entry)
@@ -388,7 +398,7 @@ class TestTwoLoadsAtOnce:
             assert handle._lease.path == str(entry)
             assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
         assert _entries(cache) == [entry]
-        assert not list(cache.glob(".staging-*"))
+        assert not list(_store(cache).glob(".staging-*"))
 
 
 class TestADiskTooFullForCoreML:
@@ -447,3 +457,292 @@ class TestADiskTooFullForCoreML:
         monkeypatch.setattr(_cache, "_free_bytes", lambda where: 1 << 40)
         with cml.load(_write(tmp_path / "m.mlpackage")) as handle:
             assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+
+
+class TestItTouchesOnlyWhatItWrote:
+    """``LUCID_COREML_CACHE_DIR`` can name a directory that holds other things.
+
+    The cache once treated every ``*.mlmodelc`` there as an entry and every
+    ``*.lock`` an hour old as its own, so pointed at a project root it
+    evicted another tool's compiled model and deleted ``yarn.lock``.
+    Entries now live in a versioned directory beneath it, and even there
+    only names of the cache's own form are read, swept or removed.
+    """
+
+    @staticmethod
+    def _theirs(where: Path) -> dict[Path, str]:
+        """Files of the kinds the cache writes, none of them its own."""
+        where.mkdir(parents=True, exist_ok=True)
+        made: dict[Path, str] = {}
+        for name in ("yarn.lock", "Cargo.lock", "notes.json", "a" * 63 + ".lock"):
+            (where / name).write_text(name)
+            made[where / name] = name
+        for name in ("theirs.mlmodelc", "b" * 64 + ".mlmodelc.d", ".staging-x"):
+            (where / name).mkdir()
+            (where / name / "coremldata.bin").write_text(name)
+            made[where / name / "coremldata.bin"] = name
+        for path in made:
+            os.utime(path, (1.0, 1.0))
+            os.utime(path.parent, (1.0, 1.0))
+        return made
+
+    def test_insert_evict_empty_and_sweep_leave_them_alone(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = tmp_path / "project"
+        theirs = {**self._theirs(root), **self._theirs(_store(root))}
+        monkeypatch.setenv("LUCID_COREML_CACHE_DIR", str(root))
+        monkeypatch.setenv("LUCID_COREML_CACHE_LIMIT", "1")
+        monkeypatch.setattr(_cache, "_ABANDONED_AFTER", 0.0)
+
+        _write(tmp_path / "m0.mlpackage", seed=0)
+        _write(tmp_path / "m1.mlpackage", seed=1)  # evicts m0
+        assert len(_entries(root)) == 1
+        _cache._entries(str(_store(root)))  # sweeps
+        assert cml.empty_cache() > 0
+        assert _entries(root) == []
+
+        for path, content in theirs.items():
+            assert path.read_text() == content, path
+
+    def test_the_store_is_versioned(self, tmp_path: Path, cache: Path) -> None:
+        _write(tmp_path / "m.mlpackage")
+        (entry,) = _entries(cache)
+        assert entry.parent == cache / f"v{_cache._FORMAT}"
+        assert len(entry.stem) == 64 and int(entry.stem, 16) >= 0
+
+
+class TestWhatADeadProcessLeft:
+    def test_old_scratch_and_orphaned_locks_are_swept(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        _write(tmp_path / "m.mlpackage")
+        store = _store(cache)
+        hex32, orphan = "c" * 32, "d" * 64
+        old = [
+            store / f".staging-{hex32}",
+            store / f".trash-{hex32}",
+            store / f".note-{hex32}",
+            store / f"{orphan}.lock",
+            store / f"{orphan}.json",
+        ]
+        for path in old[:2]:
+            path.mkdir()
+            (path / "coremldata.bin").write_text("x")
+        for path in old[2:]:
+            path.write_text("")
+        young = store / f".staging-{'e' * 32}"
+        young.mkdir()
+        for path in old:
+            os.utime(path, (1.0, 1.0))
+
+        _cache._entries(str(store))
+
+        assert not any(path.exists() for path in old)
+        assert young.is_dir()  # may be a compile still in progress
+        assert len(_entries(cache)) == 1
+
+    def test_a_held_orphan_lock_is_left(self, tmp_path: Path, cache: Path) -> None:
+        """A lock with no entry yet is a compile in progress somewhere."""
+        _write(tmp_path / "m.mlpackage")
+        store = _store(cache)
+        lock = store / f"{'f' * 64}.lock"
+        fd = _cache._hold(str(lock), exclusive=False)
+        assert fd is not None
+        try:
+            os.utime(lock, (1.0, 1.0))
+            _cache._entries(str(store))
+            assert lock.exists()
+        finally:
+            os.close(fd)
+
+    def test_a_damaged_entry_is_compiled_again(
+        self, tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")
+        assert cml.empty_cache() > 0
+        key, _size = _cache._identify(path)
+        entry = _store(cache) / f"{key}.mlmodelc"
+        entry.mkdir()
+        (entry / "half-written").write_text("not a compiled model")
+        compiles = _Counting(_C_engine.coreml.compile_model)
+        monkeypatch.setattr(_C_engine.coreml, "compile_model", compiles)
+        with cml.load(path) as handle:
+            assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+        assert compiles.calls == 1
+        assert (entry / "coremldata.bin").is_file()
+        assert not (entry / "half-written").exists()
+
+
+class TestAFailedLoadLeavesNoLock:
+    """A lease is let go whatever ends the load, not only a RuntimeError.
+
+    A shared lock nobody releases makes its entry one no eviction can ever
+    remove, for the rest of the process.
+    """
+
+    def test_compute_units_that_are_not_compute_units(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")
+        with pytest.raises(KeyError):
+            cml.load(path, compute_units="ALL")  # type: ignore[arg-type]
+        assert cml.empty_cache() > 0
+
+    @pytest.mark.parametrize("raised", [TypeError, KeyboardInterrupt])
+    def test_whatever_the_engine_raises(
+        self,
+        tmp_path: Path,
+        cache: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        raised: type[BaseException],
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")
+
+        def fail(*args: object, **kwargs: object) -> object:
+            raise raised("from the engine")
+
+        monkeypatch.setattr(_C_engine.coreml, "load_model", fail)
+        with pytest.raises(raised):
+            cml.load(path)
+        assert cml.empty_cache() > 0
+
+    def test_a_runtime_error_names_the_package(
+        self, tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")
+        (entry,) = _entries(cache)
+
+        def fail(where: str, *args: object) -> object:
+            raise RuntimeError(f"lucid.coreml: failed to load {where}: no")
+
+        monkeypatch.setattr(_C_engine.coreml, "load_model", fail)
+        with pytest.raises(RuntimeError) as raised:
+            cml.load(path)
+        assert path in str(raised.value) and str(entry) not in str(raised.value)
+        assert cml.empty_cache() > 0
+
+
+class TestTheLockLastsAsLongAsTheModel:
+    """``close`` lets this side's lock go; the model keeps its own.
+
+    The engine holds a duplicate of the lock and closes it with the model,
+    which a prediction still running on another thread keeps alive past
+    ``close`` — so the files it may read are not evicted under it.
+    """
+
+    def test_the_engine_holds_it_until_the_model_goes(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")
+        handle = cml.load(path)
+        handle._release()  # this side's lock only
+        assert cml.empty_cache() == 0
+        assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+        handle._handle.close()  # the model, and the engine's lock with it
+        assert cml.empty_cache() > 0
+        handle.close()
+
+    def test_and_an_engine_load_without_a_lock_holds_none(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        _write(tmp_path / "m.mlpackage")
+        (entry,) = _entries(cache)
+        engine = _C_engine.coreml
+        bare = engine.load_model(str(entry), engine.ComputeUnits.CPU_ONLY)
+        try:
+            assert cml.empty_cache() > 0
+        finally:
+            bare.close()
+
+
+class TestReexportingAndRewriting:
+    def test_an_export_is_a_new_entry_even_of_the_same_model(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        """The package's Manifest.json carries identifiers drawn per export."""
+        path = tmp_path / "m.mlpackage"
+        _write(path, seed=0)
+        _write(path, seed=0)
+        assert len(_entries(cache)) == 2
+
+    def test_a_rewrite_that_puts_size_and_mtime_back_is_still_seen(
+        self, tmp_path: Path, cache: Path
+    ) -> None:
+        """``cp -p``, ``touch -r`` and ``rsync --inplace -t`` restore both."""
+        path = _write(tmp_path / "m.mlpackage")
+        before = _cache._identify(path)[0]
+        weights = Path(path) / "Data" / "com.apple.CoreML" / "weights" / "weight.bin"
+        stat = os.stat(weights)
+        with open(weights, "r+b") as handle:
+            handle.seek(stat.st_size - 4)
+            last = handle.read(4)
+            handle.seek(stat.st_size - 4)
+            handle.write(bytes(b ^ 0xFF for b in last))
+        os.utime(weights, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        after = os.stat(weights)
+        assert (after.st_size, after.st_mtime_ns, after.st_ino) == (
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ino,
+        )
+        assert _cache._identify(path)[0] != before
+
+
+class TestACompiledModelIsOpenedWhereItIs:
+    @pytest.mark.parametrize("limit", ["4G", "0"])
+    def test_without_compiling_or_caching_it(
+        self,
+        tmp_path: Path,
+        cache: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        limit: str,
+    ) -> None:
+        _write(tmp_path / "m.mlpackage")
+        (entry,) = _entries(cache)
+        given = shutil.copytree(entry, tmp_path / "given.mlmodelc")
+        monkeypatch.setenv("LUCID_COREML_CACHE_LIMIT", limit)
+        compiles = _Counting(_C_engine.coreml.compile_model)
+        monkeypatch.setattr(_C_engine.coreml, "compile_model", compiles)
+        with cml.load(str(given)) as handle:
+            assert handle._lease.path == str(given) and not handle._lease.held
+            assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+            assert handle.compute_plan().total_compute > 0
+        assert compiles.calls == 0
+        assert _entries(cache) == [entry]
+        assert (given / "coremldata.bin").is_file()
+
+
+class TestAVolumeThatCannotLock:
+    """Some network shares answer ``flock`` with ``ENOTSUP``.
+
+    Without locks, an eviction could remove a model another process is
+    loading, so such a volume is treated like one that cannot be written.
+    """
+
+    @staticmethod
+    def _no_locks(fd: int, operation: int) -> None:
+        raise OSError(errno.ENOTSUP, "Operation not supported")
+
+    def test_it_compiles_per_load_and_says_so(
+        self, tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(_cache, "_flock", self._no_locks)
+        lucid.manual_seed(0)
+        path = str(tmp_path / "m.mlpackage")
+        with pytest.warns(RuntimeWarning, match="does not support file locks"):
+            handle = cml.export(_Small().eval(), lucid.randn(*_X_SHAPE), path)
+        with handle:
+            assert handle._lease.path == path and not handle._lease.held
+            assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+        assert _entries(cache) == []
+
+    def test_even_once_it_was_found_to_lock(
+        self, tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = _write(tmp_path / "m.mlpackage")  # probes the store: it locks
+        monkeypatch.setattr(_cache, "_flock", self._no_locks)
+        with pytest.warns(RuntimeWarning, match="does not support file locks"):
+            handle = cml.load(path)
+        with handle:
+            assert handle._lease.path == path and not handle._lease.held

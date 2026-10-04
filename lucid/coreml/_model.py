@@ -371,7 +371,9 @@ class CoreMLModel:
         # with are not always the units that were asked for.
         self.palettized = _reads_a_palette(path)
         self.compute_units = _palettized_units(compute_units, self.palettized)
-        compute_units = self.compute_units
+        # Looked up before anything is opened, so a value that is not a
+        # ComputeUnits fails here rather than with a cache entry held.
+        units = _UNITS[self.compute_units]
         self.precision = precision
         # What the float features are declared as. Only a known float16
         # interface changes what ``predict`` does; anything else is fed
@@ -416,15 +418,24 @@ class CoreMLModel:
         # the compiled model's path, so reopening that path is what lets
         # the bundle be read again instead of written again. See _cache.
         self._lease = _cache.open_compiled(path)
-        try:
-            self._handle = _C_engine.coreml.load_model(
-                self._lease.path, _UNITS[compute_units], function_name
-            )
-        except RuntimeError as exc:
-            self._lease.release()
-            # Named after the package the caller gave, not the cache entry.
-            raise RuntimeError(str(exc).replace(self._lease.path, path)) from None
         self._release = weakref.finalize(self, self._lease.release)
+        try:
+            # The engine holds a duplicate of the lease's lock for as long
+            # as the model it loads lives — past ``close`` while another
+            # thread's prediction is still running — so this side's lock
+            # can go at ``close`` without the files going with it.
+            self._handle = _C_engine.coreml.load_model(
+                self._lease.path, units, function_name, self._lease.lock_fd
+            )
+        except BaseException as exc:
+            # Whatever ends the load, the entry must not stay locked for
+            # the rest of the process: a lock nobody will release is an
+            # entry no eviction can ever remove.
+            self._release()
+            if isinstance(exc, RuntimeError):
+                # Named after the package the caller gave, not the entry.
+                raise RuntimeError(str(exc).replace(self._lease.path, path)) from None
+            raise
 
     def _declare_noise(
         self, noise: list[tuple[str, tuple[int, ...], str, Tensor | None]]
@@ -972,7 +983,10 @@ class CoreMLModel:
 
         The compiled model itself stays in Lucid's cache for the next
         handle on the same package — see :func:`lucid.coreml.empty_cache`.
-        Safe to call twice, so a ``finally`` beside a ``with`` is fine.
+        A prediction still running on another thread finishes with the
+        model it took, which stays loaded, and protected from eviction,
+        until it returns. Safe to call twice, so a ``finally`` beside a
+        ``with`` is fine.
         """
         self._handle.close()
         self._release()

@@ -892,41 +892,46 @@ def load(
         precision="UNKNOWN",
         io_precision="UNKNOWN",
     )
-    handle = model._handle
-    model.input_names = list(handle.input_names)
-    model.output_names = list(handle.output_names)
-    # An exported handle carries what the export knew: that an input is
-    # a picture and not an array, that the outputs are labels and not
-    # scores. Reopening the file used to lose both, so the same package
-    # answered differently depending on how it was opened — and in a
-    # deployment, reopening is the ordinary path. The package declares
-    # all of it, so it is read back rather than asked for again.
-    images = list(handle.image_input_names)
-    labels = list(handle.class_labels)
-    # ``predict`` needs only to know the input is a picture; ``verify``
-    # needs the scale and bias, which the program applies and the file
-    # does not declare. Left unset so the comparison refuses rather than
-    # measuring a normalisation it guessed.
-    model.image_input = ImageInput() if images else None
-    model.image_normalisation = None
-    model.classifier = Classifier(labels=tuple(labels)) if labels else None
-    # Which inputs stand in for a random draw, written by the export
-    # into the creator-defined metadata because nothing else in the file
-    # distinguishes them from an ordinary input.
-    declared = dict(handle.user_metadata)
-    noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] = []
-    for entry in declared.get(_DRAWN_KEY, "").split(","):
-        if not entry:
-            continue
-        name, kind, extent = entry.split(":")
-        noise.append((name, tuple(int(d) for d in extent.split("x")), kind, None))
-    model._declare_noise(noise)
-    # The precision the export recorded. A package Lucid did not write —
-    # or wrote before it recorded one — says nothing, and a guess would
-    # be repeated back as a diagnosis: the float32 advice a compute plan
-    # gives is wrong for a float16 program.
-    model.precision = declared.get(_PRECISION_KEY, "UNKNOWN")
-    model.io_precision = declared.get(_IO_PRECISION_KEY, "UNKNOWN")
+    try:
+        handle = model._handle
+        model.input_names = list(handle.input_names)
+        model.output_names = list(handle.output_names)
+        # An exported handle carries what the export knew: that an input is
+        # a picture and not an array, that the outputs are labels and not
+        # scores. Reopening the file used to lose both, so the same package
+        # answered differently depending on how it was opened — and in a
+        # deployment, reopening is the ordinary path. The package declares
+        # all of it, so it is read back rather than asked for again.
+        images = list(handle.image_input_names)
+        labels = list(handle.class_labels)
+        # ``predict`` needs only to know the input is a picture; ``verify``
+        # needs the scale and bias, which the program applies and the file
+        # does not declare. Left unset so the comparison refuses rather than
+        # measuring a normalisation it guessed.
+        model.image_input = ImageInput() if images else None
+        model.image_normalisation = None
+        model.classifier = Classifier(labels=tuple(labels)) if labels else None
+        # Which inputs stand in for a random draw, written by the export
+        # into the creator-defined metadata because nothing else in the file
+        # distinguishes them from an ordinary input.
+        declared = dict(handle.user_metadata)
+        noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] = []
+        for entry in declared.get(_DRAWN_KEY, "").split(","):
+            if not entry:
+                continue
+            name, kind, extent = entry.split(":")
+            noise.append((name, tuple(int(d) for d in extent.split("x")), kind, None))
+        model._declare_noise(noise)
+        # The precision the export recorded. A package Lucid did not write —
+        # or wrote before it recorded one — says nothing, and a guess would
+        # be repeated back as a diagnosis: the float32 advice a compute plan
+        # gives is wrong for a float16 program.
+        model.precision = declared.get(_PRECISION_KEY, "UNKNOWN")
+        model.io_precision = declared.get(_IO_PRECISION_KEY, "UNKNOWN")
+    except BaseException:
+        # Not left holding the model, or its cache entry, until collected.
+        model.close()
+        raise
     return model
 
 
@@ -942,12 +947,13 @@ def empty_cache() -> int:
     left Core ML a bundle nothing would read: a development machine's
     cache reached 121 GB.
 
-    The kept models live in ``LUCID_COREML_CACHE_DIR`` — by default
-    ``$LUCID_HOME/coreml`` or ``~/.cache/lucid/coreml`` — and keep to
-    ``LUCID_COREML_CACHE_LIMIT`` bytes (``4G`` unless set; ``0`` turns
-    the cache off), dropping the least recently used first. This empties
-    it now. A model an open handle holds, in this process or another,
-    stays.
+    The kept models live in a versioned directory (``v1``) under
+    ``LUCID_COREML_CACHE_DIR`` — by default ``$LUCID_HOME/coreml`` or
+    ``~/.cache/lucid/coreml`` — and keep to ``LUCID_COREML_CACHE_LIMIT``
+    bytes (``4G`` unless set; ``0`` turns the cache off), dropping the
+    least recently used first. This empties it now. A model an open
+    handle holds, in this process or another, stays, and so does anything
+    in the directory that Lucid did not put there.
 
     The bundles Core ML made from the removed models stay in Core ML's
     own cache, which macOS purges when the disk runs low; a package loaded
