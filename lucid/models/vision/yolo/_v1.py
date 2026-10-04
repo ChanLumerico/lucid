@@ -49,6 +49,25 @@ from lucid.models._utils._detection import batched_nms
 if TYPE_CHECKING:
     pass
 
+
+def _threshold_by_class(scores: Tensor, thresh: float) -> list[list[int]]:
+    """Per class, the ascending row indices whose score clears ``thresh``.
+
+    ``scores`` is one image's ``(N, C)`` score matrix.  It is read back
+    with a single ``.tolist()``: the per-element ``.item()`` scan this
+    replaces was ``N * C`` device round-trips (67,600 for YOLOv2 at
+    416px with 80 classes) and cost several forward passes.
+    """
+    C = int(scores.shape[1])
+    flat = cast(list[float], scores.reshape(-1).tolist())
+    per_class: list[list[int]] = [[] for _ in range(C)]
+    for idx, sc in enumerate(flat):
+        if sc >= thresh:
+            row, c = divmod(idx, C)
+            per_class[c].append(row)
+    return per_class
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -502,6 +521,10 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         ln = cfg.lambda_noobj
         H, W = image_size
         batch_size = int(raw.shape[0])
+        # Every target below is built from Python floats; without the
+        # prediction's device they land on the CPU and the first subtraction
+        # against a Metal prediction raises.
+        dev = raw.device
 
         # raw layout: (batch, S, S, B*5 + C)
         box_preds = raw[..., : B_boxes * 5].reshape(batch_size, S, S, B_boxes, 5)
@@ -620,8 +643,8 @@ class YOLOForObjectDetection(ObjectDetectionModel):
                             # network for one convention and read it in another.
                             tgt_cx_rel = cx_m / cell_w_px - float(col)
                             tgt_cy_rel = cy_m / cell_h_px - float(row)
-                            tgt_cx_t = lucid.tensor([tgt_cx_rel])
-                            tgt_cy_t = lucid.tensor([tgt_cy_rel])
+                            tgt_cx_t = lucid.tensor([tgt_cx_rel], device=dev)
+                            tgt_cy_t = lucid.tensor([tgt_cy_rel], device=dev)
 
                             xy_terms.append((pred_cx - tgt_cx_t[0]) ** 2)
                             xy_terms.append((pred_cy - tgt_cy_t[0]) ** 2)
@@ -632,20 +655,24 @@ class YOLOForObjectDetection(ObjectDetectionModel):
                             # directly rather than being rooted first.
                             tgt_w_norm = max(0.0, min(1.0, w_m / float(W)))
                             tgt_h_norm = max(0.0, min(1.0, h_m / float(H)))
-                            tgt_sqrt_w_t = lucid.tensor([math.sqrt(tgt_w_norm)])
-                            tgt_sqrt_h_t = lucid.tensor([math.sqrt(tgt_h_norm)])
+                            tgt_sqrt_w_t = lucid.tensor(
+                                [math.sqrt(tgt_w_norm)], device=dev
+                            )
+                            tgt_sqrt_h_t = lucid.tensor(
+                                [math.sqrt(tgt_h_norm)], device=dev
+                            )
                             wh_terms.append((pred_w - tgt_sqrt_w_t[0]) ** 2)
                             wh_terms.append((pred_h - tgt_sqrt_h_t[0]) ** 2)
 
                             # Confidence loss (obj): MSE vs iou_val, linear.
-                            tgt_iou_t = lucid.tensor([iou_val])
+                            tgt_iou_t = lucid.tensor([iou_val], device=dev)
                             conf_obj.append((pred_conf - tgt_iou_t[0]) ** 2)
 
                             # Class loss: MSE on class scores vs one-hot
                             pred_cls = cls_preds[bi, row, col, :]  # (C,)
                             tgt_cls_list = [0.0] * C
                             tgt_cls_list[cls_m] = 1.0
-                            tgt_cls_t = lucid.tensor(tgt_cls_list)
+                            tgt_cls_t = lucid.tensor(tgt_cls_list, device=dev)
                             cls_terms.append(((pred_cls - tgt_cls_t) ** 2).sum())
 
                         else:
@@ -661,7 +688,7 @@ class YOLOForObjectDetection(ObjectDetectionModel):
                 # silently cancels it and makes the balance drift with grid
                 # size and object count.
                 if not parts:
-                    return lucid.zeros((1,))
+                    return lucid.zeros((1,), device=dev)
                 return lucid.cat([t.reshape(1) for t in parts]).sum()
 
             loss_xy = lc * _mean_or_zero(xy_terms)
@@ -731,6 +758,9 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         B_batch = int(output.logits.shape[0])
         C = cfg.num_classes
+        # Results, NMS class ids and selection indices all live with the
+        # predictions; built on the CPU they made NMS raise on a Metal model.
+        dev = output.logits.device
         results: list[dict[str, Tensor]] = []
 
         for b in range(B_batch):
@@ -747,31 +777,30 @@ class YOLOForObjectDetection(ObjectDetectionModel):
             if output.objectness is not None:
                 sc_b = sc_b * output.objectness[b][:, None]
 
+            per_class = _threshold_by_class(sc_b, cfg.score_thresh)
+
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
             for c in range(C):
-                sc_c = sc_b[:, c]
-                mask: list[int] = [
-                    i
-                    for i in range(int(sc_c.shape[0]))
-                    if float(sc_c[i].item()) >= cfg.score_thresh
-                ]
+                mask = per_class[c]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask).long()
-                sc_sel = sc_c[mask_t]
+                mask_t = lucid.tensor(mask, device=dev).long()
+                sc_sel = sc_b[:, c][mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(
                     bx_sel,
                     sc_sel,
-                    lucid.zeros(int(sc_sel.shape[0])),
+                    lucid.zeros(len(mask), device=dev),
                     cfg.nms_thresh,
                 )
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -784,9 +813,9 @@ class YOLOForObjectDetection(ObjectDetectionModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
 

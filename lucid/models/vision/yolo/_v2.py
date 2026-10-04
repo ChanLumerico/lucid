@@ -76,6 +76,7 @@ from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
+from lucid.models.vision.yolo._v1 import _threshold_by_class
 from lucid.models.vision.yolo._weights import YOLOV2Weights
 import lucid.weights as weights_mod
 
@@ -613,6 +614,9 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         B_batch = int(raw.shape[0])
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
+        # Targets are built from Python floats; they must share the
+        # prediction's device or the first subtraction raises on Metal.
+        dev = raw.device
 
         stride_h = H / fH
         stride_w = W / fW
@@ -755,24 +759,20 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
 
                                 sig_tx = F.sigmoid(raw_tx)
                                 sig_ty = F.sigmoid(raw_ty)
-                                xy_terms.append(
-                                    (sig_tx - lucid.tensor([tgt_tx_rel])[0]) ** 2
+                                tgt_txy_t = lucid.tensor(
+                                    [tgt_tx_rel, tgt_ty_rel], device=dev
                                 )
-                                xy_terms.append(
-                                    (sig_ty - lucid.tensor([tgt_ty_rel])[0]) ** 2
-                                )
+                                xy_terms.append((sig_tx - tgt_txy_t[0]) ** 2)
+                                xy_terms.append((sig_ty - tgt_txy_t[1]) ** 2)
 
                                 # tw, th targets: log(gt / anchor)
                                 aw = anchors[a][0] * stride_w
                                 ah = anchors[a][1] * stride_h
                                 tgt_tw = math.log(max(w_m, 1e-6) / max(aw, 1e-6))
                                 tgt_th = math.log(max(h_m, 1e-6) / max(ah, 1e-6))
-                                wh_terms.append(
-                                    (raw_tw - lucid.tensor([tgt_tw])[0]) ** 2
-                                )
-                                wh_terms.append(
-                                    (raw_th - lucid.tensor([tgt_th])[0]) ** 2
-                                )
+                                tgt_twh_t = lucid.tensor([tgt_tw, tgt_th], device=dev)
+                                wh_terms.append((raw_tw - tgt_twh_t[0]) ** 2)
+                                wh_terms.append((raw_th - tgt_twh_t[1]) ** 2)
 
                                 # Objectness regresses Pr(object) x IoU, which is
                                 # what the paper defines sigma(t_o) to be and what
@@ -780,9 +780,8 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                                 # target makes confidence uninformative for ranking.
                                 sig_conf = F.sigmoid(raw_conf)
                                 tgt_conf = _best_gt_iou(row, col, a)
-                                conf_obj.append(
-                                    (sig_conf - lucid.tensor([tgt_conf])[0]) ** 2
-                                )
+                                tgt_conf_t = lucid.tensor([tgt_conf], device=dev)
+                                conf_obj.append((sig_conf - tgt_conf_t[0]) ** 2)
 
                                 # Class loss: MSE vs one-hot on the SOFTMAX
                                 # probabilities — the same quantity postprocess
@@ -794,7 +793,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                                 # likewise takes the delta against the softmax.
                                 tgt_cls_list = [0.0] * C
                                 tgt_cls_list[cls_m] = 1.0
-                                tgt_cls_t = lucid.tensor(tgt_cls_list)
+                                tgt_cls_t = lucid.tensor(tgt_cls_list, device=dev)
                                 cls_prob = F.softmax(raw_cls, dim=-1)
                                 cls_terms.append(((cls_prob - tgt_cls_t) ** 2).sum())
 
@@ -815,7 +814,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                 # silently cancels it and makes the balance drift with grid
                 # size and object count.
                 if not parts:
-                    return lucid.zeros((1,))
+                    return lucid.zeros((1,), device=dev)
                 return lucid.cat([t.reshape(1) for t in parts]).sum()
 
             loss_xy = lc * _mean_or_zero(xy_terms)
@@ -917,6 +916,9 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         B_batch = int(output.logits.shape[0])
         C = cfg.num_classes
+        # Everything built here lives with the predictions; on the CPU it
+        # made NMS raise on a Metal model.
+        dev = output.logits.device
         results: list[dict[str, Tensor]] = []
 
         for b in range(B_batch):
@@ -928,31 +930,30 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
             if output.objectness is not None:
                 sc_b = sc_b * output.objectness[b][:, None]
 
+            per_class = _threshold_by_class(sc_b, cfg.score_thresh)
+
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
             for c in range(C):
-                sc_c = sc_b[:, c]
-                mask: list[int] = [
-                    i
-                    for i in range(int(sc_c.shape[0]))
-                    if float(sc_c[i].item()) >= cfg.score_thresh
-                ]
+                mask = per_class[c]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask).long()
-                sc_sel = sc_c[mask_t]
+                mask_t = lucid.tensor(mask, device=dev).long()
+                sc_sel = sc_b[:, c][mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(
                     bx_sel,
                     sc_sel,
-                    lucid.zeros(int(sc_sel.shape[0])),
+                    lucid.zeros(len(mask), device=dev),
                     cfg.nms_thresh,
                 )
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -965,9 +966,9 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
 

@@ -23,6 +23,7 @@ from lucid.models.vision.yolo._v2 import (
 from lucid.models.vision.yolo._v3 import (
     YOLOV3Config,
     YOLOV3ForObjectDetection,
+    YOLOV3TinyForObjectDetection,
     yolo_v3,
     yolo_v3_tiny,
 )
@@ -53,6 +54,7 @@ __all__ = [
     # YOLOv3
     "YOLOV3Config",
     "YOLOV3ForObjectDetection",
+    "YOLOV3TinyForObjectDetection",
     "yolo_v3",
     "yolo_v3_tiny",
     "YOLOV3Weights",

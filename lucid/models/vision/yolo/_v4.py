@@ -60,16 +60,13 @@ from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
-from lucid.models._utils._detection import (
-    batched_nms,
-    clip_boxes_to_image,
-)
 from lucid.models.vision.yolo._weights import YOLOV4Weights
 import lucid.weights as weights_mod
 
 # v4 reuses v3's anchor-ignore rule verbatim; only the threshold differs
-# (yolov4.cfg says .7, yolov3's paper text says .5).
-from lucid.models.vision.yolo._v3 import _ignore_mask
+# (yolov4.cfg says .7, yolov3's paper text says .5).  Its detection scoring
+# and NMS are v3's too.
+from lucid.models.vision.yolo._v3 import _ignore_mask, _postprocess_detections
 
 _IGNORE_IOU_THRESH = 0.7
 
@@ -680,7 +677,7 @@ def _ciou_loss(pred_boxes: Tensor, gt_boxes: Tensor) -> Tensor:
     """
     N = int(pred_boxes.shape[0])
     if N == 0:
-        return lucid.zeros((1,))
+        return lucid.zeros((1,), device=pred_boxes.device)
 
     # Vectorised and differentiable.  The previous per-box Python-float form
     # rebuilt each term with ``lucid.tensor``, so the box-regression channels
@@ -1080,78 +1077,17 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
             image_sizes: List of (H, W) per image.
 
         Returns:
-            Per-image list of dicts with "boxes", "scores", "labels".
+            Per-image list of dicts with "boxes", "scores", "labels", on
+            the model's device.
         """
-        B = int(output.logits.shape[0])
-        results: list[dict[str, Tensor]] = []
-
-        for b in range(B):
-            cls_logits = output.logits[b]
-            boxes = output.pred_boxes[b]
-            iH, iW = image_sizes[b]
-
-            # score = sigmoid(objectness) * sigmoid(class), as darknet's
-            # ``get_yolo_detections`` does — objectness is the only head in v4
-            # that receives box-quality supervision.
-            cls_probs = F.sigmoid(cls_logits)
-            if output.objectness is not None:
-                cls_probs = cls_probs * output.objectness[b][:, None]
-            N_anc = int(cls_probs.shape[0])
-            C = int(cls_probs.shape[1])
-
-            keep_boxes: list[Tensor] = []
-            keep_scores: list[Tensor] = []
-            keep_labels: list[Tensor] = []
-
-            for a in range(N_anc):
-                for c in range(C):
-                    sc = float(cls_probs[a, c].item())
-                    if sc >= self._cfg.score_thresh:
-                        keep_boxes.append(boxes[a : a + 1])
-                        keep_scores.append(lucid.tensor([[sc]]))
-                        keep_labels.append(lucid.tensor([[float(c)]]))
-
-            if not keep_boxes:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
-                    }
-                )
-                continue
-
-            det_boxes = lucid.cat(keep_boxes, dim=0)
-            det_scores = lucid.cat(keep_scores, dim=0).reshape(-1)
-            det_labels = lucid.cat(keep_labels, dim=0).reshape(-1)
-
-            det_boxes = clip_boxes_to_image(det_boxes, (iH, iW))
-
-            keep_idx = batched_nms(
-                det_boxes, det_scores, det_labels, self._cfg.nms_thresh
-            )
-            K2 = int(keep_idx.shape[0])
-            if K2 == 0:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
-                    }
-                )
-                continue
-
-            idx_list: list[int] = [int(keep_idx[i].item()) for i in range(K2)]
-            idx_t = lucid.tensor(idx_list)
-            results.append(
-                {
-                    "boxes": det_boxes[idx_t],
-                    "scores": det_scores[idx_t],
-                    "labels": det_labels[idx_t],
-                }
-            )
-
-        return results
+        # score = sigmoid(objectness) * sigmoid(class), as darknet's
+        # ``get_yolo_detections`` does — objectness is the only head in v4
+        # that receives box-quality supervision.  The scoring, threshold and
+        # NMS are YOLOv3's, shared so the device handling and the single
+        # read-back of the score matrix cannot drift between versions.
+        return _postprocess_detections(
+            output, image_sizes, self._cfg.score_thresh, self._cfg.nms_thresh
+        )
 
 
 # ---------------------------------------------------------------------------

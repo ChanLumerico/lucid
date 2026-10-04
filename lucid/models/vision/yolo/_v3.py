@@ -51,6 +51,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike
 from lucid.models._base import ModelConfig
 from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
@@ -797,6 +798,95 @@ def _yolov3_loss(
 
 
 # ---------------------------------------------------------------------------
+# Postprocess helper (shared by YOLOv3, YOLOv3-Tiny and YOLOv4)
+# ---------------------------------------------------------------------------
+
+
+def _no_detections(device: DeviceLike) -> dict[str, Tensor]:
+    """An image's empty result, on the model's device."""
+    return {
+        "boxes": lucid.zeros((0, 4), device=device),
+        "scores": lucid.zeros((0,), device=device),
+        "labels": lucid.zeros((0,), device=device),
+    }
+
+
+def _postprocess_detections(
+    output: ObjectDetectionOutput,
+    image_sizes: list[tuple[int, int]],
+    score_thresh: float,
+    nms_thresh: float,
+) -> list[dict[str, Tensor]]:
+    """Score, threshold, clip and per-class NMS for sigmoid-class YOLO heads.
+
+    The score is Pr(object)·Pr(class|object), as darknet's
+    ``get_yolo_detections`` computes it.  Every tensor built here —
+    selection indices, scores, class ids, the empty result — is placed on
+    the predictions' device; built on the CPU they made ``batched_nms``
+    raise on a Metal model.
+    """
+    B = int(output.logits.shape[0])
+    dev = output.logits.device
+    results: list[dict[str, Tensor]] = []
+
+    for b in range(B):
+        cls_logits = output.logits[b]  # (total_anchors, C)
+        boxes = output.pred_boxes[b]  # (total_anchors, 4)
+        iH, iW = image_sizes[b]
+
+        # YOLO scores a detection by Pr(object)·Pr(class|object); dropping
+        # the objectness factor emits every background anchor whose class
+        # sigmoid happens to clear the threshold, and ranks NMS wrongly.
+        cls_probs = F.sigmoid(cls_logits)  # (total_anchors, C)
+        if output.objectness is not None:
+            cls_probs = cls_probs * output.objectness[b][:, None]
+        C = int(cls_probs.shape[1])
+
+        # One .tolist() instead of N_anc * C device syncs.  At 416px
+        # with 80 classes that scan was 10,647 * 80 = 851,760 scalar
+        # round-trips per image; darknet and every reference thresholds
+        # the (N, C) score matrix in one go.
+        flat = cast(list[float], cls_probs.reshape(-1).tolist())
+        anchor_ids: list[int] = []
+        scores: list[float] = []
+        labels: list[float] = []
+        for idx, sc in enumerate(flat):
+            if sc >= score_thresh:
+                a, c = divmod(idx, C)
+                anchor_ids.append(a)
+                scores.append(sc)
+                labels.append(float(c))
+
+        if not anchor_ids:
+            results.append(_no_detections(dev))
+            continue
+
+        # One gather rather than a (1, 4) slice and two scalar tensors per
+        # detection, which at a low threshold meant thousands of tiny device
+        # allocations followed by a concatenation.
+        det_boxes = boxes[lucid.tensor(anchor_ids, device=dev).long()]  # (K, 4)
+        det_scores = lucid.tensor(scores, device=dev)
+        det_labels = lucid.tensor(labels, device=dev)
+
+        det_boxes = clip_boxes_to_image(det_boxes, (iH, iW))
+
+        keep_idx = batched_nms(det_boxes, det_scores, det_labels, nms_thresh)
+        if int(keep_idx.shape[0]) == 0:
+            results.append(_no_detections(dev))
+            continue
+
+        results.append(
+            {
+                "boxes": det_boxes[keep_idx],
+                "scores": det_scores[keep_idx],
+                "labels": det_labels[keep_idx],
+            }
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # YOLOv3 model
 # ---------------------------------------------------------------------------
 
@@ -996,82 +1086,12 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
             image_sizes: List of (H, W) per image.
 
         Returns:
-            Per-image list of dicts with "boxes", "scores", "labels".
+            Per-image list of dicts with "boxes", "scores", "labels", on
+            the model's device.
         """
-        B = int(output.logits.shape[0])
-        results: list[dict[str, Tensor]] = []
-
-        for b in range(B):
-            cls_logits = output.logits[b]  # (total_anchors, C)
-            boxes = output.pred_boxes[b]  # (total_anchors, 4)
-            iH, iW = image_sizes[b]
-
-            # YOLO scores a detection by Pr(object)·Pr(class|object); dropping
-            # the objectness factor emits every background anchor whose class
-            # sigmoid happens to clear the threshold, and ranks NMS wrongly.
-            cls_probs = F.sigmoid(cls_logits)  # (total_anchors, C)
-            if output.objectness is not None:
-                cls_probs = cls_probs * output.objectness[b][:, None]
-            C = int(cls_probs.shape[1])
-
-            keep_boxes: list[Tensor] = []
-            keep_scores: list[Tensor] = []
-            keep_labels: list[Tensor] = []
-
-            # One .tolist() instead of N_anc * C device syncs.  At 416px
-            # with 80 classes that scan was 10,647 * 80 = 851,760 scalar
-            # round-trips per image; darknet and every reference thresholds
-            # the (N, C) score matrix in one go.
-            flat = cast(list[float], cls_probs.reshape(-1).tolist())
-            thresh = self._cfg.score_thresh
-            for idx, sc in enumerate(flat):
-                if sc >= thresh:
-                    a, c = divmod(idx, C)
-                    keep_boxes.append(boxes[a : a + 1])  # (1, 4)
-                    keep_scores.append(lucid.tensor([[sc]]))
-                    keep_labels.append(lucid.tensor([[float(c)]]))
-
-            if not keep_boxes:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
-                    }
-                )
-                continue
-
-            det_boxes = lucid.cat(keep_boxes, dim=0)  # (K, 4)
-            det_scores = lucid.cat(keep_scores, dim=0).reshape(-1)
-            det_labels = lucid.cat(keep_labels, dim=0).reshape(-1)
-
-            det_boxes = clip_boxes_to_image(det_boxes, (iH, iW))
-
-            keep_idx = batched_nms(
-                det_boxes, det_scores, det_labels, self._cfg.nms_thresh
-            )
-            K2 = int(keep_idx.shape[0])
-            if K2 == 0:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
-                    }
-                )
-                continue
-
-            idx_list: list[int] = [int(keep_idx[i].item()) for i in range(K2)]
-            idx_t = lucid.tensor(idx_list)
-            results.append(
-                {
-                    "boxes": det_boxes[idx_t],
-                    "scores": det_scores[idx_t],
-                    "labels": det_labels[idx_t],
-                }
-            )
-
-        return results
+        return _postprocess_detections(
+            output, image_sizes, self._cfg.score_thresh, self._cfg.nms_thresh
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1079,13 +1099,59 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
 # ---------------------------------------------------------------------------
 
 
-@final
-class _YOLOV3Tiny(ObjectDetectionModel):
-    """YOLOv3-Tiny — 2-scale lightweight variant.
+class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
+    r"""YOLOv3-Tiny — the 2-scale lightweight YOLOv3 (Redmon & Farhadi, 2018).
 
-    Uses _Darknet53Tiny backbone (6 conv stages + maxpool, no residuals)
-    and detects at P5 (stride 32) and P4 (stride 16) only, each through the
-    cfg's two-convolution head rather than the full model's five.
+    A shallow Darknet backbone (six conv + max-pool stages, no residual
+    connections) feeding two detection scales — stride 32 and stride 16 —
+    each through ``yolov3-tiny.cfg``'s two-convolution head rather than the
+    full model's five.  Boxes, objectness and per-class sigmoids are decoded
+    exactly as in :class:`YOLOV3ForObjectDetection`, so the two share their
+    loss and :meth:`postprocess`.
+
+    Parameters
+    ----------
+    config : YOLOV3Config
+        Frozen architecture spec.  ``config.anchors`` is used when it holds
+        exactly six priors; otherwise the cfg's own six Tiny anchors are
+        used, since the full model's nine are clustered for a different
+        network.
+
+    Attributes
+    ----------
+    config : YOLOV3Config
+        Stored copy of the config that built this model.
+    backbone : _Darknet53Tiny
+        Plain conv/max-pool backbone producing the stride-16 (256ch) and
+        stride-32 (256ch bottleneck) features.
+    p5_compress : nn.Sequential
+        Stride-32 ``conv 512 3x3`` expansion.
+    p5_predict : nn.Conv2d
+        Stride-32 1x1 predictor emitting :math:`3(5 + C)` channels.
+    p5_to_p4_conv : _ConvBnLeaky
+        ``conv 128 1x1`` on the stride-32 bottleneck before upsampling.
+    p4_compress : nn.Sequential
+        Stride-16 ``conv 256 3x3`` over the upsampled-and-concatenated
+        384 channels.
+    p4_predict : nn.Conv2d
+        Stride-16 1x1 predictor emitting :math:`3(5 + C)` channels.
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018
+    (arXiv:1804.02767).  Tiny is the variant released alongside the full
+    model for real-time and embedded inference.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo import yolo_v3_tiny
+    >>> model = yolo_v3_tiny().eval()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> dets = model.postprocess(out, image_sizes=[(416, 416)])
+    >>> sorted(dets[0])
+    ['boxes', 'labels', 'scores']
     """
 
     config_class: ClassVar[type[YOLOV3Config]] = YOLOV3Config
@@ -1176,6 +1242,25 @@ class _YOLOV3Tiny(ObjectDetectionModel):
             objectness=objectness,
         )
 
+    def postprocess(
+        self,
+        output: ObjectDetectionOutput,
+        image_sizes: list[tuple[int, int]],
+    ) -> list[dict[str, Tensor]]:
+        """Filter by score, clip boxes, apply per-class NMS.
+
+        Args:
+            output:      Forward pass output.
+            image_sizes: List of (H, W) per image.
+
+        Returns:
+            Per-image list of dicts with "boxes", "scores", "labels", on
+            the model's device.
+        """
+        return _postprocess_detections(
+            output, image_sizes, self._cfg.score_thresh, self._cfg.nms_thresh
+        )
+
 
 # ---------------------------------------------------------------------------
 # Factory functions
@@ -1263,7 +1348,7 @@ def yolo_v3(
     task="object-detection",
     family="yolo",
     model_type="yolo_v3_tiny",
-    model_class=_YOLOV3Tiny,
+    model_class=YOLOV3TinyForObjectDetection,
     default_config=_CFG_V3_TINY,
     params=8852366,
 )
@@ -1272,7 +1357,7 @@ def yolo_v3_tiny(
     *,
     weights: YOLOV3TinyWeights | None = None,
     **overrides: object,
-) -> _YOLOV3Tiny:
+) -> YOLOV3TinyForObjectDetection:
     r"""YOLOv3-Tiny — 2-scale lightweight variant (Redmon & Farhadi, 2018).
 
     Builds the YOLOv3-Tiny detector explicitly defined in the paper's
@@ -1297,7 +1382,7 @@ def yolo_v3_tiny(
 
     Returns
     -------
-    _YOLOV3Tiny
+    YOLOV3TinyForObjectDetection
         Detector with the YOLOv3-Tiny configuration applied (or with
         ``overrides`` merged on top of it).
 
@@ -1324,7 +1409,7 @@ def yolo_v3_tiny(
         else _CFG_V3_TINY
     )
     entry = weights_mod.resolve_weights(YOLOV3TinyWeights, pretrained, weights)
-    model = _YOLOV3Tiny(config)
+    model = YOLOV3TinyForObjectDetection(config)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="yolo_v3_tiny")
     return model
