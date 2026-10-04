@@ -217,7 +217,8 @@ def _class_targets(
     losses always used there, and an ``int64`` target that wide wraps.  It
     must not be compared at its own width: an ``int64`` comparison aborts
     the graph compiler when the ``int64`` came from an ``argmax`` inside a
-    compiled step, because the graph holds that result as ``int32``.
+    compiled step, because the graph holds that result as ``int32``
+    (LCD-270).
     """
     index = _as_index(target)
     on_cpu = target.device == "cpu"
