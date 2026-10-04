@@ -124,17 +124,6 @@ _KNOWN: dict[tuple[str, str, str], tuple[int, str]] = {
         "complex_real / complex_imag receive, and the ops refuse a real "
         "input before the kernel. Retire: refuse !is_complex(cs.dtype).",
     ),
-    (_GPU, "linalg_lu_factor", "bare-else"): (
-        1,
-        "the MLX-on-CPU LU picks the f32 or f64 LAPACK call; the op's "
-        "float_only validator admits F32/F64 only. Retire: explicit F64 "
-        "branch plus refusal (AE-3 / CHA-227 rewrites this path).",
-    ),
-    (_GPU, "linalg_solve_triangular", "bare-else"): (
-        1,
-        "as linalg_lu_factor: float_only admits F32/F64 only. Retire with "
-        "AE-3 / CHA-227.",
-    ),
     ("lucid/_C/nn/Interpolate.cpp", "resample_matrix", "bare-else"): (
         1,
         "not a reinterpretation: the else only picks float precision for "
