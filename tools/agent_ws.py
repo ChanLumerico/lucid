@@ -983,7 +983,9 @@ def quality_delta(wt: Path, py: str, base: str) -> tuple[int, str]:
         text=True,
         check=False,
     )
-    return proc.returncode, (proc.stdout + proc.stderr[-3000:]).rstrip()
+    # stderr is progress on success; on failure it carries the reason.
+    detail = "" if proc.returncode in (0, 1) else "\n" + proc.stderr[-3000:]
+    return proc.returncode, (proc.stdout + detail).rstrip()
 
 
 def judge_slop(wt: Path, py: str, base: str, allow: str | None) -> int:
