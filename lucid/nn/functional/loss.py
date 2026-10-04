@@ -14,7 +14,7 @@ import contextlib
 import math
 import warnings
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -25,6 +25,12 @@ from lucid._dtype import finfo as _finfo
 from lucid._dtype import float16 as _float16
 from lucid._dtype import float32 as _float32
 from lucid._types import Reduction, ReductionKL
+from lucid.nn.functional._index_checks import (
+    _check_ctc,
+    _class_targets,
+    _ClassTargets,
+    _poison,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -625,66 +631,27 @@ def huber_loss(
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
-def _refuse_or_poison(
-    target: Tensor,
-    safe: Tensor,
-    counted: Tensor | None,
-    scale: Tensor | None,
-    dtype: _dtype,
-) -> Tensor | None:
-    """Deal with class indices outside the class range.
-
-    ``safe`` is ``target`` clamped to the class range, so the two differ
-    exactly where an index was out of range; ``counted`` is ``False`` at
-    the ``ignore_index`` positions, which are allowed to be.
-
-    A CPU target is on the host already, so it is checked for free and an
-    ``IndexError`` raised, as the reference does; ``scale`` comes back as
-    it was.  A Metal target is not read back — a host read in every loss
-    call stalls every training step — so ``scale`` (a per-sample factor,
-    ``None`` for all ones) comes back NaN at each such position instead,
-    and a bad label poisons the loss rather than being scored as class 0
-    or ``C - 1``; ``dtype`` is the factor's dtype when ``scale`` is
-    ``None``.
-    """
-    usable: Tensor = safe == target
-    if counted is not None:
-        usable = usable | ~counted
-    if target.device == "cpu":
-        first: int | None = _on_host(
-            lambda: (
-                None
-                if bool(usable.all().item())
-                else int(target[~usable].reshape(-1)[0].item())
-            )
-        )
-        if first is not None:
-            raise IndexError(f"Target {first} is out of bounds.")
-        return scale
-    ones: Tensor = scale if scale is not None else _lucid.ones_like(safe, dtype=dtype)
-    return _lucid.where(usable, ones, _lucid.full_like(ones, math.nan))
-
-
 def _class_nll(
     log_p: Tensor,
-    target: Tensor,
+    targets: _ClassTargets,
     weight: Tensor | None,
-    ignore_index: int | None,
     reduction: str,
     label_smoothing: float,
 ) -> Tensor:
     """Negative log-likelihood of integer class targets — the shared body of
     :func:`cross_entropy` and :func:`nll_loss`.
 
-    ``log_p`` holds log-probabilities of shape ``(N, C, *)`` and ``target``
-    class indices of shape ``(N, *)``.  Each sample is scaled by the weight
-    of its class, ``ignore_index`` samples are dropped, and ``"mean"``
-    divides by the total weight of the samples kept.
+    ``log_p`` holds log-probabilities of shape ``(N, C, *)``.  ``targets``
+    are the class indices of shape ``(N, *)``, checked before ``log_p`` was
+    computed (:func:`~lucid.nn.functional._index_checks._class_targets`).
+    Each sample is scaled by the weight of its class, ``ignore_index``
+    samples are dropped, and ``"mean"`` divides by the total weight of the
+    samples kept.
     """
     num_classes: int = int(log_p.shape[1])
-    tgt: Tensor = target.to(dtype=_lucid.int32)
+    safe, counted, usable = targets
 
-    # Clamped before every gather, not masked after it.
+    # Gathered with the clamped targets, not masked after a raw gather.
     #
     # ``ignore_index`` defaults to -100, and those sentinels used to be
     # handed straight to ``gather``, which read that far outside the
@@ -695,25 +662,20 @@ def _class_nll(
     #
     # The value read at a clamped position is discarded by the mask below,
     # so which valid index is used does not matter; that it is valid does.
-    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
     nll: Tensor = -_lucid.gather(log_p, 1, safe.unsqueeze(1)).squeeze(1)
 
     # ``keep`` is 1 for a sample that counts and 0 for an ignored one — and
     # NaN for an out-of-range target on Metal, so a bad label poisons the
     # loss rather than being scored as class 0 or C - 1.
-    keep: Tensor | None = None
-    counted: Tensor | None = None
-    if ignore_index is not None:
-        counted = tgt != ignore_index
-        keep = counted.to(dtype=log_p.dtype)
-    keep = _refuse_or_poison(tgt, safe, counted, keep, log_p.dtype)
+    scale: Tensor | None = None if counted is None else counted.to(dtype=log_p.dtype)
+    keep: Tensor | None = _poison(scale, usable, safe, log_p.dtype)
 
     # Each sample's share of the mean: its class weight times ``keep``.
     # ``None`` when every sample counts once.
     sample_weight: Tensor | None = None
     if weight is not None:
         sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(
-            list(tgt.shape)
+            list(safe.shape)
         )
     if keep is not None:
         sample_weight = keep if sample_weight is None else sample_weight * keep
@@ -860,7 +822,8 @@ def cross_entropy(
         raise ValueError(
             f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}"
         )
-    _check_class_weight(weight, _num_classes(x, op), op)
+    num_classes: int = _num_classes(x, op)
+    _check_class_weight(weight, num_classes, op)
     # A target of the input's own shape holds class probabilities, as in
     # the reference; the docstring said so, and the gather path refused it
     # with a rank mismatch.
@@ -883,20 +846,18 @@ def cross_entropy(
     if unbatched:
         x = x.unsqueeze(0)
         target = target.unsqueeze(0) if soft else target.reshape([1])
-    # Class dim is 1 for both (N, C) and (N, C, *) inputs.
-    log_p: Tensor = _log_softmax(x, dim=1)
-    out: Tensor = (
-        _soft_target_nll(log_p, target, weight, reduction, label_smoothing)
-        if soft
-        else _class_nll(
-            log_p,
-            target,
-            weight,
-            ignore_index,
-            reduction,
-            label_smoothing,
+    out: Tensor
+    if soft:
+        # Class dim is 1 for both (N, C) and (N, C, *) inputs.
+        out = _soft_target_nll(
+            _log_softmax(x, dim=1), target, weight, reduction, label_smoothing
         )
-    )
+    else:
+        # The targets are checked before the first kernel runs.
+        targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
+        out = _class_nll(
+            _log_softmax(x, dim=1), targets, weight, reduction, label_smoothing
+        )
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
@@ -984,14 +945,16 @@ def nll_loss(
     """
     op = "nll_loss"
     _check_reduction(reduction, op)
-    _check_class_weight(weight, _num_classes(x, op), op)
+    num_classes: int = _num_classes(x, op)
+    _check_class_weight(weight, num_classes, op)
     _check_class_target(x, target, op)
     # An unbatched (C,) input is one sample.
     unbatched: bool = x.ndim == 1
     if unbatched:
         x = x.unsqueeze(0)
         target = target.reshape([1])
-    out: Tensor = _class_nll(x, target, weight, ignore_index, reduction, 0.0)
+    targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
+    out: Tensor = _class_nll(x, targets, weight, reduction, 0.0)
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
@@ -2097,7 +2060,8 @@ def ctc_loss(
     >>> ctc_loss(log_p, targets, il, tl)  # doctest: +SKIP
     Tensor(...)
     """
-    _check_reduction(reduction, "ctc_loss")
+    op = "ctc_loss"
+    _check_reduction(reduction, op)
 
     def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
         if isinstance(v, _lucid.Tensor):
@@ -2116,6 +2080,14 @@ def ctc_loss(
         input_lengths = input_lengths.reshape([1])
         target_lengths = target_lengths.reshape([1])
 
+    # Every length, label and ``blank`` is checked before the kernel: an
+    # ``input_lengths`` past the input, a ``target_lengths`` past its row
+    # and a label or ``blank`` outside the classes were all read as given,
+    # past the end of their axis.
+    rows: list[int] = _check_ctc(
+        log_probs, targets, input_lengths, target_lengths, blank, op
+    )
+
     tgt_impl = _unwrap(targets)
     if len(list(tgt_impl.shape)) > 1:
         # Padded (N, S): row b's first target_lengths[b] entries are its
@@ -2123,7 +2095,6 @@ def ctc_loss(
         # gathered into one — flattening the padding in with them made every
         # sample after a short one read the padding as its target.
         width = int(tgt_impl.shape[1])
-        rows = [int(n) for n in cast(list[int], target_lengths.tolist())]
         keep = [b * width + i for b, n in enumerate(rows) for i in range(n)]
         flat = _wrap(_C_engine.reshape(tgt_impl, [-1]))
         tgt_impl = _unwrap(flat[_lucid.tensor(keep, dtype=_lucid.int64)])
@@ -2245,9 +2216,9 @@ def multi_margin_loss(
     target_shape: list[int] = list(target.shape)
     if unbatched:
         x = x.unsqueeze(0)
-    tgt: Tensor = target.to(dtype=_lucid.int32).reshape(-1)
-    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
-    poison: Tensor | None = _refuse_or_poison(tgt, safe, None, None, x.dtype)
+    # The targets are checked before the first gather.
+    safe, _, usable = _class_targets(target.reshape(-1), num_classes, op)
+    poison: Tensor | None = _poison(None, usable, safe, x.dtype)
     tgt_col: Tensor = safe.reshape([-1, 1])  # (N, 1)
 
     # margin - x[i, y_i] + x[i, j] for every j, hinged and raised to p.
@@ -2341,30 +2312,27 @@ def multilabel_margin_loss(
     """
     op = "multilabel_margin_loss"
     _check_reduction(reduction, op)
-    _num_classes(x, op, max_ndim=2)
+    num_classes: int = _num_classes(x, op, max_ndim=2)
     # A target of another shape was read column by column against x's
     # classes, and scored whatever lined up.
     _check_target(x, target, op)
     unbatched: bool = x.ndim == 1
-    xb: Tensor = x.reshape([1, -1]) if unbatched else x
     # Any integer dtype is taken: a ``lucid.tensor([...ints...])`` target
     # is int64, and an explicitly int32 one is just as usual.
-    tgt: Tensor = (target.reshape([1, -1]) if unbatched else target).to(
-        dtype=_lucid.int32
-    )
-    num_classes: int = int(xb.shape[1])
+    tgt: Tensor = target.reshape([1, -1]) if unbatched else target
 
     # The labels of a sample are its entries up to the first negative one.
     # Every column used to be read with ``index >= 0``, so a label after
-    # the first -1 still counted as a positive.
-    listed: Tensor = _lucid.cumprod((tgt >= 0).to(dtype=_lucid.int32), dim=1) == 1
-    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
-    # A listed class outside [0, C) raises for a CPU target and makes the
-    # sample's loss NaN on Metal (its count is NaN), as for cross_entropy.
-    src: Tensor = listed.to(dtype=xb.dtype)
-    poisoned: Tensor | None = _refuse_or_poison(tgt, safe, listed, src, xb.dtype)
-    if poisoned is not None:
-        src = poisoned
+    # the first -1 still counted as a positive.  Read as int32, the width
+    # a compiled step's graph holds an argmax in.
+    tgt32: Tensor = tgt.to(dtype=_lucid.int32)
+    listed: Tensor = _lucid.cumprod((tgt32 >= 0).to(dtype=_lucid.int32), dim=1) == 1
+    # A listed class outside [0, C) raises for a CPU target, before the
+    # scatter, and makes the sample's loss NaN on Metal (its count is NaN),
+    # as for cross_entropy.  What follows the pad is never read.
+    safe, _, usable = _class_targets(tgt, num_classes, op, counted=listed)
+    xb: Tensor = x.reshape([1, -1]) if unbatched else x
+    src: Tensor = _poison(listed.to(dtype=xb.dtype), usable, safe, xb.dtype)
 
     # How many times each class is listed.  A class listed twice counts
     # twice as a positive, as in the reference; it is a target class (not

@@ -8,6 +8,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._unsupported import unsupported_if
+from lucid.nn.functional._index_checks import _check_indices, _check_table
 from lucid.nn.functional.activations import straight_through
 
 if TYPE_CHECKING:
@@ -15,70 +16,49 @@ if TYPE_CHECKING:
 
 
 def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
-    """Raise ``IndexError`` if any index falls outside the embedding table.
+    """Raise if any index in ``x`` falls outside the embedding table ``weight``.
 
-    The engine gather does no bounds checking: an out-of-range index reads past
-    the table and returns whatever is there — zeros for a small overrun (so a
-    wrong ``vocab_size`` or an unclamped token id silently trains on empty
-    embeddings) and a SIGSEGV once the offset is large.  One reduction over the
-    index tensor is negligible next to the gather it guards.
-
-    Shared by :func:`embedding` and :func:`~lucid.nn.functional.embedding_bag`
-    so the two cannot disagree on what a valid index is.
+    This is the check :func:`embedding` and
+    :func:`~lucid.nn.functional.embedding_bag` run before their gather.  It
+    is kept under this name for code that calls it directly.  The rule
+    itself has one home, shared with every other op that reads with a
+    class or table index (``one_hot``, the class-index losses,
+    ``ctc_loss``), so they cannot disagree on what a valid index is.
 
     Parameters
     ----------
     x : Tensor
-        Index tensor of any shape.  Empty tensors pass trivially.  Non-int64
-        indices are cast before the reduction, since the CPU reduce kernels
-        do not cover every integer width.
+        Index tensor of any shape and any integer dtype (or bool).  An
+        empty one passes.
     weight : Tensor
-        Embedding table of shape ``(num_embeddings, embedding_dim)``; only
+        Embedding table of shape ``(num_embeddings, embedding_dim)``.  Only
         its leading dimension is consulted.
     op : str
         Name of the calling op, used as the prefix of the raised message.
 
     Raises
     ------
+    TypeError
+        If ``x`` is not an integer (or bool) tensor.  A float index would
+        pass a range check trivially and then be read by the gather as
+        integer bits.
     IndexError
-        If any index is negative or ``>= weight.shape[0]``.
+        If any index is negative or ``>= weight.shape[0]``.  On a Metal
+        ``x`` this reads the indices on the host for now: the engine does
+        not yet isolate an out-of-range row inside the gather itself.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional.sparse import check_embedding_indices
+    >>> table = lucid.zeros(4, 2)
+    >>> check_embedding_indices(lucid.tensor([0, 3]), table, "lookup")
+    >>> check_embedding_indices(lucid.tensor([4]), table, "lookup")
+    Traceback (most recent call last):
+        ...
+    IndexError: lookup: index 4 is out of range for a table with 4 entries (valid range [0, 3])
     """
-    # Dtype first, and before the range check rather than after.  A float
-    # index tensor passes the range check trivially — its values sit in
-    # [0, 1) — and then the engine gather reads those float bits as
-    # integers, producing an offset that is nowhere near the table.
-    # ``F.embedding(float_tensor, weight)`` took the process down with a
-    # segmentation fault, which is how the audit's own sweep died.
-    if x.dtype not in (lucid.int8, lucid.int16, lucid.int32, lucid.int64, lucid.bool):
-        raise TypeError(
-            f"{op}: indices must be an integer tensor, got {x.dtype}; "
-            f"cast with .to(lucid.int64) first"
-        )
-    if x.numel() == 0:
-        return
-    num_embeddings = int(weight.shape[0])
-    # The CPU reduce kernels do not cover every integer width (int32 min/max
-    # raises), and index tensors legitimately arrive as int32 — normalise to
-    # the canonical index dtype before reducing.
-    # A guard, not a value: it raises or passes, and nothing downstream
-    # depends on what it read.  So it runs outside any active compile trace
-    # — the read would otherwise mark the trace unsupported (a traced value
-    # read on the host) and send every embedding model eager.  A compiled
-    # replay validates at trace time only, as it always has.
-    tracer = _C_engine.compile.current_tracer()
-    _C_engine.compile.set_current_tracer(None)
-    try:
-        idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
-        lo = int(idx.min().item())
-        hi = int(idx.max().item())
-    finally:
-        _C_engine.compile.set_current_tracer(tracer)
-    if lo < 0 or hi >= num_embeddings:
-        bad = lo if lo < 0 else hi
-        raise IndexError(
-            f"{op}: index {bad} is out of range for a table with "
-            f"{num_embeddings} entries (valid range [0, {num_embeddings - 1}])"
-        )
+    _check_table(x, weight, op)
 
 
 def embedding(
@@ -166,7 +146,7 @@ def embedding(
     unsupported_if(
         sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
     )
-    check_embedding_indices(x, weight, "embedding")
+    _check_table(x, weight, "embedding")
     pad = padding_idx if padding_idx is not None else -1
     # Normalised, not passed through.  The engine gather reads the index
     # buffer at a fixed width, so an int8 or bool index of more than a
@@ -212,6 +192,11 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     ValueError
         If ``num_classes`` is ``-1`` and ``tensor`` is empty — there is no
         largest index to infer the count from.
+    IndexError
+        If a CPU ``tensor`` holds a class outside ``[0, num_classes)``,
+        a negative one included; it used to give a row of zeros.  A Metal
+        ``tensor`` is not read back for the check (that would stall every
+        step), and a class outside the range gives a row of zeros there.
 
     Notes
     -----
@@ -244,6 +229,13 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
                 "pass num_classes explicitly"
             )
         num_classes = int(tensor.max().item()) + 1
+    _check_indices(
+        tensor,
+        num_classes,
+        "one_hot",
+        what="class",
+        axis=f"num_classes={num_classes}",
+    )
     out = _C_engine.nn.one_hot(_unwrap(tensor), num_classes)
     # int64, the dtype the reference framework answers in and the one class
     # indices are carried in everywhere else; the engine builds int8.
