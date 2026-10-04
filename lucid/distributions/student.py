@@ -345,9 +345,10 @@ class StudentT(Distribution):
         tensor(2.531)
         """
         # H = log(scale·sqrt(df)·B(0.5, df/2)) + (df+1)/2 · (digamma((df+1)/2) − digamma(df/2)).
-        half = lucid.tensor(0.5) + 0 * self.df  # broadcast 0.5 → df-shape.
+        # ``log Γ(½)`` is a Python constant: as a host tensor it could not meet
+        # a Metal ``df``.
         beta_term = (
-            lucid.lgamma(half)
+            math.lgamma(0.5)
             + lucid.lgamma(self.df * 0.5)
             - lucid.lgamma((self.df + 1.0) * 0.5)
         )

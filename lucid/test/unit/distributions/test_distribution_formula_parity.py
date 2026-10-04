@@ -11,6 +11,8 @@ the reference framework through the ``ref`` fixture and is marked
 * ``TestSupportBoundaries`` (CHA-144) — ``-inf`` from overflowing
   ``log(1 + exp(l))``, NaN from ``0 · log 0`` at the edge of a support, and
   ``-inf`` logits (masked categories) refused by ``constraints.real``.
+* ``TestScalarConstantsFollowTheDevice`` (CHA-148) — Python numbers held as
+  0-dim host tensors that raised ``DeviceMismatch`` against Metal tensors.
 """
 
 from typing import Any
@@ -449,8 +451,6 @@ class TestSupportBoundaries:
         assert np.isfinite(_np(masked.grad)).all(), _np(masked.grad)
 
     def test_multinomial_with_zero_probability(self, device: str) -> None:
-        if device == "metal":
-            pytest.skip("Multinomial on Metal raises DeviceMismatch — CHA-148")
         by_probs = D.Multinomial(5, probs=_t([0.0, 0.5, 0.5], device))
         by_logits = D.Multinomial(5, logits=_t([-_INF, 0.0, 0.0], device))
         counts = _t([0.0, 2.0, 3.0], device)
@@ -557,4 +557,146 @@ class TestSupportBoundaries:
                 _t(0.3, device)
             ),
             RD.ContinuousBernoulli(logits=rt([0.5, -3.0, 8.0])).log_prob(rt(0.3)),
+        )
+
+
+# ── CHA-148: constants on the wrong device ───────────────────────────────────
+
+
+def _on(t: lucid.Tensor, device: str) -> lucid.Tensor:
+    assert t.device.type == device, f"result on {t.device}, expected {device}"
+    return t
+
+
+@pytest.mark.parametrize("device", DEVICES)
+class TestScalarConstantsFollowTheDevice:
+    """CHA-148 — a Python number held as a 0-dim host tensor met a Metal
+    tensor and raised ``DeviceMismatch``.  Values are the reference's."""
+
+    def test_student_t_entropy(self, device: str) -> None:
+        d = D.StudentT(_t([3.0, 5.0], device))
+        np.testing.assert_allclose(
+            _np(_on(d.entropy(), device)), [1.77347744, 1.62750196], atol=1e-5
+        )
+
+    def test_multinomial_with_an_int_count(self, device: str) -> None:
+        d = D.Multinomial(5, probs=_t([0.2, 0.3, 0.5], device))
+        np.testing.assert_allclose(_np(_on(d.mean, device)), [1.0, 1.5, 2.5])
+        np.testing.assert_allclose(
+            _np(_on(d.variance, device)), [0.8, 1.05, 1.25], atol=1e-6
+        )
+        np.testing.assert_allclose(
+            _np(_on(d.log_prob(_t([1.0, 2.0, 2.0], device)), device)),
+            -2.00248051,
+            atol=1e-5,
+        )
+        lucid.manual_seed(0)
+        sample = _on(d.sample((4,)), device)
+        assert (_np(sample).sum(axis=-1) == 5).all()
+
+    def test_affine_and_power_transforms_with_number_parameters(
+        self, device: str
+    ) -> None:
+        x = _t([1.0, 2.0], device)
+        affine = D.transforms.AffineTransform(2.0, -3.0)
+        np.testing.assert_allclose(_np(_on(affine(x), device)), [-1.0, -4.0])
+        np.testing.assert_allclose(_np(_on(affine.inv(x), device)), [1 / 3, 0.0])
+        np.testing.assert_allclose(
+            _np(_on(affine.log_abs_det_jacobian(x, affine(x)), device)),
+            [np.log(3.0)] * 2,
+            atol=1e-6,
+        )
+        power = D.transforms.PowerTransform(2.5)
+        np.testing.assert_allclose(
+            _np(_on(power(x), device)), [1.0, 2.0**2.5], rtol=1e-6
+        )
+        np.testing.assert_allclose(
+            _np(_on(power.inv(x), device)), [1.0, 2.0**0.4], rtol=1e-6
+        )
+        np.testing.assert_allclose(
+            _np(_on(power.log_abs_det_jacobian(x, power(x)), device)),
+            np.log(2.5) + 1.5 * np.log([1.0, 2.0]),
+            atol=1e-6,
+        )
+
+    def test_transformed_distributions_built_on_them(self, device: str) -> None:
+        base = D.Normal(_t([0.0, 1.0], device), _t([1.0, 0.5], device))
+        affine = D.TransformedDistribution(
+            base, [D.transforms.AffineTransform(2.0, 3.0)]
+        )
+        lucid.manual_seed(0)
+        _on(affine.rsample((3,)), device)
+        y = _t([2.5, 4.0], device)
+        # N(2 + 3·loc, 3·scale) scored directly.
+        want = _np(D.Normal(_t([2.0, 5.0], device), _t([3.0, 1.5], device)).log_prob(y))
+        np.testing.assert_allclose(
+            _np(_on(affine.log_prob(y), device)), want, atol=1e-5
+        )
+        power = D.TransformedDistribution(
+            D.Exponential(_t([1.0, 2.0], device)), [D.transforms.PowerTransform(2.5)]
+        )
+        lucid.manual_seed(0)
+        _on(power.sample((3,)), device)
+        assert np.isfinite(
+            _np(_on(power.log_prob(_t([0.5, 2.0], device)), device))
+        ).all()
+
+    def test_relaxed_distributions_with_a_number_temperature(self, device: str) -> None:
+        rb = D.RelaxedBernoulli(0.7, probs=_t([0.3], device))
+        np.testing.assert_allclose(
+            _np(_on(rb.log_prob(_t([0.1, 0.5, 0.9], device)), device)),
+            [0.54798782, -0.53102827, -0.51020932],
+            atol=1e-5,
+        )
+        lucid.manual_seed(0)
+        _on(rb.rsample((3,)), device)
+        roc = D.RelaxedOneHotCategorical(0.5, probs=_t([0.2, 0.3, 0.5], device))
+        lucid.manual_seed(0)
+        sample = _on(roc.rsample((3,)), device)
+        assert np.isfinite(_np(_on(roc.log_prob(sample), device))).all()
+
+    @pytest.mark.parity
+    def test_parity(self, device: str, ref: Any) -> None:
+        RD = ref.distributions
+        rt = lambda v: ref.tensor(np.asarray(v, dtype=np.float32))  # noqa: E731
+        np.testing.assert_allclose(
+            _np(D.StudentT(_t([3.0, 5.0], device), 1.0, 2.0).entropy()),
+            _ref_np(RD.StudentT(rt([3.0, 5.0]), 1.0, 2.0).entropy()),
+            atol=1e-5,
+        )
+        counts = [1.0, 2.0, 2.0]
+        np.testing.assert_allclose(
+            _np(
+                D.Multinomial(5, probs=_t([0.2, 0.3, 0.5], device)).log_prob(
+                    _t(counts, device)
+                )
+            ),
+            _ref_np(RD.Multinomial(5, probs=rt([0.2, 0.3, 0.5])).log_prob(rt(counts))),
+            atol=1e-5,
+        )
+        y = [2.5, 4.0]
+        lucid_td = D.TransformedDistribution(
+            D.Normal(_t([0.0, 1.0], device), _t([1.0, 0.5], device)),
+            [D.transforms.AffineTransform(2.0, 3.0)],
+        )
+        ref_td = RD.TransformedDistribution(
+            RD.Normal(rt([0.0, 1.0]), rt([1.0, 0.5])),
+            [RD.transforms.AffineTransform(2.0, 3.0)],
+        )
+        np.testing.assert_allclose(
+            _np(lucid_td.log_prob(_t(y, device))),
+            _ref_np(ref_td.log_prob(rt(y))),
+            atol=1e-5,
+        )
+        y = [0.5, 2.0]
+        lucid_td = D.TransformedDistribution(
+            D.Exponential(_t([1.0, 2.0], device)), [D.transforms.PowerTransform(2.5)]
+        )
+        ref_td = RD.TransformedDistribution(
+            RD.Exponential(rt([1.0, 2.0])), [RD.transforms.PowerTransform(2.5)]
+        )
+        np.testing.assert_allclose(
+            _np(lucid_td.log_prob(_t(y, device))),
+            _ref_np(ref_td.log_prob(rt(y))),
+            atol=1e-5,
         )

@@ -13,7 +13,12 @@ from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import _as_tensor, _clamp_probs, _lazy_param
+from lucid.distributions._util import (
+    _align_device,
+    _as_tensor,
+    _clamp_probs,
+    _lazy_param,
+)
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -160,6 +165,11 @@ class RelaxedBernoulli(Distribution):
             self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
+        # A temperature given as a number is a 0-dim host tensor; it follows
+        # the parameters to their device so the two can meet on Metal.
+        self.temperature = _align_device(
+            self.temperature, self.logits if self._is_logits else self.probs
+        )
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
 
     @_lazy_param
@@ -401,6 +411,11 @@ class RelaxedOneHotCategorical(Distribution):
             self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
+        # A temperature given as a number is a 0-dim host tensor; it follows
+        # the parameters to their device so the two can meet on Metal.
+        self.temperature = _align_device(
+            self.temperature, self.logits if self._is_logits else self.probs
+        )
         self._num_events = shape[-1]
         super().__init__(
             batch_shape=shape[:-1],

@@ -97,6 +97,34 @@ def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
     return a + z, b + z
 
 
+def _align_device(t: Tensor, ref: Tensor) -> Tensor:
+    """``t`` on ``ref``'s device when ``t`` is a 0-dim tensor living elsewhere.
+
+    A transform or a parameter given as a Python number is held as a 0-dim
+    host tensor (:func:`_as_tensor` cannot know the device the values will
+    arrive on), and combining it with a Metal tensor raised
+    ``DeviceMismatch``.  A 0-dim tensor is a scalar in every other sense,
+    so it follows the operand it meets — the allowance the reference
+    framework makes for 0-dim tensors.  Anything with a shape is left
+    alone: a real mismatch between two arrays still raises.
+
+    Parameters
+    ----------
+    t : Tensor
+        The tensor that may need to move.
+    ref : Tensor
+        The tensor whose device it should share.
+
+    Returns
+    -------
+    Tensor
+        ``t``, moved to ``ref.device`` if it is 0-dim and elsewhere.
+    """
+    if t.ndim == 0 and t.device != ref.device:
+        return t.to(ref.device.type)
+    return t
+
+
 def _xlogy(x: Tensor, y: Tensor) -> Tensor:
     r""":math:`x \log y`, taken as ``0`` wherever ``x == 0``.
 

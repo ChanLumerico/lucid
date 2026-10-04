@@ -16,7 +16,7 @@ from typing import final, override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import DTypeLike, DeviceLike
-from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _align_device, _as_tensor
 
 
 class Transform:
@@ -460,12 +460,14 @@ class AffineTransform(Transform):
     @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\text{loc} + \\text{scale} \\cdot x`."""
-        return self.loc + self.scale * x
+        # A ``loc`` / ``scale`` given as a number is a 0-dim host tensor; it
+        # follows ``x`` to its device.
+        return _align_device(self.loc, x) + _align_device(self.scale, x) * x
 
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = (y - \\text{loc}) / \\text{scale}`."""
-        return (y - self.loc) / self.scale
+        return (y - _align_device(self.loc, y)) / _align_device(self.scale, y)
 
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
@@ -488,7 +490,7 @@ class AffineTransform(Transform):
         Tensor
             ``log|scale|`` broadcast to ``x.shape``.
         """
-        return self.scale.abs().log() + lucid.zeros(
+        return _align_device(self.scale, x).abs().log() + lucid.zeros(
             tuple(x.shape), dtype=x.dtype, device=x.device
         )
 
@@ -544,12 +546,12 @@ class PowerTransform(Transform):
     @override
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = x^{\\text{exponent}}`."""
-        return x**self.exponent
+        return x ** _align_device(self.exponent, x)
 
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Inverse: :math:`x = y^{1/\\text{exponent}}`."""
-        return y ** (1.0 / self.exponent)
+        return y ** (1.0 / _align_device(self.exponent, y))
 
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
@@ -572,7 +574,8 @@ class PowerTransform(Transform):
         """
         # |dy/dx| = exponent · x^(exponent − 1) ⇒ log|dy/dx| =
         #   log|exponent| + (exponent − 1)·log(x).
-        return self.exponent.abs().log() + (self.exponent - 1.0) * x.log()
+        exponent = _align_device(self.exponent, x)
+        return exponent.abs().log() + (exponent - 1.0) * x.log()
 
 
 class SoftmaxTransform(Transform):

@@ -11,7 +11,7 @@ from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _align_device, _as_tensor
 from lucid.distributions._util import _broadcast_pair
 from lucid.distributions._util import _clamp_probs, _lazy_param, _xlogy
 from lucid.distributions.bernoulli import (
@@ -644,7 +644,9 @@ class Multinomial(Distribution):
         else:
             self._param = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
-        self._total_count: Tensor = _as_tensor(total_count)
+        # An ``int`` count becomes a 0-dim host tensor; it joins the
+        # probabilities on their device, or ``n · p`` cannot run on Metal.
+        self._total_count: Tensor = _align_device(_as_tensor(total_count), self._param)
         # batch_shape is everything but the last (category) dim.
         batch_shape: tuple[int, ...] = tuple(self._param.shape[:-1])
         event_shape: tuple[int, ...] = (int(self._param.shape[-1]),)
