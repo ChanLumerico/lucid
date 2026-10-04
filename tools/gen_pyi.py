@@ -1344,7 +1344,10 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
         "    def unsqueeze(self, dim: DimLike = None) -> Tensor: ...",
-        "    def gather(self, other: Tensor | _float, dim: DimLike = None) -> Tensor: ...",
+        # The reference order.  The runtime method still takes the old
+        # Lucid order (index, dim) with a deprecation warning; the stub
+        # names only the order that stays.
+        "    def gather(self, dim: _int, index: Tensor) -> Tensor: ...",
         "    def sort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
         "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
         "    def topk(self, k: _int, dim: _int = -1, largest: _bool = True) -> tuple[Tensor, Tensor]: ...",
@@ -2364,6 +2367,9 @@ def gen_init_pyi() -> tuple[str, int]:
             "split",
             "tensordot",
             "meshgrid",
+            # The adapter binds by type to keep the deprecated order
+            # working, so its runtime signature is open (*args, **kwargs).
+            "gather",
         }
     )
 
@@ -2401,6 +2407,7 @@ def gen_init_pyi() -> tuple[str, int]:
         "def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "def tensordot(a: Tensor, b: Tensor, dims: _int | list[list[_int]] = 2) -> Tensor: ...",
         "def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]: ...",
+        "def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor: ...",
     ]
 
     # ── Composite ops (lucid._ops.composite) ─────────────────────────────────

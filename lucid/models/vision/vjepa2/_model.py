@@ -61,7 +61,7 @@ def _gather_tokens(tokens: Tensor, indices: Tensor) -> Tensor:
     expanded = indices.unsqueeze(-1) + lucid.zeros(
         batch, count, width, dtype=indices.dtype, device=tokens.device
     )
-    return lucid.gather(tokens, expanded, dim=1)
+    return lucid.gather(tokens, 1, expanded)
 
 
 def _rotate_queries_or_keys(x: Tensor, positions: Tensor, base: float) -> Tensor:
@@ -671,8 +671,8 @@ class _RoPEVideoPredictor(nn.Module):
             dtype=order.dtype,
             device=hidden.device,
         )
-        hidden = lucid.gather(hidden, gather_order, dim=1)
-        sorted_masks = lucid.gather(masks, order, dim=1)
+        hidden = lucid.gather(hidden, 1, gather_order)
+        sorted_masks = lucid.gather(masks, 1, order)
         rows = self.grid_size
         for block in self.predictor_blocks:
             hidden = cast(
@@ -694,7 +694,7 @@ class _RoPEVideoPredictor(nn.Module):
             dtype=inverse.dtype,
             device=hidden.device,
         )
-        hidden = lucid.gather(hidden, inverse_gather, dim=1)
+        hidden = lucid.gather(hidden, 1, inverse_gather)
         if self.return_all_tokens:
             selected = hidden
         else:

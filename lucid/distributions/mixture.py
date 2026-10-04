@@ -227,7 +227,7 @@ class MixtureSameFamily(Distribution):
             )
             .contiguous()
         )
-        gathered: Tensor = lucid.gather(comp_samples, idx_b, ax)
+        gathered: Tensor = lucid.gather(comp_samples, ax, idx_b)
         return gathered.squeeze(ax)
 
     @override

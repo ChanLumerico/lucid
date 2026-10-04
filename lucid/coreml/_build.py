@@ -1075,7 +1075,7 @@ def _assign(rows: Tensor, table: Tensor, count: int) -> Tensor:
     step = count // 2
     while step >= 1:
         candidate = found + step
-        picked = lucid.gather(table, candidate, 1)
+        picked = lucid.gather(table, 1, candidate)
         found = lucid.where(picked < rows, candidate, found)
         step //= 2
     return found
@@ -1188,7 +1188,7 @@ def _palettes_for(rows: Tensor, count: int) -> Tensor:
         for index in range(count)
     ]
     centres = lucid.gather(
-        ordered, (lucid.zeros(groups, 1) + lucid.tensor(marks)).to(lucid.int64), 1
+        ordered, 1, (lucid.zeros(groups, 1) + lucid.tensor(marks)).to(lucid.int64)
     )
 
     ones = lucid.ones_like(sample)

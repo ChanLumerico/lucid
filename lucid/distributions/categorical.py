@@ -329,7 +329,7 @@ class Categorical(Distribution):
         common = _broadcast_shapes(tuple(value.shape), tuple(log_p.shape[:-1]))
         log_p_broadcast = log_p.broadcast_to(common + (num_categories,))
         index = value.to(lucid.int64).broadcast_to(common).unsqueeze(-1)
-        return lucid.gather(log_p_broadcast, index, dim=-1).squeeze(-1)
+        return lucid.gather(log_p_broadcast, -1, index).squeeze(-1)
 
     @override
     def entropy(self) -> Tensor:

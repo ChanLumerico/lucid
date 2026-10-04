@@ -22,9 +22,11 @@ adapters and live at the top of the module.
 """
 
 import math
+import operator
 from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
+from lucid._deprecation import warn_deprecated
 from lucid._dispatch import (
     _refuse_bool_subtraction,
     _scalar_dtype,
@@ -282,6 +284,78 @@ def _scatter_add_adapter(
     if idx_impl.dtype == _C_engine.I64:
         idx_impl = _C_engine.astype(idx_impl, _C_engine.I32)
     return _C_engine.scatter_add(x_impl, idx_impl, _unwrap(src), dim)
+
+
+#: ``gather`` took ``(input, indices, dim=-1)`` until 3.16.  The reference
+#: order ``(input, dim, index)`` replaced it; the old one still answers, and
+#: warns, until the release named here.
+_GATHER_OLD_ORDER = "the argument order gather(input, indices, dim)"
+_GATHER_SINCE = "3.16.0"
+_GATHER_REMOVAL = "3.18.0"
+
+
+def _gather_operands(
+    args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[int, Tensor]:
+    """``(dim, index)`` from whichever spelling of ``gather`` the caller used.
+
+    The reference order is ``gather(input, dim, index)``.  Lucid's was
+    ``gather(input, indices, dim=-1)`` and released code still calls it so,
+    which no single signature can bind alongside the reference one — the
+    argument after ``input`` decides instead.  An integer there is a
+    ``dim``: the reference order.  A tensor there, or the old keyword
+    ``indices=``, is the old order, which still answers and warns.
+    """
+    extra = sorted(set(kwargs) - {"dim", "index", "indices"})
+    if extra:
+        raise TypeError(f"gather() got an unexpected keyword argument {extra[0]!r}")
+    if len(args) > 2:
+        raise TypeError(
+            f"gather() takes 3 positional arguments but {len(args) + 1} were given"
+        )
+    old_order = "indices" in kwargs or (len(args) > 0 and hasattr(args[0], "_impl"))
+    if old_order and "index" in kwargs:
+        raise TypeError("gather() got multiple values for argument 'index'")
+
+    names = ("indices", "dim") if old_order else ("dim", "index")
+    bound: dict[str, object] = {"dim": -1} if old_order else {}
+    for name, value in zip(names, args):
+        if name in kwargs:
+            raise TypeError(f"gather() got multiple values for argument {name!r}")
+        bound[name] = value
+    bound.update(kwargs)
+    missing = [name for name in names if name not in bound]
+    if missing:
+        raise TypeError(f"gather() missing required argument {missing[0]!r}")
+
+    index = bound["indices" if old_order else "index"]
+    if not hasattr(index, "_impl"):
+        raise TypeError(f"gather(): index must be a Tensor, got {type(index).__name__}")
+    try:
+        dim = operator.index(bound["dim"])  # type: ignore[arg-type]  # refused below
+    except TypeError:
+        raise TypeError(
+            f"gather(): dim must be an int, got {type(bound['dim']).__name__}"
+        ) from None
+    if old_order:
+        warn_deprecated(
+            _GATHER_OLD_ORDER,
+            since=_GATHER_SINCE,
+            removal=_GATHER_REMOVAL,
+            alternative="gather(input, dim, index)",
+        )
+    return dim, cast("Tensor", index)
+
+
+def _gather_adapter(a_impl: _Impl, *args: object, **kwargs: object) -> _Impl:
+    """gather(input, dim, index), read by :func:`_gather_operands`.
+
+    The parameters stay open because the old order binds by type rather
+    than by name: a signature naming either order would turn the other
+    one's calls away before they got here.
+    """
+    dim, index = _gather_operands(args, kwargs)
+    return _C_engine.gather(a_impl, _unwrap(index), dim)
 
 
 # ── Composite indexing adapters ──────────────────────────────────────────────

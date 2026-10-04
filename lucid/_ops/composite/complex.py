@@ -201,13 +201,13 @@ def view_as_complex(input: Tensor) -> Tensor:
         )
     re = lucid.gather(
         input,
+        -1,
         lucid.zeros_like(input, dtype=lucid.int32)[..., :1],
-        dim=-1,
     ).squeeze(-1)
     im = lucid.gather(
         input,
+        -1,
         lucid.zeros_like(input, dtype=lucid.int32)[..., :1] + 1,
-        dim=-1,
     ).squeeze(-1)
     return lucid.complex(re, im)
 

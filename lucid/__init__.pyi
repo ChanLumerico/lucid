@@ -2019,52 +2019,6 @@ def pad(input: Tensor, padding: Sequence[_int], mode: str = ..., value: _float =
             [0, 3, 4, 0]])
     """
     ...
-def gather(input: Tensor, indices: Tensor, dim: DimLike = ...) -> Tensor:
-    r"""    Gather values along ``dim`` according to ``indices``.
-    
-    For each output position the value is read from ``input`` with
-    ``indices`` substituted for the ``dim``-th coordinate.  All other
-    coordinates are inherited from the output position itself — a
-    "row-wise" lookup.
-    
-    Parameters
-    ----------
-    input : Tensor
-        Source tensor.
-    indices : Tensor
-        Integer tensor whose shape matches ``input`` except possibly
-        along ``dim``.  Values must be in ``[0, input.size(dim))``.
-    dim : DimLike
-        Axis along which to gather.
-    
-    Returns
-    -------
-    Tensor
-        Tensor with the same shape as ``indices``.
-    
-    Notes
-    -----
-    Mathematically,
-    
-    .. math::
-    
-        \text{out}[i_0, \dots, i_d, \dots]
-        \;=\;
-        \text{input}[i_0, \dots, \text{indices}[i_0, \dots, i_d, \dots],
-                     \dots] .
-    
-    Inverse op is :func:`scatter`.
-    
-    Examples
-    --------
-    >>> import lucid
-    >>> x = lucid.tensor([[1, 2, 3], [4, 5, 6]])
-    >>> idx = lucid.tensor([[0, 2], [1, 1]])
-    >>> lucid.gather(x, idx, dim=1)
-    Tensor([[1, 3],
-            [5, 5]])
-    """
-    ...
 def sort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
     r"""    Sort ``input`` along ``dim`` and return the sorted values.
     
@@ -5541,6 +5495,56 @@ def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]:
     >>> gx, gy = lucid.meshgrid(x, y, indexing='ij')
     >>> gx.shape, gy.shape
     ((3, 2), (3, 2))
+    """
+    ...
+def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor:
+    r"""    Gather values along ``dim`` according to ``index``.
+    
+    For each output position the value is read from ``input`` with
+    ``index`` substituted for the ``dim``-th coordinate.  All other
+    coordinates are inherited from the output position itself — a
+    "row-wise" lookup.  ``Tensor.gather(dim, index)`` is the same op.
+    
+    Parameters
+    ----------
+    input : Tensor
+        Source tensor.
+    dim : int
+        Axis along which to gather.  Negative values count from the end.
+    index : Tensor
+        Integer tensor with as many dimensions as ``input``, no larger
+        than it along any axis but ``dim``.  Values must be in
+        ``[0, input.size(dim))``.
+    
+    Returns
+    -------
+    Tensor
+        Tensor with the same shape as ``index``.
+    
+    Notes
+    -----
+    Mathematically,
+    
+    .. math::
+    
+        \text{out}[i_0, \dots, i_d, \dots]
+        \;=\;
+        \text{input}[i_0, \dots, \text{index}[i_0, \dots, i_d, \dots],
+                     \dots] .
+    
+    Inverse op is :func:`scatter`.
+    
+    Deprecated since 3.16: the old Lucid order ``gather(input, indices,
+    dim=-1)`` (an index tensor second, or the keyword ``indices=``) still
+    answers, with a ``LucidDeprecationWarning``, until 3.18.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([[1, 2, 3], [4, 5, 6]])
+    >>> idx = lucid.tensor([[0, 2], [1, 1]])
+    >>> lucid.gather(x, 1, idx)
+    tensor([[1, 3], [5, 5]], dtype=lucid.int64)
     """
     ...
 

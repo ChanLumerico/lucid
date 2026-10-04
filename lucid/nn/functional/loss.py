@@ -389,13 +389,13 @@ def cross_entropy(
     # valid does.
     safe_target: Tensor = _lucid.clip(target_long, 0, num_classes - 1)
     target_unsq: Tensor = safe_target.unsqueeze(1)
-    gathered: Tensor = _lucid.gather(log_p, target_unsq, 1).squeeze(1)
+    gathered: Tensor = _lucid.gather(log_p, 1, target_unsq).squeeze(1)
     nll: Tensor = -gathered  # (N, ...)
 
     # ── weight (per-class) ──────────────────────────────────────────────
     sample_weight: Tensor | None = None
     if weight is not None:
-        sample_weight = _lucid.gather(weight, target_long, 0)
+        sample_weight = _lucid.gather(weight, 0, target_long)
         nll = nll * sample_weight
 
     # ── ignore_index mask ───────────────────────────────────────────────
@@ -504,12 +504,12 @@ def nll_loss(
     _validate_reduction(reduction)
     target_long: Tensor = target.to(dtype=_lucid.int32)
     target_unsq: Tensor = target_long.unsqueeze(1)
-    gathered: Tensor = _lucid.gather(x, target_unsq, 1).squeeze(1)
+    gathered: Tensor = _lucid.gather(x, 1, target_unsq).squeeze(1)
     nll: Tensor = -gathered
 
     sample_weight: Tensor | None = None
     if weight is not None:
-        sample_weight = _lucid.gather(weight, target_long, 0)
+        sample_weight = _lucid.gather(weight, 0, target_long)
         nll = nll * sample_weight
 
     keep_mask_f: Tensor | None = None

@@ -816,7 +816,7 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
         indices_1d, dtype=_lucid.int32, device=x.device
     ).reshape(target_shape)
     idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()
-    return _lucid.gather(x, idx, dim)
+    return _lucid.gather(x, dim, idx)
 
 
 def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
@@ -1443,4 +1443,4 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     pairs = _lucid.triu_indices(n, n, offset=1, device=x.device)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
-    return _lucid.gather(flat, flat_idx, dim=0)
+    return _lucid.gather(flat, 0, flat_idx)

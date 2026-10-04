@@ -834,7 +834,7 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     >>> lucid.take_along_dim(x, idx, dim=1)
     tensor([[3., 1.], [5., 6.]])
     """
-    return lucid.gather(x, indices, dim)
+    return lucid.gather(x, dim, indices)
 
 
 def tril_indices(

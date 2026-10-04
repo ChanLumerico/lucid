@@ -580,7 +580,7 @@ class LSTM(Module):
         idx: Tensor = (
             rev_1d.reshape(target_shape).broadcast_to(tuple(bcast_shape)).contiguous()
         )
-        return _lucid.gather(x, idx, 0)
+        return _lucid.gather(x, 0, idx)
 
     def _run_direction(
         self,

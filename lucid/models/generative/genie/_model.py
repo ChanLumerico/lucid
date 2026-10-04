@@ -1097,7 +1097,7 @@ class GenieForWorldModeling(WorldModelingModel):
             # distribution more than a flat one, so ranking by it compares
             # positions on a scale that depends on how sure they are.
             belief = F.softmax(logits, dim=-1)
-            confidence = lucid.gather(belief, sampled.unsqueeze(-1), dim=-1).squeeze(-1)
+            confidence = lucid.gather(belief, -1, sampled.unsqueeze(-1)).squeeze(-1)
             # A revealed token scores below any probability, so it is never
             # chosen again; the threshold is the reveal-th best score.
             score = confidence * masked - (1.0 - masked)

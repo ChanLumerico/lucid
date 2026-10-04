@@ -231,7 +231,7 @@ def _top_p_filter(logits: Tensor, p: float) -> Tensor:
     masked = lucid.where(keep, sorted_vals, lucid.full_like(sorted_vals, -1e9))
     # Undo the sort: gather by the inverse permutation back to token order.
     inverse = lucid.argsort(sorted_idx, dim=-1)
-    return lucid.gather(masked, inverse, dim=-1)
+    return lucid.gather(masked, -1, inverse)
 
 
 def _multinomial_one(probs: Tensor, *, device: str) -> Tensor:

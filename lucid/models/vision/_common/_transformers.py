@@ -82,7 +82,7 @@ def gather_tokens(tokens: Tensor, indices: Tensor) -> Tensor:
     spread = indices.unsqueeze(dim=-1) + lucid.zeros(
         int(indices.shape[0]), int(indices.shape[1]), width, dtype=indices.dtype
     )
-    return lucid.gather(tokens, spread, dim=1)
+    return lucid.gather(tokens, 1, spread)
 
 
 class Attention(nn.Module):

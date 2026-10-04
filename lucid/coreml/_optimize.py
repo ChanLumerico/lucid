@@ -85,7 +85,7 @@ class _Palette:
     def apply(self, weight: Tensor) -> Tensor:
         rows = weight.to(lucid.float32).reshape(self.groups, -1)
         keys = _assign(rows, _edge_table(self.centres), self.count)
-        picked = lucid.gather(self.centres, keys, 1)
+        picked = lucid.gather(self.centres, 1, keys)
         return picked.reshape(*[int(d) for d in weight.shape]).to(weight.dtype)
 
 

@@ -244,8 +244,11 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["padding", "mode", "value"]),
 
     # ── index / gather ─────────────────────────────────────────────────────
-    OpEntry("gather",    _R.gather,    2, method_name="gather",    free_fn_name="gather",
-            extra_kwargs=["dim"]),
+    # gather(input, dim, index), the reference order.  The engine takes
+    # (a, indices, dim); the adapter reorders, and still answers the old
+    # Lucid order gather(input, indices, dim=-1) with a deprecation warning.
+    OpEntry("gather",    A._gather_adapter, 1, method_name="gather", free_fn_name="gather",
+            extra_kwargs=["dim", "index"]),
     OpEntry("sort",      A._sort_adapter,    1, method_name="sort",      free_fn_name="sort",
             extra_kwargs=["dim", "descending"]),
     OpEntry("argsort",   A._argsort_adapter, 1, method_name="argsort",   free_fn_name="argsort",
