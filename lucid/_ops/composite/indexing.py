@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, final, override
 
 import lucid
 from lucid._dispatch import _unwrap, _wrap
+from lucid._dtype import iinfo
 import lucid._C.engine as _C_engine
 from lucid.autograd.function import Function, FunctionCtx
 
@@ -320,6 +321,55 @@ def index_copy(
     return _wrap(_C_engine.scatter_set(_unwrap(input), idx_bc, _unwrap(source), dim))
 
 
+def _scatter_into(
+    base: Tensor, dim: int, index: Tensor, src: Tensor, reduce: str
+) -> Tensor:
+    """``src`` reduced into ``base`` by ``reduce`` — a ``'mean'`` as its sum."""
+    if reduce in ("sum", "mean"):
+        return base.scatter_add(dim, index, src)
+    # Coerce index to int32 (engine scatter kernels require int32).
+    idx_impl = _unwrap(index)
+    idx_i32 = _wrap(_to_i32(idx_impl))
+
+    _fn = {
+        "amax": _C_engine.scatter_amax,
+        "amin": _C_engine.scatter_amin,
+        "prod": _C_engine.scatter_prod,
+    }[reduce]
+    return _wrap(_fn(_unwrap(base), _unwrap(idx_i32), _unwrap(src), dim))
+
+
+def _divide(total: Tensor, count: Tensor) -> Tensor:
+    """``total / count`` in ``total``'s dtype, floored for an integer dtype."""
+    if total.is_floating_point():
+        return total / count
+    # ``//`` widens int32 to int64.
+    return (total // count).to(total.dtype)
+
+
+def _scatter_count(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
+    """How many ``src`` entries ``index`` sends to each position of ``input``."""
+    return lucid.zeros_like(input).scatter_add(dim, index, lucid.ones_like(src))
+
+
+def _reduce_identity(reduce: str, input: Tensor) -> float:
+    """The value a ``reduce`` leaves unchanged, within ``input``'s dtype.
+
+    What an ``include_self=False`` reduction starts from, so a position
+    ``src`` reaches comes out as the reduction of those entries alone.
+    An integer dtype holds no infinity, so ``amax`` / ``amin`` start from
+    its bounds.
+    """
+    if reduce in ("sum", "mean"):
+        return 0.0
+    if reduce == "prod":
+        return 1.0
+    if input.is_floating_point():
+        return float("-inf") if reduce == "amax" else float("inf")
+    info = iinfo(input.dtype)
+    return info.min if reduce == "amax" else info.max
+
+
 def scatter_reduce(
     input: Tensor,
     dim: int,
@@ -335,6 +385,17 @@ def scatter_reduce(
     how they combine.  ``include_self`` controls whether the existing
     value in ``input`` participates in the reduction or is replaced.
 
+    Every reduction treats a position no ``index`` entry names the same
+    way: it keeps ``input``'s value, and the gradient reaches ``input``
+    there.  With ``include_self=False`` a position ``index`` does name
+    takes nothing from ``input`` — neither its value nor a gradient.
+    For ``'amax'`` / ``'amin'`` the gradient of a position splits evenly
+    among the values tied for its result; with ``include_self=False``
+    ``input``'s value is not among them even when it equals the result,
+    so the shares still add up to the incoming gradient.  This differs
+    from the reference framework, which counts that value as a tie and
+    then drops its share.
+
     Parameters
     ----------
     input : Tensor
@@ -346,74 +407,59 @@ def scatter_reduce(
         the position along ``dim`` of ``input`` to update.
     src : Tensor
         Values to scatter into ``input`` at the positions named by
-        ``index``.
+        ``index``.  Cast to ``input``'s dtype first.
     reduce : str, optional
         Reduction op applied when multiple ``src`` values collide on
         the same target.  One of ``'sum'`` (default), ``'mean'``,
-        ``'prod'``, ``'amax'``, ``'amin'``.
+        ``'prod'``, ``'amax'``, ``'amin'``.  ``'mean'`` divides by the
+        number of values reduced — the scattered ones, plus ``input``'s
+        own when ``include_self`` — and floors on an integer dtype.
     include_self : bool, optional
         When ``True`` (default) the existing value in ``input`` is part
-        of the reduction set; when ``False`` it is overwritten and only
-        the scattered values count.
+        of the reduction set; when ``False`` it is overwritten at every
+        position ``index`` names and only the scattered values count.
 
     Returns
     -------
     Tensor
         Same shape and dtype as ``input``.
+
+    Raises
+    ------
+    ValueError
+        If ``reduce`` is not one of the five reductions.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([[1.0, 2.0, 3.0, 4.0]])
+    >>> index = lucid.tensor([[0, 0, 1]])
+    >>> src = lucid.tensor([[10.0, 20.0, 30.0]])
+    >>> lucid.scatter_reduce(x, 1, index, src, "sum", include_self=False)
+    tensor([[30., 30., 3., 4.]])
+    >>> lucid.scatter_reduce(x, 1, index, src, "mean")
+    tensor([[10.33, 16., 3., 4.]])
     """
-    if reduce == "sum":
-        base = input if include_self else lucid.zeros_like(input)
-        return base.scatter_add(dim, index, src)
-
-    elif reduce == "mean":
-        ones = lucid.ones_like(src)
-        count = lucid.zeros_like(input).scatter_add(dim, index, ones)
-        base = input if include_self else lucid.zeros_like(input)
-        total = base.scatter_add(dim, index, src)
-        denom = count + (1.0 if include_self else 0.0)
-        safe_denom = lucid.where(denom > 0.0, denom, lucid.ones_like(denom))
-        default = input if include_self else lucid.zeros_like(input)
-        return lucid.where(denom > 0.0, total / safe_denom, default)
-
-    elif reduce in ("amax", "amin", "prod"):
-        _NEUTRAL = {
-            "amax": float("-inf"),
-            "amin": float("inf"),
-            "prod": 1.0,
-        }
-        base = input if include_self else lucid.full_like(input, _NEUTRAL[reduce])
-
-        # Coerce index to int32 (engine scatter kernels require int32).
-        idx_impl = _unwrap(index)
-        idx_i32 = _wrap(_to_i32(idx_impl))
-
-        base_impl = _unwrap(base)
-        idx_impl_i32 = _unwrap(idx_i32)
-        src_impl = _unwrap(src)
-
-        _fn = {
-            "amax": _C_engine.scatter_amax,
-            "amin": _C_engine.scatter_amin,
-            "prod": _C_engine.scatter_prod,
-        }[reduce]
-
-        from lucid._tensor.tensor import Tensor as _Tensor
-
-        out_impl = _fn(base_impl, idx_impl_i32, src_impl, dim)
-        out = _Tensor.__new_from_impl__(out_impl)
-
-        if not include_self:
-            ones = lucid.ones_like(src)
-            count = lucid.zeros_like(input).scatter_add(dim, idx_i32, ones)
-            out = lucid.where(count > 0.0, out, input)
-
-        return out
-
-    else:
+    if reduce not in ("sum", "mean", "prod", "amax", "amin"):
         raise ValueError(
             f"scatter_reduce: unknown reduce={reduce!r}; "
             "expected 'sum', 'mean', 'prod', 'amax', or 'amin'."
         )
+    src = _like_input(src, input)
+    if include_self:
+        out = _scatter_into(input, dim, index, src, reduce)
+        if reduce != "mean":
+            return out
+    else:
+        identity = lucid.full_like(input, _reduce_identity(reduce, input))
+        out = _scatter_into(identity, dim, index, src, reduce)
+    count = _scatter_count(input, dim, index, src)
+    if reduce == "mean":
+        # A position no index names divides by 1 rather than 0: it is
+        # replaced by ``input`` below, and 0 / 0 there would turn its
+        # masked-off gradient into NaN.
+        out = _divide(out, count + 1 if include_self else count.clamp(min=1))
+    return out if include_self else lucid.where(count > 0, out, input)
 
 
 def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor:

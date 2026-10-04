@@ -1979,7 +1979,6 @@
    },
    "RET505": {
     "lucid/_ops/composite/elementwise.py": 1,
-    "lucid/_ops/composite/indexing.py": 1,
     "lucid/_ops/composite/statistics.py": 3,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/_methods.py": 2,
