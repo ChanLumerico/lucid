@@ -617,6 +617,11 @@ class Multinomial(Distribution):
     True
     """
 
+    # Looser than the reference, kept for now: the parameter is held in a
+    # private ``_param``, so validation never reaches ``probs`` or
+    # ``logits``, and the support is element-wise whole counts rather than
+    # a vector summing to at most ``total_count``.  Listed in the
+    # constraint-parity test's exceptions.
     arg_constraints = {
         "total_count": nonnegative_integer,
         "probs": unit_interval,

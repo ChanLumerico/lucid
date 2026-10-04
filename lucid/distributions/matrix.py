@@ -110,6 +110,11 @@ class Wishart(Distribution):
     (4, 2, 2)
     """
 
+    # Looser than the reference on purpose, like ``MultivariateNormal``:
+    # the scale matrix is not in the table.  ``covariance_matrix`` and
+    # ``precision_matrix`` fail their Cholesky factorisation when not
+    # positive-definite; a ``scale_tril`` is taken as given.  Listed in the
+    # constraint-parity test's exceptions.
     arg_constraints = {"df": positive}
     has_rsample: bool = False
 

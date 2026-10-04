@@ -132,6 +132,11 @@ class MultivariateNormal(Distribution):
     tensor(-1.838)
     """
 
+    # Looser than the reference on purpose: only ``loc`` is in the table.
+    # The scale is factorised at construction, so a covariance or
+    # precision matrix that is not positive-definite fails in Cholesky
+    # rather than in validation; a ``scale_tril`` is taken as given.
+    # Listed in the constraint-parity test's exceptions.
     arg_constraints = {"loc": real}
     support: Constraint | None = real
     has_rsample = True
