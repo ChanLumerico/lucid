@@ -207,11 +207,16 @@ private:
 // Math
 // ----
 // $$
-//   G_{t+1} = G_t + g_t^2
+//   G_t = G_{t-1} + g_t^2
 // $$
 // $$
-//   \theta_{t+1} = \theta_t - \eta \cdot \frac{g_t}{\sqrt{G_{t+1}} + \epsilon}
+//   \eta_t = \frac{\eta}{1 + (t - 1)\,\lambda}
 // $$
+// $$
+//   \theta_t = \theta_{t-1} - \eta_t \cdot \frac{g_t}{\sqrt{G_t} + \epsilon}
+// $$
+// where $t$ is the slot's own step count (1 on its first update) and
+// $\lambda$ is ``lr_decay``.
 //
 // Parameters
 // ----------
@@ -219,13 +224,15 @@ private:
 //     Parameters to optimise.
 // lr : float, default 1e-2
 //     Base step size $\eta$.
-// eps : float, default 1e-10
-//     Numerical stabiliser inside the square root.
+// lr_decay : float, default 0.0
+//     Per-step decay $\lambda$ of the effective step size.
 // weight_decay : float, default 0.0
 //     L2 penalty coefficient.
 // initial_accumulator_value : float, default 0.0
 //     Constant used to seed ``sum_sq_grad_``.  A non-zero value avoids
 //     dividing by a near-zero accumulator on the very first step.
+// eps : float, default 1e-10
+//     Added to $\sqrt{G_t}$ (outside the square root).
 //
 // Attributes
 // ----------
@@ -235,7 +242,7 @@ private:
 // Notes
 // -----
 // Because the accumulator never decays, the effective per-parameter
-// learning rate $\eta / \sqrt{G_t + \epsilon}$ is **non-increasing** —
+// learning rate $\eta_t / (\sqrt{G_t} + \epsilon)$ is **non-increasing** —
 // once a coordinate has seen large gradients its step shrinks for the
 // rest of training.  This is precisely what makes Adagrad strong on
 // sparse problems and weak on long dense-network runs.
@@ -259,17 +266,27 @@ public:
     //     Parameters to optimise.
     // lr : float, default 1e-2
     //     Base step size $\eta$.
-    // eps : float, default 1e-10
-    //     Numerical stabiliser.
+    // lr_decay : float, default 0.0
+    //     Per-step decay of the effective step size.
     // weight_decay : float, default 0.0
     //     L2 penalty coefficient.
     // initial_accumulator_value : float, default 0.0
     //     Seed value for ``sum_sq_grad_``.
+    // eps : float, default 1e-10
+    //     Numerical stabiliser.
+    //
+    // Notes
+    // -----
+    // The order is the reference framework's, not that of the Python
+    // wrapper (which keeps ``eps`` before ``initial_accumulator_value``
+    // for its released signature) — the wrapper passes every argument by
+    // keyword.
     Adagrad(std::vector<std::shared_ptr<TensorImpl>> params,
             double lr = 1e-2,
-            double eps = 1e-10,
+            double lr_decay = 0.0,
             double weight_decay = 0.0,
-            double initial_accumulator_value = 0.0);
+            double initial_accumulator_value = 0.0,
+            double eps = 1e-10);
 
     // Set the active learning rate.
     //
@@ -327,7 +344,8 @@ protected:
     // Notes
     // -----
     // Accumulates $g^2$ into ``sum_sq_grad_[i]`` then applies
-    // $p \mathrel{-}= \eta \cdot g / (\sqrt{G} + \epsilon)$.
+    // $p \mathrel{-}= \eta_t \cdot g / (\sqrt{G} + \epsilon)$ with the
+    // decayed step size $\eta_t = \eta / (1 + (t - 1)\lambda)$.
     void update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& g) override;
 
     // Allocate the squared-gradient accumulator for parameter ``i``.
@@ -346,7 +364,7 @@ protected:
     void init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) override;
 
 private:
-    double lr_, eps_, weight_decay_, initial_accumulator_value_;
+    double lr_, lr_decay_, weight_decay_, initial_accumulator_value_, eps_;
     // Per-parameter cumulative sum of squared gradients.
     std::vector<Storage> sum_sq_grad_;
 };

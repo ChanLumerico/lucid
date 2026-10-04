@@ -7,7 +7,8 @@
 
 #include "SGD.h"
 
-#include <cstring>
+#include <algorithm>
+#include <cmath>
 #include <variant>
 
 #include <mlx/ops.h>
@@ -242,133 +243,141 @@ void SGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
 
 ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
            double lr,
-           double mom,
-           double wd,
+           double lambd,
            double alpha,
            double t0,
-           double lambd)
-    : Optimizer(std::move(p)),
-      lr_(lr),
-      momentum_(mom),
-      weight_decay_(wd),
-      alpha_(alpha),
-      t0_(t0),
-      lambd_(lambd) {
+           double wd)
+    : Optimizer(std::move(p)), lr_(lr), lambd_(lambd), alpha_(alpha), t0_(t0), weight_decay_(wd) {
     if (lr_ < 0.0)
         ErrorBuilder("ASGD").invalid_argument("lr must be >= 0");
 }
 
-// Initialize velocity and running-average buffers for this slot.
-// The running average ax_ is seeded with a copy of the current
-// parameter value so the average starts from a meaningful point.
+// ax starts at zero — the first update has mu = 1 and copies the
+// parameter in — eta at the current learning rate, mu at one.
 void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
-    if (moment_.size() < params_.size())
-        moment_.resize(params_.size());
     if (ax_.size() < params_.size())
         ax_.resize(params_.size());
-    if (momentum_ != 0.0) {
-        moment_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
-    }
-
+    if (eta_.size() < params_.size())
+        eta_.resize(params_.size(), 0.0);
+    if (mu_.size() < params_.size())
+        mu_.resize(params_.size(), 1.0);
     ax_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
-    if (p->device() == Device::GPU) {
-        const auto& gp = gpu_get(p->storage());
-        gpu_replace(gpu_get(ax_[i]), ::mlx::core::copy(*gp.arr), p->dtype());
-    } else {
-        const auto& pc = storage_cpu(p->mutable_storage());
-        auto& ac = storage_cpu(ax_[i]);
-        std::memcpy(ac.ptr.get(), pc.ptr.get(), pc.nbytes);
-    }
+    eta_[i] = round_to_state_scalar(lr_, p->dtype());
+    mu_[i] = 1.0;
 }
 
-// Apply one ASGD step: standard SGD update followed by a running
-// average update of ax_ once the step counter reaches t0_.
+// One ASGD step with the slot's current eta and mu:
+//   p  = p * (1 - lambd * eta) - eta * g      (g carries the weight decay)
+//   ax = p                     when mu == 1   (before averaging starts)
+//   ax = ax + (p - ax) * mu    otherwise
+// then eta and mu advance for the slot's next step.  The decay and the
+// step are two roundings, as the reference framework's two in-place ops
+// are, and the averaging is too.
 void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    const std::int64_t step = steps_[i];
     const auto dt = p->dtype();
+    const double eta = eta_[i];
+    const double mu = mu_[i];
+    // mu is exactly 1 until averaging starts, and the average is then the
+    // parameter itself.
+    const bool track = (mu == 1.0);
     if (p->device() == Device::GPU) {
         auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
+        auto& ag = gpu_get(ax_[i]);
         ::mlx::core::array g = *gg.arr;
         if (weight_decay_ != 0.0) {
             g = ::mlx::core::add(g, ::mlx::core::multiply(mlx_scalar(weight_decay_, dt), *pg.arr));
         }
-        if (momentum_ != 0.0) {
-            auto& mg = gpu_get(moment_[i]);
-            auto new_m =
-                ::mlx::core::add(::mlx::core::multiply(mlx_scalar(momentum_, dt), *mg.arr), g);
-            gpu_replace(mg, ::mlx::core::array(new_m), dt);
-            g = new_m;
-        }
-        auto new_p = ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), g));
+        auto decayed = ::mlx::core::multiply(*pg.arr, mlx_scalar(1.0 - lambd_ * eta, dt));
+        auto new_p = ::mlx::core::add(decayed, ::mlx::core::multiply(mlx_scalar(-eta, dt), g));
+        ::mlx::core::array new_ax =
+            track ? ::mlx::core::copy(new_p)
+                  : ::mlx::core::add(*ag.arr,
+                                     ::mlx::core::multiply(::mlx::core::subtract(new_p, *ag.arr),
+                                                           mlx_scalar(mu, dt)));
+        gpu_replace(ag, std::move(new_ax), dt);
         gpu_replace(pg, std::move(new_p), dt);
-
-        if (step >= static_cast<std::int64_t>(t0_)) {
-            // Exponentially decaying coefficient for the running average.
-            const double coef = 1.0 / (alpha_ * step + 1.0);
-            auto& ag = gpu_get(ax_[i]);
-
-            auto new_ax = ::mlx::core::subtract(
-                ::mlx::core::add(::mlx::core::multiply(mlx_scalar(1.0 - coef, dt), *ag.arr),
-                                 ::mlx::core::multiply(mlx_scalar(coef, dt), *pg.arr)),
-                ::mlx::core::multiply(mlx_scalar(lambd_, dt), *ag.arr));
-            gpu_replace(ag, std::move(new_ax), dt);
-        }
-        gpu_get(p->mutable_storage()).bump_version();
-        return;
+        pg.bump_version();
+    } else {
+        const std::size_t n = cpu_numel(*p);
+        auto& p_cpu = storage_cpu(p->mutable_storage());
+        auto step_cpu = [&](auto* P, const auto* G) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            T* A = cpu_ptr<T>(ax_[i]);
+            const T wdT = static_cast<T>(weight_decay_);
+            const T decay = static_cast<T>(1.0 - lambd_ * eta);
+            const T neg_eta = static_cast<T>(-eta);
+            const T muT = static_cast<T>(mu);
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                // Separate statements keep the decay and the step from
+                // being contracted into one rounding.
+                const T decayed = P[k] * decay;
+                P[k] = decayed + neg_eta * g;
+                if (track) {
+                    A[k] = P[k];
+                } else {
+                    const T pull = (P[k] - A[k]) * muT;
+                    A[k] += pull;
+                }
+            }
+        };
+        if (dt == Dtype::F32)
+            step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
+        else if (dt == Dtype::F64)
+            step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
+        else
+            ErrorBuilder("ASGD").not_implemented("dtype not supported");
+        p_cpu.bump_version();
     }
-    const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* M = (momentum_ != 0.0) ? cpu_ptr<T>(moment_[i]) : nullptr;
-        T* A = cpu_ptr<T>(ax_[i]);
-        const T lrT = static_cast<T>(lr_);
-        const T mT = static_cast<T>(momentum_);
-        const T wdT = static_cast<T>(weight_decay_);
-        const T coefT = static_cast<T>(1.0 / (alpha_ * step + 1.0));
-        const T lambdT = static_cast<T>(lambd_);
-        const bool do_avg = step >= static_cast<std::int64_t>(t0_);
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            if (M) {
-                M[k] = mT * M[k] + g;
-                g = M[k];
-            }
-            P[k] -= lrT * g;
-            if (do_avg) {
-                A[k] = (T{1} - coefT) * A[k] + coefT * P[k] - lambdT * A[k];
-            }
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("ASGD").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+
+    // Advance the schedule with the slot's own step count and the current
+    // learning rate.  Both are held at their checkpoint precision.
+    const double t = static_cast<double>(steps_[i]);
+    eta_[i] = round_to_state_scalar(lr_ / std::pow(1.0 + lambd_ * lr_ * t, alpha_), dt);
+    mu_[i] = round_to_state_scalar(1.0 / std::max(1.0, t - t0_), dt);
 }
 
 std::vector<Optimizer::NamedBuffers> ASGD::state_buffers() const {
+    std::vector<std::shared_ptr<TensorImpl>> eta(params_.size());
+    std::vector<std::shared_ptr<TensorImpl>> mu(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (!slot_has_state(i) || i >= eta_.size() || i >= mu_.size())
+            continue;
+        const Dtype sdt = state_scalar_dtype(params_[i]->dtype());
+        eta[i] = make_state_scalar(eta_[i], sdt);
+        mu[i] = make_state_scalar(mu_[i], sdt);
+    }
     std::vector<NamedBuffers> out;
     out.emplace_back("step", clone_step_slots());
+    out.emplace_back("eta", std::move(eta));
+    out.emplace_back("mu", std::move(mu));
     out.emplace_back("ax", clone_state_slots(ax_));
-    if (momentum_ != 0.0)
-        out.emplace_back("momentum_buffer", clone_state_slots(moment_));
     return out;
 }
 
 void ASGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    // eta and mu are one number per parameter, read wherever they live.
+    auto load_scalars = [this](std::vector<double>& dst,
+                               const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+        for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+            if (!saved[i] || !params_[i])
+                continue;
+            ensure_state_slot(i);
+            dst[i] = round_to_state_scalar(read_state_scalar(*saved[i]), params_[i]->dtype());
+        }
+    };
     for (const auto& [name, tensors] : bufs) {
         if (name == "step")
             load_step_slots(tensors);
+        else if (name == "eta")
+            load_scalars(eta_, tensors);
+        else if (name == "mu")
+            load_scalars(mu_, tensors);
         else if (name == "ax")
             load_state_slots(ax_, tensors);
-        else if (name == "momentum_buffer" && momentum_ != 0.0)
-            load_state_slots(moment_, tensors);
     }
 }
 

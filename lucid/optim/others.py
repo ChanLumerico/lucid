@@ -24,13 +24,21 @@ class RMSprop(Optimizer):
         \theta_t &= \theta_{t-1}
             - \frac{\eta}{\sqrt{v_t} + \epsilon} \, g_t
 
+    With ``centered=True`` a running mean of the gradient :math:`\bar g`
+    is kept as well, and the denominator uses the estimated variance in
+    place of the raw second moment:
+
+    .. math::
+
+        \bar g_t &= \alpha \, \bar g_{t-1} + (1 - \alpha) \, g_t \\
+        \tilde v_t &= v_t - \bar g_t^2
+
     With momentum an additional velocity buffer :math:`b` is maintained:
 
     .. math::
 
-        b_t &= \mu \, b_{t-1}
-            + \frac{\eta}{\sqrt{v_t} + \epsilon} \, g_t \\
-        \theta_t &= \theta_{t-1} - b_t
+        b_t &= \mu \, b_{t-1} + \frac{g_t}{\sqrt{v_t} + \epsilon} \\
+        \theta_t &= \theta_{t-1} - \eta \, b_t
 
     Parameters
     ----------
@@ -106,11 +114,12 @@ class RMSprop(Optimizer):
         self._engines.append(
             _C_engine.RMSprop(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("alpha", 0.99)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 0.0)),
-                cast(float, group.get("momentum", 0.0)),
+                lr=cast(float, group["lr"]),
+                alpha=cast(float, group.get("alpha", 0.99)),
+                eps=cast(float, group.get("eps", 1e-8)),
+                weight_decay=cast(float, group.get("weight_decay", 0.0)),
+                momentum=cast(float, group.get("momentum", 0.0)),
+                centered=bool(group.get("centered", False)),
             )
         )
 
@@ -158,12 +167,14 @@ class Adagrad(Optimizer):
     eps : float, optional
         Term :math:`\epsilon` added to the denominator for numerical
         stability (default: ``1e-10``).
+    initial_accumulator_value : float, optional
+        Value every entry of :math:`G` starts from (default: ``0``).
 
     Attributes
     ----------
     param_groups : list of dict
         Parameter groups with keys ``"params"``, ``"lr"``, ``"lr_decay"``,
-        ``"weight_decay"``, and ``"eps"``.
+        ``"weight_decay"``, ``"eps"``, and ``"initial_accumulator_value"``.
     defaults : dict
         Default hyperparameter values.
 
@@ -175,6 +186,10 @@ class Adagrad(Optimizer):
     accumulated squared-gradient sum :math:`G_t` only grows, so the
     effective learning rate can become vanishingly small over long training
     runs.
+
+    The fifth and sixth positional slots are ``eps`` then
+    ``initial_accumulator_value`` — the reverse of the reference
+    framework's order — so pass both by keyword.
 
     Examples
     --------
@@ -197,22 +212,32 @@ class Adagrad(Optimizer):
         lr_decay: float = 0,
         weight_decay: float = 0,
         eps: float = 1e-10,
+        initial_accumulator_value: float = 0,
     ) -> None:
         """Initialise the Adagrad.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
-            lr=lr, lr_decay=lr_decay, weight_decay=weight_decay, eps=eps
+            lr=lr,
+            lr_decay=lr_decay,
+            weight_decay=weight_decay,
+            eps=eps,
+            initial_accumulator_value=initial_accumulator_value,
         )
         super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
+        # By keyword: the engine takes the reference framework's order,
+        # which this wrapper's released signature does not.
         self._engines.append(
             _C_engine.Adagrad(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("lr_decay", 0.0)),
-                cast(float, group.get("weight_decay", 0.0)),
-                cast(float, group.get("eps", 1e-10)),
+                lr=cast(float, group["lr"]),
+                lr_decay=cast(float, group.get("lr_decay", 0.0)),
+                weight_decay=cast(float, group.get("weight_decay", 0.0)),
+                initial_accumulator_value=cast(
+                    float, group.get("initial_accumulator_value", 0.0)
+                ),
+                eps=cast(float, group.get("eps", 1e-10)),
             )
         )
 
@@ -641,25 +666,36 @@ class ASGD(Optimizer):
     The averaging improves convergence in the presence of noise and is
     particularly effective near the end of training.
 
-    The SGD update with L2 regularisation is:
+    Each step decays the parameter and takes an SGD step with the current
+    step size :math:`\eta_t` (:math:`g_t` includes any ``weight_decay``
+    term):
 
     .. math::
 
-        \theta_t = \theta_{t-1}
-            - \eta_t \bigl(g_t + \lambda \, \theta_{t-1}\bigr)
+        \theta_t = \theta_{t-1} \bigl(1 - \lambda \, \eta_t\bigr)
+            - \eta_t \, g_t
 
-    where the effective learning rate decays as:
-
-    .. math::
-
-        \eta_t = \frac{\eta_0}{(1 + \lambda \, \eta_0 \, t)^\alpha}
-
-    The Polyak–Ruppert average is then:
+    then folds the result into the running average ``ax`` with weight
+    :math:`\mu_t` (``ax`` simply copies :math:`\theta_t` while
+    :math:`\mu_t = 1`):
 
     .. math::
 
-        \bar{\theta}_t = \frac{1}{t - t_0} \sum_{k=t_0}^{t} \theta_k
-        \quad \text{for } t \ge t_0
+        \bar{\theta}_t = \bar{\theta}_{t-1}
+            + \mu_t \bigl(\theta_t - \bar{\theta}_{t-1}\bigr)
+
+    and sets the step size and weight for the next step, starting from
+    :math:`\eta_1 = \eta_0` and :math:`\mu_1 = 1`:
+
+    .. math::
+
+        \eta_{t+1} = \frac{\eta_0}{(1 + \lambda \, \eta_0 \, t)^\alpha},
+        \qquad
+        \mu_{t+1} = \frac{1}{\max(1, \; t - t_0)}
+
+    Until :math:`t_0` the average therefore tracks the parameter; after it,
+    the average is the mean of the iterates since :math:`t_0`.  The state
+    of each parameter is ``step``, ``eta``, ``mu`` and ``ax``.
 
     Parameters
     ----------
@@ -722,22 +758,15 @@ class ASGD(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        # The C++ ``ASGD`` pybind signature is
-        # ``(params, lr, momentum, weight_decay, alpha, t0, lambd)``
-        # (see ``lucid/_C/bindings/bind_optim.cpp``).  The previous
-        # call passed args in ``(lr, lambd, alpha, t0, weight_decay)``
-        # order which left ``momentum=lambd``, ``weight_decay=alpha``,
-        # ``alpha=t0``, ``t0=weight_decay`` — none of which match the
-        # documented spec.  Pass keyword args so the order can't drift.
+        # Keyword arguments, so the order cannot drift from the engine's.
         self._engines.append(
             _C_engine.ASGD(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
                 lr=cast(float, group["lr"]),
-                momentum=0.0,
-                weight_decay=cast(float, group.get("weight_decay", 0.0)),
+                lambd=cast(float, group.get("lambd", 1e-4)),
                 alpha=cast(float, group.get("alpha", 0.75)),
                 t0=cast(float, group.get("t0", 1e6)),
-                lambd=cast(float, group.get("lambd", 1e-4)),
+                weight_decay=cast(float, group.get("weight_decay", 0.0)),
             )
         )
 

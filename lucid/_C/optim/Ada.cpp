@@ -121,13 +121,18 @@ void Adamax::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
     }
 }
 
-Adagrad::Adagrad(
-    std::vector<std::shared_ptr<TensorImpl>> p, double lr, double eps, double wd, double init_acc)
+Adagrad::Adagrad(std::vector<std::shared_ptr<TensorImpl>> p,
+                 double lr,
+                 double lr_decay,
+                 double wd,
+                 double init_acc,
+                 double eps)
     : Optimizer(std::move(p)),
       lr_(lr),
-      eps_(eps),
+      lr_decay_(lr_decay),
       weight_decay_(wd),
-      initial_accumulator_value_(init_acc) {}
+      initial_accumulator_value_(init_acc),
+      eps_(eps) {}
 
 // Allocate sum_sq_grad_ and pre-fill with initial_accumulator_value_
 // if non-zero, so early steps are not dominated by a near-zero divisor.
@@ -159,9 +164,12 @@ void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
 }
 
 // Accumulate g^2 into sum_sq_grad_ (monotonically increasing), then
-// take the normalized step: p -= lr * g / (sqrt(ss) + eps).
+// take the normalized step p -= clr * g / (sqrt(ss) + eps) with the
+// decayed step size clr = lr / (1 + (step - 1) * lr_decay), step being
+// the slot's own count (1 on its first update).
 void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
     const auto dt = p->dtype();
+    const double clr = lr_ / (1.0 + static_cast<double>(steps_[i] - 1) * lr_decay_);
     if (p->device() == Device::GPU) {
         auto& pg = gpu_get(p->mutable_storage());
         const auto& gg = gpu_get(grad);
@@ -173,7 +181,7 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         auto new_ss = ::mlx::core::add(*ss.arr, ::mlx::core::square(g));
         gpu_replace(ss, ::mlx::core::array(new_ss), dt);
         auto denom = ::mlx::core::add(::mlx::core::sqrt(new_ss), mlx_scalar(eps_, dt));
-        auto update = ::mlx::core::multiply(mlx_scalar(lr_, dt), ::mlx::core::divide(g, denom));
+        auto update = ::mlx::core::divide(::mlx::core::multiply(mlx_scalar(clr, dt), g), denom);
         gpu_replace(pg, ::mlx::core::subtract(*pg.arr, update), dt);
         pg.bump_version();
         return;
@@ -183,7 +191,7 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     auto step_cpu = [&](auto* P, const auto* G) {
         using T = std::remove_pointer_t<decltype(P)>;
         T* SS = cpu_ptr<T>(sum_sq_grad_[i]);
-        const T lrT = static_cast<T>(lr_);
+        const T clrT = static_cast<T>(clr);
         const T epsT = static_cast<T>(eps_);
         const T wdT = static_cast<T>(weight_decay_);
         for (std::size_t k = 0; k < n; ++k) {
@@ -191,7 +199,7 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
             if (weight_decay_ != 0.0)
                 g += wdT * P[k];
             SS[k] += g * g;
-            P[k] -= lrT * g / (std::sqrt(SS[k]) + epsT);
+            P[k] -= clrT * g / (std::sqrt(SS[k]) + epsT);
         }
     };
     if (dt == Dtype::F32)

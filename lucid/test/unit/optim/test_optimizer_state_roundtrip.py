@@ -233,18 +233,20 @@ def test_a_checkpoint_with_an_integer_step_still_restores(device: str) -> None:
     _resume(("Adam", {}), device, as_int_step)
 
 
-# ── engine-only options ────────────────────────────────────────────────────
+# ── the engine's own round trip ────────────────────────────────────────────
 
 
 _EngineFactory = Callable[[list[Any]], Any]
 
 
 def _engine_rmsprop_centered(momentum: float) -> _EngineFactory:
-    return lambda impls: _C_engine.RMSprop(impls, 1e-2, 0.99, 1e-8, 0.0, momentum, True)
+    return lambda impls: _C_engine.RMSprop(
+        impls, lr=1e-2, momentum=momentum, centered=True
+    )
 
 
-def _engine_asgd_momentum() -> _EngineFactory:
-    return lambda impls: _C_engine.ASGD(impls, 1e-2, 0.9, 0.0, 0.75, 2.0, 1e-4)
+def _engine_asgd_averaging() -> _EngineFactory:
+    return lambda impls: _C_engine.ASGD(impls, lr=1e-2, t0=2.0)
 
 
 @pytest.mark.parametrize(
@@ -261,16 +263,17 @@ def _engine_asgd_momentum() -> _EngineFactory:
             id="RMSprop-centered-momentum",
         ),
         pytest.param(
-            _engine_asgd_momentum(),
-            {"step", "ax", "momentum_buffer"},
-            id="ASGD-momentum",
+            _engine_asgd_averaging(),
+            {"step", "eta", "mu", "ax"},
+            id="ASGD-averaging",
         ),
     ],
 )
-def test_engine_only_state_round_trips(
+def test_engine_state_round_trips(
     make: _EngineFactory, keys: set[str], device: str
 ) -> None:
-    # Options the Python wrappers do not pass on, exercised on the engine.
+    # state_buffers -> load_state_buffers on the engine itself, without the
+    # Python loader in between.
     grads = _grads()
     live = _params(_init(), device)
     eng = make([p._impl for p in live])
@@ -405,39 +408,9 @@ def test_uneven_step_counts_round_trip_through_state_dict(device: str) -> None:
 
 # ── the reference framework's state layout ──────────────────────────────────
 
-# Keys the reference framework keeps that Lucid does not, with the reason.
-# ASGD: Lucid's averaging rule has no decaying ``eta`` or ``mu`` to save — it
-# derives its averaging weight from the step count.
-_KEY_GAPS: dict[str, set[str]] = {"ASGD": {"eta", "mu"}}
-
-# Whose saved values follow the reference framework's (ASGD's averaging rule
-# differs, so its ``ax`` does too).
-_VALUE_PARITY = {
-    "RMSprop",
-    "Adagrad",
-    "Adadelta",
-    "Adamax",
-    "RAdam",
-    "NAdam",
-    "Rprop",
-    "Adam",
-    "AdamW",
-    "SGD",
-}
-
 _REF_CASES = [
     *_CASE_PARAMS,
-    pytest.param(
-        ("RMSprop", {"centered": True}),
-        id="RMSprop-centered=True",
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason=(
-                "lucid.optim.RMSprop does not pass centered on to the engine, "
-                "so grad_avg is never kept"
-            ),
-        ),
-    ),
+    pytest.param(("RMSprop", {"centered": True}), id="RMSprop-centered=True"),
 ]
 
 
@@ -463,16 +436,14 @@ def test_state_keys_shapes_and_values_match_the_reference(
     assert sorted(state) == sorted(ref_state)
     for idx, ref_entry in ref_state.items():
         entry = state[idx]
-        assert set(entry) == set(ref_entry) - _KEY_GAPS.get(name, set())
+        assert set(entry) == set(ref_entry)
         for key, ref_value in ref_entry.items():
-            if key not in entry:
-                continue
             ours = _as_array(entry[key])
             theirs = ref_value.detach().numpy()
             assert ours.shape == theirs.shape, (idx, key)
             if key == "step":
                 assert int(ours) == int(theirs)
-            elif name in _VALUE_PARITY:
+            else:
                 np.testing.assert_allclose(
                     ours, theirs, rtol=1e-4, atol=1e-6, err_msg=f"{idx}/{key}"
                 )

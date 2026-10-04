@@ -248,70 +248,64 @@ private:
 
 // Averaged Stochastic Gradient Descent (Polyak-Ruppert averaging).
 //
-// Runs a standard SGD-with-momentum trajectory while also maintaining a
-// running average $\bar\theta$ of the parameter values.  Once the step
-// counter passes the warm-up threshold ``t0_``, every step blends the
-// current parameter into the running average using a decaying mixing
-// coefficient $\eta_{\mathrm{avg}}$:
-// $$
-//   \eta_{\mathrm{avg}} = \frac{1}{\alpha\, t + 1}, \qquad
-//   \bar\theta_{t+1} =
-//       (1 - \eta_{\mathrm{avg}})\, \bar\theta_t +
-//       \eta_{\mathrm{avg}}\, \theta_{t+1} - \lambda\, \bar\theta_t.
-// $$
-// Before ``t0_`` the average simply tracks $\theta$ ($\bar\theta = \theta$).
-//
-// The averaged weights $\bar\theta$ generally yield lower-variance
-// estimators than the instantaneous parameters, especially for convex
-// or near-convex problems, and are typically used at inference time
-// after training has finished.
+// Runs SGD with a decaying step size and a decay on the parameter
+// itself, while also maintaining a running average $\bar\theta$ (``ax``)
+// of the parameter values.  The algorithm is the reference framework's,
+// state names and all: ``step``, ``eta``, ``mu`` and ``ax`` per
+// parameter.
 //
 // Math
 // ----
-// Per-parameter update (post warm-up):
+// With $t$ the slot's own step count (1 on its first update), $\eta_t$
+// and $\mu_t$ the values carried over from the previous step
+// ($\eta_1 = \eta$, $\mu_1 = 1$):
 // $$
-//   g_t \leftarrow g_t + \lambda\, \theta_t,
-// $$
-// $$
-//   v_{t+1} = \mu\, v_t + g_t, \qquad
-//   \theta_{t+1} = \theta_t - \eta\, v_{t+1},
+//   g_t \leftarrow g_t + w\, \theta_{t-1}
 // $$
 // $$
-//   \bar\theta_{t+1} =
-//       (1 - \eta_{\mathrm{avg}})\, \bar\theta_t +
-//       \eta_{\mathrm{avg}}\, \theta_{t+1} - \lambda\, \bar\theta_t.
+//   \theta_t = \theta_{t-1}\,(1 - \lambda\,\eta_t) - \eta_t\, g_t
 // $$
+// $$
+//   \bar\theta_t = \begin{cases}
+//       \theta_t & \mu_t = 1 \\
+//       \bar\theta_{t-1} + \mu_t\,(\theta_t - \bar\theta_{t-1}) & \text{otherwise}
+//   \end{cases}
+// $$
+// then, for the next step,
+// $$
+//   \eta_{t+1} = \frac{\eta}{(1 + \lambda\,\eta\,t)^{\alpha}}, \qquad
+//   \mu_{t+1} = \frac{1}{\max(1,\; t - t_0)}.
+// $$
+// Before $t_0$ the average therefore tracks $\theta$ exactly; after it,
+// $\bar\theta$ is the mean of the iterates since $t_0$.
 //
 // Attributes
 // ----------
 // lr_ : double
-//     Learning rate $\eta$.
-// momentum_ : double
-//     Momentum coefficient $\mu$.  Zero disables velocity allocation.
-// weight_decay_ : double
-//     L2 penalty coefficient $\lambda$.
-// alpha_ : double
-//     Decay exponent controlling the averaging schedule
-//     ($\eta_{\mathrm{avg}} = 1 / (\alpha t + 1)$).
-// t0_ : double
-//     Number of warm-up steps before averaging starts.  Stored as
-//     ``double`` to mirror the reference framework's API but compared
-//     against integer step counts.
+//     Learning rate $\eta$.  Read when ``eta`` is first set and each time
+//     it is advanced, so a scheduler's change takes effect from the next
+//     step's ``eta``.
 // lambd_ : double
-//     Average-side decay coefficient applied to $\bar\theta$ each
-//     averaging step.
-// moment_ : std::vector<Storage>
-//     Per-parameter SGD velocity buffers (active when ``momentum_ != 0``).
+//     Decay term $\lambda$ — of the step size and of the parameter.
+// alpha_ : double
+//     Power of the step-size decay.
+// t0_ : double
+//     Step at which averaging starts.
+// weight_decay_ : double
+//     L2 penalty coefficient $w$.
 // ax_ : std::vector<Storage>
-//     Per-parameter running averages of the parameter trajectory.
-//     Initialised to a copy of the parameter on the first observed
-//     gradient.
+//     Per-parameter running average $\bar\theta$, zero until the first
+//     update copies the parameter in.
+// eta_, mu_ : std::vector<double>
+//     Per-parameter $\eta_t$ and $\mu_t$, held at the precision they are
+//     checkpointed at (``round_to_state_scalar``) so a restored run
+//     continues bit-identically.
 //
 // Notes
 // -----
-// $t$ is the slot's own update count (``Optimizer::steps_``), so
-// parameters introduced into training late (or temporarily frozen)
-// still see a clean averaging schedule.
+// $t$ is the slot's own update count (``Optimizer::steps_``), so a
+// parameter introduced into training late (or temporarily frozen) starts
+// its own schedule.
 //
 // References
 // ----------
@@ -320,7 +314,7 @@ private:
 //
 // See Also
 // --------
-// SGD : the underlying instantaneous update.
+// SGD : the plain instantaneous update.
 class LUCID_API ASGD : public Optimizer {
 public:
     // Construct an ASGD optimizer.
@@ -330,24 +324,21 @@ public:
     // params : std::vector<std::shared_ptr<TensorImpl>>
     //     Parameters to optimise.
     // lr : double, optional
-    //     Learning rate $\eta$ (default ``1e-3``).
-    // momentum : double, optional
-    //     SGD momentum coefficient $\mu$ (default ``0.0``).
-    // weight_decay : double, optional
-    //     L2 regularisation coefficient $\lambda$ (default ``0.0``).
-    // alpha : double, optional
-    //     Decay exponent for the averaging schedule (default ``0.75``).
-    // t0 : double, optional
-    //     Warm-up step count before averaging engages (default ``1e6``).
+    //     Learning rate $\eta$ (default ``1e-2``).  Must be non-negative.
     // lambd : double, optional
-    //     Average-side decay coefficient (default ``1e-4``).
+    //     Decay term $\lambda$ (default ``1e-4``).
+    // alpha : double, optional
+    //     Power of the step-size decay (default ``0.75``).
+    // t0 : double, optional
+    //     Step at which averaging starts (default ``1e6``).
+    // weight_decay : double, optional
+    //     L2 regularisation coefficient (default ``0.0``).
     ASGD(std::vector<std::shared_ptr<TensorImpl>> params,
-         double lr = 1e-3,
-         double momentum = 0.0,
-         double weight_decay = 0.0,
+         double lr = 1e-2,
+         double lambd = 1e-4,
          double alpha = 0.75,
          double t0 = 1e6,
-         double lambd = 1e-4);
+         double weight_decay = 0.0);
 
     // Update the learning rate from a scheduler.
     void set_lr(double lr) override { lr_ = lr; }
@@ -363,9 +354,9 @@ public:
     // Returns
     // -------
     // std::vector<NamedBuffers>
-    //     ``step`` (0-d I64 per slot) and ``ax``, plus
-    //     ``momentum_buffer`` when ``momentum != 0``.  Slots that have not
-    //     stepped contribute null entries.
+    //     ``step`` (0-d I64 per slot), ``eta`` and ``mu`` (0-d, F32 — F64
+    //     for an F64 parameter) and ``ax``.  Slots that have not stepped
+    //     contribute null entries.
     std::vector<NamedBuffers> state_buffers() const override;
 
     // Restore the state captured by ``state_buffers``.
@@ -379,15 +370,14 @@ public:
 protected:
     // Apply the ASGD update for one parameter slot.
     //
-    // Performs the standard SGD-with-momentum step on $\theta$, then —
-    // once the per-slot step counter has passed ``t0_`` — updates the
-    // running average $\bar\theta$ using a $1/(\alpha t + 1)$ schedule
-    // attenuated by the average-side decay $\lambda$.
+    // Decays and steps $\theta$ with the slot's current $\eta_t$, folds
+    // it into $\bar\theta$ with $\mu_t$, then advances $\eta$ and $\mu$
+    // for the slot's next step.
     //
     // Parameters
     // ----------
     // i : std::size_t
-    //     Slot index into ``params_``, ``moment_``, ``ax_``, ``step_``.
+    //     Slot index into ``params_``, ``ax_``, ``eta_``, ``mu_``.
     // p : std::shared_ptr<TensorImpl>&
     //     Parameter to update in place.
     // g : const Storage&
@@ -396,9 +386,8 @@ protected:
 
     // Allocate per-slot state on the first observed gradient.
     //
-    // Materialises the velocity buffer (only when ``momentum_ != 0``)
-    // and the running-average buffer ``ax_`` initialised to a copy of
-    // the current parameter.  The per-slot step counter is reset to 0.
+    // ``ax_`` starts at zero, ``eta_`` at the current learning rate and
+    // ``mu_`` at one.
     //
     // Parameters
     // ----------
@@ -409,11 +398,12 @@ protected:
     void init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) override;
 
 private:
-    double lr_, momentum_, weight_decay_, alpha_, t0_, lambd_;
-    // Per-parameter SGD velocity buffers (active when momentum != 0).
-    std::vector<Storage> moment_;
+    double lr_, lambd_, alpha_, t0_, weight_decay_;
     // Per-parameter running averages of the parameter trajectory.
     std::vector<Storage> ax_;
+    // Per-parameter step size and averaging weight for the next update.
+    std::vector<double> eta_;
+    std::vector<double> mu_;
 };
 
 }  // namespace lucid

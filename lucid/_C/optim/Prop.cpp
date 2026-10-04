@@ -7,6 +7,7 @@
 
 #include "Prop.h"
 
+#include <cmath>
 #include <variant>
 
 #include <mlx/ops.h>
@@ -21,6 +22,29 @@
 namespace lucid {
 
 using namespace lucid::optim_detail;
+
+namespace {
+
+// Move ``from`` toward ``to`` by weight ``w`` the way the reference
+// framework's lerp does: ``from + w * (to - from)`` while |w| < 0.5,
+// else ``to - (to - from) * (1 - w)``.  The two forms round differently,
+// and the reference picks by the weight, so matching it bit for bit
+// means picking the same way.
+template <typename T>
+inline T lerp_toward(T from, T to, T w, bool small_w) {
+    return small_w ? from + w * (to - from) : to - (to - from) * (T{1} - w);
+}
+
+// MLX counterpart of the scalar ``lerp_toward`` above.
+inline ::mlx::core::array
+lerp_toward(const ::mlx::core::array& from, const ::mlx::core::array& to, double w, Dtype dt) {
+    auto diff = ::mlx::core::subtract(to, from);
+    if (std::abs(w) < 0.5)
+        return ::mlx::core::add(from, ::mlx::core::multiply(mlx_scalar(w, dt), diff));
+    return ::mlx::core::subtract(to, ::mlx::core::multiply(diff, mlx_scalar(1.0 - w, dt)));
+}
+
+}  // namespace
 
 RMSprop::RMSprop(std::vector<std::shared_ptr<TensorImpl>> p,
                  double lr,
@@ -75,24 +99,27 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         if (centered_) {
             // Centered RMSprop: subtract the squared gradient mean to
             // estimate the variance rather than the raw second moment.
+            // The mean advances as a lerp toward g by 1 - alpha.
             auto& ga = gpu_get(grad_avg_[i]);
-            auto new_ga = ::mlx::core::add(::mlx::core::multiply(mlx_scalar(alpha_, dt), *ga.arr),
-                                           ::mlx::core::multiply(mlx_scalar(1.0 - alpha_, dt), g));
+            auto new_ga = lerp_toward(*ga.arr, g, 1.0 - alpha_, dt);
             gpu_replace(ga, ::mlx::core::array(new_ga), dt);
             avg = ::mlx::core::subtract(new_sq, ::mlx::core::square(new_ga));
         }
 
         auto denom = ::mlx::core::add(::mlx::core::sqrt(avg), mlx_scalar(eps_, dt));
-        ::mlx::core::array update = ::mlx::core::divide(g, denom);
+        // Without momentum the step is (lr * g) / denom, in that order.
+        ::mlx::core::array step_dir = g;
         if (momentum_ != 0.0) {
             auto& mb = gpu_get(moment_buf_[i]);
             auto new_mb =
-                ::mlx::core::add(::mlx::core::multiply(mlx_scalar(momentum_, dt), *mb.arr), update);
+                ::mlx::core::add(::mlx::core::multiply(mlx_scalar(momentum_, dt), *mb.arr),
+                                 ::mlx::core::divide(g, denom));
             gpu_replace(mb, ::mlx::core::array(new_mb), dt);
-            update = new_mb;
+            step_dir = ::mlx::core::multiply(mlx_scalar(lr_, dt), new_mb);
+        } else {
+            step_dir = ::mlx::core::divide(::mlx::core::multiply(mlx_scalar(lr_, dt), g), denom);
         }
-        auto new_p =
-            ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), update));
+        auto new_p = ::mlx::core::subtract(*pg.arr, step_dir);
         gpu_replace(pg, std::move(new_p), dt);
         pg.bump_version();
         return;
@@ -111,6 +138,7 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         const T epsT = static_cast<T>(eps_);
         const T wdT = static_cast<T>(weight_decay_);
         const T mT = static_cast<T>(momentum_);
+        const bool small_w = std::abs(omaT) < T{0.5};
         for (std::size_t k = 0; k < n; ++k) {
             T g = G[k];
             if (weight_decay_ != 0.0)
@@ -118,17 +146,17 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
             SQ[k] = aT * SQ[k] + omaT * g * g;
             T avg = SQ[k];
             if (GA) {
-                GA[k] = aT * GA[k] + omaT * g;
+                GA[k] = lerp_toward(GA[k], g, omaT, small_w);
                 avg = SQ[k] - GA[k] * GA[k];
             }
 
             const T denom = std::sqrt(avg) + epsT;
-            T update = g / denom;
             if (MB) {
-                MB[k] = mT * MB[k] + update;
-                update = MB[k];
+                MB[k] = mT * MB[k] + g / denom;
+                P[k] -= lrT * MB[k];
+            } else {
+                P[k] -= lrT * g / denom;
             }
-            P[k] -= lrT * update;
         }
     };
     if (dt == Dtype::F32)

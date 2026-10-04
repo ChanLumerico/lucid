@@ -94,13 +94,12 @@ void register_optim(py::module_& m) {
              py::arg("amsgrad") = false,
              "AdamW (decoupled weight decay, Loshchilov & Hutter 2017).");
 
-    // ASGD averages parameters after t0 steps; useful for convex problems.
+    // ASGD: decaying step size, decayed parameter, running average from t0.
     py::class_<ASGD, Optimizer>(m, "ASGD").def(
-        py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double, double,
+        py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
                  double>(),
-        py::arg("params"), py::arg("lr") = 1e-3, py::arg("momentum") = 0.0,
-        py::arg("weight_decay") = 0.0, py::arg("alpha") = 0.75, py::arg("t0") = 1e6,
-        py::arg("lambd") = 1e-4, "Averaged SGD.");
+        py::arg("params"), py::arg("lr") = 1e-2, py::arg("lambd") = 1e-4, py::arg("alpha") = 0.75,
+        py::arg("t0") = 1e6, py::arg("weight_decay") = 0.0, "Averaged SGD.");
 
     py::class_<NAdam, Optimizer>(m, "NAdam")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
@@ -131,10 +130,11 @@ void register_optim(py::module_& m) {
              "Resilient backprop (Rprop).");
 
     py::class_<Adagrad, Optimizer>(m, "Adagrad")
-        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double>(),
-             py::arg("params"), py::arg("lr") = 1e-2, py::arg("eps") = 1e-10,
+        .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double,
+                      double>(),
+             py::arg("params"), py::arg("lr") = 1e-2, py::arg("lr_decay") = 0.0,
              py::arg("weight_decay") = 0.0, py::arg("initial_accumulator_value") = 0.0,
-             "Adagrad: per-parameter accumulator of squared grads.");
+             py::arg("eps") = 1e-10, "Adagrad: per-parameter accumulator of squared grads.");
 
     py::class_<Adadelta, Optimizer>(m, "Adadelta")
         .def(py::init<std::vector<std::shared_ptr<TensorImpl>>, double, double, double, double>(),
