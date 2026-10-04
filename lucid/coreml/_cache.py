@@ -115,33 +115,32 @@ _unusable: set[str] = set()
 
 
 class Lease:
-    """A compiled model on disk, held for as long as a handle needs it.
+    """What a handle opens, held for as long as the handle needs it.
 
-    ``path`` is the ``.mlmodelc`` to open.  Releasing a cached one drops
-    the shared lock that keeps eviction away from it; releasing a private
-    one — compiled with the cache off — removes it.  Safe to release twice.
+    ``path`` is the cached ``.mlmodelc`` to open, and releasing the lease
+    drops the shared lock that keeps eviction away from it.  With the
+    cache off it is the package itself: the engine compiles that privately
+    and removes its copy when the last use of the handle ends — after a
+    prediction still running on another thread, which a removal here could
+    not wait for.  Safe to release twice.
     """
 
-    __slots__ = ("_fd", "_private", "path")
+    __slots__ = ("_fd", "path")
 
-    def __init__(self, path: str, fd: int | None, *, private: bool) -> None:
+    def __init__(self, path: str, fd: int | None) -> None:
         self.path = path
         self._fd = fd
-        self._private = private
 
     @property
     def held(self) -> bool:
-        """Whether the compiled model is still kept for this lease."""
-        return self._fd is not None or self._private
+        """Whether this lease still keeps a cached compiled model in place."""
+        return self._fd is not None
 
     def release(self) -> None:
         """Let the compiled model go."""
         fd, self._fd = self._fd, None
         if fd is not None:
             os.close(fd)
-        if self._private:
-            self._private = False
-            shutil.rmtree(self.path, ignore_errors=True)
 
 
 def cache_dir() -> str:
@@ -493,19 +492,17 @@ def _evict(root: str, limit: int, keep: str | None) -> int:
 
 
 def _private(package: str, size: int) -> Lease:
-    """Compile for one handle only, removed when it is released."""
+    """The package itself, for the engine to compile for one handle only."""
     if size:
         _require_room(package, size, compile_into=tempfile.gettempdir())
-    return Lease(_C_engine.coreml.compile_model(package), None, private=True)
+    return Lease(package, None)
 
 
 def _usable(root: str) -> bool:
     try:
         os.makedirs(root, exist_ok=True)
-        probe = os.path.join(root, f".note-{uuid.uuid4().hex}")
-        with open(probe, "w"):
-            pass
-        os.unlink(probe)
+        if not os.access(root, os.W_OK | os.X_OK):
+            raise PermissionError(errno.EACCES, "not writable")
         return True
     except OSError as exc:
         with _lock:
@@ -518,7 +515,7 @@ def _usable(root: str) -> bool:
                 f"cache bundle each time. Set LUCID_COREML_CACHE_DIR to a "
                 f"writable directory.",
                 RuntimeWarning,
-                stacklevel=4,
+                stacklevel=5,
             )
         return False
 
@@ -558,7 +555,8 @@ def open_compiled(package: str) -> Lease:
     Returns
     -------
     Lease
-        Holds the ``.mlmodelc`` until released.
+        Holds the cached ``.mlmodelc`` until released — or, with the cache
+        off or unusable, names the package for the engine to compile.
 
     Raises
     ------
@@ -570,12 +568,13 @@ def open_compiled(package: str) -> Lease:
     if not os.path.exists(package):
         # Core ML's own error names the missing path; nothing to cache.
         return _private(package, 0)
-    key, size = _identify(package)
     limit = cache_limit()
     root = cache_dir()
     if limit == 0 or not _usable(root):
+        size = sum(os.stat(full).st_size for _relative, full in _files(package))
         return _private(package, size)
 
+    key, size = _identify(package)
     entry = os.path.join(root, f"{key}{_SUFFIX}")
     fd = _hold(os.path.join(root, f"{key}.lock"), exclusive=False)
     if fd is None:  # a shared lock waits rather than refusing
@@ -597,7 +596,7 @@ def open_compiled(package: str) -> Lease:
     except BaseException:
         os.close(fd)
         raise
-    lease = Lease(entry, fd, private=False)
+    lease = Lease(entry, fd)
     if inserted:
         _evict(root, limit, keep=key)
     return lease

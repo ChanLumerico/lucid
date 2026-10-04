@@ -267,13 +267,16 @@ class TestTheCacheKeepsToItsLimit:
     ) -> None:
         monkeypatch.setenv("LUCID_COREML_CACHE_LIMIT", "0")
         path = _write(tmp_path / "m.mlpackage")
-        handle = cml.load(path)
-        private = handle._lease.path
-        assert Path(private).is_dir()
-        assert not Path(private).is_relative_to(cache)
-        handle.close()
-        assert not Path(private).exists()
-        assert _entries(cache) == []
+        compiles = _Counting(_C_engine.coreml.compile_model)
+        monkeypatch.setattr(_C_engine.coreml, "compile_model", compiles)
+        with cml.load(path) as handle:
+            # The handle opens the package and compiles a copy of its own,
+            # which goes with it.
+            assert handle._lease.path == path and not handle._lease.held
+            assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
+            assert handle.compute_plan().total_compute > 0
+        assert compiles.calls == 0
+        assert not cache.exists()
 
     @pytest.mark.parametrize(
         ("raw", "expected"),
@@ -323,13 +326,12 @@ class TestWhereItLives:
         blocked.write_text("")
         monkeypatch.setenv("LUCID_COREML_CACHE_DIR", str(blocked / "cache"))
         lucid.manual_seed(0)
+        path = str(tmp_path / "m.mlpackage")
         with pytest.warns(RuntimeWarning, match="cannot keep compiled models"):
-            handle = cml.export(
-                _Small().eval(), lucid.randn(*_X_SHAPE), str(tmp_path / "m.mlpackage")
-            )
-        private = handle._lease.path
-        handle.close()
-        assert not Path(private).exists()
+            handle = cml.export(_Small().eval(), lucid.randn(*_X_SHAPE), path)
+        with handle:
+            assert handle._lease.path == path and not handle._lease.held
+            assert tuple(handle.predict(lucid.randn(*_X_SHAPE)).shape) == (1, 4)
 
 
 class TestTwoLoadsAtOnce:
