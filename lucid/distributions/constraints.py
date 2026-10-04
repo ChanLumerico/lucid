@@ -68,6 +68,27 @@ class Constraint:
         return f"{type(self).__name__}()"
 
 
+def _all_trailing(result: Tensor, ndims: int) -> Tensor:
+    """``result`` reduced with logical *and* over its last ``ndims`` axes.
+
+    ``Tensor.all`` reduces to a single 0-dim answer, and an event-shaped
+    constraint needs one answer per batch element; the minimum of a boolean
+    tensor along an axis is the *and* along it.
+    """
+    for _ in range(ndims):
+        result = result.min(dim=-1)
+    return result
+
+
+def _is_integral(value: Tensor) -> Tensor:
+    """Element-wise: ``value`` is a finite whole number.
+
+    ``floor(x) == x`` alone holds for ``±inf``, which is not a count; the
+    reference framework's ``x % 1 == 0`` refuses it.
+    """
+    return lucid.isfinite(value) & (lucid.floor(value) == value)
+
+
 @final
 class _Real(Constraint):
     """``ℝ`` extended by ``±inf`` — everything except NaN.
@@ -228,13 +249,10 @@ class _IntegerInterval(Constraint):
 
     @override
     def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``value`` is an integer in ``[lower_bound, upper_bound]``.
-
-        Integrality is verified by ``floor(value) == value``.
-        """
+        """Return ``True`` element-wise where ``value`` is a whole number in
+        ``[lower_bound, upper_bound]``."""
         in_range = (value >= self.lower_bound) & (value <= self.upper_bound)
-        # Integer-valued: floor(x) == x.
-        return in_range & (lucid.floor(value) == value)
+        return in_range & _is_integral(value)
 
     @override
     def __repr__(self) -> str:
@@ -252,8 +270,9 @@ class _NonnegativeInteger(Constraint):
 
     @override
     def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` element-wise where ``value`` is a non-negative integer."""
-        return (value >= 0) & (lucid.floor(value) == value)
+        """Return ``True`` element-wise where ``value`` is a whole number
+        ``>= 0`` (``inf`` is not)."""
+        return (value >= 0) & _is_integral(value)
 
 
 @final
@@ -279,27 +298,29 @@ class _Simplex(Constraint):
 
 @final
 class _PositiveDefinite(Constraint):
-    """Matrix is positive-definite (symmetric, all eigenvalues > 0).
+    """Symmetric positive-definite matrices.
 
-    Cheap check — relies on a successful Cholesky decomposition.  A failure
-    in the linear solver is interpreted as a non-PD matrix.
+    Symmetry is checked first, within ``1e-6``: a Cholesky factorisation
+    reads only the lower triangle, so on its own it accepts any matrix
+    whose lower triangle happens to be the lower triangle of an SPD one —
+    a Cholesky *factor* among them.
     """
 
     event_dim = 2
 
     @override
     def check(self, value: Tensor) -> Tensor:
-        """Return ``True`` when ``value`` admits a Cholesky factorisation.
-
-        A successful decomposition implies symmetric positive-definiteness;
-        any solver failure (raised as an exception) is interpreted as a
-        violation and reported as ``False``.
-        """
-        try:
-            lucid.linalg.cholesky(value)
-            return lucid.tensor(True)
-        except Exception:
-            return lucid.tensor(False)
+        """Return ``True`` per matrix where it is symmetric and has a
+        Cholesky factorisation."""
+        if value.shape[-1] != value.shape[-2]:
+            return lucid.zeros(
+                tuple(value.shape[:-2]), dtype=lucid.bool, device=value.device
+            )
+        symmetric = _all_trailing(lucid.isclose(value, value.mT, atol=1e-6), 2)
+        if not bool(symmetric.all().item()):
+            return symmetric
+        _, info = lucid.linalg.cholesky_ex(value)
+        return info == 0
 
 
 # Public singletons (functions/objects users actually reach for).
