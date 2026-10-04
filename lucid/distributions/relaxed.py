@@ -412,7 +412,10 @@ class RelaxedOneHotCategorical(Distribution):
         ValueError
             If both or neither of ``probs`` and ``logits`` are provided.
         """
-        from lucid.distributions.categorical import _normalize_probs
+        from lucid.distributions.categorical import (
+            _normalize_logits,
+            _normalize_probs,
+        )
 
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -424,7 +427,7 @@ class RelaxedOneHotCategorical(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
+            self.logits = _normalize_logits(_as_tensor(logits))  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         # A temperature given as a number is a 0-dim host tensor; it follows

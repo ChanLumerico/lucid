@@ -28,6 +28,21 @@ def _normalize_probs(probs: Tensor) -> Tensor:
     return probs / probs.sum(dim=-1, keepdim=True)
 
 
+def _normalize_logits(logits: Tensor) -> Tensor:
+    """Shift logits along the last dim so they are log-probabilities.
+
+    The counterpart of :func:`_normalize_probs`, and the reference
+    framework's preprocessing: the stored ``logits`` are
+    ``logits - logsumexp(logits)``, so ``logits.exp()`` sums to 1.  What the
+    constraint then validates is the normalised value, which is what makes
+    the domain the reference's — a row that is all ``-inf`` (no category
+    possible) or holds a ``+inf`` has no normalisation and comes out NaN,
+    which ``real`` refuses, while a masked ``-inf`` among finite logits
+    passes.
+    """
+    return logits - lucid.logsumexp(logits, dim=-1, keepdim=True)
+
+
 class Categorical(Distribution):
     r"""Categorical distribution — a discrete distribution over K labelled outcomes.
 
@@ -122,9 +137,11 @@ class Categorical(Distribution):
             automatically normalised to sum to 1.  Mutually exclusive with
             ``logits``.
         logits : Tensor | None, optional
-            Unnormalised log-probabilities of shape ``(..., K)``.  Converted
-            to probabilities via softmax internally.  Mutually exclusive with
-            ``probs``.
+            Unnormalised log-probabilities of shape ``(..., K)``.  Stored
+            shifted by their ``logsumexp`` (so :attr:`logits` holds
+            log-probabilities), as in the reference framework; a row with
+            no such shift — all ``-inf``, or holding ``+inf`` — is refused
+            under validation.  Mutually exclusive with ``probs``.
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
 
@@ -140,7 +157,7 @@ class Categorical(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
+            self.logits = _normalize_logits(_as_tensor(logits))  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         self._num_events = shape[-1]
@@ -159,7 +176,8 @@ class Categorical(Distribution):
 
     @_lazy_param
     def logits(self) -> Tensor:
-        """Log-probabilities — as given, or derived from ``probs`` on access.
+        """Log-probabilities — as given (shifted by their ``logsumexp``), or
+        derived from ``probs`` on access.
 
         Derived as ``log(probs)`` with ``probs`` clamped one epsilon inside
         ``[0, 1]``, as the reference framework derives it, so a category of
