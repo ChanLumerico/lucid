@@ -19,8 +19,8 @@ from lucid.distributions._util import (
     _as_tensor,
     _clamp_probs,
     _lazy_param,
-    _xlog1py,
 )
+from lucid.special import xlog1py
 
 
 def _probs_to_logits(probs: Tensor) -> Tensor:
@@ -661,7 +661,7 @@ class Geometric(Distribution):
         tensor(-0.6931)
         """
         p = self.probs
-        return _xlog1py(value, -p) + p.log()
+        return xlog1py(value, -p) + p.log()
 
     @override
     def entropy(self) -> Tensor:

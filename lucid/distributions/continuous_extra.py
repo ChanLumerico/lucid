@@ -12,7 +12,7 @@ from typing import override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
-from lucid.distributions._util import _broadcast_pair, _xlogy
+from lucid.distributions._util import _broadcast_pair
 from lucid.distributions.constraints import (
     Constraint,
     nonnegative,
@@ -997,7 +997,7 @@ class FisherSnedecor(Distribution):
         )
         return (
             half1 * ratio.log()
-            + _xlogy(half1 - 1.0, value)
+            + lucid.xlogy(half1 - 1.0, value)
             - (half1 + half2) * lucid.log1p(ratio * value)
             - log_beta
         )

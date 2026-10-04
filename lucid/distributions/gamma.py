@@ -24,9 +24,8 @@ _MAX_GAMMA_RETRIES: int = 8
 from lucid.distributions._util import (
     _as_tensor,
     _broadcast_pair,
-    _xlog1py,
-    _xlogy,
 )
+from lucid.special import xlog1py
 
 
 def _sample_standard_gamma(
@@ -339,7 +338,7 @@ class Gamma(ExponentialFamily):
         """
         return (
             self.concentration * self.rate.log()
-            + _xlogy(self.concentration - 1.0, value)
+            + lucid.xlogy(self.concentration - 1.0, value)
             - self.rate * value
             - lucid.lgamma(self.concentration)
         )
@@ -715,7 +714,7 @@ class Beta(ExponentialFamily):
         a = self.concentration1
         b = self.concentration0
         log_b = lucid.lgamma(a) + lucid.lgamma(b) - lucid.lgamma(a + b)
-        return _xlogy(a - 1.0, value) + _xlog1py(b - 1.0, -value) - log_b
+        return lucid.xlogy(a - 1.0, value) + xlog1py(b - 1.0, -value) - log_b
 
     @override
     def entropy(self) -> Tensor:
@@ -987,7 +986,7 @@ class Dirichlet(ExponentialFamily):
         """
         a = self.concentration
         log_b = lucid.lgamma(a).sum(dim=-1) - lucid.lgamma(a.sum(dim=-1))
-        return _xlogy(a - 1.0, value).sum(dim=-1) - log_b
+        return lucid.xlogy(a - 1.0, value).sum(dim=-1) - log_b
 
     @override
     def entropy(self) -> Tensor:

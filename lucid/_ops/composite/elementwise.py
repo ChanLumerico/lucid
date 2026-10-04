@@ -13,6 +13,7 @@ Three subgroups:
 
 import math
 import math as _math
+from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 import lucid
@@ -808,12 +809,72 @@ def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
     )
 
 
-def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
-    r"""Compute :math:`x \log y` with the convention :math:`0 \cdot \log 0 = 0`.
+def _x_times_log(
+    x: Tensor | Scalar,
+    y: Tensor | Scalar,
+    log: Callable[[Tensor], Tensor],
+    pole: float,
+    root: float,
+) -> Tensor:
+    r""":math:`x \cdot \log(y)` for a logarithm ``log``, taken as ``0`` at ``x == 0``.
 
-    Frequently used to compute cross-entropy losses where the limit
-    :math:`\lim_{x \to 0^{+}} x \log x = 0` must be honored to avoid NaN
-    contamination from probability values that are exactly zero.
+    The single owner of the ``0 · log`` convention: :func:`xlogy`,
+    :func:`lucid.special.xlog1py` and :func:`lucid.special.entr` all reach
+    it, and so do the log-densities of ``lucid.distributions``.
+
+    The guard is on the *operand*, not on the product.  Where ``x == 0``
+    and ``log(y)`` is not finite — ``y`` at or below the pole, or
+    infinite — ``y`` is replaced by ``root`` (where ``log`` is exactly 0)
+    before the logarithm, so the product is an exact 0 and neither
+    factor's backward sees an infinity.  Masking the product afterwards
+    is not enough: ``where`` hands the unselected branch a zero gradient,
+    and ``mul``'s backward still forms ``0 · log(0) = 0 · (-inf) = NaN``
+    for ``x`` and ``0 / 0`` for ``y``.  Everywhere else — including
+    ``x == 0`` with a finite ``log(y)`` — the product is left alone, so
+    ``d/dx = log(y)`` there and a NaN ``y`` still propagates.
+
+    Parameters
+    ----------
+    x, y : Tensor | Scalar
+        Broadcast-compatible operands.  A Python scalar follows the other
+        operand's device and is weak in dtype; integer and bool operands
+        are taken in the default float dtype.
+    log : Callable[[Tensor], Tensor]
+        The logarithm, ``lucid.log`` or ``lucid.log1p``.
+    pole : float
+        Where ``log`` diverges to ``-inf``: ``0`` for ``log``, ``-1`` for
+        ``log1p``.
+    root : float
+        Where ``log`` is exactly 0: ``1`` for ``log``, ``0`` for ``log1p``.
+
+    Returns
+    -------
+    Tensor
+        ``x * log(y)`` with the ``x == 0`` convention.
+    """
+    if not _is_tensor(x) and not _is_tensor(y):
+        x = lucid.tensor(float(cast(float, x)))
+    # A scalar becomes a constant on the tensor operand's device: built on
+    # its own it landed on the CPU and a Metal partner raised DeviceMismatch.
+    x, y = _promote_pair(x, y)
+    # Integer and bool inputs are taken in the default float dtype, as the
+    # reference framework takes them — the log of an integer is not one.
+    default = lucid.get_default_dtype()
+    if not (x.is_floating_point() or x.is_complex()):
+        x = x.to(dtype=default)
+    if not (y.is_floating_point() or y.is_complex()):
+        y = y.to(dtype=default)
+    degenerate = (x == 0.0) & ((y <= pole) | lucid.isinf(y))
+    return x * log(lucid.where(degenerate, root, y))
+
+
+def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
+    r"""Compute :math:`x \log y` with the convention :math:`0 \cdot \log y = 0`.
+
+    Frequently used to compute cross-entropy losses and log-densities
+    where the limit :math:`\lim_{x \to 0^{+}} x \log x = 0` must be
+    honoured to avoid NaN contamination from probability values that
+    are exactly zero.
 
     Parameters
     ----------
@@ -825,7 +886,7 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     Returns
     -------
     Tensor
-        Element-wise :math:`x \log y` with the zero-times-zero convention
+        Element-wise :math:`x \log y` with the ``x == 0`` convention
         applied.
 
     Notes
@@ -836,12 +897,26 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
 
         \operatorname{xlogy}(x, y) =
         \begin{cases}
-            0,            & x = 0, \\
+            \mathrm{NaN},  & y = \mathrm{NaN}, \\
+            0,             & x = 0, \\
             x \cdot \log y, & x \neq 0.
         \end{cases}
 
-    Gradient with respect to ``y`` is :math:`x / y`; with respect to ``x``
-    is :math:`\log y`. Both are masked to zero wherever ``x == 0``.
+    The convention covers only ``x == 0``: with ``x != 0`` the plain
+    definition applies, so ``xlogy(2, 0)`` is ``-inf`` and a negative
+    ``y`` gives NaN.
+
+    Gradients are :math:`\partial/\partial x = \log y` and
+    :math:`\partial/\partial y = x / y`, except where ``x == 0`` and
+    :math:`\log y` is not finite (``y <= 0`` or ``y`` infinite): there
+    both are ``0``, so the backward never forms ``0 \cdot \infty``.  At
+    ``x == 0`` with ``0 < y < \infty`` the ``x`` gradient stays
+    :math:`\log y`.  Two cells differ from the reference framework on
+    purpose: at ``(0, 0)`` its ``y`` gradient is ``0 / 0 = NaN`` and
+    Lucid's is ``0``, and at ``(0, +\infty)`` its ``x`` gradient is
+    :math:`+\infty` and Lucid's is ``0`` (a composite cannot give a
+    value of 0 a gradient of :math:`+\infty` without forming
+    ``0 \cdot \infty`` in the forward pass).
 
     Examples
     --------
@@ -850,22 +925,10 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     >>> y = lucid.tensor([0.0, 2.0, 3.0])
     >>> lucid.xlogy(x, y)
     tensor([0., 0.6931, 2.197])
+    >>> lucid.xlogy(2.0, 0.0)
+    tensor(-inf)
     """
-    if not _is_tensor(x):
-        x = lucid.tensor(float(cast(float, x)))
-    if not _is_tensor(y):
-        y = lucid.tensor(float(cast(float, y)))
-    # Integer and bool inputs are taken in the default float dtype, as the
-    # reference framework takes them — the log of an integer is not one.
-    # They used to fail inside, at ``y == 0.0``, with a DtypeMismatch.
-    default = lucid.get_default_dtype()
-    if not (x.is_floating_point() or x.is_complex()):
-        x = x.to(dtype=default)
-    if not (y.is_floating_point() or y.is_complex()):
-        y = y.to(dtype=default)
-    safe_y = lucid.where(y == 0.0, lucid.full_like(y, 1.0), y)
-    out = x * lucid.log(safe_y)
-    return lucid.where(x == 0.0, lucid.full_like(out, 0.0), out)
+    return _x_times_log(x, y, lucid.log, pole=0.0, root=1.0)
 
 
 def logit(x: Tensor, eps: float | None = None) -> Tensor:

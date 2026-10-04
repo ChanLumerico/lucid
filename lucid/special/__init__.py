@@ -17,7 +17,7 @@ Implemented (all pure-Python composites over engine ops — no C++ work):
 * ``ndtr``                  — normal CDF ``Φ(x) = ½·(1 + erf(x/√2))``
 * ``ndtri``                 — inverse normal CDF (Beasley-Springer-Moro)
 * ``log_ndtr``              — numerically-stable ``log(Φ(x))``
-* ``xlog1py``               — ``x · log1p(y)`` with ``0·log1p(0) = 0``
+* ``xlog1py``               — ``x · log1p(y)``, taken as 0 wherever ``x = 0``
 * ``entr``                  — entropy element ``-x · log(x)``, 0 at x=0
 * ``multigammaln``          — log of the multivariate gamma function
 * ``polygamma``             — derivatives of ``digamma``; n=0 falls through
@@ -37,6 +37,7 @@ import math
 from typing import TYPE_CHECKING, Callable
 
 import lucid
+from lucid._ops.composite.elementwise import _x_times_log
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -645,13 +646,13 @@ def ndtri(p: Tensor) -> Tensor:
 def xlog1py(x: Tensor, y: Tensor) -> Tensor:
     r"""Safe product :math:`x \log(1 + y)` with limit-convention zero handling.
 
-    Computes :math:`x \log(1 + y)` element-wise but enforces the
-    convention :math:`0 \cdot \log(1 + 0) = 0`, and more generally
-    propagates the zero whenever :math:`x = 0` regardless of ``y``.
-    Mirrors :func:`lucid.xlogy` but uses :math:`\log(1 + y)` instead of
-    :math:`\log y`, which is the right primitive for log-densities of
-    distributions expressed in terms of small offsets (Negative Binomial
-    log-likelihood, Beta survival functions, etc.).
+    Computes :math:`x \log(1 + y)` element-wise but takes the product as
+    ``0`` wherever :math:`x = 0`, including where :math:`\log(1 + y)` is
+    infinite (``y = -1``).  Mirrors :func:`lucid.xlogy` but uses
+    :math:`\log(1 + y)` instead of :math:`\log y`, which is the right
+    primitive for log-densities of distributions expressed in terms of
+    small offsets (Negative Binomial log-likelihood, Beta survival
+    functions, etc.).
 
     Parameters
     ----------
@@ -673,12 +674,26 @@ def xlog1py(x: Tensor, y: Tensor) -> Tensor:
     .. math::
 
         \text{xlog1py}(x, y) = \begin{cases}
+            \mathrm{NaN}, & y = \mathrm{NaN} \\[2pt]
             0, & x = 0 \\[2pt]
             x \log(1 + y), & \text{otherwise}.
         \end{cases}
 
-    Using :math:`\log(1 + y)` avoids precision loss for small ``y``
-    where ``1 + y`` would round to ``1.0``.
+    The convention covers only ``x == 0``: with ``x != 0`` the plain
+    definition applies, so ``xlog1py(2, -1)`` is ``-inf``.  Using
+    :math:`\log(1 + y)` avoids precision loss for small ``y`` where
+    ``1 + y`` would round to ``1.0``.
+
+    Gradients are :math:`\partial/\partial x = \log(1 + y)` and
+    :math:`\partial/\partial y = x / (1 + y)`, except where ``x == 0``
+    and :math:`\log(1 + y)` is not finite (``y <= -1`` or ``y``
+    infinite): there both are ``0``, so the backward never forms
+    ``0 \cdot \infty``.  This is the convention of :func:`lucid.xlogy`,
+    and the two functions share one implementation.  Two cells differ
+    from the reference framework on purpose: at ``(0, -1)`` its ``y``
+    gradient is ``0 / 0 = NaN`` and Lucid's is ``0``, and at
+    ``(0, +\infty)`` its ``x`` gradient is :math:`+\infty` and Lucid's
+    is ``0``.
 
     Examples
     --------
@@ -688,10 +703,10 @@ def xlog1py(x: Tensor, y: Tensor) -> Tensor:
     >>> y = lucid.tensor([0.0, 1.0, 3.0])
     >>> xlog1py(x, y)
     tensor([0., 0.6931, 2.773])
+    >>> xlog1py(lucid.tensor([0.0, 2.0]), lucid.tensor([-1.0, -1.0]))
+    tensor([0., -inf])
     """
-    safe_y = lucid.where(y == lucid.zeros_like(y), lucid.full_like(y, 0.0), y)
-    out = x * lucid.log1p(safe_y)
-    return lucid.where(x == lucid.zeros_like(x), lucid.full_like(out, 0.0), out)
+    return _x_times_log(x, y, lucid.log1p, pole=-1.0, root=0.0)
 
 
 def entr(x: Tensor) -> Tensor:
@@ -705,14 +720,14 @@ def entr(x: Tensor) -> Tensor:
     Parameters
     ----------
     x : Tensor
-        Input tensor; any floating-point dtype.  Values outside
-        :math:`[0, \infty)` produce ``NaN``.
+        Input tensor.  Integer and bool inputs are taken as ``float32``.
+        Values below zero give ``-inf``.
 
     Returns
     -------
     Tensor
         Element-wise :math:`-x \log x` with the limit convention at
-        ``x = 0``; same shape and dtype as ``x``.
+        ``x = 0``; same shape as ``x``.
 
     Notes
     -----
@@ -723,7 +738,7 @@ def entr(x: Tensor) -> Tensor:
         \mathrm{entr}(x) = \begin{cases}
             -x \log x, & x > 0 \\[2pt]
             0,         & x = 0 \\[2pt]
-            \mathrm{NaN}, & x < 0.
+            -\infty,   & x < 0.
         \end{cases}
 
     The function is concave with maximum :math:`1/e \approx 0.3679` at
@@ -731,28 +746,30 @@ def entr(x: Tensor) -> Tensor:
     ``x = 1``.  Related quantities include `rel_entr` (point-wise
     relative entropy) and :func:`kl_div` (KL kernel).
 
+    It is :math:`-\operatorname{xlogy}(x, x)` and takes the ``0 \log 0``
+    convention from :func:`lucid.xlogy`, so the gradient at ``x = 0`` is
+    ``0`` rather than the one-sided :math:`+\infty` of
+    :math:`-(1 + \log x)` that the reference framework returns.  Below
+    zero the gradient is NaN, as in the reference.
+
     Examples
     --------
     >>> import lucid
     >>> from lucid.special import entr
     >>> entr(lucid.tensor([0.0, 0.5, 1.0, 2.0]))
-    tensor([0., 0.3466, -0., -1.386])
+    tensor([0., 0.3466, 0., -1.386])
     """
     x = _real(x)
-    zero = lucid.zeros_like(x)
-    safe_x = lucid.where(x > zero, x, lucid.full_like(x, 1.0))
-    val = -safe_x * lucid.log(safe_x)
-    val = lucid.where(x == zero, lucid.full_like(val, 0.0), val)
+    # ``0.0 - …`` rather than a unary minus: the convention's 0 at x == 0
+    # is +0, and negating it would print as -0.
+    val = 0.0 - lucid.xlogy(x, x)
     # Negative x is -inf, not NaN.  The entropy kernel is defined as
     # ``-x log x`` on the positive half, ``0`` at zero and ``-inf`` below
     # — it is an extended-real-valued function, not an undefined one, and
     # a NaN there loses the ordering that makes it usable as a penalty.
-    val = lucid.where(x < zero, lucid.full_like(val, float("-inf")), val)
-    # A NaN input has to survive.  Every branch above is chosen by a
-    # comparison against NaN, and all of them are false, so the value fell
-    # through to the ``x > 0`` branch's placeholder of 1.0 and came back
-    # -0.0 — a NaN entering the expression left it as an ordinary number.
-    return lucid.where(x != x, lucid.full_like(val, float("nan")), val)
+    # A NaN input needs no branch of its own: ``xlogy(nan, nan)`` is NaN,
+    # and ``nan < 0`` is false, so it falls through unchanged.
+    return lucid.where(x < 0.0, float("-inf"), val)
 
 
 # ── Gamma family ───────────────────────────────────────────────────────────

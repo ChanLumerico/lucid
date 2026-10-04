@@ -13,7 +13,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _align_device, _as_tensor
 from lucid.distributions._util import _broadcast_pair
-from lucid.distributions._util import _clamp_probs, _lazy_param, _xlogy
+from lucid.distributions._util import _clamp_probs, _lazy_param
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -762,7 +762,7 @@ class Multinomial(Distribution):
             log_p = lucid.where((value == 0) & lucid.isinf(log_p), 0.0, log_p)
             log_p_term: Tensor = (value * log_p).sum(dim=-1)
         else:
-            log_p_term = _xlogy(value, self._probs).sum(dim=-1)
+            log_p_term = lucid.xlogy(value, self._probs).sum(dim=-1)
         return log_coeff + log_p_term
 
     @override

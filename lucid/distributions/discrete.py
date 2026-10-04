@@ -12,7 +12,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
-from lucid.distributions._util import _clamp_probs, _lazy_param, _xlogy
+from lucid.distributions._util import _clamp_probs, _lazy_param
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -203,7 +203,7 @@ class Poisson(ExponentialFamily):
         Tensor
             Log-probability values of the same shape as ``value``.
         """
-        return _xlogy(value, self.rate) - self.rate - lucid.lgamma(value + 1.0)
+        return lucid.xlogy(value, self.rate) - self.rate - lucid.lgamma(value + 1.0)
 
     @override
     def entropy(self) -> Tensor:
