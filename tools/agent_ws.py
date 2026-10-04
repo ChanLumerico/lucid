@@ -45,6 +45,7 @@ import argparse
 import contextlib
 import fcntl
 import fnmatch
+import functools
 import json
 import os
 import re
@@ -101,11 +102,53 @@ class WorkspaceError(Exception):
 # ── git plumbing ──────────────────────────────────────────────────────────────
 
 
+@functools.cache
+def repo_env() -> dict[str, str]:
+    """This process's environment minus git's repository-local variables.
+
+    git exports some of them to the hooks it runs: pre-commit always gets
+    GIT_INDEX_FILE (a relative ``.git/index`` in the main checkout, a temporary
+    ``next-index-*.lock`` for ``git commit -- <path>``) and, from a linked
+    worktree, GIT_DIR; ``git rebase --exec`` exports GIT_DIR too.  They outrank
+    ``cwd``, so a query of another tree that inherits them reads the committing
+    tree's index and config instead — every tree then claims the staged files,
+    under the committer's label.  Without them each query finds its tree from
+    ``cwd``.
+
+    The names are git's own list, ``git rev-parse --local-env-vars`` — what git
+    clears before it enters another repository (a submodule) — so they follow
+    the installed git.  GIT_CONFIG_KEY_<n> / GIT_CONFIG_VALUE_<n> are read only
+    through GIT_CONFIG_COUNT, which is on it.
+    """
+    bare = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    proc = subprocess.run(  # outside any repository: the list depends on none
+        ["git", "rev-parse", "--local-env-vars"],
+        cwd="/",
+        env=bare,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    names = set(proc.stdout.split())
+    if proc.returncode != 0 or "GIT_INDEX_FILE" not in names:
+        raise WorkspaceError(
+            f"git rev-parse --local-env-vars failed:\n{proc.stderr.strip()}"
+        )
+    return {k: v for k, v in os.environ.items() if k not in names}
+
+
 def git(
     *args: str, cwd: Path, check: bool = True, env: dict[str, str] | None = None
 ) -> str:
+    """Run git in ``cwd``.  Without ``env`` it gets ``repo_env()``: the tree is
+    found from ``cwd``, never from a GIT_DIR / GIT_INDEX_FILE a hook inherited."""
     proc = subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, env=env, check=False
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env=repo_env() if env is None else env,
+        check=False,
     )
     if check and proc.returncode != 0:
         raise WorkspaceError(
@@ -115,7 +158,12 @@ def git(
 
 
 def git_ok(*args: str, cwd: Path) -> bool:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True).returncode == 0
+    return (
+        subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, env=repo_env()
+        ).returncode
+        == 0
+    )
 
 
 @dataclass
@@ -603,7 +651,19 @@ def cmd_check_commit(args: argparse.Namespace) -> int:
     if len(trees) < 2:
         return 0
     me = find_tree(trees, root)
-    staged = git("diff", "--cached", "--name-only", "--no-renames", cwd=root).split()
+    # The one query that must see the hook's environment: what is being
+    # committed lives in the index git handed over as GIT_INDEX_FILE — for
+    # `git commit -- <path>` a temporary one, while the worktree's own index
+    # may stage something else entirely.  Everything else asks about a tree's
+    # ordinary state and runs on repo_env().
+    staged = git(
+        "diff",
+        "--cached",
+        "--name-only",
+        "--no-renames",
+        cwd=root,
+        env=dict(os.environ),
+    ).split()
     blocked = [v for v in (judge(rel, me, trees) for rel in staged) if not v.clear]
     if not blocked:
         return 0
@@ -658,6 +718,7 @@ def cmd_land(args: argparse.Namespace) -> int:
         proc = subprocess.run(
             ["git", "merge-tree", "--write-tree", "--name-only", MAIN_BRANCH, "HEAD"],
             cwd=wt,
+            env=repo_env(),
             capture_output=True,
             text=True,
             check=False,
@@ -678,6 +739,7 @@ def cmd_land(args: argparse.Namespace) -> int:
         rebase = subprocess.run(
             ["git", "rebase", MAIN_BRANCH],
             cwd=wt,
+            env=repo_env(),
             capture_output=True,
             text=True,
             check=False,
@@ -727,6 +789,7 @@ def cmd_land(args: argparse.Namespace) -> int:
             replay = subprocess.run(
                 ["git", "rebase", "--force-rebase", "--exec", fold, MAIN_BRANCH],
                 cwd=wt,
+                env=repo_env(),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -745,6 +808,7 @@ def cmd_land(args: argparse.Namespace) -> int:
         ff = subprocess.run(
             ["git", "merge", "--ff-only", tip],
             cwd=main.path,
+            env=repo_env(),
             capture_output=True,
             text=True,
             check=False,
@@ -770,6 +834,7 @@ def cmd_land(args: argparse.Namespace) -> int:
         removed = subprocess.run(
             ["git", "worktree", "remove", str(wt)],
             cwd=main.path,
+            env=repo_env(),
             capture_output=True,
             text=True,
         )
