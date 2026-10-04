@@ -61,7 +61,7 @@ namespace lucid {
 // Attributes
 // ----------
 // schema_v1 : OpSchema
-//     Registered as ``"sum"`` with ``AmpPolicy::Promote`` — integer and
+//     Registered as ``"sum"`` with ``AmpPolicy::KeepInput`` — integer and
 //     boolean inputs are promoted to ``int64`` before reduction so the
 //     sum cannot overflow narrow integer dtypes (parity fix found
 //     during the M4 Max training sanity check, where ``bool.sum()``
@@ -112,7 +112,7 @@ public:
 // Attributes
 // ----------
 // schema_v1 : OpSchema
-//     Registered as ``"mean"`` with ``AmpPolicy::Promote``.
+//     Registered as ``"mean"`` with ``AmpPolicy::KeepInput``.
 // kSavesInput : bool
 //     ``false``.  Backward depends only on $N$ and shape metadata.
 //
@@ -168,7 +168,7 @@ public:
 // Attributes
 // ----------
 // schema_v1 : OpSchema
-//     Registered as ``"prod"`` with ``AmpPolicy::Promote``.
+//     Registered as ``"prod"`` with ``AmpPolicy::KeepInput``.
 // kSavesInput : bool
 //     ``true``.
 // kSavesOutput : bool

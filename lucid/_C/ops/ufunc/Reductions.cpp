@@ -221,7 +221,19 @@ CpuStorage multi_axis_reduce(const CpuStorage& a,
 }  // namespace
 
 // sum — broadcast-back is O(n) and requires no saved tensors.
-const OpSchema SumBackward::schema_v1{"sum", 1, AmpPolicy::Promote, true};
+//
+// KeepInput, as for mean and prod below: inside an autocast scope a
+// reduction runs in its input's dtype.  It was Promote, which cast a float32
+// input down to float16 first, so ``full((64, 1024), 1.5).sum()`` under
+// autocast answered float16 inf where the reference gives float32 98304 —
+// and an int64 or float64 sum was demoted the same way.  ForceFP32 would
+// fix the float32 case but turn every integer sum into float32: the
+// SchemaGuard reads ForceFP32 as "the result is a real number" outside an
+// autocast scope too.  The one remaining difference from the reference is
+// a float16 input under a Metal scope, which the reference's GPU autocast
+// widens to float32 (its CPU autocast does not); here it stays float16,
+// accumulated in float32 by the kernel (backend/gpu/HalfAccumulation.h).
+const OpSchema SumBackward::schema_v1{"sum", 1, AmpPolicy::KeepInput, true};
 
 // dL/dx = broadcast(dL/dy) back to the original input shape along reduce_axes_.
 Storage SumBackward::grad_formula(const Storage& grad_out) {
@@ -260,9 +272,10 @@ TensorImplPtr sum_op(const TensorImplPtr& a, const std::vector<int>& axes, bool 
 }
 LUCID_REGISTER_OP(SumBackward)
 
-// mean — uses AmpPolicy::Promote; divides broadcast gradient by the count of
-// reduced elements.
-const OpSchema MeanBackward::schema_v1{"mean", 1, AmpPolicy::Promote, true, "", true};
+// mean — KeepInput (see sum); divides broadcast gradient by the count of
+// reduced elements.  The reference's autocast lists mean nowhere, so it
+// runs in the input dtype there too.
+const OpSchema MeanBackward::schema_v1{"mean", 1, AmpPolicy::KeepInput, true, "", true};
 
 namespace {
 // Count the number of elements collapsed by the given axes.
@@ -333,7 +346,8 @@ TensorImplPtr mean_op(const TensorImplPtr& a, const std::vector<int>& axes, bool
 LUCID_REGISTER_OP(MeanBackward)
 
 // prod — CPU uses Accelerate via multi_axis_reduce; GPU uses mlx::core::prod.
-const OpSchema ProdBackward::schema_v1{"prod", 1, AmpPolicy::Promote, true};
+// KeepInput for the reason sum gives.
+const OpSchema ProdBackward::schema_v1{"prod", 1, AmpPolicy::KeepInput, true};
 
 // Apply the multi_axis_reduce helper with Accelerate prod kernels.
 CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
