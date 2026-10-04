@@ -28,6 +28,9 @@ def _npx() -> str:
 
 class JscpdCollector(Collector):
     name = "jscpd"
+    # Cross-file, but the whole tree takes ~1 s: a pasted block is the slop
+    # most worth stopping before it is committed, so it runs in --fast too.
+    fast = True
 
     @override
     def version(self) -> str:

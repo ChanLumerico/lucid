@@ -8,6 +8,7 @@ invisible — the count, not the site, is what may not rise.
 """
 
 import datetime
+import functools
 import json
 import os
 import subprocess
@@ -29,15 +30,30 @@ class GateError(Exception):
 # ── git ───────────────────────────────────────────────────────────────────
 
 
-def _git_env() -> dict[str, str]:
-    # A git hook exports GIT_INDEX_FILE / GIT_DIR; they would point queries
-    # of another tree at the committing tree.  The gate always asks by cwd.
-    return {k: v for k, v in os.environ.items() if k not in ("GIT_INDEX_FILE", "GIT_DIR")}
+@functools.cache
+def git_env() -> dict[str, str]:
+    """This environment minus git's repository-local variables.
+
+    A git hook exports GIT_INDEX_FILE / GIT_DIR (agent_ws.repo_env has the
+    story); they outrank ``cwd`` and would aim a query of another tree — the
+    ``--root`` of a test repository — at the committing one.  git's own list.
+    """
+    bare = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    proc = subprocess.run(
+        ["git", "rev-parse", "--local-env-vars"],
+        cwd="/",
+        env=bare,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    local = set(proc.stdout.split()) | {"GIT_INDEX_FILE", "GIT_DIR"}
+    return {k: v for k, v in os.environ.items() if k not in local}
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
     proc = subprocess.run(
-        ["git", *args], cwd=root, env=_git_env(), capture_output=True, text=True, check=False
+        ["git", *args], cwd=root, env=git_env(), capture_output=True, text=True, check=False
     )
     if check and proc.returncode != 0:
         raise GateError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")

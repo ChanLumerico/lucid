@@ -54,6 +54,16 @@ repos:
             lucid/__init__\.py
           )$
 
+      # Ratchet quality gate: no (tool, rule, file) count may rise above
+      # tools/quality_baseline.json.  Fast path = changed files, cheap
+      # collectors; CI runs --full.  tools/README.md "Quality gate".
+      - id: lucid-quality-gate
+        name: lucid quality ratchet (fast)
+        entry: python -m tools.quality_gate --fast
+        language: system
+        pass_filenames: false
+        files: ^(lucid/|tools/quality_baseline\.json$)
+
       # Model-zoo family-contract validator.  Runs on every commit that
       # touches `lucid/models/<domain>/<family>/`-tier files — catches
       # missing @model_family_meta, malformed task-wrapper names, broken

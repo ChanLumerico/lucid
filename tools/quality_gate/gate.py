@@ -21,6 +21,7 @@ from tools.quality_gate.core import (
     changed_files,
     class_totals,
     git,
+    git_env,
     load_baseline,
     rebaseline_entry,
     renames,
@@ -192,17 +193,12 @@ def rebaseline(root: Path, collectors: list[Collector], reason: str, workdir: Pa
 
 def _extract(root: Path, ref: str, dest: Path) -> None:
     """Materialise *ref*'s tree (the parts the gate reads) without a git worktree."""
-    wanted = [
-        p
-        for p in ("lucid", "pyproject.toml", "mypy.ini", ".gitignore")
-        if subprocess.run(
-            ["git", "cat-file", "-e", f"{ref}:{p}"], cwd=root, capture_output=True, check=False
-        ).returncode
-        == 0
-    ]
+    present = git(root, "ls-tree", "--name-only", ref).split("\n")
+    wanted = [p for p in ("lucid", "pyproject.toml", "mypy.ini", ".gitignore") if p in present]
     proc = subprocess.run(
         ["git", "archive", "--format=tar", ref, "--", *wanted],
         cwd=root,
+        env=git_env(),
         capture_output=True,
         check=False,
     )

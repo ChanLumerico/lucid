@@ -2,8 +2,8 @@
 
 A collector is *local* when a file's count depends on that file alone
 (ruff, the counters, lizard): the pre-commit fast path can then measure only
-the changed files.  The cross-file ones (vulture, jscpd, mypy) need the
-whole tree and run in ``--full`` and ``--diff``.
+the changed files.  The cross-file ones (vulture, jscpd, mypy) always
+measure the whole tree; of those only jscpd is cheap enough for ``--fast``.
 """
 
 import subprocess

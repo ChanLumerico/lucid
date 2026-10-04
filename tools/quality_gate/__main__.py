@@ -32,8 +32,9 @@ def _pick(names: str | None, *, fast: bool, diff: bool, full: bool) -> list[Coll
         chosen = [c for c in every if c.default and c.in_diff]
     else:
         chosen = [c for c in every if c.default]
-    if fast and any(not c.local for c in chosen):
-        raise GateError("--fast measures changed files only; cross-file collectors need --full")
+    slow = [c.name for c in chosen if fast and not c.local and not c.fast]
+    if slow:
+        raise GateError(f"--fast cannot run {', '.join(slow)} (whole-tree and slow): use --full")
     return chosen
 
 

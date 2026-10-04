@@ -123,6 +123,27 @@ if [[ "${LUCID_SKIP_H4_GUARD:-0}" != "1" && -f "${H4_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1b. Quality ratchet ─────────────────────────────────────────────────────
+# Hard-fail.  ``tools/quality_gate --fast`` measures the files changed since
+# HEAD with the cheap collectors (ruff deslop rules, suppression / cast / LOC
+# counters, lizard) and refuses any (tool, rule, file) count above
+# ``tools/quality_baseline.json`` — new slop — and a baseline left higher
+# than the code (a fix not recorded with ``--update --fast``).  Seconds, not
+# minutes; the cross-file collectors run in CI and at land.  Only when lucid/
+# or the baseline is staged.  tools/README.md "Quality gate".
+QG_DIR="${REPO_ROOT}/tools/quality_gate"
+if [[ "${LUCID_SKIP_QUALITY_GATE:-0}" != "1" && -n "${PY}" && -d "${QG_DIR}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMRD \
+        | grep -qE '^(lucid/|tools/quality_baseline\.json$)'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" -m tools.quality_gate --fast >&2); then
+            echo "" >&2
+            echo "  ❌  Pre-commit blocked by the quality ratchet (see above)." >&2
+            echo "      Override (CI and land still check):  LUCID_SKIP_QUALITY_GATE=1 git commit ..." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 2. Docstring coverage gate ──────────────────────────────────────────────
 # Hard-fail.  The validator surfaces six distinct blind-spot categories
 # that all manifest as empty / sparse / misleading docs pages on the

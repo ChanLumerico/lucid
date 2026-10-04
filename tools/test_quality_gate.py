@@ -237,7 +237,8 @@ def test_duplicated_block_fails_full_and_diff(tmp_path: Path) -> None:
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "base")
     (root / "lucid" / "a.py").write_text(DUPLICATED)
-    out = gate(root, "--full", "--collectors", "jscpd")
-    assert out.returncode == 1 and "clone-pair" in out.stdout, out.stdout + out.stderr
+    for mode in ("--full", "--fast"):
+        out = gate(root, mode, "--collectors", "jscpd")
+        assert out.returncode == 1 and "clone-pair" in out.stdout, out.stdout + out.stderr
     git(root, "commit", "-qam", "dup")
     assert gate(root, "--diff", "HEAD~1", "--collectors", "jscpd").returncode == 1
