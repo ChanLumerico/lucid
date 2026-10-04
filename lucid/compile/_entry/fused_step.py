@@ -131,9 +131,10 @@ def fused_step(
     one with ``requires_grad=False``, gets no gradient and is left
     untouched (state and step count included), and every hyper-parameter
     is read from ``optimizer.param_groups`` on each call, so LR
-    schedulers work.  Checkpoint the optimizer through
-    :attr:`optimizer` — the compiled optimizer whose ``state_dict``
-    holds the state this step updates.
+    schedulers work.  ``optimizer.state_dict()`` /
+    ``load_state_dict()`` checkpoint the state this step updates (the
+    compiled optimizer owns it from ``fused_step(...)`` on — see
+    :func:`compile_optimizer`).
 
     Delegates the optimizer math to the matching
     :func:`compile_optimizer` subclass — so every Lucid eager optimizer

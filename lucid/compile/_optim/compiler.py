@@ -88,15 +88,19 @@ def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
     Every parameter group compiles into the same executable: each
     parameter reads its own group's hyper-parameters.
 
-    From this call on the compiled wrapper owns the optimizer state.
-    ``opt.state_dict()`` / ``opt.load_state_dict()`` answer for it too
-    (they are redirected to the wrapper), so a training loop that only
-    holds ``opt`` — as one driven by :func:`fused_step` does — still
-    checkpoints and resumes correctly; the format is the eager one, so
+    **One owner of the optimizer state at a time.**  Compiling hands the
+    state over to the wrapper: whatever ``opt`` built up in eager steps
+    so far is adopted, and from then on ``opt.step()``,
+    ``opt.state_dict()`` and ``opt.load_state_dict()`` all go to the
+    wrapper — whichever handle the training loop holds (a loop driven by
+    :func:`fused_step` only holds ``opt``), it steps, saves and restores
+    the one state.  The checkpoint format is the eager one, so
     checkpoints move freely between eager and compiled runs.  Compiling
-    the same optimizer again returns the same wrapper.  Stepping ``opt``
-    itself afterwards would run its eager engines on their own state —
-    step one or the other.
+    the same optimizer again returns the same wrapper.
+
+    The exception is :class:`~lucid.optim.LBFGS`, whose compiled step is
+    a different algorithm: ``opt`` keeps its own eager state and methods,
+    and the wrapper's state is its own.
 
     Parameters
     ----------
@@ -425,6 +429,10 @@ class _CompiledStepBase:
     _EXPORTS_STEP: bool = True
     # Per-parameter Python scalar state exported next to "step".
     _PSTATE_NAMES: tuple[str, ...] = ()
+    # Whether the wrapper takes over the eager optimizer's state — adopts
+    # it, steps for it and checkpoints it.  False only where the compiled
+    # algorithm is not the eager one (LBFGS).
+    _OWNS_EAGER_STATE: bool = True
 
     def __init__(self, opt: Optimizer) -> None:
         """Set up the shared compile-step plumbing on top of ``opt``.
@@ -462,11 +470,18 @@ class _CompiledStepBase:
         self._sync_params()
         if not self._params:
             raise ValueError("compile_optimizer: optimizer has no trainable parameters")
-        # The compiled step owns the state from here on.  The eager
-        # optimizer's checkpoint methods would report its never-stepped
-        # engines, so they answer for this wrapper instead (see
-        # ``compile_optimizer``).
         opt.__dict__[_OWNER_ATTR] = self
+        if not self._OWNS_EAGER_STATE:
+            return
+        # One owner of the state at a time (see ``compile_optimizer``):
+        # take over what eager steps built so far, then answer for ``opt``
+        # — stepping it eagerly from here on would advance engines whose
+        # state nobody checkpoints any more.
+        from lucid.optim.optimizer import Optimizer as _Optimizer
+
+        if opt._engines_built:
+            self.load_state_dict(_Optimizer.state_dict(opt))
+        opt.__dict__["step"] = self.step
         opt.__dict__["state_dict"] = self.state_dict
         opt.__dict__["load_state_dict"] = self.load_state_dict
 
@@ -2114,7 +2129,9 @@ class _CompiledLBFGS(_CompiledStepBase):
         param = param + lr * d
 
     It is not the eager algorithm, so its checkpoint (``step``,
-    ``prev_param``, ``prev_grad``) is its own.
+    ``prev_param``, ``prev_grad``) is its own, read through the wrapper;
+    the eager optimizer keeps its own state, ``step`` and checkpoint
+    methods (it neither hands its state over nor answers for this one).
 
     See Also
     --------
@@ -2123,6 +2140,8 @@ class _CompiledLBFGS(_CompiledStepBase):
     """
 
     _EPS_HISTORY: float = 1e-10
+    # A different algorithm from the eager LBFGS: ``opt`` keeps its state.
+    _OWNS_EAGER_STATE = False
 
     @override
     def _state_names(self, flags: _Flags) -> tuple[str, ...]:

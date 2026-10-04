@@ -407,6 +407,102 @@ def test_a_compiled_checkpoint_loads_into_an_eager_optimizer() -> None:
     assert _drift(_snapshot(reference.model), _snapshot(eager.model)) < TOL
 
 
+def test_stepping_the_eager_handle_after_compiling_steps_the_wrapper() -> None:
+    """One owner of the state: ``opt.step()`` / ``state_dict`` / ``load_state_dict``
+    on the eager handle all reach the compiled state once it is compiled.
+
+    Before, eager steps after ``compile_optimizer`` advanced the eager
+    engines while ``opt.state_dict()`` reported the wrapper's empty state —
+    a checkpoint that silently lost everything.
+    """
+    x, t = _data()
+
+    def make(m: nn.Module) -> optim.Optimizer:
+        return optim.Adam(m.parameters(), lr=0.05, weight_decay=0.01)
+
+    reference = _run("eager", make)
+    model = _net()
+    opt = make(model)
+    compile_optimizer(opt)
+    handle = _Runner("eager", model, opt)  # steps through ``opt`` itself
+    for _ in range(3):
+        reference.step(x, t)
+        handle.step(x, t)
+    assert _drift(_snapshot(reference.model), _snapshot(model)) < TOL
+    checkpoint = opt.state_dict()
+    _assert_same_state(checkpoint, reference.opt.state_dict())
+
+    # Save → load round trip on a fresh eager run equals the uninterrupted one.
+    resumed = _run("eager", make, _copy_of(model))
+    resumed.opt.load_state_dict(checkpoint)
+    for _ in range(2):
+        reference.step(x, t)
+        resumed.step(x, t)
+    assert _drift(_snapshot(reference.model), _snapshot(resumed.model)) < TOL
+
+    # And ``opt.load_state_dict`` reaches the state ``opt.step()`` uses: load
+    # the reference's step-5 checkpoint, take one step, land on its step 6.
+    with lucid.no_grad():
+        for p, q in zip(model.parameters(), reference.model.parameters()):
+            p.copy_(q.detach())
+    opt.load_state_dict(reference.opt.state_dict())
+    reference.step(x, t)
+    handle.step(x, t)
+    assert _drift(_snapshot(reference.model), _snapshot(model)) < TOL
+
+
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+@pytest.mark.parametrize("make_opt", STATEFUL)
+def test_compiling_after_eager_steps_carries_their_state_on(
+    make_opt: OptFactory, mode: str
+) -> None:
+    """Three eager steps, then compile and take three more: the same as six
+    eager steps — the warm-up state is adopted, not restarted."""
+    x, t = _data()
+    reference, warm = _both("eager", make_opt)
+    for _ in range(3):
+        reference.step(x, t)
+        warm.step(x, t)
+    compiled = _Runner(mode, warm.model, warm.opt)
+    for k in range(3):
+        reference.step(x, t)
+        compiled.step(x, t)
+        drift = _drift(_snapshot(reference.model), _snapshot(warm.model))
+        assert drift < TOL, f"step {k + 4}: drift {drift:.3e}"
+    _assert_same_state(warm.opt.state_dict(), reference.opt.state_dict())
+
+
+def test_lbfgs_keeps_its_eager_state_and_step() -> None:
+    """The compiled LBFGS is a different algorithm, so ``opt`` stays its own:
+    its ``step`` (closure line search), state and checkpoint are untouched."""
+    lucid.manual_seed(1)
+    x = lucid.randn(10, 6).to(COMPILE_DEVICE)
+    t = lucid.randn(10, 3).to(COMPILE_DEVICE)
+
+    def run(compile_first: bool) -> tuple[list[lucid.Tensor], dict[str, object]]:
+        model = _net()
+        opt = optim.LBFGS(model.parameters(), lr=0.5, max_iter=4)
+        if compile_first:
+            compile_optimizer(opt)
+            for name in ("step", "state_dict", "load_state_dict"):
+                assert name not in opt.__dict__, name
+
+        def closure() -> lucid.Tensor:
+            opt.zero_grad()
+            loss = F.mse_loss(model(x), t)
+            loss.backward()
+            return loss
+
+        for _ in range(2):
+            opt.step(closure)
+        return _snapshot(model), opt.state_dict()
+
+    plain_params, plain_state = run(False)
+    params, state = run(True)
+    assert _drift(plain_params, params) == 0.0
+    assert sorted(state["state"][0]) == sorted(plain_state["state"][0])  # type: ignore[index]
+
+
 # ── CHA-177: parameters without a gradient do not move ─────────────
 
 
@@ -579,9 +675,14 @@ def test_the_builder_refuses_a_gradient_off_the_loss_path() -> None:
                 ids(ghost_w, ghost_u),
                 ids(new_w, new_u),
             )
-            print("refused" if exe is None else "compiled")
+            print("compiled" if exe is not None else "returned None")
         except RuntimeError as e:
-            print("refused:", "does not reach the loss" in str(e))
+            print("refused:", e)
         """)
     assert proc.returncode == 0, proc.stderr[-2000:]
-    assert proc.stdout.strip() in ("refused", "refused: True"), proc.stdout
+    out = proc.stdout.strip()
+    # Refused by the loss-path check, naming the parameter — not some
+    # other failure, and not a silent ``None``.
+    assert out.startswith("refused:"), out
+    assert "does not reach the loss" in out, out
+    assert "param id" in out, out
