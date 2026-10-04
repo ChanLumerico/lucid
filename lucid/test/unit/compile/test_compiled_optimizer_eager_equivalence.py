@@ -290,3 +290,115 @@ def test_group_counts_do_not_share_an_executable() -> None:
     key_one = next(iter(one.stepper._plans))  # type: ignore[attr-defined]
     key_two = next(iter(two.stepper._plans))  # type: ignore[attr-defined]
     assert key_one != key_two
+
+
+# ── CHA-176: the state is checkpointed in the eager format ─────────
+
+
+STATEFUL = [
+    pytest.param(lambda m: optim.SGD(m.parameters(), lr=0.2, momentum=0.9), id="SGD"),
+    pytest.param(lambda m: optim.Adam(m.parameters(), lr=0.05), id="Adam"),
+    pytest.param(
+        lambda m: optim.Adam(m.parameters(), lr=0.05, amsgrad=True), id="Adam_amsgrad"
+    ),
+    pytest.param(lambda m: optim.AdamW(m.parameters(), lr=0.05), id="AdamW"),
+    pytest.param(
+        lambda m: optim.RMSprop(m.parameters(), lr=0.01, momentum=0.9, centered=True),
+        id="RMSprop",
+    ),
+    pytest.param(lambda m: optim.Adagrad(m.parameters(), lr=0.1), id="Adagrad"),
+    pytest.param(lambda m: optim.Adadelta(m.parameters()), id="Adadelta"),
+    pytest.param(lambda m: optim.Adamax(m.parameters(), lr=0.05), id="Adamax"),
+    pytest.param(lambda m: optim.NAdam(m.parameters(), lr=0.05), id="NAdam"),
+    pytest.param(lambda m: optim.RAdam(m.parameters(), lr=0.05), id="RAdam"),
+    pytest.param(
+        lambda m: optim.ASGD(m.parameters(), lr=0.05, lambd=0.1, t0=1.0), id="ASGD"
+    ),
+    pytest.param(lambda m: optim.Rprop(m.parameters(), lr=0.01), id="Rprop"),
+]
+
+
+def _assert_same_state(got: dict[str, object], want: dict[str, object]) -> None:
+    gs = got["state"]
+    ws = want["state"]
+    assert sorted(gs) == sorted(ws)  # type: ignore[call-overload]
+    for idx in ws:  # type: ignore[attr-defined]
+        g, w = gs[idx], ws[idx]  # type: ignore[index]
+        assert sorted(g) == sorted(w), idx
+        for key in w:
+            a, b = g[key], w[key]
+            assert a.dtype == b.dtype and a.shape == b.shape, (idx, key)
+            # Relative past 1: an RMSprop momentum buffer grows to ~20.
+            assert abs(a - b).max() <= TOL * max(1.0, abs(b).max()), (idx, key)
+
+
+@pytest.mark.parametrize("make_opt", STATEFUL)
+def test_state_dict_matches_the_eager_one(make_opt: OptFactory) -> None:
+    """Same keys, dtypes, shapes and values as the eager optimizer's state."""
+    x, t = _data()
+    eager, comp = _both("compiled", make_opt)
+    for _ in range(3):
+        eager.step(x, t)
+        comp.step(x, t)
+    _assert_same_state(comp.stepper.state_dict(), eager.opt.state_dict())  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("make_opt", STATEFUL)
+def test_fused_step_state_reaches_the_optimizer_state_dict(
+    make_opt: OptFactory,
+) -> None:
+    """After ``fused_step`` the optimizer the user holds checkpoints its state."""
+    x, t = _data()
+    eager, comp = _both("fused", make_opt)
+    for _ in range(3):
+        eager.step(x, t)
+        comp.step(x, t)
+    got = comp.opt.state_dict()
+    assert got["state"], "fused_step left the optimizer's state_dict empty"
+    _assert_same_state(got, eager.opt.state_dict())
+
+
+@pytest.mark.parametrize("source", ["eager", "compiled"])
+@pytest.mark.parametrize("mode", COMPILED_MODES)
+@pytest.mark.parametrize("make_opt", STATEFUL)
+def test_resuming_from_a_checkpoint_matches_an_uninterrupted_run(
+    make_opt: OptFactory, mode: str, source: str
+) -> None:
+    """Save after 3 steps, resume in a fresh compiled run, compare after 3 more.
+
+    ``source="eager"`` loads an eager checkpoint into the compiled
+    optimizer; ``"compiled"`` round-trips the compiled one.
+    """
+    x, t = _data()
+    reference, first = _both(mode if source == "compiled" else "eager", make_opt)
+    for _ in range(3):
+        reference.step(x, t)
+        first.step(x, t)
+    checkpoint = first.opt.state_dict()
+
+    resumed = _run(mode, make_opt, _copy_of(first.model))
+    resumed.opt.load_state_dict(checkpoint)
+    for k in range(3):
+        reference.step(x, t)
+        resumed.step(x, t)
+        drift = _drift(_snapshot(reference.model), _snapshot(resumed.model))
+        assert drift < TOL, f"step {k + 4}: drift {drift:.3e}"
+
+
+def test_a_compiled_checkpoint_loads_into_an_eager_optimizer() -> None:
+    """The format is the eager one: the eager optimizer can carry on from it."""
+    x, t = _data()
+
+    def make(m: nn.Module) -> optim.Optimizer:
+        return optim.NAdam(m.parameters(), lr=0.05)
+
+    reference, comp = _both("compiled", make)
+    for _ in range(3):
+        reference.step(x, t)
+        comp.step(x, t)
+    eager = _run("eager", make, _copy_of(comp.model))
+    eager.opt.load_state_dict(comp.opt.state_dict())
+    for _ in range(3):
+        reference.step(x, t)
+        eager.step(x, t)
+    assert _drift(_snapshot(reference.model), _snapshot(eager.model)) < TOL
