@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add half_open_interval, one_hot, corr_cholesky, independent
 
+- ratchet quality gate — collectors, baseline, check/update/diff/report
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
