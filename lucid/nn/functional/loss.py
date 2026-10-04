@@ -38,11 +38,13 @@ _KERNEL_REDUCTION: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
 
 # ── boundary validators ─────────────────────────────────────────────────────
 #
-# Each raises before the loss dispatches a single op.  A wrong argument used
-# to reach the arithmetic: a class weight of the wrong length was gathered
-# out of bounds (a silent answer on the CPU, NaN or 0 on Metal), a BCE
-# target of another shape was broadcast into a different loss, and nine
-# losses looked at ``reduction`` only after computing.
+# Each raises before the loss computes.  All but ``_check_unit_interval``
+# read shapes and Python values only, so a refusal dispatches no op at all.
+# A wrong argument used to reach the arithmetic: a class weight of the wrong
+# length was cut short or read out of bounds (a silent answer on the CPU,
+# NaN or 0 on Metal), a BCE target of another shape was broadcast into a
+# different loss, and nine losses looked at ``reduction`` only after
+# computing.
 
 
 def _check_reduction(reduction: str, op: str, *, batchmean: bool = False) -> None:
@@ -124,7 +126,7 @@ def _check_class_weight(weight: Tensor | None, num_classes: int, op: str) -> Non
 
     Shape only — no value is read, so this costs nothing on Metal.  A
     longer weight was silently cut to its first ``C`` entries, and a
-    shorter one gathered out of bounds."""
+    shorter one read out of bounds for the classes past its end."""
     if weight is not None and (weight.ndim != 1 or int(weight.shape[0]) != num_classes):
         raise ValueError(
             f"{op}: weight tensor should be defined either for all {num_classes} "
