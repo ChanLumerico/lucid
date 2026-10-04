@@ -407,7 +407,7 @@ class _WorkerError:
     def __init__(self, exc: BaseException, where: str) -> None:
         try:
             self.type_bytes: bytes | None = pickle.dumps(type(exc))
-        except Exception:  # noqa: BLE001 — a local class, say
+        except pickle.PicklingError:  # a local class, say
             self.type_bytes = None
         trace = "".join(traceback.format_exception(exc))
         self.message = f"Caught {type(exc).__name__} {where}.\nOriginal {trace}"
@@ -418,8 +418,8 @@ class _WorkerError:
         if self.type_bytes is not None:
             try:
                 exc_type = pickle.loads(self.type_bytes)
-            except Exception:  # noqa: BLE001 — not importable here
-                exc_type = None
+            except ImportError, AttributeError, pickle.UnpicklingError:
+                exc_type = None  # its module or class is not importable here
         message: str = self.message
         if exc_type is KeyError:
             message = _KeyErrorMessage(message)
@@ -429,8 +429,8 @@ class _WorkerError:
         if isinstance(exc_type, type) and issubclass(exc_type, BaseException):
             try:
                 return exc_type(message)
-            except Exception:  # noqa: BLE001 — needs more than a message
-                pass
+            except TypeError:
+                return RuntimeError(message)  # needs more than a message
         return RuntimeError(message)
 
 
@@ -806,8 +806,10 @@ class _MultiProcessDataLoaderIter:
             for index_queue in self._index_queues:
                 try:
                     index_queue.put(_SHUTDOWN)
-                except Exception:  # noqa: BLE001 — already closed
-                    pass
+                except ValueError, RuntimeError:
+                    # Already closed, or at interpreter exit where its feeder
+                    # thread cannot start; the stop event reaches the worker.
+                    continue
             deadline = time.monotonic() + _SHUTDOWN_GRACE
             for w in self._workers:
                 w.join(timeout=max(deadline - time.monotonic(), 0.0))
@@ -857,8 +859,10 @@ class _MultiProcessDataLoaderIter:
     def __del__(self) -> None:
         try:
             self._shutdown_workers()
-        except Exception:  # noqa: BLE001
-            pass
+        except OSError, ValueError, RuntimeError:
+            # Pipes or process handles already released, or interpreter
+            # exit; anything else reaches ``sys.unraisablehook``.
+            return
 
 
 # ── argument checks ───────────────────────────────────────────────────────────

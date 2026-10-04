@@ -306,11 +306,7 @@ class Profiler:
 
     def memory_stats(self) -> MemoryStats | None:
         """Return memory stats if available."""
-        try:
-            impl = _C_engine.memory_stats(_C_engine.Device.CPU)
-            return MemoryStats(impl)
-        except Exception:
-            return None
+        return MemoryStats(_C_engine.memory_stats(_C_engine.Device.CPU))
 
     def export_chrome_trace(self, path: str) -> None:
         """Export events as a Chrome trace JSON file.

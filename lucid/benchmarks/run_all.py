@@ -43,7 +43,8 @@ def _git_sha() -> str:
             stderr=subprocess.DEVNULL,
         )
         return out.decode().strip()
-    except Exception:
+    except subprocess.CalledProcessError, OSError:
+        # Not a repository, or no VCS binary on PATH.
         return "unknown"
 
 

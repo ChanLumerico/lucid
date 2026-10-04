@@ -146,12 +146,9 @@ def bench_gpu_mlx(
 
 
 def metal_available() -> bool:
-    try:
-        import lucid.metal as _m
+    import lucid.metal as _m
 
-        return _m.is_available()
-    except Exception:
-        return False
+    return _m.is_available()
 
 
 # ── formatting helpers ────────────────────────────────────────────────────────

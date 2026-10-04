@@ -239,6 +239,38 @@ def test_a_worker_exception_is_reraised_with_the_worker_s_traceback():
     assert "no sample 3" in message
 
 
+class _NeedsTwoArgs(Exception):
+    def __init__(self, a, b):
+        super().__init__(a, b)
+
+
+def _local_exception_type():
+    class LocalError(Exception):
+        pass
+
+    return LocalError
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected"),
+    [
+        (ValueError("bad"), ValueError),
+        # Its type does not pickle, so only the message crosses the pipe.
+        (_local_exception_type()("bad"), RuntimeError),
+        # Its type pickles but cannot be rebuilt from one message.
+        (_NeedsTwoArgs("bad", 1), RuntimeError),
+    ],
+)
+def test_a_worker_error_falls_back_to_runtime_error_when_its_type_cannot_cross(
+    raised, expected
+):
+    from lucid.utils.data.dataloader import _WorkerError
+
+    rebuilt = _WorkerError(raised, "in a test").to_exception()
+    assert type(rebuilt) is expected
+    assert "Caught" in str(rebuilt) and "in a test" in str(rebuilt)
+
+
 def test_the_pool_survives_a_worker_exception():
     """The next epoch hung forever: the exception shut the workers down but
     the persistent loader kept feeding their queues.  It now carries on —

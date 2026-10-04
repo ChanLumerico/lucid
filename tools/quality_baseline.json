@@ -312,9 +312,8 @@
     "lucid/nn/utils/weight_norm.py": 1
    },
    "noqa[BLE001]": {
-    "lucid/_annotation_resolver.py": 1,
     "lucid/_factories/converters.py": 1,
-    "lucid/utils/data/dataloader.py": 7
+    "lucid/utils/data/dataloader.py": 2
    },
    "noqa[E402]": {
     "lucid/_ops/__init__.py": 1,
@@ -1667,13 +1666,7 @@
     "lucid/optim/optimizer.py": 1
    },
    "BLE001": {
-    "lucid/_ops/__init__.py": 1,
-    "lucid/_tensor/_repr.py": 1,
-    "lucid/benchmarks/_core.py": 1,
-    "lucid/benchmarks/run_all.py": 1,
-    "lucid/compile/_core/attention_probe.py": 1,
-    "lucid/nn/module.py": 1,
-    "lucid/profiler/__init__.py": 1
+    "lucid/nn/module.py": 1
    },
    "C901": {
     "lucid/_factories/converters.py": 1,
@@ -2016,10 +2009,6 @@
     "lucid/nn/utils/weight_norm.py": 1,
     "lucid/utils/data/dataloader.py": 3
    },
-   "S110": {
-    "lucid/_annotation_resolver.py": 1,
-    "lucid/utils/data/dataloader.py": 3
-   },
    "SIM101": {
     "lucid/_factories/converters.py": 1
    },
@@ -2030,15 +2019,13 @@
     "lucid/models/vision/vjepa2/_model.py": 1
    },
    "SIM105": {
-    "lucid/_annotation_resolver.py": 1,
     "lucid/autograd/_hooks.py": 1,
     "lucid/coreml/_cache.py": 2,
     "lucid/nn/utils/parametrize.py": 1,
     "lucid/nn/utils/prune.py": 1,
     "lucid/nn/utils/spectral_norm.py": 1,
     "lucid/nn/utils/weight_norm.py": 1,
-    "lucid/serialization/__init__.py": 2,
-    "lucid/utils/data/dataloader.py": 2
+    "lucid/serialization/__init__.py": 2
    },
    "SIM108": {
     "lucid/_dispatch.py": 2,

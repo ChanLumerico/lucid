@@ -119,8 +119,10 @@ def _run_probe() -> None:
             if float((out - ref).abs().max().item()) > 1e-2:
                 affected = True
                 break
-    except Exception:
-        # Any failure → cannot certify the GPU clean → keep the workaround on.
+    except RuntimeError:
+        # An engine, Metal or compile failure (all RuntimeError subclasses,
+        # LucidError included) → cannot certify the GPU clean → keep the
+        # workaround on.
         affected = True
     finally:
         _C_engine.compile.set_attention_workaround_state(1 if affected else 0)

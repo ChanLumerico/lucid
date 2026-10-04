@@ -291,6 +291,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - one table rules every loss's target shape; mse/huber broadcast
 - one owner for class and table index ranges (LCD-234)
 - bind loop values explicitly instead of closing over them
+- narrow blind excepts to the failures each one expects
 
 ---
 

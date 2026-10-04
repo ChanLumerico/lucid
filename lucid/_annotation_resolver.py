@@ -125,8 +125,10 @@ def _import_deferred() -> None:
             continue
         try:
             importlib.import_module(source)
-        except Exception:  # noqa: BLE001 — an annotation must never break an import
-            pass
+        except ImportError:
+            # A source this install cannot import leaves its names unbound;
+            # an annotation must never break the import that asked for it.
+            continue
 
 
 class _ThenResolve(importlib.abc.Loader):
