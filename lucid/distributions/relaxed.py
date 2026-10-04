@@ -1,7 +1,7 @@
 """Concrete (Gumbel-softmax) relaxed distributions.
 
 * :class:`RelaxedBernoulli` — relaxation of ``Bernoulli`` whose samples
-  live in ``(0, 1)`` and pass gradients through.
+  live in ``[0, 1]`` and pass gradients through.
 * :class:`RelaxedOneHotCategorical` — Concrete distribution over the
   open simplex; relaxation of :class:`OneHotCategorical`.
 
@@ -12,6 +12,7 @@ sampling math, so the same Lucid Philox stream applies.
 from typing import override
 
 import lucid
+from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import (
     _align_device,
@@ -25,10 +26,10 @@ from lucid.distributions.bernoulli import (
 )
 from lucid.distributions.constraints import (
     Constraint,
-    open_unit_interval,
     positive,
     real,
     simplex,
+    unit_interval,
 )
 from lucid.distributions.distribution import Distribution
 
@@ -54,7 +55,7 @@ class RelaxedBernoulli(Distribution):
         of the relaxation.  Small values give near-discrete samples;
         large values give near-uniform samples.
     probs : Tensor | float | None, optional
-        Bernoulli success probability :math:`p \in (0, 1)`.  Mutually
+        Bernoulli success probability :math:`p \in [0, 1]`.  Mutually
         exclusive with ``logits``.
     logits : Tensor | float | None, optional
         Log-odds :math:`l = \log(p/(1-p)) \in \mathbb{R}`.  Mutually
@@ -113,13 +114,18 @@ class RelaxedBernoulli(Distribution):
     # degenerate-but-valid setting — it is a division by zero, and the
     # sample comes back non-finite with nothing raised.  Declared
     # ``real`` here, it was never checked; the reference does not check it
-    # either, and produces the same non-finite draw.
+    # either, and produces the same non-finite draw.  Stricter than the
+    # reference on purpose — listed in the constraint-parity test's
+    # exceptions.  ``probs`` and the support are the closed interval, as
+    # there: a probability of 0 or 1 is held one epsilon inside it
+    # (``logits``), and a value of 0 or 1 is scored one step inside it
+    # (:meth:`log_prob`).
     arg_constraints = {
         "temperature": positive,
-        "probs": open_unit_interval,
+        "probs": unit_interval,
         "logits": real,
     }
-    support: Constraint | None = open_unit_interval
+    support: Constraint | None = unit_interval
     has_rsample = True
 
     def __init__(
@@ -139,7 +145,7 @@ class RelaxedBernoulli(Distribution):
             recovering a hard Bernoulli; as :math:`\\lambda \\to \\infty`, samples
             concentrate around :math:`1/2`.
         probs : Tensor | float | None, optional
-            Probability :math:`p \\in (0, 1)` parameter. Mutually exclusive
+            Probability :math:`p \\in [0, 1]` parameter. Mutually exclusive
             with ``logits``.
         logits : Tensor | float | None, optional
             Log-odds :math:`\\log\\frac{p}{1-p}` parameter. Mutually exclusive
@@ -157,19 +163,20 @@ class RelaxedBernoulli(Distribution):
                 "RelaxedBernoulli: pass exactly one of `probs` or `logits`."
             )
         self.temperature = _as_tensor(temperature)
-        if probs is not None:
-            self.probs = _as_tensor(probs)
-            self._is_logits = False
-            shape = tuple(self.probs.shape)
+        param = _as_tensor(probs if probs is not None else logits)  # type: ignore[arg-type]
+        # A temperature or a probability given as a number is a 0-dim host
+        # tensor, and either may be the one that is not: whichever is the
+        # host scalar follows the other to its device, so the two can meet
+        # on Metal — the rule ``_broadcast_pair`` applies.
+        if param.ndim == 0 and param.device.type == "cpu":
+            param = _align_device(param, self.temperature)
+        self.temperature = _align_device(self.temperature, param)
+        self._is_logits = probs is None
+        if self._is_logits:
+            self.logits = param
         else:
-            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
-            self._is_logits = True
-            shape = tuple(self.logits.shape)
-        # A temperature given as a number is a 0-dim host tensor; it follows
-        # the parameters to their device so the two can meet on Metal.
-        self.temperature = _align_device(
-            self.temperature, self.logits if self._is_logits else self.probs
-        )
+            self.probs = param
+        shape = tuple(param.shape)
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
 
     @_lazy_param
@@ -190,10 +197,11 @@ class RelaxedBernoulli(Distribution):
     def _logits(self) -> Tensor:
         """Lazily resolved log-odds tensor.
 
-        Returns ``self.logits`` when the distribution was constructed from
-        logits; otherwise computes :math:`\\log(p/(1-p))` from the stored probs.
+        Returns :attr:`logits`: as given, or the log-odds of ``probs`` held
+        one epsilon inside :math:`[0, 1]`.  Unclamped, a probability of 0 or
+        1 gave an infinite logit, and :meth:`log_prob` answered NaN.
         """
-        return self.logits if self._is_logits else _probs_to_logits(self.probs)
+        return self.logits
 
     @property
     def _probs(self) -> Tensor:
@@ -248,7 +256,7 @@ class RelaxedBernoulli(Distribution):
         Parameters
         ----------
         value : Tensor
-            Point(s) :math:`y \in (0, 1)` at which to evaluate the density.
+            Point(s) :math:`y \in [0, 1]` at which to evaluate the density.
 
         Returns
         -------
@@ -265,8 +273,14 @@ class RelaxedBernoulli(Distribution):
         """
         # ``logit(Y)`` is logistic with location ``l`` and scale ``1/τ``;
         # ``Y = sigmoid(logit(Y))`` adds the Jacobian ``−log y − log(1−y)``.
-        log_y: Tensor = value.log()
-        log_1my: Tensor = (-value).log1p()
+        # The support is the closed interval but ``logit`` is infinite at
+        # its ends, so ``y`` is held in ``[tiny, 1 − eps]`` first — the
+        # reference framework's inverse sigmoid does the same, and scores
+        # an endpoint by the density one step inside it.
+        info = finfo(value.dtype)
+        y: Tensor = value.clip(float(info.tiny), 1.0 - float(info.eps))
+        log_y: Tensor = y.log()
+        log_1my: Tensor = (-y).log1p()
         l: Tensor = self._logits
         tau: Tensor = self.temperature
         diff: Tensor = l - tau * (log_y - log_1my)
@@ -355,7 +369,9 @@ class RelaxedOneHotCategorical(Distribution):
     # degenerate-but-valid setting — it is a division by zero, and the
     # sample comes back non-finite with nothing raised.  Declared
     # ``real`` here, it was never checked; the reference does not check it
-    # either, and produces the same non-finite draw.
+    # either, and produces the same non-finite draw.  Stricter than the
+    # reference on purpose — listed in the constraint-parity test's
+    # exceptions.
     arg_constraints = {
         "temperature": positive,
         "probs": simplex,
