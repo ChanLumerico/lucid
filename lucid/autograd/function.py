@@ -302,15 +302,18 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
 
         if _C_engine.grad_enabled() and any(ctx.needs_input_grad):
             tensor_inputs = [a for a in args if isinstance(a, Tensor)]
+            # Which positional arguments were tensors, so ``backward`` may
+            # answer with one gradient per argument (``None`` for the rest).
+            is_tensor_arg = [isinstance(a, Tensor) for a in args]
             if isinstance(output, Tensor):
-                _register(output, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
+                _register(output, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
             elif isinstance(output, tuple):
                 # A ``forward`` may return non-tensor entries alongside
                 # tensors; only the tensors can carry a gradient, and
                 # ``backward`` is handed one gradient per *tensor* output.
                 outs = tuple(o for o in output if isinstance(o, Tensor))
                 if outs:
-                    _register(outs, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
+                    _register(outs, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
             # The node exists now, so ``backward`` will read the saved
             # tensors: note their versions, as a built-in op does when it
             # saves its inputs, so a write in between is refused there.
@@ -468,6 +471,25 @@ class Function(metaclass=FunctionMeta):
         Tensor or tuple of Tensor
             Downstream gradients matching the positional inputs of
             ``forward``. Use ``None`` for inputs that have no gradient.
+            One gradient per *tensor* input — leaving out the non-tensor
+            arguments — is accepted as well, and trailing ``None``
+            entries past the last argument are ignored.
+
+        Raises
+        ------
+        RuntimeError
+            When the number of gradients fits neither form, when a
+            non-tensor argument is given a gradient other than ``None``,
+            or when a gradient does not fit its input: a shape the input
+            does not broadcast to, or a device other than the input's.
+
+        Notes
+        -----
+        Each gradient is checked against the input it is for, once
+        ``backward`` returns.  A shape the input broadcasts to is summed
+        back down to the input's shape, another dtype is cast to the
+        input's (a complex gradient for a real input keeps its real part),
+        and a 0-d gradient on another device is moved to the input's.
         """
         raise NotImplementedError
 
