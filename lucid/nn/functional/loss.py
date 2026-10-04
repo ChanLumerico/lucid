@@ -4,6 +4,7 @@ nn.functional loss functions.
 
 import contextlib
 import math
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Sequence, cast
 
 import lucid as _lucid
@@ -72,18 +73,19 @@ def _float32_scope() -> contextlib.AbstractContextManager[object]:
     return contextlib.nullcontext()
 
 
-def _host_any(mask: Tensor) -> bool:
-    """Whether any element of a CPU ``mask`` is set.
+def _on_host[T](read: Callable[[], T]) -> T:
+    """Run ``read`` — a guard's read of a CPU tensor — outside any active
+    compile trace.
 
-    For a guard on a CPU tensor, which is on the host already, so reading
-    it costs no sync.  The read runs outside any active compile trace,
-    like the embedding table's range check: it raises or passes, and a
-    host read inside a trace would mark the trace unsupported.
+    A CPU tensor is on the host already, so the read costs no sync.  Like
+    the embedding table's range check it is a guard, not a value: it
+    raises or passes, nothing downstream depends on it, and a host read
+    inside a trace would mark the trace unsupported.
     """
     tracer = _C_engine.compile.current_tracer()
     _C_engine.compile.set_current_tracer(None)
     try:
-        return bool(mask.any().item())
+        return read()
     finally:
         _C_engine.compile.set_current_tracer(tracer)
 
@@ -366,23 +368,19 @@ def _refuse_or_poison(
     ``None`` for all ones) comes back NaN at each such position instead,
     and a bad label poisons the loss rather than being scored as class 0
     or ``C - 1``; ``dtype`` is the factor's dtype when ``scale`` is
-    ``None``.  The CPU read runs outside any active compile trace, like the
-    embedding table's range check: it is a guard, not a value.
+    ``None``.
     """
     usable: Tensor = safe == target
     if counted is not None:
         usable = usable | ~counted
     if target.device == "cpu":
-        tracer = _C_engine.compile.current_tracer()
-        _C_engine.compile.set_current_tracer(None)
-        try:
-            first: int | None = (
+        first: int | None = _on_host(
+            lambda: (
                 None
                 if bool(usable.all().item())
                 else int(target[~usable].reshape(-1)[0].item())
             )
-        finally:
-            _C_engine.compile.set_current_tracer(tracer)
+        )
         if first is not None:
             raise IndexError(f"Target {first} is out of bounds.")
         return scale
@@ -397,7 +395,6 @@ def _class_nll(
     ignore_index: int | None,
     reduction: str,
     label_smoothing: float,
-    op: str,
 ) -> Tensor:
     """Negative log-likelihood of integer class targets — the shared body of
     :func:`cross_entropy` and :func:`nll_loss`.
@@ -618,7 +615,6 @@ def cross_entropy(
             ignore_index,
             reduction,
             label_smoothing,
-            "cross_entropy",
         )
     )
     return out.reshape([]) if unbatched and reduction == "none" else out
@@ -729,9 +725,7 @@ def nll_loss(
     if unbatched:
         x = x.unsqueeze(0)
         target = target.reshape([1])
-    out: Tensor = _class_nll(
-        x, target, weight, ignore_index, reduction, 0.0, "nll_loss"
-    )
+    out: Tensor = _class_nll(x, target, weight, ignore_index, reduction, 0.0)
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
@@ -1663,7 +1657,7 @@ def gaussian_nll_loss(
             raise ValueError("var is of incorrect size")
     _validate_reduction(reduction)
 
-    if var.device == "cpu" and _host_any(var < 0.0):
+    if var.device == "cpu" and _on_host(lambda: bool((var < 0.0).any().item())):
         raise ValueError("var has negative entry/entries")
 
     # Clamped at ``eps`` in value, not in gradient: the reference clamps a
