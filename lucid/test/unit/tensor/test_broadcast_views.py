@@ -3,8 +3,8 @@
 Both copied, so their results could be written and never shared their
 input's memory.  Now a later write to the input shows through them, and a
 write through them is refused: a broadcast axis repeats its elements.  The
-engine's own internal broadcasting still copies, and Metal keeps copy
-semantics.
+engine's own internal broadcasting still copies.  On Metal the result is a
+copy, and a write through it is refused the same way.
 """
 
 import pytest
@@ -73,8 +73,16 @@ def test_matrix_power_zero_stays_writable() -> None:
 
 
 @pytest.mark.skipif(not lucid.metal.is_available(), reason="no Metal device")
-def test_metal_broadcast_to_stays_a_copy() -> None:
-    x = lucid.tensor([1.0, 2.0, 3.0]).to("metal")
-    b = lucid.broadcast_to(x, (2, 3))
-    b.add_(1.0)
-    assert x.to("cpu").tolist() == [1.0, 2.0, 3.0]
+def test_metal_broadcast_to_write_refuses_like_cpu() -> None:
+    """A write through ``broadcast_to`` is refused on Metal, as on the CPU.
+
+    This test used to assert the Metal write was silently dropped — it pinned
+    the defect of debug-metal-view-writes-silent (CHA-73) as if it were the
+    intent.
+    """
+    for dev in ("cpu", "metal"):
+        x = lucid.tensor([1.0, 2.0, 3.0]).to(dev)
+        b = lucid.broadcast_to(x, (2, 3))
+        with pytest.raises(RuntimeError, match="overlap"):
+            b.add_(1.0)
+        assert x.to("cpu").tolist() == [1.0, 2.0, 3.0]

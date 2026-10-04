@@ -2,9 +2,9 @@
 
 Element units, as the reference's: ``storage_offset`` counts from the start
 of the storage and defaults to the tensor's own.  On the CPU the result is a
-view sharing the buffer; on metal it is a copy of the elements it names.  A
-write through elements that overlap is refused, and a gradient scatters back
-to the elements read.
+view sharing the buffer; on metal it is a copy of the elements it names, and
+a write through it is carried back to the tensor.  A write through elements
+that overlap is refused, and a gradient scatters back to the elements read.
 """
 
 import pytest
@@ -63,10 +63,17 @@ def test_the_gradient_collects_at_the_elements_read() -> None:
 
 
 @pytest.mark.skipif(not lucid.metal.is_available(), reason="no Metal device")
-def test_metal_gives_the_same_values_as_a_copy() -> None:
+def test_metal_gives_the_same_values_and_writes_through_like_cpu() -> None:
+    """A write through ``as_strided`` reaches the tensor on Metal, as on the CPU.
+
+    This test used to assert the Metal write was lost — it pinned the defect
+    of debug-metal-view-writes-silent (CHA-73) as if it were the intent.
+    """
     x = lucid.arange(12).float()
     m = x.to("metal")
     want = lucid.as_strided(x, (2, 3), (4, 1)).tolist()
     assert lucid.as_strided(m, (2, 3), (4, 1)).to("cpu").tolist() == want
+    lucid.as_strided(x, (2,), (1,)).fill_(-1.0)
     lucid.as_strided(m, (2,), (1,)).fill_(-1.0)
-    assert m.to("cpu").tolist()[0] == 0.0
+    assert x.tolist()[:3] == [-1.0, -1.0, 2.0]
+    assert m.to("cpu").tolist() == x.tolist()
