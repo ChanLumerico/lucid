@@ -1,12 +1,30 @@
-from lucid.utils.data.dataset import Dataset
-
 """
 Sampler classes for DataLoader.
+
+Every random sampler draws from Lucid's Philox generators — the default
+one (seeded by :func:`lucid.manual_seed`) or an explicit
+:class:`lucid.Generator` — so shuffles are reproducible with the rest of
+a run.  :class:`DistributedSampler` and :class:`RASampler` keep their
+own ``seed + epoch`` streams, which every replica must agree on without
+sharing a generator.
 """
 
+import bisect
+import itertools
 import math
-from typing import Iterator, override
 import random
+from typing import Iterator, Sequence, cast, override
+
+import lucid
+from lucid._factories.random import Generator, randint
+from lucid._tensor.tensor import Tensor
+from lucid.utils.data.dataset import Dataset
+from lucid.utils.data._rng import (
+    _as_generator,
+    _draw_seed,
+    _permutation,
+    _uniform_doubles,
+)
 
 
 class Sampler:
@@ -113,11 +131,17 @@ class RandomSampler(Sampler):
         once per epoch.
     num_samples : int, optional
         Number of indices to draw per epoch. Defaults to
-        ``len(data_source)``. Only meaningful when ``replacement=True``;
-        otherwise it truncates the permutation.
-    generator : optional
-        Seed-like object forwarded to ``random.Random`` for reproducibility
-        when ``replacement=True``.
+        ``len(data_source)``.  Without replacement a value above ``n``
+        chains whole permutations (every index appears
+        ``num_samples // n`` times, plus a partial pass); a value below
+        ``n`` truncates the permutation.
+    generator : lucid.Generator or int, optional
+        Stream the order is drawn from.  A :class:`lucid.Generator`
+        advances from epoch to epoch, so a fixed one reproduces the whole
+        sequence of epochs; an ``int`` seeds a private generator once,
+        with the same effect.  ``None`` (default) draws a fresh seed from
+        the default generator every epoch, so :func:`lucid.manual_seed`
+        reproduces the order.
 
     Notes
     -----
@@ -144,7 +168,7 @@ class RandomSampler(Sampler):
         data_source: Dataset,
         replacement: bool = False,
         num_samples: int | None = None,
-        generator: object = None,
+        generator: Generator | int | None = None,
     ) -> None:
         """Configure the random sampler.
 
@@ -156,8 +180,14 @@ class RandomSampler(Sampler):
             See class docstring.
         num_samples : int, optional
             See class docstring.
-        generator : optional
+        generator : lucid.Generator or int, optional
             See class docstring.
+
+        Raises
+        ------
+        TypeError
+            If ``generator`` is neither a :class:`lucid.Generator`, a seed,
+            nor ``None``.
         """
         self.data_source = data_source
         self.replacement = replacement
@@ -169,7 +199,7 @@ class RandomSampler(Sampler):
                 f"num_samples must be a positive integer, got {num_samples}."
             )
         self._num_samples = num_samples
-        self.generator = generator
+        self.generator: Generator | None = _as_generator(generator, "RandomSampler")
 
     @property
     def num_samples(self) -> int:
@@ -188,22 +218,32 @@ class RandomSampler(Sampler):
     def __iter__(self) -> Iterator[int]:
         """Yield ``num_samples`` indices according to the configured strategy.
 
-        With ``replacement=True`` each index is drawn uniformly with
-        replacement using a seeded ``random.Random``. With
-        ``replacement=False`` a fresh permutation of ``range(n)`` is
-        produced via the module-level ``random.shuffle`` and truncated
-        to ``num_samples``.
+        With ``replacement=True`` each index is an independent uniform
+        draw from ``range(n)``.  With ``replacement=False`` the indices
+        are a fresh permutation of ``range(n)`` (chained, then truncated,
+        to reach ``num_samples``).  Both draw from ``generator``, or
+        — when it is ``None`` — from a per-epoch generator seeded off the
+        default one.
         """
         n = len(self.data_source)
+        if n == 0:
+            if self.num_samples:
+                raise ValueError(
+                    f"cannot draw {self.num_samples} samples from an empty dataset."
+                )
+            return
+        rng = self.generator
+        if rng is None:
+            rng = Generator(_draw_seed(None))
         if self.replacement:
-            import random as _r
-
-            rng = _r.Random(self.generator)  # type: ignore[arg-type]
-            yield from (rng.randrange(n) for _ in range(self.num_samples))
-        else:
-            perm = list(range(n))
-            random.shuffle(perm)
-            yield from perm[: self.num_samples]
+            draws = randint(0, n, (self.num_samples,), generator=rng)
+            yield from cast(list[int], draws.tolist())
+            return
+        for _ in range(self.num_samples // n):
+            yield from _permutation(n, rng)
+        remainder = self.num_samples % n
+        if remainder:
+            yield from _permutation(n, rng)[:remainder]
 
     @override
     def __len__(self) -> int:
@@ -222,9 +262,10 @@ class SubsetRandomSampler(Sampler):
     ----------
     indices : list of int
         Indices into the parent dataset to sample from.
-    generator : optional
-        Seed-like object accepted for API compatibility; the current
-        implementation defers to the global ``random`` state.
+    generator : lucid.Generator or int, optional
+        Stream the order is drawn from; advances from epoch to epoch.
+        ``None`` (default) draws from the default generator, so
+        :func:`lucid.manual_seed` reproduces the order.
 
     Notes
     -----
@@ -241,25 +282,29 @@ class SubsetRandomSampler(Sampler):
     True
     """
 
-    def __init__(self, indices: list[int], generator: object = None) -> None:
+    def __init__(
+        self, indices: Sequence[int], generator: Generator | int | None = None
+    ) -> None:
         """Store the index pool and optional generator handle.
 
         Parameters
         ----------
-        indices : list of int
+        indices : sequence of int
             Indices to sample from.
-        generator : optional
-            Accepted for API compatibility.
+        generator : lucid.Generator or int, optional
+            See class docstring.
         """
         self.indices = list(indices)
-        self.generator = generator
+        self.generator: Generator | None = _as_generator(
+            generator, "SubsetRandomSampler"
+        )
 
     @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``self.indices`` in a freshly shuffled order each epoch."""
-        perm = list(self.indices)
-        random.shuffle(perm)
-        yield from perm
+        indices = self.indices
+        for i in _permutation(len(indices), self.generator):
+            yield indices[i]
 
     @override
     def __len__(self) -> int:
@@ -276,9 +321,9 @@ class WeightedRandomSampler(Sampler):
 
     Parameters
     ----------
-    weights : list of float
-        Non-negative weight per index. The effective probability of index
-        ``i`` is :math:`p_i = w_i / \sum_j w_j`.
+    weights : sequence of float or Tensor
+        Non-negative, finite weight per index. The effective probability
+        of index ``i`` is :math:`p_i = w_i / \sum_j w_j`.
     num_samples : int
         Number of indices to draw per epoch.
     replacement : bool, optional
@@ -287,8 +332,11 @@ class WeightedRandomSampler(Sampler):
         index is drawn at most once: the pool shrinks as indices are
         taken, so ``num_samples`` may not exceed ``len(weights)`` and is
         refused at construction if it does.
-    generator : optional
-        Seed-like object forwarded to ``random.Random`` for reproducibility.
+    generator : lucid.Generator or int, optional
+        Stream the draws come from; advances from epoch to epoch, so each
+        epoch is a new draw and a fixed generator reproduces the sequence
+        of epochs.  ``None`` (default) draws from the default generator,
+        so :func:`lucid.manual_seed` reproduces the draws.
 
     Notes
     -----
@@ -305,6 +353,15 @@ class WeightedRandomSampler(Sampler):
     default — it preserves the target marginal exactly and is the only
     fully consistent option when ``num_samples`` exceeds the number of
     nonzero-weight indices.
+
+    With replacement each draw inverts the cumulative weights by binary
+    search, :math:`O(n + k \log n)` per epoch for ``k`` draws.  Without
+    replacement the indices are ranked by the exponential keys
+    :math:`\log(u_i) / w_i` (Efraimidis & Spirakis, 2006) and the
+    ``num_samples`` largest are kept, in the order one-at-a-time draws
+    would pick them.  When fewer than ``num_samples`` weights are
+    positive, the draw stops after the last of them rather than handing
+    out an index the caller weighted out.
 
     Examples
     --------
@@ -326,25 +383,37 @@ class WeightedRandomSampler(Sampler):
 
     def __init__(
         self,
-        weights: list[float],
+        weights: Sequence[float] | Tensor,
         num_samples: int,
         replacement: bool = True,
-        generator: object = None,
+        generator: Generator | int | None = None,
     ) -> None:
         """Store sampling configuration.
 
         Parameters
         ----------
-        weights : list of float
+        weights : sequence of float or Tensor
             See class docstring.
         num_samples : int
             See class docstring.
         replacement : bool
             See class docstring.
-        generator : optional
+        generator : lucid.Generator or int, optional
             See class docstring.
+
+        Raises
+        ------
+        ValueError
+            If ``num_samples`` is not positive, exceeds ``len(weights)``
+            without replacement, or a weight is negative or not finite,
+            or — with replacement — every weight is zero.
         """
-        self.weights = list(weights)
+        values = (
+            cast(list[float], weights.reshape(-1).tolist())
+            if isinstance(weights, Tensor)
+            else weights
+        )
+        self.weights: list[float] = [float(w) for w in values]
         if num_samples <= 0:
             raise ValueError(
                 f"num_samples must be a positive integer, got {num_samples}."
@@ -359,65 +428,52 @@ class WeightedRandomSampler(Sampler):
             )
         if any(w < 0 for w in self.weights):
             raise ValueError("weights must be non-negative.")
+        if not all(math.isfinite(w) for w in self.weights):
+            raise ValueError("weights must be finite.")
+        if replacement and not any(w > 0 for w in self.weights):
+            raise ValueError(
+                "weights must contain a positive entry to draw with replacement."
+            )
         self.num_samples = num_samples
         self.replacement = replacement
-        self.generator = generator
+        self.generator: Generator | None = _as_generator(
+            generator, "WeightedRandomSampler"
+        )
 
     @override
     def __iter__(self) -> Iterator[int]:
         """Yield ``num_samples`` indices proportional to the weights.
 
-        With ``replacement=True`` indices are produced by inverse-CDF
-        sampling against the normalised weight vector. With
-        ``replacement=False`` ``random.choices`` is used with the raw
-        weights.
+        With ``replacement=True`` each index comes from an inverse-CDF
+        lookup (binary search over the running weight sums).  With
+        ``replacement=False`` the indices with the largest exponential
+        keys are taken.  See the class notes.
         """
-        import random as _r
-
-        rng = _r.Random(self.generator)  # type: ignore[arg-type]
-        total = sum(self.weights)
-        normalized = [w / total for w in self.weights]
-        n = len(self.weights)
+        weights = self.weights
         if self.replacement:
-            for _ in range(self.num_samples):
-                r = rng.random()
-                cumulative = 0.0
-                for i, w in enumerate(normalized):
-                    cumulative += w
-                    if r <= cumulative:
-                        yield i
-                        break
-        else:
-            # ``random.choices`` samples *with* replacement — it was being
-            # called here under a comment claiming the opposite, so
-            # ``replacement=False`` returned repeats: five draws from two
-            # items gave ``[0, 1, 1, 0, 0]``.  A class-balancing sampler
-            # configured this way silently oversamples exactly the classes
-            # it was asked to visit once.
-            #
-            # It also reached for the module-level ``random`` rather than
-            # ``rng``, so ``generator`` did nothing on this branch and the
-            # epoch was not reproducible.
-            #
-            # Draw proportionally from the pool and take the chosen index
-            # out of it, which is what sampling without replacement is.
-            pool = list(range(n))
-            remaining = list(self.weights)
-            for _ in range(self.num_samples):
-                total_left = sum(remaining)
-                if total_left <= 0.0:
-                    # Every remaining weight is zero: nothing left that the
-                    # caller said it wanted.  Stop rather than fall back to
-                    # a uniform draw over items they weighted out.
-                    return
-                threshold = rng.random() * total_left
-                cumulative = 0.0
-                for slot, weight in enumerate(remaining):
-                    cumulative += weight
-                    if threshold <= cumulative:
-                        yield pool.pop(slot)
-                        remaining.pop(slot)
-                        break
+            cumulative = list(itertools.accumulate(weights))
+            total = cumulative[-1]
+            # The last index a draw may land on: past it every weight is
+            # zero, and a draw rounding up to ``total`` must not reach them.
+            last = max(i for i, w in enumerate(weights) if w > 0)
+            draws = cast(
+                list[float], _uniform_doubles(self.num_samples, self.generator).tolist()
+            )
+            for u in draws:
+                yield min(bisect.bisect_right(cumulative, u * total), last)
+            return
+        positive = sum(1 for w in weights if w > 0)
+        take = min(self.num_samples, positive)
+        if take == 0:
+            return
+        # Efraimidis–Spirakis: the ``take`` largest keys log(u) / w are a
+        # weighted draw without replacement, already in draw order.  A zero
+        # weight's key is -inf, so it is never among them.
+        w = lucid.tensor(weights, dtype=lucid.float64)
+        noise = _uniform_doubles(len(weights), self.generator)
+        keys = noise.clamp(min=2.0**-60).log() / w
+        _, order = lucid.topk(keys, take)
+        yield from cast(list[int], order.tolist())
 
     @override
     def __len__(self) -> int:

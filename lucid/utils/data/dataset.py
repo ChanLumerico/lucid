@@ -4,6 +4,9 @@ Dataset base classes and implementations.
 
 from typing import Iterator, TYPE_CHECKING, override
 
+from lucid._factories.random import Generator
+from lucid.utils.data._rng import _as_generator, _permutation
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
@@ -409,7 +412,7 @@ class Subset(Dataset):
 def random_split(
     dataset: Dataset,
     lengths: list[int] | list[float],
-    generator: object = None,
+    generator: Generator | int | None = None,
 ) -> list[Subset]:
     r"""Randomly split a dataset into non-overlapping :class:`Subset` views.
 
@@ -427,10 +430,11 @@ def random_split(
         fractions in ``[0, 1]`` summing (approximately) to ``1.0``.  In
         the fractional case, rounding error is absorbed by the final
         split so the totals stay consistent.
-    generator : optional
-        Seed-like object forwarded to ``random.Random`` for
-        reproducibility.  If ``None``, the global ``random`` state is
-        used.
+    generator : lucid.Generator or int, optional
+        Stream the permutation is drawn from.  ``None`` (default) draws
+        from the default generator, so :func:`lucid.manual_seed`
+        reproduces the split; an ``int`` seeds a private generator, so the
+        same ``int`` always gives the same split.
 
     Returns
     -------
@@ -455,14 +459,20 @@ def random_split(
 
     Notes
     -----
-    The split is permutation-based: ``range(len(dataset))`` is shuffled
-    once and then sliced into the requested chunks.  Reproducibility is
-    obtained by seeding the global RNG via :func:`lucid.manual_seed`, or
-    by passing an explicit ``generator`` seed; the same generator state
-    always yields the same partition.
-    """
-    import random as _random
+    The split is permutation-based: ``range(len(dataset))`` is permuted
+    once with :func:`lucid.randperm` and then sliced into the requested
+    chunks.  Reproducibility is obtained by seeding the default generator
+    via :func:`lucid.manual_seed`, or by passing an explicit
+    ``generator``; the same generator state always yields the same
+    partition.
 
+    >>> lucid.manual_seed(0)
+    >>> first = random_split(full, [50, 50])[0].indices
+    >>> lucid.manual_seed(0)
+    >>> first == random_split(full, [50, 50])[0].indices
+    True
+    """
+    rng = _as_generator(generator, "random_split")
     n = len(dataset)
 
     if all(isinstance(x, float) for x in lengths):
@@ -480,12 +490,7 @@ def random_split(
             f"Sum of split lengths ({sum(lengths_int)}) must equal dataset length ({n})"
         )
 
-    indices = list(range(n))
-    if generator is not None:
-        rng = _random.Random(generator)  # type: ignore[arg-type]
-        rng.shuffle(indices)
-    else:
-        _random.shuffle(indices)
+    indices = _permutation(n, rng)
 
     result = []
     offset = 0
