@@ -8,6 +8,29 @@ from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
 from lucid.autograd._python_node import _register
 
+#: A saved tensor's impl, its version when ``forward`` returned, and where it
+#: came from ("Mul input 1") for the ``VersionMismatch`` message.
+type _SavedEntry = tuple[_C_engine.TensorImpl, int, str]
+
+
+def _impl_of(t: object) -> _C_engine.TensorImpl | None:
+    """The impl behind a saved entry, or ``None`` for one that is not a tensor."""
+    if isinstance(t, _C_engine.TensorImpl):
+        return t
+    if isinstance(t, Tensor):
+        return t._impl
+    return None
+
+
+def _position(
+    impl: _C_engine.TensorImpl, impls: list[_C_engine.TensorImpl | None]
+) -> int | None:
+    """Index of ``impl`` in ``impls`` by identity, or ``None``."""
+    for k, other in enumerate(impls):
+        if other is impl:
+            return k
+    return None
+
 
 class _FunctionClass(Protocol):
     """Protocol describing a Function subclass (has forward/backward classmethods)."""
@@ -104,6 +127,11 @@ class FunctionCtx:
     def __init__(self) -> None:
         """Initialise an empty context with no saved tensors or extras."""
         self._saved_tensors: list[Tensor] = []
+        # One entry per saved tensor — its impl, that impl's version once
+        # ``forward`` returned, and where it came from for the error message
+        # — written when the node is registered.  ``None`` before that, so a
+        # ``forward`` reading its own ``saved_tensors`` is not checked.
+        self._saved_record: list[_SavedEntry | None] | None = None
         self.needs_input_grad: tuple[bool, ...] = ()
         self._non_differentiable: list[Tensor] = []
         self._extra: dict[str, object] = {}
@@ -121,8 +149,56 @@ class FunctionCtx:
         Notes
         -----
         Each call replaces any tensors previously saved on this context.
+
+        A saved tensor must not be written in place between the end of
+        ``forward`` and the ``backward`` that reads it: reading
+        :attr:`saved_tensors` then raises ``VersionMismatch``, as a built-in
+        op's backward does, instead of handing ``backward`` the new values.
+        Writes inside ``forward`` itself are fine — the version is taken
+        once ``forward`` has returned.
         """
         self._saved_tensors = list(tensors)
+
+    def _record_saved_versions(
+        self, name: str, inputs: tuple[object, ...], returned: tuple[object, ...]
+    ) -> None:
+        """Note each saved tensor's impl and version now that ``forward`` is done.
+
+        Parameters
+        ----------
+        name : str
+            The ``Function`` subclass's name, for the error message.
+        inputs : tuple of object
+            ``forward``'s positional arguments.
+        returned : tuple of object
+            What ``forward`` returned, as a tuple.
+
+        Notes
+        -----
+        Taken after ``forward`` — the reference framework saves at the same
+        point — so a ``forward`` that writes a tensor in place and then
+        returns it is not refused for its own write.
+        """
+        input_impls = [_impl_of(a) for a in inputs]
+        output_impls = [_impl_of(o) for o in returned]
+        record: list[_SavedEntry | None] = []
+        for i, t in enumerate(self._saved_tensors):
+            impl = _impl_of(t)
+            if impl is None:
+                record.append(None)
+                continue
+            # Named the way the engine names a node's input — "mul input 1" —
+            # by the position the caller knows it under.
+            k = _position(impl, input_impls)
+            j = _position(impl, output_impls)
+            if k is not None:
+                where = f"{name} input {k}"
+            elif j is not None:
+                where = f"{name} output {j}"
+            else:
+                where = f"{name} saved tensor {i}"
+            record.append((impl, impl.version, where))
+        self._saved_record = record
 
     @property
     def saved_tensors(self) -> tuple[Tensor, ...]:
@@ -134,13 +210,40 @@ class FunctionCtx:
             The tensors stored by :meth:`save_for_backward`, wrapped
             back into Python ``Tensor`` instances if the engine stored
             raw ``TensorImpl`` handles.
+
+        Raises
+        ------
+        VersionMismatch
+            A saved tensor was written in place after ``forward``
+            returned — its values are no longer the ones ``forward``
+            saw, so a gradient computed from them would be wrong.
+            Suppressed inside
+            ``lucid.autograd.graph.allow_mutation_on_saved_tensors``.
         """
+        record = self._saved_record
+        check = record is not None and not _C_engine.is_mutation_on_saved_allowed()
         result: list[Tensor] = []
-        for t in self._saved_tensors:
-            if isinstance(t, _C_engine.TensorImpl):
-                result.append(_wrap(t))
-            else:
+        for i, t in enumerate(self._saved_tensors):
+            entry = record[i] if record is not None else None
+            if entry is None:
+                result.append(_wrap(t) if isinstance(t, _C_engine.TensorImpl) else t)
+                continue
+            impl, version, where = entry
+            if check and impl.version != version:
+                # Worded as the engine's own ``check_version_match`` words it.
+                raise _C_engine.VersionMismatch(
+                    f"VersionMismatch ({where}): saved version {version} but "
+                    f"tensor is now at version {impl.version} (in-place "
+                    "mutation between forward and backward?)"
+                )
+            # What was saved is the impl, as for a built-in op: a write that
+            # rebinds the Python tensor to a new impl (``t[i] = v`` on a
+            # tensor that needs no grad) leaves the saved values where they
+            # were, and ``backward`` reads those, not the new ones.
+            if isinstance(t, Tensor) and t._impl is impl:
                 result.append(t)
+            else:
+                result.append(_wrap(impl))
         return tuple(result)
 
     def mark_non_differentiable(self, *tensors: Tensor) -> None:
@@ -208,6 +311,11 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
                 outs = tuple(o for o in output if isinstance(o, Tensor))
                 if outs:
                     _register(outs, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
+            # The node exists now, so ``backward`` will read the saved
+            # tensors: note their versions, as a built-in op does when it
+            # saves its inputs, so a write in between is refused there.
+            returned = output if isinstance(output, tuple) else (output,)
+            ctx._record_saved_versions(klass.__name__, args, returned)
 
         return cast(Tensor | tuple[Tensor, ...], output)
 
