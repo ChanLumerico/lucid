@@ -41,8 +41,9 @@ class TensorImpl;
 // factors don't depend on which parameter is being updated, so the
 // scalars are pure step-level invariants.
 //
-// The cache invalidates when ``step_count_`` advances, the param dtype
-// changes (mixed-precision case), or when ``set_lr`` mutates $\eta$.
+// The cache invalidates when the slot's step count differs from the one
+// it was built at, the param dtype changes (mixed-precision case), or
+// when ``set_lr`` mutates $\eta$.
 //
 // Attributes
 // ----------
@@ -110,7 +111,8 @@ struct AdamScalarCache {
 //
 // Math
 // ----
-// Per parameter, with global step counter $t = $ ``step_count_``:
+// Per parameter, with $t$ the parameter's own update count
+// (``Optimizer::steps_``):
 //
 // $$
 //   g_t \leftarrow g_t + \lambda\, \theta_t \quad
@@ -134,14 +136,13 @@ struct AdamScalarCache {
 //
 // Notes
 // -----
-// ``step_count_`` is a global counter incremented once per ``step()``
-// call regardless of how many parameters are updated, so all parameters
-// share the same bias-correction factor within a step.  This matches
-// reference-framework semantics.
+// $t$ counts the updates each parameter has received, as the
+// reference framework's per-parameter ``state["step"]`` does: a
+// parameter that first receives a gradient late starts its bias
+// correction at $t = 1$, whatever the other parameters have reached.
 //
-// AMSGrad (Reddi et al., 2018) is declared via the ``amsgrad`` ctor
-// flag but not yet implemented — passing ``true`` raises
-// ``not_implemented`` at construction time.
+// AMSGrad (Reddi et al., 2018) is enabled by the ``amsgrad`` ctor flag:
+// the running maximum of $v_t$ replaces $v_t$ in the denominator.
 //
 // Attributes
 // ----------
@@ -156,10 +157,7 @@ struct AdamScalarCache {
 //     L2 penalty coefficient $\lambda$ added to the gradient.  Set to
 //     ``0`` to disable.
 // amsgrad_ : bool
-//     Reserved — see Notes.  Currently must be ``false``.
-// step_count_ : int64
-//     Global step counter; bias-correction factors are functions of
-//     this.  Persisted in ``state_dict`` under ``state_step``.
+//     Use the AMSGrad running maximum — see Notes.
 // m_, v_ : Storage[]
 //     Per-parameter first-moment and second-moment buffers, matching
 //     each parameter's shape and dtype.
@@ -197,12 +195,7 @@ public:
     // weight_decay : float, optional
     //     L2 penalty coefficient $\lambda$.  Default ``0``.
     // amsgrad : bool, optional
-    //     Reserved.  Must be ``false`` — see class Notes.
-    //
-    // Raises
-    // ------
-    // not_implemented
-    //     If ``amsgrad == true``.
+    //     Use the AMSGrad variant — see class Notes.  Default ``false``.
     Adam(std::vector<std::shared_ptr<TensorImpl>> params,
          double lr = 1e-3,
          double beta1 = 0.9,
@@ -249,13 +242,15 @@ public:
     //     ``"adam_v1"``.
     std::string state_dict_id() const override { return "adam_v1"; }
 
-    // Export per-parameter state (``exp_avg`` = $m$, ``exp_avg_sq`` = $v$).
+    // Export per-parameter state.
     //
     // Returns
     // -------
     // vector of NamedBuffers
-    //     One entry per parameter, each containing the named buffers
-    //     ``exp_avg`` and ``exp_avg_sq``.
+    //     ``step`` (0-d I64 per slot), ``exp_avg`` ($m$) and
+    //     ``exp_avg_sq`` ($v$), plus ``max_exp_avg_sq`` with AMSGrad.
+    //     Each list runs parallel to the parameters; slots that have not
+    //     stepped contribute null entries.
     std::vector<NamedBuffers> state_buffers() const override;
 
     // Restore per-parameter state from a previous ``state_buffers``.
@@ -263,20 +258,14 @@ public:
     // Parameters
     // ----------
     // bufs : vector of NamedBuffers
-    //     Must have the same length as the parameter list and contain
-    //     ``exp_avg`` / ``exp_avg_sq`` keys.
+    //     Entries named as ``state_buffers`` names them; unknown names
+    //     are ignored.
     //
     // Raises
     // ------
     // runtime_error
-    //     On length / key / dtype / shape mismatch.
+    //     On a shape / dtype / device mismatch with the live parameters.
     void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
-    // Global step counter $t$ used for bias correction.
-    std::int64_t step_count() const override { return step_count_; }
-
-    // Set the global step counter (used by checkpoint loading).
-    void set_step_count(std::int64_t s) override { step_count_ = s; }
 
 protected:
     // Apply the standard Adam update to a single parameter.
@@ -313,8 +302,6 @@ private:
     double beta1_, beta2_, eps_;
     double weight_decay_;
     bool amsgrad_;
-    // Global step counter; bias correction factors are functions of this.
-    std::int64_t step_count_;
 
     std::vector<Storage> m_;  // Per-parameter first-moment estimates.
     std::vector<Storage> v_;  // Per-parameter second-moment estimates.
@@ -372,8 +359,6 @@ private:
 //     Decoupled penalty coefficient $\lambda$.  Default ``1e-2`` —
 //     larger than Adam's because it is no longer scaled by the
 //     adaptive denominator.
-// step_count_ : int64
-//     Global step counter.
 // m_, v_ : Storage[]
 //     Per-parameter first- and second-moment buffers.
 // scalar_cache_ : AdamScalarCache
@@ -439,17 +424,11 @@ public:
     //     ``"adamw_v1"``.
     std::string state_dict_id() const override { return "adamw_v1"; }
 
-    // Export per-parameter state (``exp_avg`` and ``exp_avg_sq``).
+    // Export per-parameter state.  See ``Adam::state_buffers``.
     std::vector<NamedBuffers> state_buffers() const override;
 
     // Restore per-parameter state.  See ``Adam::load_state_buffers``.
     void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
-    // Global step counter $t$.
-    std::int64_t step_count() const override { return step_count_; }
-
-    // Set the global step counter.
-    void set_step_count(std::int64_t s) override { step_count_ = s; }
 
 protected:
     // Apply the decoupled-weight-decay Adam update.
@@ -471,7 +450,6 @@ private:
     double beta1_, beta2_, eps_;
     double weight_decay_;
     bool amsgrad_;
-    std::int64_t step_count_;
 
     std::vector<Storage> m_;
     std::vector<Storage> v_;
@@ -518,7 +496,11 @@ private:
 // Notes
 // -----
 // ``mu_product_`` is a per-parameter ``double``, not a ``Storage``,
-// because it is a single scalar accumulator rather than a tensor.
+// because it is a single scalar accumulator rather than a tensor.  It is
+// held at F32 precision (F64 for an F64 parameter) — the precision it is
+// checkpointed at, which is also the reference framework's — so a
+// restored optimizer continues bit-identically.  $t$ is the parameter's
+// own update count.
 // Weight decay (if non-zero) is added to $g_t$ in the standard L2 form
 // — there is no published "decoupled NAdam".
 //
@@ -536,8 +518,6 @@ private:
 // mu_product_ : double[]
 //     Running product $\Pi_t$ of all momentum coefficients seen so far,
 //     one scalar per parameter.
-// step_count_ : int64
-//     Global step counter.
 //
 // References
 // ----------
@@ -587,6 +567,23 @@ public:
     //     ``"nadam_v1"``.
     std::string state_dict_id() const override { return "nadam_v1"; }
 
+    // Snapshot the per-slot state for checkpointing.
+    //
+    // Returns
+    // -------
+    // vector of NamedBuffers
+    //     ``step`` (0-d I64 per slot), ``mu_product`` (0-d, F32 — F64
+    //     for an F64 parameter), ``exp_avg`` and ``exp_avg_sq``.  Slots that have not stepped contribute null entries.
+    std::vector<NamedBuffers> state_buffers() const override;
+
+    // Restore the state captured by ``state_buffers``.
+    //
+    // Raises
+    // ------
+    // runtime_error
+    //     On a shape / dtype / device mismatch with the live parameters.
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+
 protected:
     // Compute per-step $\mu_t$ and $\mu_{t+1}$, advance ``mu_product_``,
     // then apply the two-term Nesterov update.
@@ -610,7 +607,6 @@ private:
     std::vector<Storage> m_, v_;
     // Running product of all per-step momentum coefficients mu_t.
     std::vector<double> mu_product_;
-    std::int64_t step_count_;
 };
 
 // RAdam optimiser — Rectified Adam (Liu et al., 2019).
@@ -652,8 +648,9 @@ private:
 //
 // Notes
 // -----
-// $\rho_t$ and $r_t$ depend only on $t$ and $\beta_2$, so they are
-// computed once per step outside the per-parameter loop.  Weight
+// $\rho_t$ and $r_t$ depend only on $t$ (the parameter's own update
+// count) and $\beta_2$, so they are computed once per parameter outside
+// the element loop.  Weight
 // decay (if non-zero) is added to $g_t$ in the standard L2 form.
 //
 // Attributes
@@ -664,8 +661,6 @@ private:
 //     As in ``Adam``.
 // m_, v_ : Storage[]
 //     Per-parameter first- and second-moment buffers.
-// step_count_ : int64
-//     Global step counter.
 //
 // References
 // ----------
@@ -712,6 +707,22 @@ public:
     //     ``"radam_v1"``.
     std::string state_dict_id() const override { return "radam_v1"; }
 
+    // Snapshot the per-slot state for checkpointing.
+    //
+    // Returns
+    // -------
+    // vector of NamedBuffers
+    //     ``step`` (0-d I64 per slot), ``exp_avg`` and ``exp_avg_sq``.  Slots that have not stepped contribute null entries.
+    std::vector<NamedBuffers> state_buffers() const override;
+
+    // Restore the state captured by ``state_buffers``.
+    //
+    // Raises
+    // ------
+    // runtime_error
+    //     On a shape / dtype / device mismatch with the live parameters.
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+
 protected:
     // Compute $\rho_t$ and $r_t$; apply the rectified adaptive update
     // when $\rho_t > 5$, else fall back to a plain momentum update.
@@ -732,7 +743,6 @@ protected:
 private:
     double lr_, beta1_, beta2_, eps_, weight_decay_;
     std::vector<Storage> m_, v_;
-    std::int64_t step_count_;
 };
 
 }  // namespace lucid

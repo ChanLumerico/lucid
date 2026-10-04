@@ -176,4 +176,47 @@ inline void gpu_replace(GpuStorage& dst, ::mlx::core::array&& arr, Dtype dt) {
     dst.arr = gpu::wrap_mlx_array(std::move(arr), dt).arr;
 }
 
+// Dtype a per-parameter scalar of optimizer state is checkpointed in.
+//
+// F64 for an F64 parameter, F32 otherwise — the reference framework's
+// default scalar dtype, and the widest the Metal device can hold, so a
+// loader that rebuilds the scalar on the parameter's device can.
+//
+// Parameters
+// ----------
+// param_dtype : Dtype
+//     Dtype of the parameter the scalar belongs to.
+//
+// Returns
+// -------
+// Dtype
+//     ``Dtype::F64`` or ``Dtype::F32``.
+inline Dtype state_scalar_dtype(Dtype param_dtype) {
+    return param_dtype == Dtype::F64 ? Dtype::F64 : Dtype::F32;
+}
+
+// Round a scalar of optimizer state to the precision it is checkpointed at.
+//
+// An accumulator held in ``double`` but saved as F32 would come back from
+// a checkpoint changed in its low bits, and the resumed run would part
+// from the uninterrupted one.  Keeping the live value at the saved
+// precision makes the round trip exact.
+//
+// Parameters
+// ----------
+// v : double
+//     Value to round.
+// param_dtype : Dtype
+//     Dtype of the parameter the scalar belongs to.
+//
+// Returns
+// -------
+// double
+//     ``v`` rounded to ``state_scalar_dtype(param_dtype)``.
+inline double round_to_state_scalar(double v, Dtype param_dtype) {
+    if (state_scalar_dtype(param_dtype) == Dtype::F64)
+        return v;
+    return static_cast<double>(static_cast<float>(v));
+}
+
 }  // namespace lucid::optim_detail

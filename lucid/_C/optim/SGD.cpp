@@ -266,8 +266,6 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
         moment_.resize(params_.size());
     if (ax_.size() < params_.size())
         ax_.resize(params_.size());
-    if (step_.size() < params_.size())
-        step_.resize(params_.size(), 0);
     if (momentum_ != 0.0) {
         moment_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     }
@@ -286,7 +284,7 @@ void ASGD::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) 
 // Apply one ASGD step: standard SGD update followed by a running
 // average update of ax_ once the step counter reaches t0_.
 void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    step_[i] += 1;
+    const std::int64_t step = steps_[i];
     const auto dt = p->dtype();
     if (p->device() == Device::GPU) {
         auto& pg = gpu_get(p->mutable_storage());
@@ -305,9 +303,9 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         auto new_p = ::mlx::core::subtract(*pg.arr, ::mlx::core::multiply(mlx_scalar(lr_, dt), g));
         gpu_replace(pg, std::move(new_p), dt);
 
-        if (step_[i] >= static_cast<std::int64_t>(t0_)) {
+        if (step >= static_cast<std::int64_t>(t0_)) {
             // Exponentially decaying coefficient for the running average.
-            const double coef = 1.0 / (alpha_ * step_[i] + 1.0);
+            const double coef = 1.0 / (alpha_ * step + 1.0);
             auto& ag = gpu_get(ax_[i]);
 
             auto new_ax = ::mlx::core::subtract(
@@ -328,9 +326,9 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         const T lrT = static_cast<T>(lr_);
         const T mT = static_cast<T>(momentum_);
         const T wdT = static_cast<T>(weight_decay_);
-        const T coefT = static_cast<T>(1.0 / (alpha_ * step_[i] + 1.0));
+        const T coefT = static_cast<T>(1.0 / (alpha_ * step + 1.0));
         const T lambdT = static_cast<T>(lambd_);
-        const bool do_avg = step_[i] >= static_cast<std::int64_t>(t0_);
+        const bool do_avg = step >= static_cast<std::int64_t>(t0_);
         for (std::size_t k = 0; k < n; ++k) {
             T g = G[k];
             if (weight_decay_ != 0.0)
@@ -352,6 +350,26 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
     else
         ErrorBuilder("ASGD").not_implemented("dtype not supported");
     p_cpu.bump_version();
+}
+
+std::vector<Optimizer::NamedBuffers> ASGD::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("ax", clone_state_slots(ax_));
+    if (momentum_ != 0.0)
+        out.emplace_back("momentum_buffer", clone_state_slots(moment_));
+    return out;
+}
+
+void ASGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "ax")
+            load_state_slots(ax_, tensors);
+        else if (name == "momentum_buffer" && momentum_ != 0.0)
+            load_state_slots(moment_, tensors);
+    }
 }
 
 }  // namespace lucid

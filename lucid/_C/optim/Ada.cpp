@@ -28,13 +28,7 @@ Adamax::Adamax(std::vector<std::shared_ptr<TensorImpl>> p,
                double b2,
                double eps,
                double wd)
-    : Optimizer(std::move(p)),
-      lr_(lr),
-      beta1_(b1),
-      beta2_(b2),
-      eps_(eps),
-      weight_decay_(wd),
-      step_count_(0) {}
+    : Optimizer(std::move(p)), lr_(lr), beta1_(b1), beta2_(b2), eps_(eps), weight_decay_(wd) {}
 
 // Allocate zero-initialized first-moment m_ and infinity-norm u_ buffers.
 void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p) {
@@ -46,13 +40,11 @@ void Adamax::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& p
     u_[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
 }
 
-// Advance the step count once per optimizer step, then apply the
-// Adamax update: EMA for m, element-wise max for u, bias-corrected step.
+// Apply the Adamax update at the slot's own step count: EMA for m,
+// element-wise max for u, bias-corrected step.
 void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Storage& grad) {
-    if (i == 0)
-        ++step_count_;
     const auto dt = p->dtype();
-    const std::int64_t step = step_count_;
+    const std::int64_t step = steps_[i];
     const double bc1 = 1.0 - std::pow(beta1_, static_cast<double>(step));
     if (p->device() == Device::GPU) {
         auto& pg = gpu_get(p->mutable_storage());
@@ -108,6 +100,25 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
     else
         ErrorBuilder("Adamax").not_implemented("dtype not supported");
     p_cpu.bump_version();
+}
+
+std::vector<Optimizer::NamedBuffers> Adamax::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("exp_avg", clone_state_slots(m_));
+    out.emplace_back("exp_inf", clone_state_slots(u_));
+    return out;
+}
+
+void Adamax::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "exp_avg")
+            load_state_slots(m_, tensors);
+        else if (name == "exp_inf")
+            load_state_slots(u_, tensors);
+    }
 }
 
 Adagrad::Adagrad(
@@ -192,6 +203,22 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     p_cpu.bump_version();
 }
 
+std::vector<Optimizer::NamedBuffers> Adagrad::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("sum", clone_state_slots(sum_sq_grad_));
+    return out;
+}
+
+void Adagrad::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "sum")
+            load_state_slots(sum_sq_grad_, tensors);
+    }
+}
+
 Adadelta::Adadelta(
     std::vector<std::shared_ptr<TensorImpl>> p, double lr, double rho, double eps, double wd)
     : Optimizer(std::move(p)), lr_(lr), rho_(rho), eps_(eps), weight_decay_(wd) {}
@@ -273,6 +300,25 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
     else
         ErrorBuilder("Adadelta").not_implemented("dtype not supported");
     p_cpu.bump_version();
+}
+
+std::vector<Optimizer::NamedBuffers> Adadelta::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("square_avg", clone_state_slots(sq_avg_));
+    out.emplace_back("acc_delta", clone_state_slots(accumulated_update_));
+    return out;
+}
+
+void Adadelta::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "square_avg")
+            load_state_slots(sq_avg_, tensors);
+        else if (name == "acc_delta")
+            load_state_slots(accumulated_update_, tensors);
+    }
 }
 
 }  // namespace lucid

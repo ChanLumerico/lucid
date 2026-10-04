@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -95,6 +96,53 @@ clone_state_storage(const Storage& src, const Shape& shape, Dtype dtype, Device 
 // clone_state_storage : produces the snapshots consumed here.
 LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 
+// Build a zero-dimensional CPU tensor holding one scalar of optimizer state.
+//
+// Per-parameter scalars — the step counter every adaptive optimizer
+// keeps, NAdam's running momentum product — travel through
+// ``state_buffers`` as 0-d tensors, the shape the reference framework
+// gives them.  They live on the CPU whatever the parameter's device,
+// as the reference framework's do.
+//
+// Parameters
+// ----------
+// value : double
+//     Value to store, converted to ``dtype``.
+// dtype : Dtype
+//     Element type of the returned tensor.
+//
+// Returns
+// -------
+// std::shared_ptr<TensorImpl>
+//     A 0-d CPU tensor that owns its buffer.
+//
+// See Also
+// --------
+// read_state_scalar : the inverse.
+LUCID_API std::shared_ptr<TensorImpl> make_state_scalar(double value, Dtype dtype);
+
+// Read a one-element optimizer-state tensor back as a ``double``.
+//
+// Accepts the tensor on either device and in any of F32, F64, I32 or
+// I64 — a checkpoint loader may rebuild the scalar on the parameter's
+// device, with whatever dtype it was saved in.
+//
+// Parameters
+// ----------
+// t : const TensorImpl&
+//     Tensor with exactly one element.
+//
+// Returns
+// -------
+// double
+//     The element, converted to ``double``.
+//
+// Raises
+// ------
+// std::runtime_error
+//     If ``t`` does not hold exactly one element or has another dtype.
+LUCID_API double read_state_scalar(const TensorImpl& t);
+
 // Abstract base class owning trainable parameters and the training step.
 //
 // ``Optimizer`` keeps a flat list of ``TensorImpl`` parameters and runs
@@ -126,9 +174,19 @@ LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 //    convention).
 // 2. Lazily allocate state via ``init_state_slot`` if this is the slot's
 //    first observed gradient.
-// 3. Apply the update via ``update_one`` and bump the parameter's
-//    version counter via ``TensorImpl::bump_version`` so any autograd
-//    node that captured the parameter before the update sees the change.
+// 3. Advance the slot's step counter ``steps_[i]``, apply the update via
+//    ``update_one`` and bump the parameter's version counter via
+//    ``TensorImpl::bump_version`` so any autograd node that captured the
+//    parameter before the update sees the change.
+//
+// Step counters
+// -------------
+// Each slot counts its own updates, as the reference framework keeps
+// ``state["step"]`` per parameter.  A slot skipped for want of a
+// gradient does not advance, so a parameter unfrozen part-way through
+// training starts its bias correction at step 1, and a frozen first
+// parameter cannot hold every other slot at step 0.  ``update_one``
+// reads ``steps_[slot_idx]``, already advanced for the current update.
 //
 // ``zero_grad()`` clears every parameter's gradient storage so the next
 // backward pass starts from a fresh zero buffer.
@@ -152,11 +210,12 @@ LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 // Subclass responsibilities
 // -------------------------
 // Concrete optimizers must override ``update_one``, ``init_state_slot``,
-// ``set_lr`` / ``lr``, and ``state_dict_id``.  Optimizers with global
-// step state (Adam, NAdam, ...) must additionally override
-// ``step_count`` / ``set_step_count``.  Optimizers with Python-visible
-// per-parameter state must override ``state_buffers`` /
-// ``load_state_buffers``.
+// ``set_lr`` / ``lr``, and ``state_dict_id``.  Optimizers with
+// Python-visible per-parameter state must override ``state_buffers`` /
+// ``load_state_buffers``, building them from ``clone_state_slots`` /
+// ``load_state_slots`` (tensor state) and ``clone_step_slots`` /
+// ``load_step_slots`` (the per-slot step, for optimizers whose
+// reference-framework state carries ``"step"``).
 //
 // Attributes
 // ----------
@@ -168,6 +227,9 @@ LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 //     Parallel to ``params_``.  Marks whether ``init_state_slot`` has
 //     run for each slot; grown lazily by ``step()`` to match
 //     ``params_.size()`` on first use.
+// steps_ : std::vector<std::int64_t>
+//     Parallel to ``params_``.  Number of updates each slot has
+//     received; see Step counters.
 //
 // See Also
 // --------
@@ -320,23 +382,37 @@ public:
     // state_buffers : the inverse operation.
     virtual void load_state_buffers(const std::vector<NamedBuffers>& bufs) { (void)bufs; }
 
-    // Global step counter used by some optimizers for bias correction.
+    // Global step counter — always 0, since steps are counted per slot.
     //
     // Returns
     // -------
     // std::int64_t
-    //     Current step count (Adam bias correction, NAdam momentum
-    //     schedule, ...).  Optimizers without a global counter return 0.
+    //     ``0``.  The per-slot counters (see Step counters) travel
+    //     through ``state_buffers`` as the ``"step"`` entry instead, so a
+    //     checkpoint keeps each parameter's own count, as the reference
+    //     framework's does.
+    //
+    // Notes
+    // -----
+    // Keep this 0: the Python checkpoint writer
+    // (``Optimizer._save_engine_state``) stamps a non-zero ``step_count``
+    // over every parameter's ``"step"`` entry.
     virtual std::int64_t step_count() const { return 0; }
 
-    // Override the global step counter (used by ``load_state_dict``).
+    // Give every slot that holds state the same step count.
+    //
+    // The fallback for a checkpoint loader that carries one counter per
+    // parameter group rather than one per parameter: run it *after*
+    // ``load_state_buffers``, which allocates the slots the checkpoint
+    // holds state for.  Slots without state stay at 0.  A loader that
+    // passes the per-slot ``"step"`` entry to ``load_state_buffers``
+    // must not call this afterwards — it would overwrite those counts.
     //
     // Parameters
     // ----------
     // count : std::int64_t
-    //     New step count.  Optimizers without a global counter ignore
-    //     this call.
-    virtual void set_step_count(std::int64_t) {}
+    //     Step count to give every slot that holds state.
+    virtual void set_step_count(std::int64_t count);
 
 protected:
     // Apply the optimizer's update rule for a single parameter.
@@ -382,12 +458,69 @@ protected:
     virtual void init_state_slot(std::size_t slot_idx,
                                  const std::shared_ptr<TensorImpl>& param) = 0;
 
+    // Whether slot ``i`` holds state (it has received at least one
+    // gradient, or a checkpoint restored it).
+    bool slot_has_state(std::size_t i) const;
+
+    // Allocate slot ``i``'s state the way ``step()`` would, if it has none.
+    //
+    // Called by the ``load_*`` helpers before they overwrite a slot, so a
+    // checkpoint can be restored into an optimizer that has never
+    // stepped.  A null parameter is left alone.
+    void ensure_state_slot(std::size_t i);
+
+    // Snapshot one per-slot state vector for ``state_buffers``.
+    //
+    // Parameters
+    // ----------
+    // bufs : const std::vector<Storage>&
+    //     A state vector parallel to ``params_`` (``m_``, ``v_``, ...).
+    //
+    // Returns
+    // -------
+    // std::vector<std::shared_ptr<TensorImpl>>
+    //     Parallel to ``params_``: a clone of ``bufs[i]`` shaped like
+    //     parameter ``i`` for every slot that holds state, null elsewhere.
+    std::vector<std::shared_ptr<TensorImpl>>
+    clone_state_slots(const std::vector<Storage>& bufs) const;
+
+    // Restore one per-slot state vector from a ``state_buffers`` snapshot.
+    //
+    // Parameters
+    // ----------
+    // bufs : std::vector<Storage>&
+    //     The live state vector to overwrite in place.
+    // saved : const std::vector<std::shared_ptr<TensorImpl>>&
+    //     Saved tensors parallel to ``params_``; null entries are skipped.
+    //
+    // Raises
+    // ------
+    // std::runtime_error
+    //     If a saved tensor's shape or dtype differs from its parameter's,
+    //     or it is on the other device.
+    void load_state_slots(std::vector<Storage>& bufs,
+                          const std::vector<std::shared_ptr<TensorImpl>>& saved);
+
+    // Snapshot the per-slot step counters as 0-d I64 CPU tensors (null for
+    // slots without state) — the ``"step"`` entry of ``state_buffers``.
+    std::vector<std::shared_ptr<TensorImpl>> clone_step_slots() const;
+
+    // Restore the per-slot step counters from a ``"step"`` entry.
+    void load_step_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved);
+
     // Flat list of trainable parameters; indexed by ``slot_idx``.
     std::vector<std::shared_ptr<TensorImpl>> params_;
 
     // Per-slot flag; true once ``init_state_slot`` has run for that slot.
     // Grown lazily by ``step()`` to match ``params_.size()``.
     std::vector<bool> state_initialized_;
+
+    // Per-slot update counts, parallel to ``params_``; see Step counters.
+    std::vector<std::int64_t> steps_;
+
+private:
+    // Size ``state_initialized_`` and ``steps_`` to ``params_``.
+    void sync_slot_vectors();
 };
 
 }  // namespace lucid

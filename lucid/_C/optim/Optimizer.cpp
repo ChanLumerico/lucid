@@ -7,6 +7,7 @@
 
 #include "Optimizer.h"
 
+#include <cstdint>
 #include <cstring>
 #include <variant>
 
@@ -14,6 +15,7 @@
 #include <mlx/ops.h>
 #include <mlx/transforms.h>  // mlx::core::eval(std::vector<array>)
 
+#include "../backend/gpu/MlxBridge.h"
 #include "../core/Allocator.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Storage.h"
@@ -77,18 +79,163 @@ void overwrite_state_storage(Storage& dst, const Storage& src) {
     ErrorBuilder("load_state_buffers").fail("device mismatch between live and saved state");
 }
 
+namespace {
+
+// Store ``value`` as one element of type ``T`` at ``dst``.
+template <typename T>
+void write_scalar(std::byte* dst, double value) {
+    const T v = static_cast<T>(value);
+    std::memcpy(dst, &v, sizeof(T));
+}
+
+// Load one element of type ``T`` from ``src`` as a double.
+template <typename T>
+double read_scalar(const std::byte* src) {
+    T v;
+    std::memcpy(&v, src, sizeof(T));
+    return static_cast<double>(v);
+}
+
+}  // namespace
+
+std::shared_ptr<TensorImpl> make_state_scalar(double value, Dtype dtype) {
+    CpuStorage cs;
+    cs.dtype = dtype;
+    cs.nbytes = dtype_size(dtype);
+    cs.ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+    switch (dtype) {
+    case Dtype::F32:
+        write_scalar<float>(cs.ptr.get(), value);
+        break;
+    case Dtype::F64:
+        write_scalar<double>(cs.ptr.get(), value);
+        break;
+    case Dtype::I64:
+        write_scalar<std::int64_t>(cs.ptr.get(), value);
+        break;
+    default:
+        ErrorBuilder("make_state_scalar").not_implemented("dtype must be F32, F64 or I64");
+    }
+    return std::make_shared<TensorImpl>(Storage{std::move(cs)}, Shape{}, dtype, Device::CPU, false);
+}
+
+double read_state_scalar(const TensorImpl& t) {
+    if (t.numel() != 1)
+        ErrorBuilder("load_state_buffers").fail("a scalar state entry must hold one element");
+    const Storage& st = t.storage();
+    // A loader may rebuild the scalar on the parameter's device; bring a GPU
+    // value to the host first.  The download is one element.
+    CpuStorage host;
+    const CpuStorage* cpu = std::get_if<CpuStorage>(&st);
+    if (const auto* gs = std::get_if<GpuStorage>(&st)) {
+        host = gpu::download_gpu_to_cpu(*gs, t.shape());
+        cpu = &host;
+    }
+    if (cpu == nullptr)
+        ErrorBuilder("load_state_buffers").fail("unsupported storage for a scalar state entry");
+    const std::byte* src = cpu->ptr.get();
+    switch (t.dtype()) {
+    case Dtype::F32:
+        return read_scalar<float>(src);
+    case Dtype::F64:
+        return read_scalar<double>(src);
+    case Dtype::I32:
+        return read_scalar<std::int32_t>(src);
+    case Dtype::I64:
+        return read_scalar<std::int64_t>(src);
+    default:
+        ErrorBuilder("load_state_buffers")
+            .not_implemented("a scalar state entry must be F32, F64, I32 or I64");
+    }
+}
+
+void Optimizer::sync_slot_vectors() {
+    if (state_initialized_.size() != params_.size())
+        state_initialized_.assign(params_.size(), false);
+    if (steps_.size() != params_.size())
+        steps_.assign(params_.size(), 0);
+}
+
+bool Optimizer::slot_has_state(std::size_t i) const {
+    return i < state_initialized_.size() && state_initialized_[i] && i < params_.size() &&
+           params_[i] != nullptr;
+}
+
+void Optimizer::ensure_state_slot(std::size_t i) {
+    sync_slot_vectors();
+    if (i >= params_.size() || !params_[i] || state_initialized_[i])
+        return;
+    init_state_slot(i, params_[i]);
+    state_initialized_[i] = true;
+}
+
+std::vector<std::shared_ptr<TensorImpl>>
+Optimizer::clone_state_slots(const std::vector<Storage>& bufs) const {
+    std::vector<std::shared_ptr<TensorImpl>> out(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (!slot_has_state(i) || i >= bufs.size())
+            continue;
+        const auto& p = params_[i];
+        out[i] = clone_state_storage(bufs[i], p->shape(), p->dtype(), p->device());
+    }
+    return out;
+}
+
+void Optimizer::load_state_slots(std::vector<Storage>& bufs,
+                                 const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+    for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+        if (!saved[i] || !params_[i])
+            continue;
+        const auto& p = params_[i];
+        const auto& s = saved[i];
+        if (s->shape() != p->shape())
+            ErrorBuilder("load_state_buffers").shape_mismatch(p->shape(), s->shape());
+        if (s->dtype() != p->dtype())
+            ErrorBuilder("load_state_buffers").dtype_mismatch(p->dtype(), s->dtype());
+        if (s->device() != p->device())
+            ErrorBuilder("load_state_buffers").device_mismatch(p->device(), s->device());
+        ensure_state_slot(i);
+        overwrite_state_storage(bufs[i], s->storage());
+    }
+}
+
+std::vector<std::shared_ptr<TensorImpl>> Optimizer::clone_step_slots() const {
+    std::vector<std::shared_ptr<TensorImpl>> out(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (slot_has_state(i) && i < steps_.size())
+            out[i] = make_state_scalar(static_cast<double>(steps_[i]), Dtype::I64);
+    }
+    return out;
+}
+
+void Optimizer::load_step_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+    for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+        if (!saved[i] || !params_[i])
+            continue;
+        ensure_state_slot(i);
+        steps_[i] = static_cast<std::int64_t>(read_state_scalar(*saved[i]));
+    }
+}
+
+void Optimizer::set_step_count(std::int64_t count) {
+    sync_slot_vectors();
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (slot_has_state(i))
+            steps_[i] = count;
+    }
+}
+
 // Drives one optimizer update across all registered parameters.
 //
-// The state_initialized_ vector is grown lazily to match params_ on
-// the first step call (handles the case where params_ was extended
-// after construction). A parameter is silently skipped if its pointer
-// is null or if it has no gradient yet — this matches the reference framework
+// The per-slot vectors are grown lazily to match params_ on the first
+// step call (handles the case where params_ was extended after
+// construction). A parameter is silently skipped if its pointer is null
+// or if it has no gradient yet — this matches the reference framework
 // convention where parameters without gradients are treated as
-// non-trainable for the current step.
+// non-trainable for the current step, and a skipped slot's step counter
+// does not advance.
 void Optimizer::step() {
-    if (state_initialized_.size() != params_.size()) {
-        state_initialized_.assign(params_.size(), false);
-    }
+    sync_slot_vectors();
     // GPU param arrays updated this step, flushed in one batched eval below.
     std::vector<::mlx::core::array> to_flush;
     for (std::size_t i = 0; i < params_.size(); ++i) {
@@ -102,6 +249,7 @@ void Optimizer::step() {
             init_state_slot(i, p);
             state_initialized_[i] = true;
         }
+        ++steps_[i];
         update_one(i, p, *grad);
 
         // Bump the version so that any autograd nodes that captured this

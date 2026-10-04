@@ -306,14 +306,12 @@ private:
 //     Per-parameter running averages of the parameter trajectory.
 //     Initialised to a copy of the parameter on the first observed
 //     gradient.
-// step_ : std::vector<std::int64_t>
-//     Per-parameter step counters driving $\eta_{\mathrm{avg}}$.
 //
 // Notes
 // -----
-// The step counter is maintained per parameter slot rather than as a
-// single global counter so that parameters introduced into training
-// late (or temporarily frozen) still see a clean averaging schedule.
+// $t$ is the slot's own update count (``Optimizer::steps_``), so
+// parameters introduced into training late (or temporarily frozen)
+// still see a clean averaging schedule.
 //
 // References
 // ----------
@@ -360,6 +358,24 @@ public:
     // Checkpoint identifier (``"asgd_v1"``).
     std::string state_dict_id() const override { return "asgd_v1"; }
 
+    // Snapshot the per-slot state for checkpointing.
+    //
+    // Returns
+    // -------
+    // std::vector<NamedBuffers>
+    //     ``step`` (0-d I64 per slot) and ``ax``, plus
+    //     ``momentum_buffer`` when ``momentum != 0``.  Slots that have not
+    //     stepped contribute null entries.
+    std::vector<NamedBuffers> state_buffers() const override;
+
+    // Restore the state captured by ``state_buffers``.
+    //
+    // Raises
+    // ------
+    // std::runtime_error
+    //     On a shape / dtype / device mismatch with the live parameters.
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+
 protected:
     // Apply the ASGD update for one parameter slot.
     //
@@ -398,8 +414,6 @@ private:
     std::vector<Storage> moment_;
     // Per-parameter running averages of the parameter trajectory.
     std::vector<Storage> ax_;
-    // Per-parameter step counters used to compute the averaging coefficient.
-    std::vector<std::int64_t> step_;
 };
 
 }  // namespace lucid

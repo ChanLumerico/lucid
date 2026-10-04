@@ -140,6 +140,30 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     p_cpu.bump_version();
 }
 
+std::vector<Optimizer::NamedBuffers> RMSprop::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("square_avg", clone_state_slots(square_avg_));
+    if (momentum_ != 0.0)
+        out.emplace_back("momentum_buffer", clone_state_slots(moment_buf_));
+    if (centered_)
+        out.emplace_back("grad_avg", clone_state_slots(grad_avg_));
+    return out;
+}
+
+void RMSprop::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "square_avg")
+            load_state_slots(square_avg_, tensors);
+        else if (name == "momentum_buffer" && momentum_ != 0.0)
+            load_state_slots(moment_buf_, tensors);
+        else if (name == "grad_avg" && centered_)
+            load_state_slots(grad_avg_, tensors);
+    }
+}
+
 Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
              double lr,
              double eta_minus,
@@ -258,6 +282,25 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     else
         ErrorBuilder("Rprop").not_implemented("dtype not supported");
     p_cpu.bump_version();
+}
+
+std::vector<Optimizer::NamedBuffers> Rprop::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    out.emplace_back("step", clone_step_slots());
+    out.emplace_back("prev", clone_state_slots(prev_grad_));
+    out.emplace_back("step_size", clone_state_slots(step_size_));
+    return out;
+}
+
+void Rprop::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    for (const auto& [name, tensors] : bufs) {
+        if (name == "step")
+            load_step_slots(tensors);
+        else if (name == "prev")
+            load_state_slots(prev_grad_, tensors);
+        else if (name == "step_size")
+            load_state_slots(step_size_, tensors);
+    }
 }
 
 }  // namespace lucid
