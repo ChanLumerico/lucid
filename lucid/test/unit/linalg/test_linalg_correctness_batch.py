@@ -46,22 +46,28 @@ def _rtol(device: str) -> float:
 # ── CHA-141: eigh / eigvalsh read the triangle UPLO names ────────────────────
 
 
-def _lopsided(seed: int = 0) -> np.ndarray:
-    """An SPD matrix with +10 added to its upper triangle only.
+def _lopsided(seed: int = 0, batch: tuple[int, ...] = ()) -> np.ndarray:
+    """SPD matrices with +10 added to their upper triangle only.
 
     The two triangles describe different symmetric matrices with different
     spectra, so reading the wrong one cannot pass by accident.
     """
     rng = np.random.default_rng(seed)
-    m = rng.standard_normal((4, 4))
-    spd = m @ m.T + 4 * np.eye(4)
+    m = rng.standard_normal(batch + (4, 4))
+    spd = m @ np.swapaxes(m, -1, -2) + 4 * np.eye(4)
     return (spd + np.triu(np.full((4, 4), 10.0), 1)).astype(np.float32)
 
 
+_BATCHES = [(), (3,), (2, 2)]
+
+
 @pytest.mark.parity
+@pytest.mark.parametrize("batch", _BATCHES, ids=str)
 @pytest.mark.parametrize("uplo", ["L", "U"])
-def test_eigh_reads_the_triangle_uplo_names(uplo: str, device: str, ref: Any) -> None:
-    a = _lopsided()
+def test_eigh_reads_the_triangle_uplo_names(
+    uplo: str, batch: tuple[int, ...], device: str, ref: Any
+) -> None:
+    a = _lopsided(0, batch)
     w, v = LA.eigh(lucid.tensor(a, device=device), UPLO=uplo)
     rw, rv = ref.linalg.eigh(ref.tensor(a), UPLO=uplo)
     np.testing.assert_allclose(_np(w), rw.numpy(), rtol=_rtol(device), atol=1e-3)
@@ -70,12 +76,42 @@ def test_eigh_reads_the_triangle_uplo_names(uplo: str, device: str, ref: Any) ->
 
 
 @pytest.mark.parity
+@pytest.mark.parametrize("batch", _BATCHES, ids=str)
+def test_eigh_kernel_reads_the_triangle_the_table_says(
+    batch: tuple[int, ...], device: str, ref: Any
+) -> None:
+    """``eigh`` passes the input straight through when the device's kernel
+    already reads the requested triangle, and transposes it otherwise —
+    so it relies on knowing which triangle each kernel reads.  This pins
+    that knowledge: a kernel that changes sides fails here, not as a
+    silently flipped ``UPLO``."""
+    from lucid._dispatch import _unwrap, _wrap
+
+    a = _lopsided(4, batch)
+    w, _ = LA._la.eigh(_unwrap(lucid.tensor(a, device=device)))
+    reads = LA._EIGH_KERNEL_READS[device]
+    want = ref.linalg.eigvalsh(ref.tensor(a), UPLO=reads).numpy()
+    np.testing.assert_allclose(_np(_wrap(w)), want, rtol=_rtol(device), atol=1e-3)
+
+
+@pytest.mark.parametrize("uplo", ["L", "U"])
+def test_complex_eigh_is_refused_by_eigh_itself(uplo: str, device: str) -> None:
+    """Whichever path ``UPLO`` takes, the refusal is the kernel's own dtype
+    check — not a helper op failing first on a dtype it lacks."""
+    h = lucid.tensor([[2.0, 1 - 1j], [1 + 1j, 3.0]], device=device)
+    for fn in (LA.eigh, LA.eigvalsh):
+        with pytest.raises(NotImplementedError, match="eigh: only F32/F64"):
+            fn(h, UPLO=uplo)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("batch", _BATCHES, ids=str)
 @pytest.mark.parametrize("uplo", ["L", "U"])
 @pytest.mark.parametrize("requires_grad", [False, True])
 def test_eigvalsh_reads_the_triangle_uplo_names(
-    uplo: str, requires_grad: bool, device: str, ref: Any
+    uplo: str, requires_grad: bool, batch: tuple[int, ...], device: str, ref: Any
 ) -> None:
-    a = _lopsided(1)
+    a = _lopsided(1, batch)
     got = LA.eigvalsh(
         lucid.tensor(a, device=device, requires_grad=requires_grad), UPLO=uplo
     )
@@ -187,6 +223,26 @@ def test_ex_info_is_the_lapack_code(
     _, rinfo = getattr(ref.linalg, op)(ref.tensor(a))
     assert info.shape == ()
     assert int(info.item()) == int(rinfo.item()) != 0
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("size", [2, 5, 16, 33])
+def test_cholesky_ex_finds_scattered_failures_in_a_batch(
+    size: int, device: str, ref: Any
+) -> None:
+    """The failures are located by bisecting the batch; each one's order by
+    bisecting its leading blocks.  Both must land where LAPACK's do."""
+    rng = np.random.default_rng(size)
+    m = rng.standard_normal((size, 5, 5)).astype(np.float32)
+    a = m @ np.swapaxes(m, -1, -2) + 0.5 * np.eye(5, dtype=np.float32)
+    broken = rng.random(size) < 0.3
+    broken[rng.integers(size)] = True
+    for i in np.flatnonzero(broken):
+        j = int(rng.integers(5))
+        a[i, j, j] = -5.0
+    _, info = LA.cholesky_ex(lucid.tensor(a, device=device))
+    _, rinfo = ref.linalg.cholesky_ex(ref.tensor(a))
+    assert _np(info).tolist() == rinfo.numpy().tolist()
 
 
 @pytest.mark.parametrize(
@@ -334,6 +390,20 @@ def test_ldl_solve_is_differentiable_in_b() -> None:
     # d(1ᵀ A⁻¹ b)/db = A⁻ᵀ 1 = A⁻¹ 1 for symmetric A.
     np.testing.assert_allclose(
         _np(b.grad), np.linalg.solve(s, np.ones((4, 1))), atol=1e-10
+    )
+
+
+def test_ldl_solve_differentiates_through_a_2x2_block() -> None:
+    """Pivots ``[-4, -4, 4, 4, 5]``: a 2×2 block of ``D``, solved in closed
+    form, and interchanges — checked in both ``LD`` and ``B``."""
+    rng = np.random.default_rng(4)
+    ld, piv = LA.ldl_factor(lucid.tensor(_symmetric(4, 5)))
+    assert _np(piv).tolist() == [-4, -4, 4, 4, 5]
+    ld = lucid.tensor(_np(ld), requires_grad=True)
+    b = lucid.tensor(rng.standard_normal((5, 2)), requires_grad=True)
+    w = lucid.tensor(rng.standard_normal((5, 2)))
+    assert lucid.autograd.gradcheck(
+        lambda L, B: (LA.ldl_solve(L, piv, B) * w).sum(), (ld, b)
     )
 
 

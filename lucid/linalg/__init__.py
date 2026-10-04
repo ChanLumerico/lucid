@@ -1584,34 +1584,51 @@ class _EighVGrad(_AutogradFunction):
         return (dA + dA.mT) * 0.5
 
 
+#: The triangle each device's ``eigh`` kernel reads, whatever ``UPLO`` says.
+#: The CPU hands LAPACK ``syevd`` a column-major copy with ``'L'``; Metal
+#: hands MLX's row-major buffer to the same routine with ``'L'``, which
+#: LAPACK reads column-major — the upper triangle.  Pinned by
+#: ``test_linalg_correctness_batch.py``: a kernel that changes sides trips a
+#: test instead of silently flipping ``UPLO``.
+_EIGH_KERNEL_READS: dict[str, str] = {"cpu": "L", "metal": "U"}
+
+
 def _from_triangle(x: Tensor, UPLO: str, op: str) -> _C_engine.TensorImpl:
-    """The Hermitian matrix ``eigh`` / ``eigvalsh`` actually decompose.
+    """The matrix to hand the ``eigh`` kernel so it reads ``UPLO``'s triangle.
 
     LAPACK reads one triangle and never looks at the other, so a
     non-symmetric input is a request about that triangle alone.  The
     kernels did not agree on which: the CPU read the lower triangle and
     Metal the upper, whatever ``UPLO`` said — ``S + triu(10, 1)`` gave a
     different spectrum per device and the documented ``UPLO`` did
-    nothing.  Mirroring the chosen triangle onto the other makes both
-    kernels see the same symmetric matrix, the one the caller named.
+    nothing.
 
-    Built from a detached view: the gradient is attached by the caller's
-    Function wrappers, which give the symmetric gradient whichever
-    triangle was read — as the reference framework does.
+    When the device's kernel already reads the requested triangle the
+    input goes through untouched, so the default ``UPLO="L"`` on the CPU
+    costs nothing.  Otherwise the kernel gets the transpose (conjugated
+    for a Hermitian input), whose other triangle is the requested one: a
+    single view, where mirroring the triangle took four kernels and made
+    a 3x3 Metal ``eigh`` several times slower.
+
+    The gradient is attached by the caller's Function wrappers, which give
+    the symmetric gradient whichever triangle was read — as the reference
+    framework does.
     """
     if UPLO not in ("L", "U"):
         raise ValueError(f"{op}: UPLO must be 'L' or 'U', got {UPLO!r}")
-    xd = x.detach()
-    if xd.ndim < 2 or xd.shape[-1] != xd.shape[-2]:
+    xi = _unwrap(x)
+    if _EIGH_KERNEL_READS["metal" if x.is_metal else "cpu"] == UPLO:
+        return xi
+    shape = xi.shape
+    if len(shape) < 2 or shape[-1] != shape[-2]:
         # Not a square matrix: the kernel's own shape check says so.
-        return _unwrap(xd)
-    if UPLO == "L":
-        kept, mirrored = lucid.tril(xd), lucid.tril(xd, -1).mT
-    else:
-        kept, mirrored = lucid.triu(xd), lucid.triu(xd, 1).mT
-    if xd.is_complex():
-        mirrored = lucid.conj(mirrored)
-    return _unwrap(kept + mirrored)
+        return xi
+    flipped = _C_engine.mT(xi)
+    if xi.dtype in (_C_engine.C64, _C_engine.C128):
+        # The kernel refuses complex input and says so itself; were it to
+        # accept it, a Hermitian matrix mirrors with the conjugate.
+        flipped = _C_engine.conj(flipped)
+    return flipped
 
 
 def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
@@ -3267,14 +3284,15 @@ def _check_square(A: Tensor, op: str) -> None:
 def _is_numerical_failure(err: RuntimeError) -> bool:
     """Whether an engine error is a failed factorisation, not a refusal.
 
-    Every engine error is a ``LucidError`` and so a ``RuntimeError``; the
-    refusals of an argument (dtype, device, shape) or of the machine (out
-    of memory) are subclasses that must reach the caller rather than be
-    reported as a singular matrix.
+    A failed factorisation — LAPACK's ``info > 0`` on the CPU, the pivot or
+    diagonal check on Metal — is raised as a bare ``LucidError``.  Every
+    other engine error is a subclass of it (shape, dtype, device, index,
+    memory, a missing GPU, a version mismatch) or not an engine error at
+    all, and must reach the caller rather than be reported as a singular
+    matrix.  The kernels' shape refusal is a bare ``LucidError`` too, which
+    is why the ``_ex`` variants check squareness before calling them.
     """
-    return not isinstance(
-        err, (ValueError, TypeError, NotImplementedError, _C_engine.OutOfMemory)
-    )
+    return type(err) is _C_engine.LucidError
 
 
 def _getrf_info(A: Tensor) -> Tensor:
@@ -3317,22 +3335,31 @@ def _potrf_info(A: Tensor, upper: bool) -> Tensor:
 
     The order of the first leading minor that is not positive definite, or
     ``0``.  The kernel reports only that *some* matrix failed — and Metal
-    not even the order — so each matrix is tried alone, and a failed one is
-    narrowed down by bisection over its leading blocks: the first ``j``
-    steps of a Cholesky factorisation read nothing outside the leading
-    ``j × j`` block, so that block fails exactly when the whole matrix
-    fails within ``j`` steps.  Reached only once the batched call failed.
+    not even the order — so the failures are found by bisection twice over.
+    Across the batch: a slice that factorises clears every matrix in it at
+    once, so ``f`` failures among ``B`` matrices cost about ``2 f log2 B``
+    calls rather than ``B``.  Within a failed matrix, over its leading
+    blocks: the first ``j`` steps of a Cholesky factorisation read nothing
+    outside the leading ``j × j`` block, so that block fails exactly when
+    the whole matrix fails within ``j`` steps.  Reached only once the
+    batched call has failed, so the whole batch is known to.
     """
     n = int(A.shape[-1])
     batch = tuple(int(s) for s in A.shape[:-2])
-    codes: list[int] = []
     with lucid.no_grad():
         flat = A.detach().reshape(-1, n, n)
-        for b in range(int(flat.shape[0])):
-            M = flat[b]
-            if _cholesky_succeeds(M, upper):
-                codes.append(0)
+        codes = [0] * int(flat.shape[0])
+        # (start, stop, known to fail) slices of the batch still to settle.
+        pending = [(0, len(codes), True)]
+        while pending:
+            start, stop, failed = pending.pop()
+            if not failed and _cholesky_succeeds(flat[start:stop], upper):
                 continue
+            if stop - start > 1:
+                middle = (start + stop) // 2
+                pending += [(start, middle, False), (middle, stop, False)]
+                continue
+            M = flat[start]
             lo, hi = 1, n  # order n fails; find the smallest order that does
             while lo < hi:
                 mid = (lo + hi) // 2
@@ -3340,7 +3367,7 @@ def _potrf_info(A: Tensor, upper: bool) -> Tensor:
                     lo = mid + 1
                 else:
                     hi = mid
-            codes.append(lo)
+            codes[start] = lo
     if not batch:
         return lucid.tensor(codes[0], dtype=lucid.int32, device=A.device)
     return lucid.tensor(codes, dtype=lucid.int32, device=A.device).reshape(*batch)
@@ -3847,7 +3874,9 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     with :math:`\tilde L` unit-lower-triangular — :math:`L` with each
     column carrying the interchanges of the steps after it, as LAPACK's
     ``syconv`` arranges it — so the solve is a permutation, two triangular
-    solves around a block-diagonal one, and the inverse permutation.
+    solves around the :math:`1 \times 1` / :math:`2 \times 2` blocks of
+    :math:`D` (solved in closed form, as ``sytrs`` does), and the inverse
+    permutation.
 
     Parameters
     ----------
@@ -3881,7 +3910,11 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     Supports indefinite symmetric :math:`A` (unlike Cholesky), so it
     is appropriate for KKT / saddle-point systems where Cholesky
     would fail.  Cost per solve is :math:`O(n^2 k)` once the LDL
-    factor is in hand.
+    factor is in hand: two triangular solves, and :math:`O(nk)` for
+    :math:`D`.  The pivots are replayed on the host in :math:`O(n)` per
+    matrix; only when an interchange reaches earlier columns of
+    :math:`L` is an :math:`n \times n` gather index built for
+    :math:`\tilde L` (:math:`O(n^2)` host work).
 
     The interchanges are applied in the order ``sytrf`` performed them
     (LAPACK ``sytrs``).  Applying them as a single up-front row
@@ -3946,58 +3979,95 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
         lucid.broadcast_to(pivots, (*batch, n)).reshape(-1, n).tolist(),
     )
 
-    # Replay every matrix's interchanges on host indices:
-    #   order[i]    — the row of B that the forward sweep sees at position i
-    #                 (B permuted by P^T);
-    #   rows[i][j]  — the row of the stored L whose column-j entry lands at
-    #                 row i of L̃ (syconv's swap of the earlier columns);
-    #   opens[k]    — 1 where a 2x2 block of D starts at row k.
+    # Replay every matrix's interchanges on host indices, O(n) each:
+    #   order[i]    — the row of B the forward sweep sees at position i
+    #                 (B permuted by Pᵀ);
+    #   partner[i]  — the other row of i's 2x2 block of D, or i itself;
+    #   moves       — (columns, row, row) for each interchange that reaches
+    #                 earlier columns of L, as syconv swaps them.
     orders: list[int] = []
-    sources: list[list[int]] = []
-    opens: list[float] = []
-    moved = False
+    partners: list[int] = []
+    moves: list[list[tuple[int, int, int]]] = []
     for piv in piv_rows:
         order = list(range(n))
-        rows = [[r] * n for r in range(n)]
-        starts = [0.0] * (n - 1)
-        for start, size, partner in _bunch_kaufman_steps(piv, n):
+        partner = list(range(n))
+        moved: list[tuple[int, int, int]] = []
+        for start, size, other in _bunch_kaufman_steps(piv, n):
             a = start + size - 1  # the row this step interchanged
-            order[a], order[partner] = order[partner], order[a]
-            if partner != a and start > 0:
-                ra, rp = rows[a], rows[partner]
-                ra[:start], rp[:start] = rp[:start], ra[:start]
-                moved = True
+            order[a], order[other] = order[other], order[a]
+            if other != a and start > 0:
+                moved.append((start, a, other))
             if size == 2:
-                starts[start] = 1.0
+                partner[start], partner[start + 1] = start + 1, start
         orders.extend(order)
-        sources.extend(rows)
-        opens.extend(starts)
+        partners.extend(partner)
+        moves.append(moved)
 
     device = LD.device
-    eye = lucid.eye(n, dtype=LD.dtype, device=device)
-    # D's off-diagonal entries live on LD's sub-diagonal, at the 2x2 blocks.
-    two = lucid.tensor(opens, dtype=LD.dtype, device=device).reshape(*batch, n - 1)
-    sub = LD.diagonal(offset=-1, dim1=-2, dim2=-1) * two
-    D = (
-        lucid.diag_embed(LD.diagonal(dim1=-2, dim2=-1))
-        + lucid.diag_embed(sub, offset=-1)
-        + lucid.diag_embed(sub, offset=1)
-    )
-    L = lucid.tril(LD, -1) - lucid.diag_embed(sub, offset=-1)
-    if moved:
+    rows = lucid.arange(n, dtype=lucid.int64, device=device).unsqueeze(-1)
+    partner_index = lucid.tensor(partners, dtype=lucid.int64, device=device)
+    partner_col = partner_index.reshape(*batch, n, 1)
+    # D's off-diagonal entry of a 2x2 block sits at LD[k + 1, k]; it belongs
+    # to D, not L.  For row i that is LD[i, partner] + LD[partner, i], the
+    # other term lying in the cleared upper triangle.
+    paired = partner_col != rows
+    offdiag = lucid.gather(LD, -1, partner_col) + lucid.gather(LD.mT, -1, partner_col)
+    in_d = (rows.mT == partner_col) & (partner_col < rows)
+    L = lucid.where(in_d, lucid.zeros_like(LD), lucid.tril(LD, -1))
+    if any(moves):
+        # Only now an n x n gather index: the rows a swap touched, every
+        # other row reading from itself.
+        sources: list[list[int]] = []
+        for moved in moves:
+            touched: dict[int, list[int]] = {}
+            for start, a, other in moved:
+                ra = touched.setdefault(a, [a] * n)
+                ro = touched.setdefault(other, [other] * n)
+                ra[:start], ro[:start] = ro[:start], ra[:start]
+            sources.extend(touched.get(r, [r] * n) for r in range(n))
         index = lucid.tensor(sources, dtype=lucid.int64, device=device)
         L = lucid.gather(L, -2, index.reshape(*batch, n, n))
-    L = L + eye
+    L = L + lucid.eye(n, dtype=LD.dtype, device=device)
 
     order_index = lucid.tensor(orders, dtype=lucid.int64, device=device)
     order_index = order_index.reshape(*batch, n, 1)
     inverse_index = lucid.argsort(order_index, dim=-2)
     Y = lucid.gather(rhs, -2, lucid.broadcast_to(order_index, (*batch, n, k)))
     Y = solve_triangular(L, Y, upper=False, unitriangular=True)
-    Y = cast(Tensor, solve(D, Y))
+    Y = _solve_bunch_kaufman_d(LD, offdiag, partner_col, paired, Y)
     Y = solve_triangular(L.mT, Y, upper=True, unitriangular=True)
     X = lucid.gather(Y, -2, lucid.broadcast_to(inverse_index, (*batch, n, k)))
     return X.squeeze(-1) if vector else X
+
+
+def _solve_bunch_kaufman_d(
+    LD: Tensor, offdiag: Tensor, partner_col: Tensor, paired: Tensor, Y: Tensor
+) -> Tensor:
+    """``D⁻¹ Y`` for ``sytrf``'s block-diagonal ``D``, in closed form.
+
+    A 1×1 block divides.  A 2×2 block ``[[a, b], [b, c]]`` takes ``sytrs``'s
+    scaled inverse — every quantity divided by ``b`` first, so the
+    determinant ``ac - b²`` is never formed — and the formula is the same
+    for both rows of the block, written from that row's side::
+
+        z_i = ((d_o / b)(y_i / b) - y_o / b) / ((d_i / b)(d_o / b) - 1)
+
+    with ``o`` the row's partner.  O(n k), against a dense solve's O(n³).
+    The masked-out branch of each ``where`` is kept finite, so neither
+    leaks a NaN into the other's gradient.
+    """
+    k = int(Y.shape[-1])
+    d = LD.diagonal(dim1=-2, dim2=-1).unsqueeze(-1)  # (*, n, 1)
+    d_o = lucid.gather(d, -2, partner_col)
+    Y_o = lucid.gather(
+        Y, -2, lucid.broadcast_to(partner_col, tuple(Y.shape[:-1]) + (k,))
+    )
+    one = lucid.ones_like(d)
+    b = lucid.where(paired, offdiag, one)
+    blocks = ((d_o / b) * (Y / b) - Y_o / b) / lucid.where(
+        paired, (d / b) * (d_o / b) - 1.0, one
+    )
+    return lucid.where(paired, blocks, Y / lucid.where(paired, one, d))
 
 
 # ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────
