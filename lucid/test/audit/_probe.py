@@ -358,10 +358,18 @@ def dtype_args(call: Any, name: str, build: Callable[..., Any]) -> list[Any]:
       companion is an index, a size or a mask, and casting it to the
       dtype under test makes the call invalid rather than testing it.
     """
+    # The primary moves to |x| + 1 — positive and away from 0, so an integer
+    # or boolean rebuild stays a valid operand — unless its values are part
+    # of the op's contract (``Call.domain``: a probability); moved out of
+    # it, the question became "does the op take an invalid value", which
+    # the CPU refuses and Metal does not check.
+    in_domain = getattr(call, "domain", None) is not None
     args: list[Any] = []
     for index, value in enumerate(call.args):
         if index == call.primary:
-            args.append(build(np.abs(call.base) + 1.0, True))
+            args.append(
+                build(call.base if in_domain else np.abs(call.base) + 1.0, True)
+            )
         else:
             args.append(_rebuild(value, build))
     return args

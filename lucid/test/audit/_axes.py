@@ -1873,6 +1873,16 @@ class NonFiniteAxis(Axis):
         try:
             out = _probe.to_numpy(fn(*call.with_primary(probe).args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
+            if call.domain is not None and isinstance(exc, ValueError):
+                # NaN is outside the domain the op's contract is over (a
+                # probability), and the op said so with a typed refusal —
+                # the NaN did not become a number, which is what is asked.
+                return self._finding(
+                    symbol,
+                    Status.PASS,
+                    f"refuses a NaN outside its domain {list(call.domain)}: "
+                    f"{type(exc).__name__}",
+                )
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
 
         # An op that ignores its input cannot propagate anything through it.
@@ -2308,9 +2318,14 @@ class EdgeAxis(Axis):
             reference_out.shape
         ) == tuple(shape)
 
+        # The primary is resized together with every operand the call
+        # declares to share its shape (``Call.resized``): a loss's target
+        # follows its input, so "empty input" is asked as an empty
+        # *problem*, not as an input that no longer matches its target.
         empty = np.zeros((0, *shape[1:]), dtype=np.float64)
         try:
-            out = _probe.to_numpy(fn(*call.with_primary(empty).args, **call.kwargs))
+            emptied = call.resized(empty)
+            out = _probe.to_numpy(fn(*emptied.args, **emptied.kwargs))
             if (
                 shape_preserving
                 and out is not None
@@ -2318,15 +2333,16 @@ class EdgeAxis(Axis):
                 and out.shape[0] != 0
                 and out.size != 0
             ):
-                # Only the *primary* was emptied.  Where another tensor
-                # argument is still full size, it is the one supplying the
-                # shape and nothing was invented: ``solve_ex(A_empty, B)``
-                # answers with B's batch, and ``new_tensor`` builds from
-                # its data argument and takes that.  Emptiness can only
-                # propagate from an operand the answer's shape depends on.
+                # Only the primary and its declared peers were emptied.
+                # Where another tensor argument is still full size, it is
+                # the one supplying the shape and nothing was invented:
+                # ``solve_ex(A_empty, B)`` answers with B's batch, and
+                # ``new_tensor`` builds from its data argument and takes
+                # that.  Emptiness can only propagate from an operand the
+                # answer's shape depends on.
                 others = [
                     a
-                    for i, a in enumerate(call.args)
+                    for i, a in enumerate(emptied.args)
                     if i != call.primary and hasattr(a, "shape")
                 ]
                 if any(int(np.prod(tuple(a.shape))) != 0 for a in others):
@@ -2343,7 +2359,7 @@ class EdgeAxis(Axis):
 
         single = np.full((1,) * len(shape), 0.7, dtype=np.float64)
         try:
-            fn(*call.with_primary(single).args, **call.kwargs)
+            fn(*call.resized(single).args, **call.kwargs)
         except Exception as exc:  # noqa: BLE001
             notes.append(f"size-1: {type(exc).__name__}")
 

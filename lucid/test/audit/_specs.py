@@ -32,6 +32,24 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 
+def _rebuild(original: Any, array: Any, *, keep_integer: bool = False) -> Any:
+    """``array`` as a tensor at ``original``'s dtype family.
+
+    A float32 or float16 operand comes back float32, a complex one at its
+    width, anything else float64 — or, with ``keep_integer``, an integer
+    operand (a class index) at its own integer dtype.
+    """
+    dtype = getattr(original, "dtype", None)
+    text = str(dtype) if dtype is not None else ""
+    if "complex" in text:
+        return (_probe.as_complex64 if "64" in text else _probe.as_complex)(array)
+    if "float32" in text or "float16" in text:
+        return _probe.as_f32(array)
+    if keep_integer and "int" in text:
+        return lucid.tensor(np.asarray(array, dtype=np.int64), dtype=dtype)
+    return _probe.as_f64(array)
+
+
 class Call:
     """One concrete invocation of an op.
 
@@ -47,9 +65,22 @@ class Call:
         weight, not its indices.
     note : str
         How this invocation was chosen, for the SKIP message.
+    same_shape : tuple of int
+        Indices into ``args`` of the operands that must keep the
+        primary's shape — a loss's target, a variance — so that an axis
+        which *resizes* the primary (:meth:`resized`) resizes them with
+        it.  An axis that only changes values never looks at it.
+    domain : (float, float) or None
+        The closed interval the primary's values are part of the op's
+        contract over — ``binary_cross_entropy``'s probabilities, which
+        the reference's CPU kernel (and Lucid's) refuses outside
+        ``[0, 1]``.  An axis that rebuilds the primary at another dtype
+        keeps the call's own values rather than moving them to
+        ``|x| + 1``, out of the domain; and a ``ValueError`` for a
+        non-finite probe is the op's answer, not a gap in it.
     """
 
-    __slots__ = ("args", "kwargs", "primary", "note")
+    __slots__ = ("args", "kwargs", "primary", "note", "same_shape", "domain")
 
     def __init__(
         self,
@@ -57,11 +88,15 @@ class Call:
         kwargs: dict[str, Any] | None = None,
         primary: int = 0,
         note: str = "",
+        same_shape: tuple[int, ...] = (),
+        domain: tuple[float, float] | None = None,
     ) -> None:
         self.args = args
         self.kwargs = kwargs or {}
         self.primary = primary
         self.note = note
+        self.same_shape = same_shape
+        self.domain = domain
 
     def with_primary(self, array: np.ndarray) -> Call:
         """A copy whose differentiated argument is replaced by ``array``.
@@ -77,16 +112,36 @@ class Call:
         """
         args = list(self.args)
         original = args[self.primary] if 0 <= self.primary < len(args) else None
-        dtype = getattr(original, "dtype", None)
-        text = str(dtype) if dtype is not None else ""
-        if "complex" in text:
-            build = _probe.as_complex64 if "64" in text else _probe.as_complex
-        elif "float32" in text or "float16" in text:
-            build = _probe.as_f32
-        else:
-            build = _probe.as_f64
-        args[self.primary] = build(array)
-        return Call(args, dict(self.kwargs), self.primary, self.note)
+        args[self.primary] = _rebuild(original, array)
+        return Call(
+            args,
+            dict(self.kwargs),
+            self.primary,
+            self.note,
+            self.same_shape,
+            self.domain,
+        )
+
+    def resized(self, array: np.ndarray) -> Call:
+        """:meth:`with_primary` for an ``array`` of *another shape*.
+
+        Every operand declared in ``same_shape`` follows the primary to the
+        new shape, filled with its own first value at its own dtype — a
+        probability stays a probability, a class index stays an index.
+        Emptying only the primary of ``bce(input, target)`` asked whether
+        the loss takes an empty input *against a full target*, and a loss
+        that refuses a target of another shape (as the reference does)
+        was filed as refusing empty input.
+        """
+        call = self.with_primary(array)
+        for index in self.same_shape:
+            peer = self.args[index]
+            values = _probe.to_numpy(peer)
+            fill = values.flat[0] if values is not None and values.size else 0
+            call.args[index] = _rebuild(
+                peer, np.full(array.shape, fill), keep_integer=True
+            )
+        return call
 
     @property
     def base(self) -> np.ndarray:
@@ -255,10 +310,21 @@ def _loss(name: str, domain: str) -> Iterator[Call]:
     same = _f((_N, classes), domain)
     probs = _f((_N, classes), "small_pos")
 
+    # ``same_shape`` names each operand that has to keep the input's shape:
+    # a resizing axis resizes it with the input (see ``Call.resized``).
     if any(k in name for k in _CLASS_LOSSES):
         yield Call([logits, target_idx], {}, 0, "loss(logits, class index)")
     if any(k in name for k in _PROB_LOSSES):
-        yield Call([probs, _f((_N, classes), "small_pos")], {}, 0, "loss(prob, prob)")
+        yield Call(
+            [probs, _f((_N, classes), "small_pos")],
+            {},
+            0,
+            "loss(prob, prob)",
+            same_shape=(1,),
+            # A probability is binary_cross_entropy's contract; it refuses
+            # one outside [0, 1] on the CPU, as the reference does.
+            domain=(0.0, 1.0) if name == "binary_cross_entropy" else None,
+        )
     if any(k in name for k in _PAIR_LOSSES):
         sign = _probe.as_f64(np.array([1.0, -1.0]))
         # The negative was the anchor.  A triplet loss whose anchor and
@@ -266,10 +332,18 @@ def _loss(name: str, domain: str) -> Iterator[Call]:
         # gradient there is neither what the formula gives nor stable
         # under a finite difference — the check could not fail.
         negative = _f((_N, classes), domain)
-        yield Call([logits, same, sign], {}, 0, "loss(a, b, target sign)")
-        yield Call([logits, same, negative], {}, 0, "loss(anchor, positive, negative)")
+        yield Call(
+            [logits, same, sign], {}, 0, "loss(a, b, target sign)", same_shape=(1,)
+        )
+        yield Call(
+            [logits, same, negative],
+            {},
+            0,
+            "loss(anchor, positive, negative)",
+            same_shape=(1, 2),
+        )
     # The elementwise regressions, and the fallback for anything unmatched.
-    yield Call([logits, same], {}, 0, "loss(input, target) same shape")
+    yield Call([logits, same], {}, 0, "loss(input, target) same shape", same_shape=(1,))
     yield Call([logits, target_idx], {}, 0, "loss(logits, class index)")
 
 
@@ -832,6 +906,7 @@ def _nn_leftover(name: str, domain: str) -> Iterator[Call]:
             {},
             0,
             "gaussian_nll(input, target, var)",
+            same_shape=(1, 2),
         )
     elif name in ("multilabel_margin_loss",):
         yield Call(
@@ -842,6 +917,7 @@ def _nn_leftover(name: str, domain: str) -> Iterator[Call]:
             {},
             0,
             "multilabel_margin(input, target)",
+            same_shape=(1,),
         )
     elif name in ("ctc_loss",):
         t, n, c = 6, 2, 4
@@ -990,7 +1066,10 @@ _FAMILIES: list[tuple[str, Callable[[str, str], Iterator[Call]]]] = [
         r"norm$|^batch_norm|^layer_norm|^group_norm|^instance_norm|^local_response",
         _norm,
     ),
-    (r"loss$|^cross_entropy$|^kl_div$|^bce", _loss),
+    # ``binary_cross_entropy`` ends in neither: it fell through to the
+    # signature-derived call, whose target of another shape the loss
+    # refuses, and every axis filed it unanswered.
+    (r"loss$|^cross_entropy$|^kl_div$|^bce|^binary_cross_entropy", _loss),
     (r"^embedding", _embedding),
     (r"attention|^sdpa$", _attention),
     (
@@ -1171,6 +1250,7 @@ _QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
                 {},
                 0,
                 "multilabel_margin_loss(input, target)",
+                same_shape=(1,),
             )
         ]
     ),
