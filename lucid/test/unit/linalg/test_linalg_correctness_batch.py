@@ -140,8 +140,6 @@ def test_inv_ex_keeps_the_matrices_that_succeeded(device: str, ref: Any) -> None
 def test_solve_ex_keeps_the_systems_that_succeeded(
     rhs: str, device: str, ref: Any
 ) -> None:
-    if rhs == "vector" and device == "metal":
-        pytest.skip("Metal solve refuses a batched vector right-hand side (engine)")
     a = _batch(np.eye(2), _SINGULAR)
     b = np.ones((2, 2, 1) if rhs == "matrix" else (2, 2), dtype=np.float32)
     out, info = LA.solve_ex(

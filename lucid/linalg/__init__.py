@@ -2087,8 +2087,7 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
         )
     # A singular matrix has no inverse; its norm is taken as infinite, and
     # 0·∞ (a zero matrix) counts as infinite too.  inv_ex judges each matrix
-    # of a batch on its own — and never runs Metal's inverse on a singular
-    # one, which aborts the process.
+    # of a batch on its own.
     Ainv, info = inv_ex(A)
     failed = (info != 0).reshape(*tuple(info.shape), 1, 1)
     Ainv = lucid.where(failed, float("inf"), Ainv)
@@ -3286,9 +3285,9 @@ def _getrf_info(A: Tensor) -> Tensor:
     fail on — or ``0`` when there is none.  ``int32``, shaped like ``A``'s
     batch, on ``A``'s device.
 
-    Factorising does not fail on a singular matrix, so this is safe on
-    every device, Metal included — where the ``inv`` / ``solve`` kernels
-    abort the process on a singular matrix instead of raising.
+    Factorising does not fail on a singular matrix, so this answers for
+    every matrix of the batch at once — the ``inv`` / ``solve`` kernels
+    report only the first failure they meet.
     """
     n = int(A.shape[-1])
     if n == 0 or A.numel() == 0:
@@ -3500,10 +3499,9 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     searches) without wanting to wrap every call in a ``try``.
 
     Each matrix of a batch is judged on its own: a singular one leaves the
-    other inverses, and their gradients, intact.  On the CPU the batch is
-    inverted directly and factorised a second time only when that fails;
-    on Metal the singular matrices are found from an LU factorisation
-    first, because its inverse kernel aborts on one instead of raising.
+    other inverses, and their gradients, intact.  The batch is inverted
+    directly; only when that fails is it factorised again to find which
+    matrices failed and at which pivot.
 
     Examples
     --------
@@ -3517,15 +3515,12 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     2
     """
     _check_square(A, "inv_ex")
-    if not A.is_metal:
-        try:
-            return cast(Tensor, inv(A)), _info_zero(A)
-        except RuntimeError as err:
-            if not _is_numerical_failure(err):
-                raise
+    try:
+        return cast(Tensor, inv(A)), _info_zero(A)
+    except RuntimeError as err:
+        if not _is_numerical_failure(err):
+            raise
     info = _getrf_info(A)
-    if not bool((info != 0).any().item()):
-        return cast(Tensor, inv(A)), info
     if check_errors:
         _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
     return _on_the_rest(lambda M: cast(Tensor, inv(M)), A, info), info
@@ -3578,11 +3573,9 @@ def solve_ex(
     recover.
 
     Each system of a batch is judged on its own: a singular ``A`` leaves
-    the other solutions, and their gradients, intact.  On the CPU the
-    batch is solved directly and factorised a second time only when that
-    fails; on Metal the singular matrices are found from an LU
-    factorisation first, because its solve kernel aborts on one instead
-    of raising.
+    the other solutions, and their gradients, intact.  The batch is solved
+    directly; only when that fails is ``A`` factorised again to find which
+    systems failed and at which pivot.
 
     Examples
     --------
@@ -3597,15 +3590,12 @@ def solve_ex(
     if not left:
         raise NotImplementedError("solve_ex: only left=True is supported")
     _check_square(A, "solve_ex")
-    if not A.is_metal:
-        try:
-            return cast(Tensor, solve(A, B)), _info_zero(A)
-        except RuntimeError as err:
-            if not _is_numerical_failure(err):
-                raise
+    try:
+        return cast(Tensor, solve(A, B)), _info_zero(A)
+    except RuntimeError as err:
+        if not _is_numerical_failure(err):
+            raise
     info = _getrf_info(A)
-    if not bool((info != 0).any().item()):
-        return cast(Tensor, solve(A, B)), info
     if check_errors:
         _raise_ex_failure("solve_ex", info, _singular_reason("solve"))
     return _on_the_rest(lambda M: cast(Tensor, solve(M, B)), A, info), info
