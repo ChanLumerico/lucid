@@ -428,18 +428,17 @@ class TestIndexCopyOutOfRange:
         assert _run_child(_OUT_OF_RANGE[case], "cpu") == {"raised": "IndexError"}
 
     @_needs_metal
-    def test_metal_survives_and_checks_only_the_shapes(self) -> None:
-        # An empty axis is refused from the shapes alone.  The index values
-        # are not checked on Metal (CHA-160 decides whether they should be):
-        # MLX drops a write past the end, and -4 on an axis of 3 — moved once
-        # to -1 — it wraps again, onto the last row.  Pinned so that the
-        # CHA-160 change shows up here.
+    def test_metal_drops_the_write(self) -> None:
+        # An empty axis is refused from the shapes alone.  An index value out
+        # of range is dropped on Metal (policy B, LCD-228): the base keeps its
+        # value.  -4 on an axis of 3 used to wrap twice, once by the backend
+        # and once more by MLX, and wrote the last row.
         got = {case: _run_child(e, "metal") for case, e in _OUT_OF_RANGE.items()}
         zero_row = [0.0] * 4
         assert got == {
             "empty-axis": {"raised": "IndexError"},
             "far": {"value": [zero_row] * 3},
-            "far-negative": {"value": [zero_row, zero_row, [1.0] * 4]},
+            "far-negative": {"value": [zero_row] * 3},
         }
 
 

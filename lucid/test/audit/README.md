@@ -283,6 +283,29 @@ original argument's dtype, the axes name a missing gradient as a missing
 gradient, and a non-tensor output is `NOT_APPLICABLE` rather than a
 refusal — 318 down to **zero**.
 
+### An out-of-range index differs by device, on purpose
+
+An index outside its axis is an error on the CPU and is isolated inside
+the graph on Metal (policy B, LCD-228):
+
+| | CPU | Metal |
+|---|---|---|
+| gather, `index_select`, `take`, `x[i]`, embedding, class-loss target | `IndexError` | NaN at that position (0 for an integer or bool result) |
+| `scatter`, `scatter_add`, `scatter_reduce`, `index_add` / `_copy` / `_fill` / `_put_` | `IndexError` | the update is dropped; the base keeps its value |
+| `one_hot` | `IndexError` | a zero row |
+
+Refusing on Metal would mean reading the indices back to the host, a
+pipeline stall on every gather, scatter and embedding. Neither device
+reads or writes outside the buffer. An index into an *empty* axis is
+decided from the shapes, so both devices raise. One known gap remains:
+`x[i] = v` on Metal derives its positions through an integer gather, so
+an out-of-range key writes position 0 instead of being dropped (LCD-209).
+For the `device` axis,
+a cell that reports `UNSP` with `IndexError` therefore means the probe
+built an out-of-range index. That is a bug in the spec, not in the op.
+The contract is pinned by `lucid/test/unit/ops/test_index_bounds_contract.py`.
+Its owner is `gpu_axis_index` in `lucid/_C/backend/gpu/AxisIndex.h`.
+
 ---
 
 ## The three coverage numbers
