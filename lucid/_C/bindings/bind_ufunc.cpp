@@ -174,8 +174,11 @@ void register_ufunc(py::module_& m) {
     m.def("isinf", &isinf_op, py::arg("a"));
     m.def("isnan", &isnan_op, py::arg("a"));
     m.def("isfinite", &isfinite_op, py::arg("a"));
-    m.def("nan_to_num", &nan_to_num_op, py::arg("a"), py::arg("nan") = 0.0,
-          py::arg("posinf") = 3.4028234663852886e+38, py::arg("neginf") = -3.4028234663852886e+38);
+    // None picks the reference framework's default for the input's dtype:
+    // 0 for NaN, the dtype's largest / lowest finite value for the
+    // infinities (resolved in nan_to_num_op).
+    m.def("nan_to_num", &nan_to_num_op, py::arg("a"), py::arg("nan") = py::none(),
+          py::arg("posinf") = py::none(), py::arg("neginf") = py::none());
 
     // Dtype cast: element-wise conversion to a different dtype.
     // CPU: static_cast loop.  GPU: mlx::core::astype.

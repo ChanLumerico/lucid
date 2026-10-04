@@ -8,6 +8,8 @@
 
 #include "Predicate.h"
 
+#include <limits>
+
 #include "../../backend/Dispatcher.h"
 #include "../../compile/Tracer.h"
 #include "../../core/Helpers.h"
@@ -65,9 +67,40 @@ TensorImplPtr isfinite_op(const TensorImplPtr& a) {
     return predicate_dispatch(a, "isfinite", 2);
 }
 
-TensorImplPtr
-nan_to_num_op(const TensorImplPtr& a, double nan_val, double posinf_val, double neginf_val) {
-    return NanToNumBackward::forward(a, nan_val, posinf_val, neginf_val);
+namespace {
+
+// The largest finite value of ``dt``, which is the reference framework's
+// replacement for +inf when none is given.  For complex dtypes it is the
+// largest finite value of the parts.  Integer and bool tensors hold nothing
+// to replace, so for them the value is never used.  It stays the float32
+// figure the default always was, which keeps a traced integer graph as it
+// was.
+double largest_finite(Dtype dt) {
+    switch (dt) {
+    case Dtype::F16:
+        return 65504.0;
+    case Dtype::BF16:
+        return 3.3895313892515355e+38;  // 0x7F7F: float32's max with 7 mantissa bits
+    case Dtype::F64:
+    case Dtype::C128:
+        return std::numeric_limits<double>::max();
+    default:
+        return static_cast<double>(std::numeric_limits<float>::max());
+    }
+}
+
+}  // namespace
+
+TensorImplPtr nan_to_num_op(const TensorImplPtr& a,
+                            std::optional<double> nan_val,
+                            std::optional<double> posinf_val,
+                            std::optional<double> neginf_val) {
+    Validator::input(a, "nan_to_num.a").non_null();
+    // The defaults are resolved here, against the input's dtype, so every
+    // backend and the trace see the value that was used.
+    const double top = largest_finite(a->dtype());
+    return NanToNumBackward::forward(a, nan_val.value_or(0.0), posinf_val.value_or(top),
+                                     neginf_val.value_or(-top));
 }
 
 TensorImplPtr any_op(const TensorImplPtr& a) {

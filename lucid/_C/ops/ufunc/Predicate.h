@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "../../api.h"
 #include "../../core/fwd.h"
 
@@ -135,14 +137,16 @@ LUCID_API TensorImplPtr isfinite_op(const TensorImplPtr& a);
 // a : TensorImplPtr
 //     Input tensor of any floating-point dtype.  Integer inputs are
 //     passed through unchanged (no non-finite values to replace).
-// nan_val : double, optional
-//     Replacement for ``NaN`` positions.  Default ``0.0``.
-// posinf_val : double, optional
-//     Replacement for $+\infty$ positions.  Default is the maximum
-//     finite IEEE-754 ``float32`` value (~``3.4028e+38``).
-// neginf_val : double, optional
-//     Replacement for $-\infty$ positions.  Default is the minimum
-//     finite IEEE-754 ``float32`` value (~``-3.4028e+38``).
+// nan_val : std::optional<double>
+//     Replacement for ``NaN`` positions.  ``nullopt`` means ``0.0``.
+// posinf_val : std::optional<double>
+//     Replacement for $+\infty$ positions.  ``nullopt`` means the
+//     largest finite value of ``a``'s dtype (65504 for float16,
+//     ~``3.3895e+38`` for bfloat16, ~``3.4028e+38`` for float32,
+//     ~``1.7977e+308`` for float64; per part for complex).
+// neginf_val : std::optional<double>
+//     Replacement for $-\infty$ positions.  ``nullopt`` means the lowest
+//     finite value of ``a``'s dtype.
 //
 // Returns
 // -------
@@ -165,17 +169,20 @@ LUCID_API TensorImplPtr isfinite_op(const TensorImplPtr& a);
 //
 // Notes
 // -----
-// The default ``posinf_val`` / ``neginf_val`` clamp to ``float32`` range
-// even when ``a`` is ``float64``.  Pass ``std::numeric_limits<double>::max``
-// explicitly to preserve double-precision extremes.
+// The defaults used to be ``float32``'s extremes for every dtype.  In
+// float16 and bfloat16 those round to infinity, so a default call left every
+// infinity in place.  float64 got ``3.4e38`` where the reference framework
+// gives ``1.8e308``.  An explicit replacement is rounded into the dtype as
+// a cast would round it, so one the dtype cannot hold becomes its infinity
+// (float16 ``posinf=1e10`` gives ``inf``), as in the reference framework.
 //
 // See Also
 // --------
 // :func:`isnan_op`, :func:`isinf_op`, :func:`isfinite_op`.
 LUCID_API TensorImplPtr nan_to_num_op(const TensorImplPtr& a,
-                                      double nan_val = 0.0,
-                                      double posinf_val = 3.4028234663852886e+38,
-                                      double neginf_val = -3.4028234663852886e+38);
+                                      std::optional<double> nan_val = std::nullopt,
+                                      std::optional<double> posinf_val = std::nullopt,
+                                      std::optional<double> neginf_val = std::nullopt);
 
 // Full-tensor boolean OR-reduction — returns a scalar Bool tensor that is
 // ``True`` iff at least one element of ``a`` is non-zero (or ``True`` for
