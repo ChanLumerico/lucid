@@ -8,7 +8,11 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._unsupported import unsupported_if
-from lucid.nn.functional._index_checks import _check_indices, _check_table
+from lucid.nn.functional._index_checks import (
+    _check_indices,
+    _check_table,
+    _padding_index,
+)
 from lucid.nn.functional.activations import straight_through
 
 if TYPE_CHECKING:
@@ -98,7 +102,9 @@ def embedding(
         If given, the embedding vector at ``weight[padding_idx]`` is
         treated as a padding slot: its gradient is forced to zero so the
         padding embedding stays at its initialised value (typically a
-        zero vector) throughout training.
+        zero vector) throughout training.  It must lie in
+        ``[-num_embeddings, num_embeddings)`` (a negative one counts from
+        the end), else ``ValueError``.
     max_norm : float, optional
         If given, every entry of ``weight`` whose :math:`L_p` norm
         exceeds ``max_norm`` is renormalised in-place to have norm
@@ -150,6 +156,7 @@ def embedding(
     unsupported_if(
         sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
     )
+    padding_idx = _padding_index(padding_idx, weight, "embedding")
     _check_table(x, weight, "embedding")
     pad = padding_idx if padding_idx is not None else -1
     # Normalised, not passed through.  The engine gather reads the index
@@ -195,7 +202,8 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     ------
     ValueError
         If ``num_classes`` is ``-1`` and ``tensor`` is empty — there is no
-        largest index to infer the count from.
+        largest index to infer the count from — or if ``num_classes`` is
+        otherwise not positive.
     IndexError
         If a CPU ``tensor`` holds a class outside ``[0, num_classes)``,
         a negative one included; it used to give a row of zeros.  A Metal
@@ -223,6 +231,11 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     tensor([[0, 1],
             [1, 0]], dtype=lucid.int64)
     """
+    if num_classes != -1 and num_classes <= 0:
+        raise ValueError(
+            f"one_hot: num_classes must be positive, or -1 to infer it, "
+            f"got {num_classes}"
+        )
     if num_classes == -1:
         # The engine takes only a positive count, so the default this
         # function has always advertised went straight through and was

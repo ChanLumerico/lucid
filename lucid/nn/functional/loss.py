@@ -13,7 +13,7 @@ inherit both.
 import contextlib
 import math
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
@@ -27,8 +27,10 @@ from lucid._dtype import float32 as _float32
 from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional._index_checks import (
     _check_ctc,
+    _class_index,
     _class_targets,
     _ClassTargets,
+    _host_read,
     _poison,
 )
 
@@ -228,7 +230,7 @@ def _check_unit_interval(t: Tensor, what: str, op: str) -> None:
     makes the loss NaN there instead."""
     if t.device != "cpu":
         return
-    if not _on_host(lambda: bool(((t >= 0.0) & (t <= 1.0)).all().item())):
+    if not _host_read(lambda: bool(((t >= 0.0) & (t <= 1.0)).all().item())):
         raise ValueError(f"{op}: all elements of {what} should be between 0 and 1")
 
 
@@ -327,23 +329,6 @@ def _float32_scope() -> contextlib.AbstractContextManager[object]:
     if _C_engine.amp_is_active():
         return _C_engine.AutocastGuard(_C_engine.F32)
     return contextlib.nullcontext()
-
-
-def _on_host[T](read: Callable[[], T]) -> T:
-    """Run ``read`` — a guard's read of a CPU tensor — outside any active
-    compile trace.
-
-    A CPU tensor is on the host already, so the read costs no sync.  Like
-    the embedding table's range check it is a guard, not a value: it
-    raises or passes, nothing downstream depends on it, and a host read
-    inside a trace would mark the trace unsupported.
-    """
-    tracer = _C_engine.compile.current_tracer()
-    _C_engine.compile.set_current_tracer(None)
-    try:
-        return read()
-    finally:
-        _C_engine.compile.set_current_tracer(tracer)
 
 
 def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
@@ -1940,7 +1925,7 @@ def gaussian_nll_loss(
         else:
             raise ValueError("var is of incorrect size")
 
-    if var.device == "cpu" and _on_host(lambda: bool((var < 0.0).any().item())):
+    if var.device == "cpu" and _host_read(lambda: bool((var < 0.0).any().item())):
         raise ValueError("var has negative entry/entries")
 
     # Clamped at ``eps`` in value, not in gradient: the reference clamps a
@@ -2333,14 +2318,14 @@ def multilabel_margin_loss(
 
     # The labels of a sample are its entries up to the first negative one.
     # Every column used to be read with ``index >= 0``, so a label after
-    # the first -1 still counted as a positive.  Read as int32, the width
-    # a compiled step's graph holds an argmax in.
-    tgt32: Tensor = tgt.to(dtype=_lucid.int32)
-    listed: Tensor = _lucid.cumprod((tgt32 >= 0).to(dtype=_lucid.int32), dim=1) == 1
+    # the first -1 still counted as a positive.  Read at the width the
+    # check below reads, so the two agree on which entries are labels.
+    index: Tensor = _class_index(tgt)
+    listed: Tensor = _lucid.cumprod((index >= 0).to(dtype=_lucid.int32), dim=1) == 1
     # A listed class outside [0, C) raises for a CPU target, before the
     # scatter, and makes the sample's loss NaN on Metal (its count is NaN),
     # as for cross_entropy.  What follows the pad is never read.
-    safe, _, usable = _class_targets(tgt, num_classes, op, counted=listed)
+    safe, _, usable = _class_targets(index, num_classes, op, counted=listed)
     xb: Tensor = x.reshape([1, -1]) if unbatched else x
     src: Tensor = _poison(listed.to(dtype=xb.dtype), usable, safe, xb.dtype)
 

@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.nn.functional._index_checks import _check_table
+from lucid.nn.functional._index_checks import (
+    _check_offsets,
+    _check_table,
+    _padding_index,
+)
 from lucid.nn.functional.sparse import embedding
 
 if TYPE_CHECKING:
@@ -589,7 +593,9 @@ def embedding_bag(
         Embedding table of shape ``(num_embeddings, embedding_dim)``.
     offsets : Tensor, optional
         Required when ``x`` is 1-D.  Integer tensor whose ``i``-th
-        element is the starting index of bag ``i`` within ``x``.
+        element is the starting index of bag ``i`` within ``x``.  It must
+        start at 0 and never decrease (else ``ValueError``), and each
+        entry must lie in ``[0, len(x)]`` (else ``IndexError``).
     max_norm : float, optional
         Renormalise embedding rows with :math:`L_p` norm exceeding
         ``max_norm`` before lookup.
@@ -611,7 +617,8 @@ def embedding_bag(
         If ``True``, ``offsets`` has length ``num_bags + 1`` and its
         last entry is the total number of indices in ``x``.
     padding_idx : int, optional
-        Embedding row to mask out (its lookup result contributes zero).
+        Embedding row to mask out (its lookup result contributes zero), in
+        ``[-num_embeddings, num_embeddings)``, else ``ValueError``.
 
     Returns
     -------
@@ -644,10 +651,17 @@ def embedding_bag(
             f"embedding_bag: mode must be one of " f"{sorted(_mode_map)}, got {mode!r}"
         )
     mode_int = _mode_map[mode]
-    pad_idx = int(padding_idx) if padding_idx is not None else -1
 
-    # Same index contract as ``embedding``, checked before the gather.
-    _check_table(x, weight, "embedding_bag")
+    # Same index contract as ``embedding``, checked before the gather:
+    # the indices, ``padding_idx``, and the bag boundaries in ``offsets``.
+    op = "embedding_bag"
+    padding_idx = _padding_index(padding_idx, weight, op)
+    pad_idx = -1 if padding_idx is None else padding_idx
+    _check_table(x, weight, op)
+    if x.ndim == 1:
+        if offsets is None:
+            raise ValueError("embedding_bag: offsets required for 1-D input")
+        _check_offsets(offsets, int(x.shape[0]), op)
 
     if per_sample_weights is not None:
         return _weighted_bag_sum(
@@ -691,10 +705,8 @@ def embedding_bag(
             w_impl, flat_x, off_impl, mode_int, pad_idx, False
         )
     else:
-        # 1-D x with explicit offsets
-        if offsets is None:
-            raise ValueError("embedding_bag: offsets required for 1-D input")
-        # Cast offsets to I32 if needed
+        # 1-D x with explicit offsets, checked above.
+        assert offsets is not None
         off_impl = _unwrap(offsets)
         if off_impl.dtype != _C_engine.I32:
             off_impl = _C_engine.astype(off_impl, _C_engine.I32)

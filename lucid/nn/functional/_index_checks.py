@@ -63,6 +63,7 @@ Two consumers read on Metal anyway, each for its own reason:
 """
 
 from collections.abc import Callable
+from itertools import pairwise
 from typing import TYPE_CHECKING, NamedTuple, cast, overload
 
 import lucid as _lucid
@@ -168,7 +169,9 @@ def _refuse(index: Tensor, usable: Tensor, message: Callable[[object], str]) -> 
     first = _host_read(
         lambda: next(
             value
-            for value, ok in zip(_flat(index.tolist()), _flat(usable.tolist()))
+            for value, ok in zip(
+                _flat(index.tolist()), _flat(usable.tolist()), strict=True
+            )
             if not ok
         )
     )
@@ -176,6 +179,18 @@ def _refuse(index: Tensor, usable: Tensor, message: Callable[[object], str]) -> 
 
 
 # ── the class-index losses ──────────────────────────────────────────────────
+
+
+def _class_index(target: Tensor) -> Tensor:
+    """``target`` at the width :func:`_class_targets` checks it at: its own
+    integer width on the CPU, ``int32`` on Metal (see there).
+
+    A loss that derives a mask from its targets before the check (the
+    labels before a list's first negative entry) builds it from this, so the
+    mask and the check read the same values.
+    """
+    index = _as_index(target)
+    return index if target.device == "cpu" else index.to(dtype=_lucid.int32)
 
 
 class _ClassTargets(NamedTuple):
@@ -220,10 +235,8 @@ def _class_targets(
     compiled step, because the graph holds that result as ``int32``
     (LCD-270).
     """
-    index = _as_index(target)
+    index = _class_index(target)
     on_cpu = target.device == "cpu"
-    if not on_cpu:
-        index = index.to(dtype=_lucid.int32)
     if ignore_index is not None:
         counted = index != ignore_index
     clamped, usable = _in_range(index, num_classes, counted)
@@ -331,6 +344,56 @@ def _check_table(x: Tensor, weight: Tensor, op: str) -> None:
         axis=f"a table with {rows} entries",
         read_on_metal=True,
     )
+
+
+def _padding_index(padding_idx: int | None, weight: Tensor, op: str) -> int | None:
+    """``padding_idx`` as a row of the table ``weight``, or ``None``.
+
+    It must lie in ``[-num_embeddings, num_embeddings)``, as for
+    :class:`~lucid.nn.Embedding`, else ``ValueError``.  A negative one counts
+    from the end and comes back as its row; the engine reads ``-1`` as
+    "no padding row", so ``padding_idx=-1`` was taken for none.
+    """
+    if padding_idx is None:
+        return None
+    rows = int(weight.shape[0])
+    if not -rows <= padding_idx < rows:
+        raise ValueError(
+            f"{op}: padding_idx must be within [-{rows}, {rows}); got {padding_idx}"
+        )
+    return padding_idx + rows if padding_idx < 0 else padding_idx
+
+
+def _check_offsets(offsets: Tensor, length: int, op: str) -> None:
+    """The bag boundaries ``offsets`` into ``length`` indices, as
+    ``embedding_bag`` reads them.
+
+    ``offsets`` is 1-D, starts at 0, never decreases, and every entry lies
+    in ``[0, length]``.  A boundary past the end, which the kernel read past
+    the indices for, raises ``IndexError``.  A first boundary that is not 0,
+    or one that goes backwards, raises ``ValueError``.  Both used to be
+    scored silently.  ``offsets`` is read on the host, like the table indices
+    beside it (see the module docstring).
+    """
+    if offsets.ndim != 1:
+        raise ValueError(
+            f"{op}: offsets must be 1-D, got shape "
+            f"{tuple(int(d) for d in offsets.shape)}"
+        )
+    bounds = [int(cast(int, v)) for v in _flat(_host_read(offsets.tolist))]
+    for v in bounds:
+        if not 0 <= v <= length:
+            raise IndexError(
+                f"{op}: offset {v} is out of range for {length} indices "
+                f"(valid range [0, {length}])"
+            )
+    if bounds and bounds[0] != 0:
+        raise ValueError(f"{op}: offsets[0] must be 0, got {bounds[0]}")
+    for before, after in pairwise(bounds):
+        if after < before:
+            raise ValueError(
+                f"{op}: offsets must not decrease, got {after} after {before}"
+            )
 
 
 # ── ctc_loss ────────────────────────────────────────────────────────────────
