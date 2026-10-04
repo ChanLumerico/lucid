@@ -12,9 +12,12 @@
 
 #include "../bfunc/Add.h"
 #include "../bfunc/Sub.h"
+#include "../gfunc/Gfunc.h"
 #include "../ufunc/Astype.h"
 #include "../ufunc/Exponential.h"
+#include "../ufunc/Predicate.h"
 #include "../ufunc/Reductions.h"
+#include "../utils/Select.h"
 #include "../utils/View.h"
 
 namespace lucid {
@@ -40,8 +43,12 @@ TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes,
     if (empty_axis)
         return log_op(sum_op(exp_op(a), axes, keepdims));
 
-    // Reduce with keepdims=true so the subtraction broadcasts naturally.
-    auto m_keep = max_op(a, axes, true);
+    // Reduce with keepdims=true so the subtraction broadcasts naturally.  An
+    // infinite max shifts by 0 instead: ``inf - inf`` is NaN, so a row holding
+    // +inf summed to NaN (the reference: +inf) and an all -inf row too
+    // (the reference: -inf).
+    auto m_raw = max_op(a, axes, true);
+    auto m_keep = where_op(isinf_op(m_raw), zeros_like_op(m_raw), m_raw);
     auto shifted = sub_op(a, m_keep);
     auto exp_shifted = exp_op(shifted);
     auto summed = sum_op(exp_shifted, axes, true);
