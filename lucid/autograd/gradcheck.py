@@ -14,6 +14,41 @@ from lucid._dispatch import _wrap, _unwrap
 from lucid._tensor.tensor import Tensor
 
 
+def _perturbed_inputs_f64(
+    inputs_base: Sequence[Tensor],
+    inputs: Sequence[Tensor],
+    inp_idx: int,
+    shape: list[int],
+    e_k: _C_engine.TensorImpl,
+    sign: float,
+) -> list[Tensor]:
+    """Every input cast to F64, with ``inputs_base[inp_idx]`` shifted by ``sign * e_k``.
+
+    The perturbed tensor stays in F64 so the denominator ``eps`` is exact:
+    casting back to the original dtype would round the perturbation, making
+    the effective step differ from ``eps`` and corrupting the estimate.
+    """
+    result = []
+    for j, base in enumerate(inputs_base):
+        if j == inp_idx:
+            base_impl = _unwrap(base)
+            flat_b = _C_engine.astype(
+                _C_engine.reshape(base_impl, [base_impl.numel()]),
+                _C_engine.F64,
+            )
+            perturbed_flat = (
+                _C_engine.add(flat_b, e_k) if sign > 0 else _C_engine.sub(flat_b, e_k)
+            )
+            result.append(_wrap(_C_engine.reshape(perturbed_flat, shape)))
+        else:
+            other_f64 = _C_engine.astype(
+                _C_engine.contiguous(_unwrap(inputs[j])),
+                _C_engine.F64,
+            )
+            result.append(_wrap(other_f64))
+    return result
+
+
 def gradcheck(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
     inputs: Sequence[Tensor],
@@ -96,36 +131,12 @@ def gradcheck(
             eps_v = _C_engine.full([1], float(eps), _C_engine.F64, dev)
             e_k = _C_engine.scatter_add(e_k, k_idx, eps_v, 0)
 
-            # Build perturbed inputs list.
-            # Keep all perturbed tensors in F64 so the denominator eps is exact.
-            # Casting back to the original dtype would round the perturbation,
-            # making the effective step ≠ eps and corrupting the gradient estimate.
-            def _make_inputs_f64(sign: float) -> list[Tensor]:
-                result = []
-                for j, base in enumerate(inputs_base):
-                    if j == inp_idx:
-                        flat_b = _C_engine.astype(
-                            _C_engine.reshape(_unwrap(base), [numel]),
-                            _C_engine.F64,
-                        )
-                        if sign > 0:
-                            perturbed_flat = _C_engine.add(flat_b, e_k)
-                        else:
-                            perturbed_flat = _C_engine.sub(flat_b, e_k)
-                        # Reshape to original shape; stay in F64 for accuracy.
-                        perturbed = _C_engine.reshape(perturbed_flat, shape)
-                        result.append(_wrap(perturbed))
-                    else:
-                        # Other inputs: cast to F64 for consistent dtype.
-                        other_f64 = _C_engine.astype(
-                            _C_engine.contiguous(_unwrap(inputs[j])),
-                            _C_engine.F64,
-                        )
-                        result.append(_wrap(other_f64))
-                return result
-
-            f_plus_out = func(*_make_inputs_f64(+1.0))
-            f_minus_out = func(*_make_inputs_f64(-1.0))
+            f_plus_out = func(
+                *_perturbed_inputs_f64(inputs_base, inputs, inp_idx, shape, e_k, +1.0)
+            )
+            f_minus_out = func(
+                *_perturbed_inputs_f64(inputs_base, inputs, inp_idx, shape, e_k, -1.0)
+            )
             f_plus = float(cast(Tensor, f_plus_out).item())
             f_minus = float(cast(Tensor, f_minus_out).item())
             grad_values.append((f_plus - f_minus) / (2.0 * eps))

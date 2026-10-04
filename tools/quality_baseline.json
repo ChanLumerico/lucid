@@ -1112,10 +1112,10 @@
     "lucid/nn/quantized/sparse.py": 3,
     "lucid/nn/utils/fusion.py": 1,
     "lucid/nn/utils/prune.py": 1,
-    "lucid/optim/adam.py": 16,
+    "lucid/optim/adam.py": 15,
     "lucid/optim/lbfgs.py": 2,
     "lucid/optim/lr_scheduler.py": 28,
-    "lucid/optim/others.py": 20,
+    "lucid/optim/others.py": 19,
     "lucid/optim/sgd.py": 3,
     "lucid/quantization/_functional.py": 1,
     "lucid/quantization/_quantize.py": 3,
@@ -1431,7 +1431,6 @@
     "lucid/nn/utils/spectral_norm.py": 1,
     "lucid/nn/utils/weight_norm.py": 1,
     "lucid/optim/lbfgs.py": 1,
-    "lucid/optim/others.py": 1,
     "lucid/quantization/_functional.py": 2,
     "lucid/quantization/_qparams.py": 1,
     "lucid/quantization/_quantize.py": 3,
@@ -1584,13 +1583,6 @@
    "B018": {
     "lucid/nn/utils/rnn.py": 1
    },
-   "B023": {
-    "lucid/autograd/gradcheck.py": 5,
-    "lucid/models/generative/planet/_model.py": 6,
-    "lucid/models/vision/yolo/_v2.py": 3,
-    "lucid/models/vision/yolo/_v4.py": 2,
-    "lucid/optim/others.py": 3
-   },
    "B024": {
     "lucid/models/_base.py": 1
    },
@@ -1740,7 +1732,6 @@
     "lucid/models/vision/vjepa2/_config.py": 1,
     "lucid/models/vision/yolo/_v1.py": 1,
     "lucid/models/vision/yolo/_v2.py": 1,
-    "lucid/models/vision/yolo/_v4.py": 1,
     "lucid/nn/_shadow.py": 1,
     "lucid/nn/_state_dict.py": 1,
     "lucid/nn/functional/attention.py": 1,

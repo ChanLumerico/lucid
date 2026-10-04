@@ -29,6 +29,7 @@ Dreamer uses the same networks, so they are shared rather than copied.
 """
 
 from dataclasses import dataclass
+from functools import partial
 from typing import ClassVar, cast, override
 
 import lucid
@@ -359,6 +360,26 @@ class PlaNetModel(PretrainedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Overshooting window helpers — ``(B, T, ...)`` state fields
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _fold_window(x: Tensor, span: int, batch: int) -> Tensor:
+    """The first ``span`` steps, with time folded into the batch axis."""
+    return x[:, :span].reshape(batch * span, -1)
+
+
+def _unfold_window(x: Tensor, span: int, batch: int) -> Tensor:
+    """Inverse of :func:`_fold_window`: ``(batch * span, D) -> (batch, span, D)``."""
+    return x.reshape(batch, span, -1)
+
+
+def _detached_window(x: Tensor, start: int, span: int) -> Tensor:
+    """Steps ``start .. start + span``, cut from the graph."""
+    return x[:, start : start + span].detach()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Task wrapper — the variational objective
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -494,14 +515,14 @@ class PlaNetForWorldModeling(WorldModelingModel):
         counted = 0
         for d in range(1, limit + 1):
             span = t - d
-            state = cur.map(lambda x: x[:, :span].reshape(b * span, -1))
+            state = cur.map(partial(_fold_window, span=span, batch=b))
             step = self.planet.rssm.prior_step(
                 state, actions[:, d : d + span].reshape(b * span, -1)
             )
-            cur = step.map(lambda x: x.reshape(b, span, -1))
+            cur = step.map(partial(_unfold_window, span=span, batch=b))
             if d < 2:
                 continue
-            target = posteriors.map(lambda x: x[:, d : d + span].detach())
+            target = posteriors.map(partial(_detached_window, start=d, span=span))
             term = rssm_kl(target, cur, free_nats=0.0)
             total = term if total is None else total + term
             if rewards is not None and self._overshoot_reward_weight > 0.0:

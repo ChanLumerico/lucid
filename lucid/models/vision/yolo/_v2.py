@@ -701,32 +701,6 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                 for m in range(M)
             ]
 
-            def _pred_box(
-                row: int, col: int, a: int
-            ) -> tuple[float, float, float, float]:
-                cell = raw_r[bi, row, col, a, :]
-                bx = (1.0 / (1.0 + math.exp(-float(cell[0].item()))) + col) * stride_w
-                by = (1.0 / (1.0 + math.exp(-float(cell[1].item()))) + row) * stride_h
-                bw = anchors[a][0] * stride_w * math.exp(float(cell[2].item()))
-                bh = anchors[a][1] * stride_h * math.exp(float(cell[3].item()))
-                return bx, by, bw, bh
-
-            def _best_gt_iou(row: int, col: int, a: int) -> float:
-                if not gt_boxes_px:
-                    return 0.0
-                bx, by, bw, bh = _pred_box(row, col, a)
-                px1, py1, px2, py2 = bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2
-                best = 0.0
-                for gcx, gcy, gw, gh in gt_boxes_px:
-                    gx1, gy1 = gcx - gw / 2, gcy - gh / 2
-                    gx2, gy2 = gcx + gw / 2, gcy + gh / 2
-                    iw = max(0.0, min(px2, gx2) - max(px1, gx1))
-                    ih = max(0.0, min(py2, gy2) - max(py1, gy1))
-                    inter = iw * ih
-                    union = bw * bh + gw * gh - inter
-                    best = max(best, inter / max(union, 1e-6))
-                return best
-
             xy_terms: list[Tensor] = []
             wh_terms: list[Tensor] = []
             conf_obj: list[Tensor] = []
@@ -779,7 +753,13 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                                 # ``rescore=1`` selects in darknet.  A constant 1.0
                                 # target makes confidence uninformative for ranking.
                                 sig_conf = F.sigmoid(raw_conf)
-                                tgt_conf = _best_gt_iou(row, col, a)
+                                tgt_conf = _best_gt_iou(
+                                    raw_r[bi, row, col, a, :],
+                                    (row, col),
+                                    anchors[a],
+                                    (stride_h, stride_w),
+                                    gt_boxes_px,
+                                )
                                 tgt_conf_t = lucid.tensor([tgt_conf], device=dev)
                                 conf_obj.append((sig_conf - tgt_conf_t[0]) ** 2)
 
@@ -800,7 +780,16 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                         else:
                             # cfg [region] thresh = .6 — an unmatched predictor
                             # that already overlaps a GT well is left alone.
-                            if _best_gt_iou(row, col, a) > _NOOBJ_IOU_THRESH:
+                            if (
+                                _best_gt_iou(
+                                    raw_r[bi, row, col, a, :],
+                                    (row, col),
+                                    anchors[a],
+                                    (stride_h, stride_w),
+                                    gt_boxes_px,
+                                )
+                                > _NOOBJ_IOU_THRESH
+                            ):
                                 continue
                             sig_conf = F.sigmoid(raw_conf)
                             conf_noobj.append(sig_conf**2)
@@ -989,6 +978,40 @@ _CFG_V2 = YOLOV2Config(
     lambda_coord=5.0,
     lambda_noobj=0.5,
 )
+
+
+def _best_gt_iou(
+    cell: Tensor,
+    cell_pos: tuple[int, int],
+    anchor: tuple[float, float],
+    stride: tuple[float, float],
+    gt_boxes_px: list[tuple[float, float, float, float]],
+) -> float:
+    """Best IoU of one predictor's decoded box against every GT box.
+
+    ``cell`` is the predictor's raw ``(t_x, t_y, t_w, t_h, ...)`` row at grid
+    position ``cell_pos = (row, col)``; ``stride`` is ``(stride_h, stride_w)``
+    and ``gt_boxes_px`` holds pixel-space ``(cx, cy, w, h)`` boxes.
+    """
+    if not gt_boxes_px:
+        return 0.0
+    row, col = cell_pos
+    stride_h, stride_w = stride
+    bx = (1.0 / (1.0 + math.exp(-float(cell[0].item()))) + col) * stride_w
+    by = (1.0 / (1.0 + math.exp(-float(cell[1].item()))) + row) * stride_h
+    bw = anchor[0] * stride_w * math.exp(float(cell[2].item()))
+    bh = anchor[1] * stride_h * math.exp(float(cell[3].item()))
+    px1, py1, px2, py2 = bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2
+    best = 0.0
+    for gcx, gcy, gw, gh in gt_boxes_px:
+        gx1, gy1 = gcx - gw / 2, gcy - gh / 2
+        gx2, gy2 = gcx + gw / 2, gcy + gh / 2
+        iw = max(0.0, min(px2, gx2) - max(px1, gx1))
+        ih = max(0.0, min(py2, gy2) - max(py1, gy1))
+        inter = iw * ih
+        union = bw * bh + gw * gh - inter
+        best = max(best, inter / max(union, 1e-6))
+    return best
 
 
 def _make_v2(

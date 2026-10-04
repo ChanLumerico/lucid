@@ -845,12 +845,12 @@ def _yolov4_loss(
             # exp(t_h) with tensor ops so the gradient reaches the box channels.
             if pos_cells:
 
-                def _chan(j: int) -> Tensor:
-                    return lucid.cat(
+                tx, ty, tw, th = [
+                    lucid.cat(
                         [pred_b[a, r, c, j].reshape(1) for (a, r, c) in pos_cells]
                     )
-
-                tx, ty, tw, th = _chan(0), _chan(1), _chan(2), _chan(3)
+                    for j in range(4)
+                ]
                 cols = lucid.tensor([float(c) for (_, _, c) in pos_cells], device=dev)
                 rows = lucid.tensor([float(r) for (_, r, _) in pos_cells], device=dev)
                 anc_w = lucid.tensor([w for (w, _) in pos_anchor_wh], device=dev)

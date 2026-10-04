@@ -11,6 +11,15 @@ from lucid.nn.parameter import Parameter
 from lucid.optim.optimizer import Optimizer
 
 
+def _scale(
+    tensor: _C_engine.TensorImpl, scalar: float, like: _C_engine.TensorImpl
+) -> _C_engine.TensorImpl:
+    """``tensor * scalar``, the scalar filled in ``like``'s shape, dtype and device."""
+    return _C_engine.mul(
+        tensor, _C_engine.full(list(like.shape), scalar, like.dtype, like.device)
+    )
+
+
 class RMSprop(Optimizer):
     r"""Root Mean Square Propagation optimizer.
 
@@ -1091,20 +1100,16 @@ class SparseAdam(Optimizer):
                 m = self._exp_avg[flat_idx]
                 v = self._exp_avg_sq[flat_idx]
 
-                def _scale(
-                    tensor: _C_engine.TensorImpl, scalar: float
-                ) -> _C_engine.TensorImpl:
-                    return _C_engine.mul(tensor, _C_engine.full(sh, scalar, dt, dv))
-
                 # m = b1 * m + (1 - b1) * g
                 m = _C_engine.add(
-                    _scale(cast(_C_engine.TensorImpl, m), b1),
-                    _scale(cast(_C_engine.TensorImpl, gi), 1.0 - b1),
+                    _scale(cast(_C_engine.TensorImpl, m), b1, pi),
+                    _scale(cast(_C_engine.TensorImpl, gi), 1.0 - b1, pi),
                 )
                 # v = b2 * v + (1 - b2) * g^2
                 g_sq = _C_engine.mul(gi, gi)
                 v = _C_engine.add(
-                    _scale(cast(_C_engine.TensorImpl, v), b2), _scale(g_sq, 1.0 - b2)
+                    _scale(cast(_C_engine.TensorImpl, v), b2, pi),
+                    _scale(g_sq, 1.0 - b2, pi),
                 )
 
                 self._exp_avg[flat_idx] = m
@@ -1119,7 +1124,7 @@ class SparseAdam(Optimizer):
                 denom = _C_engine.add(
                     _C_engine.sqrt(v), _C_engine.full(sh, eps, dt, dv)  # type: ignore[arg-type]
                 )
-                update = _scale(_C_engine.div(m, denom), step_size)
+                update = _scale(_C_engine.div(m, denom), step_size, pi)
                 new_p = _C_engine.sub(pi, update)
                 pi.copy_from(new_p)
                 flat_idx += 1
