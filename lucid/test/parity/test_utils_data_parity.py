@@ -116,3 +116,36 @@ class TestRandomSplitParity:
         idx_b = set(b.indices)
         assert idx_a.isdisjoint(idx_b)
         assert len(idx_a | idx_b) == 20
+
+
+@pytest.mark.parity
+class TestNumpyScalarCollateParity:
+    """A dataset returning ``y[i]`` from a NumPy label array (CHA-182)."""
+
+    @pytest.mark.parametrize("np_dtype", [np.int64, np.int32, np.float32, np.float64])
+    def test_scalars_collate_into_one_tensor_of_their_dtype(
+        self, ref: Any, np_dtype: Any
+    ) -> None:
+        batch = [np_dtype(i) for i in range(4)]
+        l = collate(batch)
+        r = ref.utils.data.dataloader.default_collate(batch)
+        assert isinstance(l, lucid.Tensor)
+        assert_close(l, r, atol=0.0)
+        assert str(l.dtype).rsplit(".", 1)[-1] == str(r.dtype).rsplit(".", 1)[-1]
+
+    def test_default_convert_of_a_scalar(self, ref: Any) -> None:
+        l = default_convert(np.float32(2.5))
+        r = ref.utils.data.dataloader.default_convert(np.float32(2.5))
+        assert tuple(l.shape) == tuple(r.shape) == ()
+        assert_close(l, r, atol=0.0)
+
+
+@pytest.mark.parity
+class TestNoAutoBatchingParity:
+    def test_batch_size_none_yields_the_samples_in_order(self, ref: Any) -> None:
+        from lucid.utils.data import DataLoader
+
+        data = [np.float32(v) for v in (3.0, 1.0, 2.0)]
+        l = [float(x) for x in DataLoader(data, batch_size=None)]
+        r = [float(x) for x in ref.utils.data.DataLoader(data, batch_size=None)]
+        assert l == r
