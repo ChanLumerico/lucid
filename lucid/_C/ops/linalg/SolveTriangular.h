@@ -4,11 +4,17 @@
 // right-hand-side $B$, compute $X$ such that $A X = B$.
 //
 // This is strictly cheaper than the general ``solve_op``: no factorisation
-// is performed — LAPACK ``*trtrs`` (``strtrs`` / ``dtrtrs``) does a single
-// pass of forward- or back-substitution, $\mathcal{O}(n^2)$ per right-hand
-// side instead of $\mathcal{O}(n^3)$ for a Gaussian-elimination solve.  This
-// is exactly the inner kernel used to back-substitute through a Cholesky,
-// QR, or LDL$^\top$ factor.
+// is performed — BLAS ``*trsm`` (``strsm`` / ``dtrsm``) does a single pass
+// of forward- or back-substitution, $\mathcal{O}(n^2)$ per right-hand side
+// instead of $\mathcal{O}(n^3)$ for a Gaussian-elimination solve.  This is
+// exactly the inner kernel used to back-substitute through a Cholesky, QR,
+// or LDL$^\top$ factor.
+//
+// A singular triangle (an exact zero on the diagonal, ``unitriangular``
+// false) is not refused: substitution divides by the zero, so the solution
+// carries the IEEE result — $\pm\infty$, or NaN for $0 / 0$ — as the
+// reference does.  The LAPACK driver ``*trtrs`` would refuse it instead,
+// which is why the backend does not use it.
 //
 // The forward kernel only reads the relevant triangle of $A$:
 // - ``upper=true``  : the strict lower triangle of $A$ is ignored.
@@ -17,9 +23,10 @@
 //   the stored diagonal entries are ignored (used when $A$ is the unit
 //   lower factor returned by ``ldl_factor`` or by Householder routines).
 //
-// Forward dispatches to ``IBackend::linalg_solve_triangular`` → LAPACK
-// ``*trtrs`` on the CPU path.  No GPU-native dispatch is wired; the GPU
-// backend round-trips through the CPU LAPACK routine.
+// Forward dispatches to ``IBackend::linalg_solve_triangular`` → BLAS
+// ``*trsm`` on the CPU path.  No GPU-native dispatch is wired; the GPU
+// backend hands the operands to the CPU backend and uploads its answer, so
+// both devices follow the one policy above.
 //
 // Notes
 // -----
@@ -94,9 +101,9 @@ namespace lucid {
 // LucidError
 //     If ``a`` is not square, if ``a`` and ``b`` have mismatched dtype or
 //     device, or if either tensor has a non-float dtype.
-// LucidError
-//     If LAPACK reports a singular triangular system (zero on the diagonal
-//     when ``unitriangular`` is false).
+//
+// A singular triangular system is not an error: the solution holds
+// $\pm\infty$ / NaN where substitution divided by a zero pivot.
 //
 // Notes
 // -----

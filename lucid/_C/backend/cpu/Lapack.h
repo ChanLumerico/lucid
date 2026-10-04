@@ -457,56 +457,10 @@ lapack_lu_factor_f32(const float* A, int m, int n, float* LU_out, int* ipiv_out,
 LUCID_INTERNAL void
 lapack_lu_factor_f64(const double* A, int m, int n, double* LU_out, int* ipiv_out, int* info);
 
-// Single-precision triangular linear solve.
-//
-// Solves $A X = B$ where $A$ is triangular.  Selects upper or lower triangle
-// and whether the diagonal is implicit unit.  ``B`` is overwritten with $X$.
-//
-// Parameters
-// ----------
-// A : const float*
-//     Row-major triangular matrix, $n \times n$.
-// B : float*
-//     Right-hand side, $n \times \text{nrhs}$ row-major; overwritten by $X$.
-// n, nrhs : int
-//     System dimensions.
-// upper : bool
-//     ``true`` if $A$ is upper triangular, else lower.
-// unit : bool
-//     ``true`` if the diagonal is implicit one (e.g., from packed LU).
-// info : int*
-//     LAPACK status (``> 0`` = exact-zero on diagonal).
-//
-// Math
-// ----
-// $$ A X = B \;\;\text{with $A$ triangular} $$
-//
-// References
-// ----------
-// LAPACK ``strtrs_``.
-LUCID_INTERNAL void lapack_solve_triangular_f32(
-    const float* A, float* B, int n, int nrhs, bool upper, bool unit, int* info);
-
-// Double-precision triangular linear solve.  Uses ``dtrtrs_``.
-//
-// Parameters
-// ----------
-// A : const double*
-//     Row-major triangular matrix.
-// B : double*
-//     Right-hand side, overwritten by $X$.
-// n, nrhs : int
-//     System dimensions.
-// upper, unit : bool
-//     Triangle and unit-diagonal flags.
-// info : int*
-//     LAPACK status word.
-//
-// References
-// ----------
-// LAPACK ``dtrtrs_``.
-LUCID_INTERNAL void lapack_solve_triangular_f64(
-    const double* A, double* B, int n, int nrhs, bool upper, bool unit, int* info);
+// There is deliberately no triangular-solve wrapper here.  The driver
+// ``?trtrs`` refuses a singular triangle (``info > 0``) where the reference
+// returns the IEEE result of substitution; the CPU backend solves through
+// BLAS ``trsm`` instead (``strsm`` / ``dtrsm`` in Blas.h).
 
 // Single-precision least-squares solver via QR.
 //

@@ -6278,6 +6278,11 @@ public:
                 Storage{CpuStorage{vt_ptr, vt_nbytes, dt}}};
     }
 
+    // ``getrf``'s ``info > 0`` is an exactly-zero pivot of U, which leaves a
+    // complete factorisation — it is returned, not raised (``inv_ex`` and
+    // ``solve_ex`` read their ``info`` off U's diagonal).  Only ``info < 0``,
+    // an argument Lucid marshalled wrongly, is an error.  The Metal stream
+    // delegates here, so both devices answer with this policy.
     StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
         if (dt != Dtype::F32 && dt != Dtype::F64)
             ErrorBuilder("cpu_backend::linalg_lu_factor").not_implemented("only F32/F64 supported");
@@ -6327,6 +6332,12 @@ public:
         return {lu_storage, ipiv_storage};
     }
 
+    // Substitution through BLAS ``trsm``, not the LAPACK driver ``trtrs``.
+    // ``trtrs`` checks the diagonal first and refuses a singular triangle
+    // (``info > 0``) without solving; the reference answers it with the IEEE
+    // result of substitution instead — a nonzero over a zero pivot is ±inf,
+    // ``0 / 0`` is NaN — and so does this.  The Metal stream delegates here,
+    // so this is the one triangular-solve policy for both devices.
     Storage linalg_solve_triangular(const Storage& a,
                                     const Storage& b,
                                     const Shape& a_shape,
@@ -6342,30 +6353,24 @@ public:
         const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
         const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
         const std::int64_t batch = leading_matrix_batch_count(a_shape, 2);
+        const std::size_t a_per = static_cast<std::size_t>(n) * n;
         const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
-        // Copy B for in-place overwrite
+        // trsm solves in place, so the solution starts as a copy of B.
         auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
         if (b_cpu.nbytes > 0)
             std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
-        int info = 0;
         if (dt == Dtype::F32) {
             const auto* a_p = reinterpret_cast<const float*>(a_cpu.ptr.get());
             auto* x_p = reinterpret_cast<float*>(out_ptr.get());
-            const std::size_t a_per = static_cast<std::size_t>(n) * n;
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
-                                                 unitriangular, &info);
-                check_lapack_info(info, "solve_triangular");
-            }
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::strsm(upper, unitriangular, n, nrhs, a_p + bi * a_per, n, x_p + bi * b_per,
+                           nrhs);
         } else {
             const auto* a_p = reinterpret_cast<const double*>(a_cpu.ptr.get());
             auto* x_p = reinterpret_cast<double*>(out_ptr.get());
-            const std::size_t a_per = static_cast<std::size_t>(n) * n;
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
-                                                 unitriangular, &info);
-                check_lapack_info(info, "solve_triangular");
-            }
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::dtrsm(upper, unitriangular, n, nrhs, a_p + bi * a_per, n, x_p + bi * b_per,
+                           nrhs);
         }
         return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
     }

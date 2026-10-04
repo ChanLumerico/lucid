@@ -1,7 +1,7 @@
 // lucid/_C/ops/linalg/SolveTriangular.cpp
 //
 // Implements solve_triangular_op via IBackend::linalg_solve_triangular()
-// → LAPACK strtrs_/dtrtrs_.
+// → BLAS strsm/dtrsm (the GPU backend delegates to the CPU backend).
 
 #include "SolveTriangular.h"
 

@@ -92,7 +92,6 @@
 #include "../../core/Shape.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
-#include "../cpu/Lapack.h"
 #include "HalfAccumulation.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -2917,61 +2916,32 @@ public:
         return out;
     }
 
-    // lu_factor: MLX has no packed-LU API; copy to CPU and use LAPACK.
+    // lu_factor: MLX's ``lu`` returns separate (P, L, U), not LAPACK's packed
+    // factor and pivots, so the CPU backend factorises and the result is
+    // uploaded.  Delegating — rather than running ``getrf`` again here —
+    // keeps the CPU backend the one owner of the ``info`` policy.
     StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& ga = std::get<GpuStorage>(a);
-        auto cpu_arr = ::mlx::core::contiguous(*ga.arr);
-        cpu_arr.eval();
-        const int m = static_cast<int>(shape[shape.size() - 2]);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const int k = std::min(m, n);
-        std::int64_t batch = 1;
-        for (std::size_t i = 0; i + 2 < shape.size(); ++i)
-            batch *= static_cast<std::int64_t>(shape[i]);
-        const std::size_t per_mat = static_cast<std::size_t>(m) * n;
-        const std::size_t nbytes = static_cast<std::size_t>(batch) * per_mat * dtype_size(dt);
-        const std::size_t ipiv_nbytes = static_cast<std::size_t>(batch) * k * sizeof(std::int32_t);
-        auto lu_ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        auto ipiv_ptr = allocate_aligned_bytes(ipiv_nbytes, Device::CPU);
-        auto* ipiv_out = reinterpret_cast<std::int32_t*>(ipiv_ptr.get());
-        int info = 0;
-        if (dt == Dtype::F32) {
-            MemoryTracker::track_host_sync(cpu_arr.nbytes());
-            const float* src = cpu_arr.data<float>();
-            float* lu_p = reinterpret_cast<float*>(lu_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
-                cpu::lapack_lu_factor_f32(src + b * per_mat, m, n, lu_p + b * per_mat,
-                                          ipiv_local.data(), &info);
-                for (int i = 0; i < k; ++i)
-                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
-            }
-        } else {
-            MemoryTracker::track_host_sync(cpu_arr.nbytes());
-            const double* src = cpu_arr.data<double>();
-            double* lu_p = reinterpret_cast<double*>(lu_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                std::vector<int> ipiv_local(static_cast<std::size_t>(k));
-                cpu::lapack_lu_factor_f64(src + b * per_mat, m, n, lu_p + b * per_mat,
-                                          ipiv_local.data(), &info);
-                for (int i = 0; i < k; ++i)
-                    ipiv_out[b * k + i] = static_cast<std::int32_t>(ipiv_local[i]);
-            }
-        }
+        Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape)};
+        auto [lu_cpu, piv_cpu] =
+            Dispatcher::for_device(Device::CPU).linalg_lu_factor(a_cpu, shape, dt);
         // Must upload: the op wrapper tags both outputs with the *input* device
         // (Metal), so returning CPU storage desyncs the device tag from the
         // storage variant and every later engine op hits bad_variant_access.
         // Shapes mirror lu_factor_op: LU keeps the input shape, pivots are
-        // batch dims + n.
+        // batch dims + min(m, n).  The CPU call has already refused a rank
+        // below 2.
         Shape pivot_shape(shape.begin(), shape.end() - 2);
-        pivot_shape.push_back(static_cast<std::int64_t>(k));
-        CpuStorage lu_cs{lu_ptr, nbytes, dt};
-        CpuStorage piv_cs{ipiv_ptr, ipiv_nbytes, Dtype::I32};
-        return {Storage{gpu::upload_cpu_to_gpu(lu_cs, shape)},
-                Storage{gpu::upload_cpu_to_gpu(piv_cs, pivot_shape)}};
+        pivot_shape.push_back(std::min(shape[shape.size() - 2], shape[shape.size() - 1]));
+        return {Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(lu_cpu), shape)},
+                Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(piv_cpu), pivot_shape)}};
     }
 
-    // solve_triangular: delegate to CPU LAPACK (MLX has no native dtrtrs).
+    // solve_triangular: the CPU backend's substitution, uploaded.  MLX's own
+    // ``linalg::solve_triangular`` goes through ``tri_inv``, whose LAPACK
+    // ``trtri`` throws from the CPU stream's worker thread on a zero diagonal
+    // — a process abort, not an exception (see the note on MLX CPU-stream
+    // linalg) — where the reference returns inf/NaN.  Delegating keeps the
+    // CPU backend the one owner of the singular-triangle policy.
     Storage linalg_solve_triangular(const Storage& a,
                                     const Storage& b,
                                     const Shape& a_shape,
@@ -2979,45 +2949,15 @@ public:
                                     bool upper,
                                     bool unitriangular,
                                     Dtype dt) override {
-        const auto& ga_a = std::get<GpuStorage>(a);
-        const auto& ga_b = std::get<GpuStorage>(b);
-        auto ca = ::mlx::core::contiguous(*ga_a.arr);
-        ca.eval();
-        auto cb = ::mlx::core::contiguous(*ga_b.arr);
-        cb.eval();
-        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
-        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
-        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
-        std::int64_t batch = 1;
-        for (std::size_t i = 0; i + 2 < a_shape.size(); ++i)
-            batch *= static_cast<std::int64_t>(a_shape[i]);
-        const std::size_t a_per = static_cast<std::size_t>(n) * n;
-        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
-        const std::size_t out_bytes = cb.nbytes();
-        auto out_ptr = allocate_aligned_bytes(out_bytes, Device::CPU);
-        MemoryTracker::track_host_sync(cb.nbytes());
-        std::memcpy(out_ptr.get(), cb.data<void>(), out_bytes);
-        int info = 0;
-        if (dt == Dtype::F32) {
-            MemoryTracker::track_host_sync(ca.nbytes());
-            const float* a_p = ca.data<float>();
-            float* x_p = reinterpret_cast<float*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
-                                                 unitriangular, &info);
-        } else {
-            MemoryTracker::track_host_sync(ca.nbytes());
-            const double* a_p = ca.data<double>();
-            double* x_p = reinterpret_cast<double*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
-                                                 unitriangular, &info);
-        }
+        Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), a_shape)};
+        Storage b_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(b), b_shape)};
+        Storage x_cpu =
+            Dispatcher::for_device(Device::CPU)
+                .linalg_solve_triangular(a_cpu, b_cpu, a_shape, b_shape, upper, unitriangular, dt);
         // Must upload: the op wrapper tags the result with the *input* device
         // (Metal), so returning CpuStorage here desyncs the device tag from the
         // storage variant and every later engine op hits bad_variant_access.
-        CpuStorage out_cs{out_ptr, out_bytes, dt};
-        return Storage{gpu::upload_cpu_to_gpu(out_cs, b_shape)};
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(x_cpu), b_shape)};
     }
 
     // lstsq: fall back to CPU LAPACK (MLX has no lstsq)
