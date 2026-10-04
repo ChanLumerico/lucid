@@ -510,3 +510,70 @@ class TestHalfPrecisionClassLossesSumInFloat32:
         # reference — only the mean's intermediate overflow was the bug.
         x, t = self._case(device)
         assert math.isinf(F.cross_entropy(x, t, reduction="sum").item())
+
+
+# ── CHA-90 ─────────────────────────────────────────────────────────────────
+
+
+class TestMultilabelMarginStopsAtTheFirstMinusOne:
+    """``multilabel_margin_loss`` counted labels after the first ``-1``.
+
+    Every column was read with ``index >= 0``; the labels of a sample are
+    its entries *up to* the first ``-1``, as its own docstring said.
+    """
+
+    X = [[0.1, 0.2, 0.4, 0.8]]
+
+    @pytest.mark.parametrize(
+        ("target", "want"),
+        [
+            ([[3, 0, -1, 1]], 0.85),
+            ([[-1, 0, 1, 2]], 0.0),
+            ([[3, 3, -1, 1]], 0.65),  # a class listed twice counts twice
+            ([[0, 1, 2, 3]], 0.0),
+        ],
+        ids=["after-the-pad", "pad-first", "duplicate", "all-positive"],
+    )
+    def test_only_the_labels_before_the_pad_count(
+        self, device: str, target: list[list[int]], want: float
+    ) -> None:
+        x = lucid.tensor(self.X, device=device)
+        t = lucid.tensor(target, device=device)
+        assert _close(F.multilabel_margin_loss(x, t).item(), want)
+        assert _close(nn.MultiLabelMarginLoss()(x, t).item(), want)
+
+    def test_a_1d_input_gives_a_0d_loss(self, device: str) -> None:
+        x = lucid.tensor(self.X[0], device=device)
+        t = lucid.tensor([3, 0, -1, 1], device=device)
+        out = F.multilabel_margin_loss(x, t, reduction="none")
+        assert out.shape == ()
+        assert _close(out.item(), 0.85)
+
+    def test_an_out_of_range_cpu_label_raises(self) -> None:
+        x = lucid.tensor(self.X)
+        with pytest.raises(IndexError, match="Target 5 is out of bounds"):
+            F.multilabel_margin_loss(x, lucid.tensor([[5, -1, 0, 0]]))
+        # After the pad, anything goes — it is never read.
+        assert _close(
+            F.multilabel_margin_loss(x, lucid.tensor([[3, -1, 9, -7]])).item(), 0.325
+        )
+
+    @pytest.mark.parity
+    def test_matches_the_reference(self, ref: object, device: str) -> None:
+        R = ref
+        xs = [[0.1, 0.2, 0.4, 0.8], [0.9, -0.3, 0.5, 0.0], [0.3, 0.3, 0.1, 0.7]]
+        ts = [[3, 0, -1, 1], [2, 2, 0, -1], [-1, 1, 2, 3]]
+        for reduction in ("none", "mean", "sum"):
+            lx = lucid.tensor(xs, requires_grad=True, device=device)
+            lo = F.multilabel_margin_loss(
+                lx, lucid.tensor(ts, device=device), reduction=reduction
+            )
+            lo.sum().backward()
+            rx = R.tensor(xs, requires_grad=True)  # type: ignore[attr-defined]
+            ro = R.nn.functional.multilabel_margin_loss(  # type: ignore[attr-defined]
+                rx, R.tensor(ts), reduction=reduction  # type: ignore[attr-defined]
+            )
+            ro.sum().backward()
+            assert _close(_vals(lo), ro.tolist())
+            assert lx.grad is not None
+            assert _close(_vals(lx.grad), rx.grad.tolist())

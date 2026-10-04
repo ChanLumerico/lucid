@@ -1783,22 +1783,26 @@ def multilabel_margin_loss(
 
     Targets are encoded as a fixed-width index list with ``-1`` as
     a padding sentinel — entries up to the first ``-1`` mark the
-    positive classes for that sample.
+    positive classes for that sample; that entry and every one after it
+    are ignored, whatever they hold.
 
     Parameters
     ----------
     x : Tensor
         Class scores of shape :math:`(N, C)` or :math:`(C,)`.
     target : Tensor
-        Same shape as ``x``.  Non-negative entries are positive
-        class indices; ``-1`` entries are ignored.
+        Same shape as ``x``, any integer dtype.  The entries before the
+        first negative one are the positive class indices.  A listed
+        class outside :math:`[0, C)` raises ``IndexError`` for a CPU
+        tensor and makes that sample's loss NaN on Metal.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
     Returns
     -------
     Tensor
-        Scalar or per-sample tensor of shape :math:`(N,)`.
+        Scalar, or per-sample tensor of shape :math:`(N,)` (a 0-d tensor
+        for a 1-D ``x``) under ``"none"``.
 
     Notes
     -----
@@ -1810,10 +1814,11 @@ def multilabel_margin_loss(
         L_i = \frac{1}{C} \sum_{t \in P_i} \sum_{j \notin P_i}
               \max\!\big(0,\; 1 - x_{i, t} + x_{i, j}\big),
 
-    where :math:`P_i` is the set of positive labels for sample
-    :math:`i`.  Equivalently, it is the average of multi-class
-    hinge losses obtained by treating each positive label as
-    *the* correct one against the full set of non-positives.
+    where :math:`P_i` is the list of positive labels for sample
+    :math:`i` (a class listed twice is counted twice).  Equivalently,
+    it is the average of multi-class hinge losses obtained by treating
+    each positive label as *the* correct one against the full set of
+    non-positives.
 
     Examples
     --------
@@ -1824,73 +1829,43 @@ def multilabel_margin_loss(
     >>> multilabel_margin_loss(scores, target)
     tensor(0.275)
     """
-    xi = _unwrap(x)
-    ti = _unwrap(target)
-    # Index columns gathered out of ``ti`` are compared against the I32
-    # constants below, and ``lucid.tensor([...ints...])`` hands us int64 —
-    # so the natural call raised ``DtypeMismatch`` and only an explicitly
-    # int32 target worked.  Normalize at the boundary, as ctc_loss does.
-    if ti.dtype != _C_engine.I32:
-        ti = _C_engine.astype(ti, _C_engine.I32)
+    unbatched: bool = x.ndim == 1
+    xb: Tensor = x.reshape([1, -1]) if unbatched else x
+    # Any integer dtype is taken: a ``lucid.tensor([...ints...])`` target
+    # is int64, and an explicitly int32 one is just as usual.
+    tgt: Tensor = (target.reshape([1, -1]) if unbatched else target).to(
+        dtype=_lucid.int32
+    )
+    num_classes: int = int(xb.shape[1])
 
-    # Handle 1D inputs
-    if len(xi.shape) == 1:
-        xi = _C_engine.reshape(xi, [1, xi.shape[0]])
-        ti = _C_engine.reshape(ti, [1, ti.shape[0]])
+    # The labels of a sample are its entries up to the first negative one.
+    # Every column used to be read with ``index >= 0``, so a label after
+    # the first -1 still counted as a positive.
+    listed: Tensor = _lucid.cumprod((tgt >= 0).to(dtype=_lucid.int32), dim=1) == 1
+    safe: Tensor = _lucid.clip(tgt, 0, num_classes - 1)
+    # A listed class outside [0, C) raises for a CPU target and makes the
+    # sample's loss NaN on Metal (its count is NaN), as for cross_entropy.
+    src: Tensor = listed.to(dtype=xb.dtype)
+    poisoned: Tensor | None = _refuse_or_poison(tgt, safe, listed, src, xb.dtype)
+    if poisoned is not None:
+        src = poisoned
 
-    N, C = int(xi.shape[0]), int(xi.shape[1])
+    # How many times each class is listed.  A class listed twice counts
+    # twice as a positive, as in the reference; it is a target class (not
+    # one of the negatives) once listed at all.
+    counts: Tensor = _lucid.scatter_add(
+        _lucid.zeros_like(xb), 1, safe.to(dtype=_lucid.int64), src
+    )
+    negative: Tensor = (counts == 0.0).to(dtype=xb.dtype)
 
-    # Build positive mask from target: pos_mask[i,j]=1 if target[i,k]==j for some k
-    # Use: for each k, scatter 1 at position target[i,k] if target[i,k]>=0
-    pos_mask = _C_engine.zeros([N, C], xi.dtype, xi.device)
-    zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
-    _C_engine.ones([N, 1], xi.dtype, xi.device)
-
-    # Iterate over the K columns of target (K = C at most)
-    for k in range(C):
-        # target column k: (N,) → (N, 1) indices; skip -1 entries
-        col_idx = _C_engine.gather(
-            ti, _C_engine.full([N, 1], k, _C_engine.I32, ti.device), 1
-        )  # (N,1)
-        # Clamp negatives to 0 so scatter doesn't fail, weight by (idx >= 0)
-        zero_i32 = _C_engine.zeros([N, 1], _C_engine.I32, ti.device)
-        valid = _C_engine.greater_equal(col_idx, zero_i32)  # bool (N,1)
-        safe_idx = _C_engine.where(valid, col_idx, zero_i32)  # clamp to 0
-        # Convert valid to float for weighting
-        val_f = _C_engine.where(
-            valid, _C_engine.ones([N, 1], xi.dtype, xi.device), zeros_nc
-        )
-        pos_mask = _C_engine.scatter_add(pos_mask, safe_idx, val_f, 1)
-
-    # Clamp to [0,1] to handle duplicates
-    pos_mask = _C_engine.clip(pos_mask, 0.0, 1.0)
-
-    # Negative mask = 1 - pos_mask
-    neg_mask = _C_engine.sub(_C_engine.ones([N, C], xi.dtype, xi.device), pos_mask)
-
-    # For each positive label t and each negative j: max(0, 1 - x[t] + x[j])
-    # Broadcast: x_pos[i, j, k] = x[i, pos_k]; x_neg[i, j, k] = x[i, j]
-    # Approximate via: sum_t pos_mask[i,t] * sum_j neg_mask[i,j] * max(0,1-x[i,t]+x[i,j])
-    #
-    # Use outer product via broadcasting:
-    # x: (N, C) → x_t: (N, C, 1), x_j: (N, 1, C)
-    x_t = _C_engine.reshape(xi, [N, C, 1])
-    x_j = _C_engine.reshape(xi, [N, 1, C])
-    pm_t = _C_engine.reshape(pos_mask, [N, C, 1])
-    nm_j = _C_engine.reshape(neg_mask, [N, 1, C])
-
-    margin_val = _C_engine.full([N, C, C], 1.0, xi.dtype, xi.device)
-    diff = _C_engine.add(_C_engine.sub(margin_val, x_t), x_j)  # (N, C, C)
-    hinge = _C_engine.relu(diff)  # max(0, ...)
-    pm_bc = _C_engine.broadcast_to(pm_t, [N, C, C])
-    nm_bc = _C_engine.broadcast_to(nm_j, [N, C, C])
-    loss_tck = _C_engine.mul(_C_engine.mul(hinge, pm_bc), nm_bc)  # (N, C, C)
-    # Sum over t and j, divide by C
-    loss_n = _C_engine.div(
-        _C_engine.sum(loss_tck, [1, 2], False),
-        _C_engine.full([N], float(C), xi.dtype, xi.device),
-    )  # (N,)
-    return _apply_reduction(loss_n, reduction)
+    # hinge[i, t, j] = max(0, 1 - x[i, t] + x[i, j]), for each positive t
+    # (weighted by its count) against each negative j.
+    hinge: Tensor = (1.0 - xb.unsqueeze(2) + xb.unsqueeze(1)).relu()
+    pairs: Tensor = hinge * counts.unsqueeze(2) * negative.unsqueeze(1)
+    loss_n: Tensor = pairs.sum(dim=[1, 2]) / num_classes  # (N,)
+    if unbatched:
+        loss_n = loss_n.reshape([])
+    return _apply_reduction(_unwrap(loss_n), reduction)
 
 
 # ── P3 fills: soft_margin_loss / multilabel_soft_margin_loss ───────────────
