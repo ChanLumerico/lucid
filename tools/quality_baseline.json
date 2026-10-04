@@ -27,6 +27,11 @@
    "date": "2026-10-05",
    "reason": "initial baseline (LCD-259, main b9410415e)",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-05",
+   "reason": "initial baseline (LCD-259) re-taken at main ab535b98e",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -223,7 +228,7 @@
     "lucid/models/vision/zfnet/_model.py": 9,
     "lucid/models/vision/zfnet/_pretrained.py": 2,
     "lucid/nn/_shadow.py": 2,
-    "lucid/nn/functional/loss.py": 1,
+    "lucid/nn/functional/_index_checks.py": 2,
     "lucid/nn/intrinsic/qat/modules.py": 13,
     "lucid/nn/module.py": 5,
     "lucid/nn/modules/attention.py": 1,
@@ -270,8 +275,8 @@
     "lucid/utils/transforms/functional.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 11954,
-    "lucid/_C/backend/gpu/GpuBackend.h": 5588,
+    "lucid/_C/backend/cpu/CpuBackend.h": 11970,
+    "lucid/_C/backend/gpu/GpuBackend.h": 5563,
     "lucid/_ops/composite/elementwise.py": 329,
     "lucid/_tensor/_dunders.py": 338,
     "lucid/_tensor/tensor.py": 2799,
@@ -287,7 +292,7 @@
     "lucid/models/text/bert/_model.py": 6,
     "lucid/models/vision/mask2former/_model.py": 96,
     "lucid/nn/functional/activations.py": 502,
-    "lucid/nn/functional/loss.py": 1030,
+    "lucid/nn/functional/loss.py": 993,
     "lucid/nn/functional/pooling.py": 492,
     "lucid/nn/modules/activation.py": 728,
     "lucid/nn/modules/conv.py": 1374,
@@ -791,7 +796,7 @@
     "lucid/_C/ops/fft/Ifftn.cpp": 1,
     "lucid/_C/ops/fft/Irfftn.cpp": 1,
     "lucid/_C/ops/fft/Rfftn.cpp": 1,
-    "lucid/_C/ops/gfunc/Gfunc.cpp": 12,
+    "lucid/_C/ops/gfunc/Gfunc.cpp": 10,
     "lucid/_C/ops/ufunc/Inplace.cpp": 1,
     "lucid/_C/ops/ufunc/Predicate.cpp": 1,
     "lucid/_C/ops/ufunc/Reductions.cpp": 3,
@@ -1157,6 +1162,7 @@
     "lucid/_C/autograd/FusionPass.cpp": 1,
     "lucid/_C/backend/cpu/CpuBackend.h": 43,
     "lucid/_C/backend/cpu/Pool.cpp": 3,
+    "lucid/_C/backend/gpu/AxisIndex.h": 1,
     "lucid/_C/backend/gpu/GpuBackend.h": 4,
     "lucid/_C/backend/gpu/HalfAccumulation.h": 1,
     "lucid/_C/bindings/bind.cpp": 1,
@@ -1289,7 +1295,7 @@
    "function-length": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/Engine.cpp": 2,
-    "lucid/_C/backend/cpu/CpuBackend.h": 21,
+    "lucid/_C/backend/cpu/CpuBackend.h": 20,
     "lucid/_C/backend/gpu/GpuBackend.h": 13,
     "lucid/_C/bindings/bind.cpp": 1,
     "lucid/_C/bindings/bind_autograd.cpp": 1,
@@ -1330,7 +1336,7 @@
     "lucid/_C/ops/diffeq/RkErrorNorm.cpp": 1,
     "lucid/_C/ops/einops/Einsum.cpp": 1,
     "lucid/_C/ops/einops/Repeat.cpp": 1,
-    "lucid/_C/ops/gfunc/Gfunc.cpp": 2,
+    "lucid/_C/ops/gfunc/Gfunc.cpp": 1,
     "lucid/_C/ops/ufunc/Reductions.cpp": 1,
     "lucid/_C/ops/utils/View.cpp": 1,
     "lucid/_C/utils/tokenizer/BPE.cpp": 1,
@@ -1413,6 +1419,7 @@
     "lucid/nn/functional/pooling.py": 2,
     "lucid/nn/functional/positional.py": 1,
     "lucid/nn/functional/sampling.py": 3,
+    "lucid/nn/functional/sparse.py": 1,
     "lucid/nn/modules/attention.py": 2,
     "lucid/nn/modules/normalization.py": 1,
     "lucid/nn/modules/rnn.py": 1,
