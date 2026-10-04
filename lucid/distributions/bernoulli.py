@@ -6,12 +6,17 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
+    _positive_unit_interval,
     boolean,
     nonnegative_integer,
-    open_unit_interval,
     real,
     unit_interval,
 )
+
+# No class here uses it any more, but the last release's surface lists it
+# under this module (``lucid/test/audit/released_surface.json``), and a name
+# leaves only through a deprecation cycle.
+from lucid.distributions.constraints import open_unit_interval  # noqa: F401
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
@@ -423,7 +428,7 @@ class Geometric(Distribution):
     Parameters
     ----------
     probs : Tensor or float, optional
-        Success probability :math:`p \in (0, 1)` per trial.  Mutually
+        Success probability :math:`p \in (0, 1]` per trial.  Mutually
         exclusive with ``logits``.
     logits : Tensor or float, optional
         Log-odds :math:`\ell = \log(p/(1-p))`; ``probs`` is then derived
@@ -473,7 +478,9 @@ class Geometric(Distribution):
     tensor(-1.962)
     """
 
-    arg_constraints = {"probs": open_unit_interval, "logits": real}
+    # ``(0, 1]``: ``p = 1`` is a certain first success (all mass at 0), and
+    # ``p = 0`` — no trial ever succeeds — is not a distribution.
+    arg_constraints = {"probs": _positive_unit_interval, "logits": real}
     support: Constraint | None = nonnegative_integer
 
     def __init__(
@@ -490,7 +497,7 @@ class Geometric(Distribution):
         Parameters
         ----------
         probs : Tensor | float | None, optional
-            Success probability :math:`p \in (0, 1)` of a single Bernoulli
+            Success probability :math:`p \in (0, 1]` of a single Bernoulli
             trial.  Mutually exclusive with ``logits``.
         logits : Tensor | float | None, optional
             Log-odds :math:`\ell = \log(p / (1-p))`.  Mutually exclusive
