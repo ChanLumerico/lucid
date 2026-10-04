@@ -87,7 +87,7 @@ def _reconstruct(weight: lucid.Tensor, bits: int) -> lucid.Tensor:
     rows = weight.reshape(groups, -1)
     palettes = _build._palettes_for(rows, count)
     keys = _build._assign(rows, _build._edge_table(palettes), count)
-    return lucid.gather(palettes, keys, 1).reshape(*weight.shape)
+    return lucid.gather(palettes, 1, keys).reshape(*weight.shape)
 
 
 def _run_stack(model: _Stack, x: lucid.Tensor, bits: int) -> lucid.Tensor:

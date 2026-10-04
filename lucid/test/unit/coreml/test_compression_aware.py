@@ -183,7 +183,7 @@ class TestTheExportWritesWhatWasTrained:
         count = 16
         table = lucid.sort(lucid.randn(4, count), dim=-1)
         keys = (lucid.arange(4 * 64) % count).reshape(4, 64).to(lucid.int64)
-        rows = lucid.gather(table, keys, 1)
+        rows = lucid.gather(table, 1, keys)
 
         fitted = _build._palettes_for(rows, count)
         assert float((fitted - table).abs().max().item()) < 1e-6

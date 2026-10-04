@@ -367,7 +367,7 @@ class TestWorkThatDoesNotDependOnTheInput:
                 first, last = lucid.meshgrid(rows, columns)
                 flat = (first * 4 + last).reshape(16, 1)
                 index = flat + lucid.zeros(16, 4).to(lucid.int64)
-                bias = lucid.gather(self.table, index, 0)
+                bias = lucid.gather(self.table, 0, index)
                 return x + bias
 
         lucid.manual_seed(0)
@@ -1068,7 +1068,7 @@ class TestTheOpsetTheWriterDeclares:
     def test_gather_along_an_axis_parses_and_matches(self, tmp_path: object) -> None:
         lucid.manual_seed(0)
         index = lucid.tensor([[2, 0, 1, 3], [1, 1, 0, 2]]).to(lucid.int64)
-        _check(lambda x: lucid.gather(x, index, dim=1), lucid.randn(2, 4), tmp_path)
+        _check(lambda x: lucid.gather(x, 1, index), lucid.randn(2, 4), tmp_path)
 
     def test_a_row_lookup_still_parses(self, tmp_path: object) -> None:
         """``embedding`` takes the other branch and already had it."""

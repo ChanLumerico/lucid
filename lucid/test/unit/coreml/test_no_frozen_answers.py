@@ -51,7 +51,7 @@ CASES = [
     ("triangle-masked", lambda t: lucid.tril(t, 0)),
     (
         "index-gathered",
-        lambda t: lucid.gather(t, lucid.argmax(t, dim=1, keepdim=True), 1),
+        lambda t: lucid.gather(t, 1, lucid.argmax(t, dim=1, keepdim=True)),
     ),
     ("reshaped-and-back", lambda t: t.reshape(-1).reshape(*t.shape) * 2.0),
     ("relu-control", lambda t: t.relu()),
