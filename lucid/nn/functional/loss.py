@@ -1404,11 +1404,16 @@ def cosine_embedding_loss(
     Parameters
     ----------
     x1 : Tensor
-        First embedding of shape :math:`(N, D)`.
+        First embedding of shape :math:`(N, D)`, or :math:`(D,)` for one
+        unbatched pair (with a 0-d ``y``, and a 0-d loss under
+        ``"none"``).
     x2 : Tensor
         Second embedding of the same shape.
     y : Tensor
-        Label tensor of shape :math:`(N,)` with values :math:`\pm 1`.
+        Label tensor of shape :math:`(N,)` with values :math:`\pm 1`, or
+        0-d for one unbatched pair.  A ``y`` of any other rank, inputs of
+        a rank that does not match it, or shapes that do not line up
+        raise ``ValueError``.
     margin : float, optional
         Minimum desired cosine gap for dissimilar pairs, typically
         in :math:`[-1, 1]` (default ``0.0``).
@@ -1448,8 +1453,20 @@ def cosine_embedding_loss(
     """
     from lucid.nn.functional.activations import cosine_similarity
 
-    _check_reduction(reduction, "cosine_embedding_loss")
-    cos = _unwrap(cosine_similarity(x1, x2, dim=1))
+    op = "cosine_embedding_loss"
+    _check_reduction(reduction, op)
+    # A (N,) target pairs (N, D) inputs; a 0-d one pairs one unbatched (D,)
+    # pair, which raised IndexError ("axis out of range") here.
+    if y.ndim > 1:
+        raise ValueError(f"{op}: expected a 0-d or 1-D target, got {_shape(y)}")
+    pair = _broadcast_shape(_shape(x1), _shape(x2))
+    if x1.ndim != y.ndim + 1 or x2.ndim != y.ndim + 1 or pair is None:
+        raise ValueError(
+            f"{op}: a {y.ndim}-D target expects two {y.ndim + 1}-D inputs of "
+            f"one shape, got {_shape(x1)} and {_shape(x2)}"
+        )
+    _check_broadcasts_to(y, pair[:-1], "target", op)
+    cos = _unwrap(cosine_similarity(x1, x2, dim=-1))
     ones = _C_engine.full(cos.shape, 1.0, cos.dtype, cos.device)
     zeros = _C_engine.zeros(cos.shape, cos.dtype, cos.device)
     margin_t = _C_engine.full(cos.shape, margin, cos.dtype, cos.device)
