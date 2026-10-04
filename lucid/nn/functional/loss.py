@@ -692,10 +692,12 @@ def cross_entropy(
         it is the number of samples, and ``ignore_index`` must be left
         negative.
     label_smoothing : float, optional
-        Interpolation factor :math:`\alpha \in [0, 1)` between hard
+        Interpolation factor :math:`\alpha \in [0, 1]` between hard
         one-hot targets and a uniform distribution
-        (Szegedy et al. 2016).  Acts as a regulariser by discouraging
-        over-confident predictions.
+        (Szegedy et al. 2016) — at ``1.0`` the target is the uniform
+        distribution itself.  Acts as a regulariser by discouraging
+        over-confident predictions.  A value outside :math:`[0, 1]`
+        raises ``ValueError``.
 
     Returns
     -------
@@ -735,9 +737,10 @@ def cross_entropy(
 
     op = "cross_entropy"
     _check_reduction(reduction, op)
-    if not 0.0 <= label_smoothing < 1.0:
+    # 1.0 is a uniform target, which the reference takes; it was refused.
+    if not 0.0 <= label_smoothing <= 1.0:
         raise ValueError(
-            f"{op}: label_smoothing must be in [0, 1), got {label_smoothing!r}"
+            f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}"
         )
     _check_class_weight(weight, _num_classes(x, op), op)
     # A target of the input's own shape holds class probabilities, as in
