@@ -8,6 +8,7 @@
 #include "Engine.h"
 
 #include <algorithm>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -485,11 +486,16 @@ namespace {
 // owns an AccumulateGrad as its own ``grad_fn`` (``ensure_grad_fn`` installs
 // it), so leaves and interior tensors are both reached the same way — there
 // is no separate "match the leaf tensor" case to get wrong.
+//
+// A node can capture for several requested inputs: the outputs of one
+// multi-output node share it, and so does a tensor asked for twice.  Keeping
+// one index per node answered only the first of them and called the rest
+// unreachable.
 struct CaptureTargets {
-    std::unordered_map<const Node*, std::size_t> by_node;
+    std::unordered_map<const Node*, std::vector<std::size_t>> by_node;
     // Only for a tensor with no grad_fn at all, which can be captured solely
     // as the root of the differentiation.
-    std::unordered_map<const TensorImpl*, std::size_t> orphans;
+    std::unordered_map<const TensorImpl*, std::vector<std::size_t>> orphans;
 };
 
 CaptureTargets build_targets(const std::vector<std::shared_ptr<TensorImpl>>& inputs) {
@@ -499,19 +505,17 @@ CaptureTargets build_targets(const std::vector<std::shared_ptr<TensorImpl>>& inp
         if (!inp)
             ErrorBuilder("Engine::grad").fail("inputs[" + std::to_string(i) + "] is null");
         if (inp->grad_fn())
-            targets.by_node.emplace(inp->grad_fn().get(), i);
+            targets.by_node[inp->grad_fn().get()].push_back(i);
         else
-            targets.orphans.emplace(inp.get(), i);
+            targets.orphans[inp.get()].push_back(i);
     }
     return targets;
 }
 
-// Index of the requested input this node captures for, or ``npos``.
-constexpr std::size_t kNoSlot = static_cast<std::size_t>(-1);
-
-std::size_t capture_slot(const Node* node, const CaptureTargets& targets) {
+// The requested inputs this node captures for, or null.
+const std::vector<std::size_t>* capture_slots(const Node* node, const CaptureTargets& targets) {
     auto it = targets.by_node.find(node);
-    return it == targets.by_node.end() ? kNoSlot : it->second;
+    return it == targets.by_node.end() ? nullptr : &it->second;
 }
 
 // Whether a gradient arriving at slot ``input_nr`` of ``barrier`` is one a
@@ -527,9 +531,16 @@ bool captures_at_barrier(const Node* barrier,
                          std::uint32_t input_nr,
                          const CaptureTargets& targets,
                          const std::vector<std::shared_ptr<TensorImpl>>& inputs) {
-    const std::size_t slot = capture_slot(barrier, targets);
-    return slot != kNoSlot && inputs[slot]->grad_output_nr() == input_nr;
+    const auto* slots = capture_slots(barrier, targets);
+    if (slots == nullptr)
+        return false;
+    return std::any_of(slots->begin(), slots->end(),
+                       [&](std::size_t s) { return inputs[s]->grad_output_nr() == input_nr; });
 }
+
+// Gradients gathered at the requested slots of barriers, by (node, slot).
+template <typename Grad>
+using BarrierCaptures = std::map<std::pair<const Node*, std::uint32_t>, Grad>;
 
 // The nodes from which some requested input is still reachable.
 //
@@ -601,9 +612,11 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
     // A leaf root differentiates to itself: dy/dy is the seed.
     if (!root->grad_fn()) {
         auto it = targets.orphans.find(root.get());
-        if (it != targets.orphans.end())
-            results[it->second] = std::make_shared<TensorImpl>(
-                std::move(seed), root->shape(), root->dtype(), root->device(), false);
+        if (it != targets.orphans.end()) {
+            for (const std::size_t s : it->second)
+                results[s] = std::make_shared<TensorImpl>(seed, root->shape(), root->dtype(),
+                                                          root->device(), false);
+        }
         return results;
     }
 
@@ -613,13 +626,13 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         auto order = topo_order(root->grad_fn());
         const auto reaching = reaching_nodes(order, targets);
 
-        // What reaches the requested slot of a barrier (captures_at_barrier).
-        std::unordered_map<const Node*, TensorImplPtr> at_barrier;
+        // What reaches the requested slots of barriers (captures_at_barrier).
+        BarrierCaptures<TensorImplPtr> at_barrier;
         auto gather = [&](const Node* next, std::uint32_t input_nr, const TensorImplPtr& grad) {
             if (!grad || !next->is_barrier() ||
                 !captures_at_barrier(next, input_nr, targets, inputs))
                 return;
-            auto [cit, fresh] = at_barrier.try_emplace(next, grad);
+            auto [cit, fresh] = at_barrier.try_emplace({next, input_nr}, grad);
             if (!fresh)
                 cit->second = add_op(cit->second, grad);
         };
@@ -635,14 +648,15 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             TensorImplPtr grad_in = std::move(it->second);
             pending.erase(it);
 
-            const std::size_t slot = capture_slot(node.get(), targets);
-            if (slot != kNoSlot) {
-                TensorImplPtr captured = grad_in;
-                if (node->is_barrier()) {
-                    auto cit = at_barrier.find(node.get());
-                    captured = cit == at_barrier.end() ? nullptr : cit->second;
+            if (const auto* slots = capture_slots(node.get(), targets)) {
+                for (const std::size_t s : *slots) {
+                    TensorImplPtr captured = grad_in;
+                    if (node->is_barrier()) {
+                        auto cit = at_barrier.find({node.get(), inputs[s]->grad_output_nr()});
+                        captured = cit == at_barrier.end() ? nullptr : cit->second;
+                    }
+                    results[s] = gradient_in_dtype_of(captured, inputs[s]);
                 }
-                results[slot] = gradient_in_dtype_of(captured, inputs[slot]);
             }
             // Executing an AccumulateGrad is precisely what writes a leaf's
             // .grad, so this path never does — captured or not, stop here.
@@ -671,16 +685,16 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
     auto order = topo_order(root->grad_fn());
     const auto reaching = reaching_nodes(order, targets);
 
-    // What reaches the requested slot of a barrier (captures_at_barrier), in a
-    // buffer of its own: the barrier is handed the same gradient and may add
-    // into it.
-    std::unordered_map<const Node*, Storage> at_barrier;
+    // What reaches the requested slots of barriers (captures_at_barrier), in
+    // buffers of their own: the barrier is handed the same gradient and may
+    // add into it.
+    BarrierCaptures<Storage> at_barrier;
     auto gather = [&](const Node* barrier, std::uint32_t input_nr, const Storage& grad) {
         if (!captures_at_barrier(barrier, input_nr, targets, inputs))
             return;
-        auto cit = at_barrier.find(barrier);
+        auto cit = at_barrier.find({barrier, input_nr});
         if (cit == at_barrier.end())
-            at_barrier.emplace(barrier, own_copy(grad));
+            at_barrier.emplace(std::make_pair(barrier, input_nr), own_copy(grad));
         else
             accumulate_into(cit->second, grad);
     };
@@ -701,15 +715,17 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         Storage grad_in = std::move(it->second);
         pending.erase(it);
 
-        const std::size_t slot = capture_slot(node.get(), targets);
-        if (slot != kNoSlot) {
-            const auto& inp = inputs[slot];
-            if (!node->is_barrier()) {
-                results[slot] = std::make_shared<TensorImpl>(grad_in, inp->shape(), inp->dtype(),
-                                                             inp->device(), false);
-            } else if (auto cit = at_barrier.find(node.get()); cit != at_barrier.end()) {
-                results[slot] = std::make_shared<TensorImpl>(std::move(cit->second), inp->shape(),
-                                                             inp->dtype(), inp->device(), false);
+        if (const auto* slots = capture_slots(node.get(), targets)) {
+            for (const std::size_t s : *slots) {
+                const auto& inp = inputs[s];
+                const Storage* captured = &grad_in;
+                if (node->is_barrier()) {
+                    auto cit = at_barrier.find({node.get(), inp->grad_output_nr()});
+                    captured = cit == at_barrier.end() ? nullptr : &cit->second;
+                }
+                if (captured != nullptr)
+                    results[s] = std::make_shared<TensorImpl>(*captured, inp->shape(), inp->dtype(),
+                                                              inp->device(), false);
             }
         }
         // Executing an AccumulateGrad is precisely what writes a leaf's
