@@ -179,7 +179,7 @@ class FakeQuantize(nn.Module):
         self._fake_quant_enabled = True
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # fake-quant forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Refresh qparams (if observing) then fake-quantize (if enabled)."""
         if self._observer_enabled:
             self.activation_post_process(x)

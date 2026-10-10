@@ -138,7 +138,7 @@ class Embedding(nn.Module):
         self.register_buffer("weight_zero_point", lucid.zeros(num_embeddings))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # index → embeddings
+    def forward(self, x: Tensor) -> Tensor:
         """Dequantize the table and look up ``x``."""
         weight = dequantize(
             self.weight_int8, self.weight_scale, self.weight_zero_point, ch_axis=0
@@ -289,9 +289,7 @@ class EmbeddingBag(nn.Module):
         self.register_buffer("weight_zero_point", lucid.zeros(num_embeddings))
 
     @override
-    def forward(  # type: ignore[override]  # (indices, offsets) → pooled bags
-        self, x: Tensor, offsets: Tensor | None = None
-    ) -> Tensor:
+    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
         """Dequantize the table and run the pooled bag lookup."""
         weight = dequantize(
             self.weight_int8, self.weight_scale, self.weight_zero_point, ch_axis=0

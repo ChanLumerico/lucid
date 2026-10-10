@@ -290,7 +290,7 @@ def fuse_linear_bn_eval(linear: object, bn: object) -> object:
 
     conv_b = fused.bias.detach() if fused.bias is not None else None
     new_w, new_b = fuse_conv_bn_weights(
-        fused.weight.detach(), conv_b, rm, rv, eps, gamma, beta  # type: ignore[arg-type]
+        fused.weight.detach(), conv_b, rm, rv, eps, gamma, beta
     )
     fused.weight = Parameter(new_w)
     fused.bias = Parameter(new_b)

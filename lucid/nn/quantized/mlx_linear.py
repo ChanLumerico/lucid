@@ -192,7 +192,7 @@ class QuantizedLinearMLX(nn.Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
+    def forward(self, x: Tensor) -> Tensor:
         """Run the MLX low-precision GEMM ``x @ packed_wᵀ`` (+ bias, +ReLU).
 
         The kernel is Metal-only, so a CPU-carried activation is moved onto the

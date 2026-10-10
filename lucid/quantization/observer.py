@@ -361,7 +361,7 @@ class MinMaxObserver(ObserverBase):
         self.register_buffer("max_val", lucid.tensor(float("-inf")))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Fold ``x``'s global min/max into the running statistics."""
         self._align_running_buffers(x)
         self.register_buffer("min_val", lucid.minimum(self.min_val, x.min()))
@@ -487,7 +487,7 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
         self.averaging_constant = averaging_constant
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """EMA-update the running min/max (seeded on the first batch)."""
         self._align_running_buffers(x)
         c = self.averaging_constant
@@ -632,7 +632,7 @@ class PerChannelMinMaxObserver(ObserverBase):
         self.register_buffer("max_val", lucid.tensor(float("-inf")))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Fold per-channel min/max (reduced over all non-channel axes)."""
         self._align_running_buffers(x)
         axis = self.ch_axis if self.ch_axis is not None else 0
@@ -819,7 +819,7 @@ class HistogramObserver(ObserverBase):
         return lucid.scatter_add(out, 0, dst, hist)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Update the running range and accumulate the histogram."""
         cur_min, cur_max = float(x.min().item()), float(x.max().item())
         old_min, old_max = float(self.min_val.item()), float(self.max_val.item())
@@ -1000,7 +1000,7 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
         self.averaging_constant = averaging_constant
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """EMA-update the per-channel min/max (seeded on the first batch)."""
         self._align_running_buffers(x)
         c = self.averaging_constant
@@ -1126,7 +1126,7 @@ class FixedQParamsObserver(ObserverBase):
         self.register_buffer("zero_point", lucid.tensor(float(zero_point)))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Identity — the qparams are fixed, so no statistics are gathered."""
         return x
 
@@ -1221,7 +1221,7 @@ class PlaceholderObserver(ObserverBase):
         super().__init__(qscheme, qdtype, None, eps)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # observer forward is unary
+    def forward(self, x: Tensor) -> Tensor:
         """Identity — no statistics are gathered."""
         return x
 

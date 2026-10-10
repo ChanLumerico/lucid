@@ -66,7 +66,7 @@ class LSTM(nn.Module):
         ]
 
     @override
-    def forward(  # type: ignore[override]  # LSTM-shaped (x, hx) signature
+    def forward(
         self,
         x: Tensor | PackedSequence,
         hx: tuple[Tensor, Tensor] | None = None,

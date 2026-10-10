@@ -109,7 +109,7 @@ class QuantStub(nn.Module):
             self.qconfig = qconfig
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary boundary marker
+    def forward(self, x: Tensor) -> Tensor:
         """Identity for PTQ (a hook observes); fake-quant for QAT.
 
         In QAT ``prepare_qat`` attaches a :class:`FakeQuantize` as
@@ -119,7 +119,7 @@ class QuantStub(nn.Module):
         """
         app = getattr(self, "activation_post_process", None)
         if isinstance(app, FakeQuantize) and lucid.is_floating_point(x):
-            return cast("Tensor", app(x))
+            return app(x)
         return x
 
 
@@ -178,7 +178,7 @@ class DeQuantStub(nn.Module):
             self.qconfig = qconfig
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary boundary marker
+    def forward(self, x: Tensor) -> Tensor:
         """Identity."""
         return x
 
@@ -272,7 +272,7 @@ class Quantize(nn.Module):
         self.qdtype = qdtype
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary boundary marker
+    def forward(self, x: Tensor) -> Tensor:
         """Quantize ``x`` to the calibrated activation grid (float-carried).
 
         Integer inputs (e.g. token indices) are passed through unchanged —
@@ -338,7 +338,7 @@ class DeQuantize(nn.Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary boundary marker
+    def forward(self, x: Tensor) -> Tensor:
         """Identity (activations are already float-carried)."""
         return x
 
@@ -417,8 +417,8 @@ class QuantWrapper(nn.Module):
         self.dequant = DeQuantStub()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary wrapper
+    def forward(self, x: Tensor) -> Tensor:
         """Quantize the input, run the wrapped model, dequantize the output."""
-        x = cast("Tensor", self.quant(x))
+        x = self.quant(x)
         x = cast("Tensor", self.module(x))
-        return cast("Tensor", self.dequant(x))
+        return self.dequant(x)

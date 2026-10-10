@@ -140,9 +140,9 @@ class Embedding(nn.Embedding):
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # index → embeddings
+    def forward(self, x: Tensor) -> Tensor:
         """Fake-quantize the table, then look up ``x``."""
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        w_q = self.weight_fake_quant(self.weight)
         return F.embedding(x, w_q, self.padding_idx)
 
     @classmethod

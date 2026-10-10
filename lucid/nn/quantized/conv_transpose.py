@@ -95,7 +95,7 @@ class _QuantizedConvTransposeNd(nn.Module):
         raise NotImplementedError
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
+    def forward(self, x: Tensor) -> Tensor:
         """Dequantize the kernel, transposed-convolve, fake-quantize the output."""
         weight = dequantize(
             self.weight_int8,

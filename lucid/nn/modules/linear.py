@@ -150,7 +150,7 @@ class Linear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -235,7 +235,7 @@ class Identity(Module):
         super().__init__()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Return the input unchanged.
 
         Parameters
@@ -390,7 +390,7 @@ class FusedLinear(Module):
             _init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -537,7 +537,7 @@ class Bilinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -783,7 +783,7 @@ class LazyLinear(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -968,7 +968,7 @@ class NoisyLinear(Module):
             )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Apply the layer — noisy while training, the mean network in eval.
 
         Parameters

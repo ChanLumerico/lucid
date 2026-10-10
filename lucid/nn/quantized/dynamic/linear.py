@@ -82,7 +82,7 @@ class Linear(nn.Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
+    def forward(self, x: Tensor) -> Tensor:
         """Dynamically quantize the input, then run linear with the int8 weight."""
         x_scale, x_zp = calculate_qparams(
             x.min(), x.max(), per_tensor_affine, self.act_qdtype

@@ -17,7 +17,7 @@ a single canonical implementation (and weight checkpoints don't drift
 between siblings).
 """
 
-from typing import cast, override
+from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -94,7 +94,7 @@ class SinusoidalEmbedding(Module):
         self.register_buffer("pe", table, persistent=False)
 
     @override
-    def forward(self) -> Tensor:  # type: ignore[override]
+    def forward(self) -> Tensor:
         """Return the precomputed ``(num_positions, embedding_dim)`` table."""
         return self.pe
 
@@ -168,7 +168,7 @@ class SinusoidalEmbedding2D(Module):
         self.register_buffer("pe", table, persistent=False)
 
     @override
-    def forward(self) -> Tensor:  # type: ignore[override]
+    def forward(self) -> Tensor:
         """Return the precomputed ``(H * W, embedding_dim)`` table."""
         return self.pe
 
@@ -259,7 +259,7 @@ class RotaryEmbedding(Module):
         self.register_buffer("sin_cached", lucid.sin(emb), persistent=False)
 
     @override
-    def forward(self) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self) -> tuple[Tensor, Tensor]:
         """Return ``(cos, sin)`` lookup tables.
 
         Shapes: each ``(max_position_embeddings, head_dim)``.  Callers index
@@ -372,10 +372,10 @@ class TimestepEmbedding(Module):
         return emb
 
     @override
-    def forward(self, timesteps: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, timesteps: Tensor) -> Tensor:
         """Project ``timesteps`` into an ``(*timesteps.shape, out_dim)``
         conditioning vector."""
         emb = self._sinusoidal(timesteps)
-        emb = cast(Tensor, self.linear_1(emb))
-        emb = cast(Tensor, self.act(emb))
-        return cast(Tensor, self.linear_2(emb))
+        emb = self.linear_1(emb)
+        emb = self.act(emb)
+        return self.linear_2(emb)

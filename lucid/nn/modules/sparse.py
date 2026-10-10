@@ -246,7 +246,7 @@ class Embedding(Module):
         init._fill_from_impl(self.weight, new_w._impl)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Look up embeddings for the given indices.
 
         Parameters
@@ -452,7 +452,7 @@ class EmbeddingBag(Module):
         init.normal_(self.weight)
 
     @override
-    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
         """Look up embeddings for the given indices.
 
         Parameters
@@ -642,7 +642,7 @@ class VectorQuantizer(Module):
         return flat.reshape(*lead, self.embedding_dim)
 
     @override
-    def forward(self, x: Tensor) -> VectorQuantizerOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VectorQuantizerOutput:
         """Quantise ``x`` along its trailing axis."""
         indices = nearest_codebook(x, self.weight)
         # The *hard* lookup, not the straight-through result: both loss

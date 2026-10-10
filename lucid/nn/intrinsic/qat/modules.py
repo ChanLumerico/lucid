@@ -79,14 +79,14 @@ class _ConvBnNd(nn.Module):
         return fn(x, w, b, conv.stride, conv.padding, conv.dilation, conv.groups)  # type: ignore[arg-type]
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
+    def forward(self, x: Tensor) -> Tensor:
         """Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output."""
         weight, bias = self._fold()
-        w_q = cast("Tensor", self.weight_fake_quant(weight))
+        w_q = self.weight_fake_quant(weight)
         y = self._conv(x, w_q, bias)
         if self.relu:
             y = F.relu(y)
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
 
 class ConvBn1d(_ConvBnNd):

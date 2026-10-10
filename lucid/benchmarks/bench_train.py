@@ -35,11 +35,11 @@ class _MLP(nn.Module):
         self.fc4 = nn.Linear(128, 10)
 
     @override
-    def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
-        x = lucid.relu(cast(lucid.Tensor, self.fc1(x)))
-        x = lucid.relu(cast(lucid.Tensor, self.fc2(x)))
-        x = lucid.relu(cast(lucid.Tensor, self.fc3(x)))
-        return cast(lucid.Tensor, self.fc4(x))
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        x = lucid.relu(self.fc1(x))
+        x = lucid.relu(self.fc2(x))
+        x = lucid.relu(self.fc3(x))
+        return self.fc4(x)
 
 
 # ── timing helpers ────────────────────────────────────────────────────────────

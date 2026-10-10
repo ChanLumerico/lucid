@@ -164,11 +164,11 @@ def register_parametrization(
         # put — it is still the only trainable leaf.
         existing = container_dict[tensor_name]
         if not unsafe:
-            probe = cast(Tensor, parametrization(cast(Tensor, existing())))
-            if tuple(probe.shape) != tuple(cast(Tensor, existing()).shape):
+            probe = cast(Tensor, parametrization(existing()))
+            if tuple(probe.shape) != tuple(existing().shape):
                 raise RuntimeError(
                     f"parametrization changes the shape of '{tensor_name}' "
-                    f"from {tuple(cast(Tensor, existing()).shape)} to "
+                    f"from {tuple(existing().shape)} to "
                     f"{tuple(probe.shape)}; pass unsafe=True if intended"
                 )
         existing.append(parametrization)
@@ -205,7 +205,7 @@ def register_parametrization(
     object.__setattr__(module, tensor_name, container())
 
     if not unsafe:
-        produced: Tensor = container()  # type: ignore[assignment]
+        produced: Tensor = container()
         if tuple(produced.shape) != tuple(weight.shape):
             raise RuntimeError(
                 f"parametrisation produced shape {tuple(produced.shape)} but "
@@ -337,7 +337,7 @@ def remove_parametrizations(
     handle.remove()  # type: ignore[union-attr]
 
     final_value: Tensor = (
-        container() if leave_parametrized else container.original.detach()  # type: ignore[assignment]
+        container() if leave_parametrized else container.original.detach()
     )
 
     # Drop the cached non-leaf attribute so ``register_parameter`` succeeds.

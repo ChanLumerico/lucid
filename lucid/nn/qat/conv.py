@@ -172,12 +172,12 @@ class Conv1d(nn.Conv1d):
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv1d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Conv1d:
@@ -313,12 +313,12 @@ class Conv2d(nn.Conv2d):
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv2d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Conv2d:
@@ -454,12 +454,12 @@ class Conv3d(nn.Conv3d):
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv3d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Conv3d:
@@ -570,12 +570,12 @@ class ConvReLU1d(Conv1d):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv1d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(F.relu(y)))
+        return self.activation_post_process(F.relu(y))
 
     @classmethod
     @override
@@ -681,12 +681,12 @@ class ConvReLU2d(Conv2d):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv2d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(F.relu(y)))
+        return self.activation_post_process(F.relu(y))
 
     @classmethod
     @override
@@ -791,12 +791,12 @@ class ConvReLU3d(Conv3d):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary conv layer
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+    def forward(self, x: Tensor) -> Tensor:
+        w_q = self.weight_fake_quant(self.weight)
         y = F.conv3d(
             x, w_q, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
-        return cast("Tensor", self.activation_post_process(F.relu(y)))
+        return self.activation_post_process(F.relu(y))
 
     @classmethod
     @override

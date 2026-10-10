@@ -132,7 +132,7 @@ class Sequential(Module):
                 self.add_module(str(idx), module)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters
@@ -372,7 +372,7 @@ class ModuleList(Module):
             self.add_module(str(i), module)
 
     @override
-    def forward(self, *args: object) -> Tensor:  # type: ignore[override]
+    def forward(self, *args: object) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters
@@ -553,7 +553,7 @@ class ModuleDict(Module):
             self.add_module(key, module)
 
     @override
-    def forward(self, *args: object) -> Tensor:  # type: ignore[override]
+    def forward(self, *args: object) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters
@@ -702,7 +702,7 @@ class ParameterList(Module):
             self.register_parameter(str(i), param)
 
     @override
-    def forward(self, *args: object) -> Tensor:  # type: ignore[override]
+    def forward(self, *args: object) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters
@@ -883,7 +883,7 @@ class ParameterDict(Module):
             self.register_parameter(key, param)
 
     @override
-    def forward(self, *args: object) -> Tensor:  # type: ignore[override]
+    def forward(self, *args: object) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters

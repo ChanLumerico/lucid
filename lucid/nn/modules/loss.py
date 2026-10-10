@@ -102,7 +102,7 @@ class MSELoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -196,7 +196,7 @@ class L1Loss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -385,7 +385,7 @@ class CrossEntropyLoss(_WeightedLoss):
         self.label_smoothing = label_smoothing
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -510,7 +510,7 @@ class NLLLoss(_WeightedLoss):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -622,7 +622,7 @@ class BCELoss(_WeightedLoss):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -753,7 +753,7 @@ class BCEWithLogitsLoss(_WeightedLoss):
         self.register_buffer("pos_weight", pos_weight)
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -863,7 +863,7 @@ class HuberLoss(Module):
         self.delta = delta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -963,7 +963,7 @@ class SmoothL1Loss(Module):
         self.beta = beta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1075,7 +1075,7 @@ class KLDivLoss(Module):
         self.log_target = log_target
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1206,7 +1206,7 @@ class TripletMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1320,7 +1320,7 @@ class CosineEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1422,7 +1422,7 @@ class MarginRankingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1527,7 +1527,7 @@ class HingeEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1651,7 +1651,7 @@ class PoissonNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1774,7 +1774,7 @@ class GaussianNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor, var: Tensor | float) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor, var: Tensor | float) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -1903,7 +1903,7 @@ class CTCLoss(Module):
         self.zero_infinity = zero_infinity
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         log_probs: Tensor,
         targets: Tensor,
@@ -2039,7 +2039,7 @@ class MultiMarginLoss(_WeightedLoss):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2140,7 +2140,7 @@ class MultilabelMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2284,7 +2284,7 @@ class SoftMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2392,7 +2392,7 @@ class MultiLabelSoftMarginLoss(_WeightedLoss):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
@@ -2532,7 +2532,7 @@ class TripletMarginWithDistanceLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
         # Delegate to the functional implementation so the F. and nn.
         # surfaces stay byte-equivalent.
         """Compute the loss between predictions and targets.

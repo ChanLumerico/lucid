@@ -179,7 +179,7 @@ class LayerNorm(Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -300,7 +300,7 @@ class RMSNorm(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -435,7 +435,7 @@ class GroupNorm(Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -625,7 +625,7 @@ class _BatchNormBase(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         _check_batch_norm_sample_count(x, self.training)
         # Update running stats before the forward when training with
         # tracking enabled.  Detach to avoid linking the buffer into the
@@ -1255,7 +1255,7 @@ class _InstanceNormBase(Module):
             )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -1711,7 +1711,7 @@ class LocalResponseNorm(Module):
         self.k = k
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -1955,7 +1955,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -2274,7 +2274,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters

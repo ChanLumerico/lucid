@@ -561,7 +561,7 @@ class MultiheadAttention(Module):
         return merged
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         query: Tensor,
         key: Tensor,

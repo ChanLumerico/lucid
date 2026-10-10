@@ -1308,7 +1308,7 @@ def multi_head_attention_forward(
         mha.train()
     else:
         mha.eval()
-    return mha(  # type: ignore[return-value]
+    return mha(
         query,
         key,
         value,

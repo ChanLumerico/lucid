@@ -41,7 +41,7 @@ class _QuantizedActivation(nn.Module):
         """Copy activation-specific params (e.g. ``alpha``) from the float module."""
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary activation
+    def forward(self, x: Tensor) -> Tensor:
         """Activate, then fake-quantize to the calibrated grid."""
         return fake_quantize(
             self._act(x),

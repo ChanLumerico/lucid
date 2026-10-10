@@ -171,7 +171,7 @@ class _QuantizedConvNd(nn.Module):
         return y
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary layer
+    def forward(self, x: Tensor) -> Tensor:
         """Dequantize the kernel, convolve, fake-quantize the output."""
         weight = dequantize(
             self.weight_int8,

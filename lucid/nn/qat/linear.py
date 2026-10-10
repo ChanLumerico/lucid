@@ -154,11 +154,11 @@ class Linear(nn.Linear):
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary linear layer
+    def forward(self, x: Tensor) -> Tensor:
         """Fake-quantize the weight, run linear, fake-quantize the output."""
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        w_q = self.weight_fake_quant(self.weight)
         y = F.linear(x, w_q, self.bias)
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Linear:
@@ -278,11 +278,11 @@ class LinearReLU(Linear):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # unary linear layer
+    def forward(self, x: Tensor) -> Tensor:
         """Fake-quantize the weight, run linear, ReLU, fake-quantize the output."""
-        w_q = cast("Tensor", self.weight_fake_quant(self.weight))
+        w_q = self.weight_fake_quant(self.weight)
         y = F.relu(F.linear(x, w_q, self.bias))
-        return cast("Tensor", self.activation_post_process(y))
+        return self.activation_post_process(y)
 
     @classmethod
     @override
