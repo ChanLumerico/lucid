@@ -27,6 +27,7 @@ from typing import SupportsIndex
 
 from lucid._C import engine as _C_engine
 from lucid._deprecation import warn_deprecated
+from lucid._dtype import _ENGINE_TO_DTYPE
 
 _Impl = _C_engine.TensorImpl
 
@@ -108,6 +109,37 @@ def _zero_safe_root(s: _Impl, p: float) -> _Impl:
 
 #: A set rather than a tuple: the membership test is on every norm's path.
 _HALF = frozenset({_C_engine.F16, _C_engine.BF16})
+
+#: The dtypes a norm is defined on.
+_NORMABLE = frozenset(
+    {
+        _C_engine.F16,
+        _C_engine.BF16,
+        _C_engine.F32,
+        _C_engine.F64,
+        _C_engine.C64,
+        _C_engine.C128,
+    }
+)
+
+
+def _require_normable(impl: _Impl, op: str) -> _Impl:
+    """``impl``, or a refusal if it is an integer or bool input to the norm ``op``.
+
+    The integer path answered by accident, differently per order: ``ord``
+    2 and 0 came back float32, 1 and ``inf`` in the input's own dtype, and
+    every other order raised from deep inside ``pow_scalar``.  A
+    ``DtypeMismatch`` is a ``TypeError`` and a ``RuntimeError``, the class
+    the reference raises.  ``dtype=`` does not lift the refusal: the
+    reference checks the input before any cast.
+    """
+    if impl.dtype not in _NORMABLE:
+        raise _C_engine.DtypeMismatch(
+            f"{op}: expected a floating point or complex tensor as input, "
+            f"got {_ENGINE_TO_DTYPE[impl.dtype]}"
+        )
+    return impl
+
 
 #: The orders that reduce the magnitudes directly, with no power or root.
 _ABS_REDUCTIONS = {

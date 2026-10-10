@@ -10,7 +10,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
-from lucid._ops._reduce import _p_norm, _reduction_axes
+from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
 from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
@@ -379,6 +379,8 @@ def norm(
 
     Raises
     ------
+    DtypeMismatch
+        If ``x`` is an integer or bool tensor (a ``TypeError``).
     ValueError
         If ``ord`` is given without ``dim`` and the input is neither a
         vector nor a single matrix — a batch of matrices leaves it
@@ -457,6 +459,7 @@ def norm(
     #   dim is None, ord given   1-D vector norm / 2-D matrix norm; else refuse
     #   dim names one axis       vector norm
     #   dim names two axes       matrix norm
+    _require_normable(_unwrap(x), "norm")
     rank = len(_unwrap(x).shape)
     axes: tuple[int, ...] | None
     if dim is None:
@@ -2458,8 +2461,8 @@ def vector_norm(
     Raises
     ------
     TypeError
-        If ``dtype`` would narrow ``x``, or its kind (real / complex)
-        differs from ``x``'s.
+        If ``x`` is an integer or bool tensor (a ``DtypeMismatch``), or if
+        ``dtype`` would narrow it or its kind (real / complex) differs.
     ValueError
         If ``dim`` names one axis twice.
 
@@ -2494,7 +2497,7 @@ def vector_norm(
     >>> vector_norm(lucid.tensor([3 + 4j, 0j]))
     tensor(5.)
     """
-    xi = _unwrap(x)
+    xi = _require_normable(_unwrap(x), "vector_norm")
     if dtype is not None:
         xi = _cast_for_norm(x, dtype)
     # Every order below is a function of the magnitudes |x_i| alone, and
@@ -2519,16 +2522,10 @@ def vector_norm(
     )
 
     if ord == 0:
-        # Count non-zero elements.  Counting produces an integer, and
-        # every other order here produces a float; a norm whose dtype
-        # depends on its order is a trap for anything downstream that
-        # divides by it, so the count is cast to match.
-        zeros = _C_engine.zeros(r.shape, r.dtype, r.device)
-        nz = _C_engine.not_equal(r, zeros)
-        counted = _C_engine.sum(nz, axes, keepdim)
-        if r.dtype in (_C_engine.F16, _C_engine.BF16, _C_engine.F64):
-            return _wrap(_C_engine.astype(counted, r.dtype))
-        return _wrap(_C_engine.astype(counted, _C_engine.F32))
+        # The count of non-zero entries, in r's (floating) dtype as every
+        # other order answers: a norm whose dtype follows its order is a trap.
+        nz = _C_engine.not_equal(r, _C_engine.zeros_like(r))
+        return _wrap(_C_engine.astype(_C_engine.sum(nz, axes, keepdim), r.dtype))
 
     return _wrap(_p_norm(r, float(ord), axes, keepdim))
 
@@ -2808,6 +2805,8 @@ def matrix_norm(
 
     Raises
     ------
+    DtypeMismatch
+        If ``x`` is an integer or bool tensor (a ``TypeError``).
     ValueError
         If ``x`` has fewer than two dimensions, ``dim`` does not name two
         distinct axes, or ``ord`` is not one of the orders above.
@@ -2836,7 +2835,7 @@ def matrix_norm(
     >>> matrix_norm(lucid.tensor([[3 + 4j, 0j], [0j, 0j]]), ord="fro")
     tensor(5.)
     """
-    xi = _unwrap(x)
+    xi = _require_normable(_unwrap(x), "matrix_norm")
     rank = len(xi.shape)
     if rank < 2:
         raise ValueError(

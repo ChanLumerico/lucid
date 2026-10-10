@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._reduce import _require_normable
 from lucid._tensor._metal_views import _check as _metal_check
 from lucid._tensor._metal_views import write_back as _metal_write_back
 from lucid._types import GeluApproximate
@@ -1071,12 +1072,7 @@ def tanhshrink(x: Tensor) -> Tensor:
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
 
 
-def normalize(
-    x: Tensor,
-    p: float = 2.0,
-    dim: int = 1,
-    eps: float = 1e-12,
-) -> Tensor:
+def normalize(x: Tensor, p: float = 2.0, dim: int = 1, eps: float = 1e-12) -> Tensor:
     r"""Normalize a tensor to unit :math:`L_p` norm along a dimension.
 
     Parameters
@@ -1112,9 +1108,11 @@ def normalize(
     along the chosen dimension.  The ``eps`` clamp avoids division by
     zero when the slice is all zeros.  Use ``p=2`` for cosine-similarity
     style embeddings, ``p=1`` for probability-simplex projection-like
-    behaviour, and ``p=inf`` for max-norm clipping.
+    behaviour, and ``p=inf`` for max-norm clipping.  An integer or bool
+    ``x`` is refused with a ``DtypeMismatch``, as the reference refuses it.
     """
-    return _wrap(_C_engine.nn.lp_normalize(_unwrap(x), p, dim, eps))
+    xi = _require_normable(_unwrap(x), "normalize")
+    return _wrap(_C_engine.nn.lp_normalize(xi, p, dim, eps))
 
 
 def cosine_similarity(

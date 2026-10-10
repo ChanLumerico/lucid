@@ -12,6 +12,7 @@ from lucid._ops._reduce import (
     _corrected_variance,
     _p_norm,
     _reduction_axes,
+    _require_normable,
     _variance_operands,
     _zero_safe_root,
 )
@@ -382,9 +383,17 @@ def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
     Tensor
         Shape ``(..., P, R)``.  Entry :math:`(\ldots, i, j)` =
         :math:`\|x_1[\ldots, i, :] - x_2[\ldots, j, :]\|_p`.
+
+    Raises
+    ------
+    DtypeMismatch
+        If ``x1`` or ``x2`` is an integer or bool tensor, as the reference
+        refuses one — a ``TypeError`` and a ``RuntimeError``.
     """
     from lucid._dispatch import _unwrap, _wrap
 
+    for operand in (x1, x2):
+        _require_normable(_unwrap(operand), "cdist")
     if p == 2.0:
         # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ, which never materialises
         # the (..., P, R, M) difference.
