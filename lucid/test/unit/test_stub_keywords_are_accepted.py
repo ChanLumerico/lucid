@@ -139,6 +139,91 @@ def test_free_function_keywords_reach_the_callee(entry: OpEntry) -> None:
     assert [k for k in advertised if k not in accepted and k not in bound] == []
 
 
+#: Keywords the reference's signature line carries that no Lucid op does —
+#: the output, layout and factory arguments the whole surface leaves out.
+_NOT_OFFERED = frozenset(
+    {"out", "dtype", "layout", "device", "requires_grad", "memory_format", "generator"}
+)
+
+#: Reference keywords a registry op does not accept yet — an operand Lucid
+#: names otherwise, or an argument it has no form for.  Strict, so taking
+#: one flips its case to XPASS.
+_REFERENCE_KEYWORD_GAPS = {
+    "add": "alpha= is not implemented",
+    "sub": "alpha= is not implemented",
+    "div": "rounding_mode= is not implemented",
+    "round": "decimals= is not implemented",
+    "pow": "the exponent operand is named other",
+    "dot": "the second operand is named other, the reference's tensor",
+    "outer": "the second operand is named other, the reference's vec2",
+    "mm": "the second operand is named other, the reference's mat2",
+    "bmm": "LCD-357: the second operand is named other, the reference's mat2",
+    "take": "the index operand is named indices",
+    "where": "the operands are named cond / x / y",
+    "sort": "stable= is not implemented",
+    "argsort": "stable= is not implemented",
+    "topk": "sorted= is not implemented",
+    "searchsorted": "sorted_seq / out_int32 / side / sorter",
+    "bucketize": "out_int32= is not implemented",
+    "repeat_interleave": "output_size= is not implemented",
+}
+
+
+def _reference_keywords(ref: ModuleType, name: str) -> list[str] | None:
+    """The parameter names on the first signature line of ``ref.<name>``."""
+    m = re.search(
+        rf"^\s*{re.escape(name)}\((.*?)\)\s*->", getattr(ref, name).__doc__ or "", re.M
+    )
+    if m is None:
+        return None
+    pieces, depth, current = [], 0, ""
+    for ch in m.group(1) + ",":
+        depth += {"[": 1, "]": -1}.get(ch, 0)
+        if ch == "," and depth == 0:
+            pieces.append(current)
+            current = ""
+        else:
+            current += ch
+    names = [p.split("=")[0].split(":")[0].strip().lstrip("*\\") for p in pieces]
+    return [n for n in names if n and n not in ("*", "/")]
+
+
+def _reference_cases() -> list[object]:
+    return [
+        pytest.param(
+            e.free_fn_name,
+            id=e.free_fn_name,
+            marks=(
+                [
+                    pytest.mark.xfail(
+                        strict=True, reason=_REFERENCE_KEYWORD_GAPS[e.free_fn_name]
+                    )
+                ]
+                if e.free_fn_name in _REFERENCE_KEYWORD_GAPS
+                else []
+            ),
+        )
+        for e in _FREE
+    ]
+
+
+@pytest.mark.parametrize("name", _reference_cases())
+def test_free_functions_take_the_reference_keywords(ref: ModuleType, name: str) -> None:
+    # ``tril(x, diagonal=1)`` and ``all(x, dim=1)`` reached the engine
+    # binding, which names its parameters otherwise, and failed there with
+    # "incompatible function arguments" (LCD-386).
+    if not hasattr(ref, name):
+        pytest.skip("the reference has no function of this name")
+    wanted = _reference_keywords(ref, name)
+    if wanted is None:
+        pytest.skip("the reference documents no signature line")
+    params = inspect.signature(getattr(ops, name)).parameters.values()
+    if any(p.kind is p.VAR_KEYWORD for p in params):
+        pytest.skip("takes **kwargs; its keywords are its adapter's to read")
+    advertised = {p.name for p in params}
+    assert [k for k in wanted if k not in advertised and k not in _NOT_OFFERED] == []
+
+
 def _pair(device: str) -> tuple[Tensor, Tensor]:
     return (
         lucid.tensor([0.5, 2.0, -3.0], device=device),

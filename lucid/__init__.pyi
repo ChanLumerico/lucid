@@ -1520,7 +1520,7 @@ def unsqueeze(input: Tensor, dim: DimLike) -> Tensor:
     (1, 3)
     """
     ...
-def flatten(input: Tensor, start_axis: _int = ..., end_axis: _int = ...) -> Tensor:
+def flatten(input: Tensor, start_axis: _int | None = ..., end_axis: _int | None = ..., *, start_dim: _int | None = ..., end_dim: _int | None = ...) -> Tensor:
     r"""    Collapse a contiguous range of dimensions into a single dim.
     
     All dimensions from ``start_axis`` to ``end_axis`` (inclusive) are
@@ -1535,6 +1535,9 @@ def flatten(input: Tensor, start_axis: _int = ..., end_axis: _int = ...) -> Tens
         First dimension to flatten.
     end_axis : int, default -1
         Last dimension to flatten (inclusive).
+    start_dim, end_dim : int, keyword-only, optional
+        The reference's names for ``start_axis`` and ``end_axis``; pass
+        one spelling of each.
     
     Returns
     -------
@@ -1754,7 +1757,7 @@ def as_strided(input: Tensor, size: Sequence[_int], stride: Sequence[_int], stor
             [3., 4.]])
     """
     ...
-def tile(input: Tensor, reps: Sequence[_int]) -> Tensor:
+def tile(input: Tensor, reps: Sequence[_int] | None = ..., *, dims: Sequence[_int] | None = ...) -> Tensor:
     r"""    Construct a tensor by repeating ``input`` ``reps`` times per axis.
     
     Unlike :func:`repeat` (single axis), :func:`tile` accepts a per-axis
@@ -1768,6 +1771,8 @@ def tile(input: Tensor, reps: Sequence[_int]) -> Tensor:
         Source tensor.
     reps : sequence of int
         Repetition counts per axis (right-aligned with input shape).
+    dims : sequence of int, keyword-only, optional
+        The reference's name for ``reps``; pass one of the two.
     
     Returns
     -------
@@ -1916,7 +1921,7 @@ def roll(input: Tensor, shifts: _int | Sequence[_int], dims: Sequence[_int]) -> 
     Tensor([3, 4, 0, 1, 2])
     """
     ...
-def tril(input: Tensor, k: _int = ...) -> Tensor:
+def tril(input: Tensor, k: _int | None = ..., *, diagonal: _int | None = ...) -> Tensor:
     r"""    Return the lower-triangular part of a 2-D-or-higher tensor.
     
     Elements above the ``k``-th diagonal (i.e. where ``j > i + k``) are
@@ -1931,6 +1936,8 @@ def tril(input: Tensor, k: _int = ...) -> Tensor:
         Diagonal offset.  ``0`` keeps the main diagonal; positive values
         keep additional super-diagonals; negative values exclude
         sub-diagonals.
+    diagonal : int, keyword-only, optional
+        The reference's name for ``k``; pass one of the two.
     
     Returns
     -------
@@ -1952,7 +1959,7 @@ def tril(input: Tensor, k: _int = ...) -> Tensor:
             [1., 1., 1.]])
     """
     ...
-def triu(input: Tensor, k: _int = ...) -> Tensor:
+def triu(input: Tensor, k: _int | None = ..., *, diagonal: _int | None = ...) -> Tensor:
     r"""    Return the upper-triangular part of a 2-D-or-higher tensor.
     
     Elements below the ``k``-th diagonal (i.e. where ``j < i + k``) are
@@ -1965,6 +1972,8 @@ def triu(input: Tensor, k: _int = ...) -> Tensor:
     k : int, default 0
         Diagonal offset.  Positive values exclude super-diagonals,
         negative values include sub-diagonals.
+    diagonal : int, keyword-only, optional
+        The reference's name for ``k``; pass one of the two.
     
     Returns
     -------
@@ -2794,8 +2803,8 @@ def rsqrt(input: Tensor) -> Tensor:
     Tensor([...])
     """
     ...
-def any(input: Tensor) -> Tensor: ...
-def all(input: Tensor) -> Tensor: ...
+def any(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
+def all(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
 def clip(input: Tensor, min: Scalar | None = ..., max: Scalar | None = ...) -> Tensor:
     r"""    Element-wise clamping to a closed interval.
     

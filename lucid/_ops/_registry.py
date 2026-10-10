@@ -239,8 +239,8 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("squeeze_all",_R.squeeze_all,1, method_name="squeeze_all"),
     OpEntry("unsqueeze",  _R.unsqueeze,  1, method_name="unsqueeze",  free_fn_name="unsqueeze",
             extra_kwargs=["dim"]),
-    OpEntry("flatten",    _R.flatten,    1, method_name="flatten",    free_fn_name="flatten",
-            extra_kwargs=["start_axis", "end_axis"]),
+    OpEntry("flatten",    A._flatten_adapter, 1, method_name="flatten", free_fn_name="flatten",
+            extra_kwargs=["start_axis", "end_axis", "start_dim", "end_dim"]),
     OpEntry("permute",    A._permute_adapter, 1, method_name="permute",    free_fn_name="permute"),
     OpEntry("transpose",  A._transpose_adapter, 1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   A._swapaxes_adapter, 1, method_name="swapaxes",
@@ -261,18 +261,18 @@ _REGISTRY: list[OpEntry] = [
     # free function above; see ``A._repeat_method_adapter``).
     OpEntry("repeat_method", A._repeat_method_adapter, 1,
             method_name="repeat", free_fn_name=None),
-    OpEntry("tile",       _R.tile,       1, method_name="tile",       free_fn_name="tile",
-            extra_kwargs=["reps"]),
+    OpEntry("tile",       A._tile_adapter, 1, method_name="tile",     free_fn_name="tile",
+            extra_kwargs=["reps", "dims"]),
     OpEntry("flip",       A._flip_adapter,   1, method_name="flip",   free_fn_name="flip",
             extra_kwargs=["dims"]),
     OpEntry("fliplr",     A._fliplr_adapter, 1, method_name="fliplr", free_fn_name="fliplr"),
     OpEntry("flipud",     A._flipud_adapter, 1, method_name="flipud", free_fn_name="flipud"),
     OpEntry("roll",       _R.roll,       1, method_name="roll",       free_fn_name="roll",
             extra_kwargs=["shifts", "dims"]),
-    OpEntry("tril",       _R.tril,       1, method_name="tril",       free_fn_name="tril",
-            extra_kwargs=["k"]),
-    OpEntry("triu",       _R.triu,       1, method_name="triu",       free_fn_name="triu",
-            extra_kwargs=["k"]),
+    OpEntry("tril",       A._tril_adapter, 1, method_name="tril",     free_fn_name="tril",
+            extra_kwargs=["k", "diagonal"]),
+    OpEntry("triu",       A._triu_adapter, 1, method_name="triu",     free_fn_name="triu",
+            extra_kwargs=["k", "diagonal"]),
     OpEntry("pad",        A._pad_adapter, 1, method_name="pad",        free_fn_name="pad",
             extra_kwargs=["padding", "mode", "value"]),
 
@@ -340,8 +340,10 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
 
     # ── boolean reductions ─────────────────────────────────────────────────
-    OpEntry("any", _R.any, 1, method_name="any", free_fn_name="any"),
-    OpEntry("all", _R.all, 1, method_name="all", free_fn_name="all"),
+    OpEntry("any", A._any_adapter, 1, method_name="any", free_fn_name="any",
+            extra_kwargs=["dim", "keepdim"]),
+    OpEntry("all", A._all_adapter, 1, method_name="all", free_fn_name="all",
+            extra_kwargs=["dim", "keepdim"]),
 
     # ── linear algebra ─────────────────────────────────────────────────────
     OpEntry("tensordot",  A._tensordot_adapter, 2, free_fn_name="tensordot",

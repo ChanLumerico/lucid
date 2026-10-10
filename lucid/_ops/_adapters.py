@@ -658,6 +658,81 @@ def _flipud_adapter(x_impl: _Impl) -> _Impl:
     return _C_engine.flip(x_impl, [0])
 
 
+# ── Parameters the reference spells differently ─────────────────────────────
+#
+# ``tril(x, diagonal=1)``, ``flatten(x, start_dim=1)`` and ``tile(x,
+# dims=...)`` reached the engine binding, whose parameters are ``k``,
+# ``start_axis`` / ``end_axis`` and ``reps``, and failed there with a raw
+# "incompatible function arguments".  The released Lucid names hold their
+# position — renaming a parameter a caller may pass by keyword breaks that
+# caller — so the reference's spelling is added beside each, by keyword.
+
+
+def _either_spelling[T](
+    op: str, lucid_name: str, lucid_value: T | None, ref_name: str, ref_value: T | None
+) -> T | None:
+    """The one value given for a parameter that has two names, or ``None``."""
+    if ref_value is None:
+        return lucid_value
+    if lucid_value is not None:
+        raise TypeError(
+            f"{op}() got values for both {lucid_name!r} and {ref_name!r}, "
+            f"which name the same argument; pass one"
+        )
+    return ref_value
+
+
+def _tril_adapter(
+    a_impl: _Impl, k: int | None = None, *, diagonal: int | None = None
+) -> _Impl:
+    """tril(input, k=0, *, diagonal=None) — ``diagonal`` is the reference's ``k``."""
+    offset = _either_spelling("tril", "k", k, "diagonal", diagonal)
+    return _C_engine.tril(a_impl, 0 if offset is None else offset)
+
+
+def _triu_adapter(
+    a_impl: _Impl, k: int | None = None, *, diagonal: int | None = None
+) -> _Impl:
+    """triu(input, k=0, *, diagonal=None) — ``diagonal`` is the reference's ``k``."""
+    offset = _either_spelling("triu", "k", k, "diagonal", diagonal)
+    return _C_engine.triu(a_impl, 0 if offset is None else offset)
+
+
+def _flatten_adapter(
+    a_impl: _Impl,
+    start_axis: int | None = None,
+    end_axis: int | None = None,
+    *,
+    start_dim: int | None = None,
+    end_dim: int | None = None,
+) -> _Impl:
+    """flatten(input, start_axis=0, end_axis=-1, *, start_dim, end_dim)."""
+    start = _either_spelling("flatten", "start_axis", start_axis, "start_dim", start_dim)
+    end = _either_spelling("flatten", "end_axis", end_axis, "end_dim", end_dim)
+    return _C_engine.flatten(
+        a_impl, 0 if start is None else start, -1 if end is None else end
+    )
+
+
+def _tile_adapter(
+    a_impl: _Impl,
+    reps: Sequence[int] | None = None,
+    *,
+    dims: Sequence[int] | None = None,
+) -> _Impl:
+    """tile(input, reps, *, dims) — ``dims`` is the reference's ``reps``.
+
+    Fewer counts than axes are padded with leading 1s, as documented and as
+    the reference does; the engine refuses them.
+    """
+    given = _either_spelling("tile", "reps", reps, "dims", dims)
+    if given is None:
+        raise TypeError("tile() missing required argument 'dims'")
+    counts = [int(r) for r in given]
+    short = len(a_impl.shape) - len(counts)
+    return _C_engine.tile(a_impl, [1] * short + counts)
+
+
 def _squeeze_adapter(
     x_impl: _Impl,
     dim: int | Sequence[int] | None = None,
@@ -777,6 +852,52 @@ def _argmin_adapter(
     if dim is None:
         return _flat_arg_reduce(_C_engine.argmin, "argmin", x_impl, bool(keepdim))
     return _C_engine.argmin(x_impl, int(dim), bool(keepdim))
+
+
+def _truth_count(a_impl: _Impl, axes: list[int], keepdim: bool, falsy: bool) -> _Impl:
+    """How many entries along ``axes`` are non-zero (``falsy``: are zero).
+
+    A sum rather than ``max`` / ``min`` of the truth values: those refuse an
+    empty reduced axis, where ``any`` is ``False`` and ``all`` ``True``.  A
+    complex entry is non-zero when either part is; Metal's complex-to-bool
+    cast reads the real part alone.
+    """
+    if a_impl.dtype in (_C_engine.C64, _C_engine.C128):
+        truth = _C_engine.logical_or(
+            _C_engine.astype(_C_engine.real(a_impl), _C_engine.Bool),
+            _C_engine.astype(_C_engine.imag(a_impl), _C_engine.Bool),
+        )
+    else:
+        truth = _C_engine.astype(a_impl, _C_engine.Bool)
+    if falsy:
+        truth = _C_engine.logical_not(truth)
+    return _C_engine.sum(truth, axes, keepdim)
+
+
+def _logical_reduce(
+    name: str, a_impl: _Impl, dim: int | Sequence[int] | None, keepdim: bool
+) -> _Impl:
+    """``any`` / ``all`` over ``dim`` — ``all`` is "no entry is zero"."""
+    if dim is None and not keepdim:
+        return _C_engine.any(a_impl) if name == "any" else _C_engine.all(a_impl)
+    axes = _reduction_axes(a_impl, dim, name)
+    counted = _truth_count(a_impl, axes, bool(keepdim), falsy=name == "all")
+    none = _C_engine.equal(counted, _C_engine.zeros_like(counted))
+    return none if name == "all" else _C_engine.logical_not(none)
+
+
+def _any_adapter(
+    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
+) -> _Impl:
+    """any(input, dim=None, keepdim=False) — whether some entry is non-zero."""
+    return _logical_reduce("any", a_impl, dim, keepdim)
+
+
+def _all_adapter(
+    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
+) -> _Impl:
+    """all(input, dim=None, keepdim=False) — whether every entry is non-zero."""
+    return _logical_reduce("all", a_impl, dim, keepdim)
 
 
 def _logsumexp_adapter(
