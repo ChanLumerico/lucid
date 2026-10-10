@@ -68,14 +68,10 @@ _CASES: dict[str, tuple[np.ndarray, int]] = {
 _Op = tuple[Callable[[Any, Any, Any], Any], bool]
 
 
-def _lu_factor(M: Any, a: Any, b: Any) -> Any:
-    # Lucid's ``lu_factor`` does not check ``info`` — the reference's
-    # ``lu_factor_ex`` is the call with the same contract.
-    return M.lu_factor(a) if M is LA else M.lu_factor_ex(a)[:2]
-
-
 def _lu_solve(M: Any, a: Any, b: Any) -> Any:
-    lu, piv = _lu_factor(M, a, b)
+    # The factors of a singular matrix come from ``lu_factor_ex``:
+    # ``lu_factor`` refuses them.
+    lu, piv, _ = M.lu_factor_ex(a)
     return M.lu_solve(lu, piv, b)
 
 
@@ -93,16 +89,19 @@ _OPS: dict[str, _Op] = {
         lambda M, a, b: M.solve_triangular(a, b.mT, upper=True, left=False),
         True,
     ),
-    "lu_factor": (_lu_factor, False),
+    "lu_factor": (lambda M, a, b: M.lu_factor(a), False),
+    "lu_factor_ex": (lambda M, a, b: M.lu_factor_ex(a), False),
     "lu_solve": (_lu_solve, True),
     "lu": (lambda M, a, b: M.lu(a), False),
     "lstsq": (lambda M, a, b: M.lstsq(a, b)[0], True),
     "ldl_factor": (lambda M, a, b: M.ldl_factor(a), False),
+    "ldl_factor_ex": (lambda M, a, b: M.ldl_factor_ex(a), False),
     "inv": (lambda M, a, b: M.inv(a), False),
     "solve": (lambda M, a, b: M.solve(a, b), True),
     "det": (lambda M, a, b: M.det(a), False),
     "slogdet": (lambda M, a, b: M.slogdet(a), False),
     "cholesky": (lambda M, a, b: M.cholesky(a), False),
+    "cholesky_upper": (lambda M, a, b: M.cholesky(a, upper=True), False),
     "qr": (lambda M, a, b: M.qr(a), False),
     "svdvals": (lambda M, a, b: M.svdvals(a), False),
     "eigvalsh": (lambda M, a, b: M.eigvalsh(a), False),
@@ -274,6 +273,6 @@ def test_a_batch_refusal_names_the_failing_matrix(failing: int, device: str) -> 
     batch = np.stack([np.array([[2.0, 1.0], [1.0, 4.0]])] * 3)
     batch[failing] = [[1.0, 0.0], [0.0, 0.0]]
     with pytest.raises(
-        RuntimeError, match=rf"info=2\) in matrix {failing} of the batch"
+        LA.LinAlgError, match=rf"\(Batch element {failing}\): D\[2,2\] is zero"
     ):
         LA.ldl_factor(lucid.tensor(batch, dtype=lucid.float32, device=device))

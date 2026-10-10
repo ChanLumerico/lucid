@@ -91,12 +91,17 @@ def test_the_factors_have_the_trapezoidal_shapes(shape) -> None:
 
 
 def test_a_singular_rectangular_matrix_still_factors() -> None:
-    """``getrf`` reports a zero pivot through info > 0; a rank-deficient
-    rectangular matrix is ordinary input, not an error."""
+    """``getrf`` completes on a rank-deficient matrix and reports the zero
+    pivot through ``info``: ``lu_factor_ex`` returns the factors with it,
+    and ``lu_factor`` refuses them, as the reference does."""
     a = np.array([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0]])  # rank 1
-    lu, piv = _factor(a)
+    lu_t, piv_t, info = L.lu_factor_ex(lucid.tensor(a))
+    lu, piv = np.asarray(lu_t.numpy()), np.asarray(piv_t.numpy())
     assert lu.shape == (2, 3)
+    assert int(info) == 2
     assert np.allclose(_reconstruct(a, lu, piv), a, atol=1e-12)
+    with pytest.raises(L.LinAlgError, match=r"U\[2,2\] is zero"):
+        L.lu_factor(lucid.tensor(a))
 
 
 # ── the degenerate shapes still work ──────────────────────────────────────────
