@@ -28,9 +28,8 @@
 // - The CPU stream dispatches to LAPACK ``sgetrf_``/``dgetrf_`` via
 //   ``IBackend::linalg_lu_factor()``.  The GPU stream round-trips
 //   through MLX-on-CPU because Accelerate LAPACK is FP32/FP64 only.
-// - Singular or numerically-ill-conditioned matrices return a packed
-//   $U$ with a zero on its diagonal; downstream solves detect this
-//   condition.
+// - A singular matrix is factored: its packed $U$ has a zero on the
+//   diagonal and ``info`` says where (``getrf``'s own code).
 // - **No autograd**: the differentiable LU backward is not wired.
 //   For a differentiable linear solve use [[solve_op]] directly, which
 //   provides ``SolveBackward`` without exposing the LU factors.
@@ -62,24 +61,27 @@ namespace lucid {
 // Returns
 // -------
 // std::vector<TensorImplPtr>
-//     A two-element vector ``{LU_packed, pivots}``:
+//     A three-element vector ``{LU_packed, pivots, info}``:
 //     - ``LU_packed`` has the same shape and dtype as ``a``; its upper
 //       triangle holds $U$ and its strict lower triangle holds the
 //       off-diagonal entries of $L$ (unit diagonal is implicit).
 //     - ``pivots`` has shape ``(..., n)`` and dtype ``I32``; entries
 //       are 1-based row indices matching the LAPACK convention.
+//     - ``info`` has the batch shape ``(...)`` and dtype ``I32``: ``getrf``'s
+//       code per matrix, ``0`` or the first exactly-zero pivot (1-based).
 //
 // Shape
 // -----
 // - Input ``a``: ``(..., n, n)``.
 // - Output ``LU_packed``: ``(..., n, n)``.
 // - Output ``pivots``: ``(..., n)`` with ``Dtype::I32``.
+// - Output ``info``: ``(...)`` with ``Dtype::I32``.
 //
 // Raises
 // ------
-// LinAlgError
-//     When ``a`` is not square, not float-typed, or the LAPACK call
-//     reports a structural failure.
+// LucidError
+//     When ``a`` is below 2-D or not float-typed.  A singular matrix is
+//     reported through ``info``, never raised.
 //
 // See Also
 // --------

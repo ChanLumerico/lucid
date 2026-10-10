@@ -31,14 +31,14 @@ from lucid.linalg import (
 # the order of the leading minor that is not positive definite.  A matrix
 # that succeeded keeps its answer whatever its neighbours did.
 #
-# The kernels refuse a whole batch the moment one matrix fails, and the
-# error does not say which one, so these wrappers used to report *every*
-# matrix as failed, with an invented ``info = 1`` and a zero result for
-# all of them — the identity's inverse was lost because the matrix next to
-# it was singular.  Each failure is now located per matrix; the failed
-# matrices are swapped for the identity so the kernel runs on the batch,
-# and only their results are replaced (by zeros — LAPACK leaves them
-# undefined).  The successes, and their gradients, are the kernel's.
+# ``lu_factor`` and ``ldl_factor`` finish on a singular matrix, and their
+# kernels return LAPACK's ``info`` with the factor.  ``cholesky``, ``inv``
+# and ``solve`` have no answer to return: their kernels raise
+# ``LinAlgError`` at the first failed matrix of a batch.  So those wrappers
+# locate each failure per matrix, swap the failed matrices for the
+# identity so the kernel runs on the batch, and replace only their results
+# (by zeros — LAPACK leaves them undefined).  The successes, and their
+# gradients, are the kernel's.
 
 
 def _info_zero(A: Tensor) -> Tensor:
@@ -51,43 +51,11 @@ def _info_zero(A: Tensor) -> Tensor:
     return lucid.zeros(*batch, dtype=lucid.int32, device=A.device)
 
 
-def _check_square(A: Tensor, op: str) -> None:
-    """Refuse anything but a (batch of) square matrices, up front, as the
-    ``ValueError`` an argument refusal is — the kernels' own refusal is a
-    bare ``LucidError`` and names the kernel rather than the ``_ex`` call."""
-    if A.ndim < 2 or A.shape[-1] != A.shape[-2]:
-        raise ValueError(
-            f"{op}: A must be a square matrix or a batch of them, "
-            f"got shape {tuple(A.shape)}"
-        )
-
-
-def _is_numerical_failure(err: RuntimeError) -> bool:
-    """Whether an engine error is a failed factorisation, not a refusal —
-    LAPACK's ``info > 0`` on the CPU, the pivot or diagonal check on Metal.
-    Every other error (shape, dtype, device, memory) must reach the caller
-    rather than be reported as a singular matrix."""
-    return isinstance(err, LinAlgError)
-
-
-def _first_step(flags: Tensor) -> Tensor:
-    """LAPACK's ``info`` read off a factor: the 1-based index of the first
-    set flag along the last axis — one flag per factorisation step — or
-    ``0`` when none is set.  ``int32``, shaped like the batch."""
-    k = int(flags.shape[-1])
-    if k == 0 or flags.numel() == 0:
-        batch = tuple(int(d) for d in flags.shape[:-1])
-        return lucid.zeros(batch, dtype=lucid.int32, device=flags.device)
-    position = lucid.arange(1, k + 1, dtype=lucid.int64, device=flags.device)
-    first = lucid.amin(lucid.where(flags, position, k + 1), dim=-1)
-    return lucid.where(first > k, 0, first).to(lucid.int32)
-
-
 def _getrf_info(A: Tensor) -> Tensor:
     """LAPACK ``getrf``'s ``info`` for each matrix of ``A`` — the pivot
-    ``getri`` / ``getrs`` would divide by.  Factorising does not fail on a
+    ``getri`` / ``getrs`` would divide by.  Factorising finishes on a
     singular matrix, so this answers for every matrix of the batch at once;
-    the ``inv`` / ``solve`` kernels report only the first failure."""
+    the ``inv`` / ``solve`` kernels stop at the first failure."""
     with lucid.no_grad():
         return _lu_factor_ex(A.detach(), check_errors=False, op="getrf")[2]
 
@@ -96,9 +64,7 @@ def _cholesky_succeeds(M: Tensor, upper: bool) -> bool:
     """Whether the Cholesky kernel factorises the single matrix ``M``."""
     try:
         _la.cholesky(_unwrap(M.contiguous()), upper)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
+    except LinAlgError:
         return False
     return True
 
@@ -107,8 +73,8 @@ def _potrf_info(A: Tensor, upper: bool) -> Tensor:
     """LAPACK ``potrf``'s ``info`` for each matrix of ``A``.
 
     The order of the first leading minor that is not positive definite, or
-    ``0``.  The kernel reports only that *some* matrix failed — and Metal
-    not even the order — so the failures are found by bisection twice over.
+    ``0``.  The kernel stops at the first failed matrix of a batch, so the
+    failures are found by bisection twice over.
     Across the batch: a slice that factorises clears every matrix in it at
     once, so ``f`` failures among ``B`` matrices cost about ``2 f log2 B``
     calls rather than ``B``.  Within a failed matrix, over its leading
@@ -273,12 +239,10 @@ def cholesky_ex(
     >>> int(info)
     2
     """
-    _check_square(A, "cholesky_ex")
     try:
         return cholesky(A, upper=upper), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
+    except LinAlgError:
+        pass  # located per matrix below
     info = _potrf_info(A, upper)
     if check_errors:
         _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
@@ -334,12 +298,10 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     >>> int(info)
     2
     """
-    _check_square(A, "inv_ex")
     try:
         return inv(A), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
+    except LinAlgError:
+        pass  # located per matrix below
     info = _getrf_info(A)
     if check_errors:
         _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
@@ -409,12 +371,10 @@ def solve_ex(
     """
     if not left:
         raise NotImplementedError("solve_ex: only left=True is supported")
-    _check_square(A, "solve_ex")
     try:
         return solve(A, B), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
+    except LinAlgError:
+        pass  # located per matrix below
     info = _getrf_info(A)
     if check_errors:
         _raise_ex_failure("solve_ex", info, _singular_reason("solve"))
@@ -474,12 +434,9 @@ def lu_factor_ex(
 def _lu_factor_ex(
     A: Tensor, *, check_errors: bool, op: str
 ) -> tuple[Tensor, Tensor, Tensor]:
-    """``(LU, pivots, info)``.  The factorization completes on a singular
-    matrix, so ``info`` is read off ``U``'s diagonal: ``getrf`` reports the
-    first exactly-zero pivot, and that is the test."""
-    LU, pivots = _lu_factor_packed(A)
-    with lucid.no_grad():
-        info = _first_step(LU.detach().diagonal(dim1=-2, dim2=-1) == 0)
+    """``(LU, pivots, info)``, ``info`` being ``getrf``'s own code from the
+    kernel; ``check_errors`` raises for the first matrix it marks."""
+    LU, pivots, info = _lu_factor_packed(A)
     if check_errors:
         _raise_ex_failure(op, info, _zero_pivot_reason)
     return LU, pivots, info
@@ -537,13 +494,8 @@ def ldl_factor_ex(
 def _ldl_factor_ex(
     A: Tensor, *, hermitian: bool, check_errors: bool, op: str
 ) -> tuple[Tensor, Tensor, Tensor]:
-    """``(LD, pivots, info)``, ``info`` read off ``D``.
-
-    ``sytrf`` sets ``info = k`` exactly when it has to take a 1 x 1 pivot
-    that is zero (a column with nothing to pivot on) or NaN, and takes a
-    2 x 2 block only when it is non-singular.  So the first zero or NaN
-    diagonal entry at a positive pivot is its ``info``.
-    """
+    """``(LD, pivots, info)``, ``info`` being ``sytrf``'s own code from the
+    kernel; ``check_errors`` raises for the first matrix it marks."""
     unsupported_if(
         not hermitian,
         op,
@@ -551,12 +503,8 @@ def _ldl_factor_ex(
         hermitian,
         detail="Only the Hermitian case is computed.",
     )
-    ld_impl, piv_impl = _la.ldl_factor(_unwrap(A))
-    LD, pivots = lucid.tril(_wrap(ld_impl)), _wrap(piv_impl)
-    with lucid.no_grad():
-        d = LD.diagonal(dim1=-2, dim2=-1)
-        failed = lucid.logical_or(d == 0, lucid.isnan(d))
-        info = _first_step(lucid.logical_and(failed, pivots > 0))
+    ld_impl, piv_impl, info_impl = _la.ldl_factor(_unwrap(A))
+    LD, pivots, info = lucid.tril(_wrap(ld_impl)), _wrap(piv_impl), _wrap(info_impl)
     if check_errors:
         _raise_ex_failure(op, info, _zero_block_reason)
     return LD, pivots, info

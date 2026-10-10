@@ -21,19 +21,20 @@ std::vector<TensorImplPtr> ldl_factor_op(const TensorImplPtr& a) {
     empty_piv.push_back(static_cast<std::int64_t>(n));
     // A degenerate matrix has an answer; LAPACK just will not be the one
     // to compute it — see ``empty_matrix``.
+    // ``sytrf``'s own ``info`` per matrix, the batch dims: a singular D is
+    // factored, and whether that is an error is the caller's call.
+    const Shape info_shape(sh.begin(), sh.end() - 2);
     if (empty_matrix(sh))
-        return {zeros_op(sh, a->dtype(), a->device()),
-                zeros_op(empty_piv, Dtype::I32, a->device())};
+        return {zeros_op(sh, a->dtype(), a->device()), zeros_op(empty_piv, Dtype::I32, a->device()),
+                zeros_op(info_shape, Dtype::I32, a->device())};
 
-    auto [ld_storage, piv_storage] = backend::Dispatcher::for_device(a->device())
-                                         .linalg_ldl_factor(a->storage(), sh, a->dtype());
+    auto out = backend::Dispatcher::for_device(a->device())
+                   .linalg_ldl_factor(a->storage(), sh, a->dtype());
 
-    Shape piv_shape(sh.begin(), sh.end() - 2);
-    piv_shape.push_back(static_cast<std::int64_t>(n));
-
-    auto ld = fresh(std::move(ld_storage), sh, a->dtype(), a->device());
-    auto piv = fresh(std::move(piv_storage), piv_shape, Dtype::I32, a->device());
-    return {ld, piv};
+    auto ld = fresh(std::move(out[0]), sh, a->dtype(), a->device());
+    auto piv = fresh(std::move(out[1]), empty_piv, Dtype::I32, a->device());
+    auto info = fresh(std::move(out[2]), info_shape, Dtype::I32, a->device());
+    return {ld, piv, info};
 }
 
 }  // namespace lucid

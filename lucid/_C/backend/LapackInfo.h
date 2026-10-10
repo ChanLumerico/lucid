@@ -20,26 +20,43 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "../core/ErrorBuilder.h"
 
 namespace lucid::backend {
 
+// What ``info = k > 0`` means for ``op``, worded as ``lucid.linalg`` words
+// the same failure from a ``*_ex`` variant — one message per failure,
+// whichever layer reports it.
+inline std::string lapack_failure_reason(std::string_view op, int k) {
+    const std::string at = std::to_string(k);
+    if (op == "cholesky")
+        return "The factorization could not be completed because the input is not "
+               "positive-definite (the leading minor of order " +
+               at + " is not positive-definite).";
+    if (op == "inv" || op == "solve" || op == "matrix_power")
+        return "The diagonal element " + at + " is zero, the " +
+               std::string(op == "solve" ? "solve" : "inversion") +
+               " could not be completed because the input matrix is singular.";
+    return "LAPACK numerical failure (info=" + at + ")";
+}
+
 // Raise for a non-zero LAPACK ``info`` of matrix ``index`` among ``batch``.
-// The matrix is named only when there is more than one.  Call it inside the
-// batch loop: ``info`` is overwritten per matrix, so checked once after the
-// loop it reports only the last matrix, and an earlier failure leaves its
-// output block unwritten and returned as if it were an answer.
+// The matrix is named, ``(Batch element b): ``, only when there is more than
+// one.  Call it inside the batch loop: ``info`` is overwritten per matrix, so
+// checked once after the loop it reports only the last matrix, and an
+// earlier failure leaves its output block unwritten and returned as if it
+// were an answer.
 inline void
 check_lapack_info(int info, const char* op, std::int64_t index = 0, std::int64_t batch = 1) {
     if (info == 0)
         return;
     const std::string where =
-        batch > 1 ? " in matrix " + std::to_string(index) + " of the batch" : std::string{};
+        batch > 1 ? "(Batch element " + std::to_string(index) + "): " : std::string{};
     if (info < 0)
-        ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info) + where);
-    ErrorBuilder(op).linalg_error("LAPACK numerical failure (info=" + std::to_string(info) + ")" +
-                                  where);
+        ErrorBuilder(op).fail(where + "LAPACK invalid argument index" + std::to_string(-info));
+    ErrorBuilder(op).linalg_error(where + lapack_failure_reason(op, info));
 }
 
 // Raise for the first set flag of ``flags``, a row-major ``(batch, n)``

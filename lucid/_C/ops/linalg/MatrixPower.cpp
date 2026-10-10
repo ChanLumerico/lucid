@@ -38,7 +38,7 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     using namespace linalg_detail;
     Validator::input(a, "matrix_power.a").non_null();
     require_float(a->dtype(), "matrix_power");
-    require_square_2d(a->shape(), "matrix_power");
+    require_square_matrix(a->shape(), "matrix_power.a");
     OpScopeFull scope{"matrix_power", a->device(), a->dtype(), a->shape()};
     scope.set_attr("p", static_cast<std::int64_t>(p));
 

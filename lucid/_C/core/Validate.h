@@ -247,9 +247,10 @@ public:
     //
     // Raises
     // ------
-    // LucidError
-    //     If the tensor is null, has rank < 2, or its last two dims
-    //     disagree.
+    // InvalidArgument
+    //     If the tensor has rank < 2.
+    // ShapeMismatch
+    //     If its last two dims disagree (see :cpp:func:`require_square_matrix`).
     Validator& square_2d();
 
     // Fluent precondition checker for a pair of tensors.
@@ -389,5 +390,10 @@ private:
     const TensorImplPtr& t_;
     std::string label_;
 };
+
+// Refuse a shape that is not a square matrix or a batch of them: rank < 2
+// is ``InvalidArgument``, unequal trailing dims ``ShapeMismatch`` (both
+// ``ValueError``s on the Python side).  ``label`` names the op and operand.
+LUCID_API void require_square_matrix(const Shape& sh, const std::string& label);
 
 }  // namespace lucid

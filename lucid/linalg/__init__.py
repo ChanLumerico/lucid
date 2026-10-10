@@ -1811,13 +1811,11 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     return LU, pivots
 
 
-def _lu_factor_packed(A: Tensor) -> tuple[Tensor, Tensor]:
-    """``getrf``'s packed factor and pivots, differentiable in square ``A``.
-
-    The kernel completes on a singular matrix, as ``getrf`` does, so this
-    never raises for one; whether that is an error is the caller's call.
-    """
-    lu, pivots = _la.lu_factor(_unwrap(A))
+def _lu_factor_packed(A: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    """``getrf``'s packed factor (differentiable in square ``A``), pivots and
+    ``info``.  A singular matrix is factored and reported, never raised;
+    whether that is an error is the caller's call."""
+    lu, pivots, info = _la.lu_factor(_unwrap(A))
     LU, piv = _wrap(lu), _wrap(pivots)
     if A.requires_grad and lucid.is_grad_enabled():
         n = int(A.shape[-1])
@@ -1829,7 +1827,7 @@ def _lu_factor_packed(A: Tensor) -> tuple[Tensor, Tensor]:
             )
         P = _build_permutation_matrix(piv, n, A.dtype, A.device)
         LU = cast(Tensor, _LUFactorGrad.apply(A, LU, P))
-    return LU, piv
+    return LU, piv, _wrap(info)
 
 
 @final
@@ -3326,7 +3324,7 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     n = int(sh[-1])
 
     # A singular matrix has an LU factorization; only lu_factor refuses it.
-    LU, pivots = _lu_factor_packed(A)
+    LU, pivots, _ = _lu_factor_packed(A)
 
     # Split the packed LU into L (unit-lower) and U (upper).
     eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)

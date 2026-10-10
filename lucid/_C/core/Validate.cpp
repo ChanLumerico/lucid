@@ -95,14 +95,26 @@ Validator& Validator::shape_eq(const Shape& expected) {
 // tensor [B, N, N] passes; [B, N, M] with N != M fails.
 Validator& Validator::square_2d() {
     non_null();
-    if (t_->shape().size() < 2) {
-        ErrorBuilder(label_).fail("expected >=2-D");
-    }
-    const auto n = t_->shape().size();
-    if (t_->shape()[n - 1] != t_->shape()[n - 2]) {
-        ErrorBuilder(label_).fail("last two dims must be equal (square)");
-    }
+    require_square_matrix(t_->shape(), label_);
     return *this;
+}
+
+// The one refusal of a non-square matrix, for every linalg op: a shape
+// error (``ShapeMismatch``, so a ``ValueError`` as well as a ``LucidError``)
+// naming the square shape it needed — never the bare ``LucidError`` a
+// failed factorisation used to share, which the ``*_ex`` variants then had
+// to tell apart by checking the shape themselves first.
+void require_square_matrix(const Shape& sh, const std::string& label) {
+    if (sh.size() < 2)
+        ErrorBuilder(label).invalid_argument("expected a square matrix or a batch of them "
+                                             "(>=2-D), got ndim=" +
+                                             std::to_string(sh.size()));
+    const auto n = sh.size();
+    if (sh[n - 1] != sh[n - 2]) {
+        Shape square = sh;
+        square[n - 1] = sh[n - 2];
+        throw ShapeMismatch(square, sh, label + ": a square matrix or a batch of them");
+    }
 }
 
 Validator::Pair::Pair(const TensorImplPtr& a, const TensorImplPtr& b, std::string op)

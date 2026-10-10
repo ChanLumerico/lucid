@@ -42,7 +42,7 @@ std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "eig.a").non_null();
     require_float(a->dtype(), "eig");
-    require_square_2d(a->shape(), "eig");
+    require_square_matrix(a->shape(), "eig.a");
     OpScopeFull scope{"eig", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

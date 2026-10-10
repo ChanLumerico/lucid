@@ -64,7 +64,7 @@ namespace lucid {
 //
 // Returns
 // -------
-// std::vector<TensorImplPtr> of size 2
+// std::vector<TensorImplPtr> of size 3
 //     - ``[0]`` packed factor ``LD`` of shape ``(..., N, N)``, same dtype as
 //       ``a``.  Strict lower triangle stores $L$ (unit diagonal implicit);
 //       diagonal and sub-diagonal entries jointly encode $D$ including
@@ -72,6 +72,9 @@ namespace lucid {
 //     - ``[1]`` pivot tensor of shape ``(..., N)``, dtype ``I32``, following
 //       the LAPACK ``ipiv`` convention (positive: 1$\times$1 pivot; pair of
 //       equal negatives: 2$\times$2 pivot block).
+//     - ``[2]`` ``info`` of the batch shape ``(...)``, dtype ``I32``:
+//       ``sytrf``'s code per matrix — ``0``, or the first zero (or NaN)
+//       1$\times$1 block of $D$.
 //
 // Math
 // ----
@@ -89,14 +92,14 @@ namespace lucid {
 // - ``a``           : ``(..., N, N)``.
 // - return ``[0]``  : ``(..., N, N)``.
 // - return ``[1]``  : ``(..., N)``.
+// - return ``[2]``  : ``(...)``.
 //
 // Raises
 // ------
 // LucidError
 //     If ``a`` is not at least 2-D, not square, or has a non-float dtype.
-// LucidError
-//     If LAPACK ``info > 0`` — $D$ is exactly singular, so $A$ is rank
-//     deficient and the factorisation cannot be completed.
+//     A singular $D$ completes the factorisation and is reported through
+//     ``info``, never raised.
 //
 // Notes
 // -----

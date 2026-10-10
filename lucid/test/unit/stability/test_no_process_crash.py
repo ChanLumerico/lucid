@@ -663,7 +663,7 @@ def _raise_with(fn, needle):
 
 def singular(fn):
     # The CPU stream's error, word for word apart from ``info``.
-    _raise_with(fn, "LAPACK numerical failure")
+    _raise_with(fn, "because the input matrix is singular")
 
 
 def nonfinite(fn):

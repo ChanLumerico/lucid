@@ -92,18 +92,18 @@ void register_linalg(py::module_& m) {
         "Input must be a real symmetric square matrix.\n"
         "CPU: LAPACK ssyev/dsyev.  GPU: mlx::core::linalg::eigh.");
 
-    // lu_factor: packed LU factorisation + pivots.
-    // Returns (LU_packed, pivots) as a Python tuple.
+    // lu_factor: packed LU factorisation + pivots + getrf's info.
     m.def(
         "lu_factor",
         [](const TensorImplPtr& a) {
             auto r = lu_factor_op(a);
-            return py::make_tuple(r[0], r[1]);
+            return py::make_tuple(r[0], r[1], r[2]);
         },
         py::arg("a"),
         "LU factorisation with partial pivoting.\n"
-        "Returns (LU_packed, pivots) where LU_packed is the packed n×n matrix\n"
-        "(LAPACK dgetrf format) and pivots is an int32 vector of 1-based pivot indices.");
+        "Returns (LU_packed, pivots, info): LU_packed in LAPACK dgetrf format,\n"
+        "pivots int32 1-based, info int32 per matrix (getrf's code; a singular\n"
+        "matrix is factored, not refused).");
 
     // solve_triangular: triangular system solve.
     m.def("solve_triangular", &solve_triangular_op, py::arg("a"), py::arg("b"),
@@ -135,17 +135,17 @@ void register_linalg(py::module_& m) {
           "Reconstruct Q from Householder reflectors (H, tau) as returned by\n"
           "LAPACK dgeqrf.  CPU: LAPACK sorgqr/dorgqr.  GPU: CPU fallback.");
 
-    // ldl_factor: LDL^T factorisation for symmetric matrices.
-    // Returns (LD_packed, pivots) as a Python tuple.
+    // ldl_factor: LDL^T factorisation for symmetric matrices + sytrf's info.
     m.def(
         "ldl_factor",
         [](const TensorImplPtr& a) {
             auto r = ldl_factor_op(a);
-            return py::make_tuple(r[0], r[1]);
+            return py::make_tuple(r[0], r[1], r[2]);
         },
         py::arg("a"),
         "LDL^T factorisation for symmetric matrices.\n"
-        "Returns (LD_packed, pivots).  CPU: LAPACK ssytrf/dsytrf.  GPU: CPU fallback.");
+        "Returns (LD_packed, pivots, info): info is sytrf's int32 code per\n"
+        "matrix.  CPU: LAPACK ssytrf/dsytrf.  GPU: CPU fallback.");
 }
 
 }  // namespace lucid::bindings

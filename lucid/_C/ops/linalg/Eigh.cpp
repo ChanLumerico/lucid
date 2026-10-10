@@ -47,7 +47,7 @@ std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a) {
     using namespace linalg_detail;
     Validator::input(a, "eigh.a").non_null();
     require_float(a->dtype(), "eigh");
-    require_square_2d(a->shape(), "eigh");
+    require_square_matrix(a->shape(), "eigh.a");
     OpScopeFull scope{"eigh", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

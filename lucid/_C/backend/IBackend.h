@@ -1159,10 +1159,12 @@ public:
                                             const Shape& vt_shape,
                                             Dtype dt) = 0;
 
-    // LU factorisation (packed format).  Returns {LU, pivots} where LU is
-    // the packed n×n matrix (LAPACK dgetrf_ format) and pivots is an n-element
-    // I32 tensor of 1-based pivot indices.
-    virtual StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    // LU factorisation (packed format).  Returns {LU, pivots, info}: LU the
+    // packed matrix (LAPACK dgetrf_ format), pivots I32 1-based of shape
+    // batch + min(m, n), info I32 per matrix — getrf's own code, 0 or the
+    // first exactly-zero pivot (a singular matrix is returned, not raised).
+    virtual std::vector<Storage>
+    linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // Triangular solve: solve A X = B where A is triangular.
     // upper=true → upper triangular; unit=true → unit diagonal.
@@ -1196,8 +1198,11 @@ public:
                                                const Shape& h_shape,
                                                Dtype dt) = 0;
 
-    // LDL^T factorization of symmetric matrix. Returns {LD_packed, pivots_i32}.
-    virtual StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    // LDL^T factorization of symmetric matrix.  Returns {LD_packed,
+    // pivots_i32, info_i32}: info is sytrf's own code per matrix (a singular
+    // D is returned, not raised).
+    virtual std::vector<Storage>
+    linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // Broadcasts `a` from src_shape to dst_shape following NumPy rules.
     virtual Storage

@@ -124,12 +124,7 @@ lu_solve_op(const TensorImplPtr& LU, const TensorImplPtr& pivots, const TensorIm
     // be handed to LAPACK anyway, which read ``n`` rows out of a matrix
     // that had fewer and answered ``[nan, nan, -inf]``.
     const auto& lu_sh = LU->shape();
-    if (lu_sh.size() < 2)
-        ErrorBuilder("lu_solve.LU").invalid_argument("LU must be at least 2-D");
-    if (lu_sh[lu_sh.size() - 1] != lu_sh[lu_sh.size() - 2])
-        ErrorBuilder("lu_solve.LU")
-            .fail("LU must be square to solve with — lu_factor accepts a "
-                  "rectangular matrix, but only a square system has a solution");
+    require_square_matrix(lu_sh, "lu_solve.LU (only a square system has a solution)");
     // One pivot per row of each factor: getrs reads ``n`` of them per
     // matrix, so a shorter (or differently batched) vector is read past.
     const Shape piv_expected(lu_sh.begin(), lu_sh.end() - 1);

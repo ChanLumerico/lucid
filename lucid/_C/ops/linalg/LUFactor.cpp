@@ -43,16 +43,21 @@ std::vector<TensorImplPtr> lu_factor_op(const TensorImplPtr& a) {
     // A degenerate matrix has a decomposition; LAPACK just will not be
     // the one to compute it.  See ``empty_matrix`` for why dispatching
     // wrote to a stream Lucid does not own and then raised.
+    // ``getrf``'s own ``info`` per matrix, the batch dims: a singular
+    // matrix is factored, and whether that is an error is the caller's call.
+    const Shape info_shape(sh.begin(), sh.end() - 2);
     if (empty_matrix(sh))
         return {zeros_op(sh, a->dtype(), a->device()),
-                zeros_op(pivot_shape, Dtype::I32, a->device())};
+                zeros_op(pivot_shape, Dtype::I32, a->device()),
+                zeros_op(info_shape, Dtype::I32, a->device())};
 
-    auto [lu_storage, ipiv_storage] =
+    auto out =
         backend::Dispatcher::for_device(a->device()).linalg_lu_factor(a->storage(), sh, a->dtype());
 
-    auto lu = fresh(std::move(lu_storage), sh, a->dtype(), a->device());
-    auto pivots = fresh(std::move(ipiv_storage), pivot_shape, Dtype::I32, a->device());
-    return {lu, pivots};
+    auto lu = fresh(std::move(out[0]), sh, a->dtype(), a->device());
+    auto pivots = fresh(std::move(out[1]), pivot_shape, Dtype::I32, a->device());
+    auto info = fresh(std::move(out[2]), info_shape, Dtype::I32, a->device());
+    return {lu, pivots, info};
 }
 
 }  // namespace lucid

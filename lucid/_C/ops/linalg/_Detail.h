@@ -202,35 +202,6 @@ inline void require_float(Dtype dt, const char* op) {
                                          std::string(dtype_name(dt)) + ")");
 }
 
-// Validate that ``sh`` describes at least a 2-D square matrix.
-//
-// "Square" here means ``sh[rank-1] == sh[rank-2]``.  Batched inputs
-// (``rank > 2``) are accepted as long as the trailing two dimensions
-// satisfy this constraint — leading dimensions are interpreted as batch.
-// Used by ``inv``, ``det``, ``solve``, ``cholesky``, ``eig``, ``eigh``,
-// ``matrix_power``, ``ldl_factor`` and any other op only defined on square
-// matrices.
-//
-// Parameters
-// ----------
-// sh : const Shape&
-//     Shape to validate.
-// op : const char*
-//     Symbolic op name used in the error message.
-//
-// Raises
-// ------
-// LucidError
-//     If ``sh.size() < 2``.
-// LucidError
-//     If the last two dimensions of ``sh`` are not equal.
-inline void require_square_2d(const Shape& sh, const char* op) {
-    if (sh.size() < 2)
-        ErrorBuilder(op).invalid_argument("input must be at least 2-D");
-    if (sh[sh.size() - 1] != sh[sh.size() - 2])
-        ErrorBuilder(op).fail("last two dims must be equal (square)");
-}
-
 // Whether the trailing matrix of ``sh`` has no entries.
 //
 // An empty matrix is a legal object, not a malformed one: a 0x3 matrix is

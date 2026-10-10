@@ -11,13 +11,16 @@ with ``type(err) is LucidError``.  ``lu_factor`` never raised at all.
 
 Now the backend raises ``LinAlgError`` — a ``LucidError`` and so a
 ``RuntimeError``, as the reference raises it — from the one status reader
-both streams share, and the Metal stream reads ``info`` off its factor.
-The grid below is every factorisation x {succeeds, fails} x device x
-{one matrix, a batch}, held to the reference: the same inputs raise, the
-same ``info`` comes back, and the answers agree where there is one.
+both streams share, and the Metal stream reads Cholesky's ``info`` off its
+factor.  ``lu_factor`` and ``ldl_factor`` finish on a singular matrix, so
+their kernels return LAPACK's own ``info`` (reading it back off the factor
+was wrong for non-finite input).  A non-square matrix is a
+``ShapeMismatch``, never a ``LinAlgError``.  The grid below is every
+factorisation x {succeeds, fails} x device x {one matrix, a batch}, held
+to the reference: the same inputs raise, the same ``info`` comes back, and
+the answers agree where there is one.
 """
 
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -135,12 +138,16 @@ def test_the_reference_class_is_a_runtime_error_too(ref: Any) -> None:
 
 def test_a_shape_refusal_is_not_a_linalg_error(device: str) -> None:
     wide = lucid.ones(2, 3, device=device)
-    with pytest.raises(_C_engine.LucidError) as info:
+    with pytest.raises(_C_engine.ShapeMismatch) as info:
         LA.cholesky(wide)
     assert not isinstance(info.value, LA.LinAlgError)
-    # The ``_ex`` variants let it through rather than report ``info``.
-    with pytest.raises(ValueError):
-        LA.cholesky_ex(wide)
+    # The ``_ex`` variants let it through rather than report ``info``, all
+    # with the one refusal the kernels raise.
+    for ex in (LA.cholesky_ex, LA.inv_ex, LA.ldl_factor_ex):
+        with pytest.raises(_C_engine.ShapeMismatch):
+            ex(wide)
+    with pytest.raises(_C_engine.ShapeMismatch):
+        LA.solve_ex(wide, lucid.ones(2, 1, device=device))
 
 
 # ── the raising variants ──────────────────────────────────────────────────────
@@ -161,7 +168,7 @@ def test_raising_ops_fail_where_the_reference_does(
             fn(LA, mine)
         if batched:
             # The failed matrix is named — the second of three.
-            assert re.search(r"matrix 1 of the batch|Batch element 1\)", str(info.value))
+            assert "(Batch element 1): " in str(info.value)
         return
     got, want = fn(LA, mine), fn(ref.linalg, theirs)
     got = got if isinstance(got, tuple) else (got,)
@@ -174,7 +181,7 @@ def test_both_triangles_refuse_a_matrix_that_is_not_pd(device: str) -> None:
     """The LCD-206 repro, on each device: both triangles refuse it."""
     a = lucid.tensor(_NOT_PD.tolist(), device=device)
     for upper in (False, True):
-        with pytest.raises(LA.LinAlgError, match=r"info=2"):
+        with pytest.raises(LA.LinAlgError, match=r"leading minor of order 2"):
             LA.cholesky(a, upper=upper)
 
 
@@ -222,7 +229,9 @@ def test_cholesky_info_matches_the_reference_past_the_blocked_size(
     _, got = LA.cholesky_ex(mine, upper=upper)
     _, want = ref.linalg.cholesky_ex(theirs, upper=upper)
     np.testing.assert_array_equal(_np(got), _np(want))
-    with pytest.raises(LA.LinAlgError, match=r"info=1\) in matrix 1 of the batch"):
+    with pytest.raises(
+        LA.LinAlgError, match=r"\(Batch element 1\): .*leading minor of order 1 "
+    ):
         LA.cholesky(mine, upper=upper)
 
 
@@ -247,3 +256,63 @@ def test_lu_still_factors_a_singular_matrix(device: str) -> None:
     """``lu`` (P, L, U) is defined for every matrix, as the reference's is."""
     P, L, U = LA.lu(lucid.tensor(_SINGULAR.tolist(), device=device))
     np.testing.assert_allclose(_np(P @ L @ U), _SINGULAR, atol=1e-6)
+
+
+# ── non-finite input: the info is LAPACK's own ────────────────────────────────
+
+
+def _symmetric_draws(seed: int, count: int) -> list[np.ndarray]:
+    """Small symmetric matrices with zeros, NaN and infinity in them."""
+    rng = np.random.default_rng(seed)
+    values = np.array([0.0, 1.0, -1.0, 2.0, 0.5, -3.0, np.nan, np.inf])
+    p = [0.35, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08, 0.07]
+    out = []
+    while len(out) < count:
+        n = int(rng.integers(1, 6))
+        m = rng.choice(values, size=(n, n), p=p)
+        s = np.tril(m) + np.tril(m, -1).T
+        if not np.isfinite(s).all():
+            out.append(s)
+    return out
+
+
+def test_ldl_info_is_sytrf_s_on_non_finite_input(device: str, ref: Any) -> None:
+    """The LCD-244 review repro: D's diagonal says nothing about ``info``
+    here (``sytrf`` gave up on the infinity at step 2, not at the zero of
+    step 1), so ``info`` must come from LAPACK itself."""
+    a = np.array([[0.0, 0.0, 1.0], [0.0, 0.0, np.inf], [1.0, np.inf, 0.0]])
+    mine, theirs = _both(a, device, ref)
+    _, _, info = LA.ldl_factor_ex(mine)
+    _, _, want = ref.linalg.ldl_factor_ex(theirs)
+    assert int(info) == int(want) == 2
+    with pytest.raises(LA.LinAlgError, match=r"D\[2,2\]"):
+        LA.ldl_factor(mine)
+
+
+def test_ldl_info_agrees_wherever_the_factorisations_do(device: str, ref: Any) -> None:
+    """On non-finite input two LAPACKs may pivot differently — then the
+    factors differ and so may ``info``.  Wherever the pivots agree, the
+    ``info`` must too."""
+    compared = 0
+    for a in _symmetric_draws(7, 300):
+        mine, theirs = _both(a, device, ref)
+        _, piv, info = LA.ldl_factor_ex(mine)
+        _, rpiv, rinfo = ref.linalg.ldl_factor_ex(theirs)
+        if _np(piv).tolist() != _np(rpiv).tolist():
+            continue
+        compared += 1
+        assert int(info) == int(rinfo), a.tolist()
+    assert compared > 250
+
+
+def test_lu_info_matches_the_reference_on_non_finite_input(device: str, ref: Any) -> None:
+    rng = np.random.default_rng(11)
+    values = np.array([0.0, 0.0, 1.0, -1.0, 2.0, np.nan, np.inf, 0.5, -3.0])
+    p = [0.3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.03, 0.06, 0.06]
+    for _ in range(300):
+        shape = tuple(int(d) for d in rng.integers(1, 6, size=2))
+        a = rng.choice(values, size=shape, p=p)
+        mine, theirs = _both(a, device, ref)
+        _, _, info = LA.lu_factor_ex(mine)
+        _, _, want = ref.linalg.lu_factor_ex(theirs)
+        assert int(info) == int(want), a.tolist()

@@ -2856,20 +2856,18 @@ public:
     // factor and pivots, so the CPU backend factorises and the result is
     // uploaded.  Delegating — rather than running ``getrf`` again here —
     // keeps the CPU backend the one owner of the ``info`` policy.
-    StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+    std::vector<Storage> linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
         Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape)};
-        auto [lu_cpu, piv_cpu] =
-            Dispatcher::for_device(Device::CPU).linalg_lu_factor(a_cpu, shape, dt);
-        // Must upload: the op wrapper tags both outputs with the *input* device
-        // (Metal), so returning CPU storage desyncs the device tag from the
-        // storage variant and every later engine op hits bad_variant_access.
-        // Shapes mirror lu_factor_op: LU keeps the input shape, pivots are
-        // batch dims + min(m, n).  The CPU call has already refused a rank
-        // below 2.
+        auto out = Dispatcher::for_device(Device::CPU).linalg_lu_factor(a_cpu, shape, dt);
+        // Must upload: the op wrapper tags every output with the *input*
+        // device (Metal), so returning CPU storage desyncs the device tag from
+        // the storage variant and every later engine op hits
+        // bad_variant_access.  Shapes mirror lu_factor_op: LU keeps the input
+        // shape, pivots are batch dims + min(m, n), info the batch dims.  The
+        // CPU call has already refused a rank below 2.
         Shape pivot_shape(shape.begin(), shape.end() - 2);
         pivot_shape.push_back(std::min(shape[shape.size() - 2], shape[shape.size() - 1]));
-        return {Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(lu_cpu), shape)},
-                Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(piv_cpu), pivot_shape)}};
+        return gpu::upload_factor(out, shape, pivot_shape);
     }
 
     // solve_triangular: the CPU backend's substitution, uploaded.  MLX's own
@@ -2998,18 +2996,16 @@ public:
     }
 
     // ldl_factor: the CPU backend's ``sytrf``, uploaded (MLX has no LDLᵀ).
-    StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+    std::vector<Storage>
+    linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
         Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape)};
-        auto [ld_cpu, piv_cpu] =
-            Dispatcher::for_device(Device::CPU).linalg_ldl_factor(a_cpu, shape, dt);
+        auto out = Dispatcher::for_device(Device::CPU).linalg_ldl_factor(a_cpu, shape, dt);
         // Shapes mirror ldl_factor_op: LD keeps the input shape, pivots are
         // batch dims + n.  The MLX array must carry the batch dims too — it
         // holds only as many elements as its shape names, and every later
         // read of this tensor copies the TensorImpl's element count out of
         // it.
-        Shape piv_shape(shape.begin(), shape.end() - 1);
-        return {Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(ld_cpu), shape)},
-                Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(piv_cpu), piv_shape)}};
+        return gpu::upload_factor(out, shape, Shape(shape.begin(), shape.end() - 1));
     }
 
     // fold (col2im) — Metal-native via ``scatter_add_axis``.
