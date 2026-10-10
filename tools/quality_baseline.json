@@ -2021,7 +2021,7 @@
     "lucid/_dispatch.py": 1,
     "lucid/_factories/converters.py": 1,
     "lucid/compile/_core/fallback.py": 1,
-    "lucid/coreml/_emit.py": 64,
+    "lucid/coreml/_emit.py": 63,
     "lucid/coreml/_spec.py": 2,
     "lucid/distributions/constraints.py": 2,
     "lucid/distributions/kl.py": 18,

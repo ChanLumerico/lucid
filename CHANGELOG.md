@@ -348,6 +348,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - one promotion owner for every spelling of a binary op
 - indexing reads integer widths from the promotion owner
 - literal dtype inference promotes through the owner
+- clip reads its bounds without a redundant conditional
 
 ---
 

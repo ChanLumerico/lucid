@@ -961,11 +961,14 @@ def _clip_adapter(
         raise ValueError("clip: at least one of min or max must be given")
     # A number is promoted as it stands, without building its 0-d constant,
     # so a clamp whose bounds already fit allocates nothing extra.
-    bounds: list[_promotion.Operand] = [
-        bound if isinstance(bound, _promotion.NUMBER) else _unwrap(bound)
-        for bound in (min, max)
-        if bound is not None
-    ]
+    bounds: list[_promotion.Operand] = []
+    for bound in (min, max):
+        if bound is None:
+            continue
+        if isinstance(bound, _promotion.NUMBER):
+            bounds.append(bound)
+        else:  # a tensor bound, which the annotation does not admit but callers pass
+            bounds.append(_unwrap(bound))
     tgt = _promotion.result_type(x_impl, *bounds)
     if tgt != x_impl.dtype:
         x_impl = _C_engine.astype(x_impl, tgt)
