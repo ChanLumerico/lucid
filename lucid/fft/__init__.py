@@ -17,500 +17,42 @@ default) leaves ``fft`` unscaled and divides ``ifft`` by ``N``;
 ``sqrt(N)``.  MLX's transforms always produce the ``'backward'`` form,
 so non-default norms are reached by post-multiplying the result.
 
-Autograd: each base op is wrapped in a ``lucid.autograd.Function``
-subclass.  The backward of every transform is the *dual* transform with
-the *dual* normalisation (``backward ↔ forward``, ``ortho ↔ ortho``),
-taken at the transform size and then cropped or zero-padded back to the
-input's size along every transformed axis — the adjoint of what ``n`` /
-``s`` does to the input.
+Autograd: the base ops are ``lucid.autograd.Function`` subclasses, in
+``_transforms``.  The backward of every transform is the *dual*
+transform with the *dual* normalisation (``backward ↔ forward``,
+``ortho ↔ ortho``), taken at the transform size and then cropped or
+zero-padded back to the input's size along every transformed axis — the
+adjoint of what ``n`` / ``s`` does to the input.  The dual is itself
+taken through its ``Function``, so a gradient differentiates again under
+``create_graph``.
 
 Input: an integer or boolean tensor is promoted to the default floating
 dtype, and with ``dim`` omitted an ``s`` shorter than the rank names the
 last ``len(s)`` axes.
 """
 
-import math
-from typing import Sequence, TYPE_CHECKING, cast, final, override
+from typing import Sequence, TYPE_CHECKING
 
 import lucid
-from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
 from lucid._types import DeviceLike, DTypeLike
-from lucid.autograd.function import Function as _AutogradFunction
-from lucid.autograd.function import FunctionCtx
+from lucid.fft._transforms import (
+    _FftnAutograd,
+    _IrfftnAutograd,
+    _RfftnAutograd,
+    _as_axis_list,
+    _check_norm,
+    _conj,
+    _dual_norm,
+    _input_sizes_along_axes,
+    _normalise_axes,
+    _prepare,
+    _promote,
+    _transform,
+    _transform_size,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-_fft = _C_engine.fft  # type: ignore[attr-defined]
-
-# ── Normalisation ────────────────────────────────────────────────────────────
-
-_VALID_NORMS = ("backward", "forward", "ortho")
-
-
-def _check_norm(norm: str | None) -> str:
-    if norm is None:
-        return "backward"
-    if norm not in _VALID_NORMS:
-        raise ValueError(f"norm must be one of {_VALID_NORMS} or None, got {norm!r}")
-    return norm
-
-
-def _dual_norm(norm: str) -> str:
-    if norm == "ortho":
-        return "ortho"
-    return "forward" if norm == "backward" else "backward"
-
-
-def _scale_after_fft(N: int, norm: str) -> float:
-    """Post-multiplier applied to MLX's fft (which is 'backward', i.e. unscaled)."""
-    if norm == "backward":
-        return 1.0
-    if norm == "forward":
-        return 1.0 / N
-    return 1.0 / math.sqrt(N)  # ortho
-
-
-def _scale_after_ifft(N: int, norm: str) -> float:
-    """Post-multiplier applied to MLX's ifft (which already includes 1/N)."""
-    if norm == "backward":
-        return 1.0  # MLX already divides by N
-    if norm == "forward":
-        return float(N)  # cancel MLX's 1/N
-    return math.sqrt(float(N))  # ortho: turn 1/N into 1/sqrt(N)
-
-
-# ── Axis / shape canonicalisation ────────────────────────────────────────────
-
-
-def _as_axis_list(
-    dim: int | Sequence[int] | None, rank: int, default_all: bool
-) -> list[int]:
-    if dim is None:
-        if default_all:
-            return list(range(rank))
-        return [-1]
-    if isinstance(dim, int):
-        return [dim]
-    return [int(d) for d in dim]
-
-
-def _as_size_list(s: int | Sequence[int] | None) -> list[int]:
-    if s is None:
-        return []
-    if isinstance(s, int):
-        return [int(s)]
-    return [int(v) for v in s]
-
-
-def _normalise_axes(axes: list[int], rank: int) -> list[int]:
-    out: list[int] = []
-    for ax in axes:
-        a = ax + rank if ax < 0 else ax
-        if a < 0 or a >= rank:
-            raise IndexError(f"FFT axis {ax} out of range for rank-{rank} tensor")
-        out.append(a)
-    return out
-
-
-def _validate_axes_and_s(axes: list[int], s: list[int], op: str) -> None:
-    if s and len(s) != len(axes):
-        raise ValueError(f"{op}: len(s)={len(s)} must match len(dim)={len(axes)}")
-
-
-def _promote(x: Tensor) -> Tensor:
-    """An integer or boolean input in the default floating dtype.
-
-    The engine transforms take only floating and complex input; the
-    reference reads an integer signal as the real signal it denotes, so
-    ``fft(arange(4))`` is a ``complex64`` spectrum rather than an error.
-    """
-    if x.is_floating_point() or x.is_complex():
-        return x
-    return x.to(lucid.get_default_dtype())
-
-
-def _prepare(
-    input: Tensor,
-    s: int | Sequence[int] | None,
-    dim: int | Sequence[int] | None,
-    op: str,
-) -> tuple[Tensor, list[int], list[int]]:
-    """The promoted input, its normalised transform axes, and ``s`` as a list.
-
-    With ``dim`` omitted the transform covers every axis — or, when ``s``
-    is given, the last ``len(s)`` axes, which is what ``s`` then names.
-    """
-    input = _promote(input)
-    rank = input.ndim
-    s_list = _as_size_list(s)
-    if dim is None and s_list:
-        if len(s_list) > rank:
-            raise ValueError(
-                f"{op}: len(s)={len(s_list)} exceeds the input's {rank} dimensions"
-            )
-        axes = list(range(rank - len(s_list), rank))
-    else:
-        axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    _validate_axes_and_s(axes, s_list, op)
-    return input, axes, s_list
-
-
-def _input_sizes_along_axes(x_shape: tuple[int, ...], axes: list[int]) -> list[int]:
-    return [int(x_shape[a]) for a in axes]
-
-
-def _resize_axes(x: Tensor, axes: list[int], sizes: list[int]) -> Tensor:
-    """``x`` cropped or zero-padded at the end of each axis to ``sizes``.
-
-    The adjoint of what ``s`` does to a transform's input.  The engine
-    crops an axis longer than its ``s`` entry and zero-pads a shorter one
-    before transforming, so a gradient computed at the transform size has
-    to be brought back to the input's: the cropped tail of the input
-    received nothing (zero-pad the gradient), and the padding was never an
-    input (crop it away).
-    """
-    for axis, size in zip(axes, sizes):
-        have = int(x.shape[axis])
-        if have > size:
-            x = x.narrow(axis, 0, size)
-        elif have < size:
-            # ``pad`` takes (low, high) pairs from the last axis backwards.
-            widths = [0] * (2 * x.ndim)
-            widths[2 * (x.ndim - 1 - axis) + 1] = size - have
-            x = lucid.pad(x, tuple(widths))
-    return x
-
-
-def _transform_size(s: list[int], in_sizes: list[int]) -> int:
-    """Total length N transformed = product of per-axis lengths."""
-    sizes = s if s else in_sizes
-    N = 1
-    for v in sizes:
-        N *= int(v)
-    return N
-
-
-# ── Engine wrappers (raw, no normalisation) ──────────────────────────────────
-
-
-def _engine_fftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
-    return _wrap(_fft.fftn(_unwrap(x), s, axes))
-
-
-def _engine_ifftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
-    return _wrap(_fft.ifftn(_unwrap(x), s, axes))
-
-
-def _engine_rfftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
-    return _wrap(_fft.rfftn(_unwrap(x), s, axes))
-
-
-def _engine_irfftn(x: Tensor, s: list[int], axes: list[int]) -> Tensor:
-    """The inverse real transform, promoting a real input first.
-
-    The engine kernel takes a complex spectrum and refused anything else,
-    so ``irfft`` / ``irfft2`` / ``irfftn`` / ``hfft`` of a real array
-    raised ``irfftn requires C64 input, got float32``.  The reference
-    accepts one — a real array *is* a spectrum with no imaginary part,
-    and reading it as one is the only sensible interpretation.
-    """
-    if not x.is_complex():
-        x = lucid.complex(x, lucid.zeros_like(x))
-    return _wrap(_fft.irfftn(_unwrap(x), s, axes))
-
-
-def _conj(x: Tensor) -> Tensor:
-    """Conjugate, through the op that carries a gradient.
-
-    This called ``_fft._conj_complex`` directly, which is a bare engine
-    entry point with no autograd node, so it was where ``ihfft``'s chain
-    ended: the forward was right and ``x.grad`` came back ``None``.
-    ``lucid.conj`` is the same computation with a backward attached.
-    """
-    return lucid.conj(x)
-
-
-def _scale(x: Tensor, s: float) -> Tensor:
-    """Multiply by a real scalar, lane-wise when ``x`` is complex.
-
-    ``x * s`` is enough for a real tensor.  For a complex one it is not:
-    a scalar operand goes through the *broadcast* path, and that path has
-    no complex branch — only equal-shape ``mul(C64, C64)`` does.  This
-    used to say both were supported, and the mistake was invisible while
-    nothing differentiated through a complex tensor.  The moment ``real``
-    and ``imag`` had backwards, every FFT backward reached here and
-    raised ``broadcast: dtype not supported``.
-
-    Scaling a complex number by a real one is scaling each lane by it, so
-    the projections do the work and no complex arithmetic is needed.
-    """
-    if s == 1.0:
-        return x
-    if not x.is_complex():
-        return x * s
-    return lucid.complex(lucid.real(x) * s, lucid.imag(x) * s)
-
-
-# ── Autograd Function classes (one per base transform) ──────────────────────
-#
-# Backward derivation for a complex DFT y = F(x):
-#   J[k,n] = exp(-2πi kn/N).  The conjugate transpose is J^H[n,k] = exp(+2πi kn/N).
-#   Under norm='backward', grad_x = J^H · grad_y = N · ifft(grad_y, 'backward')
-#                                                = ifft(grad_y, 'forward').
-# More generally grad_x = ifft(grad_y, dual(norm)) for any norm.  The same
-# argument with the role of fft/ifft swapped gives the ifft backward.
-#
-# ``s`` makes every transform the composition of a resize — crop or
-# zero-pad each transformed axis to its ``s`` entry — and a transform at
-# that size.  The adjoint is the transposed composition: the dual transform
-# at the transform size, then the opposite resize back to the input's own
-# sizes (``_resize_axes``).  Every ``forward`` therefore saves the input's
-# sizes along the transformed axes, and every ``backward`` ends at them —
-# what a gradient for that input has to be shaped as.
-#
-# For the real variants the transform size along the last axis is needed
-# as well, because rfft → n//2+1 is not invertible from the gradient shape
-# alone.
-
-
-def _input_grad(g: Tensor, ctx: FunctionCtx, scale: float) -> Tensor:
-    """The dual transform's result as the gradient for ``forward``'s input.
-
-    Kept real for a real input — the gradient of a real signal is the real
-    part of the complex one — then scaled by the dual normalisation and
-    resized from the transform size back to the input's sizes.
-    """
-    if cast(bool, ctx.real_input) and g.is_complex():
-        g = lucid.real(g)
-    if scale != 1.0:
-        g = _scale(g, scale)
-    return _resize_axes(g, cast(list[int], ctx.axes), cast(list[int], ctx.in_sizes))
-
-
-def _save_input(ctx: FunctionCtx, x: Tensor, axes: list[int]) -> None:
-    """Record what the input looked like along the transformed axes."""
-    ctx.axes = axes
-    ctx.in_sizes = _input_sizes_along_axes(tuple(x.shape), axes)
-    ctx.real_input = not x.is_complex()
-
-
-@final
-class _FftnAutograd(_AutogradFunction):
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx,
-        x: Tensor,
-        s: list[int],
-        axes: list[int],
-        norm: str,
-        N: int,
-    ) -> Tensor:
-        _save_input(ctx, x, axes)
-        ctx.norm = norm
-        ctx.N = N
-        out = _engine_fftn(x, s, axes)
-        scale = _scale_after_fft(N, norm)
-        if scale != 1.0:
-            out = _scale(out, scale)
-        return out
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        # grad_x = ifft(grad_out, dual(norm)) at the output's size, then
-        # resized to the input's.
-        dual = _dual_norm(cast(str, ctx.norm))
-        g = _engine_ifftn(grad_out, [], cast(list[int], ctx.axes))
-        return _input_grad(g, ctx, _scale_after_ifft(cast(int, ctx.N), dual))
-
-
-@final
-class _IfftnAutograd(_AutogradFunction):
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx,
-        x: Tensor,
-        s: list[int],
-        axes: list[int],
-        norm: str,
-        N: int,
-    ) -> Tensor:
-        _save_input(ctx, x, axes)
-        ctx.norm = norm
-        ctx.N = N
-        out = _engine_ifftn(x, s, axes)
-        scale = _scale_after_ifft(N, norm)
-        if scale != 1.0:
-            out = _scale(out, scale)
-        return out
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        dual = _dual_norm(cast(str, ctx.norm))
-        g = _engine_fftn(grad_out, [], cast(list[int], ctx.axes))
-        return _input_grad(g, ctx, _scale_after_fft(cast(int, ctx.N), dual))
-
-
-def _hermitian_weights(like: Tensor, axis: int, bins: int, full: int) -> Tensor:
-    """``[1, 2, 2, ..., 2, 1?]`` shaped to broadcast along ``axis``.
-
-    The adjoint of a transform that reads a half-spectrum has to count
-    each interior bin twice, because ``irfft`` reads each one twice: once
-    as itself and once as the conjugate mirror it reconstructs.  DC is
-    its own mirror, and so is Nyquist when the full length is even, so
-    those two are counted once.
-
-    Built from ``cat`` rather than an array literal because this is a
-    compute path and may not import numpy (H4).
-    """
-    ones_head = lucid.ones(1, dtype=like.dtype, device=like.device)
-    has_nyquist = full % 2 == 0 and bins > 1
-    middle = bins - 1 - (1 if has_nyquist else 0)
-    parts = [ones_head]
-    if middle > 0:
-        parts.append(lucid.full((middle,), 2.0, dtype=like.dtype, device=like.device))
-    if has_nyquist:
-        parts.append(lucid.ones(1, dtype=like.dtype, device=like.device))
-    weights = lucid.cat(parts) if len(parts) > 1 else ones_head
-
-    shape = [1] * like.ndim
-    shape[axis % like.ndim] = bins
-    return weights.reshape(tuple(shape))
-
-
-@final
-class _RfftnAutograd(_AutogradFunction):
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx,
-        x: Tensor,
-        s: list[int],
-        axes: list[int],
-        norm: str,
-        N: int,
-        full_sizes: list[int],
-    ) -> Tensor:
-        _save_input(ctx, x, axes)
-        ctx.full_sizes = (
-            full_sizes  # transform sizes along each axis (``s`` or the input's)
-        )
-        ctx.norm = norm
-        ctx.N = N
-        out = _engine_rfftn(x, s, axes)
-        scale = _scale_after_fft(N, norm)
-        if scale != 1.0:
-            out = _scale(out, scale)
-        return out
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        """The adjoint of ``rfft``, which is not ``irfft``.
-
-        This used to call ``irfftn``, and ``irfft`` is the *inverse* of
-        ``rfft`` rather than its adjoint.  The two differ by exactly the
-        thing that makes ``irfft`` cheap: it assumes its input is the
-        half-spectrum of a real signal, so it counts every bin between DC
-        and Nyquist twice, reconstructing the conjugate half it was not
-        given.  The adjoint counts each bin once, because those
-        conjugate entries are not inputs the gradient can flow to.
-
-        Every interior bin was therefore doubled.  On a length-6 signal:
-
-            d/dx sum|rfft(x)|   was  [-2.73, 0, 0.73, 1.27, 2, 4.73]
-                                 is  [-1.37, 1, 0.37, 1.63, 1, 3.37]
-
-        DC and Nyquist were right, which is the worst way for it to be
-        wrong: the two bins a quick check looks at.
-
-        Unreachable until complex tensors carried a gradient at all, so
-        this is newly visible rather than newly broken.
-
-        Zero-padding the half-spectrum back to full length and taking the
-        ordinary inverse gives the adjoint directly: the padded bins
-        contribute nothing, which is precisely "count each once".  The
-        real part is taken because the input to ``rfft`` was real.
-
-        That gradient is at the transform size; with ``s`` it is then
-        resized to the input's, as for every transform here.
-        """
-        dual = _dual_norm(cast(str, ctx.norm))
-        axes = cast(list[int], ctx.axes)
-        full_sizes = cast(list[int], ctx.full_sizes)
-
-        # Only the last transformed axis is halved by ``rfft``; the
-        # others are full complex transforms already.
-        last_axis = axes[-1]
-        padded = _resize_axes(grad_out, [last_axis], [full_sizes[-1]])
-
-        g = _engine_ifftn(padded, [], axes)
-        return _input_grad(g, ctx, _scale_after_ifft(cast(int, ctx.N), dual))
-
-
-@final
-class _IrfftnAutograd(_AutogradFunction):
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx,
-        x: Tensor,
-        s: list[int],
-        axes: list[int],
-        norm: str,
-        N: int,
-        out_sizes: list[int],
-    ) -> Tensor:
-        # The input's sizes are in bins along the last axis — what the
-        # gradient comes back to, whatever ``s`` asked the output to be.
-        _save_input(ctx, x, axes)
-        ctx.norm = norm
-        ctx.N = N
-        ctx.out_sizes = out_sizes  # n[i] for each axis (after expansion)
-        out = _engine_irfftn(x, s, axes)
-        scale = _scale_after_ifft(N, norm)
-        if scale != 1.0:
-            out = _scale(out, scale)
-        return out
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        """The adjoint of ``irfft``, which is not ``rfft``.
-
-        The mirror of the mistake in ``_RfftnAutograd``: ``rfft`` is the
-        *inverse* of ``irfft`` and not its adjoint.  ``irfft`` reads each
-        interior bin of its half-spectrum twice — once as itself and once
-        as the conjugate mirror it reconstructs — so the adjoint sends
-        the gradient back twice.  Plain ``rfft`` sends it once, leaving
-        every bin between DC and Nyquist short by a factor of two.
-
-        DC and Nyquist were right, being their own mirrors, which is
-        again the worst way to be wrong: they are the entries a spot
-        check reads first.
-
-        The weighted spectrum has ``out_sizes[-1] // 2 + 1`` bins — the
-        count ``irfft`` read, after cropping or zero-padding its input to
-        fit ``s``.  It is resized to the input's own bin count (and its
-        other axes to the input's sizes), or the engine would read a
-        gradient of the wrong length as the input's.
-        """
-        dual = _dual_norm(cast(str, ctx.norm))
-        axes = cast(list[int], ctx.axes)
-        out_sizes = cast(list[int], ctx.out_sizes)
-        g = _engine_rfftn(grad_out, [], axes)
-
-        last_axis = axes[-1]
-        bins = int(g.shape[last_axis])
-        weights = _hermitian_weights(lucid.real(g), last_axis, bins, int(out_sizes[-1]))
-        # Lane-wise, because a broadcast multiply has no complex branch.
-        g = lucid.complex(lucid.real(g) * weights, lucid.imag(g) * weights)
-        return _input_grad(g, ctx, _scale_after_fft(cast(int, ctx.N), dual))
 
 
 # ── Public API: complex FFT (fft / fft2 / fftn) ──────────────────────────────
@@ -622,7 +164,7 @@ def fftn(
     input, axes, s_list = _prepare(input, s, dim, "fftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
-    return cast("Tensor", _FftnAutograd.apply(input, s_list, axes, norm_v, N))
+    return _transform(_FftnAutograd, input, s_list, axes, norm_v, N, False)
 
 
 def ifftn(
@@ -711,7 +253,7 @@ def ifftn(
     input, axes, s_list = _prepare(input, s, dim, "ifftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
-    return cast("Tensor", _IfftnAutograd.apply(input, s_list, axes, norm_v, N))
+    return _transform(_FftnAutograd, input, s_list, axes, norm_v, N, True)
 
 
 def fft(
@@ -1134,9 +676,7 @@ def rfftn(
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     full_sizes: list[int] = list(s_list) if s_list else list(in_sizes)
     N = _transform_size(s_list, in_sizes)
-    return cast(
-        "Tensor", _RfftnAutograd.apply(input, s_list, axes, norm_v, N, full_sizes)
-    )
+    return _transform(_RfftnAutograd, input, s_list, axes, norm_v, N, full_sizes)
 
 
 def irfftn(
@@ -1238,9 +778,7 @@ def irfftn(
     N = 1
     for v in out_sizes:
         N *= int(v)
-    return cast(
-        "Tensor", _IrfftnAutograd.apply(input, s_list, axes, norm_v, N, out_sizes)
-    )
+    return _transform(_IrfftnAutograd, input, s_list, axes, norm_v, N, out_sizes)
 
 
 def rfft(

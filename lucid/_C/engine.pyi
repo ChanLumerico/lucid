@@ -855,6 +855,23 @@ class _linalg_namespace:
 
 linalg: _linalg_namespace
 
+# ── _C_engine.fft sub-namespace ───────────────────────────────────────────────
+# Mirrors lucid/_C/bindings/bind_fft.cpp.
+
+class _fft_namespace:
+    @staticmethod
+    def fftn(a: TensorImpl, s: Sequence[SupportsInt] = ..., dim: Sequence[SupportsInt] = ...) -> TensorImpl: ...
+    @staticmethod
+    def ifftn(a: TensorImpl, s: Sequence[SupportsInt] = ..., dim: Sequence[SupportsInt] = ...) -> TensorImpl: ...
+    @staticmethod
+    def rfftn(a: TensorImpl, s: Sequence[SupportsInt] = ..., dim: Sequence[SupportsInt] = ...) -> TensorImpl: ...
+    @staticmethod
+    def irfftn(a: TensorImpl, s: Sequence[SupportsInt] = ..., dim: Sequence[SupportsInt] = ...) -> TensorImpl: ...
+    @staticmethod
+    def _conj_complex(a: TensorImpl) -> TensorImpl: ...
+
+fft: _fft_namespace
+
 # ── einops sub-namespace ──────────────────────────────────────────────────────
 
 class _einops_namespace:
