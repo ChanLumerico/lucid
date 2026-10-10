@@ -17,15 +17,17 @@
 //     \frac{\partial L}{\partial A}
 //       = \det(A)\,\frac{\partial L}{\partial \det}\,(A^{-1})^\top.
 // $$
-// Both $A$ (to form $A^{-1}$) and $\det(A)$ (the scalar multiplier)
-// are saved on the backward node; the inverse is computed lazily via
-// ``inv_op`` so second-order gradients flow through automatically.
+// $\det(A)\,A^{-\top}$ is the cofactor matrix $\mathrm{cof}(A)$, which
+// exists at every $A$ although $A^{-1}$ does not.  When any matrix of the
+// batch is singular ($|\det| < 100\,\varepsilon$) the backward forms
+// $\mathrm{cof}(A)$ from the SVD instead ([[CofactorBackward]]), so the
+// gradient there is the adjugate's transpose rather than an inverse
+// failure.
 //
 // Note
 // ----
-// ``det`` is numerically unstable for moderate-to-large matrices; in
-// practice ``slogdet`` (log-determinant with sign) is preferred but
-// is not yet implemented.
+// ``det`` over/underflows for moderate-to-large matrices; prefer
+// ``slogdet`` there.
 
 #pragma once
 
@@ -103,7 +105,31 @@ public:
     //     differentiable input slot.
     std::vector<Storage> apply(Storage grad_out) override;
 
-    // The same det(A) G A^-T, recorded, with both factors recomputed from A.
+    // The same gradient, recorded, with its factors recomputed from A.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+};
+
+// Autograd node for the cofactor matrix $\mathrm{cof}(A) = \nabla \det(A)$
+// in its singular-safe SVD form — what [[DetBackward]] records when the
+// batch holds a singular matrix, so ``det`` differentiates twice there too.
+//
+// The cofactor map is the gradient of $\det$, so its vector-Jacobian
+// product is the Hessian of $\det$ applied to $G$, and that Hessian is
+// symmetric: the backward is the directional derivative of $\mathrm{cof}$
+// along $G$.  With $A = U\,\mathrm{diag}(s)\,V^\top$, $\alpha =
+// \det U \det V$ and $G' = U^\top G V$,
+// $$
+//   d\,\mathrm{cof}(A)[G] = \alpha\, U \left(
+//     \mathrm{diag}(Q\,\mathrm{diag}(G')) - Q \odot G'^\top \right) V^\top,
+//   \qquad Q_{ij} = [i \ne j] \prod_{m \ne i, j} s_m,
+// $$
+// which takes no division, so it holds at any rank.  A third derivative
+// through it is not implemented.
+class LUCID_API CofactorBackward : public FuncOp<CofactorBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+
+    std::vector<Storage> apply(Storage grad_out) override;
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 

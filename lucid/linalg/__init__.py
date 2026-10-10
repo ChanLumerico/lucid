@@ -1889,8 +1889,32 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     """
     d = cast(Tensor, det(A))
     sign = _wrap(_C_engine.sign(_unwrap(d)))
-    logabsdet = _wrap(_C_engine.log(_C_engine.abs(_unwrap(d))))
-    return sign, logabsdet
+    return sign, cast(Tensor, _LogAbsDet.apply(d))
+
+
+@final
+class _LogAbsDet(_AutogradFunction):
+    """``log|d|`` of a determinant, with derivative ``1 / d``.
+
+    Composed as ``log(abs(d))`` the chain rule read ``sign(d) / |d|``, and
+    at a singular matrix that is ``0 · inf`` — a NaN gradient where the
+    reference answers ``±inf``.  ``1 / d`` is the same derivative wherever
+    ``d ≠ 0`` and keeps the sign of a signed zero, so through ``det``'s own
+    backward the gradient is ``g · cof(A) / det(A)``: ``g · A⁻ᵀ`` for an
+    invertible ``A`` and ``±inf`` along the adjugate of a singular one.
+    """
+
+    @override
+    @staticmethod
+    def forward(ctx: FunctionCtx, d: Tensor) -> Tensor:
+        ctx.save_for_backward(d)
+        return _wrap(_C_engine.log(_C_engine.abs(_unwrap(d))))
+
+    @override
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
+        (d,) = ctx.saved_tensors
+        return grad_out / d
 
 
 def matrix_rank(
@@ -2225,11 +2249,15 @@ def solve_triangular(
     >>> solve_triangular(A, b, upper=True)
     tensor([[1.], [3.]])
     """
+    # The engine owns the right-hand-side contract (batch broadcast, vector
+    # right-hand side) and the gradient in both operands.
     if not left:
         # X A = B  ⟺  Aᵀ Xᵀ = Bᵀ — solve the transposed system, transpose result.
-        XT = _SolveTriangular.apply(A.mT, B.mT, not upper, unitriangular)
-        return cast(Tensor, XT).mT
-    return cast(Tensor, _SolveTriangular.apply(A, B, upper, unitriangular))
+        XT = _la.solve_triangular(
+            _unwrap(A.mT), _unwrap(B.mT), not upper, unitriangular
+        )
+        return _wrap(XT).mT
+    return _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
 
 
 def _broadcast_batch(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
@@ -2245,64 +2273,6 @@ def _broadcast_batch(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
             )
         out.append(max(x, y))
     return tuple(out)
-
-
-def _sum_to(t: Tensor, shape: tuple[int, ...]) -> Tensor:
-    """Reduce a broadcast gradient back to the operand's own shape."""
-    while t.ndim > len(shape):
-        t = t.sum(0)
-    for axis, size in enumerate(shape):
-        if size == 1 and t.shape[axis] != 1:
-            t = t.sum(axis, keepdim=True)
-    return t
-
-
-class _SolveTriangular(_AutogradFunction):
-    """``X = A⁻¹ B`` for triangular ``A``, differentiable in ``A`` and ``B``.
-
-    The engine's solve records no gradient, so a loss through it lost the
-    solve's contribution without a word — and ``cholesky``'s backward, two
-    of these solves, came back detached under ``create_graph=True``.  The
-    backward is one more triangular solve and a product, both through this
-    Function, so it differentiates again.
-    """
-
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx, A: Tensor, B: Tensor, upper: bool, unitriangular: bool
-    ) -> Tensor:
-        ctx.shapes = (tuple(A.shape), tuple(B.shape))
-        # The engine pairs batches one to one, so a single triangle against
-        # a batch of right-hand sides — or any other broadcast — is spelled
-        # out first.  Left to the engine it returned the wrong values.
-        batch = _broadcast_batch(tuple(A.shape[:-2]), tuple(B.shape[:-2]))
-        A = A.expand(*batch, *A.shape[-2:])
-        B = B.expand(*batch, *B.shape[-2:])
-        X = _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
-        ctx.save_for_backward(A, X)
-        ctx.upper = bool(upper)
-        ctx.unitriangular = bool(unitriangular)
-        return X
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> tuple[Tensor, Tensor]:
-        A, X = ctx.saved_tensors
-        upper = cast(bool, ctx.upper)
-        unit = cast(bool, ctx.unitriangular)
-        a_shape, b_shape = cast(tuple[tuple[int, ...], tuple[int, ...]], ctx.shapes)
-        # dB = A⁻ᵀ G — Aᵀ is triangular the other way round.
-        grad_B = cast(Tensor, _SolveTriangular.apply(A.mT, grad_out, not upper, unit))
-        # dA = −dB Xᵀ, on the triangle the solve read; a unit diagonal is
-        # assumed rather than read, so it takes no gradient either.
-        grad_A = -lucid.matmul(grad_B, X.mT)
-        grad_A = (
-            lucid.triu(grad_A, 1 if unit else 0)
-            if upper
-            else lucid.tril(grad_A, -1 if unit else 0)
-        )
-        return _sum_to(grad_A, a_shape), _sum_to(grad_B, b_shape)
 
 
 def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:

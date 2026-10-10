@@ -5,7 +5,13 @@
 // Forward: dispatches to IBackend::linalg_solve() via Dispatcher.
 //   CPU path: LAPACK dgesv performs LU factorisation of A (in-place) followed
 //             by the forward and backward substitution steps to solve AX = B.
-//   GPU path: mlx::core::linalg::solve() on the CPU stream.
+//   GPU path: GpuBackend::linalg_solve (LU inverse on the MLX CPU stream).
+//
+// Shape: ``solve_rhs_contract`` (``_Detail.h``) reads B, broadcasts the
+// batch and refuses any other shape before the backend is reached.  The
+// backward node is wired on the aligned ``(batch, n, n)`` / ``(batch, n, k)``
+// operands; the broadcast and the vector axis are differentiable views around
+// it, so their gradients are reduced by their own nodes.
 //
 // Backward:
 //   Given upstream gradient G = ∂L/∂X:
@@ -45,39 +51,38 @@ namespace lucid {
 // sense.  AmpPolicy::KeepInput prevents lossy dtype promotion before the solve.
 const OpSchema SolveBackward::schema_v1{"solve", 1, AmpPolicy::KeepInput};
 
-// Backward pass for solve_op.
+namespace {
+
+// The factor-and-solve on operands ``solve_rhs_contract`` already aligned:
+// ``a`` is ``(batch, n, n)`` and ``b`` is ``(batch, n, k)`` with the same
+// batch, so the backward node only ever sees matrix right-hand sides and
+// needs no broadcast bookkeeping of its own.
+TensorImplPtr solve_aligned(const TensorImplPtr& a, const TensorImplPtr& b) {
+    Storage out_storage =
+        backend::Dispatcher::for_device(a->device())
+            .linalg_solve(a->storage(), b->storage(), a->shape(), b->shape(), a->dtype());
+    auto out = linalg_detail::fresh(std::move(out_storage), b->shape(), a->dtype(), a->device());
+    auto bwd = std::make_shared<SolveBackward>();
+    bwd->saved_output_ = out->storage();
+    kernel::NaryKernel<SolveBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out, true);
+    return out;
+}
+
+}  // namespace
+
+// dB = solve(Aᵀ, G) and dA = -dB Xᵀ, on the aligned operands.
 //
-// Given upstream gradient G = ∂L/∂X:
-//   ∂L/∂B = solve(Aᵀ, G)     — solving the transpose system
-//   ∂L/∂A = -(∂L/∂B) Xᵀ     — outer product of the two gradients
-//
-// Derivation:
-//   Differentiate AX = B with respect to each input:
-//     d/dB: A dX = dB  =>  dX = A⁻¹ dB  =>  ∂L/∂B = (A⁻¹)ᵀ G = (Aᵀ)⁻¹ G
-//     d/dA: (dA) X + A dX = 0  =>  dX = -A⁻¹ (dA) X
-//           =>  ∂L/∂A = -G Xᵀ (A⁻ᵀ)ᵀ ... with the result from dB inserted:
-//           ∂L/∂A = -(∂L/∂B) Xᵀ
-//
-// The result is returned as {∂L/∂A, ∂L/∂B} to align with the input ordering
-// [A=0, B=1] that NaryKernel uses when distributing gradients.
+// Differentiating A X = B: A dX = dB - dA X, so for an upstream G the
+// adjoint is dB = A⁻ᵀ G and dA = -dB Xᵀ.  Gradients are returned in the
+// input order [A, B].
 std::vector<Storage> SolveBackward::apply(Storage grad_out) {
     NoGradGuard ng;
     using ::lucid::helpers::fresh;
-
-    // Recover A (saved input), G (upstream gradient), and X (saved output).
     auto A = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
     auto dX = fresh(std::move(grad_out), out_shape_, dtype_, device_);
     auto X = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
-
-    // Transpose of A; needed to solve the adjoint system Aᵀ dB = G.
-    auto AT = mT_op(A);
-    // ∂L/∂B = solve(Aᵀ, G)
-    auto dB = solve_op(AT, dX);
-
-    // ∂L/∂A = -dB @ Xᵀ
-    auto XT = mT_op(X);
-    auto dA = neg_op(matmul_op(dB, XT));
-    // Return in input order: [dA, dB]
+    auto dB = solve_aligned(mT_op(A), dX);
+    auto dA = neg_op(matmul_op(dB, mT_op(X)));
     return {dA->storage(), dB->storage()};
 }
 
@@ -86,41 +91,26 @@ std::vector<TensorImplPtr> SolveBackward::apply_for_graph(const TensorImplPtr& g
     const auto& b = saved_impl_inputs_[1];
     if (!a || !b)
         ErrorBuilder("solve").fail("graph-mode backward is missing its saved inputs");
-    auto dB = solve_op(mT_op(a), grad_out);
-    auto dA = neg_op(matmul_op(dB, mT_op(solve_op(a, b))));
+    auto dB = solve_aligned(mT_op(a), grad_out);
+    auto dA = neg_op(matmul_op(dB, mT_op(solve_aligned(a, b))));
     return {dA, dB};
 }
 
-// Register SolveBackward for graph serialisation and engine lookup.
 LUCID_REGISTER_OP(SolveBackward)
 
-// Solve AX = B for X.
-//
-// The output has the same shape as B.  save_inputs=true is required because
-// SolveBackward needs A to call solve(Aᵀ, G) in the backward pass.
-// save_inputs also implicitly saves B (via NaryKernel), but B is not accessed
-// in the backward — only A (index 0) and the saved output X are used.
 TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    using namespace linalg_detail;
     Validator::input(a, "solve.a").float_only().square_2d();
     Validator::pair(a, b, "solve").same_dtype().same_device();
-    OpScopeFull scope{"solve", a->device(), a->dtype(), a->shape()};
+    const SolveRhs rhs = solve_rhs_contract(a->shape(), b->shape(), "solve");
+    OpScopeFull scope{"solve", a->device(), a->dtype(), rhs.a_shape};
 
-    // A degenerate matrix has an answer; LAPACK just will not be the one
-    // to compute it — see ``empty_matrix``.
-    if (linalg_detail::empty_matrix(a->shape()))
-        return zeros_op(b->shape(), a->dtype(), a->device());
+    // An empty system has an empty solution; LAPACK will not be the one to
+    // say so — see ``empty_matrix``.
+    if (shape_numel(rhs.a_shape) == 0 || shape_numel(rhs.b_shape) == 0)
+        return zeros_op(rhs.out_shape, a->dtype(), a->device());
 
-    Storage out_storage =
-        backend::Dispatcher::for_device(a->device())
-            .linalg_solve(a->storage(), b->storage(), a->shape(), b->shape(), a->dtype());
-    // The output takes the shape of B (= X), not A.
-    auto out = linalg_detail::fresh(std::move(out_storage), b->shape(), a->dtype(), a->device());
-    auto bwd = std::make_shared<SolveBackward>();
-    // Save X so the backward can form -dB @ Xᵀ.
-    bwd->saved_output_ = out->storage();
-    // save_inputs=true: SolveBackward needs A (saved_inputs_[0]) to form solve(Aᵀ, grad).
-    kernel::NaryKernel<SolveBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out, true);
-    return out;
+    return restore_rhs(solve_aligned(align_to(a, rhs.a_shape), align_rhs(b, rhs)), rhs);
 }
 
 }  // namespace lucid

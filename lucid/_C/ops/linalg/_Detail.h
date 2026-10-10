@@ -24,9 +24,11 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -43,6 +45,9 @@
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/fwd.h"
+#include "../../kernel/BinaryKernel.h"
+#include "../utils/Layout.h"
+#include "../utils/View.h"
 
 namespace lucid::linalg_detail {
 
@@ -304,6 +309,80 @@ inline void check_lapack_info(int info, const char* op) {
         ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
     if (info > 0)
         ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
+}
+
+// How a right-hand side B is read against a square A in ``solve``,
+// ``lu_solve`` and ``solve_triangular`` — the one place that decides it.
+//
+// The backends pair matrices one to one: they take the batch count from A,
+// the column count from B's last axis, and walk both buffers in lockstep.
+// Anything the caller did not align first was read wrongly — a single A
+// against a batch of B solved only the first batch, a B with the wrong row
+// count was solved anyway (and indexed past A's batch), and a batch of
+// vectors had its batch axis taken for the column count.  So the shape is
+// settled here, before any backend sees it:
+//
+// - B is a vector right-hand side when it is 1-D, or when its shape is
+//   exactly ``A.shape[:-1]`` (one vector per matrix).  It is solved as a
+//   single column and handed back without that column.
+// - Otherwise B must be ``(*, n, k)`` with ``n = A.shape[-1]``.
+// - The batch axes of A and B broadcast against each other.
+//
+// Any other B is refused with ``ShapeMismatch`` here, so no LAPACK or MLX
+// call ever receives operands whose extents disagree.
+struct SolveRhs {
+    bool vector = false;
+    Shape a_shape;    // batch + (n, n): A as the backend receives it
+    Shape b_shape;    // batch + (n, k): B as the backend receives it
+    Shape out_shape;  // the solution's shape as returned to the caller
+};
+
+inline SolveRhs solve_rhs_contract(const Shape& a, const Shape& b, const char* op) {
+    const std::size_t ra = a.size();
+    const std::int64_t n = a[ra - 1];
+    SolveRhs rhs;
+    rhs.vector = b.size() == 1 || (b.size() + 1 == ra && std::equal(b.begin(), b.end(), a.begin()));
+    Shape b_mat = b;
+    if (rhs.vector)
+        b_mat.push_back(1);
+    if (b_mat.size() < 2 || b_mat[b_mat.size() - 2] != n)
+        throw ShapeMismatch(Shape{n, b.empty() ? 1 : b.back()}, b,
+                            std::string(op) +
+                                ": B must be (*, n, k), or (*, n) as a vector right-hand "
+                                "side, with n = A.shape[-1]");
+    const Shape a_batch(a.begin(), a.end() - 2);
+    const Shape b_batch(b_mat.begin(), b_mat.end() - 2);
+    auto batch = ::lucid::detail::try_broadcast_shapes(a_batch, b_batch);
+    if (batch.is_err())
+        throw ShapeMismatch(a_batch, b_batch,
+                            std::string(op) + ": batch dimensions of A and B do not broadcast");
+    rhs.a_shape = batch.value();
+    rhs.a_shape.push_back(n);
+    rhs.a_shape.push_back(n);
+    rhs.b_shape = batch.value();
+    rhs.b_shape.push_back(n);
+    rhs.b_shape.push_back(b_mat.back());
+    rhs.out_shape = rhs.b_shape;
+    if (rhs.vector)
+        rhs.out_shape.pop_back();
+    return rhs;
+}
+
+// ``t`` broadcast to ``shape`` — a no-op when it already has it.  The
+// broadcast records its own (reducing) backward, so a solve node built on
+// the aligned operands never has to know the caller broadcast at all.
+inline TensorImplPtr align_to(const TensorImplPtr& t, const Shape& shape) {
+    return t->shape() == shape ? t : expand_op(t, shape);
+}
+
+// B as the ``(batch, n, k)`` matrix the backend receives.
+inline TensorImplPtr align_rhs(const TensorImplPtr& b, const SolveRhs& rhs) {
+    return align_to(rhs.vector ? unsqueeze_op(b, -1) : b, rhs.b_shape);
+}
+
+// The aligned solution in the shape the caller's B asked for.
+inline TensorImplPtr restore_rhs(const TensorImplPtr& x, const SolveRhs& rhs) {
+    return rhs.vector ? squeeze_op(x, -1) : x;
 }
 
 }  // namespace lucid::linalg_detail

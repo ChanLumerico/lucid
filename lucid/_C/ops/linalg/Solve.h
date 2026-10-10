@@ -27,10 +27,12 @@
 //
 // Shape
 // -----
-// - $A$: ``(..., N, N)`` — leading batch dims iterate independently.
-// - $B$: ``(..., N)`` for a single RHS, or ``(..., N, K)`` for $K$
-//   simultaneous right-hand sides.
-// - $X$: same shape as $B$.
+// - $A$: ``(*, N, N)``.
+// - $B$: ``(*, N, K)``, or a vector right-hand side — 1-D ``(N,)``, or
+//   exactly ``A.shape[:-1]`` (one vector per matrix).
+// - The batch axes of $A$ and $B$ broadcast; $X$ is ``(*batch, N, K)``, or
+//   ``(*batch, N)`` for a vector right-hand side.  Any other $B$ raises
+//   ``ShapeMismatch`` (see ``solve_rhs_contract``).
 //
 // Notes
 // -----
@@ -64,12 +66,12 @@ namespace lucid {
 
 // Autograd node for the general linear solve $AX = B$.
 //
-// The forward saves $A$ as ``saved_inputs_[0]`` (required to build
-// $A^\top$ for the adjoint solve) and the solution $X$ as
+// Wired on the operands after the shape contract aligned them —
+// ``(batch, N, N)`` and ``(batch, N, K)`` — so it never sees a vector or a
+// broadcast.  The forward saves $A$ as ``saved_inputs_[0]`` (required to
+// build $A^\top$ for the adjoint solve) and the solution $X$ as
 // ``saved_output_`` (required for the outer-product step that yields
-// $\partial L / \partial A$).  Although $B$ is technically saved by
-// ``NaryKernel`` when ``save_inputs=true``, the backward never reads
-// it.
+// $\partial L / \partial A$).
 //
 // Math
 // ----
@@ -141,12 +143,16 @@ public:
 //
 // Shape
 // -----
-// - ``a``: ``(..., N, N)``.
-// - ``b``: ``(..., N)`` or ``(..., N, K)``.
-// - Output: same shape as ``b``.
+// - ``a``: ``(*, N, N)``.
+// - ``b``: ``(*, N, K)``, ``(N,)``, or ``a.shape[:-1]`` (vector RHS).
+// - Output: the broadcast batch followed by ``(N, K)``, or ``(N,)`` for a
+//   vector RHS.
 //
 // Raises
 // ------
+// ShapeMismatch
+//     When ``b`` is none of the shapes above, or the batch axes of ``a``
+//     and ``b`` do not broadcast — before any backend call.
 // LinAlgError
 //     When ``a`` is not square, not float-typed, when dtypes/devices
 //     mismatch between ``a`` and ``b``, or when $A$ is singular
@@ -165,7 +171,7 @@ public:
 // See Also
 // --------
 // [[lu_factor_op]] : Standalone LU factorisation (no autograd).
-// [[lu_solve_op]]  : Apply pre-computed LU factors (no autograd).
+// [[lu_solve_op]]  : Apply pre-computed LU factors.
 // [[matmul_op]]    : Used in the backward outer product $-dB\, X^\top$.
 //
 // References

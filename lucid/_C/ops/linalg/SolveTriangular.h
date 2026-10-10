@@ -30,27 +30,53 @@
 //
 // Notes
 // -----
-// - No autograd node is registered at the engine layer.  The Python
-//   ``lucid.linalg.solve_triangular`` wrapper composes manual transpose +
-//   triangular-solve operations to realise the reverse-mode rule
-//   $\partial B = A^{-\top}\,\partial X$ and
-//   $\partial A = -A^{-\top}\,\partial X\, X^\top$.
+// - ``B`` follows the solve family's right-hand-side contract
+//   (``solve_rhs_contract``): ``(*, N, K)``, or a vector — ``(N,)`` or
+//   exactly ``A.shape[:-1]`` — with the batch axes broadcast.  Any other
+//   ``B`` raises ``ShapeMismatch`` before the backend is called.
+// - Differentiable in ``A`` and ``B`` through [[SolveTriangularBackward]].
 
 #pragma once
 
 #include "../../api.h"
+#include "../../autograd/FuncOp.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
 
 namespace lucid {
 
+// Autograd node for the triangular solve $AX = B$, wired on the operands the
+// shape contract aligned (``(batch, N, N)`` and ``(batch, N, K)``).
+//
+// With $G = \partial L / \partial X$:
+// $$
+//   \frac{\partial L}{\partial B} = A^{-\top} G, \qquad
+//   \frac{\partial L}{\partial A} = \Pi\!\left(-\frac{\partial L}{\partial B}\, X^\top\right)
+// $$
+// where $\Pi$ keeps the triangle the forward read — the upper one when
+// ``upper_``, and without the diagonal when ``unitriangular_`` (that
+// diagonal is assumed, not read, so it takes no gradient).  $A^\top$ is
+// triangular the other way round, so the adjoint is one more triangular
+// solve; every step is a recorded op, so the result differentiates again.
+class LUCID_API SolveTriangularBackward : public FuncOp<SolveTriangularBackward, 2> {
+public:
+    static const OpSchema schema_v1;
+
+    bool upper_ = true;
+    bool unitriangular_ = false;
+
+    std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+};
+
 // Solve $A X = B$ for $X$ where $A$ is triangular.
 //
 // Performs a single substitution sweep through $A$; no factorisation is
-// required.  $A$ and $B$ must share the same dtype and device.  Batched
-// inputs are supported on both arguments: the trailing two dimensions are
-// treated as the matrix axes and the broadcast batch loop runs LAPACK once
-// per slice.
+// required.  $A$ and $B$ must share the same dtype and device.  The batch
+// axes of $A$ and $B$ broadcast; the backend then runs BLAS once per
+// aligned slice.
 //
 // Parameters
 // ----------
@@ -72,7 +98,7 @@ namespace lucid {
 // Returns
 // -------
 // TensorImplPtr
-//     Solution $X$ with the same shape and dtype as ``b``.
+//     Solution $X$ with the dtype of ``b`` (shape below).
 //
 // Math
 // ----
@@ -88,26 +114,26 @@ namespace lucid {
 //   \qquad
 //   \frac{\partial A}{\partial L} = -\,\frac{\partial B}{\partial L}\,X^\top,
 // $$
-// implemented in the Python wrapper.
+// implemented by [[SolveTriangularBackward]].
 //
 // Shape
 // -----
-// - ``a`` : ``(..., N, N)``.
-// - ``b`` : ``(..., N, K)`` or ``(..., N)``.
-// - return: same shape as ``b``.
+// - ``a`` : ``(*, N, N)``.
+// - ``b`` : ``(*, N, K)``, ``(N,)``, or ``a.shape[:-1]`` (vector RHS).
+// - return: the broadcast batch followed by ``(N, K)``, or ``(N,)`` for a
+//   vector RHS.
 //
 // Raises
 // ------
+// ShapeMismatch
+//     If ``b`` breaks the right-hand-side contract above — before any
+//     backend call.
 // LucidError
 //     If ``a`` is not square, if ``a`` and ``b`` have mismatched dtype or
 //     device, or if either tensor has a non-float dtype.
 //
 // A singular triangular system is not an error: the solution holds
 // $\pm\infty$ / NaN where substitution divided by a zero pivot.
-//
-// Notes
-// -----
-// No autograd node is wired; the output ``TensorImpl`` is a leaf.
 //
 // See Also
 // --------
