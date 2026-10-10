@@ -106,10 +106,8 @@ class _ConvNorm(nn.Module):
         self._act = activation
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out: Tensor = cast(
-            Tensor, self.normalization(cast(Tensor, self.convolution(x)))
-        )
+    def forward(self, x: Tensor) -> Tensor:
+        out: Tensor = self.normalization(self.convolution(x))
         if self._act:
             out = F.relu(out)
         return out
@@ -129,8 +127,8 @@ class _ResNetEmbedder(nn.Module):
         self.pool = nn.MaxPool2d(3, stride=2, padding=1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.embedder(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.embedder(x)
         return cast(Tensor, self.pool(x))
 
 
@@ -165,9 +163,9 @@ class _ResNetBottleneck(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
-        out: Tensor = cast(Tensor, self.layer(x))
+        out: Tensor = self.layer(x)
         return F.relu(out + identity)
 
 
@@ -193,8 +191,8 @@ class _ResNetStage(nn.Module):
         self.out_channels: int = out_ch
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.layers(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.layers(x)
 
 
 @final
@@ -218,7 +216,7 @@ class _ResNetEncoderStages(nn.Module):
         ]
 
     @override
-    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> list[Tensor]:
         feats: list[Tensor] = []
         out = x
         for stage in self.stages:
@@ -247,8 +245,8 @@ class _ResNetBackbone(nn.Module):
         self.out_channels: list[int] = self.encoder.out_channels
 
     @override
-    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.embedder(x))
+    def forward(self, x: Tensor) -> list[Tensor]:
+        x = self.embedder(x)
         return self.encoder.forward(x)
 
 
@@ -291,13 +289,13 @@ class _FPNLayer(nn.Module):
         self.block = _FPNConvLayer(in_features, in_features)
 
     @override
-    def forward(self, down: Tensor, left: Tensor) -> Tensor:  # type: ignore[override]
-        left = cast(Tensor, self.proj(left))
+    def forward(self, down: Tensor, left: Tensor) -> Tensor:
+        left = self.proj(left)
         h = int(left.shape[2])
         w = int(left.shape[3])
         down = F.interpolate(down, size=(h, w), mode="nearest")
         down = down + left
-        return cast(Tensor, self.block(down))
+        return self.block(down)
 
 
 @final
@@ -321,11 +319,11 @@ class _FPNModel(nn.Module):
         )
 
     @override
-    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
         fpn_features: list[Tensor] = []
         last_feature = features[-1]
         other_features = features[:-1]
-        output: Tensor = cast(Tensor, self.stem(last_feature))
+        output: Tensor = self.stem(last_feature)
         rev = other_features[::-1]
         for i, layer in enumerate(self.layers):
             output = cast(Tensor, layer(output, rev[i]))
@@ -353,9 +351,9 @@ class _FPNPixelDecoder(nn.Module):
         self.mask_projection = nn.Conv2d(feature_size, mask_feature_size, 3, padding=1)
 
     @override
-    def forward(self, features: list[Tensor]) -> Tensor:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> Tensor:
         fpn_features = self.fpn.forward(features)
-        return cast(Tensor, self.mask_projection(fpn_features[-1]))
+        return self.mask_projection(fpn_features[-1])
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +385,7 @@ class _SinePositionEmbedding(nn.Module):
         self.eps = eps
 
     @override
-    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
+    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:
         npf = self.num_position_features
         ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
         y_embed = ones.cumsum(dim=1)
@@ -445,7 +443,7 @@ class _Attention(nn.Module):
         return x.reshape(B, L, self.n_head, self.head_dim).permute(0, 2, 1, 3)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         query_input: Tensor,  # (B, Lq, d) — query stream (+ query pos)
         key_input: Tensor,  # (B, Lk, d) — key stream (+ key pos)
@@ -455,16 +453,16 @@ class _Attention(nn.Module):
         Lq = int(query_input.shape[1])
         Lk = int(key_input.shape[1])
 
-        q = self._split(cast(Tensor, self.q_proj(query_input)), B, Lq)
-        k = self._split(cast(Tensor, self.k_proj(key_input)), B, Lk)
-        v = self._split(cast(Tensor, self.v_proj(value_input)), B, Lk)
+        q = self._split(self.q_proj(query_input), B, Lq)
+        k = self._split(self.k_proj(key_input), B, Lk)
+        v = self._split(self.v_proj(value_input), B, Lk)
 
         # (B, h, Lq, hd) @ (B, h, hd, Lk) → (B, h, Lq, Lk)
         attn = lucid.matmul(q * self.scaling, k.permute(0, 1, 3, 2))
         attn = F.softmax(attn, dim=-1)
         out = lucid.matmul(attn, v)  # (B, h, Lq, hd)
         out = out.permute(0, 2, 1, 3).reshape(B, Lq, self.n_head * self.head_dim)
-        return cast(Tensor, self.o_proj(out))
+        return self.o_proj(out)
 
 
 @final
@@ -477,8 +475,8 @@ class _DecoderMLP(nn.Module):
         self.fc2 = nn.Linear(dim_ff, d_model)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.fc2(F.relu(cast(Tensor, self.fc1(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.fc2(F.relu(self.fc1(x)))
 
 
 @final
@@ -509,7 +507,7 @@ class _DecoderLayer(nn.Module):
         self.dropout3 = nn.Dropout(p=dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,  # (B, N, d) query stream
         memory: Tensor,  # (B, S, d) encoder features
@@ -520,8 +518,8 @@ class _DecoderLayer(nn.Module):
         residual = hidden
         q_in = _with_pos(hidden, query_pos)
         hidden = self.self_attn.forward(q_in, q_in, hidden)
-        hidden = residual + cast(Tensor, self.dropout1(hidden))
-        hidden = cast(Tensor, self.self_attn_layer_norm(hidden))
+        hidden = residual + self.dropout1(hidden)
+        hidden = self.self_attn_layer_norm(hidden)
 
         # Cross-attention (query pos to Q, spatial pos to K, plain memory V).
         residual = hidden
@@ -530,14 +528,14 @@ class _DecoderLayer(nn.Module):
             _with_pos(memory, spatial_pos),
             memory,
         )
-        hidden = residual + cast(Tensor, self.dropout2(hidden))
-        hidden = cast(Tensor, self.encoder_attn_layer_norm(hidden))
+        hidden = residual + self.dropout2(hidden)
+        hidden = self.encoder_attn_layer_norm(hidden)
 
         # Feed-forward.
         residual = hidden
-        hidden = cast(Tensor, self.mlp(hidden))
-        hidden = residual + cast(Tensor, self.dropout3(hidden))
-        hidden = cast(Tensor, self.final_layer_norm(hidden))
+        hidden = self.mlp(hidden)
+        hidden = residual + self.dropout3(hidden)
+        hidden = self.final_layer_norm(hidden)
         return hidden
 
 
@@ -560,7 +558,7 @@ class _TransformerDecoder(nn.Module):
         self.layernorm = nn.LayerNorm(d_model)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         memory: Tensor,
@@ -577,7 +575,7 @@ class _TransformerDecoder(nn.Module):
         stages: list[Tensor] = []
         for layer in self.layers:
             out = cast(Tensor, layer(out, memory, spatial_pos, query_pos))
-            stages.append(cast(Tensor, self.layernorm(out)))
+            stages.append(self.layernorm(out))
         return stages
 
 
@@ -620,8 +618,8 @@ class _TransformerModule(nn.Module):
         self.decoder = _TransformerDecoder(d_model, n_head, dim_ff, depth, dropout)
 
     @override
-    def forward(self, image_features: Tensor) -> list[Tensor]:  # type: ignore[override]
-        feat: Tensor = cast(Tensor, self.input_projection(image_features))
+    def forward(self, image_features: Tensor) -> list[Tensor]:
+        feat: Tensor = self.input_projection(image_features)
         B = int(feat.shape[0])
         c = int(feat.shape[1])
         h = int(feat.shape[2])
@@ -664,7 +662,7 @@ class _PixelLevelModule(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         features = self.encoder.forward(x)
         pixel_embeddings = self.decoder.forward(features)
         # (C5 raw backbone feature, per-pixel mask features)
@@ -953,7 +951,7 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
         self.mask_embedder = _MaskEmbedder(d, d)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: dict[str, Tensor] | None = None,
@@ -990,9 +988,9 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
 
         def _predict(stage: Tensor) -> tuple[Tensor, Tensor]:
             # 3. Class predictions: (B, N, K+1)
-            cls_l: Tensor = cast(Tensor, self.class_predictor(stage))
+            cls_l: Tensor = self.class_predictor(stage)
             # 4. Mask predictions: einsum("bqc,bchw->bqhw") via matmul
-            m_embed: Tensor = cast(Tensor, self.mask_embedder(stage))  # (B, N, d)
+            m_embed: Tensor = self.mask_embedder(stage)  # (B, N, d)
             m_flat: Tensor = lucid.matmul(m_embed, pixel_flat)  # (B, N, S)
             return cls_l, m_flat.reshape(B, N, fH, fW)
 

@@ -216,10 +216,8 @@ class _ConvBnLeaky(nn.Module):
         self.bn = nn.BatchNorm2d(out_ch)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.leaky_relu(
-            cast(Tensor, self.bn(cast(Tensor, self.conv(x)))), negative_slope=0.1
-        )
+    def forward(self, x: Tensor) -> Tensor:
+        return F.leaky_relu(self.bn(self.conv(x)), negative_slope=0.1)
 
 
 @final
@@ -233,8 +231,8 @@ class _Dark53Block(nn.Module):
         self.conv2 = _ConvBnLeaky(mid_ch, in_ch, 3)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return x + cast(Tensor, self.conv2(cast(Tensor, self.conv1(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        return x + self.conv2(self.conv1(x))
 
 
 def _make_dark53_stage(
@@ -289,10 +287,10 @@ class _Darknet53(nn.Module):
         self.stage5_blocks = nn.Sequential(*[_Dark53Block(1024) for _ in range(4)])
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.conv1(cast(Tensor, self.conv0(x))))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        x = self.conv1(self.conv0(x))
 
-        x = cast(Tensor, self.stage1_blocks(x))
+        x = self.stage1_blocks(x)
         x = cast(Tensor, self.down1(x))
 
         # The detection taps come *after* their residual stack, not before the
@@ -300,18 +298,18 @@ class _Darknet53(nn.Module):
         # (stride 8) and the 8×512 stage (stride 16).  Tapping a stage early
         # yields stride-4/8 maps that the decoder then scales by 8/16, doubling
         # every predicted centre.
-        x = cast(Tensor, self.stage2_blocks(x))
+        x = self.stage2_blocks(x)
         x = cast(Tensor, self.down2(x))
 
-        x = cast(Tensor, self.stage3_blocks(x))
+        x = self.stage3_blocks(x)
         p3_raw = x  # (B, 256, H/8, W/8)
         x = cast(Tensor, self.down3(x))
 
-        x = cast(Tensor, self.stage4_blocks(x))
+        x = self.stage4_blocks(x)
         p4_raw = x  # (B, 512, H/16, W/16)
         x = cast(Tensor, self.down4(x))
 
-        p5 = cast(Tensor, self.stage5_blocks(x))  # (B, 1024, H/32, W/32)
+        p5 = self.stage5_blocks(x)  # (B, 1024, H/32, W/32)
 
         return p3_raw, p4_raw, p5
 
@@ -356,19 +354,19 @@ class _Darknet53Tiny(nn.Module):
         self.conv8 = _ConvBnLeaky(1024, 256, 1)  # bottleneck before P5 head
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.pool1(cast(Tensor, self.conv1(x))))
-        x = cast(Tensor, self.pool2(cast(Tensor, self.conv2(x))))
-        x = cast(Tensor, self.pool3(cast(Tensor, self.conv3(x))))
-        x = cast(Tensor, self.pool4(cast(Tensor, self.conv4(x))))
-        x = cast(Tensor, self.conv5(x))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        x = cast(Tensor, self.pool1(self.conv1(x)))
+        x = cast(Tensor, self.pool2(self.conv2(x)))
+        x = cast(Tensor, self.pool3(self.conv3(x)))
+        x = cast(Tensor, self.pool4(self.conv4(x)))
+        x = self.conv5(x)
         p4_raw = x  # (B, 256, H/16, W/16)
         x = cast(Tensor, self.pool5(x))
-        x = cast(Tensor, self.conv6(x))
+        x = self.conv6(x)
         x = F.pad(x, (0, 1, 0, 1), mode="constant", value=_NEG_FILL)
         x = cast(Tensor, self.pool6(x))
-        x = cast(Tensor, self.conv7(x))
-        p5 = cast(Tensor, self.conv8(x))  # (B, 256, H/32, W/32)
+        x = self.conv7(x)
+        p5 = self.conv8(x)  # (B, 256, H/32, W/32)
         return p4_raw, p5
 
 
@@ -987,7 +985,7 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
         self.p3_compress, self.p3_predict = _make_detection_head(128 + 256, 128, nA, C)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -1011,28 +1009,26 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
         p3_raw, p4_raw, p5 = self.backbone.forward(x)
 
         # P5 branch
-        p5_feat = cast(Tensor, self.p5_compress(p5))  # (B, 512, H/32, W/32)
-        p5_raw = cast(Tensor, self.p5_predict(p5_feat))  # (B, nA*(5+C), H/32, W/32)
+        p5_feat = self.p5_compress(p5)  # (B, 512, H/32, W/32)
+        p5_raw = self.p5_predict(p5_feat)  # (B, nA*(5+C), H/32, W/32)
 
         # P4 branch: upsample P5 → concat with P4_raw
-        p5_up = cast(Tensor, self.p5_to_p4_conv(p5_feat))  # (B, 256, H/32, W/32)
+        p5_up = self.p5_to_p4_conv(p5_feat)  # (B, 256, H/32, W/32)
         fH4 = int(p4_raw.shape[2])
         fW4 = int(p4_raw.shape[3])
         p5_up = F.interpolate(p5_up, size=(fH4, fW4), mode="nearest")
         p4_cat = lucid.cat([p5_up, p4_raw], dim=1)  # (B, 256+512, H/16, W/16)
-        p4_feat = cast(Tensor, self.p4_compress(p4_cat))  # (B, 256, H/16, W/16)
-        p4_raw_pred = cast(
-            Tensor, self.p4_predict(p4_feat)
-        )  # (B, nA*(5+C), H/16, W/16)
+        p4_feat = self.p4_compress(p4_cat)  # (B, 256, H/16, W/16)
+        p4_raw_pred = self.p4_predict(p4_feat)  # (B, nA*(5+C), H/16, W/16)
 
         # P3 branch: upsample P4 → concat with P3_raw
-        p4_up = cast(Tensor, self.p4_to_p3_conv(p4_feat))  # (B, 128, H/16, W/16)
+        p4_up = self.p4_to_p3_conv(p4_feat)  # (B, 128, H/16, W/16)
         fH3 = int(p3_raw.shape[2])
         fW3 = int(p3_raw.shape[3])
         p4_up = F.interpolate(p4_up, size=(fH3, fW3), mode="nearest")
         p3_cat = lucid.cat([p4_up, p3_raw], dim=1)  # (B, 128+256, H/8, W/8)
-        p3_feat = cast(Tensor, self.p3_compress(p3_cat))  # (B, 128, H/8, W/8)
-        p3_raw_pred = cast(Tensor, self.p3_predict(p3_feat))  # (B, nA*(5+C), H/8, W/8)
+        p3_feat = self.p3_compress(p3_cat)  # (B, 128, H/8, W/8)
+        p3_raw_pred = self.p3_predict(p3_feat)  # (B, nA*(5+C), H/8, W/8)
 
         # raw_preds order: P5, P4, P3 (from coarse to fine)
         raw_preds = [p5_raw, p4_raw_pred, p3_raw_pred]
@@ -1186,7 +1182,7 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -1196,17 +1192,17 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
 
         p4_raw, p5 = self.backbone.forward(x)
 
-        p5_feat = cast(Tensor, self.p5_compress(p5))
-        p5_raw_pred = cast(Tensor, self.p5_predict(p5_feat))
+        p5_feat = self.p5_compress(p5)
+        p5_raw_pred = self.p5_predict(p5_feat)
 
         # Route off the bottleneck ``p5``, not the expanded ``p5_feat``.
-        p5_up = cast(Tensor, self.p5_to_p4_conv(p5))
+        p5_up = self.p5_to_p4_conv(p5)
         fH4 = int(p4_raw.shape[2])
         fW4 = int(p4_raw.shape[3])
         p5_up = F.interpolate(p5_up, size=(fH4, fW4), mode="nearest")
         p4_cat = lucid.cat([p5_up, p4_raw], dim=1)
-        p4_feat = cast(Tensor, self.p4_compress(p4_cat))
-        p4_raw_pred = cast(Tensor, self.p4_predict(p4_feat))
+        p4_feat = self.p4_compress(p4_cat)
+        p4_raw_pred = self.p4_predict(p4_feat)
 
         raw_preds = [p5_raw_pred, p4_raw_pred]
         # yolov3-tiny.cfg masks: 3,4,5 on the stride-32 head, 0,1,2 on the

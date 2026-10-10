@@ -111,13 +111,11 @@ class _ConvFeatures(nn.Module):
         # zero-input trace at construction settles it exactly.
         with lucid.no_grad():
             probe = lucid.zeros((1, in_channels, roi_size, roi_size))
-            self.out_dim: int = int(
-                cast(Tensor, self.features(probe)).flatten(1).shape[1]
-            )
+            self.out_dim: int = int(self.features(probe).flatten(1).shape[1])
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.features(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.features(x)
         return x.flatten(1)  # (N, 9216)
 
 
@@ -164,13 +162,13 @@ class _FCHead(nn.Module):
         self.bbox_head = nn.Linear(feat_dim, num_classes * 4)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         pool5 = x
-        x = F.relu(cast(Tensor, self.fc6(x)))
-        x = cast(Tensor, self.drop(x))
-        x = F.relu(cast(Tensor, self.fc7(x)))
-        x = cast(Tensor, self.drop(x))
-        return cast(Tensor, self.cls_head(x)), cast(Tensor, self.bbox_head(pool5))
+        x = F.relu(self.fc6(x))
+        x = self.drop(x)
+        x = F.relu(self.fc7(x))
+        x = self.drop(x)
+        return self.cls_head(x), self.bbox_head(pool5)
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +453,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
         return cls_loss, reg_loss
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         proposals: list[Tensor] | None = None,
@@ -519,7 +517,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
             crops = self._warp_proposals(img, props)  # (N_i, C, S, S)
 
             # 2. Extract CNN features
-            feats = cast(Tensor, self.conv_features(crops))  # (N_i, 9216)
+            feats = self.conv_features(crops)  # (N_i, 9216)
 
             # 3. FC head → class logits + bbox deltas
             logits_i, deltas_i = self.fc_head(feats)

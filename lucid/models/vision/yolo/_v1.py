@@ -385,12 +385,12 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         C = cfg.num_classes
         batch = int(x.shape[0])
 
-        feat = cast(Tensor, self.darknet(x))  # (N, ch, H', W')
-        feat = cast(Tensor, self.pool(feat))  # (N, ch, S, S)
+        feat = self.darknet(x)  # (N, ch, H', W')
+        feat = self.pool(feat)  # (N, ch, S, S)
         feat = feat.flatten(1)  # (N, ch*S*S)
-        feat = cast(Tensor, self.act1(cast(Tensor, self.fc1(feat))))
-        feat = cast(Tensor, self.drop(feat))
-        feat = cast(Tensor, self.fc2(feat))  # (N, S*S*(B*5+C))
+        feat = self.act1(self.fc1(feat))
+        feat = self.drop(feat)
+        feat = self.fc2(feat)  # (N, S*S*(B*5+C))
         return feat.reshape(batch, S, S, B_boxes * 5 + C)
 
     def _decode_predictions(
@@ -703,7 +703,7 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         return lucid.cat(loss_parts).mean()
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,

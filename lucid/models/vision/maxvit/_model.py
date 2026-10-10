@@ -238,7 +238,7 @@ class _RelPosBias(nn.Module):
         )
 
     @override
-    def forward(self) -> Tensor:  # type: ignore[override]
+    def forward(self) -> Tensor:
         """Return bias tensor of shape (1, num_heads, ws², ws²)."""
         table = self.relative_position_bias_table  # (H, T, T)
         n = self._n
@@ -277,20 +277,18 @@ class _AttnCl(nn.Module):
         self.proj = nn.Linear(dim, dim)
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, key_valid: Tensor | None = None
-    ) -> Tensor:
+    def forward(self, x: Tensor, key_valid: Tensor | None = None) -> Tensor:
         # x: (B, N, C)  where B may be a compound batch
         B, N, C = x.shape
         H = self.num_heads
         hd = self.head_dim
 
-        qkv = cast(Tensor, self.qkv(x))  # (B, N, 3C)
+        qkv = self.qkv(x)  # (B, N, 3C)
         qkv = qkv.reshape(B, N, 3, H, hd).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, H, N, hd)
 
         # Fused SDPA with the relative-position bias as an additive mask.
-        bias = cast(Tensor, self.rel_pos())  # (1, H, N, N)
+        bias = self.rel_pos()  # (1, H, N, N)
         if key_valid is not None:
             # Non-divisible feature maps are zero-padded before partitioning,
             # and a zero row is not "absent" — it is a key with a real
@@ -303,7 +301,7 @@ class _AttnCl(nn.Module):
             bias = bias + pad_bias
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
-        return cast(Tensor, self.proj(out))
+        return self.proj(out)
 
 
 # ---------------------------------------------------------------------------
@@ -323,10 +321,10 @@ class _MLP(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.fc1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.fc1(x)
         x = F.gelu(x, approximate="tanh")
-        return cast(Tensor, self.fc2(x))
+        return self.fc2(x)
 
 
 # ---------------------------------------------------------------------------
@@ -363,14 +361,10 @@ class _PartitionAttn(nn.Module):
         self.drop_path2 = DropPath(drop_path_rate)
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, key_valid: Tensor | None = None
-    ) -> Tensor:
-        attended = self.attn.forward(cast(Tensor, self.norm1(x)), key_valid)
-        x = x + cast(Tensor, self.drop_path1(attended))
-        x = x + cast(
-            Tensor, self.drop_path2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
-        )
+    def forward(self, x: Tensor, key_valid: Tensor | None = None) -> Tensor:
+        attended = self.attn.forward(self.norm1(x), key_valid)
+        x = x + self.drop_path1(attended)
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
 
 
@@ -394,11 +388,11 @@ class _SE(nn.Module):
         self.fc2 = nn.Conv2d(se_mid, expanded_dim, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W)
         s = F.adaptive_avg_pool2d(x, (1, 1))
-        s = F.silu(cast(Tensor, self.fc1(s)))
-        s = F.sigmoid(cast(Tensor, self.fc2(s)))
+        s = F.silu(self.fc1(s))
+        s = F.sigmoid(self.fc2(s))
         return x * s
 
 
@@ -433,7 +427,7 @@ class _Shortcut(nn.Module):
             self.expand = nn.Identity()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if self._stride > 1:
             # timm's Downsample2d pools with TF-SAME geometry, matching the
             # main branch's Conv2dSame.  A plain floor-mode AvgPool loses the
@@ -500,24 +494,24 @@ class _MBConv(nn.Module):
         self.conv3_1x1 = nn.Conv2d(mid, out_dim, 1, bias=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # Shortcut path
         if hasattr(self, "shortcut"):
-            shortcut = cast(Tensor, self.shortcut(x))
+            shortcut = self.shortcut(x)
         else:
             shortcut = x
 
         # Main path
-        out = cast(Tensor, self.pre_norm(x))
-        out = cast(Tensor, self.conv1_1x1(out))
-        out = F.gelu(cast(Tensor, self.norm1(out)), approximate="tanh")
+        out = self.pre_norm(x)
+        out = self.conv1_1x1(out)
+        out = F.gelu(self.norm1(out), approximate="tanh")
         if self._conv2_stride > 1:
             out = _tf_same_pad2d(out, kernel_size=3, stride=self._conv2_stride)
-        out = cast(Tensor, self.conv2_kxk(out))
-        out = F.gelu(cast(Tensor, self.norm2(out)), approximate="tanh")
-        out = cast(Tensor, self.se(out))
-        out = cast(Tensor, self.conv3_1x1(out))
-        return shortcut + cast(Tensor, self.drop_path(out))
+        out = self.conv2_kxk(out)
+        out = F.gelu(self.norm2(out), approximate="tanh")
+        out = self.se(out)
+        out = self.conv3_1x1(out)
+        return shortcut + self.drop_path(out)
 
 
 # ---------------------------------------------------------------------------
@@ -561,12 +555,12 @@ class _MaxViTBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C_in, H, W)
         ws = self.ws
 
         # 1. MBConv (NCHW)
-        x = cast(Tensor, self.conv(x))
+        x = self.conv(x)
 
         B, C, H, W = x.shape
         x_cl = x.permute(0, 2, 3, 1)  # (B, H, W, C)
@@ -656,8 +650,8 @@ class _MaxViTStage(nn.Module):
         self.blocks = nn.Sequential(*block_list)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.blocks(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.blocks(x)
 
 
 # ---------------------------------------------------------------------------
@@ -674,8 +668,8 @@ class _PreLogits(nn.Module):
         self.fc = nn.Linear(in_dim, out_dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.tanh(cast(Tensor, self.fc(x)))
+    def forward(self, x: Tensor) -> Tensor:
+        return F.tanh(self.fc(x))
 
 
 # ---------------------------------------------------------------------------
@@ -712,11 +706,11 @@ def _build_maxvit(
             self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
 
         @override
-        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        def forward(self, x: Tensor) -> Tensor:
             x = _tf_same_pad2d(x, kernel_size=3, stride=2)
-            x = cast(Tensor, self.conv1(x))
-            x = F.gelu(cast(Tensor, self.norm1(x)), approximate="tanh")
-            return cast(Tensor, self.conv2(x))
+            x = self.conv1(x)
+            x = F.gelu(self.norm1(x), approximate="tanh")
+            return self.conv2(x)
 
     stem: nn.Module = _Stem(cfg.in_channels, stem_out)
 
@@ -865,7 +859,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -890,11 +884,11 @@ class _HeadNorm(nn.Module):
         self.fc = nn.Linear(pre_logits_dim, num_classes)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C) after global pool + flatten
-        x = cast(Tensor, self.norm(x))
-        x = cast(Tensor, self.pre_logits(x))
-        return cast(Tensor, self.fc(x))
+        x = self.norm(x)
+        x = self.pre_logits(x)
+        return self.fc(x)
 
 
 # ---------------------------------------------------------------------------
@@ -978,7 +972,7 @@ class MaxViTForImageClassification(ImageClassificationModel, ClassificationHeadM
         self.head.fc = nn.Linear(self.head.fc.in_features, num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -988,7 +982,7 @@ class MaxViTForImageClassification(ImageClassificationModel, ClassificationHeadM
             x = cast(Tensor, stage(x))
         # Global average pool → flatten → LayerNorm expects (B, C)
         x = F.adaptive_avg_pool2d(x, (1, 1)).flatten(1)
-        logits = cast(Tensor, self.head(x))
+        logits = self.head(x)
 
         loss: Tensor | None = None
         if labels is not None:

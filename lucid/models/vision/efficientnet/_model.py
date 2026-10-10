@@ -66,10 +66,10 @@ class _SEBlock(nn.Module):
         self.fc2 = nn.Conv2d(se_channels, in_channels, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        scale = cast(Tensor, self.squeeze(x))
-        scale = F.silu(cast(Tensor, self.fc1(scale)))
-        scale = F.sigmoid(cast(Tensor, self.fc2(scale)))
+    def forward(self, x: Tensor) -> Tensor:
+        scale = self.squeeze(x)
+        scale = F.silu(self.fc1(scale))
+        scale = F.sigmoid(self.fc2(scale))
         return x * scale
 
 
@@ -147,11 +147,11 @@ class _MBConvBlock(nn.Module):
         self.project_bn = nn.BatchNorm2d(out_channels, eps=bn_eps, momentum=bn_momentum)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out = cast(Tensor, self.conv(x))
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.conv(x)
         if self.se is not None:
             out = cast(Tensor, self.se(out))
-        out = cast(Tensor, self.project_bn(cast(Tensor, self.project_conv(out))))
+        out = self.project_bn(self.project_conv(out))
         if self._has_residual:
             # Stochastic depth (Tan & Le 2019 §3.3) — applied only when the
             # block has a real residual (in_ch == out_ch and stride == 1) and
@@ -360,11 +360,11 @@ class EfficientNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -455,14 +455,14 @@ class EfficientNetForImageClassification(
         self._build_classifier(num_features, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.drop(x.flatten(1)))
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = self.drop(x.flatten(1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

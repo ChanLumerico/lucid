@@ -45,12 +45,12 @@ class _SEBlock(nn.Module):
         self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # Squeeze: (B, C, H, W) → (B, C, 1, 1)
-        s = cast(Tensor, self.pool(x))
+        s = self.pool(x)
         # Excite: Conv2d operates on 4-D directly
-        s = F.relu(cast(Tensor, self.fc1(s)))
-        s = F.sigmoid(cast(Tensor, self.fc2(s)))
+        s = F.relu(self.fc1(s))
+        s = F.sigmoid(self.fc2(s))
         # Broadcast-multiply (B, C, 1, 1) × (B, C, H, W)
         return x * s
 
@@ -87,12 +87,10 @@ class _SEBasicBlock(nn.Module):
         self.stride = stride
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
 
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        )
+        out = self.relu(self.bn1(self.conv1(x)))
         # An activation between bn2 and the SE gate, which the papers as
         # drawn do not call for: the canonical residual unit (He et al.
         # 2015, Fig. 5 left) puts BN alone after the second 3x3 and takes
@@ -115,16 +113,14 @@ class _SEBasicBlock(nn.Module):
         # The bottleneck block below is *not* the same: measured against
         # legacy_seresnet101, bn3's output reaches the gate untouched,
         # negatives and all.  The quirk is the basic block's alone.
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        )
-        out = cast(Tensor, self.se(out))
+        out = self.relu(self.bn2(self.conv2(out)))
+        out = self.se(out)
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.relu(out))
+        return self.relu(out)
 
 
 # ---------------------------------------------------------------------------
@@ -181,23 +177,19 @@ class _SEBottleneck(nn.Module):
         self.stride = stride
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
 
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        )
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        )
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
-        out = cast(Tensor, self.se(out))
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out = self.se(out)
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.relu(out))
+        return self.relu(out)
 
 
 # ---------------------------------------------------------------------------
@@ -448,16 +440,16 @@ class SENet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -544,21 +536,21 @@ class SENetForImageClassification(ImageClassificationModel, ClassificationHeadMi
             _zero_init_residual(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
-        x = cast(Tensor, self.dropout(x))
-        logits = cast(Tensor, self.fc(x))
+        x = self.dropout(x)
+        logits = self.fc(x)
 
         loss: Tensor | None = None
         if labels is not None:

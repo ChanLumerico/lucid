@@ -72,9 +72,9 @@ class _SepConvOp(nn.Module):
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv1(x))
-        return cast(Tensor, self.pointwise(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv1(x)
+        return self.pointwise(x)
 
 
 # ---------------------------------------------------------------------------
@@ -130,9 +130,9 @@ def _make_entry_block(
             self.skipbn = nn.BatchNorm2d(out_channels)
 
         @override
-        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-            residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
-            return cast(Tensor, self.rep(x)) + residual
+        def forward(self, x: Tensor) -> Tensor:
+            residual = self.skipbn(self.skip(x))
+            return self.rep(x) + residual
 
     return _EntryBlock()
 
@@ -179,8 +179,8 @@ def _make_middle_block(channels: int) -> nn.Module:
             )
 
         @override
-        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-            return cast(Tensor, self.rep(x)) + x
+        def forward(self, x: Tensor) -> Tensor:
+            return self.rep(x) + x
 
     return _MiddleBlock()
 
@@ -226,9 +226,9 @@ def _make_exit_block() -> nn.Module:
             self.skipbn = nn.BatchNorm2d(1024)
 
         @override
-        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-            residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
-            return cast(Tensor, self.rep(x)) + residual
+        def forward(self, x: Tensor) -> Tensor:
+            residual = self.skipbn(self.skip(x))
+            return self.rep(x) + residual
 
     return _ExitBlock()
 
@@ -254,9 +254,9 @@ class _ExitSepConv(nn.Module):
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv1(x))
-        return cast(Tensor, self.pointwise(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv1(x)
+        return self.pointwise(x)
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +498,7 @@ class Xception(PretrainedModel, BackboneMixin):
         return _xception_forward_features(self, x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -579,7 +579,7 @@ class XceptionForImageClassification(ImageClassificationModel, ClassificationHea
         init_cnn_fan_out(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,

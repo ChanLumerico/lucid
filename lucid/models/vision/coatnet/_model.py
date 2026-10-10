@@ -41,11 +41,11 @@ class _SE(nn.Module):
         self.fc2 = nn.Linear(se_ch, in_ch)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W)  →  squeeze to (B, C)  →  excite  →  (B, C, 1, 1)
         s = x.mean(dim=(2, 3))  # global average pool
-        s = F.silu(cast(Tensor, self.fc1(s)))
-        s = F.sigmoid(cast(Tensor, self.fc2(s)))
+        s = F.silu(self.fc1(s))
+        s = F.sigmoid(self.fc2(s))
         return x * s.reshape(s.shape[0], s.shape[1], 1, 1)
 
 
@@ -112,17 +112,17 @@ class _MBConv(nn.Module):
             self.shortcut = nn.Sequential()  # identity
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = cast(Tensor, self.shortcut(x))
 
         # Pre-activation form is ``x + Module(Norm(x))`` — Norm only; the
         # reference's pre_norm is built with apply_act=False.
-        out = cast(Tensor, self.bn_pre(x))
-        out = F.gelu(cast(Tensor, self.bn_exp(cast(Tensor, self.expand(out)))))
-        out = F.gelu(cast(Tensor, self.bn_dw(cast(Tensor, self.dw(out)))))
-        out = cast(Tensor, self.se(out))
-        out = cast(Tensor, self.project(out))
-        return cast(Tensor, self.drop_path(out)) + shortcut
+        out = self.bn_pre(x)
+        out = F.gelu(self.bn_exp(self.expand(out)))
+        out = F.gelu(self.bn_dw(self.dw(out)))
+        out = self.se(out)
+        out = self.project(out)
+        return self.drop_path(out) + shortcut
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +269,7 @@ class _RelAttnBlock(nn.Module):
 
     def _attn(self, x: Tensor) -> Tensor:
         B, N, _C = x.shape
-        qkv = cast(Tensor, self.qkv(x))  # (B, N, 3 * out_dim)
+        qkv = self.qkv(x)  # (B, N, 3 * out_dim)
         qkv = qkv.reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, heads, N, head_dim)
         q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, heads, N, head_dim)
@@ -279,26 +279,16 @@ class _RelAttnBlock(nn.Module):
         bias = self._rel_pos_bias().reshape(1, self.num_heads, N, N)
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, self.out_dim)
-        return cast(Tensor, self.proj(out))
+        return self.proj(out)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, N, C)
         identity = self._pool(x)
         shortcut = cast(Tensor, self.shortcut(identity))
-        h = self._pool(cast(Tensor, self.norm1(x)))
-        x = shortcut + cast(Tensor, self.drop_path1(self._attn(h)))
-        x = x + cast(
-            Tensor,
-            self.drop_path2(
-                cast(
-                    Tensor,
-                    self.fc2(
-                        F.gelu(cast(Tensor, self.fc1(cast(Tensor, self.norm2(x)))))
-                    ),
-                )
-            ),
-        )
+        h = self._pool(self.norm1(x))
+        x = shortcut + self.drop_path1(self._attn(h))
+        x = x + self.drop_path2(self.fc2(F.gelu(self.fc1(self.norm2(x)))))
         return x
 
     def _pool(self, seq: Tensor) -> Tensor:
@@ -379,13 +369,13 @@ class _TransformerStage(nn.Module):
         self.norm = nn.LayerNorm(out_ch)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W) — flattened once; the first block pools if needed.
         B, C, H, W = x.shape
         seq = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
         for blk in self.blocks:
             seq = cast(Tensor, blk(seq))
-        seq = cast(Tensor, self.norm(seq))
+        seq = self.norm(seq)
         D = int(seq.shape[2])
         out_h, out_w = self.grid_h, self.grid_w
         return seq.permute(0, 2, 1).reshape(B, D, out_h, out_w)
@@ -645,15 +635,15 @@ class CoAtNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.s1(x))
-        x = cast(Tensor, self.s2(x))
+        x = self.stem(x)
+        x = self.s1(x)
+        x = self.s2(x)
         x = cast(Tensor, self.s3(x))
-        x = cast(Tensor, self.s4(x))
+        x = self.s4(x)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -765,19 +755,19 @@ class CoAtNetForImageClassification(ImageClassificationModel, ClassificationHead
         self._build_classifier(head_in, config.num_classes, dropout=config.dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.s1(x))
-        x = cast(Tensor, self.s2(x))
+        x = self.stem(x)
+        x = self.s1(x)
+        x = self.s2(x)
         x = cast(Tensor, self.s3(x))
-        x = cast(Tensor, self.s4(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.s4(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         x = cast(Tensor, self.pre_logits(x))
         logits = cast(Tensor, self.classifier(x))
 

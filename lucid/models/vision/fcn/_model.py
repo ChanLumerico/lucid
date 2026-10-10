@@ -80,11 +80,11 @@ class _Bottleneck(nn.Module):
         self.downsample = downsample
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
-        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        out = F.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out: Tensor = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
         return F.relu(out + identity)
@@ -170,19 +170,19 @@ class _DilatedResNet(nn.Module):
         self.c5_channels: int = c5
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Return (c4, c5) feature maps.
 
         Returns:
             c4: (B, c4_channels, H/8, W/8) — layer3 output.
             c5: (B, c5_channels, H/8, W/8) — layer4 output.
         """
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        c4: Tensor = cast(Tensor, self.layer3(x))
-        c5: Tensor = cast(Tensor, self.layer4(c4))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        c4: Tensor = self.layer3(x)
+        c5: Tensor = self.layer4(c4)
         return c4, c5
 
 
@@ -367,7 +367,7 @@ class FCNForSemanticSegmentation(SemanticSegmentationModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: Tensor | None = None,
@@ -389,7 +389,7 @@ class FCNForSemanticSegmentation(SemanticSegmentationModel):
         c4, c5 = self.backbone.forward(x)
 
         # Main head
-        main_feat: Tensor = cast(Tensor, self.classifier(c5))
+        main_feat: Tensor = self.classifier(c5)
         logits: Tensor = F.interpolate(
             main_feat, size=(iH, iW), mode="bilinear", align_corners=False
         )
@@ -397,7 +397,7 @@ class FCNForSemanticSegmentation(SemanticSegmentationModel):
         # Run the aux head whenever one exists, as the reference does —
         # its output is part of the model's prediction, not a detail of
         # the loss.
-        aux_feat: Tensor = cast(Tensor, self.aux_classifier(c4))
+        aux_feat: Tensor = self.aux_classifier(c4)
         aux_logits: Tensor = F.interpolate(
             aux_feat, size=(iH, iW), mode="bilinear", align_corners=False
         )

@@ -98,8 +98,8 @@ class _DoubleConv(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.net(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.net(x)
 
 
 @final
@@ -131,7 +131,7 @@ class _AttentionGate(nn.Module):
         self.psi = _conv_nd(dims)(inter_channels, 1, 1, bias=True)
 
     @override
-    def forward(self, x: Tensor, g: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, g: Tensor) -> Tensor:
         """Apply attention gate.
 
         Args:
@@ -144,13 +144,13 @@ class _AttentionGate(nn.Module):
             are computed at the gating resolution and resampled back up.
         """
         # 1. Project *and* downsample the skip: (B, inter, H/2, W/2)
-        wx: Tensor = cast(Tensor, self.Wx(x))
+        wx: Tensor = self.Wx(x)
         # 2. Project gate and resample to wx's *actual* size.  A fixed
         # scale_factor only lands on the right shape when every spatial
         # dimension is even all the way down: MaxPool2d floors, so a 25x25
         # skip pools to 12x12 and the two grids disagree.  The reference
         # resamples to ``theta_x_size[2:]`` for exactly this reason.
-        wg_raw: Tensor = cast(Tensor, self.Wg(g))
+        wg_raw: Tensor = self.Wg(g)
         wg: Tensor = F.interpolate(
             wg_raw,
             size=tuple(int(v) for v in wx.shape[2:]),
@@ -159,7 +159,7 @@ class _AttentionGate(nn.Module):
         )
         # 3. Combine and compute the attention map on the gating grid
         combined: Tensor = F.relu(wx + wg)
-        att: Tensor = F.sigmoid(cast(Tensor, self.psi(combined)))
+        att: Tensor = F.sigmoid(self.psi(combined))
         # 4. "Grid resampling of attention coefficients" back to x's size
         att = F.interpolate(
             att,
@@ -179,7 +179,7 @@ class _EncoderBlock(nn.Module):
         self.pool = _pool_nd(dims)(2, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Returns (pooled, skip)."""
         skip: Tensor = self.conv.forward(x)
         pooled: Tensor = cast(Tensor, self.pool(skip))
@@ -221,9 +221,7 @@ class _DecoderBlock(nn.Module):
             self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch, dims)
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, skip: Tensor, gate: Tensor | None = None
-    ) -> Tensor:
+    def forward(self, x: Tensor, skip: Tensor, gate: Tensor | None = None) -> Tensor:
         """Decode one level.
 
         Args:
@@ -402,7 +400,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
             )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: Tensor | None = None,
@@ -433,7 +431,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
 
         # Bottleneck
         feat = self.bottleneck.forward(feat)
-        gating: Tensor = cast(Tensor, self.gating(feat))
+        gating: Tensor = self.gating(feat)
 
         # Decoder path.  Deep supervision classifies every stage, so keep
         # the outputs when it is on — but only then: holding them under
@@ -447,7 +445,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
                 dec_outputs.append(feat)
 
         # Segmentation head
-        logits: Tensor = cast(Tensor, self.head(feat))  # (B, num_classes, H, W)
+        logits: Tensor = self.head(feat)  # (B, num_classes, H, W)
 
         def to_input_size(t: Tensor) -> Tensor:
             if tuple(int(v) for v in t.shape[2:]) == spatial:
@@ -467,7 +465,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
             for level, proj in enumerate(self.dsv, start=1):
                 coarse = cast(Tensor, proj(dec_outputs[-(level + 1)]))
                 maps.append(to_input_size(coarse))
-            logits = cast(Tensor, self.fuse(lucid.cat(maps, dim=1)))
+            logits = self.fuse(lucid.cat(maps, dim=1))
 
         logits = to_input_size(logits)
 

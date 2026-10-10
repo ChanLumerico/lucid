@@ -197,10 +197,10 @@ class LeNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        return cast(Tensor, self.features(x))
+        return self.features(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -295,15 +295,15 @@ class LeNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         self._build_classifier(84, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
+        x = self.features(x)
         # C5 output is (B, 120, 1, 1) — flatten spatial dims
         x = x.flatten(1)
-        x = cast(Tensor, self.act_f6(cast(Tensor, self.f6(x))))
+        x = cast(Tensor, self.act_f6(self.f6(x)))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

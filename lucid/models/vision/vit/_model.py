@@ -63,9 +63,9 @@ class _PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_channels, dim, patch_size, stride=patch_size)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # (B, C, H, W) → (B, dim, H/p, W/p) → (B, num_patches, dim)
-        x = cast(Tensor, self.proj(x))
+        x = self.proj(x)
         B, C, H, W = x.shape
         return x.reshape(B, C, H * W).permute(0, 2, 1)
 
@@ -130,12 +130,12 @@ class _Attention(nn.Module):
         self.proj_drop = nn.Dropout(p=proj_drop)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
         H, D = self.num_heads, self.head_dim
 
         # (B, N, 3*C) → (B, N, 3, H, D) → (3, B, H, N, D)
-        qkv = cast(Tensor, self.qkv(x))
+        qkv = self.qkv(x)
         qkv = qkv.reshape(B, N, 3, H, D).permute(2, 0, 3, 1, 4)
         # Each: (B, H, N, D)
         q: Tensor = qkv[0]
@@ -150,7 +150,7 @@ class _Attention(nn.Module):
         if self.training and self.attn_drop.p > 0:
             attn: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
             attn = F.softmax(attn, dim=-1)
-            attn = cast(Tensor, self.attn_drop(attn))
+            attn = self.attn_drop(attn)
             out = attn @ v
         else:
             out = F.scaled_dot_product_attention(q, k, v)
@@ -160,7 +160,7 @@ class _Attention(nn.Module):
         # Appendix B.1: "Dropout, when used, is applied after every dense layer
         # except for the qkv-projections".  The output projection is such a
         # layer, and all three references drop on it before the residual add.
-        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(out))))
+        return self.proj_drop(self.proj(out))
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +200,9 @@ class _MLP(nn.Module):
         self.drop = nn.Dropout(p=dropout)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
-        return cast(Tensor, self.drop(cast(Tensor, self.fc2(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.drop(F.gelu(self.fc1(x)))
+        return self.drop(self.fc2(x))
 
 
 # ---------------------------------------------------------------------------
@@ -273,9 +273,9 @@ class _ViTBlock(nn.Module):
         self.mlp = _MLP(dim, mlp_dim, dropout)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
         return x
 
 
@@ -449,17 +449,17 @@ class ViT(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         B = x.shape[0]
-        x = cast(Tensor, self.patch_embed(x))  # (B, N, dim)
+        x = self.patch_embed(x)  # (B, N, dim)
         cls = self.cls_token.expand(B, -1, -1)  # (B, 1, dim)
         x = lucid.cat([cls, x], dim=1)  # (B, N+1, dim)
-        x = cast(Tensor, self.pos_drop(x + self.pos_embed))
+        x = self.pos_drop(x + self.pos_embed)
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         return _pool(x, self._classifier)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         # Unsqueeze to (B, 1, dim) so BaseModelOutput is spatially consistent
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
@@ -609,21 +609,21 @@ class ViTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         self.head = nn.Linear(self.head.in_features, num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         B = x.shape[0]
-        x = cast(Tensor, self.patch_embed(x))
+        x = self.patch_embed(x)
         cls = self.cls_token.expand(B, -1, -1)
         x = lucid.cat([cls, x], dim=1)
-        x = cast(Tensor, self.pos_drop(x + self.pos_embed))
+        x = self.pos_drop(x + self.pos_embed)
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         feat = cast(Tensor, self.pre_logits(_pool(x, self._classifier)))
-        logits = cast(Tensor, self.head(feat))
+        logits = self.head(feat)
 
         loss: Tensor | None = None
         if labels is not None:

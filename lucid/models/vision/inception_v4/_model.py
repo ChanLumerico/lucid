@@ -78,8 +78,8 @@ class _ConvBnReLU(nn.Module):
         self.bn = nn.BatchNorm2d(out_channels, eps=_BN_EPS)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return F.relu(self.bn(self.conv(x)))
 
 
 def _avg_pool_branch(in_channels: int, out_channels: int) -> nn.Sequential:
@@ -114,9 +114,9 @@ class _Mixed3a(nn.Module):
         self.conv = _ConvBnReLU(64, 96, 3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x0 = cast(Tensor, self.maxpool(x))
-        x1 = cast(Tensor, self.conv(x))
+        x1 = self.conv(x)
         return lucid.cat([x0, x1], dim=1)  # 64 + 96 = 160
 
 
@@ -142,9 +142,9 @@ class _Mixed4a(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
-        x1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
         return lucid.cat([x0, x1], dim=1)  # 96 + 96 = 192
 
 
@@ -162,8 +162,8 @@ class _Mixed5a(nn.Module):
         self.maxpool = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.conv(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.conv(x)
         x1 = cast(Tensor, self.maxpool(x))
         return lucid.cat([x0, x1], dim=1)  # 192 + 192 = 384
 
@@ -198,11 +198,11 @@ class _InceptionA(nn.Module):
         self.branch3 = _avg_pool_branch(384, 96)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
-        x1 = cast(Tensor, self.branch1(x))
-        x2 = cast(Tensor, self.branch2(x))
-        x3 = cast(Tensor, self.branch3(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
+        x2 = self.branch2(x)
+        x3 = self.branch3(x)
         return lucid.cat([x0, x1, x2, x3], dim=1)  # 4 × 96 = 384
 
 
@@ -231,9 +231,9 @@ class _ReductionA(nn.Module):
         self.branch2 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
-        x1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
         x2 = cast(Tensor, self.branch2(x))
         return lucid.cat([x0, x1, x2], dim=1)  # 384 + 256 + 384 = 1024
 
@@ -274,11 +274,11 @@ class _InceptionB(nn.Module):
         self.branch3 = _avg_pool_branch(1024, 128)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
-        x1 = cast(Tensor, self.branch1(x))
-        x2 = cast(Tensor, self.branch2(x))
-        x3 = cast(Tensor, self.branch3(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
+        x2 = self.branch2(x)
+        x3 = self.branch3(x)
         return lucid.cat([x0, x1, x2, x3], dim=1)  # 384 + 256 + 256 + 128
 
 
@@ -311,9 +311,9 @@ class _ReductionB(nn.Module):
         self.branch2 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
-        x1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
+        x1 = self.branch1(x)
         x2 = cast(Tensor, self.branch2(x))
         return lucid.cat([x0, x1, x2], dim=1)  # 192 + 320 + 1024 = 1536
 
@@ -355,29 +355,29 @@ class _InceptionC(nn.Module):
         self.branch3 = _avg_pool_branch(1536, 256)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x0 = cast(Tensor, self.branch0(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x0 = self.branch0(x)
 
-        x1_0 = cast(Tensor, self.branch1_0(x))
+        x1_0 = self.branch1_0(x)
         x1 = lucid.cat(
             [
-                cast(Tensor, self.branch1_1a(x1_0)),
-                cast(Tensor, self.branch1_1b(x1_0)),
+                self.branch1_1a(x1_0),
+                self.branch1_1b(x1_0),
             ],
             dim=1,
         )
 
-        x2_0 = cast(Tensor, self.branch2_0(x))
-        x2_2 = cast(Tensor, self.branch2_2(cast(Tensor, self.branch2_1(x2_0))))
+        x2_0 = self.branch2_0(x)
+        x2_2 = self.branch2_2(self.branch2_1(x2_0))
         x2 = lucid.cat(
             [
-                cast(Tensor, self.branch2_3a(x2_2)),
-                cast(Tensor, self.branch2_3b(x2_2)),
+                self.branch2_3a(x2_2),
+                self.branch2_3b(x2_2),
             ],
             dim=1,
         )
 
-        x3 = cast(Tensor, self.branch3(x))
+        x3 = self.branch3(x)
         return lucid.cat([x0, x1, x2, x3], dim=1)  # 256 + 512 + 512 + 256
 
 
@@ -537,10 +537,10 @@ class InceptionV4(PretrainedModel, BackboneMixin):
             Unpooled Inception-C output of shape ``(B, 1536, H', W')``
             (``8×8`` at the native ``299×299``).
         """
-        return cast(Tensor, self.features(x))
+        return self.features(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         r"""Return the trunk's feature map as ``last_hidden_state``.
 
         Parameters
@@ -643,7 +643,7 @@ class InceptionV4ForImageClassification(ImageClassificationModel):
         self.last_linear = nn.Linear(self.last_linear.in_features, num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -664,9 +664,9 @@ class InceptionV4ForImageClassification(ImageClassificationModel):
             ``logits`` of shape ``(B, num_classes)`` and ``loss`` (or
             ``None``).
         """
-        feats = cast(Tensor, self.features(x))
-        pooled = cast(Tensor, self.global_pool(feats)).flatten(1)
-        logits = cast(Tensor, self.last_linear(cast(Tensor, self.head_drop(pooled))))
+        feats = self.features(x)
+        pooled = self.global_pool(feats).flatten(1)
+        logits = self.last_linear(cast(Tensor, self.head_drop(pooled)))
 
         loss: Tensor | None = None
         if labels is not None:

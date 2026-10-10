@@ -88,8 +88,8 @@ class _ConvBnReLU(nn.Module):
         self.bn = nn.BatchNorm2d(out_channels, eps=1e-3)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return F.relu(self.bn(self.conv(x)))
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +122,9 @@ class _AvgPoolExclPad(nn.Module):
         self._area = float(kernel_size * kernel_size)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        window_sum = cast(Tensor, self._pool(x)) * self._area
-        valid = cast(Tensor, self._pool(lucid.ones_like(x))) * self._area
+    def forward(self, x: Tensor) -> Tensor:
+        window_sum = self._pool(x) * self._area
+        valid = self._pool(lucid.ones_like(x)) * self._area
         return window_sum / valid
 
 
@@ -168,11 +168,11 @@ class _Mixed5b(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(Tensor, self.branch2(x))
-        b3 = cast(Tensor, self.branch3(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
+        b2 = self.branch2(x)
+        b3 = self.branch3(x)
         return lucid.cat([b0, b1, b2, b3], dim=1)  # 96+64+96+64 = 320
 
 
@@ -209,12 +209,12 @@ class _Block35(nn.Module):
         self.conv2d = nn.Conv2d(128, 320, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(Tensor, self.branch2(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
+        b2 = self.branch2(x)
         mixed = lucid.cat([b0, b1, b2], dim=1)
-        out = cast(Tensor, self.conv2d(mixed))
+        out = self.conv2d(mixed)
         return F.relu(x + self.scale * out)
 
 
@@ -244,9 +244,9 @@ class _Mixed6a(nn.Module):
         self.branch2 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
         b2 = cast(Tensor, self.branch2(x))
         return lucid.cat([b0, b1, b2], dim=1)  # 384+384+320 = 1088
 
@@ -275,11 +275,11 @@ class _Block17(nn.Module):
         self.conv2d = nn.Conv2d(384, 1088, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
         mixed = lucid.cat([b0, b1], dim=1)
-        out = cast(Tensor, self.conv2d(mixed))
+        out = self.conv2d(mixed)
         return F.relu(x + self.scale * out)
 
 
@@ -317,10 +317,10 @@ class _Mixed7a(nn.Module):
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(Tensor, self.branch2(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
+        b2 = self.branch2(x)
         b3 = cast(Tensor, self.branch3(x))
         return lucid.cat([b0, b1, b2, b3], dim=1)  # 384+288+320+1088 = 2080
 
@@ -351,11 +351,11 @@ class _Block8(nn.Module):
         self.conv2d = nn.Conv2d(448, 2080, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b0 = cast(Tensor, self.branch0(x))
-        b1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b0 = self.branch0(x)
+        b1 = self.branch1(x)
         mixed = lucid.cat([b0, b1], dim=1)
-        out = cast(Tensor, self.conv2d(mixed))
+        out = self.conv2d(mixed)
         result = x + self.scale * out
         if self.no_relu:
             return result
@@ -592,7 +592,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -718,7 +718,7 @@ class InceptionResNetV2ForImageClassification(ImageClassificationModel):
         self.classif = nn.Linear(self.classif.in_features, num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -732,10 +732,10 @@ class InceptionResNetV2ForImageClassification(ImageClassificationModel):
         x = cast(Tensor, self.repeat_2(x))
         x = cast(Tensor, self.block8(x))
         x = cast(Tensor, self.conv2d_7b(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.avgpool(x)
         x = x.flatten(1)
         x = cast(Tensor, self.dropout(x))
-        logits = cast(Tensor, self.classif(x))
+        logits = self.classif(x)
 
         loss: Tensor | None = None
         if labels is not None:

@@ -58,13 +58,13 @@ class _ConvEmbed(nn.Module):
         self.norm = nn.LayerNorm(out_ch)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:
         # (B, C_in, H, W) → (B, C_out, H', W')
-        x = cast(Tensor, self.proj(x))
+        x = self.proj(x)
         B, C, H, W = x.shape
         # (B, H'*W', C) for LayerNorm, then back
         x_flat = x.reshape(B, C, H * W).permute(0, 2, 1)
-        x_flat = cast(Tensor, self.norm(x_flat))
+        x_flat = self.norm(x_flat)
         # Return spatial layout for downstream conv projections
         x_out = x_flat.permute(0, 2, 1).reshape(B, C, H, W)
         return x_out, H, W
@@ -111,21 +111,19 @@ class _ConvProj(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=True)
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, H: int, W: int, cls: Tensor | None = None
-    ) -> Tensor:
+    def forward(self, x: Tensor, H: int, W: int, cls: Tensor | None = None) -> Tensor:
         # x: (B, N, C) — the *spatial* token sequence (cls already split off
         # by the caller).  Reshape to a feature map for the depthwise conv.
         B, N, C = x.shape
         x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
-        x_2d = cast(Tensor, self.bn(cast(Tensor, self.dw(x_2d))))  # (B, C, H', W')
+        x_2d = self.bn(self.dw(x_2d))  # (B, C, H', W')
         _B, _C, H2, W2 = x_2d.shape
         x_flat = x_2d.reshape(B, C, H2 * W2).permute(0, 2, 1)  # (B, H'*W', C)
         # Re-attach the CLS token (which bypasses the conv) before the
         # shared linear projection, matching the reference CvT exactly.
         if cls is not None:
             x_flat = lucid.cat([cls, x_flat], dim=1)
-        return cast(Tensor, self.proj(x_flat))
+        return self.proj(x_flat)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +172,7 @@ class _CvTAttention(nn.Module):
         self.out_proj = nn.Linear(dim, dim)
 
     @override
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
         B, N, C = x.shape
         head_dim = C // self.num_heads
 
@@ -188,9 +186,9 @@ class _CvTAttention(nn.Module):
             cls = x[:, 0:1, :]
             spatial = x[:, 1:, :]
 
-        q = cast(Tensor, self.proj_q(spatial, H, W, cls))  # type: ignore[arg-type]
-        k = cast(Tensor, self.proj_k(spatial, H, W, cls))  # type: ignore[arg-type]
-        v = cast(Tensor, self.proj_v(spatial, H, W, cls))  # type: ignore[arg-type]
+        q = self.proj_q(spatial, H, W, cls)
+        k = self.proj_k(spatial, H, W, cls)
+        v = self.proj_v(spatial, H, W, cls)
 
         Nq = q.shape[1]
         Nkv = k.shape[1]
@@ -211,7 +209,7 @@ class _CvTAttention(nn.Module):
         else:
             out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, Nq, C)
-        return cast(Tensor, self.proj_drop(cast(Tensor, self.out_proj(out))))
+        return self.proj_drop(self.out_proj(out))
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +226,9 @@ class _MLP(nn.Module):
         self.drop = nn.Dropout(p=dropout)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
-        return cast(Tensor, self.drop(cast(Tensor, self.fc2(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.drop(F.gelu(self.fc1(x)))
+        return self.drop(self.fc2(x))
 
 
 # ---------------------------------------------------------------------------
@@ -267,14 +265,12 @@ class _CvTBlock(nn.Module):
         self.drop_path = DropPath(drop_path)
 
     @override
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
         # x: (B, N, C)
-        n = cast(Tensor, self.norm1(x))
-        attended = cast(Tensor, self.attn(n, H, W))  # type: ignore[arg-type]
-        x = x + cast(Tensor, self.drop_path(attended))
-        x = x + cast(
-            Tensor, self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
-        )
+        n = self.norm1(x)
+        attended = self.attn(n, H, W)
+        x = x + self.drop_path(attended)
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
 
@@ -349,21 +345,19 @@ class _CvTStage(nn.Module):
         # blocks.
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor | None, int, int]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor | None, int, int]:
         # x: (B, C_in, H_in, W_in)
-        x_spatial, H, W = cast(tuple[Tensor, int, int], self.embed(x))
+        x_spatial, H, W = self.embed(x)
         # Flatten to sequence: (B, H*W, C)
         B, C, _H, _W = x_spatial.shape
         tokens = x_spatial.reshape(B, C, H * W).permute(0, 2, 1)
-        tokens = cast(Tensor, self.pos_drop(tokens))
+        tokens = self.pos_drop(tokens)
         # Prepend the CLS token (if this stage owns one).
         if self.cls_token is not None:
             cls = self.cls_token.expand(B, 1, C)
             tokens = lucid.cat([cls, tokens], dim=1)
         for blk in self.blocks:
-            tokens = cast(Tensor, blk(tokens, H, W))  # type: ignore[arg-type]
+            tokens = cast(Tensor, blk(tokens, H, W))
         # Split the CLS token back off (if present); the spatial tokens
         # are reshaped to a feature map for the next stage / pooling.
         cls_out: Tensor | None = None
@@ -517,12 +511,12 @@ class CvT(PretrainedModel, BackboneMixin):
         # downstream consumers of ``task="base"`` a differently-scaled feature
         # than the classifier head sees.
         if cls is not None:
-            return cast(Tensor, self.norm(cls[:, 0]))
+            return self.norm(cls[:, 0])
         tokens = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
-        return cast(Tensor, self.norm(tokens)).mean(dim=1)
+        return self.norm(tokens).mean(dim=1)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -597,7 +591,7 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -611,7 +605,7 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         # mean-pool.  ``cls`` is ``(B, 1, C)`` so the mean over dim 1 is
         # a no-op that just squeezes the token axis.
         if cls is not None:
-            feat = cast(Tensor, self.head_norm(cls)).mean(dim=1)
+            feat = self.head_norm(cls).mean(dim=1)
         else:
             # Normalise *then* pool, matching the CLS branch directly above
             # and the reference.  Pooling first hands LayerNorm a single
@@ -619,7 +613,7 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
             # mean instead of normalising each token — a different statistic,
             # and the two branches disagreed with each other.
             tokens = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
-            feat = cast(Tensor, self.head_norm(tokens)).mean(dim=1)
+            feat = self.head_norm(tokens).mean(dim=1)
         logits = cast(Tensor, self.classifier(feat))
 
         loss: Tensor | None = None

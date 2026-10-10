@@ -88,8 +88,8 @@ class _PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_channels, dim, patch_size, stride=patch_size)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.proj(x)
         b, c, h, w = (int(s) for s in x.shape)
         return x.reshape(b, c, h * w).permute(0, 2, 1)
 
@@ -124,18 +124,18 @@ class _Encoder(nn.Module):
             _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
-    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:
         """Encode an image, optionally keeping only the given patches.
 
         The positions are added *before* the tokens are selected, so a
         kept patch carries where it came from into the blocks.
         """
-        tokens = cast(Tensor, self.patch_embed(x)) + cast(Tensor, self.pos_embed)
+        tokens = self.patch_embed(x) + cast(Tensor, self.pos_embed)
         if indices is not None:
             tokens = _gather_tokens(tokens, indices)
         for block in self.blocks:
             tokens = cast(Tensor, block(tokens))
-        return cast(Tensor, self.norm(tokens))
+        return self.norm(tokens)
 
 
 class _Predictor(nn.Module):
@@ -171,12 +171,12 @@ class _Predictor(nn.Module):
             _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, context: Tensor, context_indices: Tensor, target_indices: Tensor
     ) -> Tensor:
         """Predict the target encoder's output at ``target_indices``."""
         positions = cast(Tensor, self.predictor_pos_embed)
-        tokens = cast(Tensor, self.predictor_embed(context))
+        tokens = self.predictor_embed(context)
         tokens = tokens + _gather_tokens(
             positions
             + lucid.zeros(
@@ -203,8 +203,8 @@ class _Predictor(nn.Module):
         hidden = lucid.cat([tokens, queries], dim=1)
         for block in self.predictor_blocks:
             hidden = cast(Tensor, block(hidden))
-        hidden = cast(Tensor, self.predictor_norm(hidden))
-        return cast(Tensor, self.predictor_proj(hidden[:, -count:]))
+        hidden = self.predictor_norm(hidden)
+        return self.predictor_proj(hidden[:, -count:])
 
 
 # ── masking ──────────────────────────────────────────────────────────────────
@@ -514,7 +514,7 @@ class IJEPAModel(PretrainedModel, BackboneMixin):
         The stop-gradient that matters is in :meth:`forward`, where the
         targets are built.
         """
-        return cast(Tensor, self.target_encoder(x)).mean(dim=1)
+        return self.target_encoder(x).mean(dim=1)
 
     def _discrepancy(self, prediction: Tensor, target: Tensor) -> Tensor:
         if self.config.objective == "l2":
@@ -522,7 +522,7 @@ class IJEPAModel(PretrainedModel, BackboneMixin):
         return F.smooth_l1_loss(prediction, target, beta=self.config.smooth_l1_beta)
 
     @override
-    def forward(self, x: Tensor) -> IJEPAOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> IJEPAOutput:
         """Run one pretraining step's worth of computation.
 
         Parameters
@@ -547,7 +547,7 @@ class IJEPAModel(PretrainedModel, BackboneMixin):
         context_index, target_index = _sample_masks(config, batch, x.device)
 
         with lucid.no_grad():
-            tokens = cast(Tensor, self.target_encoder(x))
+            tokens = self.target_encoder(x)
             # Not in the paper: the released code normalises the target
             # encoder's output over the feature axis, without affine terms,
             # before the blocks are taken from it.  Leaving it out is a
@@ -561,13 +561,10 @@ class IJEPAModel(PretrainedModel, BackboneMixin):
                 dim=1,
             )
 
-        context = cast(Tensor, self.encoder(x, context_index))
+        context = self.encoder(x, context_index)
         predictions = lucid.stack(
             [
-                cast(
-                    Tensor,
-                    self.predictor(context, context_index, target_index[:, m]),
-                )
+                self.predictor(context, context_index, target_index[:, m])
                 for m in range(config.num_target_blocks)
             ],
             dim=1,
@@ -632,7 +629,7 @@ class IJEPAForImageClassification(ImageClassificationModel, ClassificationHeadMi
         self.head = nn.Linear(config.dim, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, x: Tensor, labels: Tensor | None = None
     ) -> ImageClassificationOutput:
         """Classify images from the frozen representation.
@@ -650,6 +647,6 @@ class IJEPAForImageClassification(ImageClassificationModel, ClassificationHeadMi
         ImageClassificationOutput
             Logits ``(B, num_classes)``, and the loss when labels came.
         """
-        logits = cast(Tensor, self.head(self.ijepa.encode(x)))
+        logits = self.head(self.ijepa.encode(x))
         loss = None if labels is None else F.cross_entropy(logits, labels)
         return ImageClassificationOutput(logits=logits, loss=loss)

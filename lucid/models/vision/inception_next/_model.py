@@ -81,7 +81,7 @@ class _InceptionDWConv2d(nn.Module):
         self.dwconv_h = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         id_chs = self.identity_chs
         gc = self.gc
         x0 = x[:, :id_chs, :, :]
@@ -98,9 +98,9 @@ class _InceptionDWConv2d(nn.Module):
         # checkpoint's channels.  Matching the reference, which is where the
         # weights come from.
         y0 = x0
-        y1 = cast(Tensor, self.dwconv_hw(x1))
-        y2 = cast(Tensor, self.dwconv_w(x2))
-        y3 = cast(Tensor, self.dwconv_h(x3))
+        y1 = self.dwconv_hw(x1)
+        y2 = self.dwconv_w(x2)
+        y3 = self.dwconv_h(x3)
         return lucid.cat([y0, y1, y2, y3], dim=1)
 
 
@@ -120,9 +120,9 @@ class _ConvMlp(nn.Module):
         self.fc2 = nn.Conv2d(hidden, dim, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = F.gelu(cast(Tensor, self.fc1(x)))
-        return cast(Tensor, self.fc2(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.gelu(self.fc1(x))
+        return self.fc2(x)
 
 
 # ---------------------------------------------------------------------------
@@ -156,13 +156,13 @@ class _MetaNeXtBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = x
-        x = cast(Tensor, self.token_mixer(x))
-        x = cast(Tensor, self.norm(x))
-        x = cast(Tensor, self.mlp(x))
+        x = self.token_mixer(x)
+        x = self.norm(x)
+        x = self.mlp(x)
         x = x * self.gamma.reshape(-1, 1, 1)
-        return shortcut + cast(Tensor, self.drop_path(x))
+        return shortcut + self.drop_path(x)
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +212,9 @@ class _Stage(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.downsample(x))
-        return cast(Tensor, self.blocks(x))
+        return self.blocks(x)
 
 
 # ---------------------------------------------------------------------------
@@ -244,14 +244,14 @@ class _MlpClassifierHead(nn.Module):
         self.fc2 = nn.Linear(hidden, num_classes)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W) — apply global avg pool, then mlp
         x = x.mean(dim=(2, 3))  # (B, C)
-        x = cast(Tensor, self.fc1(x))
+        x = self.fc1(x)
         x = F.gelu(x)
-        x = cast(Tensor, self.norm(x))
-        x = cast(Tensor, self.drop(x))
-        return cast(Tensor, self.fc2(x))
+        x = self.norm(x)
+        x = self.drop(x)
+        return self.fc2(x)
 
 
 # ---------------------------------------------------------------------------
@@ -399,13 +399,13 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
         return x.mean(dim=(2, 3))  # (B, C)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -482,15 +482,15 @@ class InceptionNeXtForImageClassification(ImageClassificationModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
-        logits = cast(Tensor, self.head(x))
+        logits = self.head(x)
 
         loss: Tensor | None = None
         if labels is not None:

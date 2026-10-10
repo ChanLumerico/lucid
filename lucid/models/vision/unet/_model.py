@@ -145,8 +145,8 @@ class _DoubleConv(nn.Module):
             self.shortcut = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out: Tensor = cast(Tensor, self.body(x))
+    def forward(self, x: Tensor) -> Tensor:
+        out: Tensor = self.body(x)
         if self._residual:
             identity: Tensor = (
                 x if self.shortcut is None else cast(Tensor, self.shortcut(x))
@@ -182,7 +182,7 @@ class _EncoderBlock(nn.Module):
         self.pool = _pool(dim)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         skip: Tensor = self.conv.forward(x)
         pooled: Tensor = cast(Tensor, self.pool(skip))
         return pooled, skip
@@ -225,7 +225,7 @@ class _DecoderBlock(nn.Module):
             )
 
     @override
-    def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, skip: Tensor) -> Tensor:
         x_up: Tensor = cast(Tensor, self.up(x))
 
         # Pad x_up to match skip spatial dims (handles non-power-of-2 inputs).
@@ -407,7 +407,7 @@ class UNetForSemanticSegmentation(SemanticSegmentationModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: Tensor | None = None,

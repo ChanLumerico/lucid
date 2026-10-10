@@ -213,7 +213,7 @@ class MobileNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
+        x = self.features(x)
         # ``feature_info`` describes the pre-pool pyramid, and the mixin
         # documents this as returning the deepest stage's *feature map*.
         # Pooling here collapsed it to 1x1, so the declared reduction was
@@ -222,7 +222,7 @@ class MobileNet(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -317,14 +317,14 @@ class MobileNetForImageClassification(
         self._build_classifier(num_features, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.drop(x.flatten(1)))
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = self.drop(x.flatten(1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

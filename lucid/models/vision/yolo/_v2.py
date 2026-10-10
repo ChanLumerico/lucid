@@ -280,7 +280,7 @@ class _Darknet19(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Run Darknet-19 and return (route, out).
 
         Returns:
@@ -288,13 +288,13 @@ class _Darknet19(nn.Module):
                 route: (B, 512, H/16, W/16)
                 out:   (B, 1024, H/32, W/32)
         """
-        x = cast(Tensor, self.stage1(x))
-        x = cast(Tensor, self.stage2(x))
-        x = cast(Tensor, self.stage3(x))
-        x = cast(Tensor, self.stage4(x))
-        route = cast(Tensor, self.stage5(x))  # (B, 512, H/16, W/16)
+        x = self.stage1(x)
+        x = self.stage2(x)
+        x = self.stage3(x)
+        x = self.stage4(x)
+        route = self.stage5(x)  # (B, 512, H/16, W/16)
         x = cast(Tensor, self.pool56(route))
-        out = cast(Tensor, self.stage6(x))  # (B, 1024, H/32, W/32)
+        out = self.stage6(x)  # (B, 1024, H/32, W/32)
         return route, out
 
 
@@ -474,11 +474,11 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
             (B, A*(5+C), H/32, W/32)
         """
         route, feat = self.backbone.forward(x)  # (B,512,H/16,W/16), (B,1024,H/32,W/32)
-        feat = cast(Tensor, self.det1(feat))  # (B, 1024, H/32, W/32)
-        feat = cast(Tensor, self.det2(feat))
+        feat = self.det1(feat)  # (B, 1024, H/32, W/32)
+        feat = self.det2(feat)
 
         # Passthrough: 1x1 reduce to 64 ch, then space_to_depth → (B, 256, ...)
-        route = cast(Tensor, self.route_reduce(route))
+        route = self.route_reduce(route)
         passthrough = (
             _darknet_reorg(route, 2)
             if self.config.darknet_reorg
@@ -487,8 +487,8 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
 
         # Concatenate along channel axis
         feat = lucid.cat([passthrough, feat], dim=1)  # (B, 1280, H/32, W/32)
-        feat = cast(Tensor, self.det3(feat))  # (B, 1024, H/32, W/32)
-        return cast(Tensor, self.pred(feat))  # (B, A*(5+C), H/32, W/32)
+        feat = self.det3(feat)  # (B, 1024, H/32, W/32)
+        return self.pred(feat)  # (B, A*(5+C), H/32, W/32)
 
     def _decode_predictions(
         self,
@@ -834,7 +834,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         return lucid.cat(loss_parts).mean()
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,

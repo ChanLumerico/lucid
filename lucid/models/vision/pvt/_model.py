@@ -76,12 +76,12 @@ class _OverlapPatchEmbed(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))  # (B, C, H', W')
+    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:
+        x = self.proj(x)  # (B, C, H', W')
         B, C, H, W = x.shape
         # permute to (B, H'*W', C), apply LN, return
         x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         return x, H, W
 
 
@@ -105,16 +105,16 @@ class _DWConvMLP(nn.Module):
         self.fc2 = nn.Linear(hidden, dim)
 
     @override
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
         B, _N, _C = x.shape
-        x = cast(Tensor, self.fc1(x))
+        x = self.fc1(x)
         # After fc1: (B, N, hidden) — reshape to spatial for DWConv
         hidden = x.shape[-1]
         x_2d = x.permute(0, 2, 1).reshape(B, hidden, H, W)
-        x_2d = cast(Tensor, self.dwconv(x_2d))
+        x_2d = self.dwconv(x_2d)
         x = x_2d.reshape(B, hidden, H * W).permute(0, 2, 1)
         x = F.gelu(x)
-        return cast(Tensor, self.fc2(x))
+        return self.fc2(x)
 
 
 # ---------------------------------------------------------------------------
@@ -166,27 +166,27 @@ class _SRAttention(nn.Module):
             self.norm = None  # type: ignore[assignment]
 
     @override
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
         B, N, C = x.shape
         head_dim = C // self.num_heads
 
-        q = cast(Tensor, self.q(x))
+        q = self.q(x)
         q = q.reshape(B, N, self.num_heads, head_dim).permute(0, 2, 1, 3)
 
         if self.sr is not None:
             x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
             if self.pool is not None:
                 x_2d = cast(Tensor, self.pool(x_2d))  # (B, C, P, P)
-            x_2d = cast(Tensor, self.sr(x_2d))  # (B, C, H', W')
+            x_2d = self.sr(x_2d)  # (B, C, H', W')
             x_2d = x_2d.flatten(2).permute(0, 2, 1)  # (B, H'*W', C)
-            x_2d = cast(Tensor, self.norm(x_2d))
+            x_2d = self.norm(x_2d)
             if self.linear:
                 x_2d = F.gelu(x_2d)
             kv_src = x_2d
         else:
             kv_src = x
 
-        kv = cast(Tensor, self.kv(kv_src))
+        kv = self.kv(kv_src)
         N2 = kv_src.shape[1]
         kv = kv.reshape(B, N2, 2, self.num_heads, head_dim).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
@@ -195,7 +195,7 @@ class _SRAttention(nn.Module):
         # reproduces the manual ``* self.scale`` (no attention dropout here).
         out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         x = out.permute(0, 2, 1, 3).reshape(B, N, C)
-        return cast(Tensor, self.proj(x))
+        return self.proj(x)
 
 
 # ---------------------------------------------------------------------------
@@ -224,15 +224,9 @@ class _PVTBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate)
 
     @override
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
-        x = x + cast(
-            Tensor,
-            self.drop_path(cast(Tensor, self.attn(cast(Tensor, self.norm1(x)), H, W))),  # type: ignore[arg-type]
-        )
-        x = x + cast(
-            Tensor,
-            self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)), H, W))),  # type: ignore[arg-type]
-        )
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:
+        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
+        x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
         return x
 
 
@@ -291,14 +285,14 @@ class _PVTStage(nn.Module):
     def forward_tokens(self, tokens: Tensor, H: int, W: int) -> tuple[Tensor, int, int]:
         """Run blocks + norm on pre-embedded tokens (B, N, C)."""
         for blk in self.blocks:
-            tokens = cast(Tensor, blk(tokens, H, W))  # type: ignore[arg-type]
-        tokens = cast(Tensor, self.norm(tokens))
+            tokens = cast(Tensor, blk(tokens, H, W))
+        tokens = self.norm(tokens)
         B, _, C = tokens.shape
         x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
         return x_out, H, W
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:
         # x is a spatial map (B, C_in, H_in, W_in).
         # Stage 0's patch embedding lives on the model, not here, so this
         # path has nothing to downsample with.  Say so instead of raising an
@@ -309,7 +303,7 @@ class _PVTStage(nn.Module):
                 "model as ``patch_embed``.  Call ``forward_tokens(tokens, H, W)`` "
                 "with the already-embedded tokens instead."
             )
-        tokens, H, W = cast(tuple[Tensor, int, int], self.downsample(x))
+        tokens, H, W = self.downsample(x)
         return self.forward_tokens(tokens, H, W)
 
 
@@ -477,7 +471,7 @@ class PVT(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         # Stage 0: use top-level patch_embed then stage blocks
-        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
+        tokens, H, W = self.patch_embed(x)
         x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
         # Stages 1-3: each stage calls its own downsample internally
         for stage in list(self.stages)[1:]:
@@ -486,7 +480,7 @@ class PVT(PretrainedModel, BackboneMixin):
         return x_spatial.flatten(2).mean(dim=2)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -561,13 +555,13 @@ class PVTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         self._build_classifier(out_dim, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         # Stage 0: use top-level patch_embed then stage blocks
-        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
+        tokens, H, W = self.patch_embed(x)
         x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
         # Stages 1-3
         for stage in list(self.stages)[1:]:

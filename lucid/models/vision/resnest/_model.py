@@ -50,7 +50,7 @@ class _RadixSoftmax(nn.Module):
         self._groups = groups
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         batch = x.shape[0]
         if self._radix > 1:
             # (B, groups, radix, C) → permute → (B, radix, groups, C)
@@ -129,10 +129,10 @@ class _SplitAttn(nn.Module):
         self.rsoftmax = _RadixSoftmax(radix, groups)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(x))
-        x = cast(Tensor, self.bn0(x))
-        x = cast(Tensor, self.act0(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.bn0(x)
+        x = self.act0(x)
 
         b, rc, h, w = x.shape
         r = self._radix
@@ -146,12 +146,12 @@ class _SplitAttn(nn.Module):
 
         # Global average pool → (B, C, 1, 1)
         x_gap = x_gap.mean((2, 3), keepdim=True)
-        x_gap = cast(Tensor, self.fc1(x_gap))
-        x_gap = cast(Tensor, self.bn1(x_gap))
-        x_gap = cast(Tensor, self.act1(x_gap))
-        x_attn = cast(Tensor, self.fc2(x_gap))
+        x_gap = self.fc1(x_gap)
+        x_gap = self.bn1(x_gap)
+        x_gap = self.act1(x_gap)
+        x_attn = self.fc2(x_gap)
 
-        x_attn = cast(Tensor, self.rsoftmax(x_attn)).reshape(b, -1, 1, 1)
+        x_attn = self.rsoftmax(x_attn).reshape(b, -1, 1, 1)
 
         if r > 1:
             # x: (B, radix, C, H, W) ; x_attn: (B, radix*C, 1, 1) → (B, radix, C, 1, 1)
@@ -188,7 +188,7 @@ class _DropBlock2d(nn.Module):
         self.block_size = block_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if not self.training or self.drop_prob == 0.0:
             return x
         _B, _C, H, W = (int(v) for v in x.shape)
@@ -303,29 +303,29 @@ class _ResNeStBottleneck(nn.Module):
         self.act3 = nn.ReLU(inplace=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = x
 
-        out = cast(Tensor, self.conv1(x))
-        out = cast(Tensor, self.bn1(out))
-        out = cast(Tensor, self.act1(out))
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.act1(out)
 
         out = cast(Tensor, self.avd_first(out))
 
-        out = cast(Tensor, self.conv2(out))
+        out = self.conv2(out)
         out = cast(Tensor, self.bn2(out))
         out = cast(Tensor, self.act2(out))
 
         out = cast(Tensor, self.avd_last(out))
 
-        out = cast(Tensor, self.conv3(out))
-        out = cast(Tensor, self.bn3(out))
+        out = self.conv3(out)
+        out = self.bn3(out)
 
         if self.downsample is not None:
             shortcut = cast(Tensor, self.downsample(x))
 
         out = out + shortcut
-        return cast(Tensor, self.act3(out))
+        return self.act3(out)
 
 
 # ---------------------------------------------------------------------------
@@ -682,17 +682,17 @@ class ResNeSt(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.conv1(x))
-        x = cast(Tensor, self.act1(cast(Tensor, self.bn1(x))))
+        x = self.conv1(x)
+        x = self.act1(self.bn1(x))
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -777,19 +777,19 @@ class ResNeStForImageClassification(ImageClassificationModel, ClassificationHead
         self._build_classifier(out_ch, config.num_classes, dropout=config.dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.conv1(x))
-        x = cast(Tensor, self.act1(cast(Tensor, self.bn1(x))))
+        x = self.conv1(x)
+        x = self.act1(self.bn1(x))
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

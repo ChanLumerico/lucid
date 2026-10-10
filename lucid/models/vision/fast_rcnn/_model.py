@@ -96,8 +96,8 @@ class _VGG16Features(nn.Module):
         self.out_channels: int = 512
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.features(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.features(x)
 
 
 # ---------------------------------------------------------------------------
@@ -145,11 +145,11 @@ class _FastRCNNHead(nn.Module):
         self.bbox_pred = nn.Linear(4096, num_classes * 4)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         x = x.flatten(1)
-        x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc6(x)))))
-        x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc7(x)))))
-        return cast(Tensor, self.cls_score(x)), cast(Tensor, self.bbox_pred(x))
+        x = self.drop(F.relu(self.fc6(x)))
+        x = self.drop(F.relu(self.fc7(x)))
+        return self.cls_score(x), self.bbox_pred(x)
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +496,7 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
     # ------------------------------------------------------------------
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         proposals: list[Tensor] | None = None,
@@ -524,7 +524,7 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
             proposals = [lucid.zeros((0, 4), device=x.device.type) for _ in range(B)]
 
         # 1. Shared feature extraction (one forward pass for the whole batch)
-        feat_map = cast(Tensor, self.backbone(x))  # (B, 512, H/16, W/16)
+        feat_map = self.backbone(x)  # (B, 512, H/16, W/16)
 
         # 2. RoI Pool on the shared feature map
         roi_crops = roi_pool(

@@ -81,8 +81,8 @@ class _BasicConv2d(nn.Module):
         self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return F.relu(self.bn(self.conv(x)))
 
 
 # ---------------------------------------------------------------------------
@@ -124,11 +124,11 @@ class _InceptionModule(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(Tensor, self.branch2(x))
-        b3 = cast(Tensor, self.branch3(x))
-        b4 = cast(Tensor, self.branch4(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1(x)
+        b2 = self.branch2(x)
+        b3 = self.branch3(x)
+        b4 = self.branch4(x)
         return lucid.cat([b1, b2, b3, b4], dim=1)
 
 
@@ -149,13 +149,13 @@ class _AuxClassifier(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x = F.adaptive_avg_pool2d(x, (4, 4))
-        x = cast(Tensor, self.conv(x))
+        x = self.conv(x)
         x = x.flatten(1)
-        x = F.relu(cast(Tensor, self.fc1(x)))
-        x = cast(Tensor, self.dropout(x))
-        return cast(Tensor, self.fc2(x))
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        return self.fc2(x)
 
 
 # ---------------------------------------------------------------------------
@@ -399,22 +399,22 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         if getattr(self.config, "transform_input", False):
             x = transform_input_imagenet_to_tf(x)
-        x = cast(Tensor, self.conv1(x))
+        x = self.conv1(x)
         x = cast(Tensor, self.maxpool1(x))
-        x = cast(Tensor, self.conv2(x))
-        x = cast(Tensor, self.conv3(x))
+        x = self.conv2(x)
+        x = self.conv3(x)
         x = cast(Tensor, self.maxpool2(x))
-        x = cast(Tensor, self.inception3a(x))
-        x = cast(Tensor, self.inception3b(x))
+        x = self.inception3a(x)
+        x = self.inception3b(x)
         x = cast(Tensor, self.maxpool3(x))
-        x = cast(Tensor, self.inception4a(x))
-        x = cast(Tensor, self.inception4b(x))
-        x = cast(Tensor, self.inception4c(x))
-        x = cast(Tensor, self.inception4d(x))
-        x = cast(Tensor, self.inception4e(x))
+        x = self.inception4a(x)
+        x = self.inception4b(x)
+        x = self.inception4c(x)
+        x = self.inception4d(x)
+        x = self.inception4e(x)
         x = cast(Tensor, self.maxpool4(x))
-        x = cast(Tensor, self.inception5a(x))
-        x = cast(Tensor, self.inception5b(x))
+        x = self.inception5a(x)
+        x = self.inception5b(x)
         # ``feature_info`` describes the pre-pool pyramid, and the mixin
         # documents this as returning the deepest stage's *feature map*.
         # Pooling here collapsed it to 1x1, so the declared reduction was
@@ -423,7 +423,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> GoogLeNetOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> GoogLeNetOutput:
         return GoogLeNetOutput(logits=self.forward_features(x))
 
 
@@ -561,7 +561,7 @@ class GoogLeNetForImageClassification(
         _init_reference_weights(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -572,34 +572,34 @@ class GoogLeNetForImageClassification(
 
         if getattr(self.config, "transform_input", False):
             x = transform_input_imagenet_to_tf(x)
-        x = cast(Tensor, self.conv1(x))
+        x = self.conv1(x)
         x = cast(Tensor, self.maxpool1(x))
-        x = cast(Tensor, self.conv2(x))
-        x = cast(Tensor, self.conv3(x))
+        x = self.conv2(x)
+        x = self.conv3(x)
         x = cast(Tensor, self.maxpool2(x))
-        x = cast(Tensor, self.inception3a(x))
-        x = cast(Tensor, self.inception3b(x))
+        x = self.inception3a(x)
+        x = self.inception3b(x)
         x = cast(Tensor, self.maxpool3(x))
 
-        x = cast(Tensor, self.inception4a(x))
+        x = self.inception4a(x)
         aux1: Tensor | None = None
         if use_aux and isinstance(self.aux1, _AuxClassifier):
-            aux1 = cast(Tensor, self.aux1(x))
+            aux1 = self.aux1(x)
 
-        x = cast(Tensor, self.inception4b(x))
-        x = cast(Tensor, self.inception4c(x))
-        x = cast(Tensor, self.inception4d(x))
+        x = self.inception4b(x)
+        x = self.inception4c(x)
+        x = self.inception4d(x)
         aux2: Tensor | None = None
         if use_aux and isinstance(self.aux2, _AuxClassifier):
-            aux2 = cast(Tensor, self.aux2(x))
+            aux2 = self.aux2(x)
 
-        x = cast(Tensor, self.inception4e(x))
+        x = self.inception4e(x)
         x = cast(Tensor, self.maxpool4(x))
-        x = cast(Tensor, self.inception5a(x))
-        x = cast(Tensor, self.inception5b(x))
+        x = self.inception5a(x)
+        x = self.inception5b(x)
 
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.drop(x.flatten(1)))
+        x = self.avgpool(x)
+        x = self.drop(x.flatten(1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

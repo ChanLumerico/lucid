@@ -73,11 +73,11 @@ class _DenseLayer(nn.Module):
         self.drop = nn.Dropout(p=dropout_rate) if dropout_rate > 0.0 else None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out = cast(Tensor, self.conv1(F.relu(cast(Tensor, self.norm1(x)))))
-        out = cast(Tensor, self.conv2(F.relu(cast(Tensor, self.norm2(out)))))
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.conv1(F.relu(self.norm1(x)))
+        out = self.conv2(F.relu(self.norm2(out)))
         if self.drop is not None:
-            out = cast(Tensor, self.drop(out))
+            out = self.drop(out)
         # Dense connection: concat input with new features along channel dim
         return lucid.cat([x, out], dim=1)
 
@@ -114,7 +114,7 @@ class _DenseBlock(nn.Module):
             self.add_module(f"denselayer{i + 1}", layer)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         for module in self.children():
             x = cast(Tensor, module(x))
         return x
@@ -136,9 +136,9 @@ class _Transition(nn.Module):
         self.pool = nn.AvgPool2d(2, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(F.relu(cast(Tensor, self.norm(x)))))
-        return cast(Tensor, self.pool(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(F.relu(self.norm(x)))
+        return self.pool(x)
 
 
 # ---------------------------------------------------------------------------
@@ -201,15 +201,10 @@ class _Features(nn.Module):
         return self._num_features
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x = cast(
             Tensor,
-            self.pool0(
-                cast(
-                    Tensor,
-                    self.relu0(cast(Tensor, self.norm0(cast(Tensor, self.conv0(x))))),
-                )
-            ),
+            self.pool0(self.relu0(self.norm0(self.conv0(x)))),
         )
         # iterate dense blocks and transitions in registration order
         transition_idx = 1
@@ -220,7 +215,7 @@ class _Features(nn.Module):
                 x = cast(Tensor, module(x))
                 transition_idx += 1
         # final BN + ReLU (caller applies ReLU after pool)
-        x = cast(Tensor, self.norm5(x))
+        x = self.norm5(x)
         return x
 
 
@@ -366,11 +361,11 @@ class DenseNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = F.relu(cast(Tensor, self.features(x)))
-        return cast(Tensor, self.avgpool(x))
+        x = F.relu(self.features(x))
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -451,13 +446,13 @@ class DenseNetForImageClassification(ImageClassificationModel, ClassificationHea
         _init_reference(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = F.relu(cast(Tensor, self.features(x)))
-        x = cast(Tensor, self.avgpool(x))
+        x = F.relu(self.features(x))
+        x = self.avgpool(x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

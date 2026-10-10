@@ -40,7 +40,7 @@ Faithfulness notes
   produces the final per-image detections.
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -109,8 +109,8 @@ class _BackboneWithFPN(nn.Module):
         self.out_channels = fpn_out_channels
 
     @override
-    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
-        c_feats = cast(list[Tensor], self.body(x))  # [C2, C3, C4, C5]
+    def forward(self, x: Tensor) -> list[Tensor]:
+        c_feats = self.body(x)  # [C2, C3, C4, C5]
         return self.fpn.forward(c_feats)  # [P2, P3, P4, P5, pool]
 
 
@@ -137,15 +137,13 @@ class _RPNHead(nn.Module):
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
 
     @override
-    def forward(  # type: ignore[override]
-        self, features: list[Tensor]
-    ) -> tuple[list[Tensor], list[Tensor]]:
+    def forward(self, features: list[Tensor]) -> tuple[list[Tensor], list[Tensor]]:
         logits: list[Tensor] = []
         bbox: list[Tensor] = []
         for feat in features:
-            t = F.relu(cast(Tensor, self.conv(feat)))
-            logits.append(cast(Tensor, self.cls_logits(t)))
-            bbox.append(cast(Tensor, self.bbox_pred(t)))
+            t = F.relu(self.conv(feat))
+            logits.append(self.cls_logits(t))
+            bbox.append(self.bbox_pred(t))
         return logits, bbox
 
 
@@ -177,10 +175,10 @@ class _TwoMLPHead(nn.Module):
         self.fc7 = nn.Linear(representation_size, representation_size)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x = x.flatten(1)
-        x = F.relu(cast(Tensor, self.fc6(x)))
-        x = F.relu(cast(Tensor, self.fc7(x)))
+        x = F.relu(self.fc6(x))
+        x = F.relu(self.fc7(x))
         return x
 
 
@@ -194,8 +192,8 @@ class _FastRCNNPredictor(nn.Module):
         self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        return cast(Tensor, self.cls_score(x)), cast(Tensor, self.bbox_pred(x))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        return self.cls_score(x), self.bbox_pred(x)
 
 
 @final
@@ -216,9 +214,9 @@ class _RoIHeads(nn.Module):
         self.box_predictor = _FastRCNNPredictor(representation_size, num_classes)
 
     @override
-    def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        feats = cast(Tensor, self.box_head(roi_feats))
-        return cast(tuple[Tensor, Tensor], self.box_predictor(feats))
+    def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:
+        feats = self.box_head(roi_feats)
+        return self.box_predictor(feats)
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +484,7 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
     # ------------------------------------------------------------------
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -520,7 +518,7 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
         dev = x.device.type
 
         # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
-        features = cast(list[Tensor], self.backbone(x))
+        features = self.backbone(x)
 
         # Derive the level strides from what the backbone actually produced.
         # The class constant (4, 8, 16, 32, 64) only holds for input sizes

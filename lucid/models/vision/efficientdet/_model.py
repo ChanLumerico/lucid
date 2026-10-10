@@ -89,12 +89,12 @@ class _SepConv(nn.Module):
         self.bn = nn.BatchNorm2d(channels)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # Reference order is act -> dwconv -> pwconv -> BN, with no activation
         # after the norm: the fused sum is activated on the way *in*, and the
         # node's output stays linear.
         h = F.silu(x)
-        return cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(h))))))
+        return self.bn(self.pw(self.dw(h)))
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ class _BiFPNLayer(nn.Module):
         self.down = nn.MaxPool2d(2, stride=2)
 
     @override
-    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
         """
         Args:
             features: [P3, P4, P5, P6, P7] (finest → coarsest).
@@ -252,11 +252,11 @@ class _MBConv(nn.Module):
         self.use_skip = stride == 1 and in_ch == out_ch
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out: Tensor = cast(Tensor, self.block(x))
+    def forward(self, x: Tensor) -> Tensor:
+        out: Tensor = self.block(x)
         if self.se is not None:
             out = out * cast(Tensor, self.se(out))
-        out = cast(Tensor, self.project(out))
+        out = self.project(out)
         return out + x if self.use_skip else out
 
 
@@ -321,15 +321,15 @@ class _EfficientNetBackbone(nn.Module):
         self.p5_channels: int = c6
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.stage0(x))
-        x = cast(Tensor, self.stage1(x))
-        p3: Tensor = cast(Tensor, self.stage2(x))  # stride 8
-        x = cast(Tensor, self.stage3(p3))
-        p4: Tensor = cast(Tensor, self.stage4(x))  # stride 16
-        x = cast(Tensor, self.stage5(p4))
-        p5: Tensor = cast(Tensor, self.stage6(x))  # stride 32
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        x = self.stem(x)
+        x = self.stage0(x)
+        x = self.stage1(x)
+        p3: Tensor = self.stage2(x)  # stride 8
+        x = self.stage3(p3)
+        p4: Tensor = self.stage4(x)  # stride 16
+        x = self.stage5(p4)
+        p5: Tensor = self.stage6(x)  # stride 32
         return p3, p4, p5
 
 
@@ -391,7 +391,7 @@ class _PredictionHead(nn.Module):
         self.predictor = nn.Conv2d(in_channels, num_outputs, 1)
 
     @override
-    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
         """
         Args:
             features: List of num_levels feature maps (finest → coarsest).
@@ -407,9 +407,7 @@ class _PredictionHead(nn.Module):
                 pw: Tensor = cast(Tensor, self.pw_convs[depth](dw))
                 bn_list = cast(nn.ModuleList, self.bns[depth])
                 x = F.silu(cast(Tensor, bn_list[lvl](pw)))
-            outs.append(
-                cast(Tensor, self.predictor(cast(Tensor, self.predictor_dw(x))))
-            )
+            outs.append(self.predictor(self.predictor_dw(x)))
         return outs
 
 
@@ -665,10 +663,10 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         """Project P3/P4/P5 to FPN width and build P6/P7."""
         # The reference's ResampleFeatureMap is conv + BN with ``act_layer=None``
         # — no activation on the lateral projections.
-        fp3: Tensor = cast(Tensor, self.p3_proj(p3))
-        fp4: Tensor = cast(Tensor, self.p4_proj(p4))
-        fp5: Tensor = cast(Tensor, self.p5_proj(p5))
-        fp6: Tensor = cast(Tensor, self.p6_pool(cast(Tensor, self.p6_proj(p5))))
+        fp3: Tensor = self.p3_proj(p3)
+        fp4: Tensor = self.p4_proj(p4)
+        fp5: Tensor = self.p5_proj(p5)
+        fp6: Tensor = cast(Tensor, self.p6_pool(self.p6_proj(p5)))
         fp7: Tensor = cast(Tensor, self.p7_pool(fp6))
         return [fp3, fp4, fp5, fp6, fp7]
 
@@ -677,7 +675,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
     # ------------------------------------------------------------------
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -699,7 +697,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         iW = int(x.shape[3])
 
         # 1. Backbone → (P3, P4, P5)
-        p3, p4, p5 = cast(tuple[Tensor, Tensor, Tensor], self.backbone(x))
+        p3, p4, p5 = self.backbone(x)
 
         # 2. Project → [P3, P4, P5, P6, P7] in FPN-width channels
         fpn_feats = self._project_backbone(p3, p4, p5)

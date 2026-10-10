@@ -81,9 +81,9 @@ class _ConvBnAct(nn.Module):
         self.apply_act = apply_act
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(x))
-        x = cast(Tensor, self.bn(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)
+        x = self.bn(x)
         if self.apply_act:
             x = F.leaky_relu(x, negative_slope=_LEAKY_SLOPE)
         return x
@@ -122,14 +122,14 @@ class _BottleneckBlock(nn.Module):
         self.drop_path = nn.Identity()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = x
-        x = cast(Tensor, self.conv1(x))
-        x = cast(Tensor, self.conv2(x))
-        x = cast(Tensor, self.attn2(x))
-        x = cast(Tensor, self.conv3(x))
-        x = cast(Tensor, self.attn3(x))
-        x = cast(Tensor, self.drop_path(x)) + shortcut
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.attn2(x)
+        x = self.conv3(x)
+        x = self.attn3(x)
+        x = self.drop_path(x) + shortcut
         return F.leaky_relu(x, negative_slope=_LEAKY_SLOPE)
 
 
@@ -160,12 +160,12 @@ class _DarkBlock(nn.Module):
         self.drop_path = nn.Identity()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = x
-        x = cast(Tensor, self.conv1(x))
-        x = cast(Tensor, self.attn(x))
-        x = cast(Tensor, self.conv2(x))
-        x = cast(Tensor, self.drop_path(x)) + shortcut
+        x = self.conv1(x)
+        x = self.attn(x)
+        x = self.conv2(x)
+        x = self.drop_path(x) + shortcut
         return x
 
 
@@ -314,16 +314,16 @@ class _CrossStage(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.conv_down(x))
-        x = cast(Tensor, self.conv_exp(x))
+        x = self.conv_exp(x)
         # Channel split — equal halves.
         half = self.expand_chs // 2
         xs = x[:, :half]
         xb = x[:, half:]
-        xb = cast(Tensor, self.blocks(xb))
-        xb = cast(Tensor, self.conv_transition_b(xb))
-        return cast(Tensor, self.conv_transition(lucid.cat([xs, xb], dim=1)))
+        xb = self.blocks(xb)
+        xb = self.conv_transition_b(xb)
+        return self.conv_transition(lucid.cat([xs, xb], dim=1))
 
 
 # ---------------------------------------------------------------------------
@@ -359,8 +359,8 @@ class _Stem(nn.Module):
             self.pool = nn.Identity()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv1(x)
         return cast(Tensor, self.pool(x))
 
 
@@ -468,13 +468,13 @@ class CSPNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -546,15 +546,15 @@ class CSPNetForImageClassification(ImageClassificationModel, ClassificationHeadM
             _zero_init_last(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
-        x = cast(Tensor, self.avgpool(x)).flatten(1)
+        x = self.avgpool(x).flatten(1)
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

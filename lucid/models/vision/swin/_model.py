@@ -55,12 +55,12 @@ class _PatchEmbed(nn.Module):
         self.pos_drop = nn.Dropout(p=dropout)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))  # (B, C, H, W)
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.proj(x)  # (B, C, H, W)
         B, C, H, W = x.shape
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
-        x = cast(Tensor, self.norm(x))
-        return cast(Tensor, self.pos_drop(x))
+        x = self.norm(x)
+        return self.pos_drop(x)
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ class _PatchMerge(nn.Module):
         self.proj = nn.Linear(4 * dim, 2 * dim, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, H, W, C)
         B, H, W, C = x.shape
         # The reference pads before merging when a side is odd; the strided
@@ -98,8 +98,8 @@ class _PatchMerge(nn.Module):
         x2 = x[:, 0::2, 1::2, :]
         x3 = x[:, 1::2, 1::2, :]
         x = lucid.cat([x0, x1, x2, x3], dim=-1)  # (B, H/2, W/2, 4C)
-        x = cast(Tensor, self.norm(x))
-        return cast(Tensor, self.proj(x))  # (B, H/2, W/2, 2C)
+        x = self.norm(x)
+        return self.proj(x)  # (B, H/2, W/2, 2C)
 
 
 # ---------------------------------------------------------------------------
@@ -176,13 +176,13 @@ class _WindowAttention(nn.Module):
         self.register_buffer("rel_pos_idx", rel_idx, persistent=False)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         mask: Tensor | None = None,
     ) -> Tensor:
         B_, N, C = x.shape  # B_ = num_windows*B
-        qkv = cast(Tensor, self.qkv(x))
+        qkv = self.qkv(x)
         qkv = qkv.reshape(B_, N, 3, self.num_heads, C // self.num_heads)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
@@ -220,10 +220,10 @@ class _WindowAttention(nn.Module):
             attn = attn.reshape(-1, self.num_heads, N, N)
 
         attn = F.softmax(attn, dim=-1)
-        attn = cast(Tensor, self.attn_drop(attn))
+        attn = self.attn_drop(attn)
 
         x = (attn @ v).permute(0, 2, 1, 3).reshape(B_, N, C)
-        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(x))))
+        return self.proj_drop(self.proj(x))
 
 
 # ---------------------------------------------------------------------------
@@ -302,10 +302,10 @@ class _SwinBlock(nn.Module):
         return mask
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         B, H, W, C = x.shape
         shortcut = x
-        x = cast(Tensor, self.norm1(x))
+        x = self.norm1(x)
 
         # When the whole feature map fits inside a single window, the
         # reference disables the cyclic shift *and* clamps the window down to
@@ -338,7 +338,7 @@ class _SwinBlock(nn.Module):
         windows, nH, nW = _window_partition(x, eff_ws)
         windows = windows.reshape(-1, eff_ws * eff_ws, C)
 
-        attn_out = cast(Tensor, self.attn(windows, mask=mask))
+        attn_out = self.attn(windows, mask=mask)
         attn_out = attn_out.reshape(-1, eff_ws, eff_ws, C)
         x = _window_reverse(attn_out, eff_ws, nH, nW)
 
@@ -349,10 +349,8 @@ class _SwinBlock(nn.Module):
         if pad_h or pad_w:
             x = x[:, :H, :W, :]
 
-        x = shortcut + cast(Tensor, self.drop_path(x))
-        x = x + cast(
-            Tensor, self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
-        )
+        x = shortcut + self.drop_path(x)
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
 
@@ -399,7 +397,7 @@ class _SwinStage(nn.Module):
         self.downsample: nn.Module | None = _PatchMerge(dim) if downsample else None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         if self.downsample is not None:
@@ -577,18 +575,18 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.patch_embed(x))  # (B, H/p, W/p, C)
+        x = self.patch_embed(x)  # (B, H/p, W/p, C)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
-        x = cast(Tensor, self.norm(x))  # (B, H', W', C)
+        x = self.norm(x)  # (B, H', W', C)
         # Global average pool: permute to (B, C, H', W') → avgpool → flatten
         B, H, W, C = x.shape
         x = x.permute(0, 3, 1, 2)  # (B, C, H', W')
-        x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
+        x = self.avgpool(x).flatten(1)  # (B, C)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -675,18 +673,18 @@ class SwinTransformerForImageClassification(
         self._build_classifier(out_dim, config.num_classes, dropout=config.dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.patch_embed(x))
+        x = self.patch_embed(x)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         B, H, W, C = x.shape
         x = x.permute(0, 3, 1, 2)
-        x = cast(Tensor, self.avgpool(x)).flatten(1)
+        x = self.avgpool(x).flatten(1)
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

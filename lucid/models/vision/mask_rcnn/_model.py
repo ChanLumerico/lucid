@@ -153,9 +153,9 @@ class _MaskRCNNPredictor(nn.Module):
                 nn.init.zeros_(_param)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = F.relu(cast(Tensor, self.conv5_mask(x)))
-        return cast(Tensor, self.mask_fcn_logits(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.relu(self.conv5_mask(x))
+        return self.mask_fcn_logits(x)
 
 
 # ---------------------------------------------------------------------------
@@ -200,14 +200,14 @@ class _MaskRoIHeads(nn.Module):
         )
 
     @override
-    def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        feats = cast(Tensor, self.box_head(roi_feats))
-        return cast(tuple[Tensor, Tensor], self.box_predictor(feats))
+    def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:
+        feats = self.box_head(roi_feats)
+        return self.box_predictor(feats)
 
     def predict_masks(self, mask_feats: Tensor) -> Tensor:
         """Run the mask branch on RoI-aligned crops → ``(N, K, 28, 28)``."""
-        x = cast(Tensor, self.mask_head(mask_feats))
-        return cast(Tensor, self.mask_predictor(x))
+        x = self.mask_head(mask_feats)
+        return self.mask_predictor(x)
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -466,7 +466,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         dev = x.device.type
 
         # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
-        features = cast(list[Tensor], self.backbone(x))
+        features = self.backbone(x)
 
         # Level strides come from the maps the backbone produced, as in Faster
         # R-CNN.  The nominal ``_strides`` hold only for sizes divisible all

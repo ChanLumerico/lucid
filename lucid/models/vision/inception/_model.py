@@ -63,8 +63,8 @@ class _ConvBnReLU(nn.Module):
         self.bn = nn.BatchNorm2d(out_channels, eps=_BN_EPS)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return F.relu(self.bn(self.conv(x)))
 
 
 # ---------------------------------------------------------------------------
@@ -101,16 +101,11 @@ class _InceptionA(nn.Module):
         self.branch4_conv = _ConvBnReLU(in_channels, pool_features, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(Tensor, self.branch2_b(cast(Tensor, self.branch2_a(x))))
-        b3 = cast(
-            Tensor,
-            self.branch3_c(
-                cast(Tensor, self.branch3_b(cast(Tensor, self.branch3_a(x))))
-            ),
-        )
-        b4 = cast(Tensor, self.branch4_conv(cast(Tensor, self.branch4_pool(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1(x)
+        b2 = self.branch2_b(self.branch2_a(x))
+        b3 = self.branch3_c(self.branch3_b(self.branch3_a(x)))
+        b4 = self.branch4_conv(self.branch4_pool(x))
         return lucid.cat([b1, b2, b3, b4], dim=1)
 
 
@@ -135,14 +130,9 @@ class _InceptionB(nn.Module):
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1(x))
-        b2 = cast(
-            Tensor,
-            self.branch2_c(
-                cast(Tensor, self.branch2_b(cast(Tensor, self.branch2_a(x))))
-            ),
-        )
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1(x)
+        b2 = self.branch2_c(self.branch2_b(self.branch2_a(x)))
         b3 = cast(Tensor, self.branch3(x))
         return lucid.cat([b1, b2, b3], dim=1)
 
@@ -182,20 +172,20 @@ class _InceptionC(nn.Module):
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1(x)
 
-        t = cast(Tensor, self.branch2_a(x))
-        t = F.relu(cast(Tensor, self.branch2_b_bn(cast(Tensor, self.branch2_b(t)))))
-        b2 = F.relu(cast(Tensor, self.branch2_c_bn(cast(Tensor, self.branch2_c(t)))))
+        t = self.branch2_a(x)
+        t = F.relu(self.branch2_b_bn(self.branch2_b(t)))
+        b2 = F.relu(self.branch2_c_bn(self.branch2_c(t)))
 
-        t = cast(Tensor, self.branch3_a(x))
-        t = F.relu(cast(Tensor, self.branch3_b_bn(cast(Tensor, self.branch3_b(t)))))
-        t = F.relu(cast(Tensor, self.branch3_c_bn(cast(Tensor, self.branch3_c(t)))))
-        t = F.relu(cast(Tensor, self.branch3_d_bn(cast(Tensor, self.branch3_d(t)))))
-        b3 = F.relu(cast(Tensor, self.branch3_e_bn(cast(Tensor, self.branch3_e(t)))))
+        t = self.branch3_a(x)
+        t = F.relu(self.branch3_b_bn(self.branch3_b(t)))
+        t = F.relu(self.branch3_c_bn(self.branch3_c(t)))
+        t = F.relu(self.branch3_d_bn(self.branch3_d(t)))
+        b3 = F.relu(self.branch3_e_bn(self.branch3_e(t)))
 
-        b4 = cast(Tensor, self.branch4_conv(cast(Tensor, self.branch4_pool(x))))
+        b4 = self.branch4_conv(self.branch4_pool(x))
 
         return lucid.cat([b1, b2, b3, b4], dim=1)
 
@@ -225,13 +215,13 @@ class _InceptionD(nn.Module):
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1_b(cast(Tensor, self.branch1_a(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1_b(self.branch1_a(x))
 
-        t = cast(Tensor, self.branch2_a(x))
-        t = F.relu(cast(Tensor, self.branch2_b_bn(cast(Tensor, self.branch2_b(t)))))
-        t = F.relu(cast(Tensor, self.branch2_c_bn(cast(Tensor, self.branch2_c(t)))))
-        b2 = cast(Tensor, self.branch2_d(t))
+        t = self.branch2_a(x)
+        t = F.relu(self.branch2_b_bn(self.branch2_b(t)))
+        t = F.relu(self.branch2_c_bn(self.branch2_c(t)))
+        b2 = self.branch2_d(t)
 
         b3 = cast(Tensor, self.branch3(x))
         return lucid.cat([b1, b2, b3], dim=1)
@@ -268,28 +258,20 @@ class _InceptionE(nn.Module):
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b1 = cast(Tensor, self.branch1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        b1 = self.branch1(x)
 
-        t2 = cast(Tensor, self.branch2_a(x))
-        b2a = F.relu(
-            cast(Tensor, self.branch2_b1_bn(cast(Tensor, self.branch2_b1(t2))))
-        )
-        b2b = F.relu(
-            cast(Tensor, self.branch2_b2_bn(cast(Tensor, self.branch2_b2(t2))))
-        )
+        t2 = self.branch2_a(x)
+        b2a = F.relu(self.branch2_b1_bn(self.branch2_b1(t2)))
+        b2b = F.relu(self.branch2_b2_bn(self.branch2_b2(t2)))
         b2 = lucid.cat([b2a, b2b], dim=1)
 
-        t3 = cast(Tensor, self.branch3_b(cast(Tensor, self.branch3_a(x))))
-        b3a = F.relu(
-            cast(Tensor, self.branch3_c1_bn(cast(Tensor, self.branch3_c1(t3))))
-        )
-        b3b = F.relu(
-            cast(Tensor, self.branch3_c2_bn(cast(Tensor, self.branch3_c2(t3))))
-        )
+        t3 = self.branch3_b(self.branch3_a(x))
+        b3a = F.relu(self.branch3_c1_bn(self.branch3_c1(t3)))
+        b3b = F.relu(self.branch3_c2_bn(self.branch3_c2(t3)))
         b3 = lucid.cat([b3a, b3b], dim=1)
 
-        b4 = cast(Tensor, self.branch4_conv(cast(Tensor, self.branch4_pool(x))))
+        b4 = self.branch4_conv(self.branch4_pool(x))
 
         return lucid.cat([b1, b2, b3, b4], dim=1)
 
@@ -316,13 +298,13 @@ class _InceptionAux(nn.Module):
         self.fc = nn.Linear(768, num_classes)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.conv0(x))
-        x = cast(Tensor, self.conv1(x))
-        x = cast(Tensor, self.adapt_pool(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.avgpool(x)
+        x = self.conv0(x)
+        x = self.conv1(x)
+        x = self.adapt_pool(x)
         x = x.flatten(1)
-        return cast(Tensor, self.fc(x))
+        return self.fc(x)
 
 
 # ---------------------------------------------------------------------------
@@ -583,22 +565,22 @@ class InceptionV3(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.inception_a0(x))
-        x = cast(Tensor, self.inception_a1(x))
-        x = cast(Tensor, self.inception_a2(x))
-        x = cast(Tensor, self.reduction_a(x))
-        x = cast(Tensor, self.inception_c0(x))
-        x = cast(Tensor, self.inception_c1(x))
-        x = cast(Tensor, self.inception_c2(x))
-        x = cast(Tensor, self.inception_c3(x))
-        x = cast(Tensor, self.reduction_b(x))
-        x = cast(Tensor, self.inception_e0(x))
-        x = cast(Tensor, self.inception_e1(x))
-        return cast(Tensor, self.avgpool(x))
+        x = self.stem(x)
+        x = self.inception_a0(x)
+        x = self.inception_a1(x)
+        x = self.inception_a2(x)
+        x = self.reduction_a(x)
+        x = self.inception_c0(x)
+        x = self.inception_c1(x)
+        x = self.inception_c2(x)
+        x = self.inception_c3(x)
+        x = self.reduction_b(x)
+        x = self.inception_e0(x)
+        x = self.inception_e1(x)
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -731,7 +713,7 @@ class InceptionV3ForImageClassification(
         _init_reference_weights(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -742,25 +724,25 @@ class InceptionV3ForImageClassification(
 
         if cfg.transform_input:
             x = transform_input_imagenet_to_tf(x)
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.inception_a0(x))
-        x = cast(Tensor, self.inception_a1(x))
-        x = cast(Tensor, self.inception_a2(x))
-        x = cast(Tensor, self.reduction_a(x))
-        x = cast(Tensor, self.inception_c0(x))
-        x = cast(Tensor, self.inception_c1(x))
-        x = cast(Tensor, self.inception_c2(x))
-        x = cast(Tensor, self.inception_c3(x))
+        x = self.stem(x)
+        x = self.inception_a0(x)
+        x = self.inception_a1(x)
+        x = self.inception_a2(x)
+        x = self.reduction_a(x)
+        x = self.inception_c0(x)
+        x = self.inception_c1(x)
+        x = self.inception_c2(x)
+        x = self.inception_c3(x)
 
         aux_out: Tensor | None = None
         if use_aux and isinstance(self.aux, _InceptionAux):
-            aux_out = cast(Tensor, self.aux(x))
+            aux_out = self.aux(x)
 
-        x = cast(Tensor, self.reduction_b(x))
-        x = cast(Tensor, self.inception_e0(x))
-        x = cast(Tensor, self.inception_e1(x))
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.drop(x.flatten(1)))
+        x = self.reduction_b(x)
+        x = self.inception_e0(x)
+        x = self.inception_e1(x)
+        x = self.avgpool(x)
+        x = self.drop(x.flatten(1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

@@ -63,7 +63,7 @@ class _SelectiveKernelAttn(nn.Module):
         self.gap = nn.AdaptiveAvgPool2d(1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, num_paths, C, H, W)
         # Sum paths then global-average-pool → (B, C, 1, 1)
         b = x.shape[0]
@@ -75,12 +75,12 @@ class _SelectiveKernelAttn(nn.Module):
             summed = summed + x[:, p, :, :, :]
 
         # Global average pool: mean over H and W
-        gap = cast(Tensor, self.gap(summed))  # (B, C, 1, 1)
+        gap = self.gap(summed)  # (B, C, 1, 1)
 
-        z = cast(Tensor, self.fc_reduce(gap))
-        z = cast(Tensor, self.bn(z))
-        z = cast(Tensor, self.act(z))
-        z = cast(Tensor, self.fc_select(z))  # (B, C*num_paths, 1, 1)
+        z = self.fc_reduce(gap)
+        z = self.bn(z)
+        z = self.act(z)
+        z = self.fc_select(z)  # (B, C*num_paths, 1, 1)
 
         # Reshape to (B, num_paths, C, 1, 1) then softmax over path dim
         z = z.reshape(b, self.num_paths, c, 1, 1)
@@ -125,9 +125,9 @@ class _ConvBnAct(nn.Module):
             self.act: nn.Module = nn.ReLU(inplace=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out = cast(Tensor, self.conv(x))
-        out = cast(Tensor, self.bn(out))
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.conv(x)
+        out = self.bn(out)
         if self.apply_act:
             out = cast(Tensor, self.act(out))
         return out
@@ -215,7 +215,7 @@ class _SelectiveKernel(nn.Module):
         self.attn = _SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if self.split_input:
             half = self.in_channels // self.num_paths
             x_paths = [
@@ -228,7 +228,7 @@ class _SelectiveKernel(nn.Module):
         # Stack: (B, num_paths, C, H, W)
         stacked = lucid.stack(x_paths, dim=1)
         # Attention weights: (B, num_paths, C, 1, 1)
-        attn = cast(Tensor, self.attn(stacked))
+        attn = self.attn(stacked)
         # Weighted sum
         weighted = stacked * attn
         out = weighted[:, 0, :, :, :]
@@ -295,17 +295,17 @@ class _SelectiveKernelBasic(nn.Module):
         self.downsample = downsample
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
 
-        out = cast(Tensor, self.conv1(x))
-        out = cast(Tensor, self.conv2(out))
+        out = self.conv1(x)
+        out = self.conv2(out)
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.act(out))
+        return self.act(out)
 
 
 # ---------------------------------------------------------------------------
@@ -355,18 +355,18 @@ class _SelectiveKernelBottleneck(nn.Module):
         self.downsample = downsample
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
 
-        out = cast(Tensor, self.conv1(x))
-        out = cast(Tensor, self.conv2(out))
-        out = cast(Tensor, self.conv3(out))
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.act(out))
+        return self.act(out)
 
 
 # ---------------------------------------------------------------------------
@@ -592,16 +592,16 @@ class SKNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -694,18 +694,18 @@ class SKNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         init_cnn_fan_out(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

@@ -64,8 +64,8 @@ class _InvertedResidual(nn.Module):
         self.conv = nn.Sequential(*layers)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out = cast(Tensor, self.conv(x))
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.conv(x)
         if self._use_residual:
             out = out + x
         return out
@@ -243,11 +243,11 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -344,14 +344,14 @@ class MobileNetV2ForImageClassification(
         init_cnn_fan_out(self, linear_std=0.01)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
-        x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.drop(x.flatten(1)))
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = self.drop(x.flatten(1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

@@ -327,7 +327,7 @@ class _ConvNorm(nn.Module):
         self.act = act if act is not None else nn.Identity()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         return _chain(x, self.conv, self.bn, self.act)
 
 
@@ -350,7 +350,7 @@ class _ConvBlock(nn.Module):
         self.act = _make_act(act)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         return _chain(x, self.conv, self.bn1, self.act)
 
 
@@ -380,10 +380,10 @@ class _FusedIB(nn.Module):
         self.drop_path = DropPath(drop_path)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         y = _chain(x, self.conv_exp, self.bn1, self.act, self.conv_pwl, self.bn2)
         if self._has_skip:
-            y = cast(Tensor, self.drop_path(y)) + x
+            y = self.drop_path(y) + x
         return y
 
 
@@ -435,12 +435,12 @@ class _UIB(nn.Module):
         self.drop_path = DropPath(drop_path)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         y = _chain(
             x, self.dw_start, self.pw_exp, self.dw_mid, self.pw_proj, self.layer_scale
         )
         if self._has_skip:
-            y = cast(Tensor, self.drop_path(y)) + x
+            y = self.drop_path(y) + x
         return y
 
 
@@ -462,7 +462,7 @@ class _KVProjection(nn.Module):
         self.proj = nn.Conv2d(dim, out_dim, 1, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         return _chain(x, self.down_conv, self.norm, self.proj)
 
 
@@ -474,8 +474,8 @@ class _Projection(nn.Module):
         self.proj = nn.Conv2d(in_dim, out_dim, 1, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.proj(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.proj(x)
 
 
 class _MultiQueryAttention(nn.Module):
@@ -500,24 +500,24 @@ class _MultiQueryAttention(nn.Module):
         self.output = _Projection(heads * key_dim, out_dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         b, _, h, w = x.shape
         n = h * w
         heads, d = self.heads, self.key_dim
 
         # (B, heads*d, H, W) -> (B, heads, HW, d) -> (B, heads*HW, d)
-        q = cast(Tensor, self.query(x)).reshape(b, heads, d, n)
+        q = self.query(x).reshape(b, heads, d, n)
         q = q.permute(0, 1, 3, 2).reshape(b, heads * n, d)
-        k = cast(Tensor, self.key(x))
+        k = self.key(x)
         k = k.reshape(b, d, -1).permute(0, 2, 1)  # (B, M, d)
-        v = cast(Tensor, self.value(x))
+        v = self.value(x)
         v = v.reshape(b, d, -1).permute(0, 2, 1)  # (B, M, d)
 
         o = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         # (B, heads*HW, d) -> (B, HW, heads, d) -> (B, heads*d, H, W)
         o = o.reshape(b, heads, n, d).permute(0, 2, 1, 3)
         o = o.reshape(b, h, w, heads * d).permute(0, 3, 1, 2)
-        return cast(Tensor, self.output(o))
+        return self.output(o)
 
 
 class _MobileMQA(nn.Module):
@@ -541,9 +541,9 @@ class _MobileMQA(nn.Module):
         self.drop_path = DropPath(drop_path)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         y = _chain(x, self.norm, self.attn, self.layer_scale)
-        return cast(Tensor, self.drop_path(y)) + x
+        return self.drop_path(y) + x
 
 
 # ---------------------------------------------------------------------------
@@ -744,7 +744,7 @@ class MobileNetV4(PretrainedModel, BackboneMixin):
         return _chain(x, self.conv_stem, self.bn1, self.act, self.blocks)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -841,7 +841,7 @@ class MobileNetV4ForImageClassification(
         _init_weights(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -857,7 +857,7 @@ class MobileNetV4ForImageClassification(
             self.norm_head,
             self.act_head,
         )
-        x = cast(Tensor, self.head_drop(x.reshape(x.shape[0], -1)))
+        x = self.head_drop(x.reshape(x.shape[0], -1))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

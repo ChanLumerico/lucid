@@ -56,8 +56,8 @@ class _PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_channels, embed_dim, patch_size, stride=patch_size)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))  # (B, C, H', W')
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.proj(x)  # (B, C, H', W')
         B, C, H, W = x.shape
         return x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
 
@@ -89,9 +89,9 @@ class _Attention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
-        qkv = cast(Tensor, self.qkv(x)).reshape(B, N, 3, self.num_heads, self.head_dim)
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D)
         q, k, v = qkv[0], qkv[1], qkv[2]
         # Fused SDPA when no attention dropout is active; the fused kernel has
@@ -100,13 +100,13 @@ class _Attention(nn.Module):
         if self.training and self.attn_drop.p > 0:
             attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
             attn = F.softmax(attn, dim=-1)
-            attn = cast(Tensor, self.attn_drop(attn))
+            attn = self.attn_drop(attn)
             out = attn @ v
         else:
             out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         x = out.swapaxes(1, 2).reshape(B, N, C)
-        x = cast(Tensor, self.proj(x))
-        return cast(Tensor, self.proj_drop(x))
+        x = self.proj(x)
+        return self.proj_drop(x)
 
 
 class _Mlp(nn.Module):
@@ -125,11 +125,11 @@ class _Mlp(nn.Module):
         self.drop = nn.Dropout(drop)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = F.gelu(cast(Tensor, self.fc1(x)))
-        x = cast(Tensor, self.drop(x))
-        x = cast(Tensor, self.fc2(x))
-        return cast(Tensor, self.drop(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.gelu(self.fc1(x))
+        x = self.drop(x)
+        x = self.fc2(x)
+        return self.drop(x)
 
 
 @final
@@ -157,11 +157,11 @@ class _Block(nn.Module):
         self.mlp = _Mlp(dim, int(dim * mlp_ratio), dim, drop=drop)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        n1 = cast(Tensor, self.norm1(x))
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.attn(n1))))
-        n2 = cast(Tensor, self.norm2(x))
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.mlp(n2))))
+    def forward(self, x: Tensor) -> Tensor:
+        n1 = self.norm1(x)
+        x = x + self.drop_path(self.attn(n1))
+        n2 = self.norm2(x)
+        x = x + self.drop_path(self.mlp(n2))
         return x
 
 
@@ -203,38 +203,30 @@ class _CrossAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x = concat(cls_query, kv_sequence) along token dim.
         # timm's CrossAttention takes only the first token as query,
         # the entire sequence as KV.
         B, N, C = x.shape
         q = (
-            cast(Tensor, self.wq(x[:, 0:1, :]))
+            self.wq(x[:, 0:1, :])
             .reshape(B, 1, self.num_heads, self.head_dim)
             .permute(0, 2, 1, 3)
         )
-        k = (
-            cast(Tensor, self.wk(x))
-            .reshape(B, N, self.num_heads, self.head_dim)
-            .permute(0, 2, 1, 3)
-        )
-        v = (
-            cast(Tensor, self.wv(x))
-            .reshape(B, N, self.num_heads, self.head_dim)
-            .permute(0, 2, 1, 3)
-        )
+        k = self.wk(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = self.wv(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         # Fused SDPA (cross-attention: 1 query token, N keys) unless dropout.
         out: Tensor
         if self.training and self.attn_drop.p > 0:
             attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, 1, N)
             attn = F.softmax(attn, dim=-1)
-            attn = cast(Tensor, self.attn_drop(attn))
+            attn = self.attn_drop(attn)
             out = attn @ v
         else:
             out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         x = out.swapaxes(1, 2).reshape(B, 1, C)
-        x = cast(Tensor, self.proj(x))
-        return cast(Tensor, self.proj_drop(x))
+        x = self.proj(x)
+        return self.proj_drop(x)
 
 
 @final
@@ -259,11 +251,11 @@ class _CrossAttentionBlock(nn.Module):
         self.drop_path = DropPath(drop_path)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # Residual is added only to the CLS query token (first slot).
         cls_q = x[:, 0:1, :]
-        out = cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
-        return cls_q + cast(Tensor, self.drop_path(out))
+        out = self.attn(self.norm1(x))
+        return cls_q + self.drop_path(out)
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +354,7 @@ class _MultiScaleBlock(nn.Module):
         )
 
     @override
-    def forward(self, xs: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, xs: list[Tensor]) -> list[Tensor]:
         # Per-branch self-attention.
         xs = [cast(Tensor, self.blocks[d](xs[d])) for d in range(self.num_branches)]
 
@@ -628,7 +620,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         x = lucid.cat([cls_token, x], dim=1)
         pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
         x = x + pos
-        return cast(Tensor, self.pos_drop(x))
+        return self.pos_drop(x)
 
     @override
     def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
@@ -643,14 +635,14 @@ class CrossViT(PretrainedModel, BackboneMixin):
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         # K cross-attention stages — _MultiScaleBlock takes/returns ``list[Tensor]``.
         for stage in self.stages:
-            xs = stage(xs)  # type: ignore[arg-type,assignment]
+            xs = stage(xs)
         # Final norm per branch.
         xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
         # Return the two CLS tokens.
         return xs[0][:, 0], xs[1][:, 0]
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         cls_s, cls_l = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=lucid.cat([cls_s, cls_l], dim=-1))
 
@@ -752,7 +744,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         x = lucid.cat([cls_token, x], dim=1)
         pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
         x = x + pos
-        return cast(Tensor, self.pos_drop(x))
+        return self.pos_drop(x)
 
     @override
     def reset_classifier(self, num_classes: int) -> None:
@@ -771,7 +763,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
@@ -783,7 +775,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         ]
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:
-            xs = stage(xs)  # type: ignore[arg-type,assignment]
+            xs = stage(xs)
         xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
         cls = [xs[d][:, 0] for d in range(2)]
         logits_s = cast(Tensor, self.head[0](cls[0]))

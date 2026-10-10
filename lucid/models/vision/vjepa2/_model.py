@@ -140,7 +140,7 @@ class _RoPEAttention(nn.Module):
         self.width_dim = axis_dim
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         token_indices: Tensor | None = None,
@@ -152,9 +152,7 @@ class _RoPEAttention(nn.Module):
         action_tokens: int = 0,
     ) -> Tensor:
         batch, count, dim = (int(s) for s in x.shape)
-        qkv = cast(Tensor, self.qkv(x)).reshape(
-            batch, count, 3, self.num_heads, self.head_dim
-        )
+        qkv = self.qkv(x).reshape(batch, count, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, value = qkv[0], qkv[1], qkv[2]
 
@@ -215,7 +213,7 @@ class _RoPEAttention(nn.Module):
             dropout_p=self._dropout_p(),
         )
         attended = attended.permute(0, 2, 1, 3).reshape(batch, count, dim)
-        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(attended))))
+        return self.proj_drop(self.proj(attended))
 
     def _dropout_p(self) -> float:
         """Attention dropout, which is an inference-time no-op.
@@ -328,7 +326,7 @@ class _RoPEAttention(nn.Module):
             q, k, value, attn_mask=attn_mask, dropout_p=self._dropout_p()
         )
         attended = attended.permute(0, 2, 1, 3).reshape(batch, count, heads * head_dim)
-        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(attended))))
+        return self.proj_drop(self.proj(attended))
 
 
 class _FeedForward(nn.Module):
@@ -359,13 +357,13 @@ class _FeedForward(nn.Module):
         self.drop = nn.Dropout(0.0 if use_silu else drop_rate)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if self.use_silu:
-            first = cast(Tensor, self.fc1(x))
-            second = cast(Tensor, self.fc2(x))
-            return cast(Tensor, self.fc3(F.silu(first) * second))
-        hidden = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
-        return cast(Tensor, self.drop(cast(Tensor, self.fc2(hidden))))
+            first = self.fc1(x)
+            second = self.fc2(x)
+            return self.fc3(F.silu(first) * second)
+        hidden = self.drop(F.gelu(self.fc1(x)))
+        return self.drop(self.fc2(hidden))
 
 
 class _Block(nn.Module):
@@ -402,7 +400,7 @@ class _Block(nn.Module):
         self.mlp = _FeedForward(dim, hidden, use_silu, wide_silu, drop_rate)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         token_indices: Tensor | None = None,
@@ -413,7 +411,7 @@ class _Block(nn.Module):
         attn_mask: Tensor | None = None,
         action_tokens: int = 0,
     ) -> Tensor:
-        normalized = cast(Tensor, self.norm1(x))
+        normalized = self.norm1(x)
         if token_indices is None:
             attended = self.attn(
                 normalized,
@@ -433,10 +431,10 @@ class _Block(nn.Module):
                 attn_mask=attn_mask,
                 action_tokens=action_tokens,
             )
-        attended = cast(Tensor, attended)
-        x = x + cast(Tensor, self.drop_path(attended))
-        residual = cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
-        return x + cast(Tensor, self.drop_path(residual))
+        attended = attended
+        x = x + self.drop_path(attended)
+        residual = self.mlp(self.norm2(x))
+        return x + self.drop_path(residual)
 
 
 class _RoPEVideoEncoder(nn.Module):
@@ -510,7 +508,7 @@ class _RoPEVideoEncoder(nn.Module):
             _scale_projection(block.attn.proj, block.mlp, index, init_std)
 
     @override
-    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:
         if x.ndim != 5:
             raise ValueError(f"video must have rank 5 (B, T, C, H, W), got {x.shape}")
         batch, frames, channels, height, width = (int(s) for s in x.shape)
@@ -522,7 +520,7 @@ class _RoPEVideoEncoder(nn.Module):
             raise ValueError("video height and width must be divisible by patch_size")
         if frames % self.tubelet_size != 0:
             raise ValueError("video frame count must be divisible by tubelet_size")
-        tokens = cast(Tensor, self.patch_embed(x.permute(0, 2, 1, 3, 4)))
+        tokens = self.patch_embed(x.permute(0, 2, 1, 3, 4))
         time = frames // self.tubelet_size
         rows = height // self.patch_size
         cols = width // self.patch_size
@@ -543,7 +541,7 @@ class _RoPEVideoEncoder(nn.Module):
                     Tensor,
                     block(tokens, indices, temporal=time, height=rows, width=cols),
                 )
-        return cast(Tensor, self.norm(tokens))
+        return self.norm(tokens)
 
 
 class _RoPEVideoPredictor(nn.Module):
@@ -622,7 +620,7 @@ class _RoPEVideoPredictor(nn.Module):
             _scale_projection(block.attn.proj, block.mlp, index, init_std)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         context: Tensor,
         context_indices: Tensor,
@@ -636,7 +634,7 @@ class _RoPEVideoPredictor(nn.Module):
             )
         batch, context_count = int(context.shape[0]), int(context.shape[1])
         target_count = int(target_indices.shape[1])
-        tokens = cast(Tensor, self.predictor_embed(context))
+        tokens = self.predictor_embed(context)
         temporal = max(
             1,
             int(
@@ -685,7 +683,7 @@ class _RoPEVideoPredictor(nn.Module):
                     width=rows,
                 ),
             )
-        hidden = cast(Tensor, self.predictor_norm(hidden))
+        hidden = self.predictor_norm(hidden)
         inverse = order.argsort(dim=1)
         inverse_gather = inverse.unsqueeze(-1) + lucid.zeros(
             batch,
@@ -699,7 +697,7 @@ class _RoPEVideoPredictor(nn.Module):
             selected = hidden
         else:
             selected = hidden[:, context_count:]
-        return cast(Tensor, self.predictor_proj(selected))
+        return self.predictor_proj(selected)
 
 
 class _ActionConditionedPredictor(nn.Module):
@@ -763,7 +761,7 @@ class _ActionConditionedPredictor(nn.Module):
             _scale_projection(block.attn.proj, block.mlp, index, init_std)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         actions: Tensor,
@@ -796,16 +794,14 @@ class _ActionConditionedPredictor(nn.Module):
                 raise ValueError(
                     f"extrinsics must have shape (B, {steps}, width) when enabled"
                 )
-        hidden = cast(Tensor, self.predictor_embed(x))
+        hidden = self.predictor_embed(x)
         hidden = hidden.reshape(batch, steps, spatial, self.predictor_dim)
-        action = cast(Tensor, self.action_encoder(actions)).unsqueeze(2)
-        state = cast(Tensor, self.state_encoder(states)).unsqueeze(2)
+        action = self.action_encoder(actions).unsqueeze(2)
+        state = self.state_encoder(states).unsqueeze(2)
         pieces = [action, state]
         if self.use_extrinsics:
             assert extrinsics is not None
-            pieces.append(
-                cast(Tensor, self.extrinsics_encoder(extrinsics)).unsqueeze(2)
-            )
+            pieces.append(self.extrinsics_encoder(extrinsics).unsqueeze(2))
         pieces.append(hidden)
         hidden = lucid.cat(pieces, dim=2).reshape(
             batch, steps * (spatial + len(pieces) - 1), self.predictor_dim
@@ -832,9 +828,7 @@ class _ActionConditionedPredictor(nn.Module):
             )
         hidden = hidden.reshape(batch, steps, total_per_step, self.predictor_dim)
         hidden = hidden[:, :, cond:, :].reshape(batch, token_count, self.predictor_dim)
-        return cast(
-            Tensor, self.predictor_proj(cast(Tensor, self.predictor_norm(hidden)))
-        )
+        return self.predictor_proj(self.predictor_norm(hidden))
 
 
 def _action_attention_mask(
@@ -957,15 +951,15 @@ class _SelfAttentionBlock(nn.Module):
         self.mlp = _FeedForward(dim, int(dim * mlp_ratio), False, False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         batch, count, width = (int(s) for s in x.shape)
-        qkv = cast(Tensor, self.qkv(cast(Tensor, self.norm1(x))))
+        qkv = self.qkv(self.norm1(x))
         qkv = qkv.reshape(batch, count, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         attended = F.scaled_dot_product_attention(qkv[0], qkv[1], qkv[2])
         attended = attended.permute(0, 2, 1, 3).reshape(batch, count, width)
-        x = x + cast(Tensor, self.proj(attended))
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        x = x + self.proj(attended)
+        return x + self.mlp(self.norm2(x))
 
 
 class _AttentivePooler(nn.Module):
@@ -1029,12 +1023,12 @@ class _AttentivePooler(nn.Module):
         )
 
     @override
-    def forward(self, tokens: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, tokens: Tensor) -> Tensor:
         batch, _, width = (int(s) for s in tokens.shape)
         for block in self.blocks:
             tokens = cast(Tensor, block(tokens))
         count = int(tokens.shape[1])
-        keys = cast(Tensor, self.norm_keys(tokens))
+        keys = self.norm_keys(tokens)
 
         def split_heads(value: Tensor, length: int) -> Tensor:
             return value.reshape(batch, length, self.num_heads, self.head_dim).permute(
@@ -1042,12 +1036,12 @@ class _AttentivePooler(nn.Module):
             )
 
         query_input = cast(Tensor, self.query_token).repeat(batch, 1, 1)
-        query = split_heads(cast(Tensor, self.query(query_input)), 1)
-        key = split_heads(cast(Tensor, self.key(keys)), count)
-        value = split_heads(cast(Tensor, self.value(keys)), count)
+        query = split_heads(self.query(query_input), 1)
+        key = split_heads(self.key(keys), count)
+        value = split_heads(self.value(keys), count)
         attended = F.scaled_dot_product_attention(query, key, value)
         pooled = query_input + attended.permute(0, 2, 1, 3).reshape(batch, 1, width)
-        pooled = pooled + cast(Tensor, self.mlp(cast(Tensor, self.norm_out(pooled))))
+        pooled = pooled + self.mlp(self.norm_out(pooled))
         return pooled.reshape(batch, width)
 
 
@@ -1193,7 +1187,7 @@ class VJEPA2Model(PretrainedModel, BackboneMixin):
         """Return the full ``(B, N, dim)`` token map."""
         self._check_clip(x)
         encoder = self.target_encoder if target else self.encoder
-        return cast(Tensor, encoder(x))
+        return encoder(x)
 
     def encode(self, x: Tensor) -> Tensor:
         """Return mean-pooled target-encoder representations ``(B, dim)``."""
@@ -1207,7 +1201,7 @@ class VJEPA2Model(PretrainedModel, BackboneMixin):
         return F.l1_loss(prediction, target)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         context_indices: Tensor | None = None,
@@ -1225,19 +1219,16 @@ class VJEPA2Model(PretrainedModel, BackboneMixin):
             return VJEPA2Output(tokens=self.tokens(x))
 
         with lucid.no_grad():
-            target = cast(Tensor, self.target_encoder(x))
+            target = self.target_encoder(x)
             if self.config.normalize_targets:
                 target = F.layer_norm(target, (int(target.shape[-1]),))
             target = _gather_tokens(target, target_indices)
-        context = cast(Tensor, self.encoder(x, context_indices))
-        prediction = cast(
-            Tensor,
-            self.predictor(
-                context,
-                context_indices,
-                target_indices,
-                mask_index=mask_index,
-            ),
+        context = self.encoder(x, context_indices)
+        prediction = self.predictor(
+            context,
+            context_indices,
+            target_indices,
+            mask_index=mask_index,
         )
         # With ``predictor_return_all_tokens`` the predictor answers at the
         # context positions too, and only the held-out ones have a target to
@@ -1296,7 +1287,7 @@ class VJEPA2ForVideoClassification(ImageClassificationModel, ClassificationHeadM
         self.head = nn.Linear(config.dim, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, x: Tensor, labels: Tensor | None = None
     ) -> ImageClassificationOutput:
         """Classify a clip and optionally return cross-entropy loss.
@@ -1306,7 +1297,7 @@ class VJEPA2ForVideoClassification(ImageClassificationModel, ClassificationHeadM
         not of this call: wrapping the pass in ``no_grad`` would also
         stop a caller who unfroze them deliberately.
         """
-        pooled = cast(Tensor, self.pooler(self.vjepa2.tokens(x)))
-        logits = cast(Tensor, self.head(pooled))
+        pooled = self.pooler(self.vjepa2.tokens(x))
+        logits = self.head(pooled)
         loss = None if labels is None else F.cross_entropy(logits, labels)
         return ImageClassificationOutput(logits=logits, loss=loss)

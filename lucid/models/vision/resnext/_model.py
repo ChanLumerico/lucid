@@ -64,22 +64,18 @@ class _ResNeXtBottleneck(nn.Module):
         self.stride = stride
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
 
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        )
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        )
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.relu(out))
+        return self.relu(out)
 
 
 # ---------------------------------------------------------------------------
@@ -305,16 +301,16 @@ class ResNeXt(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -408,18 +404,18 @@ class ResNeXtForImageClassification(ImageClassificationModel, ClassificationHead
             _zero_init_residual(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         x = cast(Tensor, self.maxpool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        x = cast(Tensor, self.layer4(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

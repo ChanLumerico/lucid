@@ -222,11 +222,11 @@ class AlexNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -323,13 +323,13 @@ class AlexNetForImageClassification(ImageClassificationModel, ClassificationHead
         _init_paper_weights(self)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
         # Dropout goes *in front of* each FC, matching the reference
         # classifier's Dropout -> Linear -> ReLU ordering.  Dropping after the
@@ -337,8 +337,8 @@ class AlexNetForImageClassification(ImageClassificationModel, ClassificationHead
         # never sees the noise it is supposed to be regularised against; the
         # two orderings differ only in training mode, which is why eval-time
         # parity never caught it.
-        x = F.relu(cast(Tensor, self.fc6(cast(Tensor, self.drop6(x)))))
-        x = F.relu(cast(Tensor, self.fc7(cast(Tensor, self.drop7(x)))))
+        x = F.relu(self.fc6(self.drop6(x)))
+        x = F.relu(self.fc7(self.drop7(x)))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

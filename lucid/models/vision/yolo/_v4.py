@@ -218,10 +218,8 @@ class _ConvBnLeaky(nn.Module):
         self.bn = nn.BatchNorm2d(out_ch)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.leaky_relu(
-            cast(Tensor, self.bn(cast(Tensor, self.conv(x)))), negative_slope=0.1
-        )
+    def forward(self, x: Tensor) -> Tensor:
+        return F.leaky_relu(self.bn(self.conv(x)), negative_slope=0.1)
 
 
 @final
@@ -249,8 +247,8 @@ class _ConvBnMish(nn.Module):
         self.act = nn.Mish()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.act(cast(Tensor, self.bn(cast(Tensor, self.conv(x))))))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.act(self.bn(self.conv(x)))
 
 
 # ---------------------------------------------------------------------------
@@ -280,8 +278,8 @@ class _CSPBottleneck(nn.Module):
         self.conv2 = Conv(inner, ch, 3)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return x + cast(Tensor, self.conv2(cast(Tensor, self.conv1(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        return x + self.conv2(self.conv1(x))
 
 
 @final
@@ -331,12 +329,12 @@ class _CSPBlock(nn.Module):
         self.merge = Conv(branch * 2, in_ch, 1)  # after concat
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        r1 = cast(Tensor, self.route1(x))
-        r2 = cast(Tensor, self.bottlenecks(cast(Tensor, self.route2(x))))
-        r2 = cast(Tensor, self.transition(r2))
+    def forward(self, x: Tensor) -> Tensor:
+        r1 = self.route1(x)
+        r2 = self.bottlenecks(self.route2(x))
+        r2 = self.transition(r2)
         merged = lucid.cat([r1, r2], dim=1)
-        return cast(Tensor, self.merge(merged))
+        return self.merge(merged)
 
 
 # ---------------------------------------------------------------------------
@@ -380,15 +378,15 @@ class _CSPDarknet53(nn.Module):
         self.csp5 = _CSPBlock(1024, 4, act="mish")
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.stem(x))
-        x = cast(Tensor, self.csp1(cast(Tensor, self.down1(x))))
-        x = cast(Tensor, self.csp2(cast(Tensor, self.down2(x))))
-        x = cast(Tensor, self.csp3(cast(Tensor, self.down3(x))))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        x = self.stem(x)
+        x = self.csp1(self.down1(x))
+        x = self.csp2(self.down2(x))
+        x = self.csp3(self.down3(x))
         p3 = x  # (B, 256,  H/8,  W/8)
-        x = cast(Tensor, self.csp4(cast(Tensor, self.down4(x))))
+        x = self.csp4(self.down4(x))
         p4 = x  # (B, 512,  H/16, W/16)
-        x = cast(Tensor, self.csp5(cast(Tensor, self.down5(x))))
+        x = self.csp5(self.down5(x))
         p5 = x  # (B, 1024, H/32, W/32)
         return p3, p4, p5
 
@@ -435,13 +433,13 @@ class _SPP(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.pre(x))  # (B, half, H, W)
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.pre(x)  # (B, half, H, W)
         p5 = cast(Tensor, self.pool5(x))
         p9 = cast(Tensor, self.pool9(x))
         p13 = cast(Tensor, self.pool13(x))
         concat = lucid.cat([x, p5, p9, p13], dim=1)  # (B, 4*half, H, W)
-        return cast(Tensor, self.post(concat))  # (B, out_ch, H, W)
+        return self.post(concat)  # (B, out_ch, H, W)
 
 
 def _five_conv(in_ch: int, mid: int) -> nn.Sequential:
@@ -511,7 +509,7 @@ class _PANetNeck(nn.Module):
         self.p5_bu = _five_conv(1024, 512)  # cfg layer 158, 512ch out
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         p3: Tensor,
         p4: Tensor,
@@ -528,39 +526,39 @@ class _PANetNeck(nn.Module):
             (p3_out, p4_out, p5_out) — feature maps for detection heads.
         """
         # SPP at P5 — cfg layer 116, the tensor the bottom-up P5 route reads.
-        p5_spp = cast(Tensor, self.spp(p5))  # (B, 512, H/32, W/32)
+        p5_spp = self.spp(p5)  # (B, 512, H/32, W/32)
 
         # Top-down P5→P4'
-        p5_lat = cast(Tensor, self.p5_lateral(p5_spp))  # (B, 256, H/32, W/32)
+        p5_lat = self.p5_lateral(p5_spp)  # (B, 256, H/32, W/32)
         fH4 = int(p4.shape[2])
         fW4 = int(p4.shape[3])
         p5_up = F.interpolate(
             p5_lat, size=(fH4, fW4), mode="nearest"
         )  # (B, 256, H/16, W/16)
-        p4_comp = cast(Tensor, self.p4_lateral(p4))  # (B, 256, H/16, W/16)
+        p4_comp = self.p4_lateral(p4)  # (B, 256, H/16, W/16)
         p4_cat = lucid.cat([p5_up, p4_comp], dim=1)  # (B, 512, H/16, W/16)
-        p4_td_out = cast(Tensor, self.p4_td(p4_cat))  # (B, 256, H/16, W/16)
+        p4_td_out = self.p4_td(p4_cat)  # (B, 256, H/16, W/16)
 
         # Top-down P4'→P3'
-        p4_lat = cast(Tensor, self.p4_td_lat(p4_td_out))  # (B, 128, H/16, W/16)
+        p4_lat = self.p4_td_lat(p4_td_out)  # (B, 128, H/16, W/16)
         fH3 = int(p3.shape[2])
         fW3 = int(p3.shape[3])
         p4_up = F.interpolate(
             p4_lat, size=(fH3, fW3), mode="nearest"
         )  # (B, 128, H/8, W/8)
-        p3_lat = cast(Tensor, self.p3_lateral(p3))  # (B, 128, H/8, W/8)
+        p3_lat = self.p3_lateral(p3)  # (B, 128, H/8, W/8)
         p3_cat = lucid.cat([p4_up, p3_lat], dim=1)  # (B, 256, H/8, W/8)
-        p3_td_out = cast(Tensor, self.p3_td(p3_cat))  # (B, 128, H/8, W/8)
+        p3_td_out = self.p3_td(p3_cat)  # (B, 128, H/8, W/8)
 
         # Bottom-up P3'→P4'': route ``-1,-16`` joins the top-down P4 output.
-        p3_down_feat = cast(Tensor, self.p3_down(p3_td_out))  # (B, 256, H/16, W/16)
+        p3_down_feat = self.p3_down(p3_td_out)  # (B, 256, H/16, W/16)
         p4_bu_cat = lucid.cat([p3_down_feat, p4_td_out], dim=1)  # (B, 512, ...)
-        p4_bu_out = cast(Tensor, self.p4_bu(p4_bu_cat))  # (B, 256, H/16, W/16)
+        p4_bu_out = self.p4_bu(p4_bu_cat)  # (B, 256, H/16, W/16)
 
         # Bottom-up P4''→P5'': route ``-1,-37`` joins the SPP output.
-        p4_down_feat = cast(Tensor, self.p4_down(p4_bu_out))  # (B, 512, H/32, W/32)
+        p4_down_feat = self.p4_down(p4_bu_out)  # (B, 512, H/32, W/32)
         p5_bu_cat = lucid.cat([p4_down_feat, p5_spp], dim=1)  # (B, 1024, ...)
-        p5_bu_out = cast(Tensor, self.p5_bu(p5_bu_cat))  # (B, 512, H/32, W/32)
+        p5_bu_out = self.p5_bu(p5_bu_cat)  # (B, 512, H/32, W/32)
 
         return p3_td_out, p4_bu_out, p5_bu_out
 
@@ -999,7 +997,7 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -1025,9 +1023,9 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
         p3_out, p4_out, p5_out = self.neck.forward(p3, p4, p5)
 
         # Detection heads (P5→large, P4→medium, P3→small)
-        p5_raw = cast(Tensor, self.p5_head(p5_out))  # (B, nA*(5+C), H/32, W/32)
-        p4_raw = cast(Tensor, self.p4_head(p4_out))  # (B, nA*(5+C), H/16, W/16)
-        p3_raw = cast(Tensor, self.p3_head(p3_out))  # (B, nA*(5+C), H/8,  W/8)
+        p5_raw = self.p5_head(p5_out)  # (B, nA*(5+C), H/32, W/32)
+        p4_raw = self.p4_head(p4_out)  # (B, nA*(5+C), H/16, W/16)
+        p3_raw = self.p3_head(p3_out)  # (B, nA*(5+C), H/8,  W/8)
 
         # raw_preds order: P5, P4, P3 (coarse→fine)
         raw_preds = [p5_raw, p4_raw, p3_raw]

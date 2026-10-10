@@ -13,7 +13,7 @@ either model by prefix alone.
 """
 
 import math
-from typing import cast, override
+from typing import override
 
 import lucid
 import lucid.nn as nn
@@ -114,13 +114,13 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         b, n, c = (int(s) for s in x.shape)
-        qkv = cast(Tensor, self.qkv(x)).reshape(b, n, 3, self.num_heads, self.head_dim)
+        qkv = self.qkv(x).reshape(b, n, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
         out = F.scaled_dot_product_attention(qkv[0], qkv[1], qkv[2])
         out = out.permute(0, 2, 1, 3).reshape(b, n, c)
-        return cast(Tensor, self.proj(out))
+        return self.proj(out)
 
 
 class MLP(nn.Module):
@@ -143,8 +143,8 @@ class MLP(nn.Module):
         self.fc2 = nn.Linear(hidden, dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.fc2(F.gelu(cast(Tensor, self.fc1(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.fc2(F.gelu(self.fc1(x)))
 
 
 class Block(nn.Module):
@@ -175,9 +175,9 @@ class Block(nn.Module):
         self.mlp = MLP(dim, hidden)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+    def forward(self, x: Tensor) -> Tensor:
+        x = x + self.attn(self.norm1(x))
+        return x + self.mlp(self.norm2(x))
 
 
 def init_transformer_weights(module: nn.Module, std: float = 0.02) -> None:

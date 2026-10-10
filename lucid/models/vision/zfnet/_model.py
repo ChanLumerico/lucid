@@ -152,11 +152,11 @@ class ZFNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        return self.avgpool(x)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -231,16 +231,16 @@ class ZFNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         self._build_classifier(4096, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
-        x = cast(Tensor, self.avgpool(x))
+        x = self.features(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
-        x = cast(Tensor, self.drop6(F.relu(cast(Tensor, self.fc6(x)))))
-        x = cast(Tensor, self.drop7(F.relu(cast(Tensor, self.fc7(x)))))
+        x = self.drop6(F.relu(self.fc6(x)))
+        x = self.drop7(F.relu(self.fc7(x)))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

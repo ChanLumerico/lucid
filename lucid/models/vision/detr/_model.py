@@ -101,7 +101,7 @@ class _FrozenBatchNorm2d(nn.Module):
         self.register_buffer("running_var", lucid.ones(num_features))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
         b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
         rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
@@ -137,11 +137,11 @@ class _Bottleneck(nn.Module):
         self.downsample = downsample
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
-        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        out = F.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out: Tensor = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
         return F.relu(out + identity)
@@ -184,13 +184,13 @@ class _ResNetC5(nn.Module):
         self.out_channels: int = c5
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.relu(self.bn1(self.conv1(x)))
         x = cast(Tensor, self.pool(x))
-        x = cast(Tensor, self.layer1(x))
-        x = cast(Tensor, self.layer2(x))
-        x = cast(Tensor, self.layer3(x))
-        return cast(Tensor, self.layer4(x))
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        return self.layer4(x)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ class _PositionEmbeddingSine(nn.Module):
         self.eps = eps
 
     @override
-    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
+    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:
         npf = self.num_pos_feats
         ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
         y_embed = ones.cumsum(dim=1)
@@ -281,7 +281,7 @@ class _DETREncoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         src: Tensor,
         pos: Tensor | None,
@@ -292,14 +292,9 @@ class _DETREncoderLayer(nn.Module):
         src2 = self.self_attn(
             q, k, value=src, key_padding_mask=key_padding_mask, need_weights=False
         )[0]
-        src = cast(Tensor, self.norm1(src + cast(Tensor, self.dropout1(src2))))
-        src2 = cast(
-            Tensor,
-            self.linear2(
-                cast(Tensor, self.dropout(F.relu(cast(Tensor, self.linear1(src)))))
-            ),
-        )
-        src = cast(Tensor, self.norm2(src + cast(Tensor, self.dropout2(src2))))
+        src = self.norm1(src + self.dropout1(src2))
+        src2 = self.linear2(self.dropout(F.relu(self.linear1(src))))
+        src = self.norm2(src + self.dropout2(src2))
         return src
 
 
@@ -327,7 +322,7 @@ class _DETRDecoderLayer(nn.Module):
         self.dropout3 = nn.Dropout(dropout)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         tgt: Tensor,
         memory: Tensor,
@@ -338,7 +333,7 @@ class _DETRDecoderLayer(nn.Module):
         q = _with_pos(tgt, query_pos)
         k = q
         tgt2 = self.self_attn(q, k, value=tgt, need_weights=False)[0]
-        tgt = cast(Tensor, self.norm1(tgt + cast(Tensor, self.dropout1(tgt2))))
+        tgt = self.norm1(tgt + self.dropout1(tgt2))
         tgt2 = self.multihead_attn(
             _with_pos(tgt, query_pos),
             _with_pos(memory, pos),
@@ -346,14 +341,9 @@ class _DETRDecoderLayer(nn.Module):
             key_padding_mask=memory_key_padding_mask,
             need_weights=False,
         )[0]
-        tgt = cast(Tensor, self.norm2(tgt + cast(Tensor, self.dropout2(tgt2))))
-        tgt2 = cast(
-            Tensor,
-            self.linear2(
-                cast(Tensor, self.dropout(F.relu(cast(Tensor, self.linear1(tgt)))))
-            ),
-        )
-        tgt = cast(Tensor, self.norm3(tgt + cast(Tensor, self.dropout3(tgt2))))
+        tgt = self.norm2(tgt + self.dropout2(tgt2))
+        tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
+        tgt = self.norm3(tgt + self.dropout3(tgt2))
         return tgt
 
 
@@ -370,7 +360,7 @@ class _DETREncoder(nn.Module):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         src: Tensor,
         pos: Tensor | None,
@@ -407,7 +397,7 @@ class _DETRDecoder(nn.Module):
         self.norm = nn.LayerNorm(d_model)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         tgt: Tensor,
         memory: Tensor,
@@ -430,9 +420,9 @@ class _DETRDecoder(nn.Module):
                 ),
             )
             if return_intermediate:
-                intermediate.append(cast(Tensor, self.norm(output)))
+                intermediate.append(self.norm(output))
 
-        normed = cast(Tensor, self.norm(output))
+        normed = self.norm(output)
         if not return_intermediate:
             return normed
         # The reference replaces the last collected entry with the same
@@ -486,7 +476,7 @@ class _DETRTransformer(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         src: Tensor,
         pos_embed: Tensor,
@@ -506,19 +496,14 @@ class _DETRTransformer(nn.Module):
         query_pos = query_embed.unsqueeze(1).repeat(1, B, 1)
         tgt = lucid.zeros(query_pos.shape, device=src.device.type)
 
-        memory = cast(
-            Tensor, self.encoder(src_flat, pos_flat, key_padding_mask=key_padding_mask)
-        )
-        hs = cast(
-            Tensor,
-            self.decoder(
-                tgt,
-                memory,
-                pos=pos_flat,
-                query_pos=query_pos,
-                memory_key_padding_mask=key_padding_mask,
-                return_intermediate=return_intermediate,
-            ),
+        memory = self.encoder(src_flat, pos_flat, key_padding_mask=key_padding_mask)
+        hs = self.decoder(
+            tgt,
+            memory,
+            pos=pos_flat,
+            query_pos=query_pos,
+            memory_key_padding_mask=key_padding_mask,
+            return_intermediate=return_intermediate,
         )  # (N, B, c) or (L, N, B, c)
         if return_intermediate:
             return hs.permute(0, 2, 1, 3)  # (L, B, N, c)
@@ -546,8 +531,8 @@ class _MLP(nn.Module):
         self.net = nn.Sequential(*layers)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.net(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.net(x)
 
 
 # ---------------------------------------------------------------------------
@@ -761,7 +746,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
@@ -797,8 +782,8 @@ class DETRForObjectDetection(ObjectDetectionModel):
         iW = int(x.shape[3])
 
         # 1. Backbone + projection → (B, d, H', W')
-        feat: Tensor = cast(Tensor, self.backbone(x))
-        feat = cast(Tensor, self.input_proj(feat))  # (B, d, H', W')
+        feat: Tensor = self.backbone(x)
+        feat = self.input_proj(feat)  # (B, d, H', W')
 
         fH = int(feat.shape[2])
         fW = int(feat.shape[3])
@@ -824,25 +809,20 @@ class DETRForObjectDetection(ObjectDetectionModel):
         # Auxiliary decoding losses need every decoder layer, so the stack is
         # only requested when it will actually be used.
         want_aux = targets is not None and self._cfg.aux_loss
-        hs_out = cast(
-            Tensor,
-            self.transformer(
-                feat,
-                pos_embed,
-                queries,
-                key_padding_mask=kpm,
-                return_intermediate=want_aux,
-            ),
+        hs_out = self.transformer(
+            feat,
+            pos_embed,
+            queries,
+            key_padding_mask=kpm,
+            return_intermediate=want_aux,
         )  # (B, N, d), or (L, B, N, d) when want_aux
 
         # 4. Prediction heads.  The heads are shared across decoder layers, as
         # in the reference — the auxiliary losses supervise the same weights
         # at every depth rather than adding per-layer heads.
         hs_bn = hs_out[-1] if want_aux else hs_out
-        logits: Tensor = cast(Tensor, self.class_embed(hs_bn))  # (B, N, K+1)
-        pred_boxes: Tensor = F.sigmoid(
-            cast(Tensor, self.bbox_embed(hs_bn))
-        )  # (B, N, 4)
+        logits: Tensor = self.class_embed(hs_bn)  # (B, N, K+1)
+        pred_boxes: Tensor = F.sigmoid(self.bbox_embed(hs_bn))  # (B, N, 4)
 
         # 5. Loss
         loss: Tensor | None = None
@@ -854,8 +834,8 @@ class DETRForObjectDetection(ObjectDetectionModel):
                 n_layers = int(hs_out.shape[0])
                 for li in range(n_layers - 1):
                     h_l = hs_out[li]
-                    aux_logits = cast(Tensor, self.class_embed(h_l))
-                    aux_boxes = F.sigmoid(cast(Tensor, self.bbox_embed(h_l)))
+                    aux_logits = self.class_embed(h_l)
+                    aux_boxes = F.sigmoid(self.bbox_embed(h_l))
                     loss = loss + self._set_loss(
                         aux_logits, aux_boxes, targets, (iH, iW)
                     )

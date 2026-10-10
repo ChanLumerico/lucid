@@ -105,9 +105,9 @@ class _TubeletEmbed(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         clip = x.permute(0, 2, 1, 3, 4)
-        tokens = cast(Tensor, self.proj(clip))
+        tokens = self.proj(clip)
         b, c = int(tokens.shape[0]), int(tokens.shape[1])
         return tokens.reshape(b, c, -1).permute(0, 2, 1)
 
@@ -140,18 +140,18 @@ class _Encoder(nn.Module):
             _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
-    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:
         """Encode a clip, optionally keeping only the given tubelets.
 
         Masking drops tokens rather than attending around them, so the
         context encoder's sequence is genuinely shorter than the clip.
         """
-        tokens = cast(Tensor, self.patch_embed(x)) + cast(Tensor, self.pos_embed)
+        tokens = self.patch_embed(x) + cast(Tensor, self.pos_embed)
         if indices is not None:
             tokens = _gather_tokens(tokens, indices)
         for block in self.blocks:
             tokens = cast(Tensor, block(tokens))
-        return cast(Tensor, self.norm(tokens))
+        return self.norm(tokens)
 
 
 class _Predictor(nn.Module):
@@ -193,7 +193,7 @@ class _Predictor(nn.Module):
             _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         context: Tensor,
         context_indices: Tensor,
@@ -208,7 +208,7 @@ class _Predictor(nn.Module):
             )
         positions = cast(Tensor, self.predictor_pos_embed)
         batch = int(context.shape[0])
-        tokens = cast(Tensor, self.predictor_embed(context))
+        tokens = self.predictor_embed(context)
         tokens = tokens + _gather_tokens(
             positions
             + lucid.zeros(batch, 1, 1, dtype=positions.dtype, device=positions.device),
@@ -229,8 +229,8 @@ class _Predictor(nn.Module):
         hidden = lucid.cat([tokens, queries], dim=1)
         for block in self.predictor_blocks:
             hidden = cast(Tensor, block(hidden))
-        hidden = cast(Tensor, self.predictor_norm(hidden))
-        return cast(Tensor, self.predictor_proj(hidden[:, -count:]))
+        hidden = self.predictor_norm(hidden)
+        return self.predictor_proj(hidden[:, -count:])
 
 
 # ── the attentive probe ──────────────────────────────────────────────────────
@@ -267,10 +267,10 @@ class _AttentivePooler(nn.Module):
         _scale_residual_projection(self.proj, self.mlp.fc2, 1)
 
     @override
-    def forward(self, tokens: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, tokens: Tensor) -> Tensor:
         """Pool ``(B, N, D)`` tokens into one ``(B, D)`` vector."""
         batch, count, width = (int(s) for s in tokens.shape)
-        keys_in = cast(Tensor, self.norm_keys(tokens))
+        keys_in = self.norm_keys(tokens)
 
         def heads(t: Tensor, length: int) -> Tensor:
             return t.reshape(batch, length, self.num_heads, self.head_dim).permute(
@@ -280,14 +280,14 @@ class _AttentivePooler(nn.Module):
         query_in = cast(Tensor, self.query_token) + lucid.zeros(
             batch, 1, width, dtype=tokens.dtype, device=tokens.device
         )
-        q = heads(cast(Tensor, self.query(query_in)), 1)
-        k = heads(cast(Tensor, self.key(keys_in)), count)
-        v = heads(cast(Tensor, self.value(keys_in)), count)
+        q = heads(self.query(query_in), 1)
+        k = heads(self.key(keys_in), count)
+        v = heads(self.value(keys_in), count)
         attended = F.scaled_dot_product_attention(q, k, v)
         attended = attended.permute(0, 2, 1, 3).reshape(batch, 1, width)
 
-        pooled = query_in + cast(Tensor, self.proj(attended))
-        pooled = pooled + cast(Tensor, self.mlp(cast(Tensor, self.norm_out(pooled))))
+        pooled = query_in + self.proj(attended)
+        pooled = pooled + self.mlp(self.norm_out(pooled))
         return pooled.reshape(batch, width)
 
 
@@ -599,7 +599,7 @@ class VJEPAModel(PretrainedModel, BackboneMixin):
         :meth:`encode` throws away.
         """
         self._check_clip(x)
-        return cast(Tensor, self.target_encoder(x))
+        return self.target_encoder(x)
 
     def _check_clip(self, x: Tensor) -> None:
         config = self.config
@@ -623,7 +623,7 @@ class VJEPAModel(PretrainedModel, BackboneMixin):
         return F.l1_loss(prediction, target)
 
     @override
-    def forward(self, x: Tensor) -> VJEPAOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VJEPAOutput:
         """Run one pretraining step's worth of computation.
 
         Parameters
@@ -650,21 +650,16 @@ class VJEPAModel(PretrainedModel, BackboneMixin):
         )
 
         with lucid.no_grad():
-            features = cast(Tensor, self.target_encoder(x))
+            features = self.target_encoder(x)
             features = F.layer_norm(features, (int(features.shape[-1]),))
             short_target = _gather_tokens(features, short[1])
             long_target = _gather_tokens(features, long[1])
 
         answers: list[Tensor] = []
         for index, (context_index, target_index) in enumerate((short, long)):
-            context = cast(Tensor, self.encoder(x, context_index))
+            context = self.encoder(x, context_index)
             answers.append(
-                cast(
-                    Tensor,
-                    self.predictor(
-                        context, context_index, target_index, mask_index=index
-                    ),
-                )
+                self.predictor(context, context_index, target_index, mask_index=index)
             )
 
         loss = (
@@ -740,7 +735,7 @@ class VJEPAForVideoClassification(ImageClassificationModel, ClassificationHeadMi
         self.head = nn.Linear(config.dim, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, x: Tensor, labels: Tensor | None = None
     ) -> ImageClassificationOutput:
         """Classify clips from the frozen feature map.
@@ -758,7 +753,7 @@ class VJEPAForVideoClassification(ImageClassificationModel, ClassificationHeadMi
         ImageClassificationOutput
             Logits ``(B, num_classes)``, and the loss when labels came.
         """
-        pooled = cast(Tensor, self.pooler(self.vjepa.tokens(x)))
-        logits = cast(Tensor, self.head(pooled))
+        pooled = self.pooler(self.vjepa.tokens(x))
+        logits = self.head(pooled)
         loss = None if labels is None else F.cross_entropy(logits, labels)
         return ImageClassificationOutput(logits=logits, loss=loss)

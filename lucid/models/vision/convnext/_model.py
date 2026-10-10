@@ -74,17 +74,17 @@ class _ConvNeXtBlock(nn.Module):
         self.drop_path = DropPath(drop_path_rate)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         shortcut = x
-        x = cast(Tensor, self.dwconv(x))  # (B, C, H, W)
+        x = self.dwconv(x)  # (B, C, H, W)
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
-        x = cast(Tensor, self.norm(x))
-        x = F.gelu(cast(Tensor, self.fc1(x)))
-        x = cast(Tensor, self.fc2(x))
+        x = self.norm(x)
+        x = F.gelu(self.fc1(x))
+        x = self.fc2(x)
         if self.gamma is not None:
             x = x * self.gamma  # layer scale
         x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
-        return shortcut + cast(Tensor, self.drop_path(x))
+        return shortcut + self.drop_path(x)
 
 
 # ---------------------------------------------------------------------------
@@ -99,12 +99,12 @@ class _Downsample(nn.Module):
         self.conv = nn.Conv2d(in_dim, out_dim, 2, stride=2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W) → norm in channel-last → back → strided conv
         x = x.permute(0, 2, 3, 1)
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         x = x.permute(0, 3, 1, 2)
-        return cast(Tensor, self.conv(x))
+        return self.conv(x)
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +186,10 @@ class _StemWithNorm(nn.Module):
         self.norm = norm
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(x))  # (B, C, H, W)
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.conv(x)  # (B, C, H, W)
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
-        x = cast(Tensor, self.norm(x))
+        x = self.norm(x)
         return x.permute(0, 3, 1, 2)  # (B, C, H, W)
 
 
@@ -311,7 +311,7 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         The per-stage maps this backbone's :attr:`feature_info` describes
         are left on :attr:`stage_features` for pyramid consumers.
         """
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         stages: list[Tensor] = []
         for i, stage in enumerate(self.stages):
             x = cast(Tensor, stage(x))
@@ -319,11 +319,11 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
             if i < len(self.downsamplers):
                 x = cast(Tensor, self.downsamplers[i](x))
         self._stage_features = stages
-        x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
+        x = self.avgpool(x).flatten(1)  # (B, C)
         x = x.unsqueeze(-1).unsqueeze(-1)  # keep (B,C,1,1) for consistency
         # Apply head norm in channel-last
         x = x.permute(0, 2, 3, 1)
-        x = cast(Tensor, self.head_norm(x))
+        x = self.head_norm(x)
         return x.permute(0, 3, 1, 2).flatten(1)  # (B, C)
 
     @property
@@ -337,7 +337,7 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         return list(self._stage_features)
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -428,20 +428,20 @@ class ConvNeXtForImageClassification(ImageClassificationModel, ClassificationHea
         self._build_classifier(out_dim, config.num_classes)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for i, stage in enumerate(self.stages):
             x = cast(Tensor, stage(x))
             if i < len(self.downsamplers):
                 x = cast(Tensor, self.downsamplers[i](x))
-        x = cast(Tensor, self.avgpool(x)).flatten(1)
+        x = self.avgpool(x).flatten(1)
         # head norm in channel-last
         x = x.unsqueeze(-1).unsqueeze(-1).permute(0, 2, 3, 1)
-        x = cast(Tensor, self.head_norm(x))
+        x = self.head_norm(x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

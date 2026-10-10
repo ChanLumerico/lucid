@@ -46,10 +46,10 @@ class _SEBlock(nn.Module):
         self.fc2 = nn.Conv2d(se_channels, in_channels, 1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        scale = cast(Tensor, self.pool(x))
-        scale = F.relu(cast(Tensor, self.fc1(scale)), inplace=True)
-        scale = F.hardsigmoid(cast(Tensor, self.fc2(scale)))
+    def forward(self, x: Tensor) -> Tensor:
+        scale = self.pool(x)
+        scale = F.relu(self.fc1(scale), inplace=True)
+        scale = F.hardsigmoid(self.fc2(scale))
         return x * scale
 
 
@@ -110,8 +110,8 @@ class _InvertedResidual(nn.Module):
         self.block = nn.Sequential(*layers)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        out = cast(Tensor, self.block(x))
+    def forward(self, x: Tensor) -> Tensor:
+        out = self.block(x)
         if self._use_residual:
             out = out + x
         return out
@@ -364,7 +364,7 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.features(x))
+        x = self.features(x)
         # ``feature_info`` describes the pre-pool pyramid, and the mixin
         # documents this as returning the deepest stage's *feature map*.
         # Pooling here collapsed it to 1x1, so the declared reduction was
@@ -373,7 +373,7 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> BaseModelOutput:
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -465,12 +465,12 @@ class MobileNetV3ForImageClassification(
         init_cnn_fan_out(self, linear_std=0.01)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.features(x))
+        x = self.features(x)
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None
