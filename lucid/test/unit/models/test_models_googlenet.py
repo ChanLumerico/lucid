@@ -5,6 +5,7 @@ import unittest
 
 import lucid
 import lucid.models as models
+from lucid.models import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.googlenet import (
     GoogLeNetConfig,
     GoogLeNetForImageClassification,
@@ -85,13 +86,11 @@ class TestGoogLeNetBackbone(unittest.TestCase):
         self.assertEqual(out.shape, (1, last.num_channels, 7, 7))
         self.assertEqual(224 // int(out.shape[2]), last.reduction)
 
-    def test_forward_returns_googlenet_output(self) -> None:
+    def test_forward_returns_base_model_output(self) -> None:
         x = lucid.randn(2, 3, 224, 224)
         out = self.model(x)
-        self.assertIsInstance(out, GoogLeNetOutput)
-        self.assertEqual(out.logits.shape, (2, 1024, 7, 7))
-        self.assertIsNone(out.aux_logits1)
-        self.assertIsNone(out.aux_logits2)
+        self.assertIsInstance(out, BaseModelOutput)
+        self.assertEqual(out.last_hidden_state.shape, (2, 1024, 7, 7))
 
 
 class TestGoogLeNetClassifier(unittest.TestCase):
@@ -104,6 +103,8 @@ class TestGoogLeNetClassifier(unittest.TestCase):
         x = lucid.randn(2, 3, 224, 224)
         out = self.model(x)
         self.assertEqual(out.logits.shape, (2, 1000))
+        self.assertIsInstance(out, ImageClassificationOutput)
+        self.assertIsInstance(out, GoogLeNetOutput)
         self.assertIsNone(out.aux_logits1)
         self.assertIsNone(out.aux_logits2)
         self.assertIsNone(out.loss)

@@ -42,6 +42,7 @@ from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
+from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 
 # Large finite stand-in for ``-inf`` used to pad the extra ceil-mode
@@ -164,7 +165,7 @@ class _AuxClassifier(nn.Module):
 
 
 @dataclass(slots=True)
-class GoogLeNetOutput:
+class GoogLeNetOutput(ImageClassificationOutput):
     r"""Structured forward output for :class:`GoogLeNetForImageClassification`.
 
     Carries the main classifier logits plus the optional auxiliary
@@ -218,10 +219,8 @@ class GoogLeNetOutput:
     True
     """
 
-    logits: Tensor
     aux_logits1: Tensor | None = None
     aux_logits2: Tensor | None = None
-    loss: Tensor | None = None
 
 
 # Inception module specs: (in_ch, 1x1, 3x3r, 3x3, 5x5r, 5x5, pool)
@@ -349,7 +348,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     >>> backbone = googlenet()
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = backbone(x)
-    >>> out.logits.shape   # (B, 1024, 1, 1)
+    >>> out.last_hidden_state.shape
     (2, 1024, 7, 7)
     """
 
@@ -423,8 +422,8 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         return x
 
     @override
-    def forward(self, x: Tensor) -> GoogLeNetOutput:
-        return GoogLeNetOutput(logits=self.forward_features(x))
+    def forward(self, x: Tensor) -> BaseModelOutput:
+        return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
 # ---------------------------------------------------------------------------

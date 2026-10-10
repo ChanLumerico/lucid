@@ -38,7 +38,7 @@ from lucid.models._mixins import CausalLMMixin
 from lucid.models._output import (
     BaseModelOutput,
     CausalLMOutput,
-    MaskedLMOutput,
+    SequenceClassificationOutput,
     ModelOutput,
 )
 from lucid.models._utils._text import (
@@ -648,7 +648,7 @@ class GPT2ForSequenceClassification(SequenceClassificationModel):
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         outputs = self.transformer(input_ids, attention_mask=attention_mask)
         pooled = last_kept_token(outputs.last_hidden_state, attention_mask)
         pooled = self.dropout(pooled)
@@ -658,7 +658,7 @@ class GPT2ForSequenceClassification(SequenceClassificationModel):
         if labels is not None:
             loss = F.cross_entropy(logits, labels.long())
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

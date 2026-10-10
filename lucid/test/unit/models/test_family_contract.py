@@ -20,18 +20,41 @@ import inspect
 import re
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import NoReturn
 
 import pytest
 
+import lucid
 import lucid.weights._loading as weights_loading
+from lucid.models import (
+    CausalLMOutput,
+    ImageClassificationOutput,
+    InstanceSegmentationOutput,
+    MaskedLMOutput,
+    ModelOutput,
+    ObjectDetectionOutput,
+    QuestionAnsweringOutput,
+    Seq2SeqLMOutput,
+    SemanticSegmentationOutput,
+    SequenceClassificationOutput,
+    TokenClassificationOutput,
+    create_model,
+)
 from lucid.models._protocols import (
     ModelConfigProtocol,
     PretrainedModelProtocol,
 )
-from lucid.models._registry import is_model, list_models, model_entrypoint
+from lucid.models.multimodal.clip import CLIPZeroShotOutput
+from lucid.models.text.bert import BERTForPreTrainingOutput
+from lucid.models._registry import (
+    _REGISTRY,
+    is_model,
+    list_models,
+    model_entrypoint,
+)
 from lucid.models._utils._common import reject_unavailable_pretrained
 from lucid.nn._shadow import shadow_alloc
 from lucid.weights import weights_for
@@ -379,3 +402,149 @@ def test_the_pretrained_check_can_fail(_downloads_blocked: None) -> None:
     assert _pretrained_outcome(ignores) == "ignores"
     assert _pretrained_outcome(refuses) == "refuses"
     assert _pretrained_outcome(loads) == "loads"
+
+
+# ── a task wrapper returns its task's shared output ─────────────────────────
+#
+# ``lucid.models._tasks`` fixes which output dataclass family each task
+# returns, and ``lucid.models._output`` promises that every forward returns a
+# ``ModelOutput``.  A family that declares its own output dataclass must
+# therefore *inherit* the task's shared one, or ``isinstance`` checks, tuple
+# unpacking and dict-style access all stop working for that one family
+# (LCD-203: five classifiers returned plain dataclasses).  The static check
+# covers every registered factory through its class's ``forward`` return
+# annotation — mypy keeps the annotation honest — and the runtime check
+# below builds the families that once broke.
+
+_TASK_OUTPUTS: dict[str, tuple[type[ModelOutput], ...]] = {
+    "image-classification": (ImageClassificationOutput, CLIPZeroShotOutput),
+    "object-detection": (ObjectDetectionOutput, InstanceSegmentationOutput),
+    "semantic-segmentation": (SemanticSegmentationOutput,),
+    # Pre-training (MLM + NSP) is registered here because NSP is a pooled
+    # sentence-pair head; its output carries both objectives.
+    "sequence-classification": (
+        SequenceClassificationOutput,
+        QuestionAnsweringOutput,
+        BERTForPreTrainingOutput,
+    ),
+    "token-classification": (TokenClassificationOutput,),
+    "language-modeling": (CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput),
+}
+
+# Classes whose forward still returns a bare tensor.  Pinned strict so each
+# one surfaces the moment it is fixed.
+_BARE_TENSOR_FORWARD = {
+    "DiTModel": "LCD-203 sweep: the denoiser returns its prediction tensor",
+    "MeanFlowModel": "LCD-203 sweep: the velocity network returns a tensor",
+    "StableDiffusionForImageGeneration": (
+        "LCD-203 sweep: forward aliases generate() and returns the images"
+    ),
+}
+
+
+def _output_violation(task: str, model_class: type) -> str | None:
+    """Why ``model_class.forward`` breaks its task's output contract."""
+    ret = inspect.get_annotations(model_class.forward).get("return")
+    allowed = _TASK_OUTPUTS.get(task, (ModelOutput,))
+    if isinstance(ret, type) and issubclass(ret, allowed):
+        return None
+    shown = getattr(ret, "__name__", repr(ret))
+    return (
+        f"{model_class.__name__}.forward returns {shown}, not one of "
+        f"{[c.__name__ for c in allowed]} (task {task!r})"
+    )
+
+
+def _registered_classes() -> list[tuple[str, type]]:
+    seen: dict[str, tuple[str, type]] = {}
+    for entry in _REGISTRY.values():
+        cls = entry.model_class
+        if cls is not None:
+            seen.setdefault(cls.__name__, (entry.task, cls))
+    return [seen[k] for k in sorted(seen)]
+
+
+def _task_param(task: str, cls: type) -> object:
+    reason = _BARE_TENSOR_FORWARD.get(cls.__name__)
+    marks = [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
+    return pytest.param(task, cls, id=cls.__name__, marks=marks)
+
+
+@pytest.mark.parametrize(
+    "task,model_class", [_task_param(t, c) for t, c in _registered_classes()]
+)
+def test_forward_returns_the_task_output(task: str, model_class: type) -> None:
+    violation = _output_violation(task, model_class)
+    assert violation is None, violation
+
+
+def test_every_registered_factory_names_its_class() -> None:
+    """The check above walks ``model_class``; a factory without one would
+    escape it silently."""
+    missing = sorted(n for n, e in _REGISTRY.items() if e.model_class is None)
+    assert not missing, f"factories registered without model_class: {missing}"
+
+
+def test_the_output_check_can_fail() -> None:
+    """Guards the check above with the LCD-203 shape: a plain dataclass
+    carrying the right fields but not inheriting the task output."""
+
+    @dataclass
+    class LooseOutput:
+        logits: object = None
+
+    class Loose:
+        def forward(self) -> LooseOutput:
+            return LooseOutput()
+
+    class Bare:
+        def forward(self) -> int:
+            return 0
+
+    class Fine:
+        def forward(self) -> ImageClassificationOutput:
+            raise NotImplementedError
+
+    assert _output_violation("image-classification", Loose) is not None
+    assert _output_violation("base", Bare) is not None
+    assert _output_violation("image-classification", Fine) is None
+    # One task's shared output does not satisfy another task.
+    assert _output_violation("token-classification", Fine) is not None
+
+
+# Families that once returned a non-``ModelOutput`` (LCD-203), built small
+# enough to run: the static check trusts annotations, this one does not.
+_SMALL_TEXT: dict[str, object] = {
+    "num_labels": 3,
+    "num_hidden_layers": 1,
+    "hidden_size": 32,
+    "num_attention_heads": 2,
+    "intermediate_size": 64,
+    "vocab_size": 50,
+}
+_RUNTIME_PROBES: list[tuple[str, dict[str, object], tuple[int, ...]]] = [
+    ("googlenet_cls", {"num_classes": 4}, (1, 3, 64, 64)),
+    ("inception_v3_cls", {"num_classes": 4}, (1, 3, 75, 75)),
+    ("inception_v4_cls", {"num_classes": 4}, (1, 3, 75, 75)),
+    ("inception_resnet_v2_cls", {"num_classes": 4}, (1, 3, 75, 75)),
+    ("xception_cls", {"num_classes": 4}, (1, 3, 71, 71)),
+    ("gpt_cls", _SMALL_TEXT, (2, 5)),
+    ("gpt2_small_cls", _SMALL_TEXT, (2, 5)),
+    ("transformer_base_cls", _SMALL_TEXT, (2, 5)),
+    ("transformer_base_token_cls", _SMALL_TEXT, (2, 5)),
+]
+
+
+@pytest.mark.parametrize(
+    "name,overrides,shape", _RUNTIME_PROBES, ids=[p[0] for p in _RUNTIME_PROBES]
+)
+def test_forward_output_is_the_task_output_at_runtime(
+    name: str, overrides: dict[str, object], shape: tuple[int, ...]
+) -> None:
+    model = create_model(name, **overrides).eval()
+    is_text = len(shape) == 2
+    x = lucid.randint(0, 50, shape) if is_text else lucid.randn(*shape)
+    out = model(x)
+    allowed = _TASK_OUTPUTS[_REGISTRY[name].task]
+    assert isinstance(out, allowed), (name, type(out).__mro__)
+    assert out[0] is out.logits  # the tuple protocol ModelOutput provides

@@ -38,7 +38,8 @@ from lucid.models._tasks import (
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     ModelOutput,
-    MaskedLMOutput,
+    TokenClassificationOutput,
+    SequenceClassificationOutput,
     Seq2SeqLMOutput,
 )
 from lucid.models.text.transformer._config import TransformerConfig
@@ -703,7 +704,7 @@ class TransformerForSequenceClassification(SequenceClassificationModel):
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         memory = self.transformer.encode(input_ids, attention_mask)  # (B, S, d)
         pooled = memory[:, 0]  # (B, d)
         pooled = self.dropout(pooled)
@@ -713,7 +714,7 @@ class TransformerForSequenceClassification(SequenceClassificationModel):
         if labels is not None:
             loss = F.cross_entropy(logits, labels.long())
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
 class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
@@ -791,7 +792,7 @@ class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin)
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> TokenClassificationOutput:
         memory = self.transformer.encode(input_ids, attention_mask)  # (B, S, d)
         seq = self.dropout(memory)
         logits = self.classifier(seq)
@@ -800,4 +801,4 @@ class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin)
         if labels is not None:
             loss = self.compute_lm_loss(logits, labels)
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return TokenClassificationOutput(logits=logits, loss=loss)

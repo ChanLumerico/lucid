@@ -50,7 +50,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, FeatureInfo
-from lucid.models._output import BaseModelOutput
+from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.inception_resnet._config import InceptionResNetConfig
 
 # ---------------------------------------------------------------------------
@@ -368,7 +368,7 @@ class _Block8(nn.Module):
 
 
 @dataclass(slots=True)
-class InceptionResNetOutput:
+class InceptionResNetOutput(ImageClassificationOutput):
     r"""Structured forward output for :class:`InceptionResNetV2ForImageClassification`.
 
     Inception-ResNet v2 does not use auxiliary classifiers (unlike
@@ -397,9 +397,6 @@ class InceptionResNetOutput:
     >>> out.loss is None
     True
     """
-
-    logits: Tensor
-    loss: Tensor | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -36,7 +36,7 @@ from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
-from lucid.models._output import BaseModelOutput
+from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.xception._config import XceptionConfig
 
 # ---------------------------------------------------------------------------
@@ -268,7 +268,7 @@ class _ExitSepConv(nn.Module):
 
 
 @dataclass(slots=True)
-class XceptionOutput:
+class XceptionOutput(ImageClassificationOutput):
     r"""Forward-return dataclass for :class:`XceptionForImageClassification`.
 
     Carries the per-class logits and the optional supervised loss
@@ -304,9 +304,6 @@ class XceptionOutput:
     >>> out.loss is None
     True
     """
-
-    logits: Tensor
-    loss: Tensor | None = None
 
 
 # ---------------------------------------------------------------------------

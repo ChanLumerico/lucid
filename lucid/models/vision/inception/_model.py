@@ -25,7 +25,7 @@ from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
-from lucid.models._output import BaseModelOutput
+from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.inception._config import InceptionConfig
 
 # BatchNorm epsilon used throughout Inception v3.  The canonical Inception
@@ -313,7 +313,7 @@ class _InceptionAux(nn.Module):
 
 
 @dataclass(slots=True)
-class InceptionV3Output:
+class InceptionV3Output(ImageClassificationOutput):
     r"""Structured forward output for :class:`InceptionV3ForImageClassification`.
 
     Carries the main classifier logits and the optional auxiliary
@@ -358,9 +358,7 @@ class InceptionV3Output:
     True
     """
 
-    logits: Tensor
     aux_logits: Tensor | None = None
-    loss: Tensor | None = None
 
 
 # ---------------------------------------------------------------------------
