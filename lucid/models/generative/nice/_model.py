@@ -92,11 +92,11 @@ class _CouplingNet(nn.Module):
         self.proj = proj
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         h = x
         for layer in self.hidden:
             h = generative_activation(self._act_name, cast(Tensor, layer(h)))
-        return cast(Tensor, self.proj(h))
+        return self.proj(h)
 
 
 @final
@@ -120,16 +120,16 @@ class _AdditiveCoupling(nn.Module):
         self.coupling = _CouplingNet(config)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         x1, x2 = x[:, : self._split], x[:, self._split :]
-        y = lucid.cat([x1, x2 + cast(Tensor, self.coupling(x1))], dim=-1)
+        y = lucid.cat([x1, x2 + self.coupling(x1)], dim=-1)
         return lucid.flip(y, 1)
 
     def inverse(self, y: Tensor) -> Tensor:
         """Exact inverse — undo the reversal, then subtract ``m``."""
         h = lucid.flip(y, 1)
         h1, h2 = h[:, : self._split], h[:, self._split :]
-        return lucid.cat([h1, h2 - cast(Tensor, self.coupling(h1))], dim=-1)
+        return lucid.cat([h1, h2 - self.coupling(h1)], dim=-1)
 
 
 @final
@@ -147,7 +147,7 @@ class _DiagonalScaling(nn.Module):
         self.log_scale = nn.Parameter(lucid.zeros(dim))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         return x * self.log_scale.exp()
 
     def inverse(self, h: Tensor) -> Tensor:
@@ -302,7 +302,7 @@ class NICEModel(PretrainedModel):
             h = _tile(h)
         for layer in self.couplings:
             h = cast(Tensor, layer(h))
-        h = cast(Tensor, self.scaling(h))
+        h = self.scaling(h)
 
         batch = int(x.shape[0])
         log_det = self.scaling.log_det_jacobian()
@@ -332,7 +332,7 @@ class NICEModel(PretrainedModel):
         return self._density(h, log_det)
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
         h, log_det = self.encode(x)
         return NormalizingFlowOutput(
             latent=h,
@@ -411,8 +411,8 @@ class NICEForImageGeneration(ImageGenerationModel):
         self._input_dim = config.input_dim
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
-        out = cast(NormalizingFlowOutput, self.nice(x))
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
+        out = self.nice(x)
         return NormalizingFlowOutput(
             latent=out.latent,
             log_det_jacobian=out.log_det_jacobian,

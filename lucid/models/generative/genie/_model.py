@@ -139,7 +139,7 @@ class _Attention(nn.Module):
         self.key_norm: nn.LayerNorm | None = nn.LayerNorm(head_dim) if qk_norm else None
 
     @override
-    def forward(self, x: Tensor, causal: bool) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, causal: bool) -> Tensor:
         batch, length = int(x.shape[0]), int(x.shape[1])
 
         def heads(t: Tensor) -> Tensor:
@@ -147,15 +147,15 @@ class _Attention(nn.Module):
                 0, 2, 1, 3
             )
 
-        query = heads(cast(Tensor, self.query(x)))
-        key = heads(cast(Tensor, self.key(x)))
-        value = heads(cast(Tensor, self.value(x)))
+        query = heads(self.query(x))
+        key = heads(self.key(x))
+        value = heads(self.value(x))
         if self.query_norm is not None and self.key_norm is not None:
-            query = cast(Tensor, self.query_norm(query))
-            key = cast(Tensor, self.key_norm(key))
+            query = self.query_norm(query)
+            key = self.key_norm(key)
         y = F.scaled_dot_product_attention(query, key, value, is_causal=causal)
         y = y.permute(0, 2, 1, 3).reshape(batch, length, self.heads * self.head_dim)
-        return cast(Tensor, self.out(y))
+        return self.out(y)
 
 
 class _STBlock(nn.Module):
@@ -187,19 +187,17 @@ class _STBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         b, t, n, d = (int(s) for s in x.shape)
         # Space: the N tokens of one frame attend to each other.
-        spatial_in = cast(Tensor, self.spatial_norm(x)).reshape(b * t, n, d)
-        spatial = cast(Tensor, self.spatial(spatial_in, causal=False))
+        spatial_in = self.spatial_norm(x).reshape(b * t, n, d)
+        spatial = self.spatial(spatial_in, causal=False)
         x = x + spatial.reshape(b, t, n, d)
         # Time: the T tokens at one position, each seeing only the past.
-        temporal_in = cast(Tensor, self.temporal_norm(x)).permute(0, 2, 1, 3)
-        temporal = cast(
-            Tensor, self.temporal(temporal_in.reshape(b * n, t, d), causal=True)
-        )
+        temporal_in = self.temporal_norm(x).permute(0, 2, 1, 3)
+        temporal = self.temporal(temporal_in.reshape(b * n, t, d), causal=True)
         x = x + temporal.reshape(b, n, t, d).permute(0, 2, 1, 3)
-        return x + cast(Tensor, self.ffw(cast(Tensor, self.ffw_norm(x))))
+        return x + self.ffw(self.ffw_norm(x))
 
 
 class _STTransformer(nn.Module):
@@ -234,7 +232,7 @@ class _STTransformer(nn.Module):
         self.norm = nn.LayerNorm(dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         frames = int(x.shape[1])
         if frames > self.num_frames:
             raise ValueError(
@@ -243,7 +241,7 @@ class _STTransformer(nn.Module):
         x = x + self.spatial_position + self.temporal_position[:, :frames]
         for block in self.blocks:
             x = cast(Tensor, block(x))
-        return cast(Tensor, self.norm(x))
+        return self.norm(x)
 
 
 # ── the codebook ─────────────────────────────────────────────────────────────
@@ -317,7 +315,7 @@ class _Codebook(nn.Module):
         return self.quantizer.loss(out)
 
     @override
-    def forward(self, x: Tensor) -> nn.VectorQuantizerOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> nn.VectorQuantizerOutput:
         """Quantise ``(*, dim)``, noting which codes were used.
 
         Nothing moves here.  On a training step each code's share of the
@@ -331,7 +329,7 @@ class _Codebook(nn.Module):
         :meth:`GenieModel.dynamics_loss`, which would count every batch
         twice in the staged schedule the paper trains under.
         """
-        out = cast(nn.VectorQuantizerOutput, self.quantizer(x))
+        out = self.quantizer(x)
         if self.training and self.reset_threshold > 0.0 and lucid.is_grad_enabled():
             self._observe(x, out.indices)
         return out
@@ -428,9 +426,9 @@ class _VideoTokenizer(nn.Module):
     def quantize(self, video: Tensor) -> nn.VectorQuantizerOutput:
         """Encode and quantise ``(B, T, C, H, W)`` to ``(B, T, N)`` codes."""
         patches = _patchify(video, self.config.tokenizer_patch_size)
-        hidden = cast(Tensor, self.encoder(cast(Tensor, self.encoder_in(patches))))
-        codes = cast(Tensor, self.to_code(hidden))
-        return cast(nn.VectorQuantizerOutput, self.quantizer(codes))
+        hidden = self.encoder(self.encoder_in(patches))
+        codes = self.to_code(hidden)
+        return self.quantizer(codes)
 
     def decode(self, codes: Tensor) -> Tensor:
         """Decode code vectors ``(B, T, N, code_dim)`` to frames in ``[0, 1]``.
@@ -440,8 +438,8 @@ class _VideoTokenizer(nn.Module):
         decoder, whose targets are the same normalised frames.
         """
         config = self.config
-        hidden = cast(Tensor, self.decoder(cast(Tensor, self.decoder_in(codes))))
-        patches = cast(Tensor, self.to_pixels(hidden))
+        hidden = self.decoder(self.decoder_in(codes))
+        patches = self.to_pixels(hidden)
         frames = _unpatchify(
             patches,
             config.tokenizer_patch_size,
@@ -490,9 +488,9 @@ class _LatentActionModel(nn.Module):
         vector.  Which output becomes the action is *not stated*.
         """
         patches = _patchify(video, self.config.action_patch_size)
-        hidden = cast(Tensor, self.encoder(cast(Tensor, self.encoder_in(patches))))
-        vectors = cast(Tensor, self.to_action(hidden[:, 1:].mean(dim=2)))
-        return cast(nn.VectorQuantizerOutput, self.quantizer(vectors))
+        hidden = self.encoder(self.encoder_in(patches))
+        vectors = self.to_action(hidden[:, 1:].mean(dim=2))
+        return self.quantizer(vectors)
 
     def decode(self, video: Tensor, actions: Tensor) -> Tensor:
         """Predict frames ``2..T`` from the frames before each and its action.
@@ -502,9 +500,9 @@ class _LatentActionModel(nn.Module):
         """
         config = self.config
         past = _patchify(video[:, :-1], config.action_patch_size)
-        steps = cast(Tensor, self.action_in(actions)).unsqueeze(2)
-        hidden = cast(Tensor, self.decoder_in(past)) + steps
-        patches = cast(Tensor, self.to_pixels(cast(Tensor, self.decoder(hidden))))
+        steps = self.action_in(actions).unsqueeze(2)
+        hidden = self.decoder_in(past) + steps
+        patches = self.to_pixels(self.decoder(hidden))
         frames = _unpatchify(
             patches,
             config.action_patch_size,
@@ -530,17 +528,17 @@ class _DynamicsModel(nn.Module):
         self.to_logits = nn.Linear(config.dynamics_dim, config.num_codes)
 
     @override
-    def forward(self, tokens: Tensor, actions: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, tokens: Tensor, actions: Tensor) -> Tensor:
         """Logits ``(B, T, N, num_codes)`` for tokens ``(B, T, N)``.
 
         ``actions`` is ``(B, T - 1, action_dim)``: action ``t`` is added to
         frame ``t + 1``, the frame it leads to, and the first frame gets
         none.
         """
-        hidden = cast(Tensor, self.token_embedding(tokens))
+        hidden = self.token_embedding(tokens)
         frames = int(tokens.shape[1])
         if frames > 1:
-            steps = cast(Tensor, self.action_embedding(actions))
+            steps = self.action_embedding(actions)
             first = lucid.zeros(
                 int(steps.shape[0]),
                 1,
@@ -549,7 +547,7 @@ class _DynamicsModel(nn.Module):
                 device=steps.device,
             )
             hidden = hidden + lucid.cat([first, steps], dim=1).unsqueeze(2)
-        return cast(Tensor, self.to_logits(cast(Tensor, self.transformer(hidden))))
+        return self.to_logits(self.transformer(hidden))
 
 
 # ── outputs ──────────────────────────────────────────────────────────────────
@@ -932,7 +930,7 @@ class GenieModel(PretrainedModel):
         mask = (lucid.rand(b, t, n, device=device) < rate).to(lucid.float32) * later
         hide = mask.to(tokens.dtype)
         inputs = tokens + (self.dynamics.mask_token - tokens) * hide
-        logits = cast(Tensor, self.dynamics(inputs, actions))
+        logits = self.dynamics(inputs, actions)
         per_token = F.cross_entropy(
             logits.reshape(b * t * n, config.num_codes),
             tokens.reshape(b * t * n),
@@ -943,7 +941,7 @@ class GenieModel(PretrainedModel):
         return loss, logits, mask
 
     @override
-    def forward(self, video: Tensor) -> GenieOutput:  # type: ignore[override]
+    def forward(self, video: Tensor) -> GenieOutput:
         """Compute all three objectives on one video batch.
 
         Parameters
@@ -1086,7 +1084,7 @@ class GenieForWorldModeling(WorldModelingModel):
             if reveal <= 0:
                 continue
             sequence = lucid.cat([tokens, frame.unsqueeze(1)], dim=1)
-            logits = cast(Tensor, dynamics(sequence, actions))[:, -1]
+            logits = dynamics(sequence, actions)[:, -1]
             drawn = F.softmax(logits / config.temperature, dim=-1)
             sampled = lucid.multinomial(drawn.reshape(b * n, config.num_codes), 1)
             sampled = sampled.reshape(b, n).to(tokens.dtype)
@@ -1134,7 +1132,7 @@ class GenieForWorldModeling(WorldModelingModel):
         return lucid.cat(frames, dim=1) if len(frames) > 1 else frames[0]
 
     @override
-    def forward(self, prompt: Tensor, actions: Tensor) -> GenieRolloutOutput:  # type: ignore[override]
+    def forward(self, prompt: Tensor, actions: Tensor) -> GenieRolloutOutput:
         """Play the environment from a prompt, one latent action per frame.
 
         Parameters

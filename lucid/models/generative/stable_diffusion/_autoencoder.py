@@ -154,7 +154,7 @@ class _ResnetBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Two convolutions on the residual stream.
 
         Parameters
@@ -167,12 +167,8 @@ class _ResnetBlock(nn.Module):
         Tensor
             ``(B, out_channels, H, W)``.
         """
-        h = cast(
-            Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x)))))
-        )
-        h = cast(
-            Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h)))))
-        )
+        h = self.conv1(self.act(self.norm1(x)))
+        h = self.conv2(self.act(self.norm2(h)))
         skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
         return skip + h
 
@@ -212,7 +208,7 @@ class _SelfAttention2d(nn.Module):
         self.attn = nn.MultiheadAttention(channels, 1, batch_first=True)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Attend across positions, then add back.
 
         Parameters
@@ -226,7 +222,7 @@ class _SelfAttention2d(nn.Module):
             ``(B, C, H, W)``.
         """
         b, c, h, w = (int(s) for s in x.shape)
-        normed = cast(Tensor, self.norm(x)).reshape(b, c, h * w).swapaxes(1, 2)
+        normed = self.norm(x).reshape(b, c, h * w).swapaxes(1, 2)
         attended, _ = self.attn(normed, normed, normed, need_weights=False)
         return x + attended.swapaxes(1, 2).reshape(b, c, h, w)
 
@@ -257,7 +253,7 @@ class _Downsample2d(nn.Module):
         self.conv = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=0)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Pad bottom-right, then convolve.
 
         Parameters
@@ -270,7 +266,7 @@ class _Downsample2d(nn.Module):
         Tensor
             ``(B, C, H/2, W/2)``.
         """
-        return cast(Tensor, self.conv(F.pad(x, (0, 1, 0, 1))))
+        return self.conv(F.pad(x, (0, 1, 0, 1)))
 
 
 @dataclass(slots=True)
@@ -431,17 +427,14 @@ class AutoencoderKL(nn.Module):
         >>> bool((posterior.sample() == posterior.mode()).all())
         False
         """
-        h = cast(Tensor, self.conv_in(x))
+        h = self.conv_in(x)
         for block in self.down:
             h = cast(Tensor, block(h))
-        h = cast(Tensor, self.mid_block_1(h))
-        h = cast(Tensor, self.mid_attn(h))
-        h = cast(Tensor, self.mid_block_2(h))
-        h = cast(
-            Tensor,
-            self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h))))),
-        )
-        moments = cast(Tensor, self.quant_conv(h))
+        h = self.mid_block_1(h)
+        h = self.mid_attn(h)
+        h = self.mid_block_2(h)
+        h = self.conv_out(self.act(self.norm_out(h)))
+        moments = self.quant_conv(h)
         channels = int(moments.shape[1]) // 2
         return DiagonalGaussian(moments[:, :channels], moments[:, channels:])
 
@@ -479,23 +472,16 @@ class AutoencoderKL(nn.Module):
         >>> vae.decode(lucid.randn((1, 4, 4, 6))).shape
         (1, 3, 16, 24)
         """
-        h = cast(Tensor, self.decoder_conv_in(cast(Tensor, self.post_quant_conv(z))))
-        h = cast(Tensor, self.decoder_mid_block_1(h))
-        h = cast(Tensor, self.decoder_mid_attn(h))
-        h = cast(Tensor, self.decoder_mid_block_2(h))
+        h = self.decoder_conv_in(self.post_quant_conv(z))
+        h = self.decoder_mid_block_1(h)
+        h = self.decoder_mid_attn(h)
+        h = self.decoder_mid_block_2(h)
         for block in self.up:
             h = cast(Tensor, block(h))
-        return cast(
-            Tensor,
-            self.decoder_conv_out(
-                cast(Tensor, self.act(cast(Tensor, self.decoder_norm_out(h))))
-            ),
-        )
+        return self.decoder_conv_out(self.act(self.decoder_norm_out(h)))
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, sample: bool = True
-    ) -> AutoencoderKLOutput:
+    def forward(self, x: Tensor, sample: bool = True) -> AutoencoderKLOutput:
         """Encode, take a latent, and decode it back.
 
         Parameters

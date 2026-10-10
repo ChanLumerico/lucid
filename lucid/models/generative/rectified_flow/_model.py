@@ -165,7 +165,7 @@ class _FIRResample(nn.Module):
         self.register_buffer("kernel", kernel * lucid.ones((channels, 1, 1, 1)))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         left, right = self._pad
         if self._up:
             x = _zero_insert(x, 2)
@@ -202,9 +202,9 @@ class _Resample(nn.Module):
         self.filter = _FIRResample(channels, taps, up=up) if fir else None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if self.filter is not None:
-            return cast(Tensor, self.filter(x))
+            return self.filter(x)
         return _naive_upsample(x) if self._up else _naive_downsample(x)
 
 
@@ -229,7 +229,7 @@ class _FourierProjection(nn.Module):
         self.register_buffer("freqs", lucid.randn((size,)) * scale)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         projected = x.reshape(-1, 1) * self.freqs.reshape(1, -1) * (2.0 * math.pi)
         return lucid.cat([lucid.sin(projected), lucid.cos(projected)], dim=-1)
 
@@ -314,19 +314,19 @@ class _ResBlock(nn.Module):
             self.skip = _conv1x1(in_channels, out_channels)
 
     @override
-    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:
         act = self._act_name
-        h = generative_activation(act, cast(Tensor, self.norm1(x)))
+        h = generative_activation(act, self.norm1(x))
         if self._resample is not None:
             # Both branches, so the residual sum stays well defined.
-            h = cast(Tensor, self._resample(h))
-            x = cast(Tensor, self._resample(x))
-        h = cast(Tensor, self.conv1(h))
-        shift = cast(Tensor, self.time_proj(generative_activation(act, t_emb)))
+            h = self._resample(h)
+            x = self._resample(x)
+        h = self.conv1(h)
+        shift = self.time_proj(generative_activation(act, t_emb))
         h = h + shift.unsqueeze(-1).unsqueeze(-1)
-        h = generative_activation(act, cast(Tensor, self.norm2(h)))
-        h = cast(Tensor, self.dropout(h))
-        h = cast(Tensor, self.conv2(h))
+        h = generative_activation(act, self.norm2(h))
+        h = self.dropout(h)
+        h = self.conv2(h)
         if self.skip is not None:
             x = cast(Tensor, self.skip(x))
         out = x + h
@@ -357,16 +357,16 @@ class _AttnBlock(nn.Module):
         self.scale = 1.0 / math.sqrt(channels)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         batch, channels, height, width = (int(s) for s in x.shape)
         n = height * width
-        h = cast(Tensor, self.norm(x))
-        q = cast(Tensor, self.query(h)).reshape(batch, channels, n)
-        k = cast(Tensor, self.key(h)).reshape(batch, channels, n)
-        v = cast(Tensor, self.value(h)).reshape(batch, channels, n)
+        h = self.norm(x)
+        q = self.query(h).reshape(batch, channels, n)
+        k = self.key(h).reshape(batch, channels, n)
+        v = self.value(h).reshape(batch, channels, n)
         scores = q.mT @ k * self.scale
         out: Tensor = v @ F.softmax(scores, dim=-1).mT
-        out = cast(Tensor, self.proj(out.reshape(batch, channels, height, width)))
+        out = self.proj(out.reshape(batch, channels, height, width))
         result = x + out
         return result / math.sqrt(2.0) if self._skip_rescale else result
 
@@ -611,7 +611,7 @@ class _VelocityField(nn.Module):
         return _sinusoidal(scaled, self._config.base_channels)
 
     @override
-    def forward(self, sample: Tensor, t: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, sample: Tensor, t: Tensor) -> Tensor:
         """Evaluate the velocity field.
 
         Parameters
@@ -629,17 +629,14 @@ class _VelocityField(nn.Module):
         """
         if t.ndim == 0:
             t = t.reshape((1,)).expand((int(sample.shape[0]),))
-        t_hidden = cast(Tensor, self.time_mlp_fc1(self._time_embedding(t)))
-        t_emb = cast(
-            Tensor,
-            self.time_mlp_fc2(generative_activation(self._act_name, t_hidden)),
-        )
+        t_hidden = self.time_mlp_fc1(self._time_embedding(t))
+        t_emb = self.time_mlp_fc2(generative_activation(self._act_name, t_hidden))
 
         pyramid_in = sample if self._progressive_input == "input_skip" else None
         if not self._data_centered:
             # Reference ncsnpp.forward: ``if not config.data.centered: x = 2*x - 1``.
             sample = sample * 2.0 - 1.0
-        h = cast(Tensor, self.conv_in(sample))
+        h = self.conv_in(sample)
         skips: list[Tensor] = [h]
 
         idx = 0
@@ -658,9 +655,9 @@ class _VelocityField(nn.Module):
                     h = h + cast(Tensor, self.down_combine[level](pyramid_in))
                 skips.append(h)
 
-        h = cast(Tensor, self.mid_block1(h, t_emb))
-        h = cast(Tensor, self.mid_attn(h))
-        h = cast(Tensor, self.mid_block2(h, t_emb))
+        h = self.mid_block1(h, t_emb)
+        h = self.mid_attn(h)
+        h = self.mid_block2(h, t_emb)
 
         pyramid_out: Tensor | None = None
         idx = 0
@@ -769,7 +766,7 @@ class _LikelihoodDynamics:
         self.nfe += 1
         batch = int(x.shape[0])
         image = x.reshape(batch, *self._image_shape)
-        return cast(Tensor, self.field(image, t)).reshape(batch, -1)
+        return self.field(image, t).reshape(batch, -1)
 
     def __call__(
         self, t: Tensor, state: tuple[Tensor, Tensor]
@@ -780,7 +777,7 @@ class _LikelihoodDynamics:
             source = x if x.requires_grad else x.detach().requires_grad_(True)
             batch = int(source.shape[0])
             image = source.reshape(batch, *self._image_shape)
-            velocity = cast(Tensor, self.field(image, t)).reshape(batch, -1)
+            velocity = self.field(image, t).reshape(batch, -1)
             divergence = self._divergence(velocity, source)
         return velocity, divergence
 
@@ -1194,7 +1191,7 @@ class RectifiedFlowModel(PretrainedModel):
         t = self.sample_times(batch, device=str(x1.device.type))
         x_t = self.path_sample(x1, noise, t)
         target = self.conditional_target(x1, noise, t)
-        prediction = cast(Tensor, self.field(x_t, t))
+        prediction = self.field(x_t, t)
         loss = ((prediction - target) ** 2).mean()
         return loss, prediction, target
 
@@ -1621,9 +1618,9 @@ class RectifiedFlowModel(PretrainedModel):
         return -self.log_prob(x) / (self._input_dim * math.log(2.0))
 
     @override
-    def forward(self, sample: Tensor, t: Tensor) -> DiffusionModelOutput:  # type: ignore[override]
+    def forward(self, sample: Tensor, t: Tensor) -> DiffusionModelOutput:
         """Evaluate the velocity field at ``(x, t)``."""
-        return DiffusionModelOutput(sample=cast(Tensor, self.field(sample, t)))
+        return DiffusionModelOutput(sample=self.field(sample, t))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1691,9 +1688,7 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
         return self.rectified_flow.nfe
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, noise: Tensor | None = None
-    ) -> DiffusionModelOutput:
+    def forward(self, x: Tensor, noise: Tensor | None = None) -> DiffusionModelOutput:
         loss, prediction, _ = self.rectified_flow.rectified_flow_loss(x, noise)
         return DiffusionModelOutput(sample=prediction, loss=loss)
 

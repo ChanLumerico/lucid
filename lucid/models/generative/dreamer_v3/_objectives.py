@@ -291,7 +291,7 @@ class ReturnNormaliser(nn.Module):
         return self.scale
 
     @override
-    def forward(self, returns: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, returns: Tensor) -> Tensor:
         """Update the estimate and return the scaled returns.
 
         Parameters

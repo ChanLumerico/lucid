@@ -10,7 +10,7 @@ The only thing the two families disagree about is ``unimix``, and it is a
 constructor argument.
 """
 
-from typing import cast, override
+from typing import override
 
 import lucid
 import lucid.nn as nn
@@ -122,7 +122,7 @@ class Actor(nn.Module):
         >>> bool(((choice.probs.sum(dim=-1) - 1.0).abs() < 1e-5).all().item())
         True
         """
-        out = cast(Tensor, self.head(feature))
+        out = self.head(feature)
         if self.discrete:
             return OneHotCategorical(out, unimix=self.unimix)
         raw_mean = out[..., : self.action_dim]
@@ -205,9 +205,7 @@ class Actor(nn.Module):
         return value if self.discrete else value.sum(dim=-1)
 
     @override
-    def forward(  # type: ignore[override]
-        self, feature: Tensor, *, sample: bool = True
-    ) -> Tensor:
+    def forward(self, feature: Tensor, *, sample: bool = True) -> Tensor:
         """Propose an action — ``(B, T, action_dim)`` inside ``(-1, 1)``.
 
         Parameters

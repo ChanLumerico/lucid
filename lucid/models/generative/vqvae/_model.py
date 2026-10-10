@@ -145,11 +145,11 @@ class _VQVAEResidualBlock(nn.Module):
         self.conv2 = nn.Conv2d(hidden, channels, kernel_size=1, bias=False)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         h = generative_activation(self._act_name, x)
-        h = cast(Tensor, self.conv1(h))
+        h = self.conv1(h)
         h = generative_activation(self._act_name, h)
-        h = cast(Tensor, self.conv2(h))
+        h = self.conv2(h)
         return x + h
 
 
@@ -192,7 +192,7 @@ class _VQVAEEncoder(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         h = x
         last = len(self.down_blocks) - 1
         for i, blk in enumerate(self.down_blocks):
@@ -212,7 +212,7 @@ class _VQVAEEncoder(nn.Module):
         for res in self.residuals:
             h = cast(Tensor, res(h))
         h = generative_activation(self._act_name, h)
-        return cast(Tensor, self.proj(h))
+        return self.proj(h)
 
 
 @final
@@ -254,8 +254,8 @@ class _VQVAEDecoder(nn.Module):
         self._n_up = n_up
 
     @override
-    def forward(self, z_q: Tensor) -> Tensor:  # type: ignore[override]
-        h = cast(Tensor, self.lift(z_q))
+    def forward(self, z_q: Tensor) -> Tensor:
+        h = self.lift(z_q)
         for res in self.residuals:
             h = cast(Tensor, res(h))
         h = generative_activation(self._act_name, h)
@@ -365,11 +365,11 @@ class VQVAEModel(PretrainedModel):
 
     def encode(self, x: Tensor) -> Tensor:
         """Return the *continuous* pre-quantisation latent ``z_e(x)``."""
-        return cast(Tensor, self.encoder(x))
+        return self.encoder(x)
 
     def decode(self, z_q: Tensor) -> Tensor:
         """Decode a quantised latent field back to image space."""
-        return cast(Tensor, self.decoder(z_q))
+        return self.decoder(z_q)
 
     def quantize(self, z_e: Tensor) -> nn.VectorQuantizerOutput:
         """Quantise an ``(B, D, H', W')`` latent field.
@@ -379,7 +379,7 @@ class VQVAEModel(PretrainedModel):
         the lookup and moved back afterwards; the returned ``quantized``
         is in image layout, while ``indices`` is ``(B, H', W')``.
         """
-        out = cast(nn.VectorQuantizerOutput, self.quantizer(z_e.permute(0, 2, 3, 1)))
+        out = self.quantizer(z_e.permute(0, 2, 3, 1))
         return out._replace(quantized=out.quantized.permute(0, 3, 1, 2))
 
     @lucid.no_grad()
@@ -393,7 +393,7 @@ class VQVAEModel(PretrainedModel):
         return self.decode(self.quantizer.lookup(indices).permute(0, 3, 1, 2))
 
     @override
-    def forward(self, x: Tensor) -> VQVAEOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VQVAEOutput:
         q = self.quantize(self.encode(x))
         z_q, indices = q.quantized, q.indices
         codebook_loss, commitment_loss = q.codebook_loss, q.commitment_loss
@@ -511,7 +511,7 @@ class VQVAEForImageGeneration(ImageGenerationModel):
         return per_pixel.reshape(b, -1).sum(dim=-1).mean()
 
     @override
-    def forward(self, x: Tensor) -> VQVAEOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VQVAEOutput:
         q = self.vqvae.quantize(self.vqvae.encode(x))
         recon = self.vqvae.decode(q.quantized)
 

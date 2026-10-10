@@ -236,7 +236,7 @@ class DiTBlock(nn.Module):
                 linear.bias.zero_()
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Attention and MLP, each modulated and gated by ``cond``.
 
         Parameters
@@ -251,7 +251,7 @@ class DiTBlock(nn.Module):
         Tensor
             ``(B, N, D)``.
         """
-        params = cast(Tensor, self.ada_ln(cond))
+        params = self.ada_ln(cond)
         width = int(x.shape[2])
         fan = 6 if self.gated else 4
         chunks = [
@@ -264,12 +264,12 @@ class DiTBlock(nn.Module):
             shift_a, scale_a, shift_m, scale_m = chunks
             gate_a = gate_m = lucid.ones((1, 1, 1), device=x.device.type)
 
-        h = cast(Tensor, self.norm1(x)) * (1.0 + scale_a) + shift_a
+        h = self.norm1(x) * (1.0 + scale_a) + shift_a
         attended, _ = self.attn(h, h, h, need_weights=False)
         x = x + gate_a * attended
 
-        h = cast(Tensor, self.norm2(x)) * (1.0 + scale_m) + shift_m
-        return x + gate_m * cast(Tensor, self.mlp(h))
+        h = self.norm2(x) * (1.0 + scale_m) + shift_m
+        return x + gate_m * self.mlp(h)
 
 
 class DiTFinalLayer(nn.Module):
@@ -324,11 +324,11 @@ class DiTFinalLayer(nn.Module):
                 self.proj.bias.zero_()
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Project ``(B, N, D)`` tokens to ``(B, N, patchˆ2 * out_channels)``."""
-        params = cast(Tensor, self.ada_ln(cond))
+        params = self.ada_ln(cond)
         width = int(x.shape[2])
         shift = params[:, :width].reshape(-1, 1, width)
         scale = params[:, width:].reshape(-1, 1, width)
-        h = cast(Tensor, self.norm(x)) * (1.0 + scale) + shift
-        return cast(Tensor, self.proj(h))
+        h = self.norm(x) * (1.0 + scale) + shift
+        return self.proj(h)

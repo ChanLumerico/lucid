@@ -67,12 +67,10 @@ class _TimeMLP(nn.Module):
         self.fc2 = nn.Linear(hidden_size, hidden_size)
 
     @override
-    def forward(self, t: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, t: Tensor) -> Tensor:
         """Embed ``(B,)`` times into ``(B, hidden_size)``."""
         emb = timestep_embedding(t, self.freq_size)
-        return cast(
-            Tensor, self.fc2(cast(Tensor, self.act(cast(Tensor, self.fc1(emb)))))
-        )
+        return self.fc2(self.act(self.fc1(emb)))
 
 
 @dataclass(slots=True)
@@ -258,7 +256,7 @@ class MeanFlowModel(PretrainedModel):
         return x.reshape(-1, channels, grid * patch, grid * patch)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         z: Tensor,
         r: Tensor,
@@ -284,7 +282,7 @@ class MeanFlowModel(PretrainedModel):
         Tensor
             ``(B, out_channels, H, W)`` — :math:`u_\theta(z, r, t)`.
         """
-        tokens = cast(Tensor, self.patch_embed(z))
+        tokens = self.patch_embed(z)
         tokens = tokens.reshape(tokens.shape[0], tokens.shape[1], -1).permute(0, 2, 1)
         tokens = tokens + self.pos_embed
 
@@ -299,11 +297,11 @@ class MeanFlowModel(PretrainedModel):
                 dtype=lucid.int64,
                 device=z.device.type,
             )
-        cond = cond + cast(Tensor, self.label_embed(labels))
+        cond = cond + self.label_embed(labels)
 
         for block in self.blocks:
             tokens = cast(Tensor, block(tokens, cond))
-        return self._unpatchify(cast(Tensor, self.final(tokens, cond)))
+        return self._unpatchify(self.final(tokens, cond))
 
 
 class MeanFlowForImageGeneration(ImageGenerationModel):
@@ -406,9 +404,7 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         return guided * inside + v * (1.0 - inside)
 
     @override
-    def forward(  # type: ignore[override]
-        self, images: Tensor, labels: Tensor | None = None
-    ) -> MeanFlowOutput:
+    def forward(self, images: Tensor, labels: Tensor | None = None) -> MeanFlowOutput:
         r"""One training step of the MeanFlow objective.
 
         Parameters

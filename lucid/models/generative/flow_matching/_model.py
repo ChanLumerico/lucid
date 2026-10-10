@@ -166,16 +166,14 @@ class _ResBlock(nn.Module):
             self.skip = nn.Identity()
 
     @override
-    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:
         act = self._act_name
-        h = cast(
-            Tensor, self.conv1(generative_activation(act, cast(Tensor, self.norm1(x))))
-        )
-        shift = cast(Tensor, self.time_proj(generative_activation(act, t_emb)))
+        h = self.conv1(generative_activation(act, self.norm1(x)))
+        shift = self.time_proj(generative_activation(act, t_emb))
         h = h + shift.unsqueeze(-1).unsqueeze(-1)
-        h = generative_activation(act, cast(Tensor, self.norm2(h)))
-        h = cast(Tensor, self.dropout(h))
-        h = cast(Tensor, self.conv2(h))
+        h = generative_activation(act, self.norm2(h))
+        h = self.dropout(h)
+        h = self.conv2(h)
         return h + cast(Tensor, self.skip(x))
 
 
@@ -208,17 +206,17 @@ class _AttentionBlock(nn.Module):
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         b, c, h_dim, w_dim = x.shape
         n = int(h_dim) * int(w_dim)
-        h = cast(Tensor, self.norm(x))
-        qkv = cast(Tensor, self.qkv(h)).reshape(b, 3, self.num_heads, self.head_dim, n)
+        h = self.norm(x)
+        qkv = self.qkv(h).reshape(b, 3, self.num_heads, self.head_dim, n)
         qkv = qkv.permute(1, 0, 2, 4, 3)  # (3, B, heads, N, D)
         q, k, v = qkv[0], qkv[1], qkv[2]
         scores = q @ k.permute(0, 1, 3, 2) * self.scale
         out: Tensor = F.softmax(scores, dim=-1) @ v
         out = out.permute(0, 1, 3, 2).reshape(b, c, h_dim, w_dim)
-        return x + cast(Tensor, self.proj(out))
+        return x + self.proj(out)
 
 
 @final
@@ -230,8 +228,8 @@ class _Downsample(nn.Module):
         self.op = nn.Conv2d(channels, channels, 3, stride=2, padding=0)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.op(F.pad(x, (0, 1, 0, 1))))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.op(F.pad(x, (0, 1, 0, 1)))
 
 
 @final
@@ -243,8 +241,8 @@ class _Upsample(nn.Module):
         self.op = nn.Conv2d(channels, channels, 3, padding=1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.op(F.interpolate(x, scale_factor=2.0, mode="nearest")))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.op(F.interpolate(x, scale_factor=2.0, mode="nearest"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -439,7 +437,7 @@ class _VelocityField(nn.Module):
         self._blocks_per_up = config.num_res_blocks + 1
 
     @override
-    def forward(self, sample: Tensor, t: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, sample: Tensor, t: Tensor) -> Tensor:
         """Evaluate the velocity field.
 
         Parameters
@@ -457,9 +455,9 @@ class _VelocityField(nn.Module):
         """
         if t.ndim == 0:
             t = t.reshape((1,)).expand((int(sample.shape[0]),))
-        t_emb = cast(Tensor, self.time_mlp(t * _TIME_SCALE))
+        t_emb = self.time_mlp(t * _TIME_SCALE)
 
-        h = cast(Tensor, self.conv_in(sample))
+        h = self.conv_in(sample)
         skips: list[Tensor] = [h]
 
         idx = 0
@@ -473,9 +471,9 @@ class _VelocityField(nn.Module):
                 h = cast(Tensor, self.down_sample[level](h))
                 skips.append(h)
 
-        h = cast(Tensor, self.mid_block1(h, t_emb))
-        h = cast(Tensor, self.mid_attn(h))
-        h = cast(Tensor, self.mid_block2(h, t_emb))
+        h = self.mid_block1(h, t_emb)
+        h = self.mid_attn(h)
+        h = self.mid_block2(h, t_emb)
 
         idx = 0
         for level in range(self._levels - 1, -1, -1):
@@ -487,8 +485,8 @@ class _VelocityField(nn.Module):
             if level != 0:
                 h = cast(Tensor, self.up_sample[self._levels - 1 - level](h))
 
-        h = generative_activation(self._act_name, cast(Tensor, self.norm_out(h)))
-        return cast(Tensor, self.conv_out(h))
+        h = generative_activation(self._act_name, self.norm_out(h))
+        return self.conv_out(h)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -549,7 +547,7 @@ class _LikelihoodDynamics:
         self.nfe += 1
         batch = int(x.shape[0])
         image = x.reshape(batch, *self._image_shape)
-        return cast(Tensor, self.field(image, t)).reshape(batch, -1)
+        return self.field(image, t).reshape(batch, -1)
 
     def __call__(
         self, t: Tensor, state: tuple[Tensor, Tensor]
@@ -563,7 +561,7 @@ class _LikelihoodDynamics:
             source = x if x.requires_grad else x.detach().requires_grad_(True)
             batch = int(source.shape[0])
             image = source.reshape(batch, *self._image_shape)
-            velocity = cast(Tensor, self.field(image, t)).reshape(batch, -1)
+            velocity = self.field(image, t).reshape(batch, -1)
             divergence = self._divergence(velocity, source)
         return velocity, divergence
 
@@ -874,7 +872,7 @@ class FlowMatchingModel(PretrainedModel):
 
         x_t = self.path_sample(x1, x0, t)
         target = self.conditional_target(x1, x0, t)
-        prediction = cast(Tensor, self.field(x_t, t))
+        prediction = self.field(x_t, t)
         loss = ((prediction - target) ** 2).mean()
         return loss, prediction, target
 
@@ -1065,9 +1063,9 @@ class FlowMatchingModel(PretrainedModel):
         return -self.log_prob(x) / (self._input_dim * math.log(2.0))
 
     @override
-    def forward(self, sample: Tensor, t: Tensor) -> DiffusionModelOutput:  # type: ignore[override]
+    def forward(self, sample: Tensor, t: Tensor) -> DiffusionModelOutput:
         """Evaluate the velocity field at ``(t, sample)``."""
-        return DiffusionModelOutput(sample=cast(Tensor, self.field(sample, t)))
+        return DiffusionModelOutput(sample=self.field(sample, t))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1130,7 +1128,7 @@ class FlowMatchingForImageGeneration(ImageGenerationModel):
         return self.flow_matching.nfe
 
     @override
-    def forward(self, x: Tensor) -> DiffusionModelOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> DiffusionModelOutput:
         loss, prediction, _ = self.flow_matching.flow_matching_loss(x)
         return DiffusionModelOutput(sample=prediction, loss=loss)
 

@@ -116,7 +116,7 @@ class _VAEEncoder(nn.Module):
         return h.mean(dim=(-1, -2))
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, x: Tensor
     ) -> tuple[Tensor, Tensor] | tuple[list[Tensor], list[Tensor]]:
         h = x
@@ -138,8 +138,8 @@ class _VAEEncoder(nn.Module):
             h = generative_activation(self._act_name, h)
         B = int(h.shape[0])
         h = h.reshape(B, self._c_top * self._h_top * self._w_top)
-        mu = cast(Tensor, self.fc_mu(h))
-        logvar = cast(Tensor, self.fc_logvar(h))
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
         return mu, logvar
 
 
@@ -230,7 +230,7 @@ class _VAEDecoder(nn.Module):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         z_or_zs: Tensor | list[Tensor],
     ) -> Tensor:
@@ -242,7 +242,7 @@ class _VAEDecoder(nn.Module):
             # Bottom-up encoder produced (z_0, …, z_{L-1}); decoder consumes
             # them top-down.
             top_z = zs[-1]
-            h = cast(Tensor, self.fc(top_z))
+            h = self.fc(top_z)
             B = int(h.shape[0])
             h = h.reshape(B, self._c_top, self._h_top, self._w_top)
             for lvl, blk in enumerate(self.up_blocks):
@@ -255,17 +255,17 @@ class _VAEDecoder(nn.Module):
                         B, self._post_channels[lvl], int(h.shape[2]), int(h.shape[3])
                     )
                     h = h + proj
-            return cast(Tensor, self.head(h))
+            return self.head(h)
 
         # Vanilla path
         assert isinstance(z_or_zs, Tensor), "Vanilla decoder expects a single Tensor z"
-        h = cast(Tensor, self.fc(z_or_zs))
+        h = self.fc(z_or_zs)
         B = int(h.shape[0])
         h = h.reshape(B, self._c_top, self._h_top, self._w_top)
         for blk in self.up_blocks:
             h = cast(Tensor, blk(h))
             h = generative_activation(self._act_name, h)
-        return cast(Tensor, self.head(h))
+        return self.head(h)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -371,17 +371,14 @@ class VAEModel(PretrainedModel):
         Vanilla mode → ``(mu, logvar)``.  Hierarchical mode → ``(mus,
         logvars)`` with one entry per encoder stage.
         """
-        return cast(
-            tuple[Tensor, Tensor] | tuple[list[Tensor], list[Tensor]],
-            self.encoder(x),
-        )
+        return self.encoder(x)
 
     def decode(self, z_or_zs: Tensor | list[Tensor]) -> Tensor:
         """Map a latent (or list of per-level latents) back to image space."""
-        return cast(Tensor, self.decoder(z_or_zs=z_or_zs))
+        return self.decoder(z_or_zs=z_or_zs)
 
     @override
-    def forward(self, x: Tensor) -> VAEOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VAEOutput:
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.encode(x))
             zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars)]
@@ -517,7 +514,7 @@ class VAEForImageGeneration(ImageGenerationModel):
         return per_pixel.reshape(B, -1).sum(dim=-1).mean()
 
     @override
-    def forward(self, x: Tensor) -> VAEOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> VAEOutput:
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.vae.encode(x))
             zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars)]

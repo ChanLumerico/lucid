@@ -137,7 +137,7 @@ class PixelEncoder(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         h, b, t = _fold(x)
         for conv in self.convs:
             h = generative_activation(self._act_name, cast(Tensor, conv(h)))
@@ -203,9 +203,9 @@ class PixelDecoder(nn.Module):
         )
 
     @override
-    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, feature: Tensor) -> Tensor:
         h, b, t = _fold(feature)
-        h = cast(Tensor, self.lift(h))
+        h = self.lift(h)
         h = h.reshape(int(h.shape[0]), self._lift_width, 1, 1)
         last = len(self.deconvs) - 1
         for i, deconv in enumerate(self.deconvs):
@@ -274,9 +274,9 @@ class DenseHead(nn.Module):
         self.out = nn.Linear(hidden, out_features)
 
     @override
-    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, feature: Tensor) -> Tensor:
         h, b, t = _fold(feature)
         for layer in self.layers:
             h = generative_activation(self._act_name, cast(Tensor, layer(h)))
-        out = cast(Tensor, self.out(h))
+        out = self.out(h)
         return out.reshape(b, t) if self._squeeze else _unfold(out, b, t)

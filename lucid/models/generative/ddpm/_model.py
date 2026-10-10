@@ -115,21 +115,21 @@ class _ResBlock(nn.Module):
             self.skip = nn.Identity()
 
     @override
-    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:  # type: ignore[override]
-        h = cast(Tensor, self.conv1(F.silu(cast(Tensor, self.norm1(x)))))
+    def forward(self, x: Tensor, t_emb: Tensor) -> Tensor:
+        h = self.conv1(F.silu(self.norm1(x)))
         # (B, out_ch) → (B, out_ch, 1, 1) so it broadcasts across spatial.
-        t = cast(Tensor, self.time_proj(F.silu(t_emb))).unsqueeze(-1).unsqueeze(-1)
+        t = self.time_proj(F.silu(t_emb)).unsqueeze(-1).unsqueeze(-1)
         if self._scale_shift:
             # Improved-DDPM: h = norm(h) * (1 + scale) + shift.
             half = int(t.shape[1]) // 2
             scale, shift = t[:, :half], t[:, half:]
-            h = cast(Tensor, self.norm2(h)) * (1.0 + scale) + shift
+            h = self.norm2(h) * (1.0 + scale) + shift
         else:
             h = h + t
-            h = cast(Tensor, self.norm2(h))
+            h = self.norm2(h)
         h = F.silu(h)
-        h = cast(Tensor, self.dropout(h))
-        h = cast(Tensor, self.conv2(h))
+        h = self.dropout(h)
+        h = self.conv2(h)
         return h + cast(Tensor, self.skip(x))
 
 
@@ -168,11 +168,11 @@ class _AttentionBlock(nn.Module):
         self.scale = 1.0 / math.sqrt(self.head_dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         B, C, H, W = x.shape
         N = int(H) * int(W)
-        h = cast(Tensor, self.norm(x))
-        qkv = cast(Tensor, self.qkv(h))  # (B, 3C, H, W)
+        h = self.norm(x)
+        qkv = self.qkv(h)  # (B, 3C, H, W)
         # Reshape to (B, 3, num_heads, head_dim, N) then permute heads to first.
         qkv = qkv.reshape(B, 3, self.num_heads, self.head_dim, N)
         qkv = qkv.permute(1, 0, 2, 4, 3)  # (3, B, H, N, D)
@@ -183,7 +183,7 @@ class _AttentionBlock(nn.Module):
         attn = F.softmax(scores, dim=-1)
         out: Tensor = attn @ v  # (B, H, N, D)
         out = out.permute(0, 1, 3, 2).reshape(B, C, H, W)
-        return x + cast(Tensor, self.proj(out))
+        return x + self.proj(out)
 
 
 class _Downsample(nn.Module):
@@ -199,10 +199,10 @@ class _Downsample(nn.Module):
         self.op = nn.Conv2d(channels, channels, 3, stride=2, padding=0)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         # F.pad order is (W_left, W_right, H_top, H_bottom).
         x = F.pad(x, (0, 1, 0, 1))
-        return cast(Tensor, self.op(x))
+        return self.op(x)
 
 
 @final
@@ -214,10 +214,10 @@ class _Upsample(nn.Module):
         self.op = nn.Conv2d(channels, channels, 3, padding=1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         B, C, H, W = x.shape
         x_up = F.interpolate(x, scale_factor=2.0, mode="nearest")
-        return cast(Tensor, self.op(x_up))
+        return self.op(x_up)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -461,7 +461,7 @@ class _DDPMUNet(nn.Module):
         self._blocks_per_up_stage = config.num_res_blocks + 1
 
     @override
-    def forward(self, sample: Tensor, timestep: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, sample: Tensor, timestep: Tensor) -> Tensor:
         """Predict noise (or ``[noise, σ²]``) at the given timestep.
 
         Args:
@@ -479,9 +479,9 @@ class _DDPMUNet(nn.Module):
             # ``t * (1000 / T)`` so the sinusoidal embedding still sees the
             # magnitude range it was designed for.
             timestep = timestep * self._timestep_scale  # int → float32
-        t_emb = cast(Tensor, self.time_mlp(timestep))  # (B, time_dim)
+        t_emb = self.time_mlp(timestep)  # (B, time_dim)
 
-        h = cast(Tensor, self.conv_in(sample))
+        h = self.conv_in(sample)
         skips: list[Tensor] = [h]
 
         # Encoder.
@@ -500,9 +500,9 @@ class _DDPMUNet(nn.Module):
             # last stage: down_sample slot holds an Identity; do nothing.
 
         # Middle.
-        h = cast(Tensor, self.mid_block1(h, t_emb))
-        h = cast(Tensor, self.mid_attn(h))
-        h = cast(Tensor, self.mid_block2(h, t_emb))
+        h = self.mid_block1(h, t_emb)
+        h = self.mid_attn(h)
+        h = self.mid_block2(h, t_emb)
 
         # Decoder.
         blocks_up = self._blocks_per_up_stage
@@ -519,9 +519,9 @@ class _DDPMUNet(nn.Module):
                 # is the stage's upsample (skip for level 0).
                 h = cast(Tensor, self.up_sample[L - 1 - level](h))
 
-        h = cast(Tensor, self.norm_out(h))
+        h = self.norm_out(h)
         h = F.silu(h)
-        return cast(Tensor, self.conv_out(h))
+        return self.conv_out(h)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -601,10 +601,8 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
         self.unet = _DDPMUNet(config)
 
     @override
-    def forward(  # type: ignore[override]
-        self, sample: Tensor, timestep: Tensor
-    ) -> DiffusionModelOutput:
-        out = cast(Tensor, self.unet(sample, timestep))
+    def forward(self, sample: Tensor, timestep: Tensor) -> DiffusionModelOutput:
+        out = self.unet(sample, timestep)
         return DiffusionModelOutput(sample=out)
 
 
@@ -867,14 +865,14 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
         return frac * max_log + (1.0 - frac) * min_log
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         sample: Tensor,
         timestep: Tensor,
         target: Tensor | None = None,
         x_start: Tensor | None = None,
     ) -> DDPMOutput:
-        raw = cast(Tensor, self.unet(sample, timestep))
+        raw = self.unet(sample, timestep)
         mean_pred, logvar_pred = self._split_output(raw)
 
         if target is None:

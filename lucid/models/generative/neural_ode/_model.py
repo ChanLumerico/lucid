@@ -78,11 +78,11 @@ class _GatedBlock(nn.Module):
         self.shift_weight = nn.Parameter(lucid.rand((1, out_dim)) * 2 * bound - bound)
 
     @override
-    def forward(self, t: Tensor, z: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, t: Tensor, z: Tensor) -> Tensor:
         # t is 0-D, so each term broadcasts to (1, out) and then over the
         # batch — three elementwise ops in place of two matrix products.
         gate = lucid.sigmoid(self.gate_weight * t + self.gate_bias)
-        return cast(Tensor, self.linear(z)) * gate + self.shift_weight * t
+        return self.linear(z) * gate + self.shift_weight * t
 
 
 @final
@@ -122,7 +122,7 @@ class _PlanarField(nn.Module):
         self.gate_bias = nn.Parameter(lucid.rand((1, m)) * 2 - 1.0)
 
     @override
-    def forward(self, t: Tensor, z: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, t: Tensor, z: Tensor) -> Tensor:
         pre: Tensor = z @ self.w.mT + self.b  # (B, M)
         act: Tensor = generative_activation(self._act_name, pre)
         gate: Tensor = lucid.sigmoid(self.gate_weight * t + self.gate_bias)
@@ -157,7 +157,7 @@ class _VectorField(nn.Module):
         self._last = len(self._ordered) - 1
 
     @override
-    def forward(self, t: Tensor, z: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, t: Tensor, z: Tensor) -> Tensor:
         h = z
         for index, block in enumerate(self._ordered):
             h = cast(Tensor, block(t, h))
@@ -250,12 +250,10 @@ class _CNFDynamics(nn.Module):
         the forward direction's one-plus-trace.
         """
         self.nfe += 1
-        return cast(Tensor, self.field(t, z))
+        return self.field(t, z)
 
     @override
-    def forward(  # type: ignore[override]
-        self, t: Tensor, state: tuple[Tensor, Tensor]
-    ) -> tuple[Tensor, Tensor]:
+    def forward(self, t: Tensor, state: tuple[Tensor, Tensor]) -> tuple[Tensor, Tensor]:
         z, _ = state
         self.nfe += 1
         with lucid.enable_grad():
@@ -266,7 +264,7 @@ class _CNFDynamics(nn.Module):
             # part of a live graph and must stay attached — re-rooting
             # there would silently drop the state's own gradient path.
             source = z if z.requires_grad else z.detach().requires_grad_(True)
-            dz = cast(Tensor, self.field(t, source))
+            dz = self.field(t, source)
             divergence = self._divergence(dz, source)
         return dz, divergence
 
@@ -588,7 +586,7 @@ class NeuralODEModel(PretrainedModel):
         return -self.log_prob(x) / (self._input_dim * math.log(2.0))
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
         r"""Encode ``x`` and report the density along with it.
 
         Parameters
@@ -685,7 +683,7 @@ class NeuralODEForImageGeneration(ImageGenerationModel):
         return self.neural_ode.nfe
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
         r"""Run the flow and attach the training loss.
 
         Parameters
@@ -706,7 +704,7 @@ class NeuralODEForImageGeneration(ImageGenerationModel):
         with the width of the data — the same quantity the likelihood
         literature reports.
         """
-        out = cast(NormalizingFlowOutput, self.neural_ode(x))
+        out = self.neural_ode(x)
         bits = -out.log_prob / (self._input_dim * math.log(2.0))
         return NormalizingFlowOutput(
             latent=out.latent,

@@ -1,7 +1,7 @@
 """Latent action-conditioned V-JEPA 2 world model."""
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -169,7 +169,7 @@ class VJEPA2ACModel(PretrainedModel, BackboneMixin):
         clips = video.reshape(batch * frames, 1, channels, height, width).repeat(
             1, self.config.tubelet_size, 1, 1, 1
         )
-        tokens = cast(Tensor, self.encoder(clips))
+        tokens = self.encoder(clips)
         spatial = self.config.tokens_per_step
         return tokens.reshape(batch, frames * spatial, self.config.encoder_dim)
 
@@ -191,10 +191,10 @@ class VJEPA2ACModel(PretrainedModel, BackboneMixin):
             prediction = self.predictor(context, actions, states)
         else:
             prediction = self.predictor(context, actions, states, extrinsics)
-        return cast(Tensor, prediction)
+        return prediction
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         video: Tensor,
         actions: Tensor,
@@ -279,7 +279,7 @@ class VJEPA2ACForWorldModeling(WorldModelingModel):
         self.vjepa2_ac = VJEPA2ACModel(config)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         video: Tensor,
         actions: Tensor,
@@ -291,4 +291,4 @@ class VJEPA2ACForWorldModeling(WorldModelingModel):
             result = self.vjepa2_ac(video, actions, states)
         else:
             result = self.vjepa2_ac(video, actions, states, extrinsics)
-        return cast(VJEPA2ACOutput, result)
+        return result

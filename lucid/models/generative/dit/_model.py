@@ -76,17 +76,17 @@ class _CrossAttentionBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor, cond_seq: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond_seq: Tensor) -> Tensor:
         """Self-attention, cross-attention onto ``cond_seq``, then the MLP."""
-        h = cast(Tensor, self.norm1(x))
+        h = self.norm1(x)
         attended, _ = self.attn(h, h, h, need_weights=False)
         x = x + attended
 
-        h = cast(Tensor, self.norm2(x))
+        h = self.norm2(x)
         crossed, _ = self.cross(h, cond_seq, cond_seq, need_weights=False)
         x = x + crossed
 
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.norm3(x))))
+        return x + self.mlp(self.norm3(x))
 
 
 class _PlainBlock(nn.Module):
@@ -121,12 +121,12 @@ class _PlainBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Attention then MLP, both on the residual stream."""
-        h = cast(Tensor, self.norm1(x))
+        h = self.norm1(x)
         attended, _ = self.attn(h, h, h, need_weights=False)
         x = x + attended
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        return x + self.mlp(self.norm2(x))
 
 
 @dataclass(slots=True)
@@ -289,7 +289,7 @@ class DiTModel(PretrainedModel):
         and the caller combines.
         """
         emb = timestep_embedding(timesteps, self.config.frequency_embedding_size)
-        time = cast(Tensor, self.time_mlp(emb))
+        time = self.time_mlp(emb)
         if labels is None:
             labels = lucid.full(
                 (int(timesteps.shape[0]),),
@@ -297,7 +297,7 @@ class DiTModel(PretrainedModel):
                 dtype=lucid.int64,
                 device=timesteps.device.type,
             )
-        return time, cast(Tensor, self.label_embed(labels))
+        return time, self.label_embed(labels)
 
     def _unpatchify(self, x: Tensor) -> Tensor:
         """``(B, N, pˆ2 * C)`` back to ``(B, C, H, W)``."""
@@ -310,7 +310,7 @@ class DiTModel(PretrainedModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         latent: Tensor,
         timesteps: Tensor,
@@ -333,7 +333,7 @@ class DiTModel(PretrainedModel):
             ``(B, out_channels, H, W)`` — noise, and the covariance
             beside it when ``learn_sigma``.
         """
-        tokens = cast(Tensor, self.patch_embed(latent))
+        tokens = self.patch_embed(latent)
         tokens = tokens.reshape(tokens.shape[0], tokens.shape[1], -1).permute(0, 2, 1)
         tokens = tokens + self.pos_embed
 
@@ -347,20 +347,18 @@ class DiTModel(PretrainedModel):
             extra = lucid.stack([time_emb, label_emb], dim=1)
             tokens = lucid.cat([tokens, extra], dim=1)
             for block in self.blocks:
-                tokens = cast(Tensor, cast(_PlainBlock, block)(tokens))
+                tokens = cast(_PlainBlock, block)(tokens)
             tokens = tokens[:, : self.grid * self.grid]
         elif mode == "cross_attention":
             cond_seq = cond.reshape(cond.shape[0], 1, cond.shape[1])
             cond_seq = lucid.cat([cond_seq, cond_seq], dim=1)
             for block in self.blocks:
-                tokens = cast(
-                    Tensor, cast(_CrossAttentionBlock, block)(tokens, cond_seq)
-                )
+                tokens = cast(_CrossAttentionBlock, block)(tokens, cond_seq)
         else:
             for block in self.blocks:
-                tokens = cast(Tensor, cast(DiTBlock, block)(tokens, cond))
+                tokens = cast(DiTBlock, block)(tokens, cond)
 
-        return self._unpatchify(cast(Tensor, self.final(tokens, cond)))
+        return self._unpatchify(self.final(tokens, cond))
 
 
 class DiTForImageGeneration(ImageGenerationModel):
@@ -426,9 +424,7 @@ class DiTForImageGeneration(ImageGenerationModel):
         return prediction[:, :channels], prediction[:, channels:]
 
     @override
-    def forward(  # type: ignore[override]
-        self, images: Tensor, labels: Tensor | None = None
-    ) -> DiTOutput:
+    def forward(self, images: Tensor, labels: Tensor | None = None) -> DiTOutput:
         r"""One denoising step of training.
 
         Parameters

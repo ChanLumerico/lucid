@@ -162,7 +162,7 @@ class ScoreSDEModel(PretrainedModel):
 
     def predict_noise(self, x: Tensor, t: Tensor) -> Tensor:
         """What the network thinks was added — same shape as ``x``."""
-        return cast(Tensor, self.unet(x, self._conditioning(t)))
+        return self.unet(x, self._conditioning(t))
 
     def score(self, x: Tensor, t: Tensor) -> Tensor:
         r""":math:`\nabla_x \log p_t(x)`, the quantity every sampler wants.
@@ -203,9 +203,7 @@ class ScoreSDEModel(PretrainedModel):
         return -noise / std.reshape(int(std.shape[0]), *([1] * (x.ndim - 1)))
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, t: Tensor | None = None
-    ) -> ScoreSDEOutput:
+    def forward(self, x: Tensor, t: Tensor | None = None) -> ScoreSDEOutput:
         """Perturb, then score.
 
         Parameters
@@ -293,9 +291,7 @@ class ScoreSDEForImageGeneration(ImageGenerationModel):
         return self.score_sde.sde
 
     @override
-    def forward(  # type: ignore[override]
-        self, x: Tensor, t: Tensor | None = None
-    ) -> ScoreSDEOutput:
+    def forward(self, x: Tensor, t: Tensor | None = None) -> ScoreSDEOutput:
         """Denoising score matching.
 
         Parameters
@@ -310,7 +306,7 @@ class ScoreSDEForImageGeneration(ImageGenerationModel):
         ScoreSDEOutput
             With ``loss`` set.
         """
-        out = cast(ScoreSDEOutput, self.score_sde(x, t))  # type: ignore[arg-type]
+        out = self.score_sde(x, t)
         count = int(x.shape[0])
         # Equation 7 weighted by sigma(t)^2. The score is -eps_hat/sigma and
         # its target is -eps/sigma, so the weight cancels both sigmas and

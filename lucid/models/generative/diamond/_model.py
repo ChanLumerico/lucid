@@ -80,9 +80,9 @@ class _GroupNorm(nn.Module):
         self.norm = nn.GroupNorm(_groups(channels), channels)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Normalise ``(B, C, H, W)``."""
-        return cast(Tensor, self.norm(x))
+        return self.norm(x)
 
 
 class _AdaGroupNorm(nn.Module):
@@ -114,13 +114,13 @@ class _AdaGroupNorm(nn.Module):
         self.linear = nn.Linear(cond_dim, 2 * channels)
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Normalise ``(B, C, H, W)`` and modulate it by ``(B, cond_dim)``."""
-        params = cast(Tensor, self.linear(cond))
+        params = self.linear(cond)
         channels = int(x.shape[1])
         scale = params[:, :channels].reshape(-1, channels, 1, 1)
         shift = params[:, channels:].reshape(-1, channels, 1, 1)
-        return cast(Tensor, self.norm(x)) * (1.0 + scale) + shift
+        return self.norm(x) * (1.0 + scale) + shift
 
 
 class _SelfAttention2d(nn.Module):
@@ -158,7 +158,7 @@ class _SelfAttention2d(nn.Module):
             init.zeros_(self.out_proj.bias)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Attend over the spatial positions of ``(B, C, H, W)``."""
         batch, channels = int(x.shape[0]), int(x.shape[1])
         height, width = int(x.shape[2]), int(x.shape[3])
@@ -169,8 +169,8 @@ class _SelfAttention2d(nn.Module):
         # weights are fitted to a stream that gets renormalised here.
         # Adding to raw ``x`` instead leaves the denoiser blind to its
         # image input: F_theta pins at a constant for every sigma.
-        normed = cast(Tensor, self.norm(x))
-        qkv = cast(Tensor, self.qkv_proj(normed))
+        normed = self.norm(x)
+        qkv = self.qkv_proj(normed)
         qkv = qkv.reshape(batch, 3, self.heads, channels // self.heads, height * width)
         query = qkv[:, 0].permute(0, 1, 3, 2)
         key = qkv[:, 1].permute(0, 1, 3, 2)
@@ -179,7 +179,7 @@ class _SelfAttention2d(nn.Module):
         scores = lucid.softmax(query @ key.permute(0, 1, 3, 2) * scale, dim=-1)
         out = (scores @ value).permute(0, 1, 3, 2)
         out = out.reshape(batch, channels, height, width)
-        return normed + cast(Tensor, self.out_proj(out))
+        return normed + self.out_proj(out)
 
 
 def _quantize(x: Tensor) -> Tensor:
@@ -259,13 +259,13 @@ class _ResBlock(nn.Module):
         self.act = nn.SiLU()
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Apply the block to ``(B, C, H, W)`` under ``cond``."""
         residual = x if self.proj is None else cast(Tensor, self.proj(x))
-        h = cast(Tensor, self.norm1(x, cond))
-        h = cast(Tensor, self.conv1(cast(Tensor, self.act(h))))
-        h = cast(Tensor, self.norm2(h, cond))
-        h = cast(Tensor, self.conv2(cast(Tensor, self.act(h))))
+        h = self.norm1(x, cond)
+        h = self.conv1(self.act(h))
+        h = self.norm2(h, cond)
+        h = self.conv2(self.act(h))
         out = residual + h
         return out if self.attn is None else cast(Tensor, self.attn(out))
 
@@ -289,10 +289,10 @@ class _ResBlocks(nn.Module):
         return [cast(_ResBlock, b) for b in self.resblocks]
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Run every block in order."""
         for block in self.each():
-            x = cast(Tensor, block(x, cond))
+            x = block(x, cond)
         return x
 
 
@@ -312,9 +312,9 @@ class _Downsample(nn.Module):
         init.orthogonal_(self.conv.weight)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Halve ``(B, C, H, W)``."""
-        return cast(Tensor, self.conv(x))
+        return self.conv(x)
 
 
 class _Upsample(nn.Module):
@@ -345,7 +345,7 @@ class _Upsample(nn.Module):
         self.conv = nn.Conv2d(channels, channels, 3, stride=1, padding=1)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Double ``(B, C, H, W)`` by nearest sampling, then convolve.
 
         A plain factor of two, not a resize onto the skip's size: the
@@ -355,7 +355,7 @@ class _Upsample(nn.Module):
         the network never saw in training.
         """
         up = F.interpolate(x, scale_factor=2.0, mode="nearest")
-        return cast(Tensor, self.conv(up))
+        return self.conv(up)
 
 
 class _FourierFeatures(nn.Module):
@@ -381,7 +381,7 @@ class _FourierFeatures(nn.Module):
         self.weight = nn.Parameter(lucid.randn((1, width // 2)))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Embed ``(B,)`` into ``(B, width)``."""
         args = x.reshape(-1, 1) * self.weight * (2.0 * math.pi)
         return lucid.cat([lucid.cos(args), lucid.sin(args)], dim=-1)
@@ -487,7 +487,7 @@ class _UNet(nn.Module):
             self.u_blocks.append(_ResBlocks(blocks))
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Map ``(B, C, H, W)`` through the U and back.
 
         The skips are one flat stack, not one list per resolution: the
@@ -514,17 +514,17 @@ class _UNet(nn.Module):
                 x = cast(Tensor, self.downsamples[stage](x))
                 skips.append(x)
             for block in cast(_ResBlocks, blocks).each():
-                x = cast(Tensor, block(x, cond))
+                x = block(x, cond)
                 skips.append(x)
 
-        x = cast(Tensor, self.mid_blocks(x, cond))
+        x = self.mid_blocks(x, cond)
 
         for index, blocks in enumerate(self.u_blocks):
             if index > 0:
                 x = cast(Tensor, self.upsamples[index](x))
             for block in cast(_ResBlocks, blocks).each():
                 x = lucid.cat([x, skips.pop()], dim=1)
-                x = cast(Tensor, block(x, cond))
+                x = block(x, cond)
         if pad_h or pad_w:
             x = x[..., :height, :width]
         return x
@@ -613,7 +613,7 @@ class _Denoiser(nn.Module):
         Tensor
             ``(B, cond_dim)``.
         """
-        time = cast(Tensor, self.noise_emb(c_noise))
+        time = self.noise_emb(c_noise)
         # An index selects one row of the embedding; a multi-hot row sums
         # the rows it names.  Selecting row i *is* the one-hot case of that
         # sum, so both go through the same weights — which is what lets one
@@ -623,21 +623,21 @@ class _Denoiser(nn.Module):
                 self.action_embed.weight
             )
         else:
-            embedded = cast(Tensor, self.action_embed(actions))
+            embedded = self.action_embed(actions)
         flat = embedded.reshape(int(actions.shape[0]), -1)
         total = time + flat
         if self.noise_cond_emb is not None:
             level = lucid.zeros_like(c_noise) if cond_noise is None else cond_noise
             total = total + cast(Tensor, self.noise_cond_emb(level))
-        return cast(Tensor, self.cond_proj(total))
+        return self.cond_proj(total)
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Map ``(B, (L+1)*C, H, W)`` to a single ``(B, C, H, W)`` frame."""
-        h = cast(Tensor, self.conv_in(x))
-        h = cast(Tensor, self.unet(h, cond))
-        h = cast(Tensor, self.norm_out(h))
-        return cast(Tensor, self.conv_out(cast(Tensor, self.act(h))))
+        h = self.conv_in(x)
+        h = self.unet(h, cond)
+        h = self.norm_out(h)
+        return self.conv_out(self.act(h))
 
 
 class _Upsampler(nn.Module):
@@ -707,18 +707,18 @@ class _Upsampler(nn.Module):
         Tensor
             ``(B, cond_dim)``.
         """
-        total = cast(Tensor, self.noise_emb(c_noise))
+        total = self.noise_emb(c_noise)
         level = lucid.zeros_like(c_noise) if cond_noise is None else cond_noise
-        total = total + cast(Tensor, self.noise_cond_emb(level))
-        return cast(Tensor, self.cond_proj(total))
+        total = total + self.noise_cond_emb(level)
+        return self.cond_proj(total)
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Map ``(B, 3*C, H, W)`` to one sharpened ``(B, C, H, W)`` frame."""
-        h = cast(Tensor, self.conv_in(x))
-        h = cast(Tensor, self.unet(h, cond))
-        h = cast(Tensor, self.norm_out(h))
-        return cast(Tensor, self.conv_out(cast(Tensor, self.act(h))))
+        h = self.conv_in(x)
+        h = self.unet(h, cond)
+        h = self.norm_out(h)
+        return self.conv_out(self.act(h))
 
 
 class _Encoder(nn.Module):
@@ -779,13 +779,13 @@ class _Encoder(nn.Module):
         self.out_channels = width
 
     @override
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Reduce ``(B, C, H, W)`` by a factor of two per downsample."""
-        h = cast(Tensor, self.conv_in(x))
+        h = self.conv_in(x)
         for stage, blocks in enumerate(self.blocks):
             if 0 < stage < len(self.downsamples):
                 h = cast(Tensor, self.downsamples[stage](h))
-            h = cast(Tensor, cast(_ResBlocks, blocks)(h, cond))
+            h = cast(_ResBlocks, blocks)(h, cond)
         return h
 
 
@@ -839,7 +839,7 @@ class _RewardEndModel(nn.Module):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         frames: Tensor,
         action: Tensor,
@@ -864,8 +864,8 @@ class _RewardEndModel(nn.Module):
             ``(B, 2)``, and the LSTM state to carry forward.
         """
         batch = int(frames.shape[0])
-        cond = cast(Tensor, self.action_embed(action))
-        feature = cast(Tensor, self.encoder(frames, cond))
+        cond = self.action_embed(action)
+        feature = self.encoder(frames, cond)
         flat = feature.reshape(batch, -1)
         if state is None:
             zeros = lucid.zeros(
@@ -876,7 +876,7 @@ class _RewardEndModel(nn.Module):
             Callable[[Tensor, tuple[Tensor, Tensor]], tuple[Tensor, Tensor]], self.cell
         )
         hidden, cell = step(flat, state)
-        out = cast(Tensor, self.head(hidden))
+        out = self.head(hidden)
         return out[:, :3], out[:, 3:], (hidden, cell)
 
 
@@ -913,12 +913,12 @@ class _SimpleResBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Apply the block to ``(B, C, H, W)``."""
         residual = (
             x if self.skip_projection is None else cast(Tensor, self.skip_projection(x))
         )
-        return residual + cast(Tensor, self.f(x))
+        return residual + self.f(x)
 
 
 class _ActorCritic(nn.Module):
@@ -957,7 +957,7 @@ class _ActorCritic(nn.Module):
         self.critic_linear = nn.Linear(config.actor_lstm_dim, 1)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, frame: Tensor, state: tuple[Tensor, Tensor] | None = None
     ) -> tuple[Tensor, Tensor, tuple[Tensor, Tensor]]:
         """Advance one step.
@@ -976,7 +976,7 @@ class _ActorCritic(nn.Module):
             the LSTM state.
         """
         batch = int(frame.shape[0])
-        feature = cast(Tensor, self.encoder(frame))
+        feature = self.encoder(frame)
         flat = feature.reshape(batch, -1)
         if state is None:
             zeros = lucid.zeros(
@@ -987,8 +987,8 @@ class _ActorCritic(nn.Module):
             Callable[[Tensor, tuple[Tensor, Tensor]], tuple[Tensor, Tensor]], self.cell
         )
         hidden, cell = step(flat, state)
-        logits = cast(Tensor, self.actor_linear(hidden))
-        value = cast(Tensor, self.critic_linear(hidden)).reshape(-1)
+        logits = self.actor_linear(hidden)
+        value = self.critic_linear(hidden).reshape(-1)
         return logits, value, (hidden, cell)
 
 
@@ -1413,7 +1413,7 @@ class DIAMONDModel(PretrainedModel):
         stacked = lucid.cat([history / self.config.sigma_data, noised * c_in], dim=1)
         level = None if cond_sigma is None else lucid.log(cond_sigma) * 0.25
         cond = self.denoiser.conditioning(c_noise, actions, level)
-        out = c_skip * noised + c_out * cast(Tensor, self.denoiser(stacked, cond))
+        out = c_skip * noised + c_out * self.denoiser(stacked, cond)
         return _quantize(out) if quantize else out
 
     def sigma_schedule(self, steps: int, device: str) -> Tensor:
@@ -1550,7 +1550,7 @@ class DIAMONDModel(PretrainedModel):
         data = self.config.sigma_data
         stacked = lucid.cat([previous / data, scaled / data, noised * c_in], dim=1)
         cond = self.upsampler.conditioning(c_noise)
-        out = c_skip * noised + c_out * cast(Tensor, self.upsampler(stacked, cond))
+        out = c_skip * noised + c_out * self.upsampler(stacked, cond)
         return _quantize(out) if quantize else out
 
     def upsample_frame(
@@ -1736,7 +1736,7 @@ class DIAMONDModel(PretrainedModel):
         return x
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         frames: Tensor,
         actions: Tensor,
@@ -1969,7 +1969,7 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         return action
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, frames: Tensor, actions: Tensor, *, horizon: int | None = None
     ) -> DIAMONDBehaviorOutput:
         r"""Imagine a trajectory and score the policy on it.
@@ -2146,7 +2146,7 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         >>> any(p.grad is not None for p in model.diamond.reward_end.parameters())
         False
         """
-        return cast(DIAMONDOutput, self.diamond(frames, actions, next_frame))
+        return self.diamond(frames, actions, next_frame)
 
     def reward_end_loss(
         self, frames: Tensor, actions: Tensor, rewards: Tensor, ends: Tensor

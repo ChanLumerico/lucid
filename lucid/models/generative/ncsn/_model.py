@@ -177,7 +177,7 @@ class NCSNModel(PretrainedModel):
         return self._num_levels
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         sample: Tensor,
         sigma_idx: Tensor,
@@ -320,7 +320,7 @@ class NCSNForImageGeneration(ImageGenerationModel):
     # ── Training ────────────────────────────────────────────────────────────
 
     @override
-    def forward(self, sample: Tensor) -> DiffusionModelOutput:  # type: ignore[override]
+    def forward(self, sample: Tensor) -> DiffusionModelOutput:
         """Denoising Score Matching loss (Song 2019 Eq. 6).
 
         For each image we sample ``i ~ Uniform({0, …, L-1})``, perturb
@@ -343,9 +343,7 @@ class NCSNForImageGeneration(ImageGenerationModel):
 
         z = lucid.randn(sample.shape, device=dev)
         x_tilde = sample + sigma * z
-        score = cast(
-            DiffusionModelOutput, self.ncsn(x_tilde, sigma_idx)
-        ).sample  # ŝ_θ(x̃, i)
+        score = self.ncsn(x_tilde, sigma_idx).sample  # ŝ_θ(x̃, i)
 
         residual = sigma * score + z  # (B, C, H, W)
         # The objective is a squared L2 *norm* — a sum over C.H.W — with the
@@ -407,9 +405,7 @@ class NCSNForImageGeneration(ImageGenerationModel):
             sigma_idx = lucid.tensor([i] * n_samples, device=device).long()
             sqrt_alpha = math.sqrt(alpha_i)
             for _ in range(T):
-                score = cast(
-                    DiffusionModelOutput, self.ncsn(x, sigma_idx)
-                ).sample  # (B, C, H, W)
+                score = self.ncsn(x, sigma_idx).sample  # (B, C, H, W)
                 z = lucid.randn(shape, device=device)
                 x = x + (alpha_i / 2.0) * score + sqrt_alpha * z
             if return_intermediates:
@@ -424,7 +420,7 @@ class NCSNForImageGeneration(ImageGenerationModel):
             last = self._num_levels - 1
             sigma_last = float(self.sigmas[last].item())
             idx_last = lucid.tensor([last] * n_samples, device=device).long()
-            score_last = cast(DiffusionModelOutput, self.ncsn(x, idx_last)).sample
+            score_last = self.ncsn(x, idx_last).sample
             x = x + (sigma_last**2) * score_last
 
         return GenerationOutput(

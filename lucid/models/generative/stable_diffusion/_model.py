@@ -244,7 +244,7 @@ class StableDiffusionModel(PretrainedModel):
         return self.vae.decode(latent / _LATENT_SCALE)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         images: Tensor,
         context: Tensor,
@@ -290,7 +290,7 @@ class StableDiffusionModel(PretrainedModel):
             ],
             dim=0,
         )
-        prediction = cast(Tensor, self.unet(noised, timestep.to(latent.dtype), context))
+        prediction = self.unet(noised, timestep.to(latent.dtype), context)
 
         loss: Tensor | None = None
         if return_loss:
@@ -464,10 +464,10 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
                 (width,), float(step), device=latent.device.type, dtype=latent.dtype
             )
             if both_context is None:
-                prediction = cast(Tensor, inner.unet(latent, timestep, context))
+                prediction = inner.unet(latent, timestep, context)
             else:
                 pair = lucid.cat([latent, latent], dim=0)
-                both = cast(Tensor, inner.unet(pair, timestep, both_context))
+                both = inner.unet(pair, timestep, both_context)
                 unconditional, conditional = both[:batch], both[batch:]
                 prediction = unconditional + guidance_scale * (
                     conditional - unconditional
@@ -481,9 +481,7 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
         return inner.decode_latent(latent)
 
     @override
-    def forward(  # type: ignore[override]
-        self, context: Tensor, num_inference_steps: int = 50
-    ) -> Tensor:
+    def forward(self, context: Tensor, num_inference_steps: int = 50) -> Tensor:
         """Alias for :meth:`generate` with default guidance disabled.
 
         Parameters

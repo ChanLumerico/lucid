@@ -115,7 +115,7 @@ class _ResBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor, emb: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, emb: Tensor) -> Tensor:
         """Apply the block.
 
         Parameters
@@ -130,14 +130,10 @@ class _ResBlock(nn.Module):
         Tensor
             ``(B, out_channels, H, W)``.
         """
-        h = cast(
-            Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x)))))
-        )
-        shift = cast(Tensor, self.time_proj(cast(Tensor, self.act(emb))))
+        h = self.conv1(self.act(self.norm1(x)))
+        shift = self.time_proj(self.act(emb))
         h = h + shift.reshape(int(shift.shape[0]), int(shift.shape[1]), 1, 1)
-        h = cast(
-            Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h)))))
-        )
+        h = self.conv2(self.act(self.norm2(h)))
         skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
         return skip + h
 
@@ -170,7 +166,7 @@ class _GEGLU(nn.Module):
         self.proj = nn.Linear(in_features, out_features * 2)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Project, split, and gate.
 
         Parameters
@@ -183,7 +179,7 @@ class _GEGLU(nn.Module):
         Tensor
             ``(..., out_features)``.
         """
-        projected = cast(Tensor, self.proj(x))
+        projected = self.proj(x)
         half = int(projected.shape[-1]) // 2
         return projected[..., :half] * F.gelu(projected[..., half:])
 
@@ -247,7 +243,7 @@ class _TransformerBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor, context: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, context: Tensor) -> Tensor:
         """Run the three sub-layers.
 
         Parameters
@@ -262,17 +258,17 @@ class _TransformerBlock(nn.Module):
         Tensor
             ``(B, T, channels)``.
         """
-        normed = cast(Tensor, self.norm1(x))
+        normed = self.norm1(x)
         attended, _ = self.attn1(normed, normed, normed, need_weights=False)
         x = x + attended + cast(Tensor, self.attn1_out_bias)
 
         # The load-bearing line: query from the image, key/value from the
         # conditioning.  Reversed, this still runs and still trains.
-        query = cast(Tensor, self.norm2(x))
+        query = self.norm2(x)
         crossed, _ = self.attn2(query, context, context, need_weights=False)
         x = x + crossed + cast(Tensor, self.attn2_out_bias)
 
-        return x + cast(Tensor, self.ff(cast(Tensor, self.norm3(x))))
+        return x + self.ff(self.norm3(x))
 
 
 @final
@@ -311,7 +307,7 @@ class _SpatialTransformer(nn.Module):
         self.proj_out = nn.Conv2d(channels, channels, kernel_size=1)
 
     @override
-    def forward(self, x: Tensor, context: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, context: Tensor) -> Tensor:
         """Apply the transformer over spatial positions.
 
         Parameters
@@ -328,12 +324,12 @@ class _SpatialTransformer(nn.Module):
         """
         residual = x
         b, c, h, w = (int(s) for s in x.shape)
-        y = cast(Tensor, self.proj_in(cast(Tensor, self.norm(x))))
+        y = self.proj_in(self.norm(x))
         y = y.reshape(b, c, h * w).swapaxes(1, 2)
         for block in self.blocks:
             y = cast(Tensor, block(y, context))
         y = y.swapaxes(1, 2).reshape(b, c, h, w)
-        return residual + cast(Tensor, self.proj_out(y))
+        return residual + self.proj_out(y)
 
 
 class UNet2DConditionModel(nn.Module):
@@ -455,9 +451,7 @@ class UNet2DConditionModel(nn.Module):
         self.upsample = nn.Upsample(scale_factor=2.0, mode="nearest")
 
     @override
-    def forward(  # type: ignore[override]
-        self, latent: Tensor, timestep: Tensor, context: Tensor
-    ) -> Tensor:
+    def forward(self, latent: Tensor, timestep: Tensor, context: Tensor) -> Tensor:
         """Predict the noise in ``latent`` at ``timestep``.
 
         Parameters
@@ -478,11 +472,8 @@ class UNet2DConditionModel(nn.Module):
         steps = timestep.reshape(-1)
         if int(steps.shape[0]) == 1 and batch > 1:
             steps = steps.repeat(batch)
-        emb = cast(
-            Tensor,
-            self.time_mlp(
-                _timestep_embedding(steps, self.config.unet_block_out_channels[0])
-            ),
+        emb = self.time_mlp(
+            _timestep_embedding(steps, self.config.unet_block_out_channels[0])
         )
         if int(context.shape[-1]) != self.config.cross_attention_dim:
             raise ValueError(
@@ -490,7 +481,7 @@ class UNet2DConditionModel(nn.Module):
                 f"cross_attention_dim {self.config.cross_attention_dim}"
             )
 
-        h = cast(Tensor, self.conv_in(latent))
+        h = self.conv_in(latent)
         skips: list[Tensor] = [h]
         per_level = self.config.unet_layers_per_block
         index = 0
@@ -507,9 +498,9 @@ class UNet2DConditionModel(nn.Module):
                 h = cast(Tensor, sampler(h))
                 skips.append(h)
 
-        h = cast(Tensor, self.mid_block_1(h, emb))
-        h = cast(Tensor, self.mid_attn(h, context))
-        h = cast(Tensor, self.mid_block_2(h, emb))
+        h = self.mid_block_1(h, emb)
+        h = self.mid_attn(h, context)
+        h = self.mid_block_2(h, emb)
 
         index = 0
         for level in range(len(self.config.unet_block_out_channels)):
@@ -522,9 +513,6 @@ class UNet2DConditionModel(nn.Module):
                 index += 1
             sampler = self.upsamplers[level]
             if not isinstance(sampler, nn.Identity):
-                h = cast(Tensor, sampler(cast(Tensor, self.upsample(h))))
+                h = cast(Tensor, sampler(self.upsample(h)))
 
-        return cast(
-            Tensor,
-            self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h))))),
-        )
+        return self.conv_out(self.act(self.norm_out(h)))

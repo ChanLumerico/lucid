@@ -114,12 +114,8 @@ class TwoHotHead(nn.Module):
         """The bin locations, narrowed from the buffer registry."""
         return cast(Tensor, self.bins)
 
-    def _logits(self, feature: Tensor) -> Tensor:
-        """``self(feature)``, narrowed — ``Module.__call__`` is loosely typed."""
-        return cast(Tensor, self(feature))
-
     @override
-    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, feature: Tensor) -> Tensor:
         """Return the raw bin logits — ``(B, T, num_bins)``.
 
         Parameters
@@ -132,7 +128,7 @@ class TwoHotHead(nn.Module):
         Tensor
             Unnormalised scores over the grid.
         """
-        return cast(Tensor, self.trunk(feature))
+        return self.trunk(feature)
 
     def predict(self, feature: Tensor) -> Tensor:
         """Read the distribution back as a scalar — ``(B, T)``.
@@ -163,7 +159,7 @@ class TwoHotHead(nn.Module):
         >>> float(critic.predict(lucid.randn((2, 3, 8))).abs().max().item()) < 1e-6
         True
         """
-        probabilities = F.softmax(self._logits(feature), dim=-1)
+        probabilities = F.softmax(self(feature), dim=-1)
         return F.symexp((probabilities * self.grid).sum(dim=-1))
 
     def cross_entropy(self, feature: Tensor, target: Tensor) -> Tensor:
@@ -212,7 +208,7 @@ class TwoHotHead(nn.Module):
         3.7136
         """
         encoded = F.two_hot(F.symlog(target.detach()), self.grid)
-        logits = F.log_softmax(self._logits(feature), dim=-1)
+        logits = F.log_softmax(self(feature), dim=-1)
         return -(encoded * logits).sum(dim=-1)
 
     def loss(self, feature: Tensor, target: Tensor) -> Tensor:

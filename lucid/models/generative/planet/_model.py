@@ -30,7 +30,7 @@ Dreamer uses the same networks, so they are shared rather than copied.
 
 from dataclasses import dataclass
 from functools import partial
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -218,7 +218,7 @@ class PlaNetModel(PretrainedModel):
 
     def encode(self, observations: Tensor) -> Tensor:
         """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
-        return cast(Tensor, self.encoder(observations))
+        return self.encoder(observations)
 
     def observe(
         self,
@@ -334,16 +334,14 @@ class PlaNetModel(PretrainedModel):
 
     def decode(self, state: RSSMState) -> Tensor:
         """Reconstruct frames from a state — ``(B, T, C, 64, 64)``."""
-        return cast(Tensor, self.decoder(state.feature))
+        return self.decoder(state.feature)
 
     def predict_reward(self, state: RSSMState) -> Tensor:
         """Predict reward from a state — ``(B, T)``."""
-        return cast(Tensor, self.reward_head(state.feature))
+        return self.reward_head(state.feature)
 
     @override
-    def forward(  # type: ignore[override]
-        self, observations: Tensor, actions: Tensor
-    ) -> PlaNetOutput:
+    def forward(self, observations: Tensor, actions: Tensor) -> PlaNetOutput:
         priors, posteriors = self.observe(observations, actions)
         posterior_mean, posterior_std = posteriors.gaussian()
         prior_mean, prior_std = priors.gaussian()
@@ -538,7 +536,7 @@ class PlaNetForWorldModeling(WorldModelingModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         observations: Tensor,
         actions: Tensor,

@@ -78,7 +78,7 @@ class CondInstanceNormPlusPlus(nn.Module):
         nn.init.ones_(self.alpha.weight)
 
     @override
-    def forward(self, x: Tensor, labels: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, labels: Tensor) -> Tensor:
         """Normalise ``x`` under the gains selected by ``labels``."""
         mu = x.mean(dim=(2, 3), keepdim=True)  # (B, C, 1, 1)
         var = ((x - mu) ** 2).mean(dim=(2, 3), keepdim=True)
@@ -89,9 +89,9 @@ class CondInstanceNormPlusPlus(nn.Module):
         v = ((mu - m) ** 2).mean(dim=1, keepdim=True)
         mu_hat = (mu - m) / (v + self.eps).sqrt()
 
-        g = cast(Tensor, self.gamma(labels)).reshape(*labels.shape, -1, 1, 1)
-        b = cast(Tensor, self.beta(labels)).reshape(*labels.shape, -1, 1, 1)
-        a = cast(Tensor, self.alpha(labels)).reshape(*labels.shape, -1, 1, 1)
+        g = self.gamma(labels).reshape(*labels.shape, -1, 1, 1)
+        b = self.beta(labels).reshape(*labels.shape, -1, 1, 1)
+        a = self.alpha(labels).reshape(*labels.shape, -1, 1, 1)
         return g * h + b + a * mu_hat
 
 
@@ -128,9 +128,9 @@ class _CondResBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor, labels: Tensor) -> Tensor:  # type: ignore[override]
-        h = cast(Tensor, self.conv1(F.elu(cast(Tensor, self.norm1(x, labels)))))
-        h = cast(Tensor, self.conv2(F.elu(cast(Tensor, self.norm2(h, labels)))))
+    def forward(self, x: Tensor, labels: Tensor) -> Tensor:
+        h = self.conv1(F.elu(self.norm1(x, labels)))
+        h = self.conv2(F.elu(self.norm2(h, labels)))
         return h + cast(Tensor, self.skip(x))
 
 
@@ -155,19 +155,15 @@ class _RefineBlock(nn.Module):
         self.fuse = _CondResBlock(fine_ch, fine_ch, num_classes)
 
     @override
-    def forward(  # type: ignore[override]
-        self, coarse: Tensor, fine: Tensor, labels: Tensor
-    ) -> Tensor:
+    def forward(self, coarse: Tensor, fine: Tensor, labels: Tensor) -> Tensor:
         up = F.interpolate(
             coarse,
             size=(int(fine.shape[2]), int(fine.shape[3])),
             mode="bilinear",
             align_corners=False,
         )
-        merged = cast(Tensor, self.adapt_coarse(up, labels)) + cast(
-            Tensor, self.adapt_fine(fine, labels)
-        )
-        return cast(Tensor, self.fuse(merged, labels))
+        merged = self.adapt_coarse(up, labels) + self.adapt_fine(fine, labels)
+        return self.fuse(merged, labels)
 
 
 @final
@@ -244,10 +240,10 @@ class RefineNetScoreNet(nn.Module):
         self.out_conv = nn.Conv2d(widths[0], in_channels, 3, padding=1)
 
     @override
-    def forward(self, sample: Tensor, sigma_idx: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, sample: Tensor, sigma_idx: Tensor) -> Tensor:
         """Predict the score at ``sample`` for the given noise-level indices."""
         labels = sigma_idx.long()
-        h = cast(Tensor, self.stem(sample))
+        h = self.stem(sample)
 
         skips: list[Tensor] = []
         for enc, pool in zip(self.encoders, self.pools):
@@ -260,8 +256,8 @@ class RefineNetScoreNet(nn.Module):
         for refine, skip in zip(self.refines, reversed(skips[:-1])):
             h = cast(Tensor, refine(h, skip, labels))
 
-        h = F.elu(cast(Tensor, self.out_norm(h, labels)))
-        out = cast(Tensor, self.out_conv(h))
+        h = F.elu(self.out_norm(h, labels))
+        out = self.out_conv(h)
         if tuple(int(v) for v in out.shape[2:]) != tuple(
             int(v) for v in sample.shape[2:]
         ):

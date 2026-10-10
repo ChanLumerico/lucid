@@ -330,7 +330,7 @@ class BlockLinear(nn.Module):
         nn.init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Apply the block map — ``(..., in_features) -> (..., out_features)``.
 
         Parameters
@@ -574,8 +574,8 @@ class RSSM(nn.Module):
         """
         if not self.blocks:
             x = lucid.cat([stoch, action], dim=-1)
-            x = generative_activation(self._act_name, cast(Tensor, self.pre_cell(x)))
-            return cast(Tensor, self.cell(x, deter))
+            x = generative_activation(self._act_name, self.pre_cell(x))
+            return self.cell(x, deter)
         return self._block_recurrent(stoch, action, deter)
 
     def _block_recurrent(self, stoch: Tensor, action: Tensor, deter: Tensor) -> Tensor:
@@ -640,12 +640,10 @@ class RSSM(nn.Module):
         # of the state.
         shared = parts.reshape(*leading, 1, -1).repeat(*(1,) * len(leading), blocks, 1)
         x = lucid.cat([deter.reshape(*leading, blocks, width), shared], dim=-1)
-        x = cast(Tensor, self.block_hidden(x.reshape(*leading, -1)))
-        x = generative_activation(
-            self._act_name, cast(Tensor, self.block_hidden_norm(x))
-        )
+        x = self.block_hidden(x.reshape(*leading, -1))
+        x = generative_activation(self._act_name, self.block_hidden_norm(x))
 
-        gates = cast(Tensor, self.block_gate(x)).reshape(*leading, blocks, 3 * width)
+        gates = self.block_gate(x).reshape(*leading, blocks, 3 * width)
         reset = F.sigmoid(gates[..., :width].reshape(*leading, -1))
         candidate = gates[..., width : 2 * width].reshape(*leading, -1)
         update = F.sigmoid(gates[..., 2 * width :].reshape(*leading, -1) - 1.0)
@@ -1057,7 +1055,7 @@ class RSSM(nn.Module):
         return self._stack(states)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         embed: Tensor,
         actions: Tensor,

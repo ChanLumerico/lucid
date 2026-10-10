@@ -312,7 +312,7 @@ class DreamerV3Model(PretrainedModel):
 
     def encode(self, observations: Tensor) -> Tensor:
         """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
-        return cast(Tensor, self.encoder(observations))
+        return self.encoder(observations)
 
     def observe(
         self,
@@ -373,7 +373,7 @@ class DreamerV3Model(PretrainedModel):
         in the same interval, and the reference applies it to vector
         observations and to reward and value only.
         """
-        return cast(Tensor, self.decoder(state.feature))
+        return self.decoder(state.feature)
 
     def predict_reward(self, state: RSSMState) -> Tensor:
         """Predict reward from a state — ``(B, T)``, in reward units."""
@@ -464,7 +464,7 @@ class DreamerV3Model(PretrainedModel):
                 "this model has no discount head; construct it with "
                 "DreamerV3Config(pcont=True)"
             )
-        return cast(Tensor, self.pcont_head(state.feature))
+        return self.pcont_head(state.feature)
 
     def act(self, state: RSSMState, *, sample: bool = True) -> Tensor:
         """Propose actions — ``(B, T, action_dim)`` or ``(B, action_dim)``.
@@ -505,7 +505,7 @@ class DreamerV3Model(PretrainedModel):
         >>> choice.shape, choice.sum(dim=-1).tolist()
         ((1, 2), [1.0])
         """
-        return cast(Tensor, self.actor(state.feature, sample=sample))
+        return self.actor(state.feature, sample=sample)
 
     def imagine(
         self, state: RSSMState, horizon: int, *, sample: bool | None = None
@@ -568,7 +568,7 @@ class DreamerV3Model(PretrainedModel):
         actions: list[Tensor] = []
         for _ in range(horizon):
             feature = current.feature.reshape(int(current.deter.shape[0]), 1, -1)
-            action = cast(Tensor, self.actor(feature.detach(), sample=draw))[:, 0]
+            action = self.actor(feature.detach(), sample=draw)[:, 0]
             current = self.rssm.prior_step(current, action, sample=draw)
             actions.append(action)
             deters.append(current.deter)
@@ -587,9 +587,7 @@ class DreamerV3Model(PretrainedModel):
         return rolled, lucid.stack(actions, dim=1)
 
     @override
-    def forward(  # type: ignore[override]
-        self, observations: Tensor, actions: Tensor
-    ) -> DreamerV3Output:
+    def forward(self, observations: Tensor, actions: Tensor) -> DreamerV3Output:
         priors, posteriors = self.observe(observations, actions)
         return DreamerV3Output(
             observation=self.decode(posteriors),
@@ -1101,7 +1099,7 @@ class DreamerV3ForWorldModeling(WorldModelingModel):
             param.grad = grad
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         observations: Tensor,
         actions: Tensor,

@@ -109,13 +109,13 @@ class _ResBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        h = x if self.norm1 is None else cast(Tensor, self.norm1(x))
+    def forward(self, x: Tensor) -> Tensor:
+        h = x if self.norm1 is None else self.norm1(x)
         h = generative_activation(self._act_name, h)
-        h = cast(Tensor, self.conv1(h))
-        h = h if self.norm2 is None else cast(Tensor, self.norm2(h))
+        h = self.conv1(h)
+        h = h if self.norm2 is None else self.norm2(h)
         h = generative_activation(self._act_name, h)
-        return x + cast(Tensor, self.conv2(h))
+        return x + self.conv2(h)
 
 
 @final
@@ -163,14 +163,14 @@ class _CouplingNet(nn.Module):
         self.rescale = nn.Parameter(lucid.ones(1, channels, 1, 1))
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        h = cast(Tensor, self.stem(x))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        h = self.stem(x)
         for block in self.blocks:
             h = cast(Tensor, block(h))
         if self.norm_out is not None:
-            h = cast(Tensor, self.norm_out(h))
+            h = self.norm_out(h)
         h = generative_activation(self._act_name, h)
-        out = cast(Tensor, self.head(h))
+        out = self.head(h)
 
         channels = int(x.shape[1])
         log_scale = out[:, :channels]
@@ -220,8 +220,8 @@ class _AffineCoupling(nn.Module):
         self.net = _CouplingNet(channels, dim, config)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        log_scale, shift = cast(tuple[Tensor, Tensor], self.net(x * self.mask))
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        log_scale, shift = self.net(x * self.mask)
         keep = 1.0 - self.mask
         log_scale = log_scale * keep
         shift = shift * keep
@@ -230,7 +230,7 @@ class _AffineCoupling(nn.Module):
 
     def inverse(self, y: Tensor) -> Tensor:
         """Exact inverse — the coupling net sees the untouched half."""
-        log_scale, shift = cast(tuple[Tensor, Tensor], self.net(y * self.mask))
+        log_scale, shift = self.net(y * self.mask)
         keep = 1.0 - self.mask
         log_scale = log_scale * keep
         shift = shift * keep
@@ -311,7 +311,7 @@ class _FlowBatchNorm(nn.Module):
         return used
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         mean, var = self._stats(x)
         y = (x - mean) / (var + self._eps).sqrt()
         # log|det| = -½ Σ log(σ² + ε), broadcast over the spatial extent.
@@ -348,7 +348,7 @@ class _LogitTransform(nn.Module):
         self._levels = float(2**num_bits)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         if self.training:
             # Uniform dequantisation (§4.1).  Without it the flow is fitted to
             # a discrete measure it can drive to unbounded density, so the
@@ -542,7 +542,7 @@ class RealNVPModel(PretrainedModel):
         self._check_image(x)
         batch = int(x.shape[0])
 
-        h, log_det = cast(tuple[Tensor, Tensor], self.logit(x))
+        h, log_det = self.logit(x)
         parts: list[Tensor] = []
 
         for idx in range(self._num_scales):
@@ -650,7 +650,7 @@ class RealNVPModel(PretrainedModel):
         return nats + float(self._num_bits)
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
         z, log_det = self.encode(x)
         log_prob = flow_prior_log_prob(self._prior, z).sum(dim=-1) + log_det
         return NormalizingFlowOutput(
@@ -721,8 +721,8 @@ class RealNVPForImageGeneration(ImageGenerationModel):
         self._num_bits = config.num_bits
 
     @override
-    def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
-        out = cast(NormalizingFlowOutput, self.realnvp(x))
+    def forward(self, x: Tensor) -> NormalizingFlowOutput:
+        out = self.realnvp(x)
         # Same 8-bit discretisation offset ``bits_per_dim`` applies — a
         # constant, so gradients are untouched, but the reported loss is now
         # on the paper's scale.

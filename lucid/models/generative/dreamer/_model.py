@@ -29,7 +29,7 @@ critic would chase a target it is simultaneously moving.  Use
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.nn as nn
@@ -274,7 +274,7 @@ class _Actor(nn.Module):
                 "a discrete actor has no (mean, std) — it emits categorical "
                 "logits; use `logits()` or call the actor"
             )
-        out = cast(Tensor, self.head(feature))
+        out = self.head(feature)
         raw_mean = out[..., : self.action_dim]
         raw_std = out[..., self.action_dim :]
         mean = self.mean_scale * lucid.tanh(raw_mean / self.mean_scale)
@@ -282,9 +282,7 @@ class _Actor(nn.Module):
         return mean, std
 
     @override
-    def forward(  # type: ignore[override]
-        self, feature: Tensor, *, sample: bool = True
-    ) -> Tensor:
+    def forward(self, feature: Tensor, *, sample: bool = True) -> Tensor:
         """Propose an action for a state — ``(B, T, action_dim)`` in ``(-1, 1)``.
 
         Parameters
@@ -334,7 +332,7 @@ class _Actor(nn.Module):
                 "a continuous actor has no logits — it emits a mean and a "
                 "scale; use `distribution()`"
             )
-        return cast(Tensor, self.head(feature))
+        return self.head(feature)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -441,7 +439,7 @@ class DreamerModel(PretrainedModel):
 
     def encode(self, observations: Tensor) -> Tensor:
         """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
-        return cast(Tensor, self.encoder(observations))
+        return self.encoder(observations)
 
     def observe(
         self,
@@ -503,15 +501,15 @@ class DreamerModel(PretrainedModel):
 
     def decode(self, state: RSSMState) -> Tensor:
         """Reconstruct frames from a state — ``(B, T, C, 64, 64)``."""
-        return cast(Tensor, self.decoder(state.feature))
+        return self.decoder(state.feature)
 
     def predict_reward(self, state: RSSMState) -> Tensor:
         """Predict reward from a state — ``(B, T)``."""
-        return cast(Tensor, self.reward_head(state.feature))
+        return self.reward_head(state.feature)
 
     def predict_value(self, state: RSSMState) -> Tensor:
         """Estimate the value of a state — ``(B, T)``."""
-        return cast(Tensor, self.value_head(state.feature))
+        return self.value_head(state.feature)
 
     def predict_pcont(self, state: RSSMState) -> Tensor:
         r"""Predict the discount at a state — logits, ``(B, T)``.
@@ -574,7 +572,7 @@ class DreamerModel(PretrainedModel):
                 "this model has no discount head; construct it with "
                 "DreamerConfig(pcont=True)"
             )
-        return cast(Tensor, self.pcont_head(state.feature))
+        return self.pcont_head(state.feature)
 
     def act(self, state: RSSMState, *, sample: bool = True) -> Tensor:
         """Propose actions for a state — in ``(-1, 1)``, or one-hot if discrete.
@@ -634,7 +632,7 @@ class DreamerModel(PretrainedModel):
         stepwise = feature.ndim == 2
         if stepwise:
             feature = feature.reshape(int(feature.shape[0]), 1, -1)
-        action = cast(Tensor, self.actor(feature, sample=sample))
+        action = self.actor(feature, sample=sample)
         return action[:, 0] if stepwise else action
 
     def imagine(
@@ -719,7 +717,7 @@ class DreamerModel(PretrainedModel):
             feature = current.feature.reshape(int(current.deter.shape[0]), 1, -1)
             if self._detach_actor_input:
                 feature = feature.detach()
-            action = cast(Tensor, self.actor(feature, sample=draw))[:, 0]
+            action = self.actor(feature, sample=draw)[:, 0]
             current = self.rssm.prior_step(current, action, sample=draw)
             actions.append(action)
             deters.append(current.deter)
@@ -742,9 +740,7 @@ class DreamerModel(PretrainedModel):
         return rolled, lucid.stack(actions, dim=1)
 
     @override
-    def forward(  # type: ignore[override]
-        self, observations: Tensor, actions: Tensor
-    ) -> DreamerOutput:
+    def forward(self, observations: Tensor, actions: Tensor) -> DreamerOutput:
         priors, posteriors = self.observe(observations, actions)
         posterior_mean, posterior_std = posteriors.gaussian()
         prior_mean, prior_std = priors.gaussian()
@@ -1054,7 +1050,7 @@ class DreamerForWorldModeling(WorldModelingModel):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         observations: Tensor,
         actions: Tensor,
