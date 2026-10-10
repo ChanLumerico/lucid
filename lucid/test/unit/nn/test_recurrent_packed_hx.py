@@ -27,11 +27,8 @@ _ORDERS = {"sorted": [5, 3, 2], "unsorted": [3, 5, 2]}
 
 
 def _pack(x: lucid.Tensor, lengths: list[int], device: str) -> PackedSequence:
-    """Pack on CPU and move the data: unsorted packing does not run on Metal
-    (its permutation index stays on CPU), and that is not what is tested here."""
-    p = pack_padded_sequence(x, lengths, enforce_sorted=lengths == _ORDERS["sorted"])
-    return PackedSequence(
-        p.data.to(device), p.batch_sizes, p.sorted_indices, p.unsorted_indices
+    return pack_padded_sequence(
+        x.to(device), lengths, enforce_sorted=lengths == _ORDERS["sorted"]
     )
 
 
