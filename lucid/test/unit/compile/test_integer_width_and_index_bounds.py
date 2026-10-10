@@ -219,10 +219,12 @@ def _run(program: str) -> dict[str, dict[str, object]]:
         env={k: v for k, v in os.environ.items() if k != "LUCID_COMPILE_VERBOSE"},
         timeout=600,
     )
-    assert done.returncode == 0, (
-        f"the program died with rc {done.returncode}:\n{done.stderr[-3000:]}"
-    )
-    records = [json.loads(line) for line in done.stdout.splitlines() if line.startswith("{")]
+    assert (
+        done.returncode == 0
+    ), f"the program died with rc {done.returncode}:\n{done.stderr[-3000:]}"
+    records = [
+        json.loads(line) for line in done.stdout.splitlines() if line.startswith("{")
+    ]
     return {str(r["case"]): r for r in records}
 
 

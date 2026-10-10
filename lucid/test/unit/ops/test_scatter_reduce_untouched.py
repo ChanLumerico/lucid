@@ -58,7 +58,11 @@ def _cases():
         for dtype in _TOL:
             for reduce in _REDUCTIONS:
                 marks = ()
-                if device == "cpu" and dtype == "float16" and reduce in ("prod", "amax", "amin"):
+                if (
+                    device == "cpu"
+                    and dtype == "float16"
+                    and reduce in ("prod", "amax", "amin")
+                ):
                     marks = (
                         pytest.mark.xfail(
                             raises=NotImplementedError,
@@ -81,11 +85,16 @@ def _cases():
 
 def _close(got, want, dtype):
     np.testing.assert_allclose(
-        got.astype(np.float64), want.astype(np.float64), rtol=_TOL[dtype], atol=_TOL[dtype]
+        got.astype(np.float64),
+        want.astype(np.float64),
+        rtol=_TOL[dtype],
+        atol=_TOL[dtype],
     )
 
 
-@pytest.mark.parametrize(("device", "dtype", "reduce", "include_self", "case"), list(_cases()))
+@pytest.mark.parametrize(
+    ("device", "dtype", "reduce", "include_self", "case"), list(_cases())
+)
 def test_matches_reference(ref, device, dtype, reduce, include_self, case):
     dim, x, index, src = _CASES[case]
     x_np, src_np = np.array(x, dtype=dtype), np.array(src, dtype=dtype)
@@ -93,14 +102,21 @@ def test_matches_reference(ref, device, dtype, reduce, include_self, case):
 
     xr = ref.tensor(x_np, requires_grad=True)
     sr = ref.tensor(src_np, requires_grad=True)
-    want = xr.scatter_reduce(dim, ref.tensor(index_np), sr, reduce, include_self=include_self)
+    want = xr.scatter_reduce(
+        dim, ref.tensor(index_np), sr, reduce, include_self=include_self
+    )
     grad_np = (np.arange(want.numel()).reshape(want.shape) + 1).astype(dtype)
     want.backward(ref.tensor(grad_np))
 
     xl = lucid.tensor(x_np, device=device, requires_grad=True)
     sl = lucid.tensor(src_np, device=device, requires_grad=True)
     got = lucid.scatter_reduce(
-        xl, dim, lucid.tensor(index_np, device=device), sl, reduce, include_self=include_self
+        xl,
+        dim,
+        lucid.tensor(index_np, device=device),
+        sl,
+        reduce,
+        include_self=include_self,
     )
     got.backward(lucid.tensor(grad_np, device=device))
 
@@ -136,7 +152,9 @@ def _integer_cases():
                     )
 
 
-@pytest.mark.parametrize(("device", "dtype", "reduce", "include_self"), list(_integer_cases()))
+@pytest.mark.parametrize(
+    ("device", "dtype", "reduce", "include_self"), list(_integer_cases())
+)
 def test_integer_input(ref, device, dtype, reduce, include_self):
     # Negative totals tell a floored mean from a truncated one.
     x = np.array([[1, -2, 3, 4], [5, 6, -7, 8]], dtype=dtype)

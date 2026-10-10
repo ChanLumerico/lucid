@@ -66,7 +66,11 @@ def _cases():
             for op in _OPS:
                 for row in _ROWS:
                     marks = ()
-                    if device == "metal" and op == "log_softmax" and row in _POS_INF_MAX:
+                    if (
+                        device == "metal"
+                        and op == "log_softmax"
+                        and row in _POS_INF_MAX
+                    ):
                         marks = (
                             pytest.mark.xfail(
                                 strict=True,
@@ -74,7 +78,12 @@ def _cases():
                             ),
                         )
                     yield pytest.param(
-                        device, dtype, op, row, marks=marks, id=f"{device}-{dtype}-{op}-{row}"
+                        device,
+                        dtype,
+                        op,
+                        row,
+                        marks=marks,
+                        id=f"{device}-{dtype}-{op}-{row}",
                     )
 
 
@@ -82,8 +91,14 @@ def _check(got, want, dtype):
     tol = _DTYPES[dtype]
     assert got.shape == want.shape
     assert np.array_equal(np.isnan(got), np.isnan(want)), (got, want)
-    assert np.array_equal(np.isinf(got) & (got > 0), np.isinf(want) & (want > 0)), (got, want)
-    assert np.array_equal(np.isinf(got) & (got < 0), np.isinf(want) & (want < 0)), (got, want)
+    assert np.array_equal(np.isinf(got) & (got > 0), np.isinf(want) & (want > 0)), (
+        got,
+        want,
+    )
+    assert np.array_equal(np.isinf(got) & (got < 0), np.isinf(want) & (want < 0)), (
+        got,
+        want,
+    )
     finite = np.isfinite(want)
     np.testing.assert_allclose(got[finite], want[finite], rtol=tol, atol=tol)
 
@@ -112,4 +127,6 @@ def test_logsumexp_gradient_on_infinite_max(ref, device):
     lucid.logsumexp(x, 1).sum().backward()
     xr = ref.tensor(values, requires_grad=True)
     ref.logsumexp(xr, 1).sum().backward()
-    _check(x.grad.numpy().astype(np.float64), xr.grad.numpy().astype(np.float64), "float32")
+    _check(
+        x.grad.numpy().astype(np.float64), xr.grad.numpy().astype(np.float64), "float32"
+    )
