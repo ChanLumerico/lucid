@@ -1,6 +1,5 @@
 """NaN-safe reductions composed from ``where`` + standard reductions."""
 
-import math
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
@@ -129,7 +128,7 @@ def nanmedian(
     x: Tensor,
     dim: int | None = None,
     keepdim: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""Median of a tensor, ignoring NaN entries.
 
     Computes the median over the requested axis (or the entire tensor
@@ -140,7 +139,7 @@ def nanmedian(
     Parameters
     ----------
     x : Tensor
-        Input tensor of any floating dtype.
+        Input tensor of a floating or integer dtype.
     dim : int | None, optional
         Reduction axis.  ``None`` (default) flattens ``x`` first.
     keepdim : bool, optional
@@ -150,25 +149,33 @@ def nanmedian(
 
     Returns
     -------
-    Tensor
-        Median value(s) over the non-NaN entries.  Scalar when
-        ``dim is None``; otherwise the input shape with the reduction
-        axis removed (or kept as size 1 if ``keepdim=True``).
+    Tensor or tuple of Tensor
+        With ``dim is None``, the scalar median of the non-NaN entries.
+        With ``dim`` given, ``(values, indices)``: the median of every
+        slice along ``dim`` and the ``int64`` position of that median in
+        ``x``, both the input shape with ``dim`` removed (or kept as
+        size 1 if ``keepdim=True``).
+
+    Raises
+    ------
+    NotImplementedError
+        For a ``bool`` input.
+    IndexError
+        When ``dim`` is out of range, or the reduced axis has length 0.
 
     Notes
     -----
-    Algorithmic outline:
+    Every slice keeps its own count :math:`n` of non-NaN entries.  NaN
+    sorts last, so the median is the entry at sorted position
+    :math:`\lfloor (n - 1) / 2 \rfloor` — the lower median for an even
+    count, matching the reference framework.  A slice that is all NaN
+    has no number to take and answers NaN, at the position of its first
+    entry.  Integer inputs hold no NaN and take the plain lower median.
 
-    1. Replace NaN entries with :math:`+\infty` so they sort to the
-       high end and never become the chosen median.
-    2. Sort along the reduction axis.
-    3. Pick element at index
-       :math:`\lfloor (n_{\text{not-nan}} - 1) / 2 \rfloor` — the
-       lower-median convention for even counts, matching the
-       reference framework's default behaviour.
-
-    If *all* entries along the reduction are NaN the result is NaN
-    (no valid sample to take).
+    The gradient of a ``dim`` reduction flows to the entry ``indices``
+    names.  The whole-tensor median shares its gradient evenly between
+    every entry equal to it (every NaN, when the answer is NaN), as the
+    reference does.
 
     Examples
     --------
@@ -177,6 +184,13 @@ def nanmedian(
     >>> x = lucid.tensor([1.0, math.nan, 3.0, 5.0])
     >>> lucid.nanmedian(x)
     tensor(3.)
+    >>> values, indices = lucid.nanmedian(
+    ...     lucid.tensor([[1.0, math.nan, math.nan], [1.0, 2.0, 3.0]]), 1
+    ... )
+    >>> values
+    tensor([1., 2.])
+    >>> indices
+    tensor([0, 1], dtype=lucid.int64)
     """
     if x.dtype == lucid.bool_:
         # As the reference does: a median of booleans is not defined here,
@@ -184,28 +198,76 @@ def nanmedian(
         raise NotImplementedError(
             "nanmedian does not accept bool — cast to an integer dtype"
         )
-    big = lucid.full_like(x, math.inf)
-    safe = lucid.where(lucid.isnan(x), big, x)
-    nan_mask = lucid.isnan(x)
-    not_nan = lucid.where(nan_mask, lucid.full_like(x, 0.0), lucid.full_like(x, 1.0))
-
     if dim is None:
-        flat = safe.reshape(-1)
-        sorted_vals = lucid.sort(flat)
-        nn = int(not_nan.sum().item())
-        if nn == 0:
-            # Every entry is NaN, or there is none: the answer is NaN.  A fresh
-            # constant would cut the autograd edge; the mean of the entries is
-            # NaN as well and spreads the gradient evenly over them, as the
-            # reference does.
-            return lucid.mean(x.reshape(-1))
-        return sorted_vals[(nn - 1) // 2]
+        return _nanmedian_all(x)
+    return _nanmedian_along(x, dim, keepdim)
 
-    sorted_vals = lucid.sort(safe, dim)
-    nn = int(not_nan.sum().item() / max(1, x.numel() / x.shape[dim]))
-    idx = max(0, (nn - 1) // 2)
-    out = sorted_vals.index_select(dim, lucid.tensor([idx], dtype=lucid.int64))
-    return out if keepdim else out.squeeze(dim)
+
+def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor]:
+    """``(values, indices)`` of the NaN-skipping median of every slice.
+
+    The position is read per slice from that slice's own non-NaN count —
+    a tensor, so nothing leaves the device and no slice borrows another's
+    count.
+    """
+    if x.ndim == 0:
+        if dim not in (0, -1):
+            raise IndexError(
+                f"nanmedian: dim {dim} is out of range for a 0-d tensor "
+                "(expected 0 or -1)"
+            )
+        values, indices = _nanmedian_along(x.reshape(1), 0, False)
+        return values, indices
+    if not -x.ndim <= dim < x.ndim:
+        raise IndexError(
+            f"nanmedian: dim {dim} is out of range for a {x.ndim}-d tensor "
+            f"(expected [{-x.ndim}, {x.ndim - 1}])"
+        )
+    d = dim % x.ndim
+    n = x.shape[d]
+    if n == 0:
+        raise IndexError(
+            f"nanmedian: the reduced dim {dim} has length 0 — there is no "
+            "median of nothing"
+        )
+    # The engine's sort puts NaN after every number, ``+inf`` included,
+    # and keeps tied entries in their input order.
+    order = lucid.argsort(x, d).to(lucid.int64)
+    if lucid.is_floating_point(x):
+        count = lucid.sum(~lucid.isnan(x), d, True)
+        pos = lucid.clamp((count - 1) // 2, min=0)
+    else:
+        pos = lucid.full_like(order.narrow(d, 0, 1), (n - 1) // 2)
+    indices = lucid.take_along_dim(order, pos, d)
+    values = lucid.take_along_dim(x, indices, d)
+    if not keepdim:
+        return values.squeeze(d), indices.squeeze(d)
+    return values, indices
+
+
+def _nanmedian_all(x: Tensor) -> Tensor:
+    """The NaN-skipping median of every entry of ``x``."""
+    flat = x.reshape(-1)
+    if flat.shape[0] == 0:
+        # There is no entry, so the answer is NaN.  A fresh constant would
+        # cut the autograd edge; the mean of no entries is NaN as well.
+        return lucid.mean(flat)
+    value, _ = _nanmedian_along(flat, 0, False)
+    if not x.requires_grad:
+        return value
+    # The reference hands every entry equal to the median an even share of
+    # the gradient, not only the one the sort happened to put in the middle.
+    picked = value.detach()
+    tie = (flat == picked) | (lucid.isnan(flat) & lucid.isnan(picked))
+    share = (1.0 / lucid.sum(tie).to(lucid.float32)).to(flat.dtype)
+    ties = lucid.where(tie, flat, lucid.zeros_like(flat))
+    # ``ties - ties.detach()`` is zero with a unit derivative, so ``picked``
+    # keeps its exact value — except at ``inf`` or NaN, where it is NaN.
+    # Those answers are spread instead: a sum of copies of ``inf`` or NaN,
+    # scaled, is still exactly that.
+    exact = picked + lucid.sum(ties - ties.detach()) * share
+    spread = lucid.sum(ties) * share
+    return lucid.where(lucid.isfinite(picked), exact, spread)
 
 
 def count_nonzero(

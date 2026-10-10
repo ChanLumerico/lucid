@@ -87,12 +87,12 @@ def _nanquantile_along(
     since the mean is nobody's count.
 
     ``counts`` is the per-slice valid count with ``dim`` kept at size 1.
-    NaNs have already been sorted to the end as ``+inf``, so index
-    ``n - 1`` is the largest real value.
+    The sort put every NaN after the numbers, so index ``n - 1`` is the
+    largest real value — and a slice with no number reads its first NaN
+    at index 0, which is its answer and where its gradient goes.
     """
     zero = lucid.zeros_like(counts)
     last = lucid.maximum(counts - 1.0, zero)
-    valid = counts > 0.0
 
     def _gather(pos: Tensor) -> Tensor:
         return lucid.take_along_dim(sorted_x, pos.to(lucid.int32), dim=dim)
@@ -116,10 +116,6 @@ def _nanquantile_along(
             val = _gather(lucid.round(pos))
         else:
             raise ValueError(f"Unknown interpolation method: {interpolation!r}")
-
-        # An all-NaN slice has no quantile; ``last`` clamped to 0 would
-        # otherwise hand back the ``+inf`` that stood in for the NaN.
-        val = lucid.where(valid, val, lucid.full_like(val, math.nan))
         results.append(val if keepdim else val.squeeze(dim))
     return results
 
@@ -186,21 +182,23 @@ def quantile(
     # to land beside one (``nan * 0.0`` is still ``NaN``).  Anywhere else it
     # dropped out silently: 50 samples with three NaNs returned a perfectly
     # ordinary median where the reference and NumPy both return NaN.
-    nan_frac = lucid.isnan(input).to(input.dtype)
-
     if dim is None:
         flat = input.reshape(-1)
         sorted_x = lucid.sort(flat)
         n = flat.shape[0]
         results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
-        if float(nan_frac.sum().item()) > 0.0:
-            results = [lucid.full_like(r, math.nan) for r in results]
+        nans = lucid.isnan(flat).sum()
     else:
         sorted_x = lucid.sort(input, dim)
         n = input.shape[dim]
         results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
-        clean = nan_frac.sum(dim=dim, keepdim=keepdim) == 0.0
-        results = [lucid.where(clean, r, lucid.full_like(r, math.nan)) for r in results]
+        nans = lucid.isnan(input).sum(dim=dim, keepdim=keepdim)
+    # An integer input holds no NaN, and an ``interpolation="lower"`` result
+    # of one is an integer tensor that could not hold the NaN fill anyway.
+    if lucid.is_floating_point(input):
+        results = [
+            lucid.where(nans == 0, r, lucid.full_like(r, math.nan)) for r in results
+        ]
 
     if scalar_q:
         return results[0]
@@ -248,36 +246,25 @@ def nanquantile(
     --------
     quantile : NaN-unaware version (a single ``NaN`` poisons the slice).
     """
-    # Replace NaN with +inf so they sort to the end, then count valid entries.
-    nan_mask = lucid.isnan(input)
-    safe = lucid.where(nan_mask, lucid.full_like(input, math.inf), input)
+    if not lucid.is_floating_point(input):
+        # No NaN to skip: the plain quantile is the answer.
+        return quantile(input, q, dim, keepdim, interpolation)
     q_list, scalar_q = _parse_q(q)
-
-    if dim is None:
-        flat_safe = safe.reshape(-1)
-        flat_nan = nan_mask.reshape(-1)
-        sorted_x = lucid.sort(flat_safe)
-        # Count non-NaN elements
-        non_nan_vals = lucid.where(
-            flat_nan, lucid.full_like(flat_safe, 0.0), lucid.full_like(flat_safe, 1.0)
-        )
-        n = int(non_nan_vals.sum().item())
-        if n == 0:
-            nan_val = lucid.tensor(math.nan, dtype=input.dtype, device=input.device)
-            if scalar_q:
-                return nan_val
-            return lucid.stack([nan_val] * len(q_list))
-        results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
-    else:
-        sorted_x = lucid.sort(safe, dim)
-        non_nan_count = lucid.where(
-            nan_mask,
-            lucid.full_like(safe, 0.0),
-            lucid.full_like(safe, 1.0),
-        ).sum(dim=dim, keepdim=True)
-        results = _nanquantile_along(
-            sorted_x, non_nan_count, q_list, dim, keepdim, interpolation
-        )
+    # The whole tensor is the one slice of its flattening, so it takes the
+    # per-slice path: the count stays a tensor on the device, and an all-NaN
+    # input reads its first NaN with the gradient attached.
+    x, along = (input.reshape(-1), 0) if dim is None else (input, dim)
+    # The engine's sort already puts every NaN after the numbers.
+    sorted_x = lucid.sort(x, along)
+    non_nan_count = (~lucid.isnan(x)).sum(dim=along, keepdim=True).to(x.dtype)
+    results = _nanquantile_along(
+        sorted_x,
+        non_nan_count,
+        q_list,
+        along,
+        keepdim and dim is not None,
+        interpolation,
+    )
 
     if scalar_q:
         return results[0]
@@ -479,13 +466,9 @@ def bincount(
     tensor([1., 5.])
     """
     if input.is_floating_point() or input.is_complex() or input.dtype == lucid.bool_:
-        raise TypeError(
-            f"bincount: input must be an integer tensor, got {input.dtype}"
-        )
+        raise TypeError(f"bincount: input must be an integer tensor, got {input.dtype}")
     if input.ndim != 1:
-        raise ValueError(
-            f"bincount: input must be 1-D, got shape {tuple(input.shape)}"
-        )
+        raise ValueError(f"bincount: input must be 1-D, got shape {tuple(input.shape)}")
     if minlength < 0:
         raise ValueError(f"bincount: minlength must be non-negative, got {minlength}")
     n = int(input.shape[0])
