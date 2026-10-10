@@ -94,6 +94,7 @@
 #include "Pool.h"
 #include "Reduce.h"
 #include "ScatterReduce.h"
+#include "SdpaMask.h"
 #include "Shape.h"
 #include "Vdsp.h"
 #include "Vforce.h"
@@ -449,6 +450,16 @@ inline Storage as_f32(const Storage& s) {
     if (c == nullptr || !is_half_like(c->dtype))
         return s;
     return Storage{widen_half(*c, c->nbytes / sizeof(std::uint16_t))};
+}
+
+// The same for an optional operand — an attention mask, a class weight.
+// Those used to be handed through raw while their siblings widened, and the
+// float kernel then read half bytes as floats.  ``hold`` owns the copy.
+inline const Storage* as_f32(const Storage* s, std::optional<Storage>& hold) {
+    if (s == nullptr)
+        return nullptr;
+    hold = as_f32(*s);
+    return &*hold;
 }
 
 // The inverse, equally dtype-driven: a float result rounds back to half, and
@@ -8159,12 +8170,15 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
+        if (detail::is_half_like(dt)) {
+            std::optional<Storage> weight32;
             return detail::back_to_f16(
                 cross_entropy_backward(detail::as_f32(saved_softmax), detail::as_f32(target),
-                                       weight, detail::as_f32(valid_count), detail::as_f32(grad),
+                                       detail::as_f32(weight, weight32),
+                                       detail::as_f32(valid_count), detail::as_f32(grad),
                                        input_shape, Dtype::F32, ignore_index, reduction),
                 dt);
+        }
         const int n_batch = static_cast<int>(input_shape[0]);
         const int channels = static_cast<int>(input_shape[1]);
         const int spatial = class_loss_spatial(input_shape);
@@ -8278,12 +8292,14 @@ public:
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(nll_loss_backward(detail::as_f32(target), weight,
-                                                         detail::as_f32(valid_count),
-                                                         detail::as_f32(grad), input_shape,
-                                                         Dtype::F32, ignore_index, reduction),
-                                       dt);
+        if (detail::is_half_like(dt)) {
+            std::optional<Storage> weight32;
+            return detail::back_to_f16(
+                nll_loss_backward(detail::as_f32(target), detail::as_f32(weight, weight32),
+                                  detail::as_f32(valid_count), detail::as_f32(grad), input_shape,
+                                  Dtype::F32, ignore_index, reduction),
+                dt);
+        }
         const int n_batch = static_cast<int>(input_shape[0]);
         const int channels = static_cast<int>(input_shape[1]);
         const int spatial = class_loss_spatial(input_shape);
@@ -8343,17 +8359,23 @@ public:
                                       Dtype dt) override {
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(sdpa_forward(detail::as_f32(q), detail::as_f32(k),
-                                                    detail::as_f32(v), attn_mask, q_shape, k_shape,
-                                                    v_shape, mask_dtype, mask_numel, scale,
-                                                    is_causal, need_weights, Dtype::F32),
-                                       dt);
+        // back_to_f16 key off each storage's own dtype, so a bool mask
+        // travels through untouched and an additive one widens with q/k/v.
+        if (detail::is_half_like(dt)) {
+            std::optional<Storage> mask32;
+            return detail::back_to_f16(
+                sdpa_forward(detail::as_f32(q), detail::as_f32(k), detail::as_f32(v),
+                             detail::as_f32(attn_mask, mask32), q_shape, k_shape, v_shape,
+                             mask_dtype, mask_numel, scale, is_causal, need_weights, Dtype::F32),
+                dt);
+        }
         // The Accelerate reference always rolls the full softmax weight matrix
         // (its backward reuses it), so ``need_weights`` is a no-op here.
         (void)need_weights;
+        // The mask's dtype and extent come from its storage: trusting these
+        // two is how a half mask was read as float.  See cpu::SdpaMask.
+        (void)mask_dtype;
+        (void)mask_numel;
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
             B *= static_cast<std::size_t>(q_shape[i]);
@@ -8371,76 +8393,33 @@ public:
         const auto& qs = std::get<CpuStorage>(q);
         const auto& ks = std::get<CpuStorage>(k);
         const auto& vs = std::get<CpuStorage>(v);
+        const CpuStorage* ms = attn_mask ? &std::get<CpuStorage>(*attn_mask) : nullptr;
+        const cpu::SdpaMask mask =
+            ms ? cpu::sdpa_mask_layout(*ms, dt, Lq * Lk, B) : cpu::SdpaMask{};
 
-        auto apply_masks = [&](auto* Wp_t) {
-            using T = std::remove_pointer_t<decltype(Wp_t)>;
+        // The masks for slice ``b`` alone — what one parallel task may touch.
+        // A keep-mask's ``true`` attends: this kernel once read it as "mask
+        // out" while MLX read it as "keep", inverting between devices.
+        auto apply_masks_to = [&](auto* Wb, std::size_t b) {
+            using T = std::remove_pointer_t<decltype(Wb)>;
             const T neg_inf = -std::numeric_limits<T>::infinity();
             const std::size_t pb = Lq * Lk;
-            if (attn_mask) {
-                const auto& ms = std::get<CpuStorage>(*attn_mask);
-                if (mask_dtype == Dtype::Bool) {
-                    // A keep-mask: ``true`` attends.  This kernel used to read
-                    // ``true`` as "mask out" while MLX reads it as "keep", so
-                    // the same engine call inverted between devices.
-                    const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get());
-                    if (mask_numel == pb) {
-                        for (std::size_t bb = 0; bb < B; ++bb) {
-                            T* sb = Wp_t + bb * pb;
-                            for (std::size_t i = 0; i < pb; ++i)
-                                if (!mp[i])
-                                    sb[i] = neg_inf;
-                        }
-                    } else {
-                        for (std::size_t i = 0; i < B * pb; ++i)
-                            if (!mp[i])
-                                Wp_t[i] = neg_inf;
-                    }
-                } else {
-                    const auto* mp = reinterpret_cast<const T*>(ms.ptr.get());
-                    if (mask_numel == pb) {
-                        for (std::size_t bb = 0; bb < B; ++bb) {
-                            T* sb = Wp_t + bb * pb;
-                            for (std::size_t i = 0; i < pb; ++i)
-                                sb[i] += mp[i];
-                        }
-                    } else {
-                        for (std::size_t i = 0; i < B * pb; ++i)
-                            Wp_t[i] += mp[i];
-                    }
-                }
-            }
-            if (is_causal) {
-                for (std::size_t b = 0; b < B; ++b)
-                    for (std::size_t i = 0; i < Lq; ++i) {
-                        T* row = Wp_t + (b * Lq + i) * Lk;
-                        for (std::size_t j = i + 1; j < Lk; ++j)
-                            row[j] = neg_inf;
-                    }
-            }
-        };
-
-        // The same masks, for slice ``b`` alone — what one parallel task may
-        // touch.  A mask of one slice's size is shared by every slice.
-        auto apply_masks_to = [&](float* Wb, std::size_t b) {
-            const float neg_inf = -std::numeric_limits<float>::infinity();
-            const std::size_t pb = Lq * Lk;
-            if (attn_mask) {
-                const auto& ms = std::get<CpuStorage>(*attn_mask);
-                const std::size_t offset = mask_numel == pb ? 0 : b * pb;
-                if (mask_dtype == Dtype::Bool) {
-                    const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get()) + offset;
+            if (ms != nullptr) {
+                const std::size_t offset = b * mask.slice_step;
+                if (mask.keep) {
+                    const auto* mp = reinterpret_cast<const std::uint8_t*>(ms->ptr.get()) + offset;
                     for (std::size_t i = 0; i < pb; ++i)
                         if (!mp[i])
                             Wb[i] = neg_inf;
                 } else {
-                    const auto* mp = reinterpret_cast<const float*>(ms.ptr.get()) + offset;
+                    const auto* mp = reinterpret_cast<const T*>(ms->ptr.get()) + offset;
                     for (std::size_t i = 0; i < pb; ++i)
                         Wb[i] += mp[i];
                 }
             }
             if (is_causal) {
                 for (std::size_t i = 0; i < Lq; ++i) {
-                    float* row = Wb + i * Lk;
+                    T* row = Wb + i * Lk;
                     for (std::size_t j = i + 1; j < Lk; ++j)
                         row[j] = neg_inf;
                 }
@@ -8498,7 +8477,8 @@ public:
                            static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
                            Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0, Wp + b * Lq * Lk,
                            static_cast<int>(Lk));
-            apply_masks(Wp);
+            for (std::size_t b = 0; b < B; ++b)
+                apply_masks_to(Wp + b * Lq * Lk, b);
 
             // With no keys there are no weights to normalise — and no
             // ``row[0]`` to seed the max with; the product below then writes
@@ -8551,19 +8531,24 @@ public:
                                        Dtype dt) override {
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
+        // back_to_f16 key off each storage's own dtype, so a bool mask
+        // travels through untouched and an additive one widens with q/k/v.
+        if (detail::is_half_like(dt)) {
+            std::optional<Storage> mask32;
             return detail::back_to_f16(
                 sdpa_backward(detail::as_f32(grad_out), detail::as_f32(q), detail::as_f32(k),
-                              detail::as_f32(v), detail::as_f32(saved_weights), attn_mask, q_shape,
-                              k_shape, v_shape, mask_dtype, scale, is_causal, Dtype::F32),
+                              detail::as_f32(v), detail::as_f32(saved_weights),
+                              detail::as_f32(attn_mask, mask32), q_shape, k_shape, v_shape,
+                              mask_dtype, scale, is_causal, Dtype::F32),
                 dt);
+        }
         // The Accelerate forward saves the genuine (already masked/causal)
         // weight matrix W, so the backward is fully determined by ``saved_weights``
         // and needs no mask/causal replay — the extra args exist only to match
-        // the interface the MLX VJP path requires.
+        // the interface the MLX VJP path requires.  Whether the mask is
+        // additive is read off its storage, as the forward does.
         (void)is_causal;
+        (void)mask_dtype;
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
             B *= static_cast<std::size_t>(q_shape[i]);
@@ -8583,7 +8568,9 @@ public:
         // Always emitted so the returned vector matches the node's edge count
         // (the same contract ``conv_nd_backward`` keeps for a null bias); the
         // engine drops this slot when the mask edge is null.
-        const bool want_mask_grad = (attn_mask != nullptr) && (mask_dtype != Dtype::Bool);
+        const bool want_mask_grad =
+            attn_mask != nullptr &&
+            !cpu::sdpa_mask_layout(std::get<CpuStorage>(*attn_mask), dt, Lq * Lk, B).keep;
         CpuStorage dM_cpu = alloc_cpu(want_mask_grad ? B * Lq * Lk : 1, dt);
 
         const auto& qs = std::get<CpuStorage>(q);
@@ -8591,17 +8578,6 @@ public:
         const auto& vs = std::get<CpuStorage>(v);
         const auto& ws = std::get<CpuStorage>(saved_weights);
         const auto& gs = std::get<CpuStorage>(grad_out);
-
-        auto softmax_bwd = [&](auto* Wp_t, const auto* Gp_t, auto* out_t, std::size_t lq,
-                               std::size_t lk) {
-            using T = std::remove_pointer_t<decltype(Wp_t)>;
-            std::vector<T> dw(lq * lk), ds(lq * lk);
-
-            (void)lq;
-            (void)lk;
-            (void)out_t;
-        };
-        (void)softmax_bwd;
 
         auto do_backward = [&](auto type_tag) {
             using T = decltype(type_tag);
@@ -8903,39 +8879,15 @@ public:
         // half BLAS to call — so it widens at the door and rounds once on
         // the way out.  Metal accepted F16 convolutions and the CPU did
         // not, which made the same model run on one device and raise on
-        // the other.
-        if (detail::is_half_like(dt)) {
-            const auto widen = [&](const Storage& s, std::size_t count) {
-                const auto& c = std::get<CpuStorage>(s);
-                auto p = allocate_aligned_bytes(count * sizeof(float), Device::CPU);
-                const auto* src = reinterpret_cast<const std::uint16_t*>(c.ptr.get());
-                auto* dst = reinterpret_cast<float*>(p.get());
-                for (std::size_t i = 0; i < count; ++i)
-                    dst[i] = detail::half_bits_to_float(src[i]);
-                return Storage{CpuStorage{p, count * sizeof(float), Dtype::F32}};
-            };
-            std::size_t x_n = static_cast<std::size_t>(B) * Cin;
-            std::size_t w_n = static_cast<std::size_t>(Cout) * Cin_g;
-            for (int i = 0; i < opts.N; ++i) {
-                x_n *= static_cast<std::size_t>(S[i]);
-                w_n *= static_cast<std::size_t>(K[i]);
-            }
-            const auto& b_in = std::get<CpuStorage>(b);
-            const bool has_bias = b_in.ptr != nullptr && b_in.nbytes > 0;
-            Storage wide =
-                conv_nd_forward(widen(x, x_n), widen(W, w_n),
-                                has_bias ? widen(b, static_cast<std::size_t>(Cout)) : b, B, Cin,
-                                Cout, Cin_g, Cout_g, S, K, O, opts, out_shape, Dtype::F32);
-
-            const auto& wc = std::get<CpuStorage>(wide);
-            const std::size_t out_n = wc.nbytes / sizeof(float);
-            auto narrow = allocate_aligned_bytes(out_n * sizeof(std::uint16_t), Device::CPU);
-            const auto* src = reinterpret_cast<const float*>(wc.ptr.get());
-            auto* dst = reinterpret_cast<std::uint16_t*>(narrow.get());
-            for (std::size_t i = 0; i < out_n; ++i)
-                dst[i] = detail::float_to_half_bits(src[i]);
-            return Storage{CpuStorage{narrow, out_n * sizeof(std::uint16_t), Dtype::F16}};
-        }
+        // the other.  It widened with a loop of its own that read every
+        // 16-bit float as IEEE half and rounded back to it, so a bfloat16
+        // convolution came back as float16 bits; as_f32 / back_to_f16 read
+        // each storage as what it is.
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                conv_nd_forward(detail::as_f32(x), detail::as_f32(W), detail::as_f32(b), B, Cin,
+                                Cout, Cin_g, Cout_g, S, K, O, opts, out_shape, Dtype::F32),
+                dt);
 
         const int N = opts.N;
         const int O_total = checked_extent(O, N, "output positions");

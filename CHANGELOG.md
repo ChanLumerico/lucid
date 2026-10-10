@@ -416,6 +416,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - grid_sample reflection, 5-D, bicubic; 3-D affine_grid (LCD-49)
 
+- kernels read every operand in its own dtype (LCD-385)
+
 ### Changed
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)
