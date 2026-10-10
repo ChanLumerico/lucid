@@ -112,9 +112,12 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     auto bwd = std::make_shared<BatchNormEvalBackward>();
     bwd->eps_ = eps;
     bwd->rstd_ = std::move(rstd_storage);
-    // saved_inputs_[0..4] will hold {x, mean, var, gamma, beta} at eff_dt.
+    // saved_inputs_ hold {x, mean, gamma} at eff_dt in their slots 0, 1 and 3.
+    // ``var`` reaches the backward as ``rstd_``, computed here, and beta is
+    // read by shape alone; neither is saved.
     kernel::NaryKernel<BatchNormEvalBackward, 5>::wire_autograd(
-        std::move(bwd), {x_eff, mean_eff, var_eff, gamma_eff, beta_eff}, out);
+        std::move(bwd), {x_eff, mean_eff, var_eff, gamma_eff, beta_eff}, out,
+        {true, true, false, true, false});
     return out;
 }
 
@@ -253,7 +256,9 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
     auto bwd = std::make_shared<GlobalResponseNormBackward>();
     bwd->eps_ = eps;
     bwd->saved_Nx_ = std::move(nx_storage);
-    // saved_inputs_[0..2] will hold {x, gamma, beta}.
+    // saved_inputs_[0..2] will hold {x, gamma, beta}.  Unlike the other
+    // norms' beta, this one is read: the op is gamma * (x * Nx) + beta * x,
+    // so dx carries a beta * g term (both backends read it).
     kernel::NaryKernel<GlobalResponseNormBackward, 3>::wire_autograd(std::move(bwd),
                                                                      {x, gamma, beta}, out);
     return out;

@@ -85,6 +85,9 @@ public:
     //     ``"matmul"``, version 1, ``AmpPolicy::Promote``, deterministic.
     static const OpSchema schema_v1;
 
+    // ``dA = G B^T`` reads ``B``; ``dB = A^T G`` reads ``A``.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, false}}};
+
     // Validate inputs, plan the batched matrix multiply, execute the
     // forward kernel, and wire the autograd graph if gradient tracking
     // is active.

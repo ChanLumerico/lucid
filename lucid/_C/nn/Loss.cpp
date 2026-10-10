@@ -531,12 +531,10 @@ TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs,
     bwd->lp_shape_ = lp_shape;
     bwd->blank_ = blank;
     bwd->zero_infinity_ = zero_infinity;
-    bwd->saved_log_probs_ = log_probs->storage();
     bwd->saved_targets_ = targets->storage();
     bwd->saved_input_lengths_ = input_lengths->storage();
     bwd->saved_target_lengths_ = target_lengths->storage();
-    kernel::NaryKernel<CtcLossBackward, 1>::wire_autograd(std::move(bwd), {log_probs}, result,
-                                                          false);
+    kernel::NaryKernel<CtcLossBackward, 1>::wire_autograd(std::move(bwd), {log_probs}, result);
     return result;
 }
 
@@ -544,7 +542,7 @@ const OpSchema CtcLossBackward::schema_v1{"ctc_loss", 1, AmpPolicy::ForceFP32, t
 
 std::vector<Storage> CtcLossBackward::apply(Storage grad_out) {
     return {backend::Dispatcher::for_device(device_).ctc_loss_backward(
-        saved_log_probs_, saved_targets_, saved_input_lengths_, saved_target_lengths_, grad_out,
+        saved_inputs_[0], saved_targets_, saved_input_lengths_, saved_target_lengths_, grad_out,
         lp_shape_, blank_, zero_infinity_, dtype_)};
 }
 LUCID_REGISTER_OP(CtcLossBackward)

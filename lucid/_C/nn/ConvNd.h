@@ -64,6 +64,12 @@ template <int N>
 class LUCID_API ConvNdBackward : public FuncOp<ConvNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
+
+    // ``dx`` reads the weight, ``dW`` reads ``x``, and the bias's gradient
+    // reads nothing.
+    static constexpr GradReads<3> kGradReads{
+        {{false, true, false}, {true, false, false}, {false, false, false}}};
+
     int stride_[N];    // Convolution stride per spatial axis.
     int pad_[N];       // Zero-padding per spatial axis.
     int dilation_[N];  // Dilation (hole size) per spatial axis.

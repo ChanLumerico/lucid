@@ -22,6 +22,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -90,10 +91,12 @@ namespace lucid {
 //     Initial hidden state shaped ``(1, B, H_rec)`` where ``H_rec`` is
 //     ``proj_size`` if projection is enabled, otherwise ``hidden_size``.
 // saved_weights : std::vector<Storage>
-//     Four-element vector ``{wih, whh, bih, bhh}`` in that exact order.
-//     When ``opts.has_bias == false`` the bias slots still appear but
-//     are zero-filled stand-ins so the backward kernel's BLAS layout
-//     is uniform.
+//     ``{wih, whh, bih, bhh}`` (plus ``whr`` when projected) in that exact
+//     order.  BPTT reads the matrices only — the biases' gradient is the
+//     gates' gradient summed — so the bias slots hold zero-element
+//     placeholders of the right device and dtype, not the biases: holding
+//     them would make a write into a bias after forward refused (the CPU
+//     write guard) where the reference allows it.
 // gates_all : Storage
 //     All pre-activation gate values shaped ``(T, B, 4H)`` in
 //     ``[i, f, g, o]`` order, written by the training-mode forward.
@@ -148,10 +151,18 @@ class LUCID_API LstmBackward : public Node, public GraphBarrier {
 public:
     Storage saved_input;                 // Original input sequence (T, B, input_size).
     Storage saved_h0;                    // Initial hidden state (1, B, H).
-    std::vector<Storage> saved_weights;  // {wih, whh, bih, bhh}.
+    std::vector<Storage> saved_weights;  // {wih, whh, -, -[, whr]}; biases not held.
 
     Storage gates_all;  // All gate pre-activations, shape (T, B, 4H).
     Storage cells_all;  // All cell states (including c_0), shape (T+1, B, H).
+
+    // One entry per forward argument, ``{input, h0, c0, wih, whh, bih, bhh
+    // [, whr]}``, with ``saved_versions_`` at the same positions.  Only the
+    // tensors BPTT reads by value are held — ``input``, ``h0`` and the
+    // weight matrices; ``c0`` reaches the backward as ``cells_all``'s first
+    // step, which the forward wrote, and the biases are not read at all —
+    // so their entries are empty and never checked.
+    std::vector<std::weak_ptr<TensorImpl>> saved_sources;
 
     backend::IBackend::LstmOpts opts;
     Dtype dtype = Dtype::F32;
@@ -209,6 +220,15 @@ public:
     // Free the saved forward state once a pass that did not retain the
     // graph has run.
     void release_saved() override;
+
+    // Refuse backward when ``input``, ``h0`` or a weight was written in
+    // place since forward: BPTT reads the values they held then.
+    //
+    // Raises
+    // ------
+    // VersionMismatch
+    //     One of them moved past the version recorded at forward.
+    void validate_versions() override;
 
     // Run the LSTM forward pass and return ``{output, hn, cn}``.
     //

@@ -258,7 +258,6 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     // silently never trained.  No error, no NaN — the loss just never
     // moved through it.  The reference gives a gradient here.
     auto bwd = std::make_shared<EmbeddingBagBackward>();
-    bwd->saved_weight_ = weight->storage();
     bwd->saved_indices_ = indices->storage();
     bwd->saved_offsets_ = offsets->storage();
     bwd->weight_shape_ = weight->shape();
@@ -268,8 +267,7 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     bwd->include_last_offset_ = include_last_offset;
     bwd->dtype_ = weight->dtype();
     bwd->device_ = weight->device();
-    kernel::NaryKernel<EmbeddingBagBackward, 1>::wire_autograd(std::move(bwd), {weight}, out,
-                                                               false);
+    kernel::NaryKernel<EmbeddingBagBackward, 1>::wire_autograd(std::move(bwd), {weight}, out);
     return out;
 }
 
@@ -277,7 +275,7 @@ const OpSchema EmbeddingBagBackward::schema_v1{"embedding_bag", 1, AmpPolicy::Pr
 
 std::vector<Storage> EmbeddingBagBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.embedding_bag_backward(grad_out, saved_weight_, saved_indices_, saved_offsets_,
+    return {be.embedding_bag_backward(grad_out, saved_inputs_[0], saved_indices_, saved_offsets_,
                                       weight_shape_, indices_shape_, mode_, padding_idx_,
                                       include_last_offset_, dtype_)};
 }
@@ -338,7 +336,7 @@ std::vector<TensorImplPtr> EmbeddingBagBackward::apply_for_graph(const TensorImp
     if (mode_ == 2) {
         // max: each (bag, column) sends its gradient to the row that won it,
         // first on ties, as the forward's strict ``>`` decided.
-        const CpuStorage weight = host_copy(saved_weight_, weight_shape);
+        const CpuStorage weight = host_copy(saved_inputs_[0], weight_shape);
         const Shape grid{static_cast<std::int64_t>(n_bags), dim};
         CpuStorage rows = helpers::allocate_cpu(grid, Dtype::I32);
         CpuStorage keep = helpers::allocate_cpu(grid, Dtype::F64);

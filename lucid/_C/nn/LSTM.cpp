@@ -180,7 +180,15 @@ void LstmBackward::release_saved() {
     saved_weights.clear();
     gates_all = Storage{CpuStorage{}};
     cells_all = Storage{CpuStorage{}};
+    saved_sources.clear();
     grad_slots_ = {};
+}
+
+void LstmBackward::validate_versions() {
+    // ``saved_sources`` is indexed by forward argument; an entry for a
+    // tensor that is not held is empty and passes.
+    for (std::size_t k = 0; k < saved_sources.size(); ++k)
+        check_saved_version(saved_sources[k], k, "lstm", k);
 }
 
 std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
@@ -288,6 +296,11 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     bwd->saved_input = input->storage();
     bwd->saved_h0 = h0->storage();
     bwd->saved_weights = w_storages;
+    // The biases (weights 2 and 3) are not read by BPTT: keep a zero-element
+    // placeholder of the same device and dtype in their slots rather than
+    // their bytes, so nothing holds them for backward.
+    for (std::size_t k = 2; k < 4 && k < bwd->saved_weights.size(); ++k)
+        bwd->saved_weights[k] = be.zeros(Shape{0}, dt);
     bwd->gates_all = std::move(res[3]);
     bwd->cells_all = std::move(res[4]);
     bwd->opts = opts;
@@ -302,21 +315,33 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
         edge_tensors.push_back(w);
 
     std::vector<Edge> edges;
-    std::vector<std::int64_t> versions;
     for (const auto& t : edge_tensors) {
         if (!t->requires_grad()) {
             // A null edge signals that this input does not participate in
             // gradient accumulation; the backward skips it.
             edges.emplace_back(nullptr, 0);
-            versions.push_back(0);
         } else {
             if (t->is_leaf() && !t->grad_fn())
                 t->set_grad_fn(std::make_shared<AccumulateGrad>(t));
             edges.emplace_back(t->grad_fn(), t->grad_output_nr());
-            versions.push_back(t->version());
         }
     }
     bwd->set_next_edges(std::move(edges));
+
+    // Versions, by forward argument, of what BPTT reads by value — input,
+    // h0 and the weight matrices — whether or not it takes a gradient: a
+    // write into a weight that does not require grad still changes every
+    // other input's gradient.  c0 and the biases are not read, so their
+    // entries stay empty and a write into them after forward is allowed.
+    const auto read_by_bptt = [](std::size_t arg) { return arg != 2 && arg != 5 && arg != 6; };
+    std::vector<std::int64_t> versions;
+    versions.reserve(edge_tensors.size());
+    bwd->saved_sources.reserve(edge_tensors.size());
+    for (std::size_t arg = 0; arg < edge_tensors.size(); ++arg) {
+        const bool held = read_by_bptt(arg);
+        bwd->saved_sources.push_back(held ? edge_tensors[arg] : TensorImplPtr{});
+        versions.push_back(held ? edge_tensors[arg]->version() : 0);
+    }
     bwd->set_saved_versions(std::move(versions));
 
     // Every output shares the one node; ``grad_output_nr`` tells the engine

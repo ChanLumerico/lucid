@@ -302,9 +302,10 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         }
     }
 
-    // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
-    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(std::move(bwd),
-                                                                 {x_eff, gamma_eff, beta_eff}, out);
+    // saved_inputs_[0..1] hold {x, gamma} at eff_dt; beta is read by shape
+    // alone and is not saved.
+    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(
+        std::move(bwd), {x_eff, gamma_eff, beta_eff}, out, {true, true, false});
 
     // 3.5 compile: promote the traced BN node from 3-in/1-out to 5-in/3-out so
     // the running-stats EMA rides the compiled executable.  wire_autograd has

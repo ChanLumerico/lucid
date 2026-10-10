@@ -90,7 +90,6 @@ Storage insert_axis_slice_storage(const Storage& src,
 //                    the i-th input's contribution along the concat axis.
 //   output_shape_  — the shape of the concatenated output tensor.
 //   axis_          — the dimension along which concatenation was performed.
-//   input_tensors_ — weak references for version-check validation.
 //
 // Backward formula: the output gradient is split back into per-input pieces
 // by slicing at the cumulative boundary offsets along axis_.  The offset
@@ -100,7 +99,6 @@ class ConcatBackward : public kernel::VariadicKernel<ConcatBackward> {
 public:
     static const OpSchema schema_v1;
 
-    std::vector<std::weak_ptr<TensorImpl>> input_tensors_;
     std::vector<Shape> input_shapes_;
     Shape output_shape_;
     int axis_ = 0;
@@ -131,14 +129,6 @@ public:
         }
         return grads;
     }
-
-    void validate_versions() override {
-        for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
-            check_version_match(input_tensors_[i],
-                                saved_versions_.size() > i ? saved_versions_[i] : 0, schema_v1.name,
-                                i);
-        }
-    }
 };
 
 const OpSchema ConcatBackward::schema_v1{"concatenate", 1, AmpPolicy::KeepInput, true};
@@ -151,7 +141,6 @@ const OpSchema ConcatBackward::schema_v1{"concatenate", 1, AmpPolicy::KeepInput,
 //   output_shape_  — the shape of the stacked output (input_shape_ with a
 //                    new axis of size N inserted at axis_).
 //   axis_          — the axis that was inserted by stack_op.
-//   input_tensors_ — weak references for version-check validation.
 //
 // Backward formula: each input i occupies exactly one slab of size 1 at
 // offset i along axis_.  Extract that slab with slice_axis_storage, then
@@ -160,7 +149,6 @@ class StackBackward : public kernel::VariadicKernel<StackBackward> {
 public:
     static const OpSchema schema_v1;
 
-    std::vector<std::weak_ptr<TensorImpl>> input_tensors_;
     Shape input_shape_;
     Shape output_shape_;
     int axis_ = 0;
@@ -171,8 +159,8 @@ public:
         Shape slice_shape = output_shape_;
         slice_shape[static_cast<std::size_t>(axis_)] = 1;
         std::vector<Storage> grads;
-        grads.reserve(input_tensors_.size());
-        for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
+        grads.reserve(next_edges().size());
+        for (std::size_t i = 0; i < next_edges().size(); ++i) {
             // Extract the single-element slab for input i, then drop axis_.
             auto piece = slice_axis_storage(grad_out, output_shape_, slice_shape, axis_,
                                             static_cast<std::int64_t>(i), dtype_, device_);
@@ -188,20 +176,12 @@ public:
         // axis the stack introduced.
         std::vector<std::int64_t> target(input_shape_.begin(), input_shape_.end());
         std::vector<TensorImplPtr> grads;
-        grads.reserve(input_tensors_.size());
-        for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
+        grads.reserve(next_edges().size());
+        for (std::size_t i = 0; i < next_edges().size(); ++i) {
             auto slab = narrow_op(grad_out, axis_, static_cast<std::int64_t>(i), 1);
             grads.push_back(reshape_op(slab, target));
         }
         return grads;
-    }
-
-    void validate_versions() override {
-        for (std::size_t i = 0; i < input_tensors_.size(); ++i) {
-            check_version_match(input_tensors_[i],
-                                saved_versions_.size() > i ? saved_versions_[i] : 0, schema_v1.name,
-                                i);
-        }
     }
 };
 
@@ -233,13 +213,6 @@ public:
     // True for unbind: the forward dropped axis_ via reshape, so the backward
     // must restore it before calling insert_axis_slice.
     bool squeeze_axis_ = false;
-
-    // Nothing to validate: the backward places the gradient by shape and
-    // offset and never reads the input's values.  A piece can be a view of
-    // the input (make_block_view), so a write through either moves the
-    // input's version, and checking it turned that write into a
-    // VersionMismatch.
-    void validate_versions() override {}
 
     std::vector<Storage> apply(Storage grad_out) override {
         Storage slice_grad = std::move(grad_out);
@@ -294,7 +267,6 @@ attach_concat_grad(const std::vector<TensorImplPtr>& xs, TensorImplPtr out, int 
 
     auto bwd = std::make_shared<ConcatBackward>();
     bwd->input_shapes_.reserve(xs.size());
-    bwd->input_tensors_.reserve(xs.size());
     bwd->output_shape_ = out->shape();
     bwd->axis_ = axis;
     bwd->dtype_ = out->dtype();
@@ -306,7 +278,7 @@ attach_concat_grad(const std::vector<TensorImplPtr>& xs, TensorImplPtr out, int 
     versions.reserve(xs.size());
     for (const auto& t : xs) {
         bwd->input_shapes_.push_back(t->shape());
-        bwd->input_tensors_.push_back(t);
+        bwd->input_tensors_v_.push_back(t);
         edges.emplace_back(detail::ensure_grad_fn(t), t->grad_output_nr());
         versions.push_back(t->version());
     }
@@ -338,14 +310,13 @@ TensorImplPtr attach_stack_grad(const std::vector<TensorImplPtr>& xs, TensorImpl
     bwd->axis_ = axis;
     bwd->dtype_ = out->dtype();
     bwd->device_ = out->device();
-    bwd->input_tensors_.reserve(xs.size());
 
     std::vector<Edge> edges;
     std::vector<std::int64_t> versions;
     edges.reserve(xs.size());
     versions.reserve(xs.size());
     for (const auto& t : xs) {
-        bwd->input_tensors_.push_back(t);
+        bwd->input_tensors_v_.push_back(t);
         edges.emplace_back(detail::ensure_grad_fn(t), t->grad_output_nr());
         versions.push_back(t->version());
     }

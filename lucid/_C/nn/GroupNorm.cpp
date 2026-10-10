@@ -107,9 +107,10 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     bwd->G_ = G;
     bwd->spatial_dims_ = std::move(S);
     bwd->eps_ = eps;
-    // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
-    kernel::NaryKernel<GroupNormBackward, 3>::wire_autograd(std::move(bwd),
-                                                            {x_eff, gamma_eff, beta_eff}, out);
+    // saved_inputs_[0..1] hold {x, gamma} at eff_dt; beta is read by shape
+    // alone and is not saved.
+    kernel::NaryKernel<GroupNormBackward, 3>::wire_autograd(
+        std::move(bwd), {x_eff, gamma_eff, beta_eff}, out, {true, true, false});
     return out;
 }
 

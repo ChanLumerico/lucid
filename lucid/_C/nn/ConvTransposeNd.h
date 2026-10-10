@@ -69,6 +69,12 @@ template <int N>
 class LUCID_API ConvTransposeNdBackward : public FuncOp<ConvTransposeNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
+
+    // ``dx`` reads the weight, ``dW`` reads ``x``, and the bias's gradient
+    // reads nothing.
+    static constexpr GradReads<3> kGradReads{
+        {{false, true, false}, {true, false, false}, {false, false, false}}};
+
     int stride_[N];    // Upsampling stride per axis.
     int pad_[N];       // Input padding removed from output per axis.
     int opad_[N];      // Output padding added to disambiguate output size.

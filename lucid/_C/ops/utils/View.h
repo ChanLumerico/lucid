@@ -78,11 +78,6 @@ public:
     // Graph label — ``"reshape"`` — for debug printing and profiler
     // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "reshape"; }
-    // Nothing to validate: the backward reads only the gradient and the two
-    // shapes, never the input's values.  The input's version still moves —
-    // a write through any tensor sharing its buffer bumps it — and checking
-    // it here turned every write through a view into a VersionMismatch.
-    void validate_versions() override {}
 };
 
 // Reinterpret a tensor under a new shape.
@@ -229,9 +224,6 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
     std::string node_name() const override { return "as_strided"; }
-    // It never reads the input's values, and on the CPU its output is a view
-    // of the input: a write through that view moves the version.
-    void validate_versions() override {}
 };
 
 // View ``a``'s storage through ``size`` and ``stride`` from ``storage_offset``,

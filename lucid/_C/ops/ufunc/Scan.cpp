@@ -168,7 +168,6 @@ TensorImplPtr cumprod_grad(const TensorImplPtr& g,
 // Saved state:
 //   input_shape_ — shape of the forward input.
 //   axis_        — normalised reduction axis.
-//   saved_x_     — copy of the forward input tensor's storage.
 //   saved_y_     — copy of the forward output (cumprod) tensor's storage.
 class CumprodBackward : public AutogradNode<CumprodBackward, 1> {
 public:
@@ -176,7 +175,6 @@ public:
 
     Shape input_shape_;
     int axis_;
-    Storage saved_x_;
     Storage saved_y_;
 
     // From the values saved at forward, under no-grad.
@@ -185,9 +183,9 @@ public:
         auto wrap = [this](Storage s) {
             return std::make_shared<TensorImpl>(std::move(s), input_shape_, dtype_, device_, false);
         };
-        return {
-            cumprod_grad(wrap(std::move(grad_out)), wrap(saved_x_), wrap(saved_y_), axis_, false)
-                ->storage()};
+        return {cumprod_grad(wrap(std::move(grad_out)), wrap(saved_inputs_[0]), wrap(saved_y_),
+                             axis_, false)
+                    ->storage()};
     }
 
     // The same formula, recorded, with the product recomputed from the input
@@ -252,9 +250,10 @@ TensorImplPtr cumprod_op(const TensorImplPtr& a_in, int axis) {
     auto bwd = std::make_shared<CumprodBackward>();
     bwd->input_shape_ = a->shape();
     bwd->axis_ = ax;
-    bwd->saved_x_ = a->storage();    // needed for the final division in apply()
     bwd->saved_y_ = out->storage();  // cumprod output, used as the weight
-    kernel::NaryKernel<CumprodBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
+    // The input, needed for the final division in apply(), is saved by the
+    // wiring into the slot its version guards.
+    kernel::NaryKernel<CumprodBackward, 1>::wire_autograd(std::move(bwd), {a}, out);
     return out;
 }
 

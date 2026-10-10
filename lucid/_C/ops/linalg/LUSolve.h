@@ -35,6 +35,10 @@
 // §2.5.1 "Solving Linear Systems".
 
 #pragma once
+#include <array>
+#include <cstddef>
+#include <cstdint>
+
 #include "../../api.h"
 #include "../../autograd/FuncOp.h"
 #include "../../core/AmpPolicy.h"
@@ -65,11 +69,23 @@ class LUCID_API LUSolveBackward : public FuncOp<LUSolveBackward, 2> {
 public:
     static const OpSchema schema_v1;
 
-    // The aligned ``(batch, n)`` pivot vector of the factor.
+    // The aligned ``(batch, n)`` pivot vector of the factor, and its version
+    // at forward: it is held as a tensor, so a write into it after forward
+    // would reach the gradient unless refused.
     TensorImplPtr pivots_;
+    std::int64_t pivots_version_ = 0;
+
+    // The wired slots ``{LU, B}`` are arguments 0 and 2 of
+    // ``lu_solve(LU, pivots, B)``; the pivots, argument 1, are held above.
+    static constexpr std::array<std::size_t, 2> kArgPositions{0, 2};
 
     std::vector<Storage> apply(Storage grad_out) override;
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+    // ``LU`` and ``B`` as every node guards its saved inputs, and the pivots.
+    // ``B`` stays guarded although the eager formula reads the saved
+    // solution instead: graph-mode backward recomputes ``X`` from it.
+    void validate_versions() override;
 };
 
 // Solve $Ax = b$ given the packed LU factors and pivot vector.

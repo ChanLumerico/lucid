@@ -46,8 +46,9 @@ using bfunc_detail::validate_pair;
 class OuterBackward : public AutogradNode<OuterBackward, 2> {
 public:
     static const OpSchema schema_v1;
+    // Each operand's gradient reads the other operand alone.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, false}}};
 
-    Storage saved_a_, saved_b_;
     std::int64_t M_, N_;  // Length of a and b respectively.
 
     // Compute dA and dB by contracting grad_out with the saved operands.
@@ -59,8 +60,8 @@ public:
         Shape a_row_shape{1, M_};
         Shape da_col_shape{M_, 1};
         Shape db_row_shape{1, N_};
-        Storage b_col = be.reshape(saved_b_, Shape{N_}, b_col_shape, dtype_);
-        Storage a_row = be.reshape(saved_a_, Shape{M_}, a_row_shape, dtype_);
+        Storage b_col = be.reshape(saved_inputs_[1], Shape{N_}, b_col_shape, dtype_);
+        Storage a_row = be.reshape(saved_inputs_[0], Shape{M_}, a_row_shape, dtype_);
 
         // dA = grad_out [M×N] @ b_col [N×1] → [M×1]
         backend::MatmulOpts da_opts;
@@ -113,11 +114,9 @@ TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     // tensor is constructed so that wire_autograd has a fully populated node.
     auto wire_grad = [&](const TensorImplPtr& out) {
         auto bwd = std::make_shared<OuterBackward>();
-        bwd->saved_a_ = a->storage();
-        bwd->saved_b_ = b->storage();
         bwd->M_ = a->shape()[0];
         bwd->N_ = b->shape()[0];
-        kernel::NaryKernel<OuterBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out, false);
+        kernel::NaryKernel<OuterBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out);
     };
 
     const std::int64_t M = a->shape()[0];

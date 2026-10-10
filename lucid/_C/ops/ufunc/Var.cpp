@@ -56,7 +56,6 @@ using ufunc_detail::fresh;
 //   axes_        — normalised reduction axes.
 //   keepdims_    — whether collapsed axes were kept as size-1 dims.
 //   count_       — number of elements reduced (N); guards against empty axes.
-//   saved_input_ — a copy of the forward input, used to compute (x - mean).
 //   saved_mean_  — mean(x) already broadcast to the input shape, so apply()
 //                  can subtract it directly without an extra broadcast call.
 class VarBackward : public AutogradNode<VarBackward, 1> {
@@ -67,14 +66,13 @@ public:
     std::vector<int> axes_;
     bool keepdims_;
     std::int64_t count_;
-    Storage saved_input_;
     Storage saved_mean_;
 
     // dL/dx = (2/N) * (x - mean) * broadcast_back(dL/dy).
     std::vector<Storage> apply(Storage grad_out) override {
         const std::size_t n = shape_numel(input_shape_);
         // (x - mean): mean is already broadcast to input shape from forward.
-        Storage centered = subtract_storages(saved_input_, saved_mean_, n, dtype_, device_);
+        Storage centered = subtract_storages(saved_inputs_[0], saved_mean_, n, dtype_, device_);
         // Expand the reduced gradient back to the full input shape.
         Storage g_b = broadcast_back_for_reduce(grad_out, out_shape_, input_shape_, axes_,
                                                 keepdims_, dtype_, device_);
@@ -170,10 +168,9 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
         bwd->axes_ = axes;
         bwd->keepdims_ = keepdims;
         bwd->count_ = static_cast<std::int64_t>(reduced);
-        bwd->saved_input_ = x->storage();
         bwd->saved_mean_ = std::move(mean_storage);
-        // save_output=false: VarBackward saves the input and mean manually above.
-        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {x}, out, false);
+        // The input is saved by the wiring, into the slot its version guards.
+        kernel::NaryKernel<VarBackward, 1>::wire_autograd(std::move(bwd), {x}, out);
     }
     return out;
 }

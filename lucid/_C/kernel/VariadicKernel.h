@@ -22,12 +22,14 @@
 //     VariadicKernel<CatBackward>::wire_autograd(inputs, out);
 //
 // :meth:`validate_versions` is overridden to walk the runtime vector
-// and check in-place mutations on every input; :meth:`apply` must be
+// and check in-place mutations on every input saved by value;
+// :meth:`apply` must be
 // implemented by the concrete op (no shared backward formula is
 // imposed because variadic backward shapes vary too widely).
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string_view>
@@ -79,9 +81,9 @@ namespace kernel {
 // device_ : Device
 //     Effective device, taken from the first non-null input.
 // saved_inputs_v_ : std::vector<Storage>
-//     Snapshots of each input's :class:`Storage` at forward time,
-//     populated when :meth:`wire_autograd` is called with
-//     ``save_ins=true``.
+//     Snapshots of each input's :class:`Storage` at forward time, one
+//     per input slot (empty for a null input), populated when
+//     :meth:`wire_autograd` is called with ``save_ins=true``.
 // saved_output_ : Storage
 //     Optional snapshot of the output storage for ops whose backward
 //     needs the forward output value (e.g. softmax-style ops).
@@ -91,8 +93,9 @@ namespace kernel {
 // All inputs must share dtype and device — :meth:`wire_autograd` does
 // **not** validate this; the concrete op's ``forward()`` is expected
 // to have already enforced consistency before calling wire_autograd.
-// :meth:`validate_versions` walks the runtime vector and invokes
-// :func:`check_version_match` per input.
+// :meth:`validate_versions` walks the runtime vector and checks each
+// input whose values :attr:`saved_inputs_v_` holds — the rule
+// :meth:`AutogradNode::validate_versions` follows.
 //
 // See Also
 // --------
@@ -105,19 +108,21 @@ public:
     // Return the canonical schema name of the concrete op.
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
-    // Verify no saved input was mutated in-place between forward and backward.
+    // Verify no input whose values :meth:`apply` reads was written in
+    // place between forward and backward.
     //
     // Notes
     // -----
-    // Iterates over the runtime input vector and calls
-    // :func:`check_version_match` on each, raising a clear error
-    // (with the op name and slot index) if any version drifted.
-    // Invoked by the autograd engine before :meth:`apply`.
+    // Checks each input whose values :attr:`saved_inputs_v_` holds and
+    // raises a clear error (with the op name and slot index) if its version
+    // drifted; an input saved by shape alone is not refused (see
+    // :func:`holds_saved_values`).  Invoked by the autograd engine before
+    // :meth:`apply`.
     void validate_versions() override {
-        for (std::size_t i = 0; i < input_tensors_v_.size(); ++i) {
-            ::lucid::check_version_match(input_tensors_v_[i],
-                                         saved_versions_.size() > i ? saved_versions_[i] : 0,
-                                         Derived::schema_v1.name, i);
+        const std::size_t n = std::min(input_tensors_v_.size(), saved_inputs_v_.size());
+        for (std::size_t i = 0; i < n; ++i) {
+            if (::lucid::holds_saved_values(saved_inputs_v_[i]))
+                check_saved_version(input_tensors_v_[i], i, Derived::schema_v1.name, i);
         }
     }
 
@@ -208,8 +213,9 @@ public:
         for (const auto& inp : inputs) {
             bwd->input_shapes_v_.push_back(inp ? inp->shape() : Shape{});
             bwd->input_tensors_v_.push_back(inp);
-            if (save_ins && inp)
-                bwd->saved_inputs_v_.push_back(inp->storage());
+            // One entry per slot, so entry ``i`` is input ``i``'s values.
+            if (save_ins)
+                bwd->saved_inputs_v_.push_back(inp ? inp->storage() : Storage{CpuStorage{}});
             edges.emplace_back(detail::ensure_grad_fn(inp), inp ? inp->grad_output_nr() : 0);
             versions.push_back(inp ? inp->version() : 0);
         }

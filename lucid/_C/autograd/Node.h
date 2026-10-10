@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <typeinfo>
 #include <vector>
 
@@ -110,9 +111,12 @@ struct LUCID_API Edge {
 //     Outgoing edges — one per input tensor of the forward op.  Populated
 //     by the op builder at forward time and read-only thereafter.
 // saved_versions_ : std::vector<std::int64_t>
-//     Version counters of the input tensors as observed during forward.
-//     Compared against the live counters in :meth:`validate_versions` to
-//     catch in-place mutations that would silently corrupt gradients.
+//     Version counters captured at forward.  :class:`AutogradNode` keeps
+//     one per input slot; a node that subclasses ``Node`` directly keeps
+//     one per tensor it holds for backward, in an order of its own.
+//     :meth:`validate_versions` compares exactly the ones whose values the
+//     backward reads against the live counters, to catch in-place writes
+//     that would silently corrupt gradients.
 // tensor_hooks_ : std::unique_ptr<NodeHooks>
 //     Hooks and ``retain_grad`` targets of the tensors this node produced,
 //     by output slot; null for the common node that has none.
@@ -340,16 +344,22 @@ public:
         return name.empty() ? "unknown" : name;
     }
 
-    // Assert that no saved input has been modified in-place since forward.
+    // Refuse backward when a tensor whose values this node reads has been
+    // written in place since forward.
     //
-    // The default implementation is a no-op for nodes that do not save
-    // input tensors.  :class:`AutogradNode` overrides this to compare live
-    // version counters with the values captured at forward time.
+    // A node validates exactly the tensors whose values its backward reads —
+    // no more, or a write into an input the formula never reads (``add``,
+    // ``sum``, a view) is refused where the reference allows it; no fewer, or
+    // the write reaches the gradient in silence.  The default has nothing to
+    // check: it is right only for a node that holds no tensor for backward.
+    // :class:`AutogradNode` guards the inputs it saved by value; a node that
+    // holds a tensor any other way overrides this (``tools/check_saved_versions.py``
+    // refuses a node class that holds one without saying how it is guarded).
     //
     // Raises
     // ------
     // VersionMismatch
-    //     (Through overrides) when any saved input's live version counter
+    //     (Through overrides) when such a tensor's live version counter
     //     differs from the value snapshotted during forward.
     virtual void validate_versions() {}
 
@@ -475,6 +485,22 @@ public:
     void release_tensor_hooks() noexcept;
 
 protected:
+    // Refuse when ``live`` has moved past the version recorded at ``k`` in
+    // :attr:`saved_versions_`.  ``input_idx`` names the tensor in the error
+    // as the op's argument position.  Nothing is checked when no version was
+    // recorded at ``k`` or the tensor is gone — nothing can then reach the
+    // gradient through it.
+    //
+    // Raises
+    // ------
+    // VersionMismatch
+    //     The tensor was written in place since forward and the check is not
+    //     waived (``allow_mutation_on_saved_tensors``).
+    void check_saved_version(const std::weak_ptr<TensorImpl>& live,
+                             std::size_t k,
+                             std::string_view op_name,
+                             std::size_t input_idx) const;
+
     std::uint64_t sequence_nr_;
     std::vector<Edge> next_edges_;
     std::vector<std::int64_t> saved_versions_;

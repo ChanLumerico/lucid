@@ -71,6 +71,9 @@ public:
     //     ``true``.
     static const OpSchema schema_v1;
 
+    // ``d/da = 1/b`` reads ``b`` alone; ``d/db = -a/b^2`` reads both.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, true}}};
+
     // Forward dispatch hook called by BinaryKernel::forward.
     //
     // Parameters

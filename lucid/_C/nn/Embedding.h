@@ -375,11 +375,11 @@ LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
 // The weight is saved as well as the indices, which ``EmbeddingBackward``
 // does not need: ``mode="max"`` sends the incoming gradient only to the
 // row that won each column, and the forward records no argmax, so the
-// backward recomputes it from the weight it was given.
+// backward recomputes it from the weight it was given — kept by value in
+// ``saved_inputs_[0]``, ``(num_embeddings, embed_dim)``.
 class LUCID_API EmbeddingBagBackward : public FuncOp<EmbeddingBagBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    Storage saved_weight_;   // (num_embeddings, embed_dim), for the argmax.
     Storage saved_indices_;  // Flat integer index buffer.
     Storage saved_offsets_;  // Bag boundaries.
     Shape weight_shape_;
@@ -397,6 +397,14 @@ public:
     // as the eager backward reads them, and the gradient is a scatter-add of
     // the bag gradients onto them — differentiable again in the gradient.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+    // The weight's values are read only to find each bag's maximum; a sum
+    // or a mean reads the indices alone, so a write into the weight after
+    // forward does not reach their gradient and is not refused.
+    void validate_versions() override {
+        if (mode_ == 2)
+            FuncOp<EmbeddingBagBackward, 1>::validate_versions();
+    }
 };
 
 LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,

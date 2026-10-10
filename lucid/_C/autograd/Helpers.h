@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 
 #include "../core/Device.h"
@@ -1020,6 +1021,28 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
                          std::string_view op_name,
                          std::size_t input_idx);
+
+// The same check for a tensor the error names by ``what`` — a node's own
+// output it reads back (``"scatter_amax output 0"``) rather than an input.
+void check_version_match(const std::weak_ptr<TensorImpl>& live,
+                         std::int64_t saved_version,
+                         const std::string& what);
+
+// Whether a node kept an input's values for backward in the slot ``s``.
+//
+// The one rule that decides both which inputs a node's version check guards
+// (:meth:`AutogradNode::validate_versions`) and which ones graph-mode
+// backward can rebuild (:func:`forward_time_input`).  A backward that reads
+// an input's values saves them, by value, in that input's slot; an empty
+// slot means the formula reads the input's shape at most, so a write into
+// the input after forward cannot change the gradient and is not refused —
+// the reference's rule for ``add``, ``sum`` or a view.  Checking every input
+// instead refused ``y[:, 1] = y[:, 0] + 5`` on the CPU, where the slice is a
+// view whose version the write moves.  A zero-element input saves no bytes
+// and is not guarded either: no write can change what it holds.
+inline bool holds_saved_values(const Storage& s) noexcept {
+    return storage_nbytes(s) > 0;
+}
 
 struct Edge;
 

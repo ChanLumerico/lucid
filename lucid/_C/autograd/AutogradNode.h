@@ -30,6 +30,14 @@ namespace lucid {
 
 class TensorImpl;
 
+// ``reads[i][j]``: whether the gradient of input ``i`` reads input ``j``'s
+// values.  A node declares it as ``static constexpr GradReads<N> kGradReads``
+// when its gradients do not each read every input it saved — ``mul`` reads
+// the other operand only — so a write into an input that only an unneeded
+// gradient reads is not refused (see :meth:`AutogradNode::validate_versions`).
+template <std::size_t N>
+using GradReads = std::array<std::array<bool, N>, N>;
+
 // CRTP base supplying boilerplate fields and methods to concrete backward
 // nodes with a fixed number of forward inputs.
 //
@@ -61,7 +69,7 @@ class TensorImpl;
 //     as a value (e.g. when constructing the ``next_edges`` vector).
 // input_tensors_ : std::array<std::weak_ptr<TensorImpl>, N_IN>
 //     Weak references to the original input :class:`TensorImpl` objects,
-//     used by :meth:`validate_versions`.
+//     used by :meth:`validate_versions` for the inputs saved by value.
 //     Weak so the backward graph never extends an input's lifetime.
 // input_shapes_ : std::array<Shape, N_IN>
 //     Shapes of the forward inputs, captured so that broadcasts and
@@ -86,7 +94,11 @@ class TensorImpl;
 // saved_inputs_ : std::array<Storage, N_IN>
 //     Copies of forward input :class:`Storage` values that :meth:`apply`
 //     reads — for example, the input activations of an element-wise
-//     multiply.  Populated by the forward op builder.
+//     multiply.  Populated by the forward op builder.  The one place a
+//     node keeps an input's values: a slot holding them is what
+//     :meth:`validate_versions` guards and :meth:`restore_saved_for_graph`
+//     rebuilds from, so a node never keeps an input's values in a member of
+//     its own (``tools/check_saved_versions.py``).
 // saved_output_ : Storage
 //     Copy of the forward output :class:`Storage`, populated only when
 //     the backward formula needs the output activation (sigmoid,
@@ -155,26 +167,53 @@ public:
     //     reports.
     std::string_view name() const noexcept { return Derived::schema_v1.name; }
 
-    // Verify that no saved input has been mutated in-place since forward.
+    // Verify that no input whose values :meth:`apply` reads has been
+    // written in place since forward.
     //
-    // Walks every input slot and calls :func:`check_version_match` with
-    // the live :class:`TensorImpl` weak reference and the version
-    // captured at forward time.  Expired weak references are silently
-    // skipped — if the input has been destroyed, no consumer can observe
-    // a corrupted gradient.
+    // An input is guarded when its values sit in :attr:`saved_inputs_`
+    // (:func:`holds_saved_values`) — the slot a backward that reads them
+    // saves them in — and a gradient that is needed reads them: one whose
+    // input takes a gradient (a live edge), by :func:`grad_reads`.  The
+    // others are not: ``add``, ``sum`` or a view read at most their shape,
+    // and ``x * c`` with a constant ``c`` reads ``x`` only for ``c``'s
+    // gradient, which nothing asks for.  Refusing a write into one of them
+    // refused what the reference allows.  Expired weak references are
+    // skipped — if the input has been destroyed, no consumer can observe a
+    // corrupted gradient.
     //
     // Raises
     // ------
     // VersionMismatch
-    //     When any saved input's live version counter differs from the
+    //     When a guarded input's live version counter differs from the
     //     value captured at forward.  The error names this op (via
     //     ``Derived::schema_v1.name``) and the offending input index.
     void validate_versions() override {
-        for (std::size_t i = 0; i < N_IN; ++i) {
-            ::lucid::check_version_match(input_tensors_[i],
-                                         saved_versions_.size() > i ? saved_versions_[i] : 0,
-                                         Derived::schema_v1.name, i);
+        for (std::size_t j = 0; j < N_IN; ++j) {
+            if (::lucid::holds_saved_values(saved_inputs_[j]) && read_by_a_needed_gradient(j))
+                check_saved_version(input_tensors_[j], j, Derived::schema_v1.name,
+                                    argument_position(j));
         }
+    }
+
+    // The forward argument slot ``j`` stands for, which the error names:
+    // ``Derived::kArgPositions`` where the node is wired on fewer inputs
+    // than its op takes (``lu_solve(LU, pivots, B)`` wires ``{LU, B}``),
+    // otherwise ``j`` itself.
+    static constexpr std::size_t argument_position(std::size_t j) {
+        if constexpr (requires { Derived::kArgPositions; })
+            return Derived::kArgPositions[j];
+        else
+            return j;
+    }
+
+    // Whether the gradient of input ``i`` reads input ``j``'s values:
+    // ``Derived::kGradReads`` where the node declares it, otherwise every
+    // gradient is taken to read every input the node saved.
+    static constexpr bool grad_reads(std::size_t i, std::size_t j) {
+        if constexpr (requires { Derived::kGradReads; })
+            return Derived::kGradReads[i][j];
+        else
+            return true;
     }
 
     // Put back, for graph-mode backward, every saved tensor a write since
@@ -242,6 +281,17 @@ public:
     Storage saved_output_;
     std::array<std::shared_ptr<TensorImpl>, N_IN> saved_impl_inputs_;
     std::weak_ptr<TensorImpl> saved_impl_output_;
+
+private:
+    // Whether some input that takes a gradient has one reading input ``j``.
+    bool read_by_a_needed_gradient(std::size_t j) const {
+        const auto& edges = next_edges();
+        for (std::size_t i = 0; i < N_IN && i < edges.size(); ++i) {
+            if (edges[i].is_valid() && grad_reads(i, j))
+                return true;
+        }
+        return false;
+    }
 };
 
 }  // namespace lucid

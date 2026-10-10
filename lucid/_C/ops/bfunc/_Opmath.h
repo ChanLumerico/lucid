@@ -288,9 +288,16 @@ TensorImplPtr forward(const Pair& p, const TensorImplPtr& a, const TensorImplPtr
     bwd->t_index_ = p.scalar_first ? 1 : 0;
     bwd->s_dtype_ = p.s->dtype();
     ScalarBackward<K>* node = bwd.get();
+    // Only what grad_t reads is saved: the 0-d for a product or a quotient,
+    // and the tensor too for ``s / t``, whose derivative is ``-s / t^2``.
+    // A write into ``t`` after ``t * s`` is then not refused, as the
+    // reference does not refuse it.
+    std::array<bool, 2> saves{};
+    saves[p.scalar_first ? 0 : 1] = K != Op::FloorDiv;
+    saves[p.scalar_first ? 1 : 0] = K == Op::Div && p.scalar_first;
     // wire_autograd takes the node's dtype from the first input, which is
     // the 0-d when it leads; the gradient lives in the half dtype.
-    if (kernel::NaryKernel<ScalarBackward<K>, 2>::wire_autograd(std::move(bwd), {a, b}, out))
+    if (kernel::NaryKernel<ScalarBackward<K>, 2>::wire_autograd(std::move(bwd), {a, b}, out, saves))
         node->dtype_ = h;
     return out;
 }

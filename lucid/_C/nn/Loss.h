@@ -752,7 +752,7 @@ public:
     Shape lp_shape_;
     int blank_ = 0;
     bool zero_infinity_ = false;
-    Storage saved_log_probs_;
+    // ``log_probs`` is saved by value in ``saved_inputs_[0]``.
     Storage saved_targets_;
     Storage saved_input_lengths_;
     Storage saved_target_lengths_;

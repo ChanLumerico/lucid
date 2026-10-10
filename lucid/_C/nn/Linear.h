@@ -60,6 +60,11 @@ public:
     // ``amp_policy=Promote``, ``produces_grad=true``.
     static const OpSchema schema_v1;
 
+    // ``dx`` reads the weight, ``dW`` reads ``x``, and the bias's gradient
+    // reads nothing.
+    static constexpr GradReads<3> kGradReads{
+        {{false, true, false}, {true, false, false}, {false, false, false}}};
+
     // Run the forward pass and, when grad mode is on, register ``this``
     // as the ``grad_fn`` of the returned output.
     //

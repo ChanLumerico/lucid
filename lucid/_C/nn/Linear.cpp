@@ -123,10 +123,13 @@ LinearBackward::forward(const TensorImplPtr& x, const TensorImplPtr& W, const Te
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
                                             x_eff->device(), false);
 
-    // Wire the backward node; saved_inputs_ holds {x, W, b} at the
+    // Wire the backward node; saved_inputs_ holds {x, W} at the
     // effective (cast) dtype so apply() can do the matmul transposes
-    // and reduce(db) entirely at F16 — matching the forward path.
-    kernel::NaryKernel<LinearBackward, 3>::wire_autograd({x_eff, W_eff, b_eff}, out);
+    // entirely at F16 — matching the forward path.  The bias is read by
+    // shape alone (db sums the gradient), so it is not saved and a write
+    // into it after forward is not refused.
+    kernel::NaryKernel<LinearBackward, 3>::wire_autograd(
+        std::make_shared<LinearBackward>(), {x_eff, W_eff, b_eff}, out, {true, true, false});
     return out;
 }
 

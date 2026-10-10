@@ -379,18 +379,25 @@ void set_mutation_on_saved_allowed(bool v) {
 // and this backward call — which invalidates the saved activation data.
 void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
-                         std::string_view op_name,
-                         std::size_t input_idx) {
+                         const std::string& what) {
     if (g_allow_mutation_on_saved) {
         return;  // user opted into the unsafe contract
     }
     auto t = live.lock();
     if (!t)
         return;
-    if (t->version() != saved_version) {
-        throw VersionMismatch(saved_version, t->version(),
-                              std::string(op_name) + " input " + std::to_string(input_idx));
-    }
+    if (t->version() != saved_version)
+        throw VersionMismatch(saved_version, t->version(), what);
+}
+
+void check_version_match(const std::weak_ptr<TensorImpl>& live,
+                         std::int64_t saved_version,
+                         std::string_view op_name,
+                         std::size_t input_idx) {
+    if (g_allow_mutation_on_saved || live.expired())
+        return;
+    check_version_match(live, saved_version,
+                        std::string(op_name) + " input " + std::to_string(input_idx));
 }
 
 std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>& live,
@@ -411,9 +418,9 @@ std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>
         return nullptr;
     // Nothing saved by value: the formula reads no values of this input, and
     // the tensor it reads stands for its shape.
-    const std::size_t nbytes = storage_nbytes(values);
-    if (nbytes == 0)
+    if (!holds_saved_values(values))
         return nullptr;
+    const std::size_t nbytes = storage_nbytes(values);
     const Dtype dtype = storage_dtype(values);
     if (nbytes != shape_numel(shape) * dtype_size(dtype)) {
         std::string msg = std::string(op_name) + " input " + std::to_string(input_idx);

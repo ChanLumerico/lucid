@@ -137,6 +137,9 @@ struct ScatterSetNode : Node {
 
     std::string node_name() const override { return "scatter_set"; }
     void release_saved() override { saved_indices_.reset(); }
+    // The index is the one tensor read by value; base and src only route the
+    // gradient.
+    void validate_versions() override { check_saved_version(saved_indices_, 0, "scatter", 2); }
 
     std::vector<Storage> apply(Storage g) override {
         auto& be = backend::Dispatcher::for_device(device_);
@@ -257,7 +260,7 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
     bwd->device_ = dv;
     bwd->set_next_edges({Edge(detail::ensure_grad_fn(base), base->grad_output_nr()),
                          Edge(detail::ensure_grad_fn(values), values->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), values->version()});
+    bwd->set_saved_versions({indices->version()});
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
     out->set_requires_grad(true);

@@ -156,9 +156,9 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->opad_[i] = opad[i];
         bwd->dilation_[i] = dilation[i];
     }
-    // saved_inputs_[0..2] will hold {x, W, b}.
-    kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b},
-                                                                     out);
+    // saved_inputs_[0..1] will hold {x, W}; the bias is read by shape alone.
+    kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b}, out,
+                                                                     {true, true, false});
     return out;
 }
 

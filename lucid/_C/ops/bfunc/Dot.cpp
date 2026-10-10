@@ -43,8 +43,9 @@ using bfunc_detail::validate_pair;
 class Dot1DBackward : public AutogradNode<Dot1DBackward, 2> {
 public:
     static const OpSchema schema_v1;
+    // Each operand's gradient reads the other operand alone.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, false}}};
 
-    Storage saved_a_, saved_b_;
     std::size_t numel_;  // Length of both input vectors.
 
     // Broadcast the scalar grad_out to [numel_], then multiply by the other
@@ -54,8 +55,8 @@ public:
         auto& be = backend::Dispatcher::for_device(device_);
         // Scalar gradient (shape {}) → vector shape {numel_}.
         Storage scaled_grad = be.broadcast(grad_out, Shape{}, vec_shape, dtype_);
-        Storage da = be.mul(saved_b_, scaled_grad, vec_shape, dtype_);
-        Storage db = be.mul(saved_a_, scaled_grad, vec_shape, dtype_);
+        Storage da = be.mul(saved_inputs_[1], scaled_grad, vec_shape, dtype_);
+        Storage db = be.mul(saved_inputs_[0], scaled_grad, vec_shape, dtype_);
         return {std::move(da), std::move(db)};
     }
 
@@ -79,8 +80,9 @@ public:
 class Dot2DBackward : public AutogradNode<Dot2DBackward, 2> {
 public:
     static const OpSchema schema_v1;
+    // Each operand's gradient reads the other operand alone.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, false}}};
 
-    Storage saved_a_, saved_b_;
     Shape a_shape_, b_shape_;
 
     // Compute dA = grad_out @ B^T and dB = A^T @ grad_out.
@@ -102,8 +104,8 @@ public:
         db_opts.transA = true;
 
         auto& be = backend::Dispatcher::for_device(device_);
-        Storage da = be.matmul(grad_out, saved_b_, da_opts, dtype_);
-        Storage db = be.matmul(saved_a_, grad_out, db_opts, dtype_);
+        Storage da = be.matmul(grad_out, saved_inputs_[1], da_opts, dtype_);
+        Storage db = be.matmul(saved_inputs_[0], grad_out, db_opts, dtype_);
         return {std::move(da), std::move(db)};
     }
 
@@ -137,17 +139,13 @@ TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     auto wire_grad = [&](const TensorImplPtr& out) {
         if (a->shape().size() == 1 && b->shape().size() == 1) {
             auto n = std::make_shared<Dot1DBackward>();
-            n->saved_a_ = a->storage();
-            n->saved_b_ = b->storage();
             n->numel_ = static_cast<std::size_t>(a->shape()[0]);
-            kernel::NaryKernel<Dot1DBackward, 2>::wire_autograd(std::move(n), {a, b}, out, false);
+            kernel::NaryKernel<Dot1DBackward, 2>::wire_autograd(std::move(n), {a, b}, out);
         } else if (a->shape().size() == 2 && b->shape().size() == 2) {
             auto n = std::make_shared<Dot2DBackward>();
-            n->saved_a_ = a->storage();
-            n->saved_b_ = b->storage();
             n->a_shape_ = a->shape();
             n->b_shape_ = b->shape();
-            kernel::NaryKernel<Dot2DBackward, 2>::wire_autograd(std::move(n), {a, b}, out, false);
+            kernel::NaryKernel<Dot2DBackward, 2>::wire_autograd(std::move(n), {a, b}, out);
         }
     };
 

@@ -173,8 +173,9 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
     auto bwd = std::make_shared<BilinearLayerBackward>();
     bwd->orig_x1_shape_ = x1->shape();
     bwd->orig_x2_shape_ = x2->shape();
-    kernel::NaryKernel<BilinearLayerBackward, 4>::wire_autograd(std::move(bwd),
-                                                                {x1, x2, weight, bias}, out);
+    // The bias is read by shape alone and is not saved.
+    kernel::NaryKernel<BilinearLayerBackward, 4>::wire_autograd(
+        std::move(bwd), {x1, x2, weight, bias}, out, {true, true, true, false});
     return out;
 }
 

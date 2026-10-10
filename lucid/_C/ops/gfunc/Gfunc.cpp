@@ -564,6 +564,11 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
         Device device_;
         std::string node_name() const override { return "scatter_add"; }
         void release_saved() override { saved_indices_.reset(); }
+        // The index is the one tensor read by value; base and src only route
+        // the gradient.
+        void validate_versions() override {
+            check_saved_version(saved_indices_, 0, "scatter_add", 1);
+        }
 
         std::vector<Storage> apply(Storage g) override {
             Storage grad_base = g;  // d/d(base) = identity
@@ -592,7 +597,7 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     bwd->device_ = dv;
     bwd->set_next_edges(
         {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, values->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), values->version()});
+    bwd->set_saved_versions({indices->version()});
 
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -684,6 +689,72 @@ std::pair<TensorImplPtr, TensorImplPtr> scatter_prod_grads(const TensorImplPtr& 
     return {grad_base, where_op(lone_zero, at_lone, elsewhere)};
 }
 
+// What the scatter_amax / scatter_amin / scatter_prod backwards hold: both
+// operands, the index and the result, read by value at backward through the
+// tensors themselves.  Held as tensors, they are what a write after forward
+// would change under the node, so each one's version is guarded — the
+// reference saves all four and refuses the same writes.
+struct ScatterReduceNode : Node {
+    int dim_ = 0;
+    TensorImplPtr saved_base_;
+    TensorImplPtr saved_indices_;
+    TensorImplPtr saved_src_;
+    TensorImplPtr saved_out_;
+    Shape base_shape_;
+    Dtype dtype_ = Dtype::F32;
+    Device device_ = Device::CPU;
+
+    // Hold the operands, the index and the result, at the versions they are
+    // guarded at, and wire the edges to ``base`` and ``src``.
+    void hold(const TensorImplPtr& base,
+              const TensorImplPtr& indices,
+              const TensorImplPtr& src,
+              const TensorImplPtr& out,
+              int dim) {
+        dim_ = dim;
+        saved_base_ = base;
+        saved_indices_ = indices;
+        saved_src_ = src;
+        saved_out_ = out;
+        base_shape_ = base->shape();
+        dtype_ = base->dtype();
+        device_ = base->device();
+        set_next_edges({Edge(lucid::detail::ensure_grad_fn(base), base->grad_output_nr()),
+                        Edge(lucid::detail::ensure_grad_fn(src), src->grad_output_nr())});
+        set_saved_versions({base->version(), indices->version(), src->version(), out->version()});
+    }
+
+    void validate_versions() override {
+        const std::string op = node_name();
+        check_saved_version(saved_base_, 0, op, 0);
+        check_saved_version(saved_indices_, 1, op, 1);
+        check_saved_version(saved_src_, 2, op, 2);
+        if (saved_versions_.size() > 3)
+            check_version_match(saved_out_, saved_versions_[3], op + " output 0");
+    }
+
+    void release_saved() override {
+        saved_base_.reset();
+        saved_indices_.reset();
+        saved_src_.reset();
+        saved_out_.reset();
+    }
+};
+
+// Attach ``node`` as ``out``'s grad_fn.
+TensorImplPtr attach_scatter_reduce(std::shared_ptr<ScatterReduceNode> node,
+                                    const TensorImplPtr& base,
+                                    const TensorImplPtr& indices,
+                                    const TensorImplPtr& src,
+                                    TensorImplPtr out,
+                                    int dim) {
+    node->hold(base, indices, src, out, dim);
+    out->set_grad_fn(std::move(node));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
 }  // anonymous namespace
 
 // ── scatter_amax ──────────────────────────────────────────────────────────────
@@ -713,25 +784,8 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
     if (!needs_grad)
         return out;
 
-    auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge = lucid::detail::ensure_grad_fn(src);
-
-    struct ScatterAmaxNode : Node {
-        int dim_;
-        std::shared_ptr<TensorImpl> saved_indices_;
-        std::shared_ptr<TensorImpl> saved_out_;
-        std::shared_ptr<TensorImpl> saved_base_;
-        std::shared_ptr<TensorImpl> saved_src_;
-        Shape base_shape_;
-        Dtype dtype_;
-        Device device_;
+    struct ScatterAmaxNode : ScatterReduceNode {
         std::string node_name() const override { return "scatter_amax"; }
-        void release_saved() override {
-            saved_indices_.reset();
-            saved_out_.reset();
-            saved_base_.reset();
-            saved_src_.reset();
-        }
 
         // Gradient is split equally among all tied winners at each output
         // position (matches the reference framework's scatter_reduce
@@ -764,22 +818,8 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
         }
     };
 
-    auto bwd = std::make_shared<ScatterAmaxNode>();
-    bwd->dim_ = d;
-    bwd->saved_indices_ = indices;
-    bwd->saved_out_ = out;
-    bwd->saved_base_ = base;
-    bwd->saved_src_ = src;
-    bwd->base_shape_ = bs;
-    bwd->dtype_ = dt;
-    bwd->device_ = dv;
-    bwd->set_next_edges(
-        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), src->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
-    return out;
+    return attach_scatter_reduce(std::make_shared<ScatterAmaxNode>(), base, indices, src,
+                                 std::move(out), d);
 }
 
 // ── scatter_amin ──────────────────────────────────────────────────────────────
@@ -809,25 +849,8 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
     if (!needs_grad)
         return out;
 
-    auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge = lucid::detail::ensure_grad_fn(src);
-
-    struct ScatterAminNode : Node {
-        int dim_;
-        std::shared_ptr<TensorImpl> saved_indices_;
-        std::shared_ptr<TensorImpl> saved_out_;
-        std::shared_ptr<TensorImpl> saved_base_;
-        std::shared_ptr<TensorImpl> saved_src_;
-        Shape base_shape_;
-        Dtype dtype_;
-        Device device_;
+    struct ScatterAminNode : ScatterReduceNode {
         std::string node_name() const override { return "scatter_amin"; }
-        void release_saved() override {
-            saved_indices_.reset();
-            saved_out_.reset();
-            saved_base_.reset();
-            saved_src_.reset();
-        }
 
         std::vector<Storage> apply(Storage g) override {
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
@@ -847,22 +870,8 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
         }
     };
 
-    auto bwd = std::make_shared<ScatterAminNode>();
-    bwd->dim_ = d;
-    bwd->saved_indices_ = indices;
-    bwd->saved_out_ = out;
-    bwd->saved_base_ = base;
-    bwd->saved_src_ = src;
-    bwd->base_shape_ = bs;
-    bwd->dtype_ = dt;
-    bwd->device_ = dv;
-    bwd->set_next_edges(
-        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), src->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
-    return out;
+    return attach_scatter_reduce(std::make_shared<ScatterAminNode>(), base, indices, src,
+                                 std::move(out), d);
 }
 
 // ── scatter_prod ──────────────────────────────────────────────────────────────
@@ -892,25 +901,8 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
     if (!needs_grad)
         return out;
 
-    auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge = lucid::detail::ensure_grad_fn(src);
-
-    struct ScatterProdNode : Node {
-        int dim_;
-        std::shared_ptr<TensorImpl> saved_indices_;
-        std::shared_ptr<TensorImpl> saved_out_;
-        std::shared_ptr<TensorImpl> saved_base_;
-        std::shared_ptr<TensorImpl> saved_src_;
-        Shape base_shape_;
-        Dtype dtype_;
-        Device device_;
+    struct ScatterProdNode : ScatterReduceNode {
         std::string node_name() const override { return "scatter_prod"; }
-        void release_saved() override {
-            saved_indices_.reset();
-            saved_out_.reset();
-            saved_base_.reset();
-            saved_src_.reset();
-        }
 
         std::vector<Storage> apply(Storage g) override {
             NoGradGuard no_grad;
@@ -921,22 +913,8 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
         }
     };
 
-    auto bwd = std::make_shared<ScatterProdNode>();
-    bwd->dim_ = d;
-    bwd->saved_indices_ = indices;
-    bwd->saved_out_ = out;
-    bwd->saved_base_ = base;
-    bwd->saved_src_ = src;
-    bwd->base_shape_ = bs;
-    bwd->dtype_ = dt;
-    bwd->device_ = dv;
-    bwd->set_next_edges(
-        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
-    bwd->set_saved_versions({base->version(), src->version()});
-    out->set_grad_fn(std::move(bwd));
-    out->set_leaf(false);
-    out->set_requires_grad(true);
-    return out;
+    return attach_scatter_reduce(std::make_shared<ScatterProdNode>(), base, indices, src,
+                                 std::move(out), d);
 }
 
 // ── unfold_dim ─────────────────────────────────────────────────────────────────
@@ -1107,8 +1085,9 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     bwd->out_shape_ = out_shape;
     bwd->dtype_ = a->dtype();
     bwd->device_ = a->device();
+    // Nothing is held for backward — the adjoint reads shapes alone — so no
+    // version is recorded, and a write into ``a`` after forward is allowed.
     bwd->set_next_edges({Edge(a_edge, a->grad_output_nr())});
-    bwd->set_saved_versions({a->version()});
 
     result->set_grad_fn(std::move(bwd));
     result->set_leaf(false);

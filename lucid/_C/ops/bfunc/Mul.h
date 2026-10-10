@@ -69,6 +69,10 @@ public:
     //     ``true``.
     static const OpSchema schema_v1;
 
+    // Each operand's gradient reads the other operand alone: ``x * c`` with
+    // a constant ``c`` does not guard ``x``.
+    static constexpr GradReads<2> kGradReads{{{false, true}, {true, false}}};
+
     // Forward dispatch hook called by BinaryKernel::forward.
     //
     // Parameters

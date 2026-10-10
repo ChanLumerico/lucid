@@ -86,9 +86,13 @@ public:
     //     ``nullptr`` (e.g. an optional bias).
     // out : const TensorImplPtr&
     //     The freshly produced output tensor.
-    // save_ins : bool, default ``true``
-    //     If ``true``, snapshot each non-null input's storage into
-    //     ``saved_inputs_[i]`` for use during backward.
+    // saves : const std::array<bool, N>&
+    //     Which inputs the backward reads the values of: input ``i``'s
+    //     storage is snapshotted into ``saved_inputs_[i]`` when
+    //     ``saves[i]`` and the input is non-null.  Those are the inputs
+    //     :meth:`AutogradNode::validate_versions` guards, so an input read
+    //     by shape alone — a bias, a ``beta`` — is left out, and a write
+    //     into it after forward is not refused.
     //
     // Returns
     // -------
@@ -108,7 +112,7 @@ public:
     static bool wire_autograd(std::shared_ptr<Derived> bwd,
                               const std::array<TensorImplPtr, N>& inputs,
                               const TensorImplPtr& out,
-                              bool save_ins = true) {
+                              const std::array<bool, N>& saves) {
         // 3.5 Phase 1.1: trace wiring fires *before* the GradMode short-circuit
         // so inference passes (no_grad / eval) still produce a complete
         // TraceGraph.  Outside any _tracing() scope this is one TLS load + null
@@ -146,7 +150,7 @@ public:
             const auto& inp = inputs[i];
             bwd->input_shapes_[i] = inp ? inp->shape() : Shape{};
             bwd->input_tensors_[i] = inp;
-            if (save_ins && inp)
+            if (saves[i] && inp)
                 bwd->saved_inputs_[i] = inp->storage();
             // Always save strong TensorImpl refs for graph-mode backward.
             bwd->saved_impl_inputs_[i] = inp;
@@ -161,6 +165,16 @@ public:
         out->set_leaf(false);
         out->set_requires_grad(true);
         return true;
+    }
+
+    // The same, with every input's values saved (``save_ins``) or none.
+    static bool wire_autograd(std::shared_ptr<Derived> bwd,
+                              const std::array<TensorImplPtr, N>& inputs,
+                              const TensorImplPtr& out,
+                              bool save_ins = true) {
+        std::array<bool, N> saves{};
+        saves.fill(save_ins);
+        return wire_autograd(std::move(bwd), inputs, out, saves);
     }
 
     // Convenience overload that constructs the backward node internally.

@@ -7,6 +7,7 @@
 
 #include "Node.h"
 
+#include "Helpers.h"
 #include "TensorHooks.h"
 
 namespace lucid {
@@ -35,6 +36,14 @@ NodeHooks& Node::ensure_tensor_hooks() {
 
 void Node::release_tensor_hooks() noexcept {
     tensor_hooks_.reset();
+}
+
+void Node::check_saved_version(const std::weak_ptr<TensorImpl>& live,
+                               std::size_t k,
+                               std::string_view op_name,
+                               std::size_t input_idx) const {
+    if (k < saved_versions_.size())
+        check_version_match(live, saved_versions_[k], op_name, input_idx);
 }
 
 }  // namespace lucid

@@ -18,9 +18,11 @@
 //                        zero-initialised buffer at the correct (row, col)
 //                        positions determined by offset, axis1, and axis2.
 //
-// where and masked_fill extend AutogradNode<N> (the multi-input base) because
-// they need to validate versions for multiple saved weak_ptrs.  The remaining
-// ops use the single-input FuncOp<1> template for simplicity.
+// where, masked_fill and gather read a selector — the condition, the mask, the
+// index — that is not one of their differentiable inputs, so they guard its
+// version themselves; the inputs they differentiate are read by shape alone
+// and are not refused.  The remaining ops use the single-input FuncOp<1>
+// template for simplicity.
 
 #include "Select.h"
 
@@ -121,7 +123,7 @@ Storage diagonal_backward_storage(const Storage& grad,
 // Invariants:
 //   cond_       — a copy of the condition storage, used to route gradients.
 //   shape_      — the output (and condition) shape.
-//   cond/x/y_tensor_ — weak refs for version checking.
+//   cond_tensor_ — weak ref to the condition, for version checking.
 //
 // Backward: grad_out * cond → dx,  grad_out * ~cond → dy.
 // Sum a gradient over the axes broadcasting expanded, back to ``shape`` —
@@ -159,8 +161,6 @@ public:
     Shape x_shape_;
     Shape y_shape_;
     std::weak_ptr<TensorImpl> cond_tensor_;
-    std::weak_ptr<TensorImpl> x_tensor_;
-    std::weak_ptr<TensorImpl> y_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
         Storage dx = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true);
@@ -189,14 +189,9 @@ public:
                 sum_to_shape(where_op(cond, zero, grad_out), y_shape_)};
     }
 
-    void validate_versions() override {
-        check_version_match(cond_tensor_, saved_versions_.size() > 0 ? saved_versions_[0] : 0,
-                            schema_v1.name, 0);
-        check_version_match(x_tensor_, saved_versions_.size() > 1 ? saved_versions_[1] : 0,
-                            schema_v1.name, 1);
-        check_version_match(y_tensor_, saved_versions_.size() > 2 ? saved_versions_[2] : 0,
-                            schema_v1.name, 2);
-    }
+    // The condition is the one tensor read by value; ``x`` and ``y`` only
+    // route the gradient, so a write into either is not refused.
+    void validate_versions() override { check_saved_version(cond_tensor_, 0, schema_v1.name, 0); }
 };
 
 const OpSchema WhereBackward::schema_v1{"where", 1, AmpPolicy::KeepInput, true};
@@ -217,7 +212,6 @@ public:
     Storage mask_;
     Dtype mask_dtype_ = Dtype::Bool;
     Shape shape_;
-    std::weak_ptr<TensorImpl> input_tensor_;
     std::weak_ptr<TensorImpl> mask_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
@@ -235,12 +229,8 @@ public:
         return {where_op(mask, zeros_like_op(grad_out), grad_out)};
     }
 
-    void validate_versions() override {
-        check_version_match(input_tensor_, saved_versions_.size() > 0 ? saved_versions_[0] : 0,
-                            schema_v1.name, 0);
-        check_version_match(mask_tensor_, saved_versions_.size() > 1 ? saved_versions_[1] : 0,
-                            schema_v1.name, 1);
-    }
+    // Only the mask is read by value.
+    void validate_versions() override { check_saved_version(mask_tensor_, 0, schema_v1.name, 1); }
 };
 
 const OpSchema MaskedFillBackward::schema_v1{"masked_fill", 1, AmpPolicy::KeepInput, true};
@@ -297,7 +287,6 @@ public:
     Shape output_shape_;
     int axis_ = 0;
     Dtype index_dtype_ = Dtype::I64;
-    std::weak_ptr<TensorImpl> input_tensor_;
     std::weak_ptr<TensorImpl> indices_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
@@ -323,11 +312,9 @@ public:
         return {scatter_add_op(zero, indices, grad_out, axis_)};
     }
 
+    // Only the index is read by value.
     void validate_versions() override {
-        check_version_match(input_tensor_, saved_versions_.size() > 0 ? saved_versions_[0] : 0,
-                            schema_v1.name, 0);
-        check_version_match(indices_tensor_, saved_versions_.size() > 1 ? saved_versions_[1] : 0,
-                            schema_v1.name, 1);
+        check_saved_version(indices_tensor_, 0, schema_v1.name, 1);
     }
 };
 
@@ -385,11 +372,6 @@ public:
             back[static_cast<std::size_t>(order[static_cast<std::size_t>(i)])] = i;
         return {permute_op(placed, back)};
     }
-
-    // The gradient never reads the input's values, and on the CPU the
-    // diagonal is a view of it: a write through that view moves the version
-    // it would otherwise refuse.
-    void validate_versions() override {}
 };
 
 const OpSchema DiagonalBackward::schema_v1{"diagonal", 1, AmpPolicy::KeepInput, true};
@@ -415,11 +397,9 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     bwd->dtype_ = out->dtype();
     bwd->device_ = out->device();
     bwd->cond_tensor_ = cond;
-    bwd->x_tensor_ = x;
-    bwd->y_tensor_ = y;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(x), x->grad_output_nr()),
                                           Edge(detail::ensure_grad_fn(y), y->grad_output_nr())});
-    bwd->set_saved_versions({cond->version(), x->version(), y->version()});
+    bwd->set_saved_versions({cond->version()});
 
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -442,10 +422,9 @@ attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, Tenso
     bwd->shape_ = out->shape();
     bwd->dtype_ = out->dtype();
     bwd->device_ = out->device();
-    bwd->input_tensor_ = a;
     bwd->mask_tensor_ = mask;
     bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), a->grad_output_nr())});
-    bwd->set_saved_versions({a->version(), mask->version()});
+    bwd->set_saved_versions({mask->version()});
 
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -658,11 +637,10 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
         bwd->dtype_ = dt;
         bwd->index_dtype_ = indices->dtype();
         bwd->device_ = device;
-        bwd->input_tensor_ = a;
         bwd->indices_tensor_ = indices;
         bwd->set_next_edges(
             std::vector<Edge>{Edge(detail::ensure_grad_fn(a), a->grad_output_nr())});
-        bwd->set_saved_versions({a->version(), indices->version()});
+        bwd->set_saved_versions({indices->version()});
         result->set_grad_fn(std::move(bwd));
         result->set_leaf(false);
         result->set_requires_grad(true);

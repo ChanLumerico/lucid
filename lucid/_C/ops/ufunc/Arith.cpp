@@ -132,15 +132,17 @@ TensorImplPtr complex_abs_forward(const TensorImplPtr& a) {
     if (!GradMode::is_enabled() || !a->requires_grad())
         return magnitude;
 
-    auto bwd = std::make_shared<ComplexAbsBackward>();
-    bwd->saved_input_ = a;
-    kernel::NaryKernel<ComplexAbsBackward, 1>::wire_autograd(std::move(bwd), {a}, magnitude, false);
+    // ``z`` is saved by value: the backward reads its values, and holding the
+    // tensor instead read whatever a later in-place write left in it.
+    kernel::NaryKernel<ComplexAbsBackward, 1>::wire_autograd(std::make_shared<ComplexAbsBackward>(),
+                                                             {a}, magnitude);
     return magnitude;
 }
 
 std::vector<Storage> ComplexAbsBackward::apply(Storage grad_out) {
     NoGradGuard nograd;
-    const auto& z = saved_input_;
+    const auto z =
+        std::make_shared<TensorImpl>(saved_inputs_[0], input_shapes_[0], dtype_, device_, false);
     auto g = std::make_shared<TensorImpl>(std::move(grad_out), z->shape(), real_lane_of(z->dtype()),
                                           z->device(), false);
     // ``g * z / |z|``, lane by lane, with the quotient forced to zero

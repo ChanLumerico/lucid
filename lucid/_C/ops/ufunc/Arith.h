@@ -107,7 +107,7 @@ LUCID_API TensorImplPtr complex_abs_forward(const TensorImplPtr& a);
 class LUCID_API ComplexAbsBackward : public FuncOp<ComplexAbsBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    TensorImplPtr saved_input_;  // z, for z / |z|
+    // ``z`` itself, for ``z / |z|``, is saved by value in ``saved_inputs_[0]``.
     std::vector<Storage> apply(Storage grad_out);
 };
 

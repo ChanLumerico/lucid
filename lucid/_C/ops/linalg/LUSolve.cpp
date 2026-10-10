@@ -37,6 +37,7 @@ lu_solve_aligned(const TensorImplPtr& LU, const TensorImplPtr& pivots, const Ten
     auto out = linalg_detail::fresh(std::move(result), b->shape(), LU->dtype(), LU->device());
     auto bwd = std::make_shared<LUSolveBackward>();
     bwd->pivots_ = pivots;
+    bwd->pivots_version_ = pivots->version();
     bwd->saved_output_ = out->storage();
     kernel::NaryKernel<LUSolveBackward, 2>::wire_autograd(std::move(bwd), {LU, b}, out, true);
     return out;
@@ -92,6 +93,11 @@ std::vector<TensorImplPtr> LUSolveBackward::apply_for_graph(const TensorImplPtr&
     // X recomputed so its own dependence on LU and B is recorded.
     auto x = lu_solve_aligned(LU, pivots_, b);
     return lu_solve_adjoint(LU, pivots_, x, grad_out);
+}
+
+void LUSolveBackward::validate_versions() {
+    FuncOp<LUSolveBackward, 2>::validate_versions();
+    check_version_match(pivots_, pivots_version_, schema_v1.name, 1);
 }
 
 LUCID_REGISTER_OP(LUSolveBackward)

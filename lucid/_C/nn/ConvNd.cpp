@@ -201,10 +201,11 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->dilation_[i] = dilation[i];
     }
     bwd->groups_ = groups;
-    // saved_inputs_[0..2] hold the *cast* (effective-dtype) {x, W, b} so
+    // saved_inputs_[0..1] hold the *cast* (effective-dtype) {x, W} so
     // the backward conv_general dispatches at eff_dt to match the forward.
+    // The bias is read by shape alone and is not saved.
     kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x_eff, W_eff, b_eff},
-                                                            out);
+                                                            out, {true, true, false});
     return out;
 }
 
@@ -462,7 +463,8 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
         bwd->stride_ = stride;
         bwd->pad_ = pad;
         bwd->dilation_ = dilation;
-        kernel::NaryKernel<UnfoldBackward, 1>::wire_autograd(std::move(bwd), {x}, out);
+        // The adjoint (fold) reads the input's shape alone.
+        kernel::NaryKernel<UnfoldBackward, 1>::wire_autograd(std::move(bwd), {x}, out, false);
     }
     return out;
 }
@@ -563,7 +565,8 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
         bwd->stride_ = stride;
         bwd->pad_ = padding;
         bwd->dilation_ = dilation;
-        kernel::NaryKernel<FoldBackward, 1>::wire_autograd(std::move(bwd), {x}, result);
+        // The adjoint (unfold) reads the input's shape alone.
+        kernel::NaryKernel<FoldBackward, 1>::wire_autograd(std::move(bwd), {x}, result, false);
     }
     return result;
 }
