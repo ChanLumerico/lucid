@@ -275,29 +275,27 @@ private:
 // otherwise.  A CPU tensor's addresses are its buffer's; a Metal family
 // member's count from its family's identity (TensorImpl::family_key) as if
 // that were the root's first byte, so members of one family compare as CPU
-// views of one buffer do.  ``first`` is null for any other tensor.
+// views of one buffer do.  Addresses are integers — a Metal family's
+// identity is no buffer to point into — and ``first`` is 0 for any other
+// tensor.
 struct Footprint {
-    const std::byte* first = nullptr;
+    std::uintptr_t first = 0;
     std::size_t n = 0;
     std::size_t item = 0;
     std::vector<std::uintptr_t> addr;
 
     bool run() const { return addr.empty(); }
-    std::uintptr_t at(std::size_t i) const {
-        return run() ? reinterpret_cast<std::uintptr_t>(first) + i * item : addr[i];
-    }
+    std::uintptr_t at(std::size_t i) const { return run() ? first + i * item : addr[i]; }
 };
 
 Footprint footprint(const TensorImpl& t) {
     Footprint f;
-    // An address as an integer: a Metal family's identity is no buffer, so
-    // offsets from it are counted rather than pointed at.
     auto base = reinterpret_cast<std::uintptr_t>(t.family_key());
     if (const auto* cpu = std::get_if<CpuStorage>(&t.raw_storage()))
         base = reinterpret_cast<std::uintptr_t>(cpu->ptr.get());
     if (base == 0)
         return f;
-    f.first = reinterpret_cast<const std::byte*>(base + t.storage_offset());
+    f.first = base + t.storage_offset();
     f.n = t.numel();
     f.item = dtype_size(t.dtype());
     if (t.is_contiguous() || f.n == 0)
@@ -310,7 +308,8 @@ Footprint footprint(const TensorImpl& t) {
         std::int64_t off = 0;
         for (std::size_t d = 0; d < shape.size(); ++d)
             off += idx[d] * stride[d];
-        f.addr[i] = reinterpret_cast<std::uintptr_t>(f.first + off);
+        // Modular: a negative offset steps back from ``first``.
+        f.addr[i] = f.first + static_cast<std::uintptr_t>(off);
         for (std::size_t d = shape.size(); d-- > 0;) {
             if (++idx[d] < shape[d])
                 break;
@@ -369,7 +368,7 @@ void rebase_views(const TensorImplPtr& a) {
     std::unordered_map<std::uintptr_t, std::int64_t> where;
     const auto locate = [&](std::uintptr_t x) -> std::int64_t {
         if (fa.run()) {
-            const auto lo = reinterpret_cast<std::uintptr_t>(fa.first);
+            const auto lo = fa.first;
             if (x < lo || x >= lo + fa.n * fa.item || (x - lo) % fa.item != 0)
                 return -1;
             return static_cast<std::int64_t>((x - lo) / fa.item);
@@ -399,18 +398,19 @@ void rebase_views(const TensorImplPtr& a) {
         std::shared_ptr<CopySlicesBackward> node;
         if (fa.run() && fm.run()) {
             // Two runs meet in a run.
-            const std::byte* lo = std::max(fa.first, fm.first);
-            const std::byte* hi = std::min(fa.first + fa.n * fa.item, fm.first + fm.n * fm.item);
+            const std::uintptr_t lo = std::max(fa.first, fm.first);
+            const std::uintptr_t hi =
+                std::min(fa.first + fa.n * fa.item, fm.first + fm.n * fm.item);
             if (hi <= lo)
                 continue;
-            const auto item = static_cast<std::ptrdiff_t>(fa.item);
-            const std::int64_t len = (hi - lo) / item;
+            const auto item = static_cast<std::int64_t>(fa.item);
+            const auto len = static_cast<std::int64_t>(hi - lo) / item;
             covered = len == static_cast<std::int64_t>(fm.n);
             same = covered && len == static_cast<std::int64_t>(fa.n);
             if (!same)
                 node = std::make_shared<CopySlicesBackward>(
-                    m->shape(), a->shape(), (lo - fm.first) / item, (lo - fa.first) / item, len,
-                    a->dtype(), a->device());
+                    m->shape(), a->shape(), static_cast<std::int64_t>(lo - fm.first) / item,
+                    static_cast<std::int64_t>(lo - fa.first) / item, len, a->dtype(), a->device());
         } else {
             // A strided side meets the other at scattered positions.
             std::vector<std::int64_t> dst;

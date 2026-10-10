@@ -649,8 +649,8 @@ class _BatchNormBase(Module):
         # on ``running_mean`` / ``running_var`` is fused into the C++
         # BN forward kernel: it reuses the same mean / rstd it already
         # computes for autograd, avoiding a second reduction over ``x``.
-        # All Python has to do is bump ``num_batches_tracked`` (cheap,
-        # one I64 add) and hand the buffers to the functional below.
+        # Python hands the buffers to the functional below, then bumps
+        # ``num_batches_tracked`` — after, so a refused write counts nothing.
         #
         # Slow path (``self.momentum is None``) — cumulative MA, needs
         # ``num_batches_tracked.item()`` which forces a GPU sync.  Keep
@@ -660,21 +660,16 @@ class _BatchNormBase(Module):
         fuse_running_update: bool = (
             self.training and self.track_running_stats and self.momentum is not None
         )
-        # Skip Python-level stateful updates when a :class:`Tracer` is
-        # installed (``lucid.compile()`` / ``make_step`` paths): the
-        # ``num_batches_tracked + 1`` 0-D add and the cumulative-MA
-        # composition both leak side-effectful ops into the trace whose
-        # MPSGraph lowering hits an 8-byte buffer-size mismatch.  The
-        # compile path needs pure forward graphs; training entry points
-        # advance the observed layers' counters after each executable run.
+        # Skip Python-level stateful updates when a :class:`Tracer` is installed
+        # (``lucid.compile()`` / ``make_step`` paths): the ``num_batches_tracked + 1``
+        # 0-D add and the cumulative-MA composition both leak side-effectful ops into
+        # the trace whose MPSGraph lowering hits an 8-byte buffer-size mismatch.  The
+        # compile path needs pure forward graphs; training entry points advance the
+        # observed layers' counters after each executable run.
         _tracing_active = _C_engine.compile.current_tracer() is not None
-        if self.training and self.track_running_stats and not fuse_running_update:
-            if not _tracing_active:
-                self._update_running_stats(x)
-        elif fuse_running_update and not _tracing_active:
-            nbt = self._buffers["num_batches_tracked"]
-            assert nbt is not None, "num_batches_tracked buffer missing"
-            self._buffers["num_batches_tracked"] = nbt + 1
+        idle = fuse_running_update or _tracing_active
+        if self.training and self.track_running_stats and not idle:
+            self._update_running_stats(x)
 
         # Pick which stats path the functional uses:
         #   - eval + tracking          → precomputed running stats (eval kernel)
@@ -692,7 +687,7 @@ class _BatchNormBase(Module):
             else None
         )
 
-        return batch_norm(
+        out = batch_norm(
             x,
             running_mean,
             running_var,
@@ -702,6 +697,11 @@ class _BatchNormBase(Module):
             momentum=self.momentum if self.momentum is not None else 0.0,
             eps=self.eps,
         )
+        if fuse_running_update and not _tracing_active:
+            nbt = self._buffers["num_batches_tracked"]
+            assert nbt is not None, "num_batches_tracked buffer missing"
+            self._buffers["num_batches_tracked"] = nbt + 1
+        return out
 
     def _update_running_stats(self, x: Tensor) -> None:
         """Update ``running_mean`` / ``running_var`` from this batch.
@@ -736,7 +736,6 @@ class _BatchNormBase(Module):
             assert (
                 nbt is not None and rm is not None and rv is not None
             ), "BatchNorm running-stats buffers missing under track_running_stats=True"
-            self._buffers["num_batches_tracked"] = nbt + 1
             _C_engine.nn.batch_norm_update_running_stats(
                 rm._impl,
                 rv._impl,
@@ -745,6 +744,7 @@ class _BatchNormBase(Module):
                 float(self.momentum),
                 True,  # unbiased_var = n/(n-1) Bessel correction for the running buffer
             )
+            self._buffers["num_batches_tracked"] = nbt + 1
             return
 
         # Slow path: cumulative MA needs num_batches_tracked.item() (GPU sync).

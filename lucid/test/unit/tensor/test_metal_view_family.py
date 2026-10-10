@@ -190,6 +190,7 @@ def test_a_refused_running_stat_write_leaves_both_stats_as_they_were() -> None:
         bn(lucid.randn(4, 3, device="metal"))
     assert _flat(bn.running_mean) == mean_before
     assert _flat(base) == [1.0] * 6
+    assert bn.num_batches_tracked.item() == 0
 
 
 def test_a_refused_compiled_step_target_leaves_every_target_as_it_was() -> None:
