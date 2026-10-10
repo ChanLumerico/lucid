@@ -4,7 +4,7 @@ TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
 import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 from typing import cast, override
 
@@ -23,6 +23,36 @@ from lucid.nn.functional.activations import gelu, relu
 # ``forward`` resolve: PEP 649 defers them only until something asks for the
 # value, and ``inspect.signature`` / ``help()`` both do.
 from lucid.utils.cache import Cache
+
+# The activation names a feed-forward block accepts — exactly the
+# reference's set.  Anything else is a callable passed as-is.
+_FFN_ACTIVATIONS: dict[str, Callable[[Tensor], Tensor]] = {"relu": relu, "gelu": gelu}
+
+
+def _resolve_activation(
+    activation: str | Callable[[Tensor], Tensor],
+) -> Callable[[Tensor], Tensor]:
+    """The feed-forward non-linearity of an encoder or decoder layer.
+
+    Raises:
+        ValueError: ``activation`` is a string other than ``"relu"`` or
+            ``"gelu"``.
+        TypeError: ``activation`` is neither a string nor callable.
+    """
+    if isinstance(activation, str):
+        fn = _FFN_ACTIVATIONS.get(activation)
+        if fn is None:
+            raise ValueError(
+                f"activation should be one of {sorted(_FFN_ACTIVATIONS)} or a "
+                f"callable, got {activation!r}"
+            )
+        return fn
+    if not callable(activation):
+        raise TypeError(
+            "activation should be a string or a callable, got "
+            f"{type(activation).__name__}"
+        )
+    return activation
 
 
 class TransformerEncoderLayer(Module):
@@ -91,9 +121,10 @@ class TransformerEncoderLayer(Module):
     dropout : float, optional
         Dropout probability applied after each sub-layer output and
         inside the FFN activation.  Default: ``0.1``.
-    activation : str, optional
-        Non-linearity used inside the FFN.  Supported values:
-        ``"relu"`` (default) and ``"gelu"``.
+    activation : str or callable, optional
+        Non-linearity used inside the FFN: ``"relu"`` (default),
+        ``"gelu"``, or a callable applied as-is.  Any other string
+        raises ``ValueError``.
     batch_first : bool, optional
         If ``True``, inputs and outputs are ``(batch, seq, feature)``.
         If ``False`` (default), they are ``(seq, batch, feature)``.
@@ -183,7 +214,7 @@ class TransformerEncoderLayer(Module):
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
         attention_dropout: float | None = None,
-        activation: str = "relu",
+        activation: str | Callable[[Tensor], Tensor] = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
         layer_norm_eps: float = 1e-5,
@@ -196,6 +227,7 @@ class TransformerEncoderLayer(Module):
         self.nhead = nhead
         self.dim_feedforward = dim_feedforward
         self.dropout_val = dropout
+        _resolve_activation(activation)
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
@@ -225,9 +257,8 @@ class TransformerEncoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         """Internal helper for the TransformerEncoderLayer module."""
-        act = gelu if self.activation == "gelu" else relu
-        h = self.linear1(x)
-        return self.linear2(self.dropout2(act(h)))
+        act = _resolve_activation(self.activation)
+        return self.linear2(self.dropout2(act(self.linear1(x))))
 
     @override
     def forward(
@@ -630,9 +661,10 @@ class TransformerDecoderLayer(Module):
     dropout : float, optional
         Dropout probability for all sub-layer outputs and the FFN
         activation.  Default: ``0.1``.
-    activation : str, optional
-        Non-linearity inside the FFN: ``"relu"`` (default) or
-        ``"gelu"``.
+    activation : str or callable, optional
+        Non-linearity inside the FFN: ``"relu"`` (default),
+        ``"gelu"``, or a callable applied as-is.  Any other string
+        raises ``ValueError``.
     batch_first : bool, optional
         If ``True``, all tensors use ``(batch, seq, feature)`` layout.
         Default: ``False`` (sequence-first).
@@ -726,7 +758,7 @@ class TransformerDecoderLayer(Module):
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
         attention_dropout: float | None = None,
-        activation: str = "relu",
+        activation: str | Callable[[Tensor], Tensor] = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
         layer_norm_eps: float = 1e-5,
@@ -739,6 +771,7 @@ class TransformerDecoderLayer(Module):
         self.nhead = nhead
         self.dim_feedforward = dim_feedforward
         self.dropout_val = dropout
+        _resolve_activation(activation)
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
@@ -778,9 +811,8 @@ class TransformerDecoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         """Internal helper for the TransformerDecoderLayer module."""
-        act = gelu if self.activation == "gelu" else relu
-        h = self.linear1(x)
-        return self.linear2(self.dropout2(act(h)))
+        act = _resolve_activation(self.activation)
+        return self.linear2(self.dropout2(act(self.linear1(x))))
 
     @override
     def forward(
@@ -1203,9 +1235,9 @@ class Transformer(Module):
     dropout : float, optional
         Dropout probability applied throughout the model.
         Default: ``0.1``.
-    activation : str, optional
-        Activation function for all FFN layers: ``"relu"`` (default)
-        or ``"gelu"``.
+    activation : str or callable, optional
+        Activation function for all FFN layers: ``"relu"`` (default),
+        ``"gelu"``, or a callable applied as-is.
     batch_first : bool, optional
         If ``True``, all input and output tensors use
         ``(batch, seq, feature)`` layout.  Default: ``False``
@@ -1312,7 +1344,7 @@ class Transformer(Module):
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
         attention_dropout: float | None = None,
-        activation: str = "relu",
+        activation: str | Callable[[Tensor], Tensor] = "relu",
         batch_first: bool = False,
         layer_norm_eps: float = 1e-5,
         device: DeviceLike = None,
