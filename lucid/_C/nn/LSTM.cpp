@@ -85,6 +85,12 @@ void validate_operands(const TensorImplPtr& input,
         err.not_implemented(
             "the engine runs one layer in one direction over a sequence-first input; "
             "stacking, directions and batch_first are composed by the caller");
+    // The reference refuses an empty sequence, and the GPU kernel stacks its
+    // per-step outputs — there are none to stack.  Same words as the Python
+    // recurrent modules' door (``_sequence_major``).
+    if (opts.seq_len < 1)
+        err.invalid_argument("expected sequence length to be larger than 0, got " +
+                             std::to_string(opts.seq_len));
     const Dtype dt = input->dtype();
     if (!is_floating_point(dt))
         throw DtypeMismatch("a floating-point dtype", std::string(dtype_name(dt)), "lstm");

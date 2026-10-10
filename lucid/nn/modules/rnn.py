@@ -50,12 +50,37 @@ def _slice(x: Tensor, *index: slice) -> Tensor:
     return x
 
 
-def _is_packed(x: object) -> bool:
-    """Whether ``x`` is a :class:`~lucid.nn.utils.rnn.PackedSequence`."""
-    return isinstance(x, PackedSequence)
+# The engine's ``lstm`` entry refuses an empty sequence in the same words.
+_EMPTY_SEQUENCE = "expected sequence length to be larger than 0"
 
 
-def _packed_to_padded(seq: object) -> tuple[Tensor, list[int]]:
+def _sequence_major(
+    x: Tensor | PackedSequence, batch_first: bool
+) -> tuple[Tensor, list[int], PackedSequence | None]:
+    """The input as ``(T, B, *)``, its active batch size per step, and the
+    packed source (``None`` for a dense input).
+
+    Every recurrent forward enters here.  A sequence with no timesteps is
+    refused as the reference refuses it: the recurrences below build their
+    output by stacking per-step results, and there are none to stack.
+
+    Raises:
+        ValueError: The input has no timesteps.
+    """
+    if isinstance(x, PackedSequence):
+        if int(x.batch_sizes.shape[0]) == 0:
+            raise ValueError(f"{_EMPTY_SEQUENCE}, got a packed sequence with no steps")
+        seq, batch_sizes = _packed_to_padded(x)
+        return seq, batch_sizes, x
+    # An unbatched ``(T, *)`` input keeps time first whatever ``batch_first``.
+    time_axis = 1 if batch_first and x.ndim == 3 else 0
+    if int(x.shape[time_axis]) == 0:
+        raise ValueError(f"{_EMPTY_SEQUENCE}, got input of shape {tuple(x.shape)}")
+    seq = x.permute([1, 0, 2]) if batch_first else x
+    return seq, [int(seq.shape[1])] * int(seq.shape[0]), None
+
+
+def _packed_to_padded(packed: PackedSequence) -> tuple[Tensor, list[int]]:
     """Inflate a packed sequence to ``(T, B, *)`` in *packed* batch order.
 
     Deliberately not :func:`~lucid.nn.utils.rnn.pad_packed_sequence`: that
@@ -64,14 +89,13 @@ def _packed_to_padded(seq: object) -> tuple[Tensor, list[int]]:
     at each timestep a prefix of the batch.
 
     Args:
-        seq: The packed sequence.
+        packed: The packed sequence, with at least one step.
 
     Returns:
         ``(padded, batch_sizes)`` — padded is ``(T, B, *)`` with zeros past
         each sequence's length, ``batch_sizes[t]`` is how many sequences
         are still running at step ``t``.
     """
-    packed = cast("PackedSequence", seq)
     batch_sizes = _int_tensor_to_list(packed.batch_sizes)
     T = len(batch_sizes)
     B = batch_sizes[0]
@@ -742,20 +766,11 @@ class LSTM(Module):
         inter-layer dropout and concatenating bidirectional outputs as
         the input to the next layer.
         """
-        packed_src = x if _is_packed(x) else None
-        if packed_src is not None:
-            seq, batch_sizes = _packed_to_padded(packed_src)
-        else:
-            seq = cast(Tensor, x)
-            if self.batch_first:
-                seq = seq.permute([1, 0, 2])
+        # A dense input is one segment: one engine call per layer and direction.
+        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
 
         B: int = int(seq.shape[1])
         num_dirs: int = 2 if self.bidirectional else 1
-        if packed_src is None:
-            # One segment covering everything — a single engine call, exactly
-            # as before.
-            batch_sizes = [B] * int(seq.shape[0])
         L: int = self.num_layers
         rec_size: int = self.proj_size if self.proj_size > 0 else self.hidden_size
 
@@ -1498,21 +1513,13 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        packed_src = x if _is_packed(x) else None
-        if packed_src is not None:
-            seq, batch_sizes = _packed_to_padded(packed_src)
-        else:
-            seq = cast(Tensor, x)
-            if self.batch_first:
-                seq = seq.permute([1, 0, 2])
+        # A dense input runs every sequence the full length; ``_carry`` and
+        # ``_pad_rows`` both become identities.
+        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
 
         T: int = seq.shape[0]
         B: int = seq.shape[1]
         num_dirs: int = 2 if self.bidirectional else 1
-        if packed_src is None:
-            # Every sequence runs the full length; ``_carry`` and ``_pad_rows``
-            # both become identities, so this is the dense path unchanged.
-            batch_sizes = [B] * T
 
         hx = _initial_state(
             hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq
@@ -1766,19 +1773,11 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        packed_src = x if _is_packed(x) else None
-        if packed_src is not None:
-            seq, batch_sizes = _packed_to_padded(packed_src)
-        else:
-            seq = cast(Tensor, x)
-            if self.batch_first:
-                seq = seq.permute([1, 0, 2])
+        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
 
         T: int = seq.shape[0]
         B: int = seq.shape[1]
         num_dirs: int = 2 if self.bidirectional else 1
-        if packed_src is None:
-            batch_sizes = [B] * T
 
         hx = _initial_state(
             hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq

@@ -277,7 +277,8 @@ public:
     // Raises
     // ------
     // InvalidArgument
-    //     An operand is null, or the weight count is not 4 (5 projected).
+    //     An operand is null, ``opts.seq_len < 1`` (the reference refuses an
+    //     empty sequence), or the weight count is not 4 (5 projected).
     // DeviceMismatch
     //     ``h0``, ``c0`` or a weight is not on the input's device.
     // DtypeMismatch
