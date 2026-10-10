@@ -41,9 +41,13 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
 
+    // The CPU backend walks the buffer through the geometry; the Metal one
+    // ignores the geometry and copies what it is handed, so it is handed the
+    // tensor's own elements — a family member's root holds more than them.
+    const Storage& src = storage_is_gpu(a->raw_storage()) ? a->storage() : a->raw_storage();
     Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .contiguous(a->raw_storage(), a->shape(), a->stride(),
-                                          a->storage_offset(), a->is_contiguous(), a->dtype());
+                              .contiguous(src, a->shape(), a->stride(), a->storage_offset(),
+                                          a->is_contiguous(), a->dtype());
 
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                                a->device(), false);

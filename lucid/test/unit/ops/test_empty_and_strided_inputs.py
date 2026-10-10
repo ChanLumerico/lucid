@@ -54,6 +54,10 @@ EMPTY_DIVERGES = {
 }
 
 
+#: Cases that cannot copy: a layout they cannot read in place is refused.
+STRICT_VIEWS = frozenset({"view"})
+
+
 def _cases() -> list[str]:
     return [c.name for c in M.CASES if not c.random]
 
@@ -96,6 +100,12 @@ def test_a_strided_input_answers_as_a_dense_one(name: str, device: str) -> None:
             x = M.make_input(case.kind, dtype, case.shape, 1).to(device)
             want = case.fn(x)
             for tag, view in _layouts(x):
+                if name in STRICT_VIEWS and not view._impl.is_dense():
+                    # ``view`` reads its input in place or refuses, as the
+                    # reference does; ``reshape`` is the copying spelling.
+                    with pytest.raises(RuntimeError, match="use .reshape"):
+                        case.fn(view)
+                    continue
                 why = _differs(case.fn(view), want)
                 assert not why, f"{dtype} {tag}: {why}"
 

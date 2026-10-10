@@ -1,12 +1,12 @@
 // lucid/_C/ops/utils/View.cpp
 //
-// Implements reshape, squeeze, and unsqueeze.  On the CPU, a dense input is
-// reshaped by relabelling: the result is a view over the same buffer, in the
-// input's ViewFamily.  So is a strided CPU view whose new shape only drops or
-// inserts size-1 axes.  Anything else — any other CPU view, any GPU tensor —
-// is copied by the backend dispatcher's reshape.  Either way the central
-// helper build_view_output wires the ViewBackward autograd node so that
-// gradients flow back through the changed shape.
+// Implements reshape, view, squeeze, and unsqueeze.  A dense input is
+// reshaped by relabelling: the result is a view over the same buffer — on
+// Metal, over its family's root — in the input's ViewFamily.  So is a strided
+// CPU view whose new shape only drops or inserts size-1 axes.  Anything else
+// is copied by the backend dispatcher's reshape, which ``view`` refuses.
+// Either way the central helper build_view_output wires the ViewBackward
+// autograd node so that gradients flow back through the changed shape.
 
 #include "View.h"
 
@@ -32,6 +32,7 @@
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
 #include "Contiguous.h"
+#include "ViewStrict.h"
 
 namespace lucid {
 
@@ -116,35 +117,40 @@ bool squeezes_only(const TensorImpl& a, const Shape& out, Stride& stride) {
     return true;
 }
 
-// Shared implementation used by reshape_op, squeeze_op, squeeze_all_op, and
-// unsqueeze_op.  A dense CPU input, or a strided one whose new shape only drops
-// or inserts size-1 axes, gives a view over the same buffer; anything else is
-// copied.  Either way ViewBackward is attached so that autograd can reshape
-// gradients back to the input's shape.
+// The strides under which ``a``'s elements, read as ``out_shape``, are a view
+// of its buffer — or false when reading them so takes a copy.
+//
+// A dense tensor holds its elements in row-major order from the first byte
+// of its buffer (on Metal, of its family's root), which is what any shape
+// with the same element count reads there.  A strided view whose new shape
+// only drops or inserts size-1 axes keeps every element where it was —
+// ``x[:, 1]`` is a column slice with its axis squeezed out — on the CPU and
+// for a Metal family member, which reads its root through its geometry.
+bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride) {
+    if (a.is_dense()) {
+        stride = contiguous_stride(out_shape, dtype_size(a.dtype()));
+        return true;
+    }
+    return (storage_is_cpu(a.raw_storage()) || a.family_key() != nullptr) &&
+           squeezes_only(a, out_shape, stride);
+}
+
+// Shared implementation used by reshape_op, view_op, squeeze_op,
+// squeeze_all_op, and unsqueeze_op.  An input view_strides can view gives a
+// view over the same buffer, in its ViewFamily — no copy, and an in-place
+// write to either reaches the other, on Metal too; anything else is copied.
+// Either way ViewBackward is attached so that autograd can reshape gradients
+// back to the input's shape.
 TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const char* op_name) {
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
     TensorImplPtr out;
-    if (a->device() == Device::CPU && a->is_dense()) {
-        // A dense CPU tensor holds its elements in row-major order from the
-        // first byte of its buffer, which is what any shape with the same
-        // element count reads there — so the result is a view of it: no
-        // copy, and an in-place write to either reaches the other (see
-        // ViewFamily).
-        Stride stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
+    if (Stride stride; view_strides(*a, out_shape, stride)) {
         out = TensorImpl::make_view(a, out_shape, std::move(stride));
-    } else if (Stride strided; a->device() == Device::CPU && storage_is_cpu(a->raw_storage()) &&
-                               squeezes_only(*a, out_shape, strided)) {
-        // A strided CPU view whose new shape only drops or inserts size-1
-        // axes keeps every element where it was — ``x[:, 1]`` is a column
-        // slice with its axis squeezed out — so the result is a view too.
-        out = TensorImpl::make_view(a, out_shape, std::move(strided));
     } else {
-        // Any other reshape of a CPU tensor that is not dense (a view at an
-        // offset, or not contiguous) copies: ``storage()`` hands the backend
-        // its elements packed.  GPU tensors keep copy semantics: an MLX array
-        // cannot see a write made through another.
+        // Any other reshape — of a view at an offset, or not contiguous —
+        // copies: ``storage()`` hands the backend its elements packed.
         Storage out_storage = backend::Dispatcher::for_device(a->device())
                                   .reshape(a->storage(), a->shape(), out_shape, a->dtype());
         out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
@@ -184,6 +190,20 @@ std::vector<TensorImplPtr> ViewBackward::apply_for_graph(const TensorImplPtr& gr
 TensorImplPtr reshape_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
     Validator::input(a, "reshape.a").non_null();
     Shape resolved = resolve_reshape_shape(a->shape(), new_shape);
+    return build_view_output(a, std::move(resolved), "reshape");
+}
+
+// ``reshape``'s view without its copy: an input whose elements the new
+// shape cannot read in place is refused rather than copied, so the result
+// always shares ``a``'s storage.
+TensorImplPtr view_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
+    Validator::input(a, "view.a").non_null();
+    Shape resolved = resolve_reshape_shape(a->shape(), new_shape);
+    if (Stride unused; !view_strides(*a, resolved, unused))
+        ErrorBuilder("view").fail(
+            "view size is not compatible with input tensor's size and stride (at least one "
+            "dimension spans across two contiguous subspaces) — use .reshape(...) instead");
+    // Traced as the reshape it is: compile and Core ML know it by that name.
     return build_view_output(a, std::move(resolved), "reshape");
 }
 

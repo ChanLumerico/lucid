@@ -71,8 +71,8 @@ namespace lucid {
 
 class TensorImpl;
 
-// The CPU tensors that read one buffer, as :func:`TensorImpl::make_view`
-// made them.
+// The tensors that read one buffer, as :func:`TensorImpl::make_view` made
+// them.
 //
 // Every member holds this through ``shared_ptr``, so ``use_count()`` is how
 // many of them are alive.  They share one version counter — a write
@@ -82,6 +82,12 @@ class TensorImpl;
 // (:func:`TensorImpl::write_through`).  ``members`` is how autograd finds
 // the others to re-derive from the one written; entries expire with their
 // tensors.
+//
+// A Metal family has no shared bytes to write into — an MLX array is a
+// value — so it keeps the buffer's current value instead, as ``root``: a
+// dense GpuStorage of ``nbytes`` bytes in any shape.  Each member reads its
+// elements out of the root through its own geometry, and a write through
+// any member replaces the root (core/GpuStrided.h).
 struct ViewFamily {
     VersionCounter version{0};
     // The whole buffer's size.  A member that reads fewer bytes is a slice
@@ -89,6 +95,8 @@ struct ViewFamily {
     std::size_t nbytes = 0;
     std::mutex mu;
     std::vector<std::weak_ptr<TensorImpl>> members;
+    // Set for a Metal family only.
+    std::optional<Storage> root;
 };
 
 // Reference-counted tensor implementation owned by every Python-level
@@ -190,6 +198,10 @@ public:
     // through any member of its view family).  Every other tensor answers
     // with its own buffer, as before.
     //
+    // A member of a Metal view family answers with its elements read out of
+    // the family's root, cached the same way — or with the root itself when
+    // it reads all of it, in the root's shape.
+    //
     // Code that walks the geometry itself — ``contiguous``, the NumPy bridge,
     // ``data_ptr``, buffer-identity and overlap tests — reads
     // :func:`raw_storage` instead.
@@ -197,14 +209,30 @@ public:
 
     // The backing :class:`Storage` as it is, before any packing: the whole
     // buffer a view reads into, to be walked with :func:`stride` and
-    // :func:`storage_offset`.
-    const Storage& raw_storage() const noexcept { return storage_; }
+    // :func:`storage_offset`.  For a Metal family member, the family's root.
+    const Storage& raw_storage() const noexcept { return gpu_member() ? *family_->root : storage_; }
 
     // Returns a mutable reference to the backing :class:`Storage` variant.
     //
-    // Used by in-place ops; callers are responsible for bumping the version
-    // counter when they mutate the underlying bytes.
-    Storage& mutable_storage() noexcept { return storage_; }
+    // Used by engine writers that replace the values wholesale (the C++
+    // optimisers, BatchNorm's running statistics, the compiled step);
+    // callers are responsible for bumping the version counter when they
+    // mutate the underlying bytes.  A Metal family member that reads its
+    // whole root hands out the root itself, reshaped to this tensor's shape,
+    // so what the caller writes is what every member reads.
+    //
+    // Raises
+    // ------
+    // NotImplementedError
+    //     The tensor is a Metal view of part of its family's root, which a
+    //     wholesale replacement cannot write.
+    Storage& mutable_storage();
+
+    // An identity shared by every member of this tensor's Metal view family
+    // and by nothing else — where autograd measures a member's elements from
+    // when it re-derives the family after a write — or ``nullptr`` when the
+    // tensor is not a Metal family member.
+    const void* family_key() const noexcept { return gpu_member() ? family_.get() : nullptr; }
 
     // Returns the byte offset of this tensor's first element from the start
     // of :func:`storage`.
@@ -268,7 +296,8 @@ public:
     //
     // The write an in-place op makes to a tensor with live views: into the
     // bytes the views read, where a new storage slot would leave them
-    // reading the old ones.  Bumps the version, which every member shares.
+    // reading the old ones.  A Metal family member writes into the family's
+    // root instead.  Bumps the version, which every member shares.
     //
     // Parameters
     // ----------
@@ -286,10 +315,11 @@ public:
     //     would be modified while autograd records, the elements overlap,
     //     or the buffer is a gradient's that something else also reads.
     // NotImplementedError
-    //     The tensor is on the GPU or is not dense, or its buffer is also
-    //     held by something that is not one of its views — a storage saved
-    //     for backward, a NumPy array — which would read the new values
-    //     without being told.
+    //     The tensor is on the GPU outside a view family; or its CPU buffer
+    //     is also held by something that is not one of its views — a
+    //     storage saved for backward, a NumPy array — which would read the
+    //     new values without being told; or autograd would have to re-derive
+    //     a strided Metal view after the write, which it cannot yet.
     void write_through(const TensorImpl& src, const char* name);
 
     // The Metal shared buffer this tensor still is, or ``nullptr``.
@@ -352,9 +382,11 @@ public:
     // offset.
     //
     // No data is copied.  The view starts with no autograd state of its
-    // own; a caller that makes a differentiable view wires its grad_fn.  A
-    // CPU view joins ``base``'s :class:`ViewFamily` — one version counter,
-    // in-place writes into the buffer — unless ``join_family`` is ``false``.
+    // own; a caller that makes a differentiable view wires its grad_fn.  The
+    // view joins ``base``'s :class:`ViewFamily` — one version counter,
+    // in-place writes into the buffer (on Metal, into the family's root) —
+    // unless ``join_family`` is ``false``; a Metal view outside the family
+    // takes ``base``'s elements under its geometry as a value of its own.
     //
     // Parameters
     // ----------
@@ -367,7 +399,7 @@ public:
     // offset_bytes : std::size_t, optional
     //     Byte offset from ``base``'s storage origin.  Defaults to ``0``.
     // join_family : bool, optional
-    //     Whether a CPU view joins ``base``'s family.  Defaults to ``true``.
+    //     Whether the view joins ``base``'s family.  Defaults to ``true``.
     //
     // Returns
     // -------
@@ -981,10 +1013,14 @@ private:
     Storage storage_;
     // The packed copy :func:`storage` hands out for a non-dense CPU view, and
     // the version it was packed at.  Guarded by ``packed_mu_``: the reference
-    // it returns has to outlive the call, so the copy lives here.
+    // it returns has to outlive the call, so the copy lives here.  A Metal
+    // family member keeps its elements read out of the root here, with the
+    // root they were read from: an engine writer that replaces the root
+    // through mutable_storage() moves no version.
     mutable std::mutex packed_mu_;
     mutable std::optional<Storage> packed_;
     mutable std::int64_t packed_version_ = -1;
+    mutable std::weak_ptr<::mlx::core::array> packed_root_;
     // Byte offset of the first element from the start of storage_.
     std::size_t offset_ = 0;
     TensorMeta meta_;
@@ -995,9 +1031,11 @@ private:
     // constructor while storage_ holds the CPU view or GPU alias; see
     // metal_shared().  Views inherit it.
     std::optional<SharedStorage> shared_;
-    // The CPU tensors that read this one's buffer, this one included; set by
+    // The tensors that read this one's buffer, this one included; set by
     // make_view on the base and every view made from it, and null for a
-    // tensor that has never had a view.
+    // tensor that has never had a view.  A Metal member's own storage_ is
+    // unused — its values live in the family's root — and is an empty
+    // placeholder once the family is first written.
     std::shared_ptr<ViewFamily> family_;
     // Set on what ``.data`` hands out (the data_alias binding): a member of
     // the family whose writes autograd does not follow.  See
@@ -1007,6 +1045,31 @@ private:
     // Writes ``src``'s values into the shared buffer.  False when this
     // tensor no longer is the buffer or ``src`` does not match it.
     bool write_into_shared(const TensorImpl& src);
+
+    // Whether this tensor reads a Metal view family's root.
+    bool gpu_member() const noexcept { return family_ && family_->root.has_value(); }
+
+    // Whether this tensor reads every element of its family's root, in the
+    // root's order — a reshape of it rather than a part.
+    bool covers_root() const;
+
+    // What reads of the values go through: a Metal member's elements, or
+    // the storage as it is (the CPU readers walk the geometry themselves).
+    const Storage& readable() const { return gpu_member() ? storage() : storage_; }
+
+    // Replaces the Metal family root with ``src``'s values laid into this
+    // member's elements, and bumps the version.  ``raw`` is copy_from's
+    // write rather than an in-place op's: no autograd refusals, and with no
+    // graph to protect it writes into a Metal shared buffer the root reads.
+    void write_gpu_member(const TensorImpl& src, const char* name, bool raw);
+
+    // Drops every member's cached elements, and any value a member held
+    // before the family formed: the root is being replaced.
+    void drop_family_caches();
+
+    // A Metal member that is the only one left takes its values as its own
+    // storage and leaves the family, so it behaves as any Metal tensor.
+    void leave_family();
 
     // Puts ``view`` into ``base``'s view family, making one if ``base`` has
     // none yet.

@@ -270,9 +270,12 @@ private:
     std::vector<std::int64_t> src_idx_;
 };
 
-// Where a CPU tensor's elements sit, in its own row-major order: one run
-// from ``first`` when the tensor is contiguous, one address per element
-// otherwise.  ``first`` is null for any other storage.
+// Where a tensor's elements sit, in its own row-major order: one run from
+// ``first`` when the tensor is contiguous, one address per element
+// otherwise.  A CPU tensor's addresses are its buffer's; a Metal family
+// member's count from its family's identity (TensorImpl::family_key) as if
+// that were the root's first byte, so members of one family compare as CPU
+// views of one buffer do.  ``first`` is null for any other tensor.
 struct Footprint {
     const std::byte* first = nullptr;
     std::size_t n = 0;
@@ -287,10 +290,12 @@ struct Footprint {
 
 Footprint footprint(const TensorImpl& t) {
     Footprint f;
-    const auto* cpu = std::get_if<CpuStorage>(&t.raw_storage());
-    if (!cpu || !cpu->ptr)
+    const std::byte* base = static_cast<const std::byte*>(t.family_key());
+    if (const auto* cpu = std::get_if<CpuStorage>(&t.raw_storage()))
+        base = cpu->ptr.get();
+    if (!base)
         return f;
-    f.first = cpu->ptr.get() + t.storage_offset();
+    f.first = base + t.storage_offset();
     f.n = t.numel();
     f.item = dtype_size(t.dtype());
     if (t.is_contiguous() || f.n == 0)

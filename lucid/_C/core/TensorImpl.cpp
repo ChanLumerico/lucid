@@ -35,6 +35,7 @@
 #include "Allocator.h"
 #include "Error.h"
 #include "ErrorBuilder.h"
+#include "GpuStrided.h"
 #include "GradMode.h"
 #include "MemoryStats.h"
 #include "StridedCopy.h"
@@ -236,14 +237,33 @@ const SharedStorage* TensorImpl::metal_shared() const {
     if (!shared_ || offset_ != 0 || meta_.dtype != shared_->dtype || nbytes() != shared_->nbytes ||
         !is_contiguous())
         return nullptr;
-    if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
+    // A Metal family member is the buffer while the family's root still is.
+    const Storage& own = raw_storage();
+    if (const auto* cpu = std::get_if<CpuStorage>(&own))
         return cpu->ptr.get() == shared_->cpu_ptr ? &*shared_ : nullptr;
-    if (const auto* gpu_st = std::get_if<GpuStorage>(&storage_)) {
+    if (const auto* gpu_st = std::get_if<GpuStorage>(&own)) {
         const auto& pin = shared_->gpu_alias;
         return gpu_st->arr && pin && gpu_st->arr->id() == pin->id() ? &*shared_ : nullptr;
     }
     return nullptr;
 }
+
+namespace {
+
+// Lays ``arr``'s values into the shared buffer ``sh``, which arrays aliasing
+// it then read.  The caller has synchronised the GPU.
+void copy_into_shared(const SharedStorage& sh, const ::mlx::core::array& arr) {
+    // data() ignores strides, so lay the result out first.
+    ::mlx::core::array packed = ::mlx::core::contiguous(arr);
+    packed.eval();
+    MemoryTracker::track_host_sync(packed.nbytes());
+    auto* dst = static_cast<std::byte*>(sh.cpu_ptr);
+    const auto* from = reinterpret_cast<const std::byte*>(packed.data<std::uint8_t>());
+    if (from != dst)
+        std::memcpy(dst, from, sh.nbytes);
+}
+
+}  // namespace
 
 bool TensorImpl::write_into_shared(const TensorImpl& src) {
     const SharedStorage* sh = metal_shared();
@@ -264,14 +284,7 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                           [&](const GpuStorage& g) {
                               if (!g.arr)
                                   return false;
-                              // data() ignores strides, so lay the result out first.
-                              ::mlx::core::array packed = ::mlx::core::contiguous(*g.arr);
-                              packed.eval();
-                              MemoryTracker::track_host_sync(packed.nbytes());
-                              const auto* from =
-                                  reinterpret_cast<const std::byte*>(packed.data<std::uint8_t>());
-                              if (from != dst)
-                                  std::memcpy(dst, from, sh->nbytes);
+                              copy_into_shared(*sh, *g.arr);
                               return true;
                           },
                           [&](const SharedStorage& s) {
@@ -401,6 +414,63 @@ SlotWrite gradient_slot_write(const Storage& storage, long members) {
         "(run it under no_grad, or clone() first)");
 }
 
+// A leaf's values are where its gradient accumulates.  A write through one
+// of its views moves them as surely as a write to the leaf itself, which
+// refuse_on_leaf refuses while autograd records.  is_leaf(), not a missing
+// grad_fn: a leaf used in a graph holds an AccumulateGrad.  A detached alias
+// (``.data``) is exempt — its writes are untracked by design — and so is a
+// detached member, which no autograd reads.  The caller checks the writer
+// itself and the grad mode.
+void refuse_write_to_leaf_view(const std::vector<std::shared_ptr<TensorImpl>>& views,
+                               const char* name) {
+    for (const auto& m : views)
+        if (!m->is_detached_alias() && m->requires_grad() && m->is_leaf())
+            ErrorBuilder(name).fail("a view of a leaf tensor that requires grad cannot be "
+                                    "modified in place — wrap the call in no_grad, or use "
+                                    "the out-of-place form");
+}
+
+// After a write autograd re-derives the members of the written tensor's
+// family that take part in a graph (inplace::rebase_views).  A strided Metal
+// member meets the written one at scattered positions, which the CopySlices
+// node splices on the CPU only so far: refused, rather than left sending its
+// gradient to the values the write replaced.
+void refuse_strided_rederive(const TensorImpl& t,
+                             const std::vector<std::shared_ptr<TensorImpl>>& views,
+                             bool graph,
+                             const char* name) {
+    bool involved = graph || t.requires_grad() || t.grad_fn();
+    bool strided = !t.is_contiguous();
+    for (const auto& m : views) {
+        if (m->is_detached_alias())
+            continue;
+        involved = involved || m->requires_grad() || m->grad_fn();
+        strided = strided || !m->is_contiguous();
+    }
+    if (involved && strided)
+        ErrorBuilder(name).not_implemented(
+            "an in-place write that autograd records, into a Metal tensor that shares storage "
+            "with a strided view (transposed, or with steps), is not supported yet — clone() "
+            "first, or write under no_grad()");
+}
+
+// Whether a Metal family's root still is the shared buffer ``shared`` its
+// base was built over.
+bool root_is_shared_buffer(const std::optional<SharedStorage>& shared,
+                           const GpuStorage& root,
+                           Dtype dtype) {
+    return shared && shared->gpu_alias && root.arr && root.arr->id() == shared->gpu_alias->id() &&
+           shared->nbytes == root.nbytes && shared->dtype == dtype;
+}
+
+// A Metal family member's own storage: empty, since its values are the
+// family root's.  Typed, so the variant still says which device it is on.
+Storage gpu_placeholder(Dtype dtype) {
+    GpuStorage g;
+    g.dtype = dtype;
+    return Storage{std::move(g)};
+}
+
 }  // namespace
 
 bool TensorImpl::write_lands_in_buffer() const {
@@ -416,8 +486,13 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // only in write_through: an expanded view whose base is gone has no live
     // views, so it came down to the swap below and took a dense buffer in
     // silence — ``ones(1, 3).expand(2, 3).add_(1)`` raised nothing.
-    if (storage_is_cpu(storage_) && !is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
+    if (!is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
         refuse_overlapping_write(name);
+    // The last Metal member left has no one to share the write with: it
+    // takes the result as its own storage below, as any Metal tensor does
+    // (a dtype-changing op included).
+    if (gpu_member() && !is_aliased())
+        leave_family();
     // A tensor read from ``.grad`` writes into its gradient's buffer: a new
     // slot of its own would leave the gradient as it was.
     const SlotWrite slot = gradient_slot_write(storage_, family_ ? family_.use_count() : 1);
@@ -437,8 +512,19 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // node of this op holds the bytes being replaced; a node that had saved
     // the gradient tensor earlier would hold its pointer, and the write was
     // refused above.
-    if (storage_is_cpu(storage_) && (is_aliased() || slot == SlotWrite::kInto)) {
+    // A Metal member with live views writes into the family's root, where
+    // they read.  Its snapshot shared the root's old value, which no write
+    // changes: an MLX array is a value.
+    if (gpu_member() || (storage_is_cpu(storage_) && (is_aliased() || slot == SlotWrite::kInto))) {
         write_through(out, name);
+        return;
+    }
+    if (out.gpu_member()) {
+        // ``out`` reads a family's root: take its elements, laid out densely.
+        storage_ = out.storage();
+        meta_.stride = contiguous_stride(out.shape(), dtype_size(out.dtype()));
+        offset_ = 0;
+        drop_shared();
         return;
     }
     storage_ = std::move(out.storage_);
@@ -452,7 +538,41 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     drop_shared();
 }
 
+bool TensorImpl::covers_root() const {
+    return offset_ == 0 && is_contiguous() && nbytes() == family_->nbytes;
+}
+
 const Storage& TensorImpl::storage() const {
+    if (gpu_member()) {
+        const Storage& root = *family_->root;
+        const auto& rg = std::get<GpuStorage>(root);
+        // All of the root in the root's own shape: the root is the value.
+        if (!rg.arr ||
+            (covers_root() && rg.arr->ndim() == meta_.shape.size() &&
+             std::equal(meta_.shape.begin(), meta_.shape.end(), rg.arr->shape().begin())))
+            return root;
+        std::lock_guard<std::mutex> lock(packed_mu_);
+        const std::int64_t v = version();
+        if (!packed_ || packed_version_ != v || packed_root_.lock() != rg.arr) {
+            const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_,
+                                          dtype_size(meta_.dtype));
+            ::mlx::core::array elems = gpu_strided::read(*rg.arr, g);
+            if (g.contiguous) {
+                // A reshape or a run of the root reads the root's own buffer:
+                // no allocation of its own for the memory statistics to count.
+                GpuStorage view;
+                view.dtype = meta_.dtype;
+                view.nbytes = elems.nbytes();
+                view.arr = std::make_shared<::mlx::core::array>(std::move(elems));
+                packed_ = Storage{std::move(view)};
+            } else {
+                packed_ = Storage{gpu::wrap_mlx_array(std::move(elems), meta_.dtype)};
+            }
+            packed_version_ = v;
+            packed_root_ = rg.arr;
+        }
+        return *packed_;
+    }
     if (!storage_is_cpu(storage_) || is_dense())
         return storage_;
     // Packed once per version, not once per call: an op asks several times,
@@ -502,6 +622,10 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
                                 "shares storage with a live view — cast first, or use the "
                                 "out-of-place form");
+    if (gpu_member()) {
+        write_gpu_member(src, name, /*raw=*/false);
+        return;
+    }
     if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
         ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
     if (overlaps_itself(meta_.shape, meta_.stride))
@@ -509,18 +633,8 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     const long members = family_ ? family_.use_count() : 1;
     if (gradient_slot_write(storage_, members) == SlotWrite::kRefused)
         refuse_shared_gradient_write(name);
-    // A leaf's values are where its gradient accumulates.  A write through
-    // one of its views moves them as surely as a write to the leaf itself,
-    // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
-    // a missing grad_fn: a leaf used in a graph holds an AccumulateGrad.  A
-    // detached alias (``.data``) is exempt — its writes are untracked by
-    // design — and so is a detached member, which no autograd reads.
     if (GradMode::is_enabled() && !is_detached_alias())
-        for (const auto& m : live_views())
-            if (!m->is_detached_alias() && m->requires_grad() && m->is_leaf())
-                ErrorBuilder(name).fail("a view of a leaf tensor that requires grad cannot be "
-                                        "modified in place — wrap the call in no_grad, or use "
-                                        "the out-of-place form");
+        refuse_write_to_leaf_view(live_views(), name);
     auto& dst = std::get<CpuStorage>(storage_);
     const auto& from = std::get<CpuStorage>(src.storage_);
     // The op handed back this very buffer (a no-op for this dtype): the
@@ -553,6 +667,99 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         scatter_contig_to_strided(bytes, dst, meta_.shape, meta_.stride, offset_);
     }
     bump_version();
+}
+
+void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool raw) {
+    if (src.device() != Device::GPU)
+        throw DeviceMismatch(std::string(device_name(meta_.device)),
+                             std::string(device_name(src.device())), name);
+    if (!is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
+        refuse_overlapping_write(name);
+    const bool graph = src.requires_grad() || src.grad_fn();
+    if (!raw && GradMode::is_enabled() && !is_detached_alias()) {
+        const auto views = live_views();
+        refuse_write_to_leaf_view(views, name);
+        refuse_strided_rederive(*this, views, graph, name);
+    }
+    const auto& value = std::get<GpuStorage>(src.readable());
+    auto& root = std::get<GpuStorage>(*family_->root);
+    if (!value.arr || !root.arr)
+        ErrorBuilder(name).fail("a Metal tensor without an array");
+    const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_, dtype_size(meta_.dtype));
+    ::mlx::core::array next = gpu_strided::write(*root.arr, *value.arr, g);
+    // The family was built over a Metal shared buffer that the root still
+    // reads.  With no graph to protect — a node's snapshot reads the same
+    // bytes — the values go into that buffer, so its CPU alias sees them as
+    // well (take_storage_from's rule), and the root stays the buffer.
+    if ((raw || !graph) && root_is_shared_buffer(shared_, root, meta_.dtype)) {
+        ::mlx::core::synchronize();
+        copy_into_shared(*shared_, next);
+    } else if (g.covers(static_cast<std::int64_t>(root.arr->size())) &&
+               value.arr->shape() == root.arr->shape()) {
+        // The whole value in the root's shape: the root is the value itself,
+        // as a slot swap would have made it.
+        root.arr = value.arr;
+    } else {
+        root.arr = gpu::wrap_mlx_array(std::move(next), meta_.dtype).arr;
+    }
+    drop_family_caches();
+    bump_version();
+}
+
+void TensorImpl::drop_family_caches() {
+    // The cached elements, and the value the base held before the family
+    // formed: either would keep an old root's buffer alive.
+    const auto drop = [](TensorImpl& t) {
+        {
+            std::lock_guard<std::mutex> lock(t.packed_mu_);
+            t.packed_.reset();
+            t.packed_root_.reset();
+        }
+        if (const auto* g = std::get_if<GpuStorage>(&t.storage_); g && g->arr)
+            t.storage_ = gpu_placeholder(t.meta_.dtype);
+    };
+    drop(*this);
+    for (const auto& m : live_views())
+        drop(*m);
+}
+
+void TensorImpl::leave_family() {
+    Storage own = storage();
+    const auto carried =
+        static_cast<std::int64_t>(family_->version.load(std::memory_order_relaxed));
+    {
+        std::lock_guard<std::mutex> lock(packed_mu_);
+        packed_.reset();
+        packed_root_.reset();
+    }
+    family_.reset();
+    // The family's counter folds into this tensor's own, so version() does
+    // not move backwards (drop_shared does the same).
+    if (carried > 0)
+        ensure_autograd()->version += carried;
+    storage_ = std::move(own);
+    meta_.stride = contiguous_stride(meta_.shape, dtype_size(meta_.dtype));
+    offset_ = 0;
+}
+
+Storage& TensorImpl::mutable_storage() {
+    if (!gpu_member())
+        return storage_;
+    if (!covers_root())
+        ErrorBuilder("mutable_storage")
+            .not_implemented("an engine in-place step (an optimizer, BatchNorm's running "
+                             "statistics, a compiled step) on a Metal view of part of a tensor "
+                             "is not supported — clone() first");
+    auto& root = std::get<GpuStorage>(*family_->root);
+    if (root.arr &&
+        !(root.arr->ndim() == meta_.shape.size() &&
+          std::equal(meta_.shape.begin(), meta_.shape.end(), root.arr->shape().begin())))
+        root.arr =
+            gpu::wrap_mlx_array(::mlx::core::reshape(*root.arr, gpu_strided::to_mlx(meta_.shape)),
+                                meta_.dtype)
+                .arr;
+    drop_family_caches();
+    return *family_->root;
 }
 
 void TensorImpl::drop_shared() {
@@ -626,7 +833,7 @@ bool TensorImpl::is_contiguous() const {
 }
 
 bool TensorImpl::is_dense() const {
-    return offset_ == 0 && is_contiguous() && storage_nbytes(storage_) == nbytes();
+    return offset_ == 0 && is_contiguous() && storage_nbytes(raw_storage()) == nbytes();
 }
 
 // Dispatches on the active Storage variant to produce a NumPy array.
@@ -638,9 +845,12 @@ py::object TensorImpl::data_as_python() const {
                               return make_numpy_view(s, meta_.shape, meta_.stride, offset_);
                           },
                           [&](const GpuStorage& g) -> py::object {
-                              // The download is a fresh, dense buffer.
+                              // The download is a fresh, dense buffer, whatever
+                              // geometry a Metal view has over its family's root.
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-                              return make_numpy_view(cpu, meta_.shape, meta_.stride, 0);
+                              return make_numpy_view(
+                                  cpu, meta_.shape,
+                                  contiguous_stride(meta_.shape, dtype_size(meta_.dtype)), 0);
                           },
 
                           [&](const SharedStorage& sh) -> py::object {
@@ -648,7 +858,7 @@ py::object TensorImpl::data_as_python() const {
                               return make_numpy_view(v, meta_.shape, meta_.stride, offset_);
                           },
                       },
-                      storage_);
+                      readable());
 }
 
 // Same variant dispatch as data_as_python() but applied to the optional
@@ -958,7 +1168,7 @@ py::bytes TensorImpl::to_bytes() const {
                 return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
             },
         },
-        storage_);
+        readable());
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
@@ -1051,7 +1261,7 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
                                                     meta_.dtype, target, requires_grad);
             },
         },
-        storage_);
+        readable());
 }
 
 namespace {
@@ -1349,8 +1559,10 @@ py::object TensorImpl::item() const {
                 }
                 g.arr->eval();
                 MemoryTracker::track_host_sync(dtype_size(meta_.dtype));
-                const auto* raw =
-                    reinterpret_cast<const char*>(g.arr->data<std::uint8_t>()) + byte_offset;
+                // A Metal tensor's value is its own elements: a family
+                // member's offset counts in the root, which readable() has
+                // already read through.
+                const auto* raw = reinterpret_cast<const char*>(g.arr->data<std::uint8_t>());
                 return decode_scalar(raw, meta_.dtype);
             },
             [&](const SharedStorage& sh) -> py::object {
@@ -1359,7 +1571,7 @@ py::object TensorImpl::item() const {
                 return decode_scalar(raw, meta_.dtype);
             },
         },
-        storage_);
+        readable());
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
@@ -1426,7 +1638,7 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
                        buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
                    },
                },
-               storage_);
+               readable());
 
     if (meta_.shape.empty()) {
         // 0-d scalar — render the single element with no brackets.
@@ -1471,15 +1683,15 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     if (other.shape() != shape()) {
         throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
     }
+    // A Metal family member writes into the root that every member reads.
+    if (gpu_member())
+        return write_gpu_member(other, "copy_from", /*raw=*/true);
     // A CPU view is written through its geometry: the source, packed, laid
     // into this tensor's own elements at its offset and strides.  The copy
     // below would land at the buffer's first byte.
     if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
         if (overlaps_itself(meta_.shape, meta_.stride))
-            ErrorBuilder("copy_from")
-                .fail(
-                    "copying into a tensor whose elements overlap (an "
-                    "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
+            refuse_overlapping_write("copy_from");
         const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
                                                 other.stride(), other.storage_offset());
         scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
@@ -1554,7 +1766,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                                             "copy_from (storage variant)");
                    },
                },
-               storage_, other.storage_);
+               storage_, other.readable());
 
     bump_version();
 }
@@ -1617,7 +1829,7 @@ void TensorImpl::zero_grad() {
 void TensorImpl::eval() const {
     if (meta_.device != Device::GPU)
         return;  // CPU: no-op
-    const auto& gpu_st = std::get<GpuStorage>(storage_);
+    const auto& gpu_st = std::get<GpuStorage>(readable());
     if (gpu_st.arr)
         gpu_st.arr->eval();  // mlx::core::array::eval()
 }
@@ -1639,26 +1851,39 @@ bool TensorImpl::storage_is_shared() const noexcept {
 // wires its grad_fn, as reshape does; one that makes a detached alias sets
 // the flags it wants, as clone_with_grad does.
 //
-// A CPU view joins base's view family (see ViewFamily) unless the caller
-// asks it not to.  GPU tensors form none: an MLX array cannot see a write
-// made through another, so they keep copy semantics.
+// The view joins base's view family (see ViewFamily) unless the caller asks
+// it not to.  On Metal the family keeps the buffer's value as its root, and
+// the view reads and writes through it.  A Metal view kept out of the family
+// is a value of its own: base's elements under the view's geometry.
 std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
                                                   Shape shape,
                                                   Stride stride,
                                                   std::size_t offset_bytes,
                                                   bool join_family) {
-    auto view = std::make_shared<TensorImpl>(base->storage_, std::move(shape), base->meta_.dtype,
-                                             base->meta_.device, false);
-    view->meta_.stride = std::move(stride);
+    const Dtype dtype = base->meta_.dtype;
     // offset_ accumulates: a view of a view has the combined byte offset from
     // the original allocation's start.
-    view->offset_ = base->offset_ + offset_bytes;
+    const std::size_t offset = base->offset_ + offset_bytes;
+    if (base->gpu_member() && !join_family) {
+        const auto& root = std::get<GpuStorage>(*base->family_->root);
+        const gpu_strided::Geometry g(shape, stride, offset, dtype_size(dtype));
+        auto view = std::make_shared<TensorImpl>(
+            Storage{gpu::wrap_mlx_array(gpu_strided::read(*root.arr, g), dtype)}, std::move(shape),
+            dtype, base->meta_.device, false);
+        view->shared_ = base->shared_;
+        return view;
+    }
+    const bool gpu_family = join_family && storage_is_gpu(base->raw_storage());
+    auto view = std::make_shared<TensorImpl>(gpu_family ? gpu_placeholder(dtype) : base->storage_,
+                                             std::move(shape), dtype, base->meta_.device, false);
+    view->meta_.stride = std::move(stride);
+    view->offset_ = offset;
     // A view of a shared buffer reads the same bytes, so it shares the
     // buffer's version counter and keeps its MLX alias pinned.
     // metal_shared() still answers no unless the view is the whole buffer.
     view->shared_ = base->shared_;
 
-    if (join_family && storage_is_cpu(base->storage_))
+    if (gpu_family || (join_family && storage_is_cpu(base->storage_)))
         add_to_family(base, view);
     return view;
 }
@@ -1669,6 +1894,12 @@ void TensorImpl::add_to_family(const std::shared_ptr<TensorImpl>& base,
         base->family_ = std::make_shared<ViewFamily>();
         base->family_->nbytes = storage_nbytes(base->storage_);
         base->family_->members.push_back(base);
+        // A Metal base's value becomes the family's root, which every
+        // member — the base included — reads from now on.  The base keeps
+        // its own copy until the first write (drop_family_caches): an op
+        // may still hold a reference to it from before the view was made.
+        if (storage_is_gpu(base->storage_))
+            base->family_->root = base->storage_;
     }
     view->family_ = base->family_;
     std::lock_guard<std::mutex> lock(view->family_->mu);

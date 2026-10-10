@@ -2,7 +2,7 @@
 //
 // Registers ops from ``ops/composite/`` plus a handful of pure aliases for
 // existing primitives that share an engine implementation under a different
-// public name (e.g. ``eq → equal``, ``view → reshape``).  Aliases live here
+// public name (e.g. ``eq → equal``).  Aliases live here
 // rather than in their owning bind_*.cpp because they are part of the same
 // "convenience surface" the composite ops expose.
 
@@ -25,6 +25,7 @@
 #include "../ops/utils/Concat.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
+#include "../ops/utils/ViewStrict.h"
 
 namespace py = pybind11;
 
@@ -102,8 +103,9 @@ void register_composite(py::module_& m) {
     m.def("bitwise_not", &invert_op, py::arg("a"));
 
     // Shape aliases.
+    // ``view`` is reshape that refuses to copy (view_op).
     m.def(
-        "view", [](const TensorImplPtr& a, const Shape& shape) { return reshape_op(a, shape); },
+        "view", [](const TensorImplPtr& a, const Shape& shape) { return view_op(a, shape); },
         py::arg("a"), py::arg("shape"));
     m.def(
         "concat",
