@@ -32,7 +32,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
 from lucid.nn.functional import loss as _loss_module
-from lucid.nn.functional.loss import _TARGET_SHAPE
+from lucid.nn.functional._loss_checks import _TARGET_SHAPE
 from lucid.test._fixtures.devices import metal_available
 
 _needs_metal = pytest.mark.skipif(not metal_available(), reason="needs Metal")

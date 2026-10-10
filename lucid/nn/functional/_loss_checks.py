@@ -1,0 +1,374 @@
+"""
+The boundary validators of the losses in :mod:`lucid.nn.functional.loss`.
+
+Each public loss calls these at its top, before it computes anything, and
+a malformed argument is refused with a typed exception, the same one on
+the CPU and on Metal.  All but :func:`_check_unit_interval` read only
+shapes, dtypes and Python values, so a refusal dispatches no op and waits
+on no device.
+
+Operand dtypes
+--------------
+Which dtypes a loss takes for its input and its target, and which dtype it
+computes in, is decided here too (``_OPERAND_DTYPES``).  The losses used to
+leave that to whichever op first touched the operand, so the answer
+depended on the device and on the code path:
+
+- ``nll_loss`` took an integer input on the CPU and returned an integer
+  loss, and on Metal it raised ``ValueError`` about NaN;
+- ``margin_ranking_loss`` refused the integer label that the reference
+  takes;
+- ``huber_loss`` returned a wrong number on the CPU for a float16 target
+  beside a float32 input.
+
+An operand of a dtype the loss does not take is now refused with a
+``TypeError`` that names the loss and the dtype (:func:`_check_dtypes`).
+The accepted operands are cast to one dtype (:func:`_loss_dtype`), so no
+kernel sees a mixed pair.
+"""
+
+import warnings
+from typing import TYPE_CHECKING
+
+import lucid as _lucid
+from lucid import _promotion
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap
+from lucid.nn.functional._index_checks import _host_read
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+#: The reductions every loss defines.  ``kl_div`` adds ``"batchmean"``.
+_REDUCTIONS: tuple[str, ...] = ("none", "mean", "sum")
+
+
+# ── boundary validators ─────────────────────────────────────────────────────
+#
+# Each raises before the loss computes.  All but ``_check_unit_interval``
+# read shapes and Python values only, so a refusal dispatches no op at all.
+# A wrong argument used to reach the arithmetic: a class weight of the wrong
+# length was cut short or read out of bounds (a silent answer on the CPU,
+# NaN or 0 on Metal), a BCE target of another shape was broadcast into a
+# different loss, and nine losses looked at ``reduction`` only after
+# computing.
+
+
+def _check_reduction(reduction: str, op: str, *, batchmean: bool = False) -> None:
+    """Refuse a ``reduction`` that the loss ``op`` does not define."""
+    valid = _REDUCTIONS + ("batchmean",) if batchmean else _REDUCTIONS
+    if not isinstance(reduction, str) or reduction not in valid:
+        raise ValueError(f"{op}: reduction must be one of {valid}, got {reduction!r}")
+
+
+def _shape(t: Tensor) -> tuple[int, ...]:
+    return tuple(int(d) for d in t.shape)
+
+
+def _broadcast_shape(*shapes: tuple[int, ...]) -> tuple[int, ...] | None:
+    """The shape ``shapes`` broadcast to, or ``None`` if they do not."""
+    rank = max((len(s) for s in shapes), default=0)
+    out: list[int] = []
+    for axis in range(-rank, 0):
+        sizes = {s[axis] for s in shapes if len(s) >= -axis} - {1}
+        if len(sizes) > 1:
+            return None
+        out.append(sizes.pop() if sizes else 1)
+    return tuple(out)
+
+
+def _check_broadcasts_to(
+    t: Tensor | None, shape: tuple[int, ...], what: str, op: str
+) -> None:
+    """``t`` scales a loss of ``shape`` element by element: it has to
+    broadcast to ``shape`` without making it any larger."""
+    if t is not None and _broadcast_shape(_shape(t), shape) != shape:
+        raise ValueError(
+            f"{op}: {what} of shape {_shape(t)} does not broadcast to the "
+            f"input's shape {shape}"
+        )
+
+
+#: How each elementwise loss's ``target`` has to relate to its input's
+#: shape — one rule per loss, the reference's:
+#:
+#: - ``"same"``: equal shapes.  Another shape is refused, not broadcast:
+#:   broadcasting a BCE target scores a different problem.
+#: - ``"within"``: the target broadcasts to the input's shape without
+#:   enlarging it.  (For ``multilabel_soft_margin_loss`` this is stricter
+#:   than the reference, which broadcasts the loss up.)
+#: - ``"broadcast"``: input and target broadcast together.
+#: - ``"broadcast-warn"``: the same, with a ``UserWarning`` when the shapes
+#:   differ, as the reference's regression losses give — an ``(N, 1)``
+#:   prediction against an ``(N,)`` target scores ``N * N`` pairs.
+#:
+#: The class-index losses take one index per sample instead
+#: (:func:`_check_class_target`); the pair losses check their operands
+#: together (:func:`_check_same_rank`).
+_TARGET_SHAPE: dict[str, str] = {
+    "binary_cross_entropy": "same",
+    "binary_cross_entropy_with_logits": "same",
+    "multilabel_margin_loss": "same",
+    "soft_margin_loss": "within",
+    "multilabel_soft_margin_loss": "within",
+    "gaussian_nll_loss": "broadcast",
+    "hinge_embedding_loss": "broadcast",
+    "kl_div": "broadcast",
+    "poisson_nll_loss": "broadcast",
+    "huber_loss": "broadcast-warn",
+    "l1_loss": "broadcast-warn",
+    "mse_loss": "broadcast-warn",
+    "smooth_l1_loss": "broadcast-warn",
+}
+
+
+def _check_target(x: Tensor, target: Tensor, op: str) -> tuple[int, ...]:
+    """Check ``target``'s shape against ``x``'s by ``op``'s rule in
+    ``_TARGET_SHAPE``, and return the shape of the elementwise loss."""
+    rule = _TARGET_SHAPE[op]
+    x_shape, t_shape = _shape(x), _shape(target)
+    if rule == "same":
+        if t_shape != x_shape:
+            raise ValueError(
+                f"{op}: target size {t_shape} must be the same as input size "
+                f"{x_shape}"
+            )
+        return x_shape
+    shape = _broadcast_shape(x_shape, t_shape)
+    if shape is None or (rule == "within" and shape != x_shape):
+        raise ValueError(
+            f"{op}: target of shape {t_shape} does not broadcast "
+            f"{'to' if rule == 'within' else 'with'} the input's shape {x_shape}"
+        )
+    if rule == "broadcast-warn" and t_shape != x_shape:
+        warnings.warn(
+            f"{op}: using a target size {t_shape} that is different to the "
+            f"input size {x_shape}; the two are broadcast together, which "
+            "is rarely what a regression means",
+            UserWarning,
+            stacklevel=3,
+        )
+    return shape
+
+
+def _broadcast_operands(
+    x: Tensor, target: Tensor, shape: tuple[int, ...]
+) -> tuple[Tensor, Tensor]:
+    """``x`` and ``target`` at the loss's ``shape``, for a fused kernel that
+    takes operands of one shape.  An operand already at ``shape`` is passed
+    through untouched, so the ordinary call dispatches nothing extra."""
+    if _shape(x) != shape:
+        x = _lucid.broadcast_to(x, shape)
+    if _shape(target) != shape:
+        target = _lucid.broadcast_to(target, shape)
+    return x, target
+
+
+def _check_same_rank(op: str, *, broadcast: bool = True, **tensors: Tensor) -> None:
+    """The inputs of a pairwise loss line up element for element: one rank,
+    and (with ``broadcast``) shapes that broadcast together.  A user's
+    distance function decides for itself which shapes it pairs, so
+    ``triplet_margin_with_distance_loss`` checks the rank only."""
+    shapes = {name: _shape(t) for name, t in tensors.items()}
+    if len({len(s) for s in shapes.values()}) > 1 or (
+        broadcast and _broadcast_shape(*shapes.values()) is None
+    ):
+        got = ", ".join(f"{name} {s}" for name, s in shapes.items())
+        raise ValueError(
+            f"{op}: the inputs are expected to have the same number of "
+            f"dimensions{' and broadcastable shapes' if broadcast else ''}, "
+            f"got {got}"
+        )
+
+
+def _num_classes(x: Tensor, op: str, *, max_ndim: int | None = None) -> int:
+    """The class count of class scores ``x`` — dim 1 of ``(N, C, *)``, dim 0
+    of one unbatched sample ``(C,)`` — refusing a rank the loss does not
+    define."""
+    if x.ndim == 0 or (max_ndim is not None and x.ndim > max_ndim):
+        shapes = "(C,) or (N, C)" if max_ndim == 2 else "(C,), (N, C) or (N, C, *)"
+        raise ValueError(f"{op}: expected an input of shape {shapes}, got {_shape(x)}")
+    return int(x.shape[0] if x.ndim == 1 else x.shape[1])
+
+
+def _check_class_weight(weight: Tensor | None, num_classes: int, op: str) -> None:
+    """A per-class ``weight`` has exactly one entry per class.
+
+    Shape only — no value is read, so this costs nothing on Metal.  A
+    longer weight was silently cut to its first ``C`` entries, and a
+    shorter one read out of bounds for the classes past its end."""
+    if weight is not None and (weight.ndim != 1 or int(weight.shape[0]) != num_classes):
+        raise ValueError(
+            f"{op}: weight tensor should be defined either for all {num_classes} "
+            f"classes or no classes but got weight tensor of shape: "
+            f"{list(_shape(weight))}"
+        )
+
+
+def _check_class_target(x: Tensor, target: Tensor, op: str) -> None:
+    """``target`` holds one class index per sample of ``x``: the shape of
+    ``x`` without its class dimension.  One unbatched ``(C,)`` sample takes a
+    0-d target, or one of shape ``(1,)``."""
+    want = (int(x.shape[0]),) + _shape(x)[2:] if x.ndim > 1 else ()
+    got = _shape(target)
+    if got != want and not (x.ndim == 1 and got == (1,)):
+        raise ValueError(
+            f"{op}: expected a target of shape {want} for an input of shape "
+            f"{_shape(x)}, got {got}"
+        )
+
+
+def _check_unit_interval(t: Tensor, what: str, op: str) -> None:
+    """Refuse a CPU ``t`` with an entry outside ``[0, 1]`` — NaN included —
+    as the reference's CPU kernel does.
+
+    A CPU tensor is on the host already, so the read costs no sync.  A
+    Metal tensor is not read back (a host read in every loss call stalls
+    every step), so it is not checked, and an entry outside the interval
+    makes the loss NaN there instead."""
+    if t.device != "cpu":
+        return
+    if not _host_read(lambda: bool(((t >= 0.0) & (t <= 1.0)).all().item())):
+        raise ValueError(f"{op}: all elements of {what} should be between 0 and 1")
+
+
+# ── operand dtypes ──────────────────────────────────────────────────────────
+
+#: The dtypes an operand of each kind may hold:
+#:
+#: - ``"floating"``: floating point only;
+#: - ``"real"``: floating point or integer, but not bool;
+#: - ``"numeric"``: floating point, integer or bool;
+#: - ``"index"``: integer class indices (no bool, no floating point).
+_KINDS: dict[str, frozenset[str]] = {
+    "floating": frozenset({"floating"}),
+    "real": frozenset({"floating", "integer"}),
+    "numeric": frozenset({"floating", "integer", "bool"}),
+    "index": frozenset({"integer"}),
+}
+
+_DESCRIBE: dict[str, str] = {
+    "floating": "a floating point",
+    "real": "a floating point or integer (not bool)",
+    "numeric": "a floating point, integer or bool",
+    "index": "an integer (class index)",
+}
+
+#: Each loss's ``(input kind, target kind)``, the reference's rule,
+#: measured against it (``test_loss_operand_dtypes``).  An empty target
+#: kind means the loss has no target here, or checks it elsewhere
+#: (``ctc_loss``'s labels are checked with its lengths).
+#:
+#: A loss with a floating point input has no integer form in the
+#: reference: it has no integer kernel, or its result is a probability or
+#: a logarithm.  The pair and distance losses compute a non-floating
+#: input in the default floating dtype instead, as the reference does.
+_OPERAND_DTYPES: dict[str, tuple[str, str]] = {
+    "binary_cross_entropy": ("floating", "floating"),
+    "binary_cross_entropy_with_logits": ("floating", "floating"),
+    "kl_div": ("floating", "floating"),
+    "cross_entropy": ("floating", "index"),
+    "nll_loss": ("floating", "index"),
+    "multi_margin_loss": ("floating", "index"),
+    "multilabel_margin_loss": ("floating", "index"),
+    "ctc_loss": ("floating", ""),
+    "hinge_embedding_loss": ("floating", "numeric"),
+    "huber_loss": ("floating", "numeric"),
+    "soft_margin_loss": ("floating", "numeric"),
+    "multilabel_soft_margin_loss": ("floating", "real"),
+    "mse_loss": ("numeric", "numeric"),
+    "smooth_l1_loss": ("numeric", "numeric"),
+    "l1_loss": ("real", "real"),
+    "gaussian_nll_loss": ("real", "real"),
+    "poisson_nll_loss": ("real", "numeric"),
+    "margin_ranking_loss": ("real", "real"),
+    "cosine_embedding_loss": ("numeric", "numeric"),
+    "triplet_margin_loss": ("real", ""),
+    "triplet_margin_with_distance_loss": ("real", ""),
+}
+
+#: The regression losses: each takes a non-floating input or target, but
+#: not both.  They compute in the dtype the two promote to, and an
+#: integer pair has no loss to compute — the reference has no integer
+#: kernel for them.
+_FLOATING_RESULT: frozenset[str] = frozenset({"mse_loss", "smooth_l1_loss", "l1_loss"})
+
+
+def _kind_of(t: Tensor) -> str:
+    """``"floating"``, ``"integer"``, ``"bool"`` or ``"complex"``."""
+    if t.is_floating_point():
+        return "floating"
+    d = _unwrap(t).dtype
+    if d == _C_engine.Dtype.Bool:
+        return "bool"
+    return "integer" if _promotion.is_integer(d) else "complex"
+
+
+def _check_kind(t: Tensor, kind: str, what: str, op: str) -> None:
+    """Refuse ``t``, the ``what`` operand of loss ``op``, unless its dtype
+    is of ``kind`` (see ``_KINDS``)."""
+    if _kind_of(t) not in _KINDS[kind]:
+        raise TypeError(f"{op}: expected {_DESCRIBE[kind]} {what}, got {t.dtype}")
+
+
+def _check_dtypes(op: str, target: Tensor | None = None, **inputs: Tensor) -> None:
+    """Refuse an operand whose dtype loss ``op`` does not take, by its row
+    of ``_OPERAND_DTYPES``.
+
+    ``inputs`` are the loss's inputs, by the names the message uses for
+    them; ``target`` is its target, when it has one."""
+    input_kind, target_kind = _OPERAND_DTYPES[op]
+    for what, t in inputs.items():
+        _check_kind(t, input_kind, what, op)
+    if target is None or not target_kind:
+        return
+    _check_kind(target, target_kind, "target", op)
+    if op in _FLOATING_RESULT and not any(
+        t.is_floating_point() for t in (*inputs.values(), target)
+    ):
+        dtypes = ", ".join(str(t.dtype) for t in (*inputs.values(), target))
+        raise TypeError(
+            f"{op}: expected a floating point input or target, got {dtypes}"
+        )
+
+
+def _loss_dtype(*operands: Tensor) -> _C_engine.Dtype:
+    """The dtype a loss over ``operands`` computes in: the dtype they
+    promote to, or the default floating dtype when that is not floating
+    point (an integer or bool pair loss)."""
+    impls = [_unwrap(t) for t in operands]
+    d = _promotion.result_type(*impls)
+    if _promotion.is_integral(d):
+        return _promotion.default_float(impls[0].device)
+    return d
+
+
+def _cast(t: Tensor, d: _C_engine.Dtype) -> Tensor:
+    """``t`` at the engine dtype ``d``; ``t`` itself when it is already."""
+    return t if _unwrap(t).dtype == d else t.to(dtype=d)
+
+
+def _operands(
+    op: str, x: Tensor, target: Tensor, *, promote: bool = True
+) -> tuple[Tensor, Tensor]:
+    """``x`` and ``target`` checked for loss ``op`` (:func:`_check_dtypes`)
+    and cast to the dtype the loss computes in.
+
+    That dtype is the one the two promote to.  With ``promote=False`` it is
+    ``x``'s alone: a target that is only compared, never multiplied, does
+    not widen the loss."""
+    _check_dtypes(op, target, input=x)
+    d = _loss_dtype(x, target) if promote else _loss_dtype(x)
+    return _cast(x, d), _cast(target, d)
+
+
+def _pair_operands(
+    op: str, x1: Tensor, x2: Tensor, y: Tensor, *, promote: bool
+) -> tuple[Tensor, Tensor, Tensor]:
+    """The two inputs and the label ``y`` of a pair loss, checked for loss
+    ``op`` and cast to the dtype it computes in: the inputs' dtype, joined
+    with the label's when ``promote`` (a label that is only compared does
+    not widen the loss)."""
+    _check_dtypes(op, y, input1=x1, input2=x2)
+    d = _loss_dtype(x1, x2, y) if promote else _loss_dtype(x1, x2)
+    return _cast(x1, d), _cast(x2, d), _cast(y, d)
