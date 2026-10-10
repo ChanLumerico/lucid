@@ -11,8 +11,10 @@ The scaling now lives on each lookup's graph node
 (``F.embedding(..., scale_grad_by_freq=True)``), which owns nothing a module
 holds.  Pinned here: every site in :data:`_SITES` dies once dropped, the
 scaled gradient matches the reference across the cases that used to break
-it, and a static scan keeps library code from registering a hook that
-closes over ``self``.
+it, and a static scan keeps library code from handing the engine a
+callable that closes over ``self`` — a tensor hook, or a module call's
+backward-hook runners, whose holder once also held the engine state that
+kept them (LCD-167, ``test_module_backward_hook_lifetime.py``).
 """
 
 import ast
@@ -188,18 +190,30 @@ def test_the_result_reads_the_unscaled_gradient(device: str) -> None:
     assert weight.grad.tolist()[1] == [1.0] * 3
 
 
-# ── class guard: no library hook closes over ``self`` ──────────────────────
+# ── class guard: no engine-held library callable closes over ``self`` ─────
 
 
 _LIBRARY = Path(lucid.__file__).parent
-_REGISTRARS = frozenset({"register_hook", "_register_tensor_hook"})
+
+#: engine entry points that keep a Python callable -> index of the first
+#: positional argument that is one (every later one, and every keyword, is)
+_REGISTRARS: dict[str, int] = {
+    "register_hook": -1,
+    "_register_tensor_hook": -1,  # ``_register_tensor_hook(tensor, hook)``
+    # ``(n_inputs, pre_runner, full_runner)`` — a module call's backward
+    # hooks; held by the call's graph (LCD-167)
+    "_create_module_backward_hook_state": 1,
+}
 
 
 def _hooks_holding_self(source: str) -> list[int]:
-    """Lines registering a tensor hook whose argument mentions ``self``.
+    """Lines handing the engine a callable whose expression mentions ``self``.
 
     A bound method (``self.m``), a lambda or a partial over ``self`` all
-    hand the engine a strong reference to the object that owns the hook.
+    hand the engine a strong reference to the object that registers it.
+    The engine's edges are invisible to the garbage collector, so if that
+    object also holds what the engine keeps — a weight's slot, a module
+    call's hook state — the pair can never be freed.
     """
     lines: list[int] = []
     for node in ast.walk(ast.parse(source)):
@@ -209,8 +223,12 @@ def _hooks_holding_self(source: str) -> list[int]:
         name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
         if name not in _REGISTRARS or not node.args:
             continue
-        hook = node.args[-1]  # ``_register_tensor_hook(tensor, hook)``
-        if any(isinstance(n, ast.Name) and n.id == "self" for n in ast.walk(hook)):
+        hooks = [*node.args[_REGISTRARS[name] :], *(kw.value for kw in node.keywords)]
+        if any(
+            isinstance(n, ast.Name) and n.id == "self"
+            for hook in hooks
+            for n in ast.walk(hook)
+        ):
             lines.append(node.lineno)
     return lines
 
@@ -223,8 +241,14 @@ def test_the_scan_catches_the_pattern_it_guards() -> None:
         "        w.register_hook(lambda g: self.scale(g))\n"
         "        _register_tensor_hook(w, self.scale)\n"
         "        w.register_hook(module_level_fn)\n"
+        "        _register_tensor_hook(self.w, module_level_fn)\n"
+        "        self.state = E._create_module_backward_hook_state(\n"
+        "            n, self.run_pre_hooks, self.run_full_hooks)\n"
+        "        E._create_module_backward_hook_state(\n"
+        "            len(self.args), runners.pre, full_runner=self.full)\n"
+        "        E._create_module_backward_hook_state(len(self.args), a, b)\n"
     )
-    assert _hooks_holding_self(source) == [3, 4, 5]
+    assert _hooks_holding_self(source) == [3, 4, 5, 8, 10]
 
 
 def test_no_library_tensor_hook_holds_its_owner() -> None:

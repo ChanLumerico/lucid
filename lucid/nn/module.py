@@ -351,27 +351,35 @@ class Module:
     def _prepare_backward_hooks(
         self,
         args: tuple[Tensor, ...],
-    ) -> tuple[tuple[Tensor, ...], _ModuleBackwardState]:
-        state = _ModuleBackwardState(self, len(args))
+    ) -> tuple[tuple[Tensor, ...], object]:
+        # The engine state is owned by the call's graph alone (LCD-167): the
+        # runners keep the module alive as long as the graph is, and nothing
+        # Python holds points back at the engine state, so dropping the
+        # graph frees the call.  A runner object that also held the engine
+        # state was a cycle through C++ the garbage collector cannot see.
+        runners = _ModuleBackwardState(self)
+        engine_state: object = _C_engine._create_module_backward_hook_state(  # type: ignore[attr-defined]
+            len(args), runners.run_pre_hooks, runners.run_full_hooks
+        )
         entries: list[tuple[int, _C_engine.TensorImpl]] = [
             (idx, _unwrap(arg))
             for idx, arg in enumerate(args)
             if isinstance(arg, Tensor) and arg.requires_grad
         ]
         if not entries:
-            return args, state
+            return args, engine_state
         wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]
-            state.engine_state, entries
+            engine_state, entries
         )
         wrapped_args = list(args)
         for (idx, _), impl in zip(entries, wrapped_impls, strict=True):
             wrapped_args[idx] = _wrap(impl)
-        return tuple(wrapped_args), state
+        return tuple(wrapped_args), engine_state
 
     def _attach_output_backward_hooks(
         self,
         output: _ModuleOutput,
-        state: _ModuleBackwardState,
+        engine_state: object,
     ) -> _ModuleOutput:
         if isinstance(output, tuple):
             n_outputs = sum(1 for item in output if isinstance(item, Tensor))
@@ -387,7 +395,7 @@ class Module:
             if not entries:
                 return output
             wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
-                state.engine_state, entries, n_outputs
+                engine_state, entries, n_outputs
             )
             wrapped_output = list(output)
             for pos, impl in zip(positions, wrapped_impls, strict=True):
@@ -397,7 +405,7 @@ class Module:
         if not isinstance(output, Tensor) or not output.requires_grad:
             return output
         wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]
-            state.engine_state, [(0, _unwrap(output))], 1
+            engine_state, [(0, _unwrap(output))], 1
         )[
             0
         ]
@@ -1317,13 +1325,17 @@ class _ModuleBackwardState:
     engine accepted, and what flows on is the last hook's.  Nothing is
     filtered here: an entry that is not a tensor reaches the engine, which
     refuses it.
+
+    The engine's state holds this object through its two bound methods, so
+    it must hold nothing that leads back to that state: the garbage
+    collector cannot see the engine's edges, and such a cycle would keep
+    the module and every call's state alive forever (LCD-167).  It holds
+    the module, as the reference's graph does, so a module that is only
+    reachable from a pending graph still runs its hooks.
     """
 
-    def __init__(self, module: Module, n_inputs: int) -> None:
+    def __init__(self, module: Module) -> None:
         self.module = module
-        self.engine_state: object = _C_engine._create_module_backward_hook_state(  # type: ignore[attr-defined]
-            n_inputs, self.run_pre_hooks, self.run_full_hooks
-        )
 
     def run_pre_hooks(
         self, grad_output_impls: tuple[_C_engine.TensorImpl | None, ...]
