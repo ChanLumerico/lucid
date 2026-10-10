@@ -352,6 +352,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - literal dtype inference promotes through the owner
 - clip reads its bounds without a redundant conditional
 - rename the resolver to lucid/_annotations.py
+- merge the NAMES table into lucid/_annotations.py
 
 ---
 

@@ -17,9 +17,9 @@ That rule once covered ``lucid.__all__`` alone, by binding ``Tensor`` at the
 foot of each file; 297 callables across ``nn``, ``compile``,
 ``quantization``, ``models`` and the rest still raised.  Now
 :mod:`lucid._annotations` binds every name a module imports under
-``TYPE_CHECKING`` once the module has finished executing, from a table
-``tools/gen_annotation_names.py`` writes — and the whole surface is held
-here, not only the top level.
+``TYPE_CHECKING`` once the module has finished executing, from the table
+at that file's foot which ``tools/gen_annotation_names.py`` writes — and the
+whole surface is held here, not only the top level.
 """
 
 import annotationlib
@@ -173,7 +173,7 @@ def test_every_public_callable_in_every_subpackage_has_a_readable_signature() ->
 
 
 def test_the_annotation_table_is_fresh() -> None:
-    """``lucid/_annotation_names.py`` matches the ``TYPE_CHECKING`` blocks."""
+    """``NAMES`` in ``lucid/_annotations.py`` matches the ``TYPE_CHECKING`` blocks."""
     result = subprocess.run(
         [sys.executable, "-m", "tools.gen_annotation_names", "--check"],
         capture_output=True,
@@ -181,6 +181,41 @@ def test_the_annotation_table_is_fresh() -> None:
         cwd=_REPO,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_annotation_table_check_reads_only_the_generated_region() -> None:
+    """A stale table is caught; an edit to the hand-written resolver is not.
+
+    The table shares ``lucid/_annotations.py`` with the resolver, so the
+    check must compare the region between the markers and nothing else —
+    and must refuse a file whose markers are missing or doubled rather than
+    rewrite the wrong lines.
+    """
+    from tools import gen_annotation_names as gen
+
+    text = gen.OUT.read_text(encoding="utf-8")
+    fresh = gen.render(gen.collect())
+    assert gen.region(text) == fresh
+
+    resolver_edited = text.replace('"""Bind the names', '"""Binds the names', 1)
+    assert resolver_edited != text
+    assert gen.region(resolver_edited) == fresh
+
+    first_row = next(line for line in fresh.splitlines() if line.startswith("    "))
+    stale = gen.splice(text, fresh.replace(first_row + "\n", "", 1))
+    assert gen.region(stale) != fresh
+    assert gen.splice(stale, fresh) == text
+
+    for broken in (
+        text.replace(gen.END, ""),
+        text.replace(gen.BEGIN, ""),
+        text + gen.BEGIN + "\n",
+        text.replace(gen.BEGIN, "\0")
+        .replace(gen.END, gen.BEGIN)
+        .replace("\0", gen.END),
+    ):
+        with pytest.raises(gen.MarkerError):
+            gen.region(broken)
 
 
 def test_binding_names_imports_nothing_the_package_defers() -> None:
