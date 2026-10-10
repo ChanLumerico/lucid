@@ -26,6 +26,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Compare.h"
@@ -109,6 +110,14 @@ ForwardCore run_forward(const TensorImplPtr& q,
     if (q->dtype() != k->dtype() || q->dtype() != v->dtype())
         throw DtypeMismatch(std::string(dtype_name(q->dtype())),
                             std::string(dtype_name(k->dtype())), "attention: Q/K/V dtype mismatch");
+    if (attn_mask) {
+        // A bool mask selects; an additive one is summed into the scores, so
+        // both kernels read it in q's dtype.  The CPU read a mismatched one
+        // as q's bytes and MLX refused it, so it is refused here for both.
+        Validator::pair(q, attn_mask, "attention: Q/attn_mask").same_device();
+        if (attn_mask->dtype() != Dtype::Bool)
+            Validator::pair(q, attn_mask, "attention: Q/attn_mask").same_dtype();
+    }
     if (q->shape().size() < 2 || k->shape().size() < 2 || v->shape().size() < 2)
         ErrorBuilder("attention").invalid_argument("Q/K/V must be at least 2-D");
 

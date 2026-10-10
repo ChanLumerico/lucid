@@ -231,6 +231,9 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
                                                   double eps) {
     if (!x || !gamma || !beta)
         ErrorBuilder("global_response_norm").fail("null input");
+    // The kernels read gamma and beta in x's dtype.
+    Validator::pair(x, gamma, "global_response_norm").same_device().same_dtype();
+    Validator::pair(x, beta, "global_response_norm").same_device().same_dtype();
     if (x->shape().size() != 4)
         throw ShapeMismatch(x->shape(), Shape{}, "global_response_norm: x must be 4-D");
     const int C = static_cast<int>(x->shape()[1]);

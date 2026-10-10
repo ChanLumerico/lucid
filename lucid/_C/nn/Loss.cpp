@@ -147,6 +147,10 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
     if (!input || !target || !weight)
         ErrorBuilder("bce_loss")
             .fail("input/target/weight required (pass ones for weight if not used)");
+    // The kernels read every operand in the input's dtype; a mismatched one
+    // was read as such — a float16 target as float32 bytes, say.
+    Validator::pair(input, target, "bce_loss").same_device().same_dtype();
+    Validator::pair(input, weight, "bce_loss").same_device().same_dtype();
     if (input->shape() != target->shape())
         throw ShapeMismatch(input->shape(), target->shape(),
                             "bce_loss: input/target shape mismatch");
@@ -200,6 +204,8 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
                                              Reduction reduction) {
     if (!input || !target || !weight || !pos_weight)
         ErrorBuilder("bce_with_logits").fail("input/target/weight/pos_weight required");
+    for (const auto* other : {&target, &weight, &pos_weight})
+        Validator::pair(input, *other, "bce_with_logits").same_device().same_dtype();
     if (input->shape() != target->shape())
         throw ShapeMismatch(input->shape(), target->shape(),
                             "bce_with_logits: input/target shape mismatch");
@@ -260,10 +266,10 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
         throw DeviceMismatch(std::string(device_name(input->device())),
                              std::string(device_name(target->device())),
                              "cross_entropy: input/target");
-    if (weight_or_null && weight_or_null->device() != input->device())
-        throw DeviceMismatch(std::string(device_name(input->device())),
-                             std::string(device_name(weight_or_null->device())),
-                             "cross_entropy: input/weight");
+    if (weight_or_null)
+        Validator::pair(input, weight_or_null, "cross_entropy: input/weight")
+            .same_device()
+            .same_dtype();
 
     const int N = static_cast<int>(input->shape()[0]);
 
@@ -345,10 +351,8 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
     if (input->device() != target->device())
         throw DeviceMismatch(std::string(device_name(input->device())),
                              std::string(device_name(target->device())), "nll_loss: input/target");
-    if (weight_or_null && weight_or_null->device() != input->device())
-        throw DeviceMismatch(std::string(device_name(input->device())),
-                             std::string(device_name(weight_or_null->device())),
-                             "nll_loss: input/weight");
+    if (weight_or_null)
+        Validator::pair(input, weight_or_null, "nll_loss: input/weight").same_device().same_dtype();
 
     const int N = static_cast<int>(input->shape()[0]);
 
@@ -429,6 +433,7 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input0,
     if (input->shape() != target->shape())
         throw ShapeMismatch(input->shape(), target->shape(),
                             "huber_loss: input/target shape mismatch");
+    Validator::pair(input, target, "huber_loss").same_device().same_dtype();
     if (delta <= 0.0)
         ErrorBuilder("huber_loss").invalid_argument("delta must be positive");
 
