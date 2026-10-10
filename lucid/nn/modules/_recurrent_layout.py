@@ -8,8 +8,13 @@ run on one layout only — ``(T, B, *)`` in descending-length batch order,
 :func:`_sequence_major` (cells: :func:`_cell_batch`) and leaves through
 :func:`_restore_layout` (cells: :func:`_cell_unbatch`).  The initial
 states are checked against the shape the input implies on the way in.
+
+Between stacked layers every module applies its ``dropout`` through
+:func:`_inter_layer_dropout`, after checking it once with
+:func:`_check_dropout` when it is built.
 """
 
+import warnings
 from collections.abc import Sequence
 from typing import NamedTuple
 
@@ -17,6 +22,7 @@ import lucid as _lucid
 from lucid import stack
 from lucid._factories.creation import zeros
 from lucid._tensor.tensor import Tensor
+from lucid.nn.functional.dropout import dropout as _dropout
 from lucid.nn.utils.rnn import PackedSequence, _int_tensor_to_list
 
 # The engine's ``lstm`` entry refuses an empty sequence in the same words.
@@ -287,3 +293,46 @@ def _cell_unbatch(unbatched: bool, state: Tensor) -> Tensor:
     """A cell's ``(B, H)`` result in the input's layout — :func:`_cell_batch`
     reversed."""
     return state.squeeze(0) if unbatched else state
+
+
+def _check_dropout(dropout: float, num_layers: int) -> float:
+    """The inter-layer ``dropout`` of RNN / GRU / LSTM, checked once.
+
+    Dropout runs only *between* stacked layers, so a single-layer module
+    has nowhere to apply it — the reference warns rather than refuses,
+    and so does this.
+
+    Raises:
+        ValueError: ``dropout`` is not a number in ``[0, 1]``.
+    """
+    if (
+        isinstance(dropout, bool)
+        or not isinstance(dropout, (int, float))
+        or not 0.0 <= dropout <= 1.0
+    ):
+        raise ValueError(
+            "dropout should be a number in range [0, 1] representing the "
+            f"probability of an element being zeroed, got {dropout!r}"
+        )
+    if dropout > 0 and num_layers == 1:
+        warnings.warn(
+            "dropout option adds dropout after all but last recurrent layer, "
+            "so non-zero dropout expects num_layers greater than 1, but got "
+            f"dropout={dropout} and num_layers={num_layers}",
+            UserWarning,
+            stacklevel=3,
+        )
+    return float(dropout)
+
+
+def _inter_layer_dropout(
+    x: Tensor, p: float, layer: int, num_layers: int, training: bool
+) -> Tensor:
+    """Dropout on the output of ``layer`` before it feeds the next one.
+
+    The one place RNN, GRU and LSTM apply their ``dropout``: in training
+    only, and never after the last layer, whose output is the module's.
+    """
+    if p == 0.0 or not training or layer >= num_layers - 1:
+        return x
+    return _dropout(x, p, training=True)

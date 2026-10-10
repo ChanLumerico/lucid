@@ -4,7 +4,7 @@ Recurrent modules: LSTM, GRU, RNN.
 
 import math
 from collections import OrderedDict
-from typing import cast, override
+from typing import Protocol, cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -18,6 +18,8 @@ from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.functional.linear import linear
 from lucid.nn.utils.rnn import PackedSequence
 from lucid.nn.modules._recurrent_layout import (
+    _check_dropout,
+    _inter_layer_dropout,
     _cell_batch,
     _cell_unbatch,
     _packed_segments,
@@ -86,6 +88,73 @@ def _pad_rows(x: Tensor, total: int) -> Tensor:
         total - bs, *tuple(int(v) for v in x.shape[1:]), device=x.device, dtype=x.dtype
     )
     return _lucid.cat([x, pad], 0)
+
+
+class _CellStack(Protocol):
+    """What :func:`_run_cell_stack` reads off a GRU or an RNN."""
+
+    num_layers: int
+    hidden_size: int
+    batch_first: bool
+    bidirectional: bool
+    dropout_val: float
+    training: bool
+
+    def _cell(self, layer: int, reverse: bool = False) -> GRUCell | RNNCell: ...
+
+
+def _run_cell_stack(
+    kind: str, module: _CellStack, x: Tensor | PackedSequence, hx: Tensor | None
+) -> tuple[Tensor | PackedSequence, Tensor]:
+    """The stacked recurrence of GRU and RNN, which differ only in the cell.
+
+    Steps each layer's cell over time — in both directions when
+    bidirectional — and hands the layer output, through the inter-layer
+    dropout, to the next layer.  A dense input runs every sequence the
+    full length, so ``_carry`` and ``_pad_rows`` both become identities.
+    """
+    num_dirs: int = 2 if module.bidirectional else 1
+    layout, (h0,) = _sequence_major(
+        kind,
+        x,
+        module.batch_first,
+        (("h0", hx, module.hidden_size),),
+        module.num_layers * num_dirs,
+    )
+    seq, batch_sizes = layout.seq, layout.batch_sizes
+    T: int = seq.shape[0]
+    B: int = seq.shape[1]
+
+    h_n: list[Tensor] = []
+    inp = seq
+    for layer in range(module.num_layers):
+        dir_outs: list[list[Tensor]] = []
+        for direction in range(num_dirs):
+            cell = module._cell(layer, reverse=direction == 1)
+            h: Tensor = h0[layer * num_dirs + direction]
+            steps = range(T - 1, -1, -1) if direction == 1 else range(T)
+            outs: list[Tensor] = []
+            for t in steps:
+                bs = batch_sizes[t]
+                step = cell(_slice(inp[t], slice(0, bs)), _slice(h, slice(0, bs)))
+                h = _carry(h, step, bs)
+                outs.append(_pad_rows(step, B))
+            if direction == 1:
+                outs.reverse()
+            h_n.append(h)
+            dir_outs.append(outs)
+        if num_dirs == 2:
+            layer_out = stack(
+                [_cat_last(dir_outs[0][t], dir_outs[1][t]) for t in range(T)], 0
+            )
+        else:
+            layer_out = stack(dir_outs[0], 0)
+        inp = _inter_layer_dropout(
+            layer_out, module.dropout_val, layer, module.num_layers, module.training
+        )
+
+    out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
+    return out, h_n_tensor
 
 
 # Cell-internal parameter names (RNNCell/GRUCell/LSTMCell).  Used by the
@@ -433,7 +502,7 @@ class LSTM(Module):
         self.num_layers: int = num_layers
         self.bias: bool = bias
         self.batch_first: bool = batch_first
-        self.dropout_val: float = dropout
+        self.dropout_val: float = _check_dropout(dropout, num_layers)
         self.bidirectional: bool = bidirectional
         self.proj_size: int = proj_size
 
@@ -686,11 +755,9 @@ class LSTM(Module):
             else:
                 layer_input = dir_outs[0]
 
-            # Inter-layer dropout (skip after the last layer).
-            if self.dropout_val > 0.0 and layer < L - 1 and self.training:
-                from lucid.nn.functional.dropout import dropout as _dropout
-
-                layer_input = _dropout(layer_input, self.dropout_val, training=True)
+            layer_input = _inter_layer_dropout(
+                layer_input, self.dropout_val, layer, L, self.training
+            )
 
         result, (h_n_final, c_n_final) = _restore_layout(
             layout,
@@ -1348,7 +1415,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.batch_first = batch_first
-        self.dropout_val = dropout
+        self.dropout_val = _check_dropout(dropout, num_layers)
         self.bidirectional = bidirectional
 
         num_dirs = 2 if bidirectional else 1
@@ -1390,69 +1457,15 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        # A dense input runs every sequence the full length; ``_carry`` and
-        # ``_pad_rows`` both become identities.
-        num_dirs: int = 2 if self.bidirectional else 1
-        layout, (hx,) = _sequence_major(
-            "GRU",
-            x,
-            self.batch_first,
-            (("h0", hx, self.hidden_size),),
-            self.num_layers * num_dirs,
-        )
-        seq, batch_sizes = layout.seq, layout.batch_sizes
-        T: int = seq.shape[0]
-        B: int = seq.shape[1]
-
-        h_n: list[Tensor] = []
-        inp = seq
-
-        for layer in range(self.num_layers):
-            # ── forward direction ────────────────────────────────────────────
-            cell_fwd: GRUCell = self._cell(layer, reverse=False)
-            h_fwd: Tensor = hx[layer * num_dirs]  # (B, hidden)
-            fwd_out: list[Tensor] = []
-            for t in range(T):
-                bs = batch_sizes[t]
-                step = cell_fwd(
-                    _slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))
-                )
-                h_fwd = _carry(h_fwd, step, bs)
-                fwd_out.append(_pad_rows(step, B))
-            h_n.append(h_fwd)
-
-            if self.bidirectional:
-                # ── reverse direction ────────────────────────────────────────
-                cell_rev = self._cell(layer, reverse=True)
-                h_rev: Tensor = hx[layer * num_dirs + 1]
-                rev_out: list[Tensor] = []
-                for t in range(T - 1, -1, -1):
-                    bs = batch_sizes[t]
-                    step = cell_rev(
-                        _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
-                    )
-                    h_rev = _carry(h_rev, step, bs)
-                    rev_out.append(_pad_rows(step, B))
-                rev_out.reverse()
-                h_n.append(h_rev)
-                # Concat forward and backward at each time step
-                layer_out = stack(
-                    [_cat_last(fwd_out[t], rev_out[t]) for t in range(T)], 0
-                )
-            else:
-                layer_out = stack(fwd_out, 0)
-
-            inp = layer_out
-
-        out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
-        return out, h_n_tensor
+        return _run_cell_stack("GRU", self, x, hx)
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
-            f"batch_first={self.batch_first}, bidirectional={self.bidirectional}"
+            f"batch_first={self.batch_first}, dropout={self.dropout_val}, "
+            f"bidirectional={self.bidirectional}"
         )
 
 
@@ -1597,6 +1610,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         self.num_layers = num_layers
         self.nonlinearity = nonlinearity
         self.batch_first = batch_first
+        self.dropout_val = _check_dropout(dropout, num_layers)
         self.bidirectional = bidirectional
 
         num_dirs = 2 if bidirectional else 1
@@ -1645,57 +1659,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        num_dirs: int = 2 if self.bidirectional else 1
-        layout, (hx,) = _sequence_major(
-            "RNN",
-            x,
-            self.batch_first,
-            (("h0", hx, self.hidden_size),),
-            self.num_layers * num_dirs,
-        )
-        seq, batch_sizes = layout.seq, layout.batch_sizes
-        T: int = seq.shape[0]
-        B: int = seq.shape[1]
-
-        h_n: list[Tensor] = []
-        inp = seq
-
-        for layer in range(self.num_layers):
-            cell_fwd = self._cell(layer, reverse=False)
-            h_fwd: Tensor = hx[layer * num_dirs]
-            fwd_out: list[Tensor] = []
-            for t in range(T):
-                bs = batch_sizes[t]
-                step = cell_fwd(
-                    _slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))
-                )
-                h_fwd = _carry(h_fwd, step, bs)
-                fwd_out.append(_pad_rows(step, B))
-            h_n.append(h_fwd)
-
-            if self.bidirectional:
-                cell_rev = self._cell(layer, reverse=True)
-                h_rev: Tensor = hx[layer * num_dirs + 1]
-                rev_out: list[Tensor] = []
-                for t in range(T - 1, -1, -1):
-                    bs = batch_sizes[t]
-                    step = cell_rev(
-                        _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
-                    )
-                    h_rev = _carry(h_rev, step, bs)
-                    rev_out.append(_pad_rows(step, B))
-                rev_out.reverse()
-                h_n.append(h_rev)
-                layer_out = stack(
-                    [_cat_last(fwd_out[t], rev_out[t]) for t in range(T)], 0
-                )
-            else:
-                layer_out = stack(fwd_out, 0)
-
-            inp = layer_out
-
-        out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
-        return out, h_n_tensor
+        return _run_cell_stack("RNN", self, x, hx)
 
     @override
     def extra_repr(self) -> str:
@@ -1703,5 +1667,5 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
             f"nonlinearity={self.nonlinearity!r}, batch_first={self.batch_first}, "
-            f"bidirectional={self.bidirectional}"
+            f"dropout={self.dropout_val}, bidirectional={self.bidirectional}"
         )
