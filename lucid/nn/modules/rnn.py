@@ -16,7 +16,14 @@ import lucid.nn.init as init
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.functional.linear import linear
-from lucid.nn.utils.rnn import PackedSequence, _int_tensor_to_list
+from lucid.nn.utils.rnn import PackedSequence
+from lucid.nn.modules._recurrent_layout import (
+    _cell_batch,
+    _cell_unbatch,
+    _packed_segments,
+    _restore_layout,
+    _sequence_major,
+)
 from lucid.nn.functional.activations import tanh, relu, sigmoid
 from lucid import stack
 
@@ -50,110 +57,6 @@ def _slice(x: Tensor, *index: slice) -> Tensor:
     return x
 
 
-# The engine's ``lstm`` entry refuses an empty sequence in the same words.
-_EMPTY_SEQUENCE = "expected sequence length to be larger than 0"
-
-
-def _sequence_major(
-    x: Tensor | PackedSequence, batch_first: bool
-) -> tuple[Tensor, list[int], PackedSequence | None]:
-    """The input as ``(T, B, *)``, its active batch size per step, and the
-    packed source (``None`` for a dense input).
-
-    Every recurrent forward enters here.  A sequence with no timesteps is
-    refused as the reference refuses it: the recurrences below build their
-    output by stacking per-step results, and there are none to stack.
-
-    Raises:
-        ValueError: The input has no timesteps.
-    """
-    if isinstance(x, PackedSequence):
-        if int(x.batch_sizes.shape[0]) == 0:
-            raise ValueError(f"{_EMPTY_SEQUENCE}, got a packed sequence with no steps")
-        seq, batch_sizes = _packed_to_padded(x)
-        return seq, batch_sizes, x
-    # An unbatched ``(T, *)`` input keeps time first whatever ``batch_first``.
-    time_axis = 1 if batch_first and x.ndim == 3 else 0
-    if int(x.shape[time_axis]) == 0:
-        raise ValueError(f"{_EMPTY_SEQUENCE}, got input of shape {tuple(x.shape)}")
-    seq = x.permute([1, 0, 2]) if batch_first else x
-    return seq, [int(seq.shape[1])] * int(seq.shape[0]), None
-
-
-def _packed_to_padded(packed: PackedSequence) -> tuple[Tensor, list[int]]:
-    """Inflate a packed sequence to ``(T, B, *)`` in *packed* batch order.
-
-    Deliberately not :func:`~lucid.nn.utils.rnn.pad_packed_sequence`: that
-    restores the caller's original batch order, and the recurrence needs
-    the descending-length order, because that is what makes the active set
-    at each timestep a prefix of the batch.
-
-    Args:
-        packed: The packed sequence, with at least one step.
-
-    Returns:
-        ``(padded, batch_sizes)`` — padded is ``(T, B, *)`` with zeros past
-        each sequence's length, ``batch_sizes[t]`` is how many sequences
-        are still running at step ``t``.
-    """
-    batch_sizes = _int_tensor_to_list(packed.batch_sizes)
-    T = len(batch_sizes)
-    B = batch_sizes[0]
-    feat = tuple(int(v) for v in packed.data.shape[1:])
-
-    rows: list[Tensor] = []
-    offset = 0
-    for bs in batch_sizes:
-        step = packed.data[offset : offset + bs]
-        if bs < B:
-            pad = zeros(
-                B - bs,
-                *feat,
-                device=packed.data.device,
-                dtype=packed.data.dtype,
-            )
-            step = _lucid.cat([step, pad], 0)
-        rows.append(step)
-        offset += bs
-
-    assert len(rows) == T
-    return stack(rows, 0), batch_sizes
-
-
-def _padded_to_packed(
-    padded: Tensor, batch_sizes: list[int], template: object
-) -> PackedSequence:
-    """Repack ``(T, B, *)`` back into a packed sequence.
-
-    Reuses the input's ``sorted_indices`` / ``unsorted_indices`` verbatim,
-    so unpacking the result returns the batch in the caller's own order.
-    """
-    src = cast("PackedSequence", template)
-    rows = [padded[t, :bs] for t, bs in enumerate(batch_sizes)]
-    return PackedSequence(
-        _lucid.cat(rows, 0),
-        src.batch_sizes,
-        src.sorted_indices,
-        src.unsorted_indices,
-    )
-
-
-def _packed_segments(batch_sizes: list[int]) -> list[tuple[int, int, int]]:
-    """Maximal runs of constant batch size: ``[(t_start, t_end, bs), …]``.
-
-    The engine takes a whole ``(T, B, *)`` block per call, so the packed
-    path runs one call per run of timesteps that share an active-set size
-    rather than one per timestep.
-    """
-    segments: list[tuple[int, int, int]] = []
-    start = 0
-    for t in range(1, len(batch_sizes) + 1):
-        if t == len(batch_sizes) or batch_sizes[t] != batch_sizes[start]:
-            segments.append((start, t, batch_sizes[start]))
-            start = t
-    return segments
-
-
 def _carry(state: Tensor, updated: Tensor, bs: int) -> Tensor:
     """Splice a recomputed prefix back onto a carried state.
 
@@ -172,35 +75,6 @@ def _carry(state: Tensor, updated: Tensor, bs: int) -> Tensor:
         return updated
     tail = state[:, bs:] if axis == 1 else state[bs:]
     return _lucid.cat([updated, tail], axis)
-
-
-def _reorder_batch(state: Tensor, template: object, *, to_packed: bool) -> Tensor:
-    """Permute the batch axis of a ``(N, B, H)`` state across a packed input.
-
-    The recurrence runs the batch sorted by descending length.
-    ``to_packed=True`` takes a caller's initial state into that order — row
-    ``i`` becomes the caller's row ``sorted_indices[i]``.  ``to_packed=False``
-    takes a final state back to the caller's order by ``unsorted_indices``.
-    """
-    src = cast("PackedSequence", template)
-    indices = src.sorted_indices if to_packed else src.unsorted_indices
-    if indices is None:
-        return state
-    order = _int_tensor_to_list(indices)
-    if order == list(range(len(order))):
-        return state
-    return stack([state[:, i] for i in order], 1)
-
-
-def _initial_state(
-    hx: Tensor | None, packed_src: object, shape: tuple[int, int, int], like: Tensor
-) -> Tensor:
-    """The caller's ``(N, B, H)`` initial state in run order, or zeros."""
-    if hx is None:
-        return zeros(*shape, device=like.device, dtype=like.dtype)
-    if packed_src is None:
-        return hx
-    return _reorder_batch(hx, packed_src, to_packed=True)
 
 
 def _pad_rows(x: Tensor, total: int) -> Tensor:
@@ -470,6 +344,11 @@ class LSTM(Module):
       time step for every layer and direction.
     * **c_n**: ``(D * num_layers, N, H)`` — cell state after the last
       time step for every layer and direction.
+    * **Unbatched**: an ``(L, input_size)`` input runs as a batch of one
+      whatever ``batch_first`` says.  Its states are ``(D * num_layers, H)``
+      (``h`` is ``proj_size`` wide when projected), the output is
+      ``(L, D * H)``, and a supplied state of any other shape raises
+      ``ValueError``.
 
     Notes
     -----
@@ -766,24 +645,25 @@ class LSTM(Module):
         inter-layer dropout and concatenating bidirectional outputs as
         the input to the next layer.
         """
-        # A dense input is one segment: one engine call per layer and direction.
-        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
-
-        B: int = int(seq.shape[1])
         num_dirs: int = 2 if self.bidirectional else 1
         L: int = self.num_layers
         rec_size: int = self.proj_size if self.proj_size > 0 else self.hidden_size
 
         h_in, c_in = (None, None) if hx is None else hx
-        h0_full = _initial_state(h_in, packed_src, (L * num_dirs, B, rec_size), seq)
-        c0_full = _initial_state(
-            c_in, packed_src, (L * num_dirs, B, self.hidden_size), seq
+        # A dense input is one segment: one engine call per layer and direction.
+        layout, (h0_full, c0_full) = _sequence_major(
+            "LSTM",
+            x,
+            self.batch_first,
+            (("h0", h_in, rec_size), ("c0", c_in, self.hidden_size)),
+            L * num_dirs,
         )
+        batch_sizes = layout.batch_sizes
 
         h_n_layers: list[Tensor] = []
         c_n_layers: list[Tensor] = []
 
-        layer_input: Tensor = seq
+        layer_input: Tensor = layout.seq
 
         for layer in range(L):
             dir_outs: list[Tensor] = []
@@ -812,22 +692,12 @@ class LSTM(Module):
 
                 layer_input = _dropout(layer_input, self.dropout_val, training=True)
 
-        h_n_final: Tensor = _lucid.cat(h_n_layers, 0)
-        c_n_final: Tensor = _lucid.cat(c_n_layers, 0)
-
-        if packed_src is not None:
-            return (
-                _padded_to_packed(layer_input, batch_sizes, packed_src),
-                (
-                    _reorder_batch(h_n_final, packed_src, to_packed=False),
-                    _reorder_batch(c_n_final, packed_src, to_packed=False),
-                ),
-            )
-
-        if self.batch_first:
-            layer_input = layer_input.permute([1, 0, 2])
-
-        return layer_input, (h_n_final, c_n_final)
+        result, (h_n_final, c_n_final) = _restore_layout(
+            layout,
+            layer_input,
+            [_lucid.cat(h_n_layers, 0), _lucid.cat(c_n_layers, 0)],
+        )
+        return result, (h_n_final, c_n_final)
 
     @override
     def extra_repr(self) -> str:
@@ -894,6 +764,8 @@ class RNNCell(Module):
     * **hx** (optional): ``(N, hidden_size)`` — initial hidden state.
       Defaults to zeros when ``None``.
     * **Output** ``h_t``: ``(N, hidden_size)``.
+    * **Unbatched**: an ``(input_size,)`` input takes and returns
+      ``(hidden_size,)`` states.
 
     Notes
     -----
@@ -984,12 +856,13 @@ class RNNCell(Module):
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        if hx is None:
-            hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
+        unbatched, x, (h0,) = _cell_batch("RNNCell", x, (("hx", hx),), self.hidden_size)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
-            hx, self.weight_hh, self.bias_hh
+            h0, self.weight_hh, self.bias_hh
         )
-        return tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
+        return _cell_unbatch(
+            unbatched, tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1057,6 +930,8 @@ class LSTMCell(Module):
       ``(N, hidden_size)``.  Defaults to zero tensors when ``None``.
     * **Output**: tuple ``(h_t, c_t)`` each of shape
       ``(N, hidden_size)``.
+    * **Unbatched**: an ``(input_size,)`` input takes and returns
+      ``(hidden_size,)`` states.
 
     Notes
     -----
@@ -1152,12 +1027,10 @@ class LSTMCell(Module):
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        if hx is None:
-            batch = x.shape[0]
-            h0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
-            c0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
-        else:
-            h0, c0 = hx
+        h_in, c_in = (None, None) if hx is None else hx
+        unbatched, x, (h0, c0) = _cell_batch(
+            "LSTMCell", x, (("hx", h_in), ("cx", c_in)), self.hidden_size
+        )
         gates = linear(x, self.weight_ih, self.bias_ih) + linear(
             h0, self.weight_hh, self.bias_hh
         )
@@ -1168,7 +1041,7 @@ class LSTMCell(Module):
         o_gate = sigmoid(gates[:, 3 * hs :])
         c1 = f_gate * c0 + i_gate * g_gate
         h1 = o_gate * tanh(c1)
-        return h1, c1
+        return _cell_unbatch(unbatched, h1), _cell_unbatch(unbatched, c1)
 
     @override
     def extra_repr(self) -> str:
@@ -1238,6 +1111,8 @@ class GRUCell(Module):
     * **hx** (optional): ``(N, hidden_size)`` — initial hidden state.
       Defaults to zeros when ``None``.
     * **Output** ``h_t``: ``(N, hidden_size)``.
+    * **Unbatched**: an ``(input_size,)`` input takes and returns
+      ``(hidden_size,)`` states.
 
     Notes
     -----
@@ -1328,16 +1203,14 @@ class GRUCell(Module):
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        if hx is None:
-            hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
+        unbatched, x, (h0,) = _cell_batch("GRUCell", x, (("hx", hx),), self.hidden_size)
         hs = self.hidden_size
         gates_x = linear(x, self.weight_ih, self.bias_ih)
-        gates_h = linear(hx, self.weight_hh, self.bias_hh)
+        gates_h = linear(h0, self.weight_hh, self.bias_hh)
         r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
         z = sigmoid(gates_x[:, hs : 2 * hs] + gates_h[:, hs : 2 * hs])
         n = tanh(gates_x[:, 2 * hs :] + r * gates_h[:, 2 * hs :])
-        h1 = (1.0 - z) * n + z * hx
-        return h1
+        return _cell_unbatch(unbatched, (1.0 - z) * n + z * h0)
 
     @override
     def extra_repr(self) -> str:
@@ -1408,6 +1281,10 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
     * **output**: ``(L, N, D * H)`` or ``(N, L, D * H)``.
     * **h_n**: ``(D * num_layers, N, H)`` — hidden state at the final
       time step for each layer and direction.
+    * **Unbatched**: an ``(L, input_size)`` input runs as a batch of one
+      whatever ``batch_first`` says.  Its states are ``(D * num_layers, H)``,
+      the output is ``(L, D * H)``, and a supplied ``h_0`` of any other
+      shape raises ``ValueError``.
 
     Notes
     -----
@@ -1515,15 +1392,17 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         """
         # A dense input runs every sequence the full length; ``_carry`` and
         # ``_pad_rows`` both become identities.
-        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
-
+        num_dirs: int = 2 if self.bidirectional else 1
+        layout, (hx,) = _sequence_major(
+            "GRU",
+            x,
+            self.batch_first,
+            (("h0", hx, self.hidden_size),),
+            self.num_layers * num_dirs,
+        )
+        seq, batch_sizes = layout.seq, layout.batch_sizes
         T: int = seq.shape[0]
         B: int = seq.shape[1]
-        num_dirs: int = 2 if self.bidirectional else 1
-
-        hx = _initial_state(
-            hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq
-        )
 
         h_n: list[Tensor] = []
         inp = seq
@@ -1565,18 +1444,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
 
             inp = layer_out
 
-        out = inp
-        h_n_tensor = stack(h_n, 0)  # (D*num_layers, B, hidden)
-
-        if packed_src is not None:
-            return (
-                _padded_to_packed(out, batch_sizes, packed_src),
-                _reorder_batch(h_n_tensor, packed_src, to_packed=False),
-            )
-
-        if self.batch_first:
-            out = out.permute([1, 0, 2])
-
+        out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
         return out, h_n_tensor
 
     @override
@@ -1659,6 +1527,10 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
     * **output**: ``(L, N, D * H)`` or ``(N, L, D * H)``.
     * **h_n**: ``(D * num_layers, N, H)`` — hidden state at the final
       time step for each layer and direction.
+    * **Unbatched**: an ``(L, input_size)`` input runs as a batch of one
+      whatever ``batch_first`` says.  Its states are ``(D * num_layers, H)``,
+      the output is ``(L, D * H)``, and a supplied ``h_0`` of any other
+      shape raises ``ValueError``.
 
     Notes
     -----
@@ -1773,15 +1645,17 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        seq, batch_sizes, packed_src = _sequence_major(x, self.batch_first)
-
+        num_dirs: int = 2 if self.bidirectional else 1
+        layout, (hx,) = _sequence_major(
+            "RNN",
+            x,
+            self.batch_first,
+            (("h0", hx, self.hidden_size),),
+            self.num_layers * num_dirs,
+        )
+        seq, batch_sizes = layout.seq, layout.batch_sizes
         T: int = seq.shape[0]
         B: int = seq.shape[1]
-        num_dirs: int = 2 if self.bidirectional else 1
-
-        hx = _initial_state(
-            hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq
-        )
 
         h_n: list[Tensor] = []
         inp = seq
@@ -1820,18 +1694,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
 
             inp = layer_out
 
-        out = inp
-        h_n_tensor = stack(h_n, 0)
-
-        if packed_src is not None:
-            return (
-                _padded_to_packed(out, batch_sizes, packed_src),
-                _reorder_batch(h_n_tensor, packed_src, to_packed=False),
-            )
-
-        if self.batch_first:
-            out = out.permute([1, 0, 2])
-
+        out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
         return out, h_n_tensor
 
     @override
