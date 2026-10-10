@@ -16,6 +16,7 @@ Not under ``lucid/test`` (the default ``testpaths``), so it runs on request::
     .venv/bin/python3 -m pytest tools/test_agent_ws.py
 """
 
+import json
 import os
 import shlex
 import subprocess
@@ -153,3 +154,54 @@ def test_main_commit_of_a_file_a_worktree_changed_names_that_worktree(
     result = scratch.commit(scratch.main, "b.txt", mode)
     assert result.returncode != 0
     assert "b.txt is claimed by worktree wt-b [task-b] — label of B. " in result.stderr
+
+
+# ── land: the audit baselines (LCD-358) ───────────────────────────────────────
+
+COVERAGE = "lucid/test/audit/coverage.json"
+
+
+def commit_coverage(scratch: Scratch, cells: int) -> None:
+    """Commit, in A, a coverage baseline whose header claims ``cells`` over two entries."""
+    path = scratch.a / COVERAGE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    answered = {"grad::lucid.exp": "pass", "grad::lucid.log": "pass"}
+    path.write_text(json.dumps({"cells": cells, "answered": answered}))
+    assert scratch.git(scratch.a, "add", COVERAGE).returncode == 0
+    commit = scratch.git(scratch.a, "commit", "-q", "-m", "record coverage")
+    assert commit.returncode == 0, commit.stderr
+
+
+def land(scratch: Scratch, *flags: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(AGENT_WS), "land", str(scratch.a), "--no-changelog", *flags],
+        cwd=scratch.main,
+        env=scratch.env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def main_tip(scratch: Scratch) -> str:
+    return scratch.git(scratch.main, "rev-parse", "main").stdout.strip()
+
+
+@pytest.mark.parametrize("flags", [(), ("--check",)])
+def test_land_refuses_an_audit_baseline_whose_total_disagrees_with_its_body(
+    scratch: Scratch, flags: tuple[str, ...]
+) -> None:
+    before = main_tip(scratch)
+    commit_coverage(scratch, cells=3)
+    result = land(scratch, *flags)
+    output = result.stdout + result.stderr
+    assert result.returncode == 7, output
+    assert "'cells' is 3 but 'answered' holds 2 entries" in output
+    assert main_tip(scratch) == before
+
+
+def test_land_takes_an_audit_baseline_that_agrees_with_itself(scratch: Scratch) -> None:
+    commit_coverage(scratch, cells=2)
+    result = land(scratch)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert scratch.git(scratch.main, "cat-file", "-e", f"main:{COVERAGE}").returncode == 0

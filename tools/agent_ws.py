@@ -32,7 +32,8 @@ Subcommands::
   bootstrap [PATH]            make a worktree runnable (.so, light .venv, vault)
   doctor                      show where `import lucid` resolves from here
   land WORKTREE [--check] [--cleanup] [--skip-stub-check] [--no-changelog]
-                [--allow-slop REASON]   (refuses a quality-gate increase, exit 6)
+                [--allow-slop REASON]   (refuses a quality-gate increase, exit 6,
+                and an audit baseline whose totals disagree with its body, exit 7)
   heavy -- CMD...             run CMD under the machine-wide heavy-job lock
   build                       build the C++ engine in place in a worktree
   hook                        Claude Code PreToolUse entry point (stdin JSON)
@@ -61,15 +62,21 @@ from pathlib import Path
 
 MAIN_BRANCH = "main"
 
+# The audit's recorded baselines: each holds a header total beside the body it
+# sums, and `land` refuses one where they disagree (LCD-358).
+AUDIT_BASELINES = (
+    "lucid/test/audit/coverage.json",
+    "lucid/test/audit/doctest.json",
+    "lucid/test/audit/suite.json",
+)
+
 # Regenerated rather than merged: a conflict here is resolved by running the
 # generator again, so claiming them would only serialise unrelated work.
 GENERATED = (
     "lucid/_C/engine.pyi",
     "lucid/_tensor/tensor.pyi",
     "lucid/__init__.pyi",
-    "lucid/test/audit/coverage.json",
-    "lucid/test/audit/doctest.json",
-    "lucid/test/audit/suite.json",
+    *AUDIT_BASELINES,
     "CHANGELOG.md",
     # Every branch that lowers a count writes it; the `lucid-quality-baseline`
     # merge driver (setup) merges it per key, so it must not serialise them.
@@ -89,6 +96,7 @@ MERGE_DRIVERS = {
     ),
 }
 SLOP_EXIT = 6
+BASELINE_EXIT = 7
 
 # Machine-local and outside the synced project tree: locks must never travel
 # to the other Mac through .sync.
@@ -102,6 +110,7 @@ LAND_LOCK = STATE_DIR / "land.lock"
 HOOK_LOG = STATE_DIR / "hook.log"
 SLOP_LOG = STATE_DIR / "slop-overrides.log"  # every `land --allow-slop`, with its reason
 SELF = Path(__file__).resolve()
+BASELINE_CHECK = SELF.with_name("check_audit_baselines.py")
 
 USER_FACING_RE = r"^(feat|fix|perf|refactor|revert|remove|deprec|sec)(\([^)]*\))?!?:\s"
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -756,6 +765,10 @@ def cmd_land(args: argparse.Namespace) -> int:
         # The branch's own delta: against where it forked, so main's later
         # fixes do not read as this branch's slop.
         fork = git("merge-base", MAIN_BRANCH, "HEAD", cwd=wt).strip()
+        inconsistent = audit_baseline_errors(wt, diff_names(wt, fork, "HEAD"))
+        if inconsistent:
+            print(f"✗ {inconsistent}")
+            return BASELINE_EXIT
         return judge_slop(wt, py, fork, args.allow_slop)
 
     ensure_merge_drivers(main.path)
@@ -803,6 +816,13 @@ def cmd_land(args: argparse.Namespace) -> int:
                     + (stubs.stdout + stubs.stderr)[-1500:],
                     code=4,
                 )
+
+        # 2a. Audit baselines: the merge driver keeps one side whole, so only a
+        #     hand edit or a commit with hooks off leaves a total disagreeing
+        #     with its body — and a unit test red on main (LCD-358).
+        inconsistent = audit_baseline_errors(wt, touched)
+        if inconsistent:
+            raise WorkspaceError(inconsistent, code=BASELINE_EXIT)
 
         # 2b. Quality ratchet: the rebased branch against main (now its fork
         #     point) — no measured count may rise, and the actual counts may
@@ -986,6 +1006,24 @@ def quality_delta(wt: Path, py: str, base: str) -> tuple[int, str]:
     # stderr is progress on success; on failure it carries the reason.
     detail = "" if proc.returncode in (0, 1) else "\n" + proc.stderr[-3000:]
     return proc.returncode, (proc.stdout + detail).rstrip()
+
+
+def audit_baseline_errors(wt: Path, touched: set[str]) -> str:
+    """What is wrong with the audit baselines *wt* changed; empty when they agree.
+
+    The checker beside this script (the main checkout's, stdlib only) reads
+    *wt*'s files, so a branch cut before it existed is judged too.  *wt* is
+    clean whenever `land` asks, so its files are its HEAD.
+    """
+    if not touched.intersection(AUDIT_BASELINES) or not BASELINE_CHECK.exists():
+        return ""
+    proc = subprocess.run(
+        [sys.executable, str(BASELINE_CHECK), "--root", str(wt)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return "" if proc.returncode == 0 else (proc.stdout + proc.stderr).strip()
 
 
 def judge_slop(wt: Path, py: str, base: str, allow: str | None) -> int:
