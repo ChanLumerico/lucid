@@ -38,8 +38,8 @@ class Embedding(Module):
     ``<PAD>`` token whose embedding should never influence the model.
 
     **Max-norm renormalisation.** When ``max_norm`` is set, every row
-    whose :math:`L_p`-norm exceeds ``max_norm`` is rescaled *in place*
-    at each forward call before the lookup:
+    looked up whose :math:`L_p`-norm exceeds ``max_norm`` is rescaled
+    *in place* at each forward call before the lookup:
 
     .. math::
 
@@ -57,8 +57,8 @@ class Embedding(Module):
         receives no gradient updates.  Negative values are normalised
         to ``padding_idx + num_embeddings``.  Default: ``None``.
     max_norm : float or None, optional
-        If provided, rows with :math:`L_p`-norm exceeding this value
-        are renormalised in place at every forward call.
+        If provided, the rows looked up whose :math:`L_p`-norm exceeds
+        this value are renormalised in place at every forward call.
         Default: ``None``.
     norm_type : float, optional
         The :math:`p` in the :math:`L_p`-norm used by ``max_norm``.
@@ -70,8 +70,8 @@ class Embedding(Module):
         count belongs to each forward call: two lookups before one
         ``backward()`` are each scaled by their own.  Default: ``False``.
     sparse : bool, optional
-        Accepted for API compatibility; sparse gradient emission is
-        not yet supported.  Default: ``False``.
+        Gradients are always dense, so ``True`` raises
+        ``NotImplementedError`` at the first forward.  Default: ``False``.
     device : DeviceLike, optional
         Device for the weight tensor.
     dtype : DTypeLike, optional
@@ -191,31 +191,6 @@ class Embedding(Module):
             zeroed: Tensor = _lucid.index_fill(self.weight, 0, pad, 0.0)
         init._fill_from_impl(self.weight, zeroed._impl)
 
-    def _renorm_weight_inplace(self) -> None:
-        """Apply ``max_norm`` rescaling to rows that exceed the cap.
-
-        A write to the table, not a step in the computation: under
-        ``no_grad`` and through the weight's storage, as the reference does
-        it.  Swapping ``w * scale`` in as the weight made it a non-leaf on the
-        first forward, after which it never received a gradient.
-        """
-        w: Tensor = self.weight
-        with _lucid.no_grad():
-            # Per-row Lp-norm via engine ops.
-            if self.norm_type == 2.0:
-                norms: Tensor = (w * w).sum(dim=1).sqrt()
-            elif self.norm_type == 1.0:
-                norms = w.abs().sum(dim=1)
-            else:
-                norms = (w.abs() ** float(self.norm_type)).sum(dim=1) ** (
-                    1.0 / float(self.norm_type)
-                )
-            scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)  # type: ignore[arg-type]
-            ones: Tensor = _lucid.ones_like(scale_raw)
-            scale: Tensor = scale_raw.minimum(ones).unsqueeze(-1)
-            new_w: Tensor = w * scale
-        init._fill_from_impl(self.weight, new_w._impl)
-
     @override
     def forward(self, x: Tensor) -> Tensor:
         """Look up embeddings for the given indices.
@@ -230,13 +205,14 @@ class Embedding(Module):
         Tensor
             Tensor of embedding vectors of shape ``(*input.shape, embedding_dim)``.
         """
-        if self.max_norm is not None:
-            self._renorm_weight_inplace()
         return embedding(
             x,
             self.weight,
             self.padding_idx,
-            scale_grad_by_freq=self.scale_grad_by_freq,
+            self.max_norm,
+            self.norm_type,
+            self.scale_grad_by_freq,
+            self.sparse,
         )
 
     @override
@@ -302,13 +278,14 @@ class EmbeddingBag(Module):
     norm_type : float, optional
         The :math:`p` for ``max_norm`` renormalisation.  Default: ``2.0``.
     scale_grad_by_freq : bool, optional
-        Accepted for API compatibility; not yet implemented.
+        Divide each row's gradient by how many times its index occurs in
+        the input (see :class:`Embedding`).  Not with ``mode='max'``.
         Default: ``False``.
     mode : {'sum', 'mean', 'max'}, optional
         Reduction applied over each bag.  Default: ``'mean'``.
     sparse : bool, optional
-        Accepted for API compatibility; sparse gradient emission is
-        not yet supported.  Default: ``False``.
+        Gradients are always dense, so ``True`` raises
+        ``NotImplementedError`` at the first forward.  Default: ``False``.
     padding_idx : int or None, optional
         Indices equal to ``padding_idx`` contribute zero to the
         reduction and do not receive gradient updates.
@@ -384,7 +361,11 @@ class EmbeddingBag(Module):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
+        self.max_norm = max_norm
+        self.norm_type = norm_type
+        self.scale_grad_by_freq = scale_grad_by_freq
         self.mode = mode
+        self.sparse = sparse
         self.padding_idx = padding_idx
         self.weight = Parameter(
             empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
@@ -407,12 +388,15 @@ class EmbeddingBag(Module):
         """
         from lucid.nn.functional.sampling import embedding_bag as _eb
 
-        _mode_map = {"sum": "sum", "mean": "mean", "max": "max"}
         return _eb(
             x,
             self.weight,
-            offsets=offsets,
-            mode=_mode_map.get(self.mode, "mean"),
+            offsets,
+            self.max_norm,
+            self.norm_type,
+            self.scale_grad_by_freq,
+            self.mode,
+            self.sparse,
             padding_idx=self.padding_idx,
         )
 

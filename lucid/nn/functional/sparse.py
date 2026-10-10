@@ -107,9 +107,11 @@ def embedding(
         ``[-num_embeddings, num_embeddings)`` (a negative one counts from
         the end), else ``ValueError``.
     max_norm : float, optional
-        If given, every entry of ``weight`` whose :math:`L_p` norm
-        exceeds ``max_norm`` is renormalised in-place to have norm
-        ``max_norm`` prior to the lookup (with :math:`p` = ``norm_type``).
+        If given, every row of ``weight`` that ``x`` looks up and whose
+        :math:`L_p` norm exceeds ``max_norm`` is rescaled in place, outside
+        autograd, to norm ``max_norm`` before the lookup (with :math:`p` =
+        ``norm_type``).  ``weight`` stays a leaf; a tensor that saved it for
+        an earlier backward sees the write.
     norm_type : float, optional
         The :math:`p` value of the :math:`L_p` norm used by ``max_norm``.
         Default ``2.0``.
@@ -120,9 +122,8 @@ def embedding(
         is per call: two lookups before one backward are each scaled by
         their own.
     sparse : bool, optional
-        Request a sparse gradient w.r.t. ``weight``.  Lucid currently
-        always produces a dense gradient; this flag is accepted for
-        API compatibility.
+        Request a sparse gradient w.r.t. ``weight``.  Gradients are always
+        dense, so ``True`` raises ``NotImplementedError``.
 
     Returns
     -------
@@ -156,17 +157,12 @@ def embedding(
     ([1.0, 1.0], [1.0, 1.0])
     """
     unsupported_if(
-        max_norm is not None,
-        "embedding",
-        "max_norm",
-        max_norm,
-        detail="Rows are never renormalised.",
-    )
-    unsupported_if(
         sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
     )
     padding_idx = _padding_index(padding_idx, weight, "embedding")
     _check_table(x, weight, "embedding")
+    if max_norm is not None:
+        _renorm_rows(weight, x, max_norm, norm_type)
     pad = padding_idx if padding_idx is not None else -1
     # Normalised, not passed through.  The engine gather reads the index
     # buffer at a fixed width, so an int8 or bool index of more than a
@@ -179,6 +175,30 @@ def embedding(
     if scale_grad_by_freq and out.requires_grad:
         return _scale_grad_by_freq(out, idx, int(weight.shape[0]))
     return out
+
+
+def _renorm_rows(
+    weight: Tensor, idx: Tensor, max_norm: float, norm_type: float
+) -> None:
+    """Rescale the rows of ``weight`` that ``idx`` names down to ``max_norm``, in place.
+
+    The ``max_norm`` of every lookup — ``embedding``, ``embedding_bag`` and
+    their modules — is this one write, as the reference makes it: only the
+    rows looked up, only those whose :math:`L_p` norm exceeds ``max_norm``,
+    each scaled by ``max_norm / (norm + 1e-7)``, under ``no_grad`` and
+    through ``weight``'s own storage so a trainable table stays a leaf.  A
+    row named twice is written twice with the same values.
+    """
+    flat = idx.reshape(-1)
+    if flat.dtype != lucid.int64:
+        flat = flat.to(lucid.int64)
+    with lucid.no_grad():
+        rows = weight.index_select(0, flat)
+        norms = lucid.linalg.vector_norm(rows, norm_type, dim=1, keepdim=True)
+        scale = lucid.where(
+            norms > max_norm, max_norm / (norms + 1e-7), lucid.ones_like(norms)
+        )
+        weight.index_copy_(0, flat, rows * scale)
 
 
 def _scale_grad_by_freq(out: Tensor, idx: Tensor, num_embeddings: int) -> Tensor:
@@ -206,6 +226,147 @@ def _scale_grad_by_freq(out: Tensor, idx: Tensor, num_embeddings: int) -> Tensor
 
     _register_tensor_hook(out, divide_by_count)
     return out.view(tuple(out.shape))
+
+
+def _bag_mode(mode: str, sparse: bool, scale_grad_by_freq: bool) -> int:
+    """The engine's code for ``mode``, once the flags beside it are known to fit.
+
+    Raises
+    ------
+    ValueError
+        An unknown ``mode`` — ``.get(mode, 1)`` used to answer "mean" for a
+        typo — or ``scale_grad_by_freq`` with ``mode="max"``, where one
+        index per bag and dimension takes the whole gradient and there is
+        no frequency to divide by (the reference refuses it too).
+    NotImplementedError
+        ``sparse=True``: gradients are always dense, as in ``embedding``.
+    """
+    modes = {"sum": 0, "mean": 1, "max": 2}
+    if mode not in modes:
+        raise ValueError(
+            f"embedding_bag: mode must be one of {sorted(modes)}, got {mode!r}"
+        )
+    unsupported_if(
+        sparse, "embedding_bag", "sparse", sparse, detail="Gradients are always dense."
+    )
+    if scale_grad_by_freq and mode == "max":
+        raise ValueError(
+            "embedding_bag: scale_grad_by_freq is not defined for mode='max' — "
+            "use mode='sum' or 'mean'"
+        )
+    return modes[mode]
+
+
+def _bag_by_lookup(
+    x: Tensor,
+    weight: Tensor,
+    bags: tuple[Tensor, int],
+    per_sample_weights: Tensor | None,
+    mode: str,
+    padding_idx: int | None,
+    scale_grad_by_freq: bool,
+) -> Tensor:
+    """``embedding_bag`` built from :func:`embedding`: rows weighted, then summed per bag.
+
+    The path for what the fused engine op cannot do.  ``per_sample_weights``
+    used to be accepted and dropped, so a weighted bag came back a plain sum
+    with no error; ``scale_grad_by_freq`` likewise, giving every row the
+    unscaled gradient.  Here each index's row comes from :func:`embedding`,
+    which owns the frequency scaling at its lookup node, and is weighted by
+    its sample weight — or by one over its bag's count for ``"mean"`` —
+    before :func:`lucid.index_add` sums it into its bag.  It differentiates
+    in both the table and the weights.
+
+    Parameters
+    ----------
+    x : Tensor
+        Indices, 1-D with ``offsets`` or 2-D with one bag per row.
+    weight : Tensor
+        The ``(num_embeddings, dim)`` table.
+    bags : (Tensor, int)
+        Each index's bag and the number of bags (:func:`_bag_of_each_index`).
+    per_sample_weights : Tensor or None
+        One weight per index, the shape of ``x``; ``"sum"`` only, as in
+        the reference.
+    mode : str
+        ``"sum"`` or ``"mean"`` (``_bag_mode`` has refused the rest).
+    padding_idx : int or None
+        Rows with this index contribute nothing and are not counted.
+    scale_grad_by_freq : bool
+        Divide each row's gradient by its index's count in ``x``.
+
+    Returns
+    -------
+    Tensor
+        ``(num_bags, dim)`` pooled rows.
+
+    Raises
+    ------
+    NotImplementedError
+        ``per_sample_weights`` with a mode other than ``"sum"`` — ``"max"``
+        included.
+    ValueError
+        If the weights do not match ``x``.
+    """
+    if per_sample_weights is not None:
+        if mode != "sum":
+            raise NotImplementedError(
+                "embedding_bag: per_sample_weights is only supported for "
+                f"mode='sum' (got mode={mode!r})"
+            )
+        if tuple(per_sample_weights.shape) != tuple(x.shape):
+            raise ValueError(
+                "embedding_bag: per_sample_weights must have the shape of the "
+                f"indices {tuple(x.shape)}, got {tuple(per_sample_weights.shape)}"
+            )
+    flat = x.reshape(-1)
+    rows = embedding(flat, weight, scale_grad_by_freq=scale_grad_by_freq)
+    bag, n_bags = bags
+    counted = bag >= 0
+    if padding_idx is not None:
+        counted = counted & (flat != padding_idx)
+    if per_sample_weights is None:
+        scale = counted.to(rows.dtype)
+    else:
+        scale = lucid.where(
+            counted,
+            per_sample_weights.reshape(-1).to(rows.dtype),
+            lucid.zeros((), dtype=rows.dtype, device=rows.device),
+        )
+    bag = bag.clamp(min=0)
+    zeros = lucid.zeros(n_bags, dtype=rows.dtype, device=rows.device)
+    if mode == "mean":
+        sizes = lucid.index_add(zeros, 0, bag, counted.to(rows.dtype))
+        scale = scale / sizes.clamp(min=1.0).index_select(0, bag)
+    out = lucid.zeros(
+        (n_bags, int(weight.shape[1])), dtype=rows.dtype, device=rows.device
+    )
+    return lucid.index_add(out, 0, bag, rows * scale.unsqueeze(-1))
+
+
+def _bag_of_each_index(
+    x: Tensor, offsets: Tensor | None, include_last_offset: bool
+) -> tuple[Tensor, int]:
+    """Which bag each index of ``x`` (flattened) falls in, ``-1`` for none; and how many bags.
+
+    A 2-D ``x`` is one bag per row.  For a 1-D one, bag ``b`` owns
+    ``[offsets[b], offsets[b + 1])``; under ``include_last_offset`` the last
+    offset ends the final bag, and an index past it belongs to none.
+    """
+    device = x.device
+    if x.ndim == 2:
+        n_rows, length = int(x.shape[0]), int(x.shape[1])
+        positions = lucid.arange(n_rows * length, dtype=lucid.int64, device=device)
+        return positions // max(length, 1), n_rows
+    if offsets is None:
+        raise ValueError("embedding_bag: offsets required for 1-D input")
+    bounds = offsets.to(lucid.int64).to(device)
+    n_bags = int(bounds.shape[0]) - (1 if include_last_offset else 0)
+    positions = lucid.arange(int(x.shape[0]), dtype=lucid.int64, device=device)
+    bag = lucid.searchsorted(bounds[:n_bags], positions, right=True) - 1
+    if include_last_offset:
+        bag = lucid.where(positions < bounds[-1], bag, lucid.full_like(bag, -1))
+    return bag, n_bags
 
 
 def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:

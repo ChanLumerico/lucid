@@ -13,7 +13,12 @@ from lucid.nn.functional._index_checks import (
     _check_table,
     _padding_index,
 )
-from lucid.nn.functional.sparse import embedding
+from lucid.nn.functional.sparse import (
+    _bag_by_lookup,
+    _bag_of_each_index,
+    _bag_mode,
+    _renorm_rows,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -597,17 +602,20 @@ def embedding_bag(
         start at 0 and never decrease (else ``ValueError``), and each
         entry must lie in ``[0, len(x)]`` (else ``IndexError``).
     max_norm : float, optional
-        Renormalise embedding rows with :math:`L_p` norm exceeding
-        ``max_norm`` before lookup.
+        Rescale, in place and outside autograd, every row ``x`` looks up
+        whose :math:`L_p` norm exceeds ``max_norm`` to that norm before the
+        lookup, as :func:`~lucid.nn.functional.embedding` does.
     norm_type : float, optional
         :math:`p` exponent for ``max_norm``.  Default ``2.0``.
     scale_grad_by_freq : bool, optional
-        Scale gradients of each embedding row by inverse mini-batch
-        frequency.
+        Divide the gradient reaching each row by how many times its index
+        occurs in ``x`` (all bags together).  ``mode="max"`` raises
+        ``ValueError``.
     mode : str, optional
         Bag reduction: ``"sum"``, ``"mean"`` (default), or ``"max"``.
     sparse : bool, optional
-        Request a sparse gradient (accepted for compatibility).
+        Request a sparse gradient.  Gradients are always dense, so ``True``
+        raises ``NotImplementedError``.
     per_sample_weights : Tensor, optional
         One weight per index, the shape of ``x``; each looked-up row is
         scaled by its weight before the bag is summed.  Only
@@ -642,15 +650,7 @@ def embedding_bag(
     >>> out.shape
     (2, 4)
     """
-    _mode_map = {"sum": 0, "mean": 1, "max": 2}
-    # ``.get(mode, 1)`` silently answered "mean" for anything it did not
-    # recognise, so ``mode="sun"`` returned an average and said nothing.
-    # A reduction is not the kind of thing to guess at from a typo.
-    if mode not in _mode_map:
-        raise ValueError(
-            f"embedding_bag: mode must be one of " f"{sorted(_mode_map)}, got {mode!r}"
-        )
-    mode_int = _mode_map[mode]
+    mode_int = _bag_mode(mode, sparse, scale_grad_by_freq)
 
     # Same index contract as ``embedding``, checked before the gather:
     # the indices, ``padding_idx``, and the bag boundaries in ``offsets``.
@@ -662,16 +662,21 @@ def embedding_bag(
         if offsets is None:
             raise ValueError("embedding_bag: offsets required for 1-D input")
         _check_offsets(offsets, int(x.shape[0]), op)
+    if max_norm is not None:
+        _renorm_rows(weight, x, max_norm, norm_type)
 
-    if per_sample_weights is not None:
-        return _weighted_bag_sum(
+    # The engine op pools rows it looked up itself, so neither a weight per
+    # index nor the lookup's own gradient scaling can reach it.
+    scaled = scale_grad_by_freq and weight.requires_grad and _C_engine.grad_enabled()
+    if per_sample_weights is not None or scaled:
+        return _bag_by_lookup(
             x,
             weight,
-            offsets,
+            _bag_of_each_index(x, offsets, include_last_offset),
             per_sample_weights,
             mode,
-            include_last_offset,
             padding_idx,
+            scale_grad_by_freq,
         )
 
     x_impl = _unwrap(x)
@@ -715,86 +720,6 @@ def embedding_bag(
         )
 
     return _wrap(impl)
-
-
-def _weighted_bag_sum(
-    x: Tensor,
-    weight: Tensor,
-    offsets: Tensor | None,
-    per_sample_weights: Tensor,
-    mode: str,
-    include_last_offset: bool,
-    padding_idx: int | None,
-) -> Tensor:
-    """``embedding_bag`` with ``per_sample_weights``: each row scaled, then summed.
-
-    The engine op pools unweighted rows, and the weights used to be
-    accepted and dropped, so a weighted bag came back as a plain sum with
-    no error.  Built from :func:`embedding` and :func:`lucid.index_add`
-    instead, it differentiates in both the table and the weights.
-
-    Parameters
-    ----------
-    x : Tensor
-        Indices, 1-D with ``offsets`` or 2-D with one bag per row.
-    weight : Tensor
-        The ``(num_embeddings, dim)`` table.
-    offsets : Tensor or None
-        Bag starts for 1-D ``x``; under ``include_last_offset`` the last
-        entry ends the final bag.
-    per_sample_weights : Tensor
-        One weight per index, the shape of ``x``.
-    mode : str
-        Must be ``"sum"``, as in the reference.
-    include_last_offset : bool
-        Whether ``offsets`` ends with the end of the last bag.
-    padding_idx : int or None
-        Rows with this index contribute nothing.
-
-    Returns
-    -------
-    Tensor
-        ``(num_bags, dim)`` weighted sums.
-
-    Raises
-    ------
-    NotImplementedError
-        If ``mode`` is not ``"sum"``.
-    ValueError
-        If the weights do not match ``x``, or 1-D ``x`` has no offsets.
-    """
-    if mode != "sum":
-        raise NotImplementedError(
-            "embedding_bag: per_sample_weights is only supported for "
-            f"mode='sum' (got mode={mode!r})"
-        )
-    if tuple(per_sample_weights.shape) != tuple(x.shape):
-        raise ValueError(
-            "embedding_bag: per_sample_weights must have the shape of the "
-            f"indices {tuple(x.shape)}, got {tuple(per_sample_weights.shape)}"
-        )
-    rows = embedding(x, weight)
-    scale = per_sample_weights.to(rows.dtype)
-    if padding_idx is not None:
-        scale = _lucid.where(x == padding_idx, _lucid.zeros_like(scale), scale)
-    scaled = rows * scale.unsqueeze(-1)
-    if x.ndim == 2:
-        return scaled.sum(dim=1)
-    if offsets is None:
-        raise ValueError("embedding_bag: offsets required for 1-D input")
-    device = x.device
-    bounds = offsets.to(_lucid.int64).to(device)
-    n_bags = int(bounds.shape[0]) - (1 if include_last_offset else 0)
-    positions = _lucid.arange(int(x.shape[0]), dtype=_lucid.int64).to(device)
-    # Bag b owns [bounds[b], bounds[b + 1]); a position before the first
-    # bound or past the sentinel belongs to none.
-    bag = _lucid.searchsorted(bounds[:n_bags], positions, right=True) - 1
-    inside = bag >= 0
-    if include_last_offset:
-        inside = inside & (positions < bounds[-1])
-    scaled = _lucid.where(inside.unsqueeze(-1), scaled, _lucid.zeros_like(scaled))
-    out = _lucid.zeros((n_bags, int(weight.shape[1])), dtype=rows.dtype).to(device)
-    return _lucid.index_add(out, 0, bag.clamp(min=0), scaled)
 
 
 _PAD_MODES: frozenset[str] = frozenset({"constant", "reflect", "replicate", "circular"})
