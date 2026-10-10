@@ -36,7 +36,8 @@ two costs very nearly twice a batch of one at 512 pixels.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from collections.abc import Callable
+from typing import ClassVar, Self, cast, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -159,6 +160,14 @@ class StableDiffusionModel(PretrainedModel):
         self.unet = UNet2DConditionModel(config)
         self.scheduler = DDIMScheduler(config)
 
+    @override
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        super()._apply(fn)
+        # The scheduler is not a Module, but its noising tables are read
+        # by every training forward, so they move and cast with the model.
+        self.scheduler._apply(fn)
+        return self
+
     def encode_image(self, images: Tensor, sample: bool = True) -> Tensor:
         """Image to scaled latent.
 
@@ -278,18 +287,7 @@ class StableDiffusionModel(PretrainedModel):
             drawn = lucid.rand((shape[0],), device=latent.device.type)
             timestep = (drawn * self.config.num_train_timesteps).to(lucid.int64)
 
-        # ``add_noise`` reads one scalar alpha, so a per-sample timestep
-        # is applied one row at a time rather than gathered — the batch
-        # here is small and a gather would need a data-dependent index.
-        noised = lucid.stack(
-            [
-                self.scheduler.add_noise(
-                    latent[i : i + 1], noise[i : i + 1], int(timestep[i].item())
-                )[0]
-                for i in range(shape[0])
-            ],
-            dim=0,
-        )
+        noised = self.scheduler.add_noise(latent, noise, timestep)
         prediction = self.unet(noised, timestep.to(latent.dtype), context)
 
         loss: Tensor | None = None

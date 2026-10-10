@@ -39,6 +39,7 @@ from lucid.models._tasks import ImageGenerationModel
 from lucid.models._mixins import DiffusionMixin
 from lucid.models._output import DiffusionModelOutput
 from lucid.models._utils._generative import (
+    DiffusionPosterior,
     diffusion_posterior,
     diffusion_posterior_constants,
     diffusion_vlb_term,
@@ -740,6 +741,17 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
     config_class: ClassVar[type[DDPMConfig]] = DDPMConfig
     base_model_prefix: ClassVar[str] = "ddpm"
 
+    # Forward-process constants of the hybrid objective, present only with
+    # ``learn_sigma``.  Non-persistent buffers: they follow the model's
+    # device, so the per-sample gather runs where the batch is, and stay
+    # out of the checkpoint, being functions of the config alone.
+    _log_betas: Tensor
+    _sqrt_recip_ab: Tensor
+    _sqrt_recipm1_ab: Tensor
+    _posterior_mean_coef_start: Tensor
+    _posterior_mean_coef_t: Tensor
+    _posterior_log_variance: Tensor
+
     def __init__(self, config: DDPMConfig) -> None:
         super().__init__(config)
         self.unet = _DDPMUNet(config)
@@ -762,9 +774,27 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
                 beta_start=config.beta_start,
                 beta_end=config.beta_end,
             )
-            self._log_betas = lucid.log(betas)
-            self._posterior = diffusion_posterior_constants(betas)
-            self._sqrt_recip_ab, self._sqrt_recipm1_ab = _x0_recovery_constants(betas)
+            posterior = diffusion_posterior_constants(betas)
+            sqrt_recip_ab, sqrt_recipm1_ab = _x0_recovery_constants(betas)
+            constants = {
+                "_log_betas": lucid.log(betas),
+                "_sqrt_recip_ab": sqrt_recip_ab,
+                "_sqrt_recipm1_ab": sqrt_recipm1_ab,
+                "_posterior_mean_coef_start": posterior.mean_coef_start,
+                "_posterior_mean_coef_t": posterior.mean_coef_t,
+                "_posterior_log_variance": posterior.log_variance,
+            }
+            for name, value in constants.items():
+                self.register_buffer(name, value, persistent=False)
+
+    @property
+    def _posterior(self) -> DiffusionPosterior:
+        """The posterior constants, on whatever device the model is."""
+        return DiffusionPosterior(
+            mean_coef_start=self._posterior_mean_coef_start,
+            mean_coef_t=self._posterior_mean_coef_t,
+            log_variance=self._posterior_log_variance,
+        )
 
     def make_scheduler(self) -> DDPMScheduler:
         r"""The ancestral sampler this model's own config describes.

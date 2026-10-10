@@ -135,7 +135,15 @@ def extract_into_tensor(
 
     Returns:
         ``(B, 1, 1, …)`` (rank == ``len(broadcast_shape)``) so it broadcasts
-        elementwise against an ``(B, C, H, W)`` image.
+        elementwise against an ``(B, C, H, W)`` image.  It is on
+        ``timesteps``' device, which is the batch's, whichever device
+        ``arr`` was built on.
+
+    Raises:
+        IndexError: On CPU, for a timestep outside ``[-T, T)``.  On Metal
+            the gather reads NaN there instead, so the loss turns NaN —
+            the index is not read back to check it, which would stall
+            every step.
 
     Examples
     --------
@@ -146,19 +154,24 @@ def extract_into_tensor(
     >>> picked = extract_into_tensor(alphas, steps, (2, 1, 1))
     >>> picked.shape
     (2, 1, 1)
+    >>> [round(v, 4) for v in picked.reshape(-1).tolist()]
+    [0.1, 0.3]
 
     One coefficient per item of the batch, shaped so it broadcasts
     against images — each sample in a diffusion batch is usually at a
-    different timestep, so a scalar per step is not enough.
+    different timestep, so a scalar per step is not enough.  A gather
+    rather than a read of each timestep on the host: a compiled or
+    exported training step then takes the timesteps from each call's
+    inputs instead of replaying the ones it was traced with.
     """
-    B = int(timesteps.shape[0])
-    # Manual gather — ``arr`` is small (≤ a few thousand entries) and we
-    # want a backend-agnostic implementation.
-    vals = [float(arr[int(timesteps[b].item())].item()) for b in range(B)]
-    out = lucid.tensor(vals, device=arr.device.type)
-    while out.ndim < len(broadcast_shape):
-        out = out.unsqueeze(-1)
-    return out
+    index = timesteps.long().reshape(-1)
+    device = index.device.type
+    # Schedules are built once on the CPU and are not module state, so a
+    # model moved to Metal still holds them there.
+    table = arr if arr.device.type == device else arr.to(device)
+    picked = lucid.take_along_dim(table, index, dim=0)
+    trailing = [1] * max(len(broadcast_shape) - 1, 0)
+    return picked.reshape(int(index.shape[0]), *trailing)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -46,10 +46,12 @@ still strong, and denoises to mush. It has its own name here for that
 reason, and a test pins the two apart.
 """
 
+from collections.abc import Callable
 from typing import cast, final
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._generative import extract_into_tensor
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 
 __all__ = ["DDIMScheduler", "PNDMScheduler"]
@@ -108,6 +110,23 @@ class DDIMScheduler:
             betas = (1.0 - ramp) * config.beta_start + ramp * config.beta_end
         self.betas = betas
         self.alphas_cumprod = lucid.cumprod(1.0 - betas, dim=0)
+        # add_noise's two coefficients per timestep, tabulated so that a
+        # batch of timesteps is a gather on the device rather than a read
+        # of each one.  Taken in double and rounded once: 1 - ᾱ_t is not
+        # exact in float32 once ᾱ_t < 0.5, and double is what the scalar
+        # formula these replace computed in.
+        wide = self.alphas_cumprod.to(lucid.float64)
+        self._signal_scale = wide.sqrt().to(lucid.float32)
+        self._noise_scale = (1.0 - wide).sqrt().to(lucid.float32)
+
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> None:
+        """Map the noising tables through a model's device / dtype move.
+
+        Only these: :meth:`step` reads ``alphas_cumprod`` at Python-int
+        timesteps, which is cheapest left on the host.
+        """
+        self._signal_scale = fn(self._signal_scale)
+        self._noise_scale = fn(self._noise_scale)
 
     def timesteps(self, num_inference_steps: int) -> list[int]:
         """The decreasing subsequence to sample over.
@@ -161,7 +180,9 @@ class DDIMScheduler:
         ]
         return ascending[::-1]
 
-    def add_noise(self, latent: Tensor, noise: Tensor, timestep: int) -> Tensor:
+    def add_noise(
+        self, latent: Tensor, noise: Tensor, timestep: int | Tensor
+    ) -> Tensor:
         r"""The forward process — :math:`z_t` from :math:`z_0`.
 
         Parameters
@@ -170,13 +191,23 @@ class DDIMScheduler:
             ``(B, C, h, w)`` clean latent.
         noise : Tensor
             The same shape.
-        timestep : int
-            Index into the training schedule.
+        timestep : int or Tensor
+            Index into the training schedule — one for the whole batch,
+            or a ``(B,)`` integer tensor with one per sample, as training
+            draws them.
 
         Returns
         -------
         Tensor
             :math:`\sqrt{\bar\alpha_t} z_0 + \sqrt{1-\bar\alpha_t}\epsilon`.
+
+        Raises
+        ------
+        IndexError
+            If an ``int`` timestep is outside the schedule.  A tensor of
+            timesteps raises on CPU and reads NaN on Metal, as
+            :func:`~lucid.models._utils._generative.extract_into_tensor`
+            describes.
 
         Examples
         --------
@@ -206,9 +237,29 @@ class DDIMScheduler:
         >>> signal, noise = coefficients(500)
         >>> round(signal**2 + noise**2, 6)
         1.0
+
+        A tensor of timesteps noises each sample at its own step, the same
+        as noising it alone.
+
+        >>> batch = lucid.randn((2, 4, 8, 8))
+        >>> mixed = scheduler.add_noise(batch, lucid.zeros((2, 4, 8, 8)),
+        ...                             lucid.tensor([0, 999]))
+        >>> bool((mixed[1:] == scheduler.add_noise(batch[1:], zeros, 999)).all())
+        True
         """
-        alpha = float(self.alphas_cumprod[timestep].item())
-        return cast(Tensor, alpha**0.5 * latent + (1.0 - alpha) ** 0.5 * noise)
+        if isinstance(timestep, int):
+            # A Python int is checked here, where it costs nothing; a
+            # tensor is left to the gather (see ``extract_into_tensor``).
+            total = self.config.num_train_timesteps
+            if not -total <= timestep < total:
+                raise IndexError(
+                    f"timestep must lie in [{-total}, {total}), got {timestep}"
+                )
+            timestep = lucid.tensor([timestep], device=latent.device.type)
+        shape = tuple(int(s) for s in latent.shape)
+        signal = extract_into_tensor(self._signal_scale, timestep, shape)
+        noise_scale = extract_into_tensor(self._noise_scale, timestep, shape)
+        return signal * latent + noise_scale * noise
 
     def step(
         self,
