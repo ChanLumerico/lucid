@@ -116,7 +116,8 @@ def _make_entry_block(
             super().__init__()
             ops: list[nn.Module] = []
             if activate_first:
-                ops.append(nn.ReLU(inplace=True))
+                # Not in place: the skip reads the block's input (timm).
+                ops.append(nn.ReLU(inplace=False))
             # SepConv 1
             ops.append(_SepConvOp(in_channels, out_channels))
             ops.append(nn.BatchNorm2d(out_channels))
@@ -167,7 +168,8 @@ def _make_middle_block(channels: int) -> nn.Module:
         def __init__(self) -> None:
             super().__init__()
             self.rep = nn.Sequential(
-                nn.ReLU(inplace=True),
+                # Not in place: ``forward`` adds the block's input back.
+                nn.ReLU(inplace=False),
                 _SepConvOp(channels, channels),
                 nn.BatchNorm2d(channels),
                 nn.ReLU(inplace=True),
@@ -214,7 +216,8 @@ def _make_exit_block() -> nn.Module:
         def __init__(self) -> None:
             super().__init__()
             self.rep = nn.Sequential(
-                nn.ReLU(inplace=True),
+                # Not in place: the skip reads the block's input (timm).
+                nn.ReLU(inplace=False),
                 _SepConvOp(728, 728),
                 nn.BatchNorm2d(728),
                 nn.ReLU(inplace=True),
