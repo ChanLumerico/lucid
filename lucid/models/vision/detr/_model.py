@@ -60,6 +60,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
+    _FrozenBatchNorm2d,
+    _make_resnet_layer,
     box_cxcywh_to_xyxy,
     box_xyxy_to_cxcywh,
     generalized_box_iou,
@@ -67,100 +69,13 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.detr._config import DETRConfig
 
-# ---------------------------------------------------------------------------
-# Frozen BatchNorm (eval-only affine + running-stat math, no nbt buffer)
-# ---------------------------------------------------------------------------
-
-
-class _FrozenBatchNorm2d(nn.Module):
-    """BatchNorm2d with frozen affine params + running stats.
-
-    Holds exactly four persistent buffers — ``weight``, ``bias``,
-    ``running_mean``, ``running_var`` — with **no** ``num_batches_tracked``,
-    matching the reference DETR ``FrozenBatchNorm2d`` key-set.  The forward
-    applies the eval-time normalisation
-
-    .. math::
-
-        y = (x - \\mathrm{running\\_mean})
-            \\cdot \\mathrm{rsqrt}(\\mathrm{running\\_var} + \\varepsilon)
-            \\cdot \\mathrm{weight} + \\mathrm{bias}
-
-    with :math:`\\varepsilon = 10^{-5}`, regardless of ``train`` / ``eval``
-    mode (the statistics never update).
-    """
-
-    eps: ClassVar[float] = 1e-5
-
-    def __init__(self, num_features: int) -> None:
-        super().__init__()
-        self.num_features = num_features
-        self.register_buffer("weight", lucid.ones(num_features))
-        self.register_buffer("bias", lucid.zeros(num_features))
-        self.register_buffer("running_mean", lucid.zeros(num_features))
-        self.register_buffer("running_var", lucid.ones(num_features))
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:
-        w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
-        b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
-        rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
-        rv = cast(Tensor, self.running_var).reshape(1, -1, 1, 1)
-        scale = w * (rv + self.eps).rsqrt()
-        bias = b - rm * scale
-        return x * scale + bias
-
+# The reference DETR backbone freezes its BatchNorm with eps = 1e-5, where
+# the R-CNN trunks sharing these blocks use 0.
+_BN_EPS = 1e-5
 
 # ---------------------------------------------------------------------------
 # ResNet backbone (C5 only — frozen BN, reference key layout)
 # ---------------------------------------------------------------------------
-
-
-class _Bottleneck(nn.Module):
-    expansion: ClassVar[int] = 4
-
-    def __init__(
-        self,
-        in_ch: int,
-        mid_ch: int,
-        stride: int = 1,
-        downsample: nn.Module | None = None,
-    ) -> None:
-        super().__init__()
-        out_ch = mid_ch * self.expansion
-        self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
-        self.bn1 = _FrozenBatchNorm2d(mid_ch)
-        self.conv2 = nn.Conv2d(mid_ch, mid_ch, 3, stride=stride, padding=1, bias=False)
-        self.bn2 = _FrozenBatchNorm2d(mid_ch)
-        self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
-        self.bn3 = _FrozenBatchNorm2d(out_ch)
-        self.downsample = downsample
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-        out: Tensor = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
-        return F.relu(out + identity)
-
-
-def _make_layer(
-    in_ch: int, mid_ch: int, num_blocks: int, stride: int = 1
-) -> tuple[nn.Sequential, int]:
-    out_ch = mid_ch * 4
-    ds: nn.Module | None = None
-    if stride != 1 or in_ch != out_ch:
-        ds = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
-            _FrozenBatchNorm2d(out_ch),
-        )
-    blocks: list[nn.Module] = [_Bottleneck(in_ch, mid_ch, stride=stride, downsample=ds)]
-    for _ in range(1, num_blocks):
-        blocks.append(_Bottleneck(out_ch, mid_ch))
-    return nn.Sequential(*blocks), out_ch
 
 
 @final
@@ -175,12 +90,12 @@ class _ResNetC5(nn.Module):
     def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
-        self.bn1 = _FrozenBatchNorm2d(64)
+        self.bn1 = _FrozenBatchNorm2d(64, eps=_BN_EPS)
         self.pool = nn.MaxPool2d(3, stride=2, padding=1)
-        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)
-        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)
-        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2)
-        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2)
+        self.layer1, c2 = _make_resnet_layer(64, 64, layers[0], 1, _BN_EPS)
+        self.layer2, c3 = _make_resnet_layer(c2, 128, layers[1], 2, _BN_EPS)
+        self.layer3, c4 = _make_resnet_layer(c3, 256, layers[2], 2, _BN_EPS)
+        self.layer4, c5 = _make_resnet_layer(c4, 512, layers[3], 2, _BN_EPS)
         self.out_channels: int = c5
 
     @override

@@ -640,7 +640,7 @@ class AnchorGenerator(nn.Module):
         return grid.reshape(G * A, 4)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         feature_maps: list[Tensor],
         image_size: tuple[int, int],
@@ -1168,7 +1168,7 @@ class FPN(nn.Module):
         )
 
     @override
-    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
         """
         Args:
             features: Bottom-up maps, finest → coarsest (e.g. C2, C3, C4, C5).
@@ -1258,7 +1258,7 @@ class RPN(nn.Module):
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         features: list[Tensor],
         anchors: list[Tensor],
@@ -1281,9 +1281,9 @@ class RPN(nn.Module):
         all_scores: list[list[Tensor]] = [[] for _ in range(B)]
 
         for feat, level_anchors in zip(features, anchors):
-            t = F.relu(cast(Tensor, self.conv(feat)))
-            logits = cast(Tensor, self.cls_logits(t))  # (B, A, H, W)
-            deltas = cast(Tensor, self.bbox_pred(t))  # (B, 4A, H, W)
+            t = F.relu(self.conv(feat))
+            logits = self.cls_logits(t)  # (B, A, H, W)
+            deltas = self.bbox_pred(t)  # (B, 4A, H, W)
 
             A = int(logits.shape[1])
             fH = int(logits.shape[2])
@@ -1406,7 +1406,7 @@ class RoIHead(nn.Module):
         self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
 
     @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """
         Args:
             x: (N_rois, C, roi_h, roi_w) RoI-aligned feature crops.
@@ -1417,10 +1417,10 @@ class RoIHead(nn.Module):
                 box_deltas:   (N_rois, num_classes * 4)
         """
         x = x.flatten(1)
-        x = F.relu(cast(Tensor, self.fc6(x)))
-        x = F.relu(cast(Tensor, self.fc7(x)))
-        class_logits = cast(Tensor, self.cls_score(x))
-        box_deltas = cast(Tensor, self.bbox_pred(x))
+        x = F.relu(self.fc6(x))
+        x = F.relu(self.fc7(x))
+        class_logits = self.cls_score(x)
+        box_deltas = self.bbox_pred(x)
         return class_logits, box_deltas
 
 
@@ -2360,7 +2360,7 @@ class _FrozenBatchNorm2d(nn.Module):
         self.register_buffer("running_var", lucid.ones(num_features))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
         b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
         rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
@@ -2394,11 +2394,11 @@ class _ResNetBottleneck(nn.Module):
         self.downsample = downsample
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         identity = x
-        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        out = F.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out: Tensor = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
         return F.relu(out + identity)
@@ -2448,13 +2448,13 @@ class _ResNetBody(nn.Module):
         self.out_channels_list: list[int] = [c2, c3, c4, c5]
 
     @override
-    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x))))))
+    def forward(self, x: Tensor) -> list[Tensor]:
+        x = self.relu(self.bn1(self.conv1(x)))
         x = cast(Tensor, self.maxpool(x))
-        c2 = cast(Tensor, self.layer1(x))
-        c3 = cast(Tensor, self.layer2(c2))
-        c4 = cast(Tensor, self.layer3(c3))
-        c5 = cast(Tensor, self.layer4(c4))
+        c2 = self.layer1(x)
+        c3 = self.layer2(c2)
+        c4 = self.layer3(c3)
+        c5 = self.layer4(c4)
         return [c2, c3, c4, c5]
 
 
@@ -2483,7 +2483,7 @@ class _FeaturePyramidNetwork(nn.Module):
         )
 
     @override
-    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+    def forward(self, features: list[Tensor]) -> list[Tensor]:
         """Top-down FPN over bottom-up maps (finest first) + a pool level.
 
         Returns ``len(features) + 1`` maps: the FPN levels followed by the
@@ -2565,9 +2565,7 @@ class _ReferenceAnchorGenerator(nn.Module):
         return grid.reshape(-1, 4)
 
     @override
-    def forward(  # type: ignore[override]
-        self, feature_maps: list[Tensor], strides: list[int]
-    ) -> list[Tensor]:
+    def forward(self, feature_maps: list[Tensor], strides: list[int]) -> list[Tensor]:
         device = feature_maps[0].device.type if feature_maps else "cpu"
         out: list[Tensor] = []
         for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
