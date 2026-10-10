@@ -79,11 +79,19 @@ def _masked_attention(
     The fused kernel runs unless the weights are wanted or dropout is on,
     since it never materialises the probabilities either needs.  The
     weights returned are the ones applied to ``value`` — after dropout.
+
+    An additive mask in another float dtype — a float32 bias against
+    half-precision queries, which the reference accepts — is cast to the
+    query's dtype here.  The cast is recorded, so a learnable mask's
+    gradient comes back in the mask's own dtype.  The engine kernels
+    refuse a mismatched mask rather than read it in the wrong dtype.
     """
     import lucid as _lucid
 
     dead: Tensor | None = None
     if attn_mask is not None:
+        if attn_mask.dtype != query.dtype:
+            attn_mask = attn_mask.to(query.dtype)
         dead = attn_mask.detach().max(dim=-1, keepdim=True) == _NEG_INF
         attn_mask = _lucid.masked_fill(attn_mask, dead, 0.0)
 

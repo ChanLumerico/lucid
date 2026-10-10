@@ -10,7 +10,9 @@ one into an additive mask in the query's dtype.  It was also the source
 of the LCD-129 flake: the out-of-bounds read differed from run to run.
 
 Each cell runs {SDPA, MultiheadAttention} x {bool, additive, zero} mask x
-{float16, bfloat16} on every device.  The output and every gradient,
+{float16, bfloat16} on every device.  A float mask in another dtype than the
+queries (float32 or float16 against half queries) is cast at the public
+door, and its gradient comes back in its own dtype.  The output and every gradient,
 including the additive mask's, must match the same call in float32 on the
 same rounded values.  The ``parity`` cells hold them to the reference too.
 """
@@ -191,16 +193,8 @@ def test_sdpa_matches_the_reference(
         _close(g, t.grad.numpy(), dtype, f"{name} gradient")
 
 
-@pytest.mark.parity
-@pytest.mark.parametrize("device", _DEVICES)
-@pytest.mark.parametrize("dtype", list(_HALVES))
-@pytest.mark.parametrize("kind", _KINDS)
-def test_mha_matches_the_reference(
-    ref: Any, device: str, dtype: str, kind: str
-) -> None:
-    ours = nn.MultiheadAttention(E, H, batch_first=True).to(
-        device, dtype=_HALVES[dtype]
-    )
+def _ref_mha(ref: Any, ours: nn.MultiheadAttention) -> Any:
+    """The reference module holding ``ours``'s parameters."""
     theirs = ref.nn.MultiheadAttention(E, H, batch_first=True)
     with ref.no_grad():
         for mine, name in (
@@ -211,6 +205,20 @@ def test_mha_matches_the_reference(
         ):
             value = getattr(ours, mine).detach().to(lucid.float32).cpu().numpy()
             theirs.get_parameter(name).copy_(ref.from_numpy(value))
+    return theirs
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("dtype", list(_HALVES))
+@pytest.mark.parametrize("kind", _KINDS)
+def test_mha_matches_the_reference(
+    ref: Any, device: str, dtype: str, kind: str
+) -> None:
+    ours = nn.MultiheadAttention(E, H, batch_first=True).to(
+        device, dtype=_HALVES[dtype]
+    )
+    theirs = _ref_mha(ref, ours)
     arrays = [
         _rounded(_values(10 + i, N, n, E), dtype) for i, n in enumerate((L, S, S))
     ]
@@ -227,6 +235,114 @@ def test_mha_matches_the_reference(
     _close(got, want.detach().numpy(), dtype, "output")
     for name, g, t in zip(("query", "key", "value"), got_grads, ref_in, strict=True):
         _close(g, t.grad.numpy(), dtype, f"{name} gradient")
+
+
+# ── a float mask in another dtype than the queries ─────────────────────────
+#
+# The engine refuses an additive mask whose dtype is not the queries'; the
+# public door casts it (the reference takes a float32 bias against half
+# queries).  The cast is recorded, so a learnable mask's gradient comes
+# back in the mask's own dtype.
+
+_MASK_DTYPES = {"float32": lucid.float32, "float16": lucid.float16}
+_ENTRIES = ["sdpa", "mha"]
+
+
+def _mixed_shapes(entry: str) -> tuple[list[tuple[int, ...]], tuple[int, ...]]:
+    if entry == "sdpa":
+        return [(N, H, n, D) for n in (L, S, S)], (N, H, L, S)
+    return [(N, n, E) for n in (L, S, S)], (L, S)
+
+
+def _mixed_inputs(
+    entry: str, dtype: str, mask_dtype: str
+) -> tuple[list[np.ndarray], np.ndarray]:
+    """Query/key/value rounded through ``dtype``; the bias through its own."""
+    shapes, mask_shape = _mixed_shapes(entry)
+    arrays = [_rounded(_values(20 + i, *sh), dtype) for i, sh in enumerate(shapes)]
+    bias = _mask_values("additive", mask_shape)
+    bias = lucid.tensor(bias).to(_MASK_DTYPES[mask_dtype]).to(lucid.float32).numpy()
+    return arrays, bias
+
+
+def _mixed_run(
+    module: nn.MultiheadAttention | None,
+    arrays: list[np.ndarray],
+    bias: np.ndarray,
+    dtype: Any,
+    mask_dtype: Any,
+    device: str,
+) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tensor]:
+    """Output, query gradient and mask gradient."""
+    q, k, v = (
+        lucid.tensor(a, dtype=dtype, device=device, requires_grad=True) for a in arrays
+    )
+    m = lucid.tensor(bias, dtype=mask_dtype, device=device, requires_grad=True)
+    if module is None:
+        out = F.scaled_dot_product_attention(q, k, v, attn_mask=m)
+    else:
+        out, _ = module(q, k, v, attn_mask=m, need_weights=False)
+    upstream = lucid.tensor(_values(8, *out.shape), dtype=dtype, device=device)
+    (out * upstream).sum().backward()
+    assert q.grad is not None and m.grad is not None
+    return out, q.grad, m.grad
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("dtype", list(_HALVES))
+@pytest.mark.parametrize("mask_dtype", list(_MASK_DTYPES))
+@pytest.mark.parametrize("entry", _ENTRIES)
+def test_a_float_mask_in_another_dtype_is_cast(
+    entry: str, mask_dtype: str, dtype: str, device: str
+) -> None:
+    arrays, bias = _mixed_inputs(entry, dtype, mask_dtype)
+    half = None
+    full = None
+    if entry == "mha":
+        half = nn.MultiheadAttention(E, H, batch_first=True).to(
+            device, dtype=_HALVES[dtype]
+        )
+        full = copy.deepcopy(half).to(dtype=lucid.float32)
+    got, gq, gm = _mixed_run(
+        half, arrays, bias, _HALVES[dtype], _MASK_DTYPES[mask_dtype], device
+    )
+    want, wq, wm = _mixed_run(full, arrays, bias, lucid.float32, lucid.float32, device)
+    assert got.dtype == _HALVES[dtype]
+    assert gm.dtype == _MASK_DTYPES[mask_dtype], "mask gradient left its dtype"
+    _close(got, want.cpu().numpy(), dtype, "output")
+    _close(gq, wq.cpu().numpy(), dtype, "query gradient")
+    _close(gm, wm.cpu().numpy(), dtype, "mask gradient")
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("dtype", list(_HALVES))
+@pytest.mark.parametrize("mask_dtype", list(_MASK_DTYPES))
+@pytest.mark.parametrize("entry", _ENTRIES)
+def test_a_float_mask_in_another_dtype_matches_the_reference(
+    ref: Any, entry: str, mask_dtype: str, dtype: str, device: str
+) -> None:
+    arrays, bias = _mixed_inputs(entry, dtype, mask_dtype)
+    ours = None
+    if entry == "mha":
+        ours = nn.MultiheadAttention(E, H, batch_first=True).to(
+            device, dtype=_HALVES[dtype]
+        )
+    got, gq, gm = _mixed_run(
+        ours, arrays, bias, _HALVES[dtype], _MASK_DTYPES[mask_dtype], device
+    )
+
+    q, k, v = (ref.from_numpy(a).requires_grad_() for a in arrays)
+    m = ref.from_numpy(bias).requires_grad_()
+    if ours is None:
+        want = ref.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=m)
+    else:
+        want, _ = _ref_mha(ref, ours)(q, k, v, attn_mask=m, need_weights=False)
+    (want * ref.from_numpy(_values(8, *want.shape))).sum().backward()
+
+    _close(got, want.detach().numpy(), dtype, "output")
+    _close(gq, q.grad.numpy(), dtype, "query gradient")
+    _close(gm, m.grad.numpy(), dtype, "mask gradient")
 
 
 def test_the_cpu_kernel_refuses_a_mask_it_would_read_past() -> None:
