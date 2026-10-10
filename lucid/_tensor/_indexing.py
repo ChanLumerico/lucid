@@ -47,6 +47,7 @@ import operator
 from bisect import bisect_left
 from typing import Sequence, SupportsIndex, TYPE_CHECKING, cast
 
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._factories.converters import _to_impl
@@ -158,12 +159,6 @@ def _select_slice(
 _BOOL = _C_engine.Dtype.Bool
 _I64 = _C_engine.Dtype.I64
 _CPU = _C_engine.Device.CPU
-_INTEGER_BITS: dict[_C_engine.Dtype, int] = {
-    _C_engine.Dtype.I8: 8,
-    _C_engine.Dtype.I16: 16,
-    _C_engine.Dtype.I32: 32,
-    _C_engine.Dtype.I64: 64,
-}
 _COMPLEX = frozenset({_C_engine.Dtype.C64, _C_engine.Dtype.C128})
 
 
@@ -234,7 +229,7 @@ def _token(part: object) -> object:
             ) from err
     if impl.dtype == _BOOL:
         return impl
-    if impl.dtype not in _INTEGER_BITS:
+    if not _promotion.is_integer(impl.dtype):
         raise IndexError(
             f"tensors used as indices must be integer or bool tensors, got {impl.dtype}"
         )
@@ -794,11 +789,11 @@ def _scalar_impl(
             f"cannot write the complex value {value!r} into a {dtype} tensor"
         )
     exact = dtype in _COMPLEX or (
-        type(value) is int and dtype in _INTEGER_BITS  # not bool, not float
+        type(value) is int and _promotion.is_integer(dtype)  # not bool, not float
     )
     if not exact:
         return _C_engine.full([], float(value.real), dtype, device)
-    bits = _INTEGER_BITS.get(dtype)
+    bits = _promotion.bit_width(dtype) if _promotion.is_integer(dtype) else None
     if bits is not None and not -(2 ** (bits - 1)) <= int(value.real) < 2 ** (bits - 1):
         raise OverflowError(f"{value} is out of range for a {dtype} tensor")
     return _to_impl(value, dtype=dtype, device=device)

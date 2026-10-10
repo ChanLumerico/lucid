@@ -344,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop dead nn/quantization casts and ignores (LCD-260-C3d)
 - unlaunder rnn.py, drop transitional mypy section (LCD-260-C3e/C4)
 - one promotion owner for every spelling of a binary op
+- indexing reads integer widths from the promotion owner
 
 ---
 
