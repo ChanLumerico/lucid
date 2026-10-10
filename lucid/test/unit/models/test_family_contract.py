@@ -18,16 +18,23 @@ Contract spec: ``obsidian/architecture/arch-models-family-contract.md``
 import importlib
 import inspect
 import re
+import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import NoReturn
 
 import pytest
 
+import lucid.weights._loading as weights_loading
 from lucid.models._protocols import (
     ModelConfigProtocol,
     PretrainedModelProtocol,
 )
-from lucid.models._registry import is_model
+from lucid.models._registry import is_model, list_models, model_entrypoint
+from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.nn._shadow import shadow_alloc
+from lucid.weights import weights_for
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MODELS_DIR = REPO_ROOT / "lucid" / "models"
@@ -276,3 +283,99 @@ def test_the_export_check_can_fail() -> None:
     fake.__all__ = ["free_bits_kl"]  # type: ignore[attr-defined]
 
     assert _stray_exported_functions(fake) == ["free_bits_kl"]
+
+
+# ── pretrained=True never returns an untrained model ────────────────────────
+#
+# ``from_pretrained`` resolves a name by calling ``factory(pretrained=True)``
+# and trusts whatever comes back.  A factory that accepts the flag and does
+# nothing with it therefore hands the caller random weights labelled as
+# trained.  Every factory with no weights registered under its own name must
+# refuse the flag with the exception ``reject_unavailable_pretrained`` raises
+# — unless it reaches a checkpoint some other way (a task head that loads its
+# backbone's weights, as ``bert_base_cls`` does).
+
+# The type ``reject_unavailable_pretrained`` raises; pinned against the
+# helper itself by ``test_rejection_type_is_the_helpers`` below.
+_REJECTION = NotImplementedError
+
+
+class _CheckpointRequested(Exception):
+    """Raised in place of a download, so no test ever fetches weights."""
+
+
+def _no_download(*args: object, **kwargs: object) -> NoReturn:
+    raise _CheckpointRequested
+
+
+@pytest.fixture
+def _downloads_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(weights_loading, "download", _no_download)
+    monkeypatch.setattr(urllib.request, "urlopen", _no_download)
+
+
+def _pretrained_outcome(factory: Callable[..., object]) -> str:
+    """What ``factory(pretrained=True)`` does: refuses, loads, or ignores.
+
+    Built under ``shadow_alloc`` so even the largest configuration costs
+    no memory; the caller must block downloads so "loads" stops at the
+    request rather than fetching the file.
+    """
+    with shadow_alloc():
+        try:
+            factory(pretrained=True)
+        except _REJECTION:
+            return "refuses"
+        except _CheckpointRequested:
+            return "loads"
+    return "ignores"
+
+
+_UNWEIGHTED = sorted(n for n in list_models() if weights_for(n) is None)
+
+
+@pytest.mark.parametrize("name", _UNWEIGHTED)
+def test_pretrained_without_weights_is_refused(
+    name: str, _downloads_blocked: None
+) -> None:
+    outcome = _pretrained_outcome(model_entrypoint(name))
+    assert outcome != "ignores", (
+        f"{name}(pretrained=True) returned a randomly initialised model.  "
+        f"No weights are registered for {name!r}, so the factory must call "
+        f"reject_unavailable_pretrained({name!r}) when pretrained is set."
+    )
+
+
+def test_rejection_type_is_the_helpers() -> None:
+    with pytest.raises(_REJECTION):
+        reject_unavailable_pretrained("probe")
+
+
+def test_partially_weighted_families_are_covered() -> None:
+    """A family with weights for one configuration only is still checked
+    for the rest — DiT publishes XL/2 and nothing else."""
+    assert "dit_xlarge_2" not in _UNWEIGHTED
+    assert {"dit_xlarge_4", "dit_small_2_gen"} <= set(_UNWEIGHTED)
+
+
+def test_the_pretrained_check_can_fail(_downloads_blocked: None) -> None:
+    """Guards the test above — with every factory already conforming, a
+    classifier that never said "ignores" would pass just as well."""
+
+    def ignores(pretrained: bool = False) -> object:
+        del pretrained  # the defect under test: the flag goes nowhere
+        return object()
+
+    def refuses(pretrained: bool = False) -> object:
+        if pretrained:
+            reject_unavailable_pretrained("refuses")
+        return object()
+
+    def loads(pretrained: bool = False) -> object:
+        if pretrained:
+            weights_loading.download("https://example.invalid/w", "0", name="w")
+        return object()
+
+    assert _pretrained_outcome(ignores) == "ignores"
+    assert _pretrained_outcome(refuses) == "refuses"
+    assert _pretrained_outcome(loads) == "loads"

@@ -45,7 +45,7 @@ from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
-from lucid.models._utils._common import apply_overrides
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 if TYPE_CHECKING:
     pass
@@ -875,7 +875,8 @@ def yolo(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No YOLOv1 checkpoint ships; ``True`` raises rather than
+        returning a randomly initialised model.
     **overrides
         Keyword overrides forwarded into :class:`YOLOConfig` —
         ``num_classes``, ``split_size`` (S), ``num_boxes`` (B),
@@ -902,6 +903,8 @@ def yolo(
     >>> out.logits.shape[0]
     1
     """
+    if pretrained:
+        reject_unavailable_pretrained("yolo")
     return YOLOForObjectDetection(apply_overrides(_CFG_V1, overrides))
 
 
@@ -930,7 +933,8 @@ def yolo_tiny(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        Fast YOLO has no checkpoint here either, so ``True`` is refused
+        instead of quietly building an untrained detector.
     **overrides
         Keyword overrides forwarded into :class:`YOLOConfig`.
 
@@ -956,4 +960,6 @@ def yolo_tiny(
     >>> out.logits.shape[0]
     1
     """
+    if pretrained:
+        reject_unavailable_pretrained("yolo_tiny")
     return YOLOForObjectDetection(apply_overrides(_CFG_V1_TINY, overrides))

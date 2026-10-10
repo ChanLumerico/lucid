@@ -24,7 +24,7 @@ from lucid.weights import WeightsEnum
 from lucid.models._registry import register_model
 from lucid.models.generative.dit._config import DiTConfig
 from lucid.models.generative.dit._model import DiTForImageGeneration, DiTModel
-from lucid.models._utils._common import apply_overrides
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 __all__ = [
     "dit_small_2",
@@ -116,8 +116,8 @@ def dit_small_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -139,6 +139,8 @@ def dit_small_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 2)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_2", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_SMALL_2, overrides))
 
 
@@ -156,8 +158,8 @@ def dit_small_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -179,6 +181,8 @@ def dit_small_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 4)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_4", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_SMALL_4, overrides))
 
 
@@ -196,8 +200,8 @@ def dit_small_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -219,6 +223,8 @@ def dit_small_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 8)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_8", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_SMALL_8, overrides))
 
 
@@ -236,8 +242,8 @@ def dit_base_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -259,6 +265,8 @@ def dit_base_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 2)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_2", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_BASE_2, overrides))
 
 
@@ -276,8 +284,8 @@ def dit_base_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -299,6 +307,8 @@ def dit_base_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 4)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_4", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_BASE_4, overrides))
 
 
@@ -316,8 +326,8 @@ def dit_base_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -339,6 +349,8 @@ def dit_base_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 8)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_8", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_BASE_8, overrides))
 
 
@@ -356,8 +368,8 @@ def dit_large_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -379,6 +391,8 @@ def dit_large_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 2)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_2", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_LARGE_2, overrides))
 
 
@@ -396,8 +410,8 @@ def dit_large_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -419,6 +433,8 @@ def dit_large_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 4)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_4", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_LARGE_4, overrides))
 
 
@@ -436,8 +452,8 @@ def dit_large_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -459,6 +475,8 @@ def dit_large_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 8)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_8", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_LARGE_8, overrides))
 
 
@@ -532,8 +550,8 @@ def dit_xlarge_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -555,6 +573,8 @@ def dit_xlarge_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (28, 1152, 4)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_xlarge_4", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_XLARGE_4, overrides))
 
 
@@ -572,8 +592,8 @@ def dit_xlarge_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -595,6 +615,8 @@ def dit_xlarge_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (28, 1152, 8)
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_xlarge_8", alternative="dit_xlarge_2")
     return DiTModel(apply_overrides(_CFG_XLARGE_8, overrides))
 
 
@@ -614,8 +636,8 @@ def dit_small_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -633,6 +655,8 @@ def dit_small_2_gen(
     >>> from lucid.models import dit_small_2_gen
     >>> model = dit_small_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_2_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_SMALL_2, overrides))
 
 
@@ -652,8 +676,8 @@ def dit_small_4_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -671,6 +695,8 @@ def dit_small_4_gen(
     >>> from lucid.models import dit_small_4_gen
     >>> model = dit_small_4_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_4_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_SMALL_4, overrides))
 
 
@@ -690,8 +716,8 @@ def dit_small_8_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -709,6 +735,8 @@ def dit_small_8_gen(
     >>> from lucid.models import dit_small_8_gen
     >>> model = dit_small_8_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_small_8_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_SMALL_8, overrides))
 
 
@@ -728,8 +756,8 @@ def dit_base_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -747,6 +775,8 @@ def dit_base_2_gen(
     >>> from lucid.models import dit_base_2_gen
     >>> model = dit_base_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_2_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_BASE_2, overrides))
 
 
@@ -766,8 +796,8 @@ def dit_base_4_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -785,6 +815,8 @@ def dit_base_4_gen(
     >>> from lucid.models import dit_base_4_gen
     >>> model = dit_base_4_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_4_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_BASE_4, overrides))
 
 
@@ -804,8 +836,8 @@ def dit_base_8_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -823,6 +855,8 @@ def dit_base_8_gen(
     >>> from lucid.models import dit_base_8_gen
     >>> model = dit_base_8_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_base_8_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_BASE_8, overrides))
 
 
@@ -842,8 +876,8 @@ def dit_large_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -861,6 +895,8 @@ def dit_large_2_gen(
     >>> from lucid.models import dit_large_2_gen
     >>> model = dit_large_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_2_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_LARGE_2, overrides))
 
 
@@ -880,8 +916,8 @@ def dit_large_4_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -899,6 +935,8 @@ def dit_large_4_gen(
     >>> from lucid.models import dit_large_4_gen
     >>> model = dit_large_4_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_4_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_LARGE_4, overrides))
 
 
@@ -918,8 +956,8 @@ def dit_large_8_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -937,6 +975,8 @@ def dit_large_8_gen(
     >>> from lucid.models import dit_large_8_gen
     >>> model = dit_large_8_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("dit_large_8_gen", alternative="dit_xlarge_2_gen")
     return DiTForImageGeneration(apply_overrides(_CFG_LARGE_8, overrides))
 
 
@@ -1010,8 +1050,8 @@ def dit_xlarge_4_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -1029,6 +1069,10 @@ def dit_xlarge_4_gen(
     >>> from lucid.models import dit_xlarge_4_gen
     >>> model = dit_xlarge_4_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "dit_xlarge_4_gen", alternative="dit_xlarge_2_gen"
+        )
     return DiTForImageGeneration(apply_overrides(_CFG_XLARGE_4, overrides))
 
 
@@ -1048,8 +1092,8 @@ def dit_xlarge_8_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No DiT
-        checkpoint ships here.
+        No DiT checkpoint was published for this configuration; ``True``
+        raises rather than returning a randomly initialised model.
     **overrides : object
         Optional :class:`DiTConfig` field overrides.
 
@@ -1067,4 +1111,8 @@ def dit_xlarge_8_gen(
     >>> from lucid.models import dit_xlarge_8_gen
     >>> model = dit_xlarge_8_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "dit_xlarge_8_gen", alternative="dit_xlarge_2_gen"
+        )
     return DiTForImageGeneration(apply_overrides(_CFG_XLARGE_8, overrides))

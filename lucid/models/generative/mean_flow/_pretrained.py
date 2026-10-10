@@ -25,7 +25,7 @@ from lucid.models.generative.mean_flow._model import (
     MeanFlowForImageGeneration,
     MeanFlowModel,
 )
-from lucid.models._utils._common import apply_overrides
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 __all__ = [
     "mean_flow_base_4",
@@ -79,9 +79,9 @@ def mean_flow_base_4(pretrained: bool = False, **overrides: object) -> MeanFlowM
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -108,6 +108,8 @@ def mean_flow_base_4(pretrained: bool = False, **overrides: object) -> MeanFlowM
     >>> config.patch_size, config.num_patches
     (4, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_base_4")
     return MeanFlowModel(apply_overrides(_CFG_BASE_4, overrides))
 
 
@@ -126,9 +128,9 @@ def mean_flow_base_2(pretrained: bool = False, **overrides: object) -> MeanFlowM
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -149,6 +151,8 @@ def mean_flow_base_2(pretrained: bool = False, **overrides: object) -> MeanFlowM
     >>> config.hidden_size, config.depth, config.num_patches
     (768, 12, 256)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_base_2")
     return MeanFlowModel(apply_overrides(_CFG_BASE_2, overrides))
 
 
@@ -167,9 +171,9 @@ def mean_flow_medium_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -193,6 +197,8 @@ def mean_flow_medium_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     >>> config.hidden_size, config.depth
     (1024, 16)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_medium_2")
     return MeanFlowModel(apply_overrides(_CFG_MEDIUM_2, overrides))
 
 
@@ -211,9 +217,9 @@ def mean_flow_large_2(pretrained: bool = False, **overrides: object) -> MeanFlow
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -238,6 +244,8 @@ def mean_flow_large_2(pretrained: bool = False, **overrides: object) -> MeanFlow
     >>> config.depth, config.guidance_interval
     (24, (0.0, 0.8))
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_large_2")
     return MeanFlowModel(apply_overrides(_CFG_LARGE_2, overrides))
 
 
@@ -256,9 +264,9 @@ def mean_flow_xlarge_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -282,6 +290,8 @@ def mean_flow_xlarge_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     >>> config.hidden_size, config.depth, config.num_heads
     (1152, 28, 16)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_xlarge_2")
     return MeanFlowModel(apply_overrides(_CFG_XLARGE_2, overrides))
 
 
@@ -308,9 +318,9 @@ def mean_flow_base_4_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -328,6 +338,8 @@ def mean_flow_base_4_gen(
     >>> from lucid.models import mean_flow_base_4_gen
     >>> model = mean_flow_base_4_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_base_4_gen")
     return _gen(_CFG_BASE_4, overrides)
 
 
@@ -348,9 +360,9 @@ def mean_flow_base_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -368,6 +380,8 @@ def mean_flow_base_2_gen(
     >>> from lucid.models import mean_flow_base_2_gen
     >>> model = mean_flow_base_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_base_2_gen")
     return _gen(_CFG_BASE_2, overrides)
 
 
@@ -388,9 +402,9 @@ def mean_flow_medium_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -408,6 +422,8 @@ def mean_flow_medium_2_gen(
     >>> from lucid.models import mean_flow_medium_2_gen
     >>> model = mean_flow_medium_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_medium_2_gen")
     return _gen(_CFG_MEDIUM_2, overrides)
 
 
@@ -428,9 +444,9 @@ def mean_flow_large_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -448,6 +464,8 @@ def mean_flow_large_2_gen(
     >>> from lucid.models import mean_flow_large_2_gen
     >>> model = mean_flow_large_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_large_2_gen")
     return _gen(_CFG_LARGE_2, overrides)
 
 
@@ -468,9 +486,9 @@ def mean_flow_xlarge_2_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Accepted for signature parity with the rest of the zoo.  No
-        MeanFlow checkpoint ships — the paper releases none, and a
-        ``True`` here would have nothing to load.
+        No MeanFlow checkpoint ships — the paper releases none — so
+        ``True`` raises rather than returning a randomly initialised
+        model.
     **overrides : object
         Optional :class:`MeanFlowConfig` field overrides.
 
@@ -489,4 +507,6 @@ def mean_flow_xlarge_2_gen(
     >>> from lucid.models import mean_flow_xlarge_2_gen
     >>> model = mean_flow_xlarge_2_gen()  # doctest: +SKIP
     """
+    if pretrained:
+        reject_unavailable_pretrained("mean_flow_xlarge_2_gen")
     return _gen(_CFG_XLARGE_2, overrides)

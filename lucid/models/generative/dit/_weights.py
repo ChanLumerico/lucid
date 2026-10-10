@@ -4,8 +4,9 @@ Two checkpoints were released, and they are the same model: the XL
 backbone at patch 2, trained on class-conditional ImageNet, at the two
 resolutions the paper reports state-of-the-art FID for.  The other
 eleven configurations in the scaling study were trained but never
-published, which is why ``dit_xlarge_2`` is the only factory here that
-takes ``pretrained``.
+published, which is why ``dit_xlarge_2`` (and its ``_gen`` wrapper) is
+the only factory here whose ``pretrained=True`` loads anything — the
+others refuse it rather than hand back an untrained model.
 
 The weights are converted by :mod:`tools.convert_weights.dit` from the
 ``facebook/DiT-XL-2-*`` repos and re-hosted under the ``lucid-dl`` org.
