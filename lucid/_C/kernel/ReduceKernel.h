@@ -436,6 +436,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         bwd->out_shape_ = out_shape;
         bwd->dtype_ = eff_dt;
         bwd->device_ = a->device();
+        bwd->grad_dtypes_ = {detail::grad_dtype_for(a, a_ptr)};
         bwd->input_tensors_ = {a};
         if constexpr (Derived::kSavesInput)
             bwd->saved_inputs_ = {a_ptr->storage()};
@@ -473,7 +474,8 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
 template <class Derived>
 std::vector<Storage> ReduceKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
-    return {std::move(dx)};
+    return {detail::grad_to_input_dtype(std::move(dx), this->grad_dtypes_[0],
+                                        this->full_input_shape_, this->dtype_, this->device_)};
 }
 
 // Out-of-line definition of :meth:`ReduceKernel::apply_for_graph`.
@@ -516,8 +518,19 @@ std::vector<TensorImplPtr> ReduceKernel<Derived>::apply_for_graph(const TensorIm
     // to all elements that were reduced (sum backward).
     auto dx = broadcast_to_op(g, this->full_input_shape_);
 
-    // Derived may scale the gradient (e.g. MeanBackward divides by n_reduced).
-    return {static_cast<Derived*>(this)->scale_graph_grad(dx)};
+    // Derived may scale the gradient (e.g. MeanBackward divides by n_reduced)
+    // and reads the saved input there, which must be at the kernel dtype like
+    // ``dx``.  The cast stands in for the call only: left in the slot, a
+    // retained graph's next restore_saved_for_graph would take it for an
+    // input moved by an in-place write.
+    struct RestoreSaved {
+        TensorImplPtr& slot;
+        TensorImplPtr saved;
+        ~RestoreSaved() { slot = std::move(saved); }
+    } restore{this->saved_impl_inputs_[0], this->saved_impl_inputs_[0]};
+    this->saved_impl_inputs_[0] = detail::graph_input_at_kernel_dtype(restore.saved, this->dtype_);
+    return {detail::graph_grad_to_input_dtype(static_cast<Derived*>(this)->scale_graph_grad(dx),
+                                              this->grad_dtypes_[0])};
 }
 
 }  // namespace lucid

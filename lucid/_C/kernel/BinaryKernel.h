@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <complex>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -57,6 +58,10 @@
 #include "IKernel.h"
 
 namespace lucid {
+
+// Defined in ops/ufunc/Astype.cpp.  Declared here because the graph-mode
+// AMP helpers below need a differentiable cast and kernel/ sits below ops/.
+LUCID_API TensorImplPtr astype_op(const TensorImplPtr& a, Dtype dst_dtype);
 
 namespace detail {
 
@@ -316,6 +321,75 @@ inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
     Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), dt);
     return std::make_shared<TensorImpl>(std::move(cast_storage), t->shape(), dt, t->device(),
                                         false);
+}
+
+// The dtype an input's gradient goes back in, when the kernel computed with
+// a cast of it.
+//
+// Parameters
+// ----------
+// given : const TensorImplPtr&
+//     The input as the caller passed it.
+// used : const TensorImplPtr&
+//     What :func:`maybe_cast_for_kernel` returned for it.
+//
+// Returns
+// -------
+// std::optional<Dtype>
+//     ``given``'s dtype when it was cast and takes a gradient, otherwise
+//     empty.  Stored in :attr:`AutogradNode::grad_dtypes_`.
+//
+// Notes
+// -----
+// The autocast cast is differentiable in the reference: the input's
+// gradient comes back in the input's own dtype.  Returning it at the
+// kernel dtype instead left a view or permute between the input and this
+// op wrapping bfloat16 bytes as float32.
+inline std::optional<Dtype> grad_dtype_for(const TensorImplPtr& given, const TensorImplPtr& used) {
+    if (used == given || !given->requires_grad())
+        return std::nullopt;
+    return given->dtype();
+}
+
+// Cast a gradient computed at the kernel dtype back to its input's dtype.
+//
+// Parameters
+// ----------
+// g : Storage
+//     The gradient, shaped like the input, at dtype ``dt``.
+// input_dt : const std::optional<Dtype>&
+//     The input's entry of :attr:`AutogradNode::grad_dtypes_`.
+// shape : const Shape&
+//     The input's shape.
+// dt : Dtype
+//     The kernel dtype (``dtype_`` of the node).
+// device : Device
+//     Device of ``g``.
+//
+// Returns
+// -------
+// Storage
+//     ``g`` unchanged when ``input_dt`` is empty — the path every op takes
+//     outside autocast — otherwise ``g`` cast to ``*input_dt``.
+inline Storage grad_to_input_dtype(
+    Storage g, const std::optional<Dtype>& input_dt, const Shape& shape, Dtype dt, Device device) {
+    if (!input_dt)
+        return g;
+    return backend::Dispatcher::for_device(device).astype(g, shape, dt, *input_dt);
+}
+
+// Graph-mode counterpart of :func:`grad_to_input_dtype`, with a
+// differentiable cast so a second derivative flows through it.
+inline TensorImplPtr graph_grad_to_input_dtype(const TensorImplPtr& g,
+                                               const std::optional<Dtype>& input_dt) {
+    return (input_dt && g) ? astype_op(g, *input_dt) : g;
+}
+
+// A saved input at the kernel dtype ``dt`` for a graph-mode formula: the
+// forward computed on a cast of it, so the formula must too.  A
+// differentiable cast, so the second derivative reaches the input.
+inline TensorImplPtr graph_input_at_kernel_dtype(const TensorImplPtr& t, Dtype dt) {
+    return (!t || t->dtype() == dt) ? t : astype_op(t, dt);
 }
 
 }  // namespace detail
@@ -673,6 +747,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     bwd->out_shape_ = out->shape();
     bwd->dtype_ = eff_dt;
     bwd->device_ = a->device();
+    bwd->grad_dtypes_ = {detail::grad_dtype_for(a, a_ptr), detail::grad_dtype_for(b, b_ptr)};
     bwd->input_tensors_ = {a, b};
     // saved_inputs_ holds the (possibly cast) pre-broadcast input storages
     // so that grad_formula can inspect the original per-element values.
@@ -705,12 +780,13 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
 template <class Derived>
 std::vector<Storage> BinaryKernel<Derived>::apply(Storage grad_out) {
     auto [da, db] = static_cast<Derived*>(this)->grad_formula(grad_out);
-    return {
-        reduce_grad_to_shape(da, this->out_shape_, this->input_shapes_[0], this->dtype_,
-                             this->device_),
-        reduce_grad_to_shape(db, this->out_shape_, this->input_shapes_[1], this->dtype_,
-                             this->device_),
+    auto to_input = [this](Storage g, std::size_t k) {
+        Storage reduced = reduce_grad_to_shape(g, this->out_shape_, this->input_shapes_[k],
+                                               this->dtype_, this->device_);
+        return detail::grad_to_input_dtype(std::move(reduced), this->grad_dtypes_[k],
+                                           this->input_shapes_[k], this->dtype_, this->device_);
     };
+    return {to_input(std::move(da), 0), to_input(std::move(db), 1)};
 }
 
 // Out-of-class definition of :meth:`BinaryKernel::reduce_impl_to_shape`.
@@ -780,16 +856,23 @@ std::vector<TensorImplPtr> BinaryKernel<Derived>::apply_for_graph(const TensorIm
             "Ensure create_graph=True was set before the forward pass.");
     }
 
+    const auto a_k = detail::graph_input_at_kernel_dtype(a, this->dtype_);
+    const auto b_k = detail::graph_input_at_kernel_dtype(b, this->dtype_);
+
     // Broadcast saved inputs to out_shape_ if needed so grad_formula_impl can
     // do simple element-wise ops without worrying about shape mismatches.
-    auto a_b = (a->shape() == this->out_shape_) ? a : broadcast_to_op(a, this->out_shape_);
-    auto b_b = (b->shape() == this->out_shape_) ? b : broadcast_to_op(b, this->out_shape_);
+    auto a_b = (a_k->shape() == this->out_shape_) ? a_k : broadcast_to_op(a_k, this->out_shape_);
+    auto b_b = (b_k->shape() == this->out_shape_) ? b_k : broadcast_to_op(b_k, this->out_shape_);
 
     auto [da, db] = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a_b, b_b);
 
     return {
-        reduce_impl_to_shape(da, this->out_shape_, this->input_shapes_[0]),
-        reduce_impl_to_shape(db, this->out_shape_, this->input_shapes_[1]),
+        detail::graph_grad_to_input_dtype(
+            reduce_impl_to_shape(da, this->out_shape_, this->input_shapes_[0]),
+            this->grad_dtypes_[0]),
+        detail::graph_grad_to_input_dtype(
+            reduce_impl_to_shape(db, this->out_shape_, this->input_shapes_[1]),
+            this->grad_dtypes_[1]),
     };
 }
 

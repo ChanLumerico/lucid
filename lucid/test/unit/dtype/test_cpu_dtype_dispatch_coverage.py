@@ -109,11 +109,6 @@ def test_ones_half(dtype: lucid.dtype) -> None:
 # ── LCD-253: an autocast op's gradient into a non-leaf f32 input ────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="AMP kernels return the input's grad in the autocast dtype — "
-    "kernel-layer card",
-)
 def test_autocast_bf16_grad_through_view_lands_as_float32() -> None:
     x = lucid.randn(2, 4).requires_grad_()
     with lucid.amp.autocast("cpu", dtype=lucid.bfloat16):

@@ -14,6 +14,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 #include "../api.h"
@@ -75,6 +76,13 @@ class TensorImpl;
 // device_ : Device
 //     Device of the forward computation.  Gradient tensors live on the
 //     same device.  Defaults to :data:`Device::CPU`.
+// grad_dtypes_ : std::array<std::optional<Dtype>, N_IN>
+//     The dtype input ``i`` had before the forward cast it to
+//     :attr:`dtype_` for an AMP policy; empty when it was used as given.
+//     The cast is part of the op, so the op hands that input's gradient
+//     back in this dtype — a view or permute between the input and this
+//     node reads it at its own width.  Set only for inputs that take a
+//     gradient.
 // saved_inputs_ : std::array<Storage, N_IN>
 //     Copies of forward input :class:`Storage` values that :meth:`apply`
 //     reads — for example, the input activations of an element-wise
@@ -229,6 +237,7 @@ public:
     Shape out_shape_;
     Dtype dtype_ = Dtype::F32;
     Device device_ = Device::CPU;
+    std::array<std::optional<Dtype>, N_IN> grad_dtypes_{};
     std::array<Storage, N_IN> saved_inputs_;
     Storage saved_output_;
     std::array<std::shared_ptr<TensorImpl>, N_IN> saved_impl_inputs_;

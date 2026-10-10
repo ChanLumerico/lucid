@@ -353,6 +353,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
         bwd->out_shape_ = a->shape();
         bwd->dtype_ = eff_dt;
         bwd->device_ = a->device();
+        bwd->grad_dtypes_ = {detail::grad_dtype_for(a, a_ptr)};
         bwd->input_tensors_ = {a};
         // Conditionally snapshot inputs/output for use in grad_formula.
         if constexpr (Derived::kSavesInput)
@@ -386,8 +387,10 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
 template <class Derived>
 std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
-    return {reduce_grad_to_shape(dx, this->out_shape_, this->input_shapes_[0], this->dtype_,
-                                 this->device_)};
+    Storage reduced = reduce_grad_to_shape(dx, this->out_shape_, this->input_shapes_[0],
+                                           this->dtype_, this->device_);
+    return {detail::grad_to_input_dtype(std::move(reduced), this->grad_dtypes_[0],
+                                        this->input_shapes_[0], this->dtype_, this->device_)};
 }
 
 // Out-of-class definition of :meth:`UnaryKernel::apply_for_graph`.
@@ -402,11 +405,11 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
     extern TensorImplPtr sum_op(const TensorImplPtr&, const std::vector<int>&, bool);
     extern TensorImplPtr reshape_op(const TensorImplPtr&, const Shape&);
 
-    auto& a = this->saved_impl_inputs_[0];
-    if (!a) {
+    if (!this->saved_impl_inputs_[0]) {
         throw std::runtime_error("apply_for_graph: saved_impl_inputs_[0] not set for op '" +
                                  std::string(Derived::schema_v1.name) + "'.");
     }
+    const auto a = detail::graph_input_at_kernel_dtype(this->saved_impl_inputs_[0], this->dtype_);
 
     // saved_impl_output_ is a WEAK ref (it breaks the node -> output -> grad_fn
     // self-cycle that would otherwise retain the whole graph in inference and
@@ -433,7 +436,7 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
 
     // Reduce back to input shape if needed (same as apply()).
     if (dx->shape() == this->input_shapes_[0])
-        return {dx};
+        return {detail::graph_grad_to_input_dtype(dx, this->grad_dtypes_[0])};
     std::vector<int> axes;
     const int ng = static_cast<int>(dx->shape().size());
     const int nt = static_cast<int>(this->input_shapes_[0].size());
@@ -448,7 +451,7 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
         dx = sum_op(dx, axes, false);
     if (dx->shape() != this->input_shapes_[0])
         dx = reshape_op(dx, this->input_shapes_[0]);
-    return {dx};
+    return {detail::graph_grad_to_input_dtype(dx, this->grad_dtypes_[0])};
 }
 
 }  // namespace lucid
