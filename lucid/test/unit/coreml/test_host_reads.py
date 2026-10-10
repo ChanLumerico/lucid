@@ -19,6 +19,7 @@ from lucid._C import engine as _C_engine
 from lucid.test.unit.compile._host_reads import (
     CONSTANT_READS,
     HOST_READS,
+    STATE_READS,
     Apply,
     inputs,
 )
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.parametrize("name", list(HOST_READS))
+@pytest.mark.parametrize("name", sorted(set(HOST_READS) - STATE_READS))
 def test_a_host_read_is_refused(name: str, tmp_path: object) -> None:
     first, _second = inputs()
     with pytest.raises(ValueError, match="read on the host"):
@@ -38,11 +39,16 @@ def test_a_host_read_is_refused(name: str, tmp_path: object) -> None:
         )
 
 
-@pytest.mark.parametrize("name", list(CONSTANT_READS))
-def test_a_read_that_feeds_nothing_exports(name: str, tmp_path: object) -> None:
+_EXPORTABLE = {**CONSTANT_READS, **{n: HOST_READS[n] for n in STATE_READS}}
+
+
+@pytest.mark.parametrize("name", sorted(_EXPORTABLE))
+def test_a_read_of_a_constant_exports(name: str, tmp_path: object) -> None:
+    """A tensor built from Python numbers, a validation-only read, or the
+    model's weights — which a package holds as constants — all export."""
     first, second = inputs()
-    model = Apply(CONSTANT_READS[name]).eval()
+    model = Apply(_EXPORTABLE[name]).eval()
     exported = cml.export(model, first, f"{tmp_path}/{name}.mlpackage")
     got = exported.predict(second)
     assert isinstance(got, lucid.Tensor)
-    assert float((got - second * 3).abs().max().item()) <= 1e-5
+    assert float((got - model(second)).abs().max().item()) <= 1e-5

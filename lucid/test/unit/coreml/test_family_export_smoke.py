@@ -418,8 +418,8 @@ def test_a_multi_input_family_exports_and_matches(
         request.applymarker(
             pytest.mark.xfail(
                 strict=True,
-                reason="LCD-337 follow-up: _indexing CPU bounds check must run "
-                "under _host_check",
+                reason="LCD-336 (API-05b wraps _indexing.py bounds check in "
+                "_host_check)",
             )
         )
     lucid.manual_seed(0)

@@ -115,7 +115,7 @@ def compiled_step(
 
     grad_ctx = nullcontext() if use_grad_mode else no_grad()
     with grad_ctx:
-        with _tracing(watch=(x,)) as tracer:
+        with _tracing(watch=(x,), module=model) as tracer:
             out = model(x)
             # Module.__call__ widens to Tensor|tuple; loss_fn expects Tensor.
             if not isinstance(out, Tensor):

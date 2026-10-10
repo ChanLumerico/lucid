@@ -587,7 +587,7 @@ class _FusedStep:
         _tls.active = True
         try:
             with no_grad():
-                with _tracing(watch=args) as tracer:
+                with _tracing(watch=args, module=self._model) as tracer:
                     out = self._model(*args[:1])
                     loss = self._loss_fn(out, *args[1:])
 

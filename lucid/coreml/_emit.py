@@ -24,6 +24,8 @@ fails loudly.
 import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
+from lucid.coreml import _spec
+
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
 
@@ -305,6 +307,7 @@ def _neg(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 def _integer_clip(b: Builder, value: str, low: int, high: int | None) -> EmitResult:
     """``value`` held to ``[low, high]``: MIL's ``maximum`` takes int32, ``clip`` not."""
+    low, high = _spec.int32_clip_bounds(low, high)
     floor_binding: Bindings = [("x", value), ("y", b.const_int(low))]
     if high is None:
         return "maximum", floor_binding
@@ -1391,15 +1394,10 @@ def _log_softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("clip")
 def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    # An integer clamp is a histogram's bucket index. The engine's integer
-    # kernel converts each bound to the element type, truncating toward zero.
+    # An int clamp (a histogram's bucket index) truncates bounds, as the kernel.
     if b.dtype_of(ins[0]) == _MIL_INT32:
-        return _integer_clip(
-            b,
-            ins[0],
-            math.trunc(_as_float(_attr(op, "min"))),
-            math.trunc(_as_float(_attr(op, "max"))),
-        )
+        low, high = (math.trunc(_as_float(_attr(op, k))) for k in ("min", "max"))
+        return _integer_clip(b, ins[0], low, high)
     return "clip", [
         ("x", ins[0]),
         ("alpha", b.const_float(_as_float(_attr(op, "min")))),

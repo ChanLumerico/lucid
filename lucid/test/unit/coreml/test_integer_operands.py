@@ -104,3 +104,49 @@ def test_a_histogram_exports_and_follows_its_input(tmp_path: object) -> None:
     for x in (first, second):
         got = _single(exported.predict(x))
         assert got.tolist() == model(x).tolist()
+
+
+#: Bounds past int32: the body is int32, so they saturate exactly. Written
+#: as given, Core ML kept their low 32 bits — ``2**40`` became ``0``.
+_WIDE_BOUNDS = [
+    (0, 2**40),
+    (-(2**40), 3),
+    (0, 2**31),
+    (-(2**31) - 1, 2**31),
+]
+
+
+@pytest.mark.parametrize(("low", "high"), _WIDE_BOUNDS)
+def test_a_bound_past_int32_saturates(low: int, high: int, tmp_path: object) -> None:
+    model = _ThroughIntegers(lucid.int64, lambda t: lucid.clamp(t, low, high)).eval()
+    lucid.manual_seed(0)
+    x = lucid.randn(4, 8)
+    want = model(x)
+    exported = cml.export(model, x, f"{tmp_path}/wide.mlpackage")
+    got = _single(exported.predict(x))
+    assert got.tolist() == want.tolist()
+
+
+def test_an_integer_constant_past_int32_is_refused(tmp_path: object) -> None:
+    """A wider constant has no exact int32 form, so export says so."""
+
+    class AddsWide(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("wide", lucid.tensor([2**40], dtype=lucid.int64))
+
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            held = x.to(lucid.int64) + self.get_buffer("wide")
+            return held.to(lucid.float32)
+
+    with pytest.raises(ValueError, match="outside int32"):
+        cml.export(AddsWide().eval(), lucid.randn(4), f"{tmp_path}/wide.mlpackage")
+
+
+@pytest.mark.parametrize(("low", "high"), [(2**40, 2**41), (-(2**41), -(2**40))])
+def test_a_clamp_whose_every_result_is_past_int32_is_refused(
+    low: int, high: int, tmp_path: object
+) -> None:
+    model = _ThroughIntegers(lucid.int64, lambda t: lucid.clamp(t, low, high)).eval()
+    with pytest.raises(ValueError, match="outside int32"):
+        cml.export(model, lucid.randn(4, 8), f"{tmp_path}/past.mlpackage")

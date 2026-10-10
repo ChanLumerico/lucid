@@ -691,6 +691,76 @@ INT8 = _C_engine.coreml.DTYPE_INT8
 BLOB_INT8 = _C_engine.coreml.BLOB_INT8
 BLOB_UINT8 = _C_engine.coreml.BLOB_UINT8
 INT32 = _C_engine.coreml.DTYPE_INT32
+#: The values an int32 constant or program-body integer can hold.
+INT32_MIN, INT32_MAX = -(2**31), 2**31 - 1
+
+
+def as_int32(values: list[int], name: str) -> list[int]:
+    """``values`` for an int32 constant, refusing one Core ML would wrap.
+
+    The writer stores each integer as given and Core ML keeps its low 32
+    bits, so ``2**40`` became ``0`` with no error anywhere.
+
+    Parameters
+    ----------
+    values : list of int
+        The constant's elements.
+    name : str
+        The constant's value name, for the error.
+
+    Returns
+    -------
+    list of int
+        The same values as Python ints.
+
+    Raises
+    ------
+    ValueError
+        A value lies outside ``[INT32_MIN, INT32_MAX]``.
+    """
+    payload = [int(v) for v in values]
+    for value in payload:
+        if not INT32_MIN <= value <= INT32_MAX:
+            raise ValueError(
+                f"lucid.coreml: integer constant {name!r} holds {value}, outside "
+                f"int32 [{INT32_MIN}, {INT32_MAX}]; Core ML integers are int32 "
+                "and a wider value would be truncated"
+            )
+    return payload
+
+
+def int32_clip_bounds(low: int, high: int | None) -> tuple[int, int | None]:
+    """An integer clamp's bounds for a program whose integers are int32.
+
+    A bound past int32 saturates exactly, since no int32 value lies beyond
+    it — unless it forces every result past int32, which cannot be held.
+
+    Parameters
+    ----------
+    low : int
+        Lower bound, already truncated to an integer.
+    high : int or None
+        Upper bound, or ``None`` for a one-sided clamp.
+
+    Returns
+    -------
+    tuple of (int, int or None)
+        The bounds, saturated to int32.
+
+    Raises
+    ------
+    ValueError
+        ``low`` is above ``INT32_MAX`` or ``high`` below ``INT32_MIN``.
+    """
+    if low > INT32_MAX or (high is not None and high < INT32_MIN):
+        raise ValueError(
+            f"lucid.coreml: clamping to [{low}, {high}] puts every value outside "
+            "int32, the only integer type a Core ML program computes in"
+        )
+    low = max(low, INT32_MIN)
+    return low, None if high is None else min(high, INT32_MAX)
+
+
 BOOL = _C_engine.coreml.DTYPE_BOOL
 STRING = _C_engine.coreml.DTYPE_STRING
 FLOAT32 = _C_engine.coreml.DTYPE_FLOAT32

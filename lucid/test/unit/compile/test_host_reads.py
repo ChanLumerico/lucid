@@ -54,15 +54,20 @@ def _fresh_notices(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 @pytest.mark.parametrize("name", list(HOST_READS))
 def test_a_host_read_runs_eagerly_and_follows_the_input(name: str) -> None:
-    model = Apply(HOST_READS[name]).eval()
+    """Between the calls both the input and the weights change."""
     first, second = inputs()
-    want_first, want_second = model(first), model(second)
+    reference = Apply(HOST_READS[name]).eval()
+    want_first = reference(first)
+    reference.change_state()
+    want_second = reference(second)
     assert float((want_first - want_second).abs().max().item()) > 1e-3
 
-    compiled = lucid.compile.compile(model.to(COMPILE_DEVICE))
+    model = Apply(HOST_READS[name]).eval().to(COMPILE_DEVICE)
+    compiled = lucid.compile.compile(model)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         got_first = compiled(first.to(COMPILE_DEVICE)).to("cpu")
+        model.change_state()
         got_second = compiled(second.to(COMPILE_DEVICE)).to("cpu")
 
     for got, want in ((got_first, want_first), (got_second, want_second)):

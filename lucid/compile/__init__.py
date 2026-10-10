@@ -361,7 +361,9 @@ def __getattr__(name: str) -> object:
 
 
 @contextmanager
-def _tracing(watch: Iterable[object] = ()) -> Iterator[Tracer]:
+def _tracing(
+    watch: Iterable[object] = (), module: _Module | None = None
+) -> Iterator[Tracer]:
     """Install a fresh :class:`Tracer` for the calling thread.
 
     Every op dispatched inside the ``with`` block enters its
@@ -379,6 +381,12 @@ def _tracing(watch: Iterable[object] = ()) -> Iterator[Tracer]:
         before an op has consumed it: the value read is the call's data,
         and whatever the host computes from it would be baked into every
         later call.
+    module : Module or None, optional
+        The traced model, whose parameters and buffers are watched the
+        same way: a compiled executable feeds them on every run, so a
+        value read from one would go stale once it changes (an optimizer
+        step, ``load_state_dict``). Core ML export leaves it out — its
+        weights are constants of the package anyway.
 
     Yields
     ------
@@ -414,7 +422,8 @@ def _tracing(watch: Iterable[object] = ()) -> Iterator[Tracer]:
     from lucid.compile._core.signature import leaf_tensors
 
     tracer = _C_engine.compile.Tracer()
-    for argument in leaf_tensors(watch, {}):
+    state = () if module is None else (*module.parameters(), *module.buffers())
+    for argument in leaf_tensors((watch, state), {}):
         tracer.watch(argument._impl)
     _C_engine.compile.set_current_tracer(tracer)
     try:

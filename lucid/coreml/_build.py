@@ -586,11 +586,10 @@ def _refuse_replaced(name: str, grad: bool) -> NoReturn:
 
 
 _HOST_READS = (
-    "A model that reads tensor values while it runs computes that part on the "
-    "host, where an exported graph cannot follow: ``.item()``, ``.tolist()``, "
-    "``float(t)``, a Python ``if`` on a comparison, or an index computed from "
-    "the data. Whatever reads values has to become tensor operations before "
-    "this model can be exported."
+    "A model that reads tensor values while it runs computes that part on the host, "
+    "where an exported graph cannot follow: ``.item()``, ``.tolist()``, ``float(t)``, "
+    "an ``if`` on a comparison, or an index computed from the data. Whatever reads "
+    "values has to become tensor operations before this model can be exported."
 )
 
 
@@ -1572,7 +1571,7 @@ class Builder:
     def const_ints(self, values: list[int]) -> str:
         name = self._const_name("ints")
         self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
-        self._program.add_int_const(name, [int(v) for v in values], False)
+        self._program.add_int_const(name, _spec.as_int32(values, name), False)
         return name
 
     def const_ints_shaped(self, values: list[int], shape: list[int]) -> str:
@@ -1595,7 +1594,7 @@ class Builder:
             Name of the constant.
         """
         name = self._const_name("intsn")
-        self._program.add_int_const_shaped(name, [int(v) for v in values], shape)
+        self._program.add_int_const_shaped(name, _spec.as_int32(values, name), shape)
         self.shapes[name] = list(shape)
         self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
         return name
@@ -1603,7 +1602,7 @@ class Builder:
     def const_int(self, value: int) -> str:
         name = self._const_name("int")
         self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
-        self._program.add_int_const(name, [int(value)], True)
+        self._program.add_int_const(name, _spec.as_int32([value], name), True)
         return name
 
     def const_float(self, value: float) -> str:
@@ -3187,7 +3186,8 @@ def build_package(
             # Integer buffers (position ids, token-type ids) go inline: the
             # blob carries float payloads only, and MIL has an integer
             # tensor value already, so nothing has to be guessed.
-            program.add_int_const_shaped(name, _flatten(tensor, _as_int), shape)
+            values = _spec.as_int32(_flatten(tensor, _as_int), name)
+            program.add_int_const_shaped(name, values, shape)
             weight_dtypes[name] = _C_engine.coreml.DTYPE_INT32
         names[tid] = name
         weight_shapes[name] = shape
