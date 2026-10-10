@@ -3,7 +3,7 @@ Multi-head attention module.
 """
 
 import math
-from typing import cast, final, override
+from typing import final, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -15,7 +15,13 @@ from lucid._C import engine as _C_engine
 import lucid as _lucid
 import lucid.nn.init as init
 from lucid.nn.functional.linear import linear
-from lucid.nn.functional.attention import repeat_kv, scaled_dot_product_attention
+from lucid.nn.functional.attention import (
+    _causal_additive_mask,
+    _keep_mask_to_additive,
+    _masked_attention,
+    repeat_kv,
+    scaled_dot_product_attention,
+)
 
 from lucid.utils.cache import Cache
 
@@ -27,9 +33,6 @@ from lucid.utils.cache import Cache
 # ``Tensor`` this way, so there is no cycle to avoid.
 
 
-_NEG_INF: float = float("-inf")
-
-
 def _pad_mask_columns(mask: Tensor | None, n: int) -> Tensor | None:
     """Append ``n`` key columns every query may attend to (``0`` / ``False``)."""
     if mask is None:
@@ -38,17 +41,11 @@ def _pad_mask_columns(mask: Tensor | None, n: int) -> Tensor | None:
     return _lucid.cat([mask, pad], -1)
 
 
-def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
-    """Convert a bool/byte mask (True = mask out) to an additive float mask
+def _to_additive_mask(mask: Tensor, float_dtype: DTypeLike) -> Tensor:
+    """Convert a bool mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
     if mask.dtype == _lucid.bool_:
-        # mask: True ⇒ -inf, False ⇒ 0
-        _dtype = cast(DTypeLike, float_dtype)
-        zero_t: Tensor = _lucid.zeros(mask.shape, dtype=_dtype, device=mask.device)
-        ninf_t: Tensor = _lucid.full(
-            mask.shape, _NEG_INF, dtype=_dtype, device=mask.device
-        )
-        return _lucid.where(mask, ninf_t, zero_t)
+        return _keep_mask_to_additive(mask.logical_not(), float_dtype)
     return mask
 
 
@@ -243,6 +240,13 @@ class MultiheadAttention(Module):
         score matrix so that position :math:`i` cannot attend to any
         position :math:`j > i`.  This implements the autoregressive
         constraint needed for language model decoding.
+
+    **A query with every key masked out** (a fully padded sequence, say):
+        attends to nothing.  Its output row, before ``out_proj``, is
+        ``0``, its attention weights are ``0``, and no gradient flows
+        through it — on every device and dtype, and whether or not
+        ``need_weights`` is set.  The reference agrees on its fused path;
+        its ``need_weights=True`` path returns NaN for such a row instead.
 
     **Fused vs. separate projections**:
         When ``kdim == vdim == embed_dim``, the Q/K/V projections
@@ -533,7 +537,7 @@ class MultiheadAttention(Module):
         batch_size: int,
         target_len: int,
         source_len: int,
-        float_dtype: object,
+        float_dtype: DTypeLike,
     ) -> Tensor | None:
         """Combine ``attn_mask`` and ``key_padding_mask`` into a single
         ``(B, H, T, S)`` additive float mask suitable for SDPA."""
@@ -727,40 +731,37 @@ class MultiheadAttention(Module):
         # ``is_causal`` mask would be wrong (a single new query would only see
         # key 0), so fold it into an explicit bottom-right-aligned additive
         # mask: query ``i`` may attend to key ``j`` iff ``j <= (Tk - Tq) + i``.
-        # The non-cache path keeps the original ``is_causal`` fast path intact.
-        if is_causal and use_cache and past_key_value is not None:
-            offset = Tk - Tq
-            causal_add: Tensor = _lucid.tensor(
-                [
-                    [_NEG_INF if j > i + offset else 0.0 for j in range(Tk)]
-                    for i in range(Tq)
-                ],
-                dtype=qh.dtype,
-                device=qh.device,
+        # The weights and dropout need the explicit form, which has no
+        # triangle of its own, so the (top-left) triangle is folded for them
+        # too.  Otherwise ``is_causal`` reaches the fused path untouched.
+        #
+        # The fused, memory-efficient SDPA kernel runs whenever possible — it
+        # never materialises the (B, H, T, S) score matrix.  Both forms go
+        # through the one masked-softmax core, so a query whose keys are all
+        # masked out gets the same zero row either way.
+        dropout_p: float = self.dropout if self.training else 0.0
+        explicit: bool = need_weights or dropout_p > 0.0
+        cached: bool = use_cache and past_key_value is not None
+        if is_causal and (cached or explicit):
+            causal_add = _causal_additive_mask(
+                Tq, Tk, Tk - Tq if cached else 0, qh.dtype, qh.device
             ).reshape(1, 1, Tq, Tk)
             merged_mask = (
                 causal_add if merged_mask is None else merged_mask + causal_add
             )
             is_causal = False
 
-        # Adding a bias / zero row to K means key_padding_mask (which is
-        # only sized for the original sequence) needs to be extended.  We
-        # simply do *not* extend it; those extra positions are always
-        # attendable, matching the reference framework's behaviour.
-
-        # Route to the fused, memory-efficient SDPA kernel whenever possible — it
-        # never materialises the (B, H, T, S) score matrix.  Fall back to the
-        # manual softmax only when genuinely required: the caller wants the
-        # weight matrix (need_weights), attention dropout is active during
-        # training (the fused kernel has no dropout), or both is_causal and an
-        # additive mask are set (the fused kernel carries a single mask slot, so
-        # it lets the mask win over is_causal; the manual path applies both).
         attn_weights: Tensor | None
-        needs_dropout: bool = self.training and self.dropout > 0.0
-        causal_and_mask: bool = is_causal and merged_mask is not None
-        if need_weights or needs_dropout or causal_and_mask:
-            attn_out, _aw = self._attn_with_weights(qh, kh, vh, merged_mask, is_causal)
-            attn_weights = _aw if need_weights else None
+        if explicit:
+            attn_out, attn_weights = _masked_attention(
+                qh,
+                kh,
+                vh,
+                merged_mask,
+                1.0 / math.sqrt(qh.shape[-1]),
+                dropout_p=dropout_p,
+                need_weights=need_weights,
+            )
         else:
             attn_out = scaled_dot_product_attention(
                 qh,
@@ -784,49 +785,6 @@ class MultiheadAttention(Module):
             attn_weights = attn_weights.mean(dim=1)
 
         return out, attn_weights
-
-    def _attn_with_weights(
-        self,
-        q: Tensor,
-        k: Tensor,
-        v: Tensor,
-        attn_mask: Tensor | None,
-        is_causal: bool,
-    ) -> tuple[Tensor, Tensor]:
-        """Manual scaled-dot-product attention that also returns weights.
-
-        Used when the caller asks for attention weights — the fused SDPA
-        op returns only the contracted output.  Performance impact is
-        small for typical sequence lengths and only triggered on demand.
-        """
-        from lucid.nn.functional.activations import softmax as _softmax
-
-        head_dim: int = q.shape[-1]
-        scale: float = 1.0 / math.sqrt(head_dim)
-        # scores: (B, H, Tq, Tk)
-        scores: Tensor = _lucid.matmul(q, k.permute([0, 1, 3, 2])) * scale
-
-        if is_causal:
-            # Build an upper-triangular -inf mask.
-            Tq: int = scores.shape[2]
-            Tk: int = scores.shape[3]
-            tri = _lucid.tensor(
-                [[_NEG_INF if j > i else 0.0 for j in range(Tk)] for i in range(Tq)],
-                dtype=scores.dtype,
-                device=scores.device,
-            )
-            scores = scores + tri.reshape(1, 1, Tq, Tk)
-
-        if attn_mask is not None:
-            scores = scores + attn_mask
-
-        weights: Tensor = _softmax(scores, dim=-1)
-        if self.training and self.dropout > 0.0:
-            from lucid.nn.functional.dropout import dropout as _dropout
-
-            weights = _dropout(weights, p=self.dropout, training=True)
-        out: Tensor = _lucid.matmul(weights, v)
-        return out, weights
 
     @override
     def extra_repr(self) -> str:

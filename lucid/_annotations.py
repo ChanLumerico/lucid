@@ -385,7 +385,11 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
     "lucid.nn.functional.activations": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
-    "lucid.nn.functional.attention": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid.nn.functional.attention": (
+        ("DTypeLike", "lucid._types", "DTypeLike"),
+        ("DeviceLike", "lucid._types", "DeviceLike"),
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+    ),
     "lucid.nn.functional.conv": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.dropout": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.linear": (("Tensor", "lucid._tensor.tensor", "Tensor"),),

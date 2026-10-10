@@ -8,6 +8,104 @@ from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+    from lucid._types import DeviceLike, DTypeLike
+
+_NEG_INF: float = float("-inf")
+
+
+def _keep_mask_to_additive(keep: Tensor, dtype: DTypeLike) -> Tensor:
+    """A boolean keep-mask as the additive mask it stands for: ``0`` / ``-inf``.
+
+    ``-inf`` rather than a large finite negative: a finite stand-in lets a
+    row with no key left normalise over the banned keys, and it averages V.
+    """
+    import lucid as _lucid
+
+    zeros = _lucid.zeros(keep.shape, dtype=dtype, device=keep.device)
+    return _lucid.masked_fill(zeros, _lucid.logical_not(keep), _NEG_INF)
+
+
+def _causal_additive_mask(
+    lq: int, lk: int, offset: int, dtype: DTypeLike, device: DeviceLike
+) -> Tensor:
+    """``(lq, lk)`` additive mask letting query ``i`` see keys ``0..i + offset``."""
+    import lucid as _lucid
+
+    keep = _lucid.tril(_lucid.ones((lq, lk), dtype=_lucid.bool_, device=device), offset)
+    return _keep_mask_to_additive(keep, dtype)
+
+
+def _fused_attention(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    attn_mask: Tensor | None,
+    scale: float,
+    is_causal: bool,
+) -> Tensor:
+    """The engine's fused kernel; it never materialises the probabilities."""
+    return _wrap(
+        _C_engine.nn.scaled_dot_product_attention(
+            _unwrap(query),
+            _unwrap(key),
+            _unwrap(value),
+            _unwrap(attn_mask) if attn_mask is not None else None,
+            scale,
+            is_causal,
+        )
+    )
+
+
+def _masked_attention(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    attn_mask: Tensor | None,
+    scale: float,
+    *,
+    dropout_p: float = 0.0,
+    need_weights: bool = False,
+) -> tuple[Tensor, Tensor | None]:
+    """The masked-softmax core every attention entry point runs through.
+
+    ``attn_mask`` is additive, with any causal triangle already folded in.
+    A query row whose every key is ``-inf`` has no distribution to
+    normalise; it attends to nothing, so its output, its weights and every
+    gradient through it are ``0``.  The row's mask is zeroed before the
+    softmax and its output after, so no kernel ever sees an all ``-inf``
+    row — the backends disagreed on one (the Metal kernel returned NaN,
+    the CPU one ``0`` or the mean of V by dtype).
+
+    The fused kernel runs unless the weights are wanted or dropout is on,
+    since it never materialises the probabilities either needs.  The
+    weights returned are the ones applied to ``value`` — after dropout.
+    """
+    import lucid as _lucid
+
+    dead: Tensor | None = None
+    if attn_mask is not None:
+        dead = attn_mask.detach().max(dim=-1, keepdim=True) == _NEG_INF
+        attn_mask = _lucid.masked_fill(attn_mask, dead, 0.0)
+
+    weights: Tensor | None = None
+    if need_weights or dropout_p > 0.0:
+        from lucid.nn.functional.activations import softmax
+        from lucid.nn.functional.dropout import dropout
+
+        scores = _lucid.matmul(query, key.mT) * scale
+        if attn_mask is not None:
+            scores = scores + attn_mask
+        weights = softmax(scores, dim=-1)
+        if dead is not None:
+            weights = _lucid.masked_fill(weights, dead, 0.0)
+        if dropout_p > 0.0:
+            weights = dropout(weights, p=dropout_p, training=True)
+        out = _lucid.matmul(weights, value)
+    else:
+        out = _fused_attention(query, key, value, attn_mask, scale, False)
+    if dead is not None:
+        out = _lucid.masked_fill(out, dead, 0.0)
+    return out, weights if need_weights else None
 
 
 def scaled_dot_product_attention(
@@ -52,6 +150,11 @@ def scaled_dot_product_attention(
         is masked out — converted internally to the additive form it
         stands for, so the two spellings are exactly equivalent on every
         path, fused or not.  Combined with ``is_causal``, both apply.
+        A query row whose every key is masked out (``False`` or ``-inf``
+        throughout) attends to nothing: its output row is ``0`` and no
+        gradient flows through it, on every device and dtype.  A large
+        *finite* negative is not a mask-out — such a row still normalises,
+        to the mean of the values.
     dropout_p : float, optional
         Dropout probability applied to attention weights during training.
         Default ``0.0``.
@@ -130,27 +233,22 @@ def scaled_dot_product_attention(
         # Normalise a boolean mask to the additive form *once*, before
         # either path can form its own opinion about what ``True`` means.
         # They had opposite ones: the fused kernel treated ``True`` as
-        # "mask this out", while the dropout branch below treated it as
-        # "this attends" — so the same mask inverted the moment dropout
-        # was switched on, which is a training-time flip no shape or
-        # dtype check would catch.  Keep-semantics wins because it is
-        # what this function's own branch documented and what a boolean
+        # "mask this out", while the dropout branch treated it as "this
+        # attends" — so the same mask inverted the moment dropout was
+        # switched on.  Keep-semantics wins because it is what a boolean
         # mask conventionally means for scaled-dot-product attention.
-        attn_mask = (attn_mask.to(query.dtype) - 1.0) * 1e9
+        attn_mask = _keep_mask_to_additive(attn_mask, query.dtype)
 
     lq, lk = int(query.shape[-2]), int(key.shape[-2])
-    if is_causal and (attn_mask is not None or lq != lk):
+    if is_causal and (attn_mask is not None or lq != lk or dropout_p > 0.0):
         # The engine gives ``is_causal`` a meaning only for a square score
         # matrix with no other mask.  Beyond that its backends disagreed: the
         # Metal kernel let a mask win over causality and aligned a non-square
         # triangle bottom-right, while the CPU applied both, top-left — so the
         # same call attended to the future on one device only.  Fold the
         # top-left triangle into the additive mask so every device, and the
-        # explicit form below, compute one thing.
-        keep = _lucid.tril(
-            _lucid.ones((lq, lk), dtype=query.dtype, device=query.device.type)
-        )
-        causal = (keep - 1.0) * 1e9
+        # explicit form dropout needs, compute one thing.
+        causal = _causal_additive_mask(lq, lk, 0, query.dtype, query.device)
         attn_mask = causal if attn_mask is None else attn_mask + causal
         is_causal = False
 
@@ -186,7 +284,6 @@ def scaled_dot_product_attention(
         # no fused kernel to preserve a memory win for).
         if not query.is_metal:
             lead = list(query.shape[:-2])
-            lq, lk = int(query.shape[-2]), int(key.shape[-2])
             per_batch = lq * lk
             flat = 1
             for d in lead:
@@ -197,48 +294,21 @@ def scaled_dot_product_attention(
                     attn_mask = attn_mask.unsqueeze(0)
                 attn_mask = attn_mask.expand(*full).contiguous()
 
-    mask = _unwrap(attn_mask) if attn_mask is not None else None
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)
-
-    if dropout_p > 0.0:
-        # Dropout applies to the attention *probabilities*.  The fused kernel
-        # never materialises them (MLX's fused SDPA takes no dropout argument),
-        # and the engine's weights-returning variant emits them as a
-        # non-differentiable side output — so the only correct way to honour
-        # the request is the explicit math form, every step of which is
-        # differentiable.  Before this branch existed ``dropout_p`` was accepted
-        # and silently discarded: every caller that passed it, BERT included,
-        # trained with no attention regularisation whatsoever.
-        import lucid
-        from lucid.nn.functional.activations import softmax
-        from lucid.nn.functional.dropout import dropout as _dropout
-
-        scores = lucid.matmul(query, key.mT) * scale_val
-        if is_causal:
-            lq, lk = int(query.shape[-2]), int(key.shape[-2])
-            keep = lucid.tril(lucid.ones((lq, lk), device=query.device.type))
-            scores = scores + (keep - 1.0) * 1e9
-        if attn_mask is not None:
-            # Additive unconditionally: a boolean mask was converted to
-            # this form at the top of the function, so there is one
-            # meaning of ``True`` in play rather than one per path.
-            scores = scores + attn_mask
-        weights = softmax(scores, dim=-1)
-        if dropout_p > 0.0:
-            weights = _dropout(weights, p=dropout_p, training=True)
-        return lucid.matmul(weights, value)
-
-    return _wrap(
-        _C_engine.nn.scaled_dot_product_attention(
-            _unwrap(query),
-            _unwrap(key),
-            _unwrap(value),
-            mask,
-            scale_val,
-            is_causal,
-        )
+    if is_causal:
+        # Square, unmasked and without dropout: every row keeps key 0, so
+        # there is no empty row to guard and the kernel's own triangle runs.
+        return _fused_attention(query, key, value, None, scale_val, True)
+    out, _ = _masked_attention(
+        query,
+        key,
+        value,
+        attn_mask,
+        scale_val,
+        dropout_p=dropout_p,
     )
+    return out
 
 
 def repeat_kv(hidden_states: Tensor, n_rep: int) -> Tensor:
