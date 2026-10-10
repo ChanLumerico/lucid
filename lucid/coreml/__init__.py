@@ -85,13 +85,13 @@ from lucid.coreml._build import (
     commit_staging,
     discard_staging,
     staging_path,
-    ShapeNotFlexible,
     _Shared,
     StatefulModel,
     UnsupportedOp,
     UnsupportedRank,
     build_package,
 )
+from lucid.coreml._flex import ShapeNotFlexible
 from lucid.coreml._model import CoreMLModel, Latency, PlacementSummary
 from lucid.coreml._optimize import CompressionAware
 from lucid.coreml._spec import (
@@ -555,9 +555,8 @@ def _export_prepared(
         compute_units=compute_units,
         precision=precision.value,
         io_precision=io_precision.value,
-        # A flexible export's output shape follows the input, so the
-        # traced one is not the shape to restore it to.
-        output_shapes=None if info["flexible"] else dict(outputs),
+        # ``-1`` marks an axis that follows the input.
+        output_shapes=dict(outputs),
         image_input=image_input,
         classifier=classifier,
         deployment_target=info["deployment_target"],

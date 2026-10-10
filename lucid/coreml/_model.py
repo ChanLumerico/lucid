@@ -682,7 +682,13 @@ class CoreMLModel:
         for name, impl in zip(self.output_names, raw):
             out = _wrap(impl)
             declared = self.output_shapes.get(name)
-            if declared is not None and out.shape != declared:
+            # Core ML returns a 0-d result as ``(1,)``. An axis that follows
+            # the input is ``-1`` here and keeps whatever size came back.
+            if declared is not None and (
+                len(out.shape) != len(declared)
+                if -1 in declared
+                else out.shape != declared
+            ):
                 out = out.reshape(*declared)
             produced[name] = out
         if len(self.output_names) == 1:

@@ -24,7 +24,7 @@ fails loudly.
 import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
-from lucid.coreml import _spec
+from lucid.coreml import _flex, _spec
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
@@ -54,7 +54,7 @@ class TracedValue(Protocol):
     """
 
     id: int
-    shape: tuple[int, ...]
+    shape: Sequence[int]
     dtype: object
 
 
@@ -497,6 +497,9 @@ def _register_binary(lucid_name: str, mil_name: str) -> None:
         # parsed. Lucid does, so a traced graph reaches here with mixed
         # operands as a matter of course.
         target = None if lucid_name in _COMPARISONS else b.result_mil_dtype(op)
+        if target is None and _MIL_BOOL in (b.dtype_of(ins[0]), b.dtype_of(ins[1])):
+            # MIL compares numbers only; ``mask != False`` compares 0 and 1.
+            target = _MIL_INT32
         x, y = b.agree_on_dtype([ins[0], ins[1]], target)
         if lucid_name == "pow" and b.is_const(x) and not b.is_const(y):
             x = _runtime_base(b, op, x, y)
@@ -510,19 +513,14 @@ for _lucid_name, _mil_name in _BINARY_MIL.items():
 
 
 @_emitter("reshape")
+@_emitter("squeeze")
+@_emitter("unsqueeze")
 def _reshape(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    # Lucid keeps the target shape on the result, not in the attributes.
-    # Asking the builder for it leaves a flexible export's varying axes at
-    # -1, which MIL reads as "infer this one"; baking the default here
-    # would give a package correct at only one of its shapes.
-    shape = b.result_shape(op)
-    if shape.count(-1) > 1:
-        from lucid.coreml._build import ShapeNotFlexible
-
-        raise ShapeNotFlexible(
-            "reshape", "MIL infers at most one axis of a reshape and this needs two"
-        )
-    return "reshape", [("x", ins[0]), ("shape", b.const_ints(shape))]
+    # The target is on the result — ``squeeze`` / ``unsqueeze`` record no
+    # axes at all — and a Core ML tensor has no strides, so all three are a
+    # reshape to it. The builder leaves a flexible export's open axes open.
+    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    return "reshape", [("x", ins[0]), ("shape", target)]
 
 
 @_emitter("dropout")
@@ -538,37 +536,6 @@ def _dropout(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "identity", [("x", ins[0])]
 
 
-def _out_shape(op: TracedOp, b: Builder | None = None) -> list[int]:
-    """The recorded output shape, minus a leading axis the driver drops.
-
-    ``squeeze``, ``unsqueeze`` and ``contiguous`` all become a reshape to
-    this, so following the driver here is what lets a value computed at
-    rank 6 be emitted a rank lower without any of them being told.
-    """
-    shape = [int(d) for d in op.outputs[0].shape]
-    if b is not None and b.result_thinned(op):
-        return shape[1:]
-    return shape
-
-
-# ── shape ops ────────────────────────────────────────────────────────
-#
-# ``squeeze`` / ``unsqueeze`` / ``contiguous`` all become a ``reshape`` to
-# the shape the trace already recorded.  A Core ML tensor holds values, not
-# strides, and the result shape is static, so a reshape expresses each of
-# them exactly and avoids axis bookkeeping that could disagree with the trace.
-
-
-@_emitter("squeeze")
-def _squeeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op, b)))]
-
-
-@_emitter("unsqueeze")
-def _unsqueeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op, b)))]
-
-
 @_emitter("permute")
 def _permute(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     perm = [_as_int(a) for a in _as_seq(op.attrs["permutation"])]
@@ -578,9 +545,10 @@ def _permute(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 @_emitter("concatenate")
 def _concatenate(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "dim"))
-    # ``values`` is variadic: one parameter bound to every input.
+    # ``values`` is variadic: one parameter bound to every input, each of
+    # the result's type — MIL does not promote and Lucid did.
     return "concat", [
-        ("values", list(ins)),
+        ("values", b.agree_on_dtype(list(ins), b.result_mil_dtype(op))),
         ("axis", b.const_int(axis)),
         ("interleave", b.const_bool(False)),
     ]
@@ -688,7 +656,7 @@ def _one_hot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     index needs", which is a value the host worked out and the graph has
     no way to recompute.
     """
-    size = b.result_shape(op)[-1]
+    size = b.result_dims(op)[-1]
     # Core ML requires the two fill values to carry the result's own
     # dtype, and refuses at parse time otherwise. Lucid's ``one_hot``
     # answers in the index type unless a caller casts it, so the choice
@@ -770,7 +738,8 @@ def _mean(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 @_emitter("stack")
 def _stack(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "axis"))
-    return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
+    values = b.agree_on_dtype(list(ins), b.result_mil_dtype(op))
+    return "stack", [("values", values), ("axis", b.const_int(axis))]
 
 
 @_emitter("split")
@@ -805,17 +774,24 @@ def _broadcast_to(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Expressed as ``tile``, which MIL has, since ``broadcast_to`` it does not.
 
     A broadcast repeats each size-1 axis; the repetition counts come from
-    dividing the result shape by the operand's. Ranks are matched first by
-    reshaping with leading ones, the way broadcasting aligns them.
+    dividing the result shape by the operand's, after leading axes match
+    the ranks. An axis that follows the input — a class token spread over
+    the batch — repeats as often as the input is long there, at run time.
     """
-    src = b.shape_of(ins[0])
-    out = _out_shape(op)
-    value = ins[0]
+    src = b.shape_of(ins[0]).declared()
+    out = b.result_shape(op)
+    # ``tile`` keeps its operand's type and MIL checks that it does.
+    (value,) = b.agree_on_dtype([ins[0]], b.result_mil_dtype(op))
     if len(src) < len(out):
-        src = [1] * (len(out) - len(src)) + src
-        value = b.emit("reshape", [("x", ins[0]), ("shape", b.const_ints(src))], src)
-    reps = [o // s if s else 1 for s, o in zip(src, out)]
-    return "tile", [("x", value), ("reps", b.const_ints(reps))]
+        lead = list(range(len(out) - len(src)))
+        src = [1] * len(lead) + src
+        value = b.emit("expand_dims", [("x", value), ("axes", b.const_ints(lead))], src)
+    operand = _flex.Dims(src, op.name)
+    reps = [
+        (-1 if size == 1 else 1) if o < 0 else o // operand[axis]
+        for axis, (size, o) in enumerate(zip(src, out, strict=True))
+    ]
+    return "tile", [("x", value), ("reps", b.sizes_operand(reps, op.outputs[0].id))]
 
 
 @_emitter("scaled_dot_product_attention")
@@ -833,9 +809,7 @@ def _sdpa(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
             "trace carries no mask operand"
         )
     query, key, value = ins[0], ins[1], ins[2]
-    q_shape = b.shape_of(query)
-    k_shape = b.shape_of(key)
-    scores_shape = q_shape[:-1] + [k_shape[-2]]
+    scores_shape = b.shape_of(query).declared()[:-1] + [b.shape_of(key).declared()[-2]]
 
     scores = b.emit(
         "matmul",
@@ -864,7 +838,7 @@ def _sdpa(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # ``inf - inf`` is a NaN rather than a zero weight.
         import lucid
 
-        rows, cols = scores_shape[-2], scores_shape[-1]
+        rows, cols = _flex.Dims(scores_shape, op.name)[-2:]
         offset = cols - rows
         mask = lucid.tensor(
             [
@@ -892,21 +866,38 @@ def _sdpa(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 # becomes a constant that an ``identity`` names as the op's output.
 
 
-@_emitter("zeros")
-def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
+def _filled(b: Builder, op: TracedOp, value: float) -> Constant | EmitResult:
+    """One value, shaped and typed like the result: a constant, or a ``fill``
+    sized at run time when the shape follows the input (``zeros(x.shape[0])``)."""
     import lucid
 
-    return Constant(b.const_from_tensor(lucid.zeros(*_out_shape(op))))
+    shape = b.result_shape(op)
+    kind = b.result_mil_dtype(op)
+    whole = kind in (_MIL_INT32, _MIL_BOOL)
+    made: Constant | EmitResult
+    if -1 in shape:
+        fill = b.const_int(int(value)) if whole else b.const_float(value)
+        sizes = b.sizes_operand(shape, op.outputs[0].id)
+        made = "fill", [("shape", sizes), ("value", fill)]
+    elif whole:
+        made = Constant(b.const_ints_shaped([int(value)] * math.prod(shape), shape))
+    else:
+        filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
+        made = Constant(b.const_from_tensor(filled))
+    if kind != _MIL_BOOL:
+        return made
+    held = made.name if isinstance(made, Constant) else b.emit(*made, shape, _MIL_INT32)
+    return "cast", [("x", held), ("dtype", b.const_str("bool"))]
+
+
+@_emitter("zeros")
+def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+    return _filled(b, op, 0.0)
 
 
 @_emitter("full")
-def _full(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
-    import lucid
-
-    value = _as_float(_attr(op, "fill_value"))
-    shape = _out_shape(op)
-    filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
-    return Constant(b.const_from_tensor(filled))
+def _full(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+    return _filled(b, op, _as_float(_attr(op, "fill_value")))
 
 
 @_emitter("arange")
@@ -925,7 +916,7 @@ def _arange(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
     attrs = op.attrs
     start = _as_float(attrs.get("start", 0.0))
     step = _as_float(attrs.get("step", 1.0))
-    count = int(_out_shape(op)[0])
+    count = b.result_dims(op)[0]
     integer = _CAST_TARGETS.get(str(op.outputs[0].dtype).split(".")[-1]) == "int32"
     if integer and count > 0:
         # The attributes are doubles, which hold every int32 exactly.
@@ -1055,7 +1046,7 @@ def _gelu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 def _scales(op: TracedOp, b: Builder, value: str) -> tuple[float, float]:
     src = b.shape_of(value)
-    out = _out_shape(op)
+    out = b.result_dims(op)
     return out[-2] / src[-2], out[-1] / src[-1]
 
 
@@ -1149,7 +1140,7 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         *(
             []
             if -1 in b.result_shape(op)
-            else [("output_shape", b.const_ints(_out_shape(op, b)))]
+            else [("output_shape", b.const_ints(b.result_shape(op)))]
         ),
     ]
     return "conv_transpose", bindings
@@ -1205,7 +1196,7 @@ def _unfold_dim(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     size = _as_int(_attr(op, "size"))
     step = _as_int(_attr(op, "step"))
 
-    windowed = list(shape)
+    windowed = shape.declared()
     windowed[axis] = (shape[axis] - size) // step + 1
     windowed.insert(axis + 1, size)
     slid = b.emit(
@@ -1257,7 +1248,10 @@ def _scatter_set(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("where")
 def _where(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "select", [("cond", ins[0]), ("a", ins[1]), ("b", ins[2])]
+    # Both branches carry the result's type, which MIL checks and Lucid
+    # promoted to: ``where(outside, full(...), index)`` meets an int index.
+    a, other = b.agree_on_dtype([ins[1], ins[2]], b.result_mil_dtype(op))
+    return "select", [("cond", ins[0]), ("a", a), ("b", other)]
 
 
 @_emitter("roll")
@@ -1273,14 +1267,14 @@ def _roll(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axes = [_as_int(a) for a in _as_seq(attrs["axes"])]
     shifts = [_as_int(s) for s in _as_seq(attrs["shifts"])]
     value = ins[0]
-    shape = list(b.shape_of(value))
+    shape = b.shape_of(value)
 
-    for step, (axis, shift) in enumerate(zip(axes, shifts)):
+    for step, (axis, shift) in enumerate(zip(axes, shifts, strict=True)):
         size = shape[axis]
         head = (size - shift % size) % size
         if head == 0:
             continue
-        first, second = list(shape), list(shape)
+        first, second = shape.declared(), shape.declared()
         first[axis], second[axis] = head, size - head
         pieces = b.emit_multi(
             "split",
@@ -1378,7 +1372,7 @@ def _log_softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """
     axis = _as_int(_attr(op, "dim"))
     shape = b.shape_of(ins[0])
-    kept = list(shape)
+    kept = shape.declared()
     kept[axis if axis >= 0 else axis + len(kept)] = 1
     total = b.emit(
         "reduce_log_sum_exp",
@@ -1406,10 +1400,8 @@ def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("ones")
-def _ones(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
-    import lucid
-
-    return Constant(b.const_from_tensor(lucid.ones(*_out_shape(op))))
+def _ones(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+    return _filled(b, op, 1.0)
 
 
 # ── reductions ───────────────────────────────────────────────────────────────
@@ -1501,7 +1493,7 @@ def _var(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     rank = len(shape)
     dims = [_as_int(d) % rank for d in _as_seq(_attr(op, "dims"))]
     keep = bool(_attr(op, "keepdim"))
-    kept = [1 if i in dims else s for i, s in enumerate(shape)]
+    kept = [1 if i in dims else s for i, s in enumerate(shape.declared())]
     axes = b.const_ints(dims)
     mean = b.emit(
         "reduce_mean",
@@ -1518,7 +1510,7 @@ def _var(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     if not bool(op.attrs.get("unbiased", False)):
         return "reduce_mean", bindings
     count = math.prod(shape[i] for i in dims)
-    biased = b.emit("reduce_mean", bindings, _out_shape(op))
+    biased = b.emit("reduce_mean", bindings, b.result_shape(op))
     return "mul", [("x", biased), ("y", b.const_float(count / max(count - 1, 1)))]
 
 
@@ -1564,7 +1556,7 @@ def _inner(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ],
         [rows, cols],
     )
-    return "reshape", [("x", product), ("shape", b.const_ints(_out_shape(op)))]
+    return "reshape", [("x", product), ("shape", b.const_ints(list(b.result_dims(op))))]
 
 
 @_emitter("outer")
@@ -1585,7 +1577,7 @@ def _tensordot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     free_b = [i for i in range(len(sb)) if i not in axes_b]
 
     def arranged(
-        value: str, shape: list[int], perm: list[int], rows: int, cols: int
+        value: str, shape: Sequence[int], perm: list[int], rows: int, cols: int
     ) -> str:
         if perm != list(range(len(shape))):
             value = b.emit(
@@ -1728,9 +1720,8 @@ def _topk(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
 def _unbind(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
     """One ``gather`` per slice: a scalar index drops the axis, as unbind does."""
     axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
-    slices = []
-    for i, out in enumerate(op.outputs):
-        slices.append(
+    return Bound(
+        [
             b.emit(
                 "gather",
                 [
@@ -1739,10 +1730,11 @@ def _unbind(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
                     ("axis", b.const_int(axis)),
                     ("validate_indices", b.const_bool(False)),
                 ],
-                [int(d) for d in out.shape],
+                b.result_shape(op, i),
             )
-        )
-    return Bound(slices)
+            for i in range(len(op.outputs))
+        ]
+    )
 
 
 # ── shape ────────────────────────────────────────────────────────────────────
@@ -1793,7 +1785,7 @@ def _triangle(b: Builder, op: TracedOp, ins: list[str], lower: bool) -> EmitResu
         )
     shape = b.shape_of(ins[0])
     if len(shape) < 2:
-        raise UnsupportedOp(f"{op.name}: needs at least two axes, got {shape}")
+        raise UnsupportedOp(f"{op.name}: needs at least two axes, got {len(shape)}")
     offset = _as_int(_attr(op, "k"))
     ones = lucid.ones(*shape[-2:])
     mask = lucid.tril(ones, offset) if lower else lucid.triu(ones, offset)
@@ -1812,12 +1804,10 @@ def _triu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("masked_fill")
 def _masked_fill(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    """``select(mask, fill, x)`` — the mask is the second operand."""
-    import lucid
-
-    shape = b.shape_of(ins[0])
+    """``select(mask, fill, x)``; the mask is second, the fill a broadcast scalar."""
     value = _as_float(_attr(op, "fill_value"))
-    fill = b.const_from_tensor(lucid.zeros(*shape) + value)
+    integer = b.dtype_of(ins[0]) == _MIL_INT32
+    fill = b.const_int(int(value)) if integer else b.const_float(value)
     return "select", [("cond", ins[1]), ("a", fill), ("b", ins[0])]
 
 
@@ -1940,25 +1930,30 @@ def _group_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """
     shape = b.shape_of(ins[0])
     groups = _as_int(_attr(op, "num_groups"))
-    batch, channels = shape[0], shape[1]
-    trailing = shape[2:]
-
-    grouped = [batch * groups, channels // groups] + list(trailing)
+    channels = shape[1]
+    trailing = shape.declared()[2:]
+    # Each group flattened to one row: the same mean and variance as over
+    # ``(C/G, ...)``, and the open axes of a flexible export fold into at
+    # most the two of this shape.
+    batch = shape.declared()[0]
+    grouped = [
+        batch * groups if batch >= 0 else -1,
+        -1 if -1 in trailing else channels // groups * math.prod(trailing),
+    ]
     folded = b.emit(
-        "reshape", [("x", ins[0]), ("shape", b.const_ints(grouped))], grouped
+        "reshape", [("x", ins[0]), ("shape", b.shape_operand(grouped))], grouped
     )
     normalised = b.emit(
         "layer_norm",
         [
             ("x", folded),
-            ("axes", b.const_ints(list(range(1, len(grouped))))),
+            ("axes", b.const_ints([1])),
             ("epsilon", b.const_float(_as_float(_attr(op, "eps")))),
         ],
         grouped,
     )
-    restored = b.emit(
-        "reshape", [("x", normalised), ("shape", b.const_ints(list(shape)))], shape
-    )
+    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    restored = b.emit("reshape", [("x", normalised), ("shape", target)], shape)
     if len(ins) < 3:
         return "identity", [("x", restored)]
 
@@ -1981,7 +1976,7 @@ def _rms_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     shape = b.shape_of(ins[0])
     weight_shape = b.shape_of(ins[1]) if len(ins) > 1 else []
     axes = list(range(len(shape) - len(weight_shape), len(shape)))
-    kept = list(shape)
+    kept = shape.declared()
     for axis in axes:
         kept[axis] = 1
 
@@ -2013,23 +2008,22 @@ def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     length-1 axis after the target, tiling that, and folding it back is
     the standard way to say it with the ops MIL has.
     """
-    shape = b.shape_of(ins[0])
+    shape = b.shape_of(ins[0]).declared()
     repeats = _as_int(_attr(op, "repeats"))
     axis = _as_int(_attr(op, "axis"))
     axis = axis if axis >= 0 else axis + len(shape)
 
-    spread = list(shape[: axis + 1]) + [1] + list(shape[axis + 1 :])
+    spread = shape[: axis + 1] + [1] + shape[axis + 1 :]
     expanded = b.emit(
-        "reshape", [("x", ins[0]), ("shape", b.const_ints(spread))], spread
+        "expand_dims", [("x", ins[0]), ("axes", b.const_ints([axis + 1]))], spread
     )
     reps = [1] * len(spread)
     reps[axis + 1] = repeats
     tiled_shape = list(spread)
     tiled_shape[axis + 1] = repeats
     tiled = b.emit("tile", [("x", expanded), ("reps", b.const_ints(reps))], tiled_shape)
-    final = list(shape)
-    final[axis] = shape[axis] * repeats
-    return "reshape", [("x", tiled), ("shape", b.const_ints(final))]
+    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    return "reshape", [("x", tiled), ("shape", target)]
 
 
 @_emitter("invert")
@@ -2086,7 +2080,7 @@ def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # would need a transpose the trace did not ask for.
         raise UnsupportedOp("diagonal")
 
-    length = int(_out_shape(op)[-1])
+    length = b.result_dims(op)[-1]
     # MIL wants the index tensor the same shape as the result, not a
     # broadcastable stand-in, so the leading axes are written out.
     leading = 1
@@ -2106,7 +2100,7 @@ def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ],
         gathered,
     )
-    return "reshape", [("x", taken), ("shape", b.const_ints(_out_shape(op, b)))]
+    return "reshape", [("x", taken), ("shape", b.const_ints(list(b.result_dims(op))))]
 
 
 @_emitter("meshgrid")
@@ -2117,7 +2111,7 @@ def _meshgrid(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
     emitter appends both and says what they are — when the trace carries
     enough to build them, which today it does not.
     """
-    grid = [int(d) for d in op.outputs[0].shape]
+    grid = list(b.result_dims(op))
     if len(ins) != len(grid):
         from lucid.coreml._build import UnsupportedOp
 
@@ -2174,7 +2168,7 @@ def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
     base = b.const_from_tensor(lucid.tensor([rows]))
     b.shapes[base] = [1, height * width, 3]
-    out = _out_shape(op)
+    out = b.result_shape(op)
     flat = b.emit(
         "matmul",
         [
@@ -2187,7 +2181,7 @@ def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     )
     # The product is one row per position; the grid is those rows laid
     # back out over the image.
-    return "reshape", [("x", flat), ("shape", b.const_ints(out))]
+    return "reshape", [("x", flat), ("shape", b.shape_operand(out, op.outputs[0].id))]
 
 
 @_emitter("bilinear_layer")
@@ -2202,13 +2196,13 @@ def _bilinear_layer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     left = b.shape_of(x1)
     right = b.shape_of(x2)
     outputs = int(b.shape_of(weight)[0])
-    batch, inner_i, inner_j = left[0], left[1], right[1]
+    batch, inner_i, inner_j = left.declared()[0], left[1], right[1]
 
     # (N, J) -> (N, 1, J, 1) so the batched matmul lines up with
     # (1, O, I, J), contracting J.
     column = b.emit(
         "reshape",
-        [("x", x2), ("shape", b.const_ints([batch, 1, inner_j, 1]))],
+        [("x", x2), ("shape", b.shape_operand([batch, 1, inner_j, 1]))],
         [batch, 1, inner_j, 1],
     )
     kernel = b.emit(
@@ -2228,12 +2222,12 @@ def _bilinear_layer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     )
     folded = b.emit(
         "reshape",
-        [("x", contracted), ("shape", b.const_ints([batch, outputs, inner_i]))],
+        [("x", contracted), ("shape", b.shape_operand([batch, outputs, inner_i]))],
         [batch, outputs, inner_i],
     )
     spread = b.emit(
         "reshape",
-        [("x", x1), ("shape", b.const_ints([batch, 1, inner_i]))],
+        [("x", x1), ("shape", b.shape_operand([batch, 1, inner_i]))],
         [batch, 1, inner_i],
     )
     weighted = b.emit("mul", [("x", folded), ("y", spread)], [batch, outputs, inner_i])
@@ -2262,7 +2256,7 @@ def _lp_normalize(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "axis"))
     order = _as_float(_attr(op, "ord"))
     epsilon = _as_float(_attr(op, "eps"))
-    kept = list(shape)
+    kept = shape.declared()
     kept[axis if axis >= 0 else axis + len(kept)] = 1
 
     magnitude = b.emit("abs", [("x", ins[0])], shape)
@@ -2335,7 +2329,7 @@ def _unfold(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         )
 
     batch, channels = padded[0], padded[1]
-    out = _out_shape(op)
+    out = list(b.result_dims(op))
     length = out[2]
     rows = (padded[2] - dilation[0] * (kernel[0] - 1) - 1) // stride[0] + 1
     columns = (padded[3] - dilation[1] * (kernel[1] - 1) - 1) // stride[1] + 1
@@ -2400,7 +2394,7 @@ def _interpolate_nearest_3d(b: Builder, op: TracedOp, ins: list[str]) -> EmitRes
     from lucid.coreml._build import UnsupportedOp
 
     shape = b.shape_of(ins[0])
-    out = _out_shape(op)
+    out = list(b.result_dims(op))
     if len(shape) != 5:
         raise UnsupportedOp("interpolate_nearest_3d")
     batch, channels, depth, height, width = shape
@@ -2472,7 +2466,7 @@ _ERFINV_TAIL = (
 
 
 def _horner(
-    b: Builder, coefficients: tuple[float, ...], w: str, shape: list[int]
+    b: Builder, coefficients: tuple[float, ...], w: str, shape: Sequence[int]
 ) -> str:
     """Evaluate a polynomial in ``w`` by Horner's rule."""
     value = b.const_float(coefficients[0])
@@ -2539,7 +2533,7 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
     from lucid.coreml._build import UnsupportedOp
 
     shape = b.shape_of(ins[0])
-    out = _out_shape(op)
+    out = list(b.result_dims(op))
     if len(shape) != 5:
         raise UnsupportedOp("interpolate_trilinear")
     batch, channels, depth, height, width = shape
@@ -2636,7 +2630,7 @@ def _fold(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     size = _ints(attrs["output_size"])
 
     batch, rows, length = shape
-    out = _out_shape(op)
+    out = list(b.result_dims(op))
     channels = out[1]
     padded = [size[0] + 2 * padding[0], size[1] + 2 * padding[1]]
     blocks_h = (padded[0] - dilation[0] * (kernel[0] - 1) - 1) // stride[0] + 1

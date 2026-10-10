@@ -16,7 +16,7 @@ Two things the trace hands over that the driver has to sort out:
   bare ``isinstance`` check would reject every model in the zoo.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn, cast, override
 
 import dataclasses
@@ -31,7 +31,8 @@ import lucid.nn.functional as _F
 import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.coreml import _spec
+from lucid.coreml import _flex, _spec
+from lucid.coreml._flex import ShapeNotFlexible
 from lucid.coreml._emit import (
     EMITTERS,
     Bindings,
@@ -1311,17 +1312,22 @@ class Builder:
         # refused when the package is parsed, naming an internal value
         # and nothing else. Recorded so an emitter can insert the cast.
         self.dtypes: dict[str, int] = {}
-        # Traced value id -> the axes a flexible export leaves open, so an
-        # emitter that writes a shape into a constant can leave them open
-        # too rather than baking the default.
-        self.varying: dict[int, set[int]] = {}
+        # Which axes of which traced values a flexible export leaves open,
+        # so an emitter that writes a shape into a constant can leave them
+        # open too rather than baking the default.
+        self.flex = _flex.Flexibility()
+        # The operation being emitted, named by any refusal a shape read
+        # raises; and the flexible input, which run-time sizes are read off.
+        self.current = "<driver>"
+        self.flex_input: str | None = None
+        self._input_dims: dict[int, str] = {}
 
     def result_shape(self, op: TracedOp, index: int = 0) -> list[int]:
         """One of an operation's result shapes, with varying axes as ``-1``.
 
-        Emitters that carry a shape in a constant — ``reshape`` is the
-        one — must ask for it this way, or a flexible export bakes the
-        default and is wrong at every other shape.
+        Emitters that carry a shape in a constant must ask for it this
+        way — or as :meth:`result_dims`, which refuses an open axis — or a
+        flexible export bakes the default and is wrong at every other shape.
 
         Parameters
         ----------
@@ -1336,13 +1342,125 @@ class Builder:
             The shape, with ``-1`` where the export is flexible.
         """
         out = op.outputs[index]
-        shape = [int(d) for d in out.shape]
+        recorded = out.shape
+        shape = (
+            recorded.declared()
+            if isinstance(recorded, _flex.Dims)
+            else [int(d) for d in recorded]
+        )
         # A value the driver emits a rank lower loses its leading axis
         # here too, or an emitter that writes the shape into a constant
         # would ask for the rank Core ML refused.
         if int(out.id) in self.thinned:
             shape = shape[1:]
-        return _flex(shape, self.varying.get(out.id))
+        return _flex.flex(shape, self.flex.varying.get(int(out.id)))
+
+    def result_dims(self, op: TracedOp, index: int = 0) -> _flex.Dims:
+        """A result's shape as numbers an emitter may write into a constant.
+
+        Reading an axis a flexible export leaves open raises
+        :class:`ShapeNotFlexible` naming ``op`` — the traced size is the
+        only number there is, and writing it down is the failure.
+
+        Parameters
+        ----------
+        op : TracedOp
+            Operation whose result to describe.
+        index : int, optional, default=0
+            Which result.
+        """
+        return _flex.Dims(self.result_shape(op, index), op.name)
+
+    def shape_operand(self, shape: Sequence[int], value_id: int = -1) -> str:
+        """A ``reshape`` target for ``shape``, open axes and all.
+
+        One open axis is a ``-1`` in a constant, which ``reshape`` infers;
+        more than one is read at run time, as :meth:`sizes_operand` does.
+
+        Parameters
+        ----------
+        shape : sequence of int
+            Declared shape, ``-1`` on open axes.
+        value_id : int, optional, default=-1
+            Traced value the shape belongs to, which says where its open
+            axes come from. ``-1`` when the shape is no traced value's.
+        """
+        dims = shape.declared() if isinstance(shape, _flex.Dims) else list(shape)
+        if sum(d < 0 for d in dims) <= 1:
+            return self.const_ints(dims)
+        return self.sizes_operand(dims, value_id)
+
+    def sizes_operand(self, sizes: list[int], value_id: int) -> str:
+        """``sizes`` as an int32 vector, each ``-1`` read at run time.
+
+        Axis ``k``'s ``-1`` is the size of the input axis that axis ``k``
+        of value ``value_id`` equalled at every traced shape — refused
+        when no single input axis did, since then there is nothing to read.
+
+        Parameters
+        ----------
+        sizes : list of int
+            One size per axis, ``-1`` where it follows the input.
+        value_id : int
+            Traced value the sizes describe.
+        """
+        pieces: list[str] = []
+        run: list[int] = []
+        for axis, size in enumerate(sizes):
+            if size >= 0:
+                run.append(size)
+                continue
+            source = self.flex.source(value_id, axis)
+            if source is None or self.flex_input is None:
+                raise ShapeNotFlexible(
+                    self.current,
+                    f"axis {axis} of its result follows the input, and no single "
+                    "input axis had its size at every traced shape, so there is "
+                    "nothing to read it from at run time",
+                )
+            if run:
+                pieces.append(self.const_ints(run))
+                run = []
+            pieces.append(self.input_dim(source))
+        if run:
+            pieces.append(self.const_ints(run))
+        if len(pieces) == 1:
+            return pieces[0]
+        return self.emit(
+            "concat",
+            [
+                ("values", pieces),
+                ("axis", self.const_int(0)),
+                ("interleave", self.const_bool(False)),
+            ],
+            [len(sizes)],
+            dtype=_C_engine.coreml.DTYPE_INT32,
+        )
+
+    def input_dim(self, axis: int) -> str:
+        """The flexible input's size along ``axis``, read at run time, as ``[n]``."""
+        if axis in self._input_dims:
+            return self._input_dims[axis]
+        assert self.flex_input is not None
+        int32 = _C_engine.coreml.DTYPE_INT32
+        if -1 not in self._input_dims:
+            rank = len(self.shapes[self.flex_input])
+            self._input_dims[-1] = self.emit(
+                "shape", [("x", self.flex_input)], [rank], dtype=int32
+            )
+        picked = self.emit(
+            "gather",
+            [
+                ("x", self._input_dims[-1]),
+                ("indices", self.const_ints([axis])),
+                ("axis", self.const_int(0)),
+                ("validate_indices", self.const_bool(False)),
+            ],
+            [1],
+            dtype=int32,
+        )
+        self._input_dims[axis] = picked
+        return picked
 
     def result_mil_dtype(self, op: TracedOp, index: int = 0) -> int:
         """MIL element type the driver will declare for a result.
@@ -1366,23 +1484,6 @@ class Builder:
         """
         out = op.outputs[index]
         return _spec.trace_dtype(str(out.dtype).split(".")[-1], self._body_mil)
-
-    def result_thinned(self, op: TracedOp, index: int = 0) -> bool:
-        """Whether a result is emitted without its leading axis.
-
-        Parameters
-        ----------
-        op : TracedOp
-            Operation whose result to ask about.
-        index : int, optional, default=0
-            Which result.
-
-        Returns
-        -------
-        bool
-            True when the driver drops the leading axis of this result.
-        """
-        return int(op.outputs[index].id) in self.thinned
 
     def leading_axis_dropped(self, name: str) -> bool:
         """Whether this value is a rank lower than the trace recorded.
@@ -1534,14 +1635,15 @@ class Builder:
             _C_engine.coreml.DTYPE_FLOAT32,
         )
 
-    def shape_of(self, name: str) -> list[int]:
+    def shape_of(self, name: str) -> _flex.Dims:
+        """An operand's shape; reading an open axis refuses the operation."""
         shape = self.shapes.get(name)
         if shape is None:
             raise KeyError(
                 f"lucid.coreml: no shape recorded for value {name!r} — an emitter "
                 "asked about an operand the driver never registered"
             )
-        return shape
+        return _flex.Dims(shape, self.current)
 
     def _next(self, kind: str) -> str:
         self._counter += 1
@@ -1716,7 +1818,7 @@ class Builder:
         self,
         mil_type: str,
         bindings: Bindings,
-        shape: list[int],
+        shape: Sequence[int],
         dtype: int | None = None,
     ) -> str:
         """Append an intermediate operation and return its value name.
@@ -1732,8 +1834,9 @@ class Builder:
             MIL operator name.
         bindings : list
             ``(parameter, value name)`` pairs, as an emitter returns.
-        shape : list[int]
-            Result shape.
+        shape : sequence of int
+            Result shape; a :class:`~lucid.coreml._flex.Dims` declares its
+            open axes as such.
         dtype : int or None, optional, default=None
             MIL element type of the result. ``None`` is the type of the
             ``x`` operand when that is an integer or boolean, and the
@@ -1748,8 +1851,9 @@ class Builder:
         name = self._next(mil_type)
         normalised = _operands(bindings)
         declared = self._result_dtype(normalised) if dtype is None else int(dtype)
-        self._program.add_op(mil_type, normalised, name, (declared, list(shape)))
-        self.shapes[name] = list(shape)
+        dims = shape.declared() if isinstance(shape, _flex.Dims) else list(shape)
+        self._program.add_op(mil_type, normalised, name, (declared, dims))
+        self.shapes[name] = dims
         self.dtypes[name] = declared
         return name
 
@@ -1951,7 +2055,7 @@ def _stage_zero_stuff(builder: Any, source: str, plan: _StuffRewrite) -> str:
         split = current[:axis] + [current[axis], 1] + current[axis + 1 :]
         value = builder.emit(
             "reshape",
-            [("x", value), ("shape", builder.const_ints(split))],
+            [("x", value), ("shape", builder.shape_operand(split))],
             split,
         )
         pads = [0] * (2 * len(split))
@@ -1968,10 +2072,10 @@ def _stage_zero_stuff(builder: Any, source: str, plan: _StuffRewrite) -> str:
             ],
             widened,
         )
-        current[axis] *= factor
+        current[axis] = current[axis] * factor if current[axis] >= 0 else -1
         value = builder.emit(
             "reshape",
-            [("x", value), ("shape", builder.const_ints(current))],
+            [("x", value), ("shape", builder.shape_operand(current))],
             list(current),
         )
     return value
@@ -2129,6 +2233,7 @@ def _foldable(
     feeds: dict[int, Any],
     input_ids: set[int],
     traced_values: dict[int, Any],
+    varying: set[int],
 ) -> tuple[set[int], set[int]]:
     """Values a package can carry instead of computing, and who makes them.
 
@@ -2164,6 +2269,10 @@ def _foldable(
             continue
         if not all(int(o.id) in traced_values for o in op.outputs):
             # Nothing to write in its place.
+            continue
+        if any(int(o.id) in varying for o in op.outputs):
+            # ``zeros(x.shape[0], ...)``: made out of nothing, and still
+            # the input's size. The traced value is one size of many.
             continue
         inside.add(int(op.outputs[0].id))
         constant.update(int(o.id) for o in op.outputs)
@@ -2303,12 +2412,12 @@ def _stage_permutation(builder: Any, source: str, plan: _WindowRewrite) -> str:
         at = order.index(axis)
         while at > slot:
             i = at - 1
-            left = math.prod(shape[:i]) if i else 1
-            right = math.prod(shape[i + 2 :]) if i + 2 < len(shape) else 1
+            left = _volume(shape[:i])
+            right = _volume(shape[i + 2 :])
             grouped = [left, shape[i], shape[i + 1], right]
             viewed = builder.emit(
                 "reshape",
-                [("x", name), ("shape", builder.const_ints(grouped))],
+                [("x", name), ("shape", builder.shape_operand(grouped))],
                 grouped,
             )
             swapped = [left, shape[i + 1], shape[i], right]
@@ -2323,10 +2432,15 @@ def _stage_permutation(builder: Any, source: str, plan: _WindowRewrite) -> str:
 
     staged: str = builder.emit(
         "reshape",
-        [("x", name), ("shape", builder.const_ints(plan.out_shape))],
+        [("x", name), ("shape", builder.shape_operand(plan.out_shape, plan.out_id))],
         plan.out_shape,
     )
     return staged
+
+
+def _volume(dims: list[int]) -> int:
+    """How many elements ``dims`` hold, or ``-1`` if an open axis is among them."""
+    return -1 if any(d < 0 for d in dims) else math.prod(dims)
 
 
 def _reachable_ops(graph: Any, output_ids: list[int]) -> list[Any]:
@@ -2389,44 +2503,6 @@ def _apply_image_normalisation(tensor: Tensor, spec: ImageInput) -> Tensor:
         offsets = lucid.tensor([[[[b]] for b in spec.bias]])
         out = out + offsets
     return out
-
-
-class ShapeNotFlexible(NotImplementedError):
-    """An operation's configuration was derived from the input's size.
-
-    Named rather than generic because the alternative is a package that
-    accepts several shapes and is only correct at one of them. An adaptive
-    pool is the usual cause: the tracer records it as an average pool
-    whose kernel came from the input, so the same model traced at two
-    resolutions produces two different kernels.
-
-    Examples
-    --------
-    A range of resolutions, since that is what an adaptive pool's kernel
-    is taken from — a range of batch sizes leaves it alone:
-
-    >>> import shutil, tempfile
-    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
-    >>> model = nn.Sequential(
-    ...     nn.Conv2d(3, 8, 3, padding=1), nn.AdaptiveAvgPool2d(1), nn.Flatten()
-    ... ).eval()
-    >>> room = tempfile.mkdtemp()
-    >>> try:
-    ...     cml.export(model, lucid.randn(1, 3, 16, 16), f"{room}/m.mlpackage",
-    ...                shape_range={2: (16, 32), 3: (16, 32)})
-    ... except cml.ShapeNotFlexible as refusal:
-    ...     print(refusal)
-    lucid.coreml: operation 'avg_pool2d' cannot take a flexible shape ...
-    >>> shutil.rmtree(room)
-    """
-
-    def __init__(self, op_name: str, detail: str) -> None:
-        super().__init__(
-            f"lucid.coreml: operation {op_name!r} cannot take a flexible shape — "
-            f"{detail}. Trace it at one shape, or replace the layer with one whose "
-            "configuration does not depend on the input size."
-        )
-        self.op_name = op_name
 
 
 class StatefulModel(NotImplementedError):
@@ -2499,117 +2575,51 @@ def _buffer_marks(model: Module) -> dict[str, float]:
     return marks
 
 
-def _varying_axes(
+def _probe(
     model: Module,
     example: Tensor,
-    shapes: list[tuple[int, ...]],
+    probes: list[tuple[int, ...]],
     output_field: str | None,
-) -> dict[int, set[int]]:
+) -> _flex.Flexibility:
     """Which axes of which traced values change with the input shape.
 
     Found by tracing the model once per shape and comparing, rather than
     propagating symbols through the graph. The tracer already knows every
     value's shape; asking it twice is cheaper than teaching it algebra,
     and it cannot disagree with itself about how an operation behaves.
-
-    Parameters
-    ----------
-    model : nn.Module
-        Model to trace, in ``eval()`` mode.
-    example : Tensor
-        Supplies the dtype the probes are built with.
-    shapes : list[tuple[int, ...]]
-        Shapes to compare, the default first.
-    output_field : str or None
-        Passed through to :func:`trace`.
-
-    Returns
-    -------
-    dict[int, set[int]]
-        Value id to the axes that varied.
-
-    Raises
-    ------
-    ShapeNotFlexible
-        The graph or an operation's attributes changed with the shape.
     """
-    recorded: list[list[tuple[str, dict[str, object], list[tuple[int, ...]]]]] = []
-    ids: list[list[int]] = []
-    for shape in shapes:
+    records: list[_flex.Record] = []
+    for shape in probes:
         probe = lucid.zeros(*shape).to(example.dtype)
-        graph, _feeds, _inputs, _outputs, _values = trace(
+        graph, feeds, inputs, _outputs, _values = trace(
             model, probe, output_field=output_field
         )
-        recorded.append(
-            [
-                (
-                    op.name,
-                    dict(op.attrs),
-                    [tuple(int(d) for d in out.shape) for out in op.outputs],
-                )
-                for op in graph.ops
-            ]
-        )
-        ids.append([out.id for op in graph.ops for out in op.outputs])
-
-    base = recorded[0]
-    for other, other_ids in zip(recorded[1:], ids[1:]):
-        if len(other) != len(base) or [n for n, _a, _s in other] != [
-            n for n, _a, _s in base
-        ]:
-            raise ShapeNotFlexible(
-                "<graph>", "the traced operations themselves differ between shapes"
-            )
-        if other_ids != ids[0]:
-            raise ShapeNotFlexible("<graph>", "the traced values differ between shapes")
-        for (name, attrs, _shape), (_n, other_attrs, _s) in zip(base, other):
-            if name in _DRAW_OPS:
-                # A draw records the seed it used, and each probe drew
-                # again — so its attributes always differ and never
-                # because of the size. Comparing them refused every
-                # flexible export of a model that samples, naming the
-                # seed as though the input had changed it. The operation
-                # is either refused outright or lifted to an input, so
-                # nothing downstream reads these.
-                continue
-            if attrs != other_attrs:
-                changed = sorted(
-                    key
-                    for key in set(attrs) | set(other_attrs)
-                    if attrs.get(key) != other_attrs.get(key)
-                )
-                raise ShapeNotFlexible(
-                    name, f"its {', '.join(changed)} changed with the input size"
-                )
-
-    varying: dict[int, set[int]] = {}
-    position = 0
-    for index, (_name, _attrs, base_shapes) in enumerate(base):
-        for output, base_shape in enumerate(base_shapes):
-            value_id = ids[0][position]
-            position += 1
-            axes = set()
-            for other in recorded[1:]:
-                other_shape = other[index][2][output]
-                if len(other_shape) != len(base_shape):
-                    raise ShapeNotFlexible(
-                        base[index][0], "its result changes rank with the input size"
+        ops = list(graph.ops)
+        records.append(
+            _flex.Record(
+                [
+                    (
+                        op.name,
+                        dict(op.attrs),
+                        [tuple(int(d) for d in out.shape) for out in op.outputs],
                     )
-                axes |= {
-                    axis
-                    for axis, (a, b) in enumerate(zip(base_shape, other_shape))
-                    if a != b
-                }
-            if axes:
-                varying[value_id] = axes
-    return varying
-
-
-def _flex(shape: list[int], axes: set[int] | None) -> list[int]:
-    """A shape with its varying axes left for Core ML to fill in."""
-    if not axes:
-        return list(shape)
-    return [-1 if axis in axes else int(dim) for axis, dim in enumerate(shape)]
+                    for op in ops
+                ],
+                [out.id for op in ops for out in op.outputs],
+                int(inputs[0][1]),
+                _flex.signature(graph),
+                {
+                    int(tid): tuple(int(d) for d in impl.shape)
+                    for tid, impl in feeds.items()
+                    if int(tid) != int(inputs[0][1])
+                },
+            )
+        )
+    # A draw records the seed it used, and each probe drew again — so its
+    # attributes always differ and never because of the size. The
+    # operation is either refused outright or lifted to an input, so
+    # nothing downstream reads them.
+    return _flex.compare(records, probes, _DRAW_OPS)
 
 
 def _declare_image(
@@ -2838,6 +2848,32 @@ def build_package(
         graph, feeds, inputs, outputs, traced_values = trace(
             model, example, output_field=output_field
         )
+        probes, ordered, bounds = _flex.plan_probes(
+            tuple(int(d) for d in inputs[0][2].shape) if inputs else (),
+            len(inputs),
+            shapes,
+            shape_range,
+        )
+        flexibility = _flex.Flexibility()
+        if probes:
+            flexibility = _probe(model, inputs[0][2], probes, output_field)
+            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
+                # The open axes are keyed by the probes' value ids, so the
+                # graph emitted has to be theirs. A model that fills a
+                # cache on its first call — Swin's attention mask — traces
+                # a longer graph then than on every call after, and the
+                # probes were all later calls.
+                graph, feeds, inputs, outputs, traced_values = trace(
+                    model, example, output_field=output_field
+                )
+            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
+                raise ShapeNotFlexible(
+                    "<graph>",
+                    "the model traces a different graph at the example's shape "
+                    "on different calls, so which values follow the input "
+                    "cannot be told from comparing them",
+                )
+    varying = flexibility.varying
 
     lifted = _lift_draws(graph, traced_values) if draws is _spec.Draws.AS_INPUT else []
     lifted_heads = {tid for _n, tid, _t, _k in lifted}
@@ -2848,83 +2884,6 @@ def build_package(
     # range and an image input each need a single-input model, and
     # counting the draw made a one-input sampler look like two.
     asked_for = len(inputs)
-
-    varying: dict[int, set[int]] = {}
-    ordered: list[tuple[int, ...]] = []
-    bounds: list[tuple[int, int]] = []
-    if shapes is not None and shape_range is not None:
-        raise ValueError(
-            "lucid.coreml: shapes and shape_range say different things about the "
-            "same input — a list of allowed shapes, or a range that admits "
-            "everything between. Give one"
-        )
-    if shape_range is not None:
-        if len(inputs) != 1:
-            raise ValueError(
-                f"lucid.coreml: a shape range needs a single-input model, and this "
-                f"one takes {len(inputs)}"
-            )
-        default = tuple(int(d) for d in inputs[0][2].shape)
-        for axis, (low, high) in sorted(shape_range.items()):
-            if not 0 <= axis < len(default):
-                raise ValueError(
-                    f"lucid.coreml: axis {axis} is outside the input's rank "
-                    f"{len(default)}"
-                )
-            if low > high:
-                raise ValueError(
-                    f"lucid.coreml: axis {axis} has a range of ({low}, {high})"
-                )
-            if not low <= default[axis] <= high:
-                raise ValueError(
-                    f"lucid.coreml: the example's axis {axis} is {default[axis]}, "
-                    f"outside the range ({low}, {high}) it is meant to sit in"
-                )
-        bounds = [
-            shape_range.get(axis, (size, size)) for axis, size in enumerate(default)
-        ]
-        # Trace at both ends as well as the default: within a range the
-        # graph has to be the same at every size, and the ends are where a
-        # dependence on the size shows up.
-        corners = [
-            tuple(low for low, _high in bounds),
-            tuple(high for _low, high in bounds),
-        ]
-        probes = [default] + [c for c in corners if c != default]
-        if len(probes) < 2:
-            raise ValueError(
-                "lucid.coreml: the range admits only the example's own shape "
-                f"{default}"
-            )
-        varying = _varying_axes(model, inputs[0][2], probes, output_field)
-        ranged_axes = {axis for axis, (low, high) in enumerate(bounds) if low != high}
-        if ranged_axes:
-            varying[inputs[0][1]] = ranged_axes
-    if shapes is not None:
-        if len(inputs) != 1:
-            raise ValueError(
-                f"lucid.coreml: flexible shapes need a single-input model, and this "
-                f"one takes {len(inputs)}"
-            )
-        default = tuple(int(d) for d in inputs[0][2].shape)
-        ordered = [default] + [tuple(s) for s in shapes if tuple(s) != default]
-        if len(ordered) < 2:
-            raise ValueError(
-                "lucid.coreml: shapes must name at least one shape besides the "
-                f"example's own {default}"
-            )
-        varying = _varying_axes(model, inputs[0][2], ordered, output_field)
-        # The input is an external feed, not an operation's result, so it
-        # is not in the map the trace comparison builds; its varying axes
-        # are simply the ones the enumerated shapes disagree on.
-        input_axes = {
-            axis
-            for axis in range(len(default))
-            for alternative in ordered[1:]
-            if alternative[axis] != default[axis]
-        }
-        if input_axes:
-            varying[inputs[0][1]] = input_axes
 
     carried = {spec.input: spec for spec in (state or [])}
     if carried and precision is not Precision.FLOAT16:
@@ -3004,7 +2963,7 @@ def build_package(
                         if _half_interface(name, tensor)
                         else _spec.mil_dtype(tensor.dtype)
                     ),
-                    _flex([int(d) for d in tensor.shape], varying.get(tid)),
+                    _flex.flex([int(d) for d in tensor.shape], varying.get(tid)),
                 ),
             )
             for name, tid, tensor in plain_inputs
@@ -3214,10 +3173,18 @@ def build_package(
     # Folding is decided first: it removes operations, and whether the
     # rank-6 component can be emitted a rank lower depends on which
     # operations are left to check.
-    precomputed, folded = _foldable(graph, feeds, set(input_ids), traced_values)
+    precomputed, folded = _foldable(
+        graph, feeds, set(input_ids), traced_values, set(varying)
+    )
     thinned = _unit_axis_rewrites(
         graph, set(rewrites) | set(stuffing) | absorbed, folded
     )
+    if thinned & set(varying):
+        raise ShapeNotFlexible(
+            "<rank-6 value>",
+            "a value computed at rank 6 is emitted without its leading axis of "
+            "one, and its shape changes with the input",
+        )
     _pending_thinned = thinned
     for op in graph.ops:
         head = int(op.outputs[0].id) if op.outputs else -1
@@ -3228,7 +3195,7 @@ def build_package(
                 raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
 
     builder = Builder(program, blob, body_mil, body_blob, half)
-    builder.varying = varying
+    builder.flex = flexibility
     builder.thinned = set(_pending_thinned)
     builder.shapes.update(weight_shapes)
     builder.shapes.update(builder_shapes_state)
@@ -3247,8 +3214,10 @@ def build_package(
             f"takes {asked_for} — which of them is the image would be a guess"
         )
     for name, tid, tensor in plain_inputs:
-        shape = [int(d) for d in tensor.shape]
+        shape = _flex.flex(tensor.shape, varying.get(tid))
         builder.shapes[name] = shape
+        if tid == flexibility.input_id:
+            builder.flex_input = name
         half_in = _half_interface(name, tensor)
         builder.dtypes[name] = (
             _spec.FLOAT16 if half_in else _spec.mil_dtype(tensor.dtype)
@@ -3259,7 +3228,10 @@ def build_package(
             # input too and is not one — declaring it as an image refused
             # the export, naming the noise's shape as though the caller
             # had passed it.
-            source = _declare_image(program, builder, name, shape, image_input)
+            source = _declare_image(
+                program, builder, name, [int(d) for d in tensor.shape], image_input
+            )
+            builder.shapes[source] = shape
             names[tid] = source
         # Only a float interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
@@ -3268,12 +3240,7 @@ def build_package(
         if half and not half_in and tensor.dtype in (lucid.float32, lucid.float16):
             cast_name = f"_cast_in_{name}"
             mil_type, raw = emit_cast(builder, source, "fp16")
-            program.add_op(
-                mil_type,
-                _operands(raw),
-                cast_name,
-                (body_mil, _flex(shape, varying.get(tid))),
-            )
+            program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
             builder.shapes[cast_name] = shape
             names[tid] = cast_name
     # An output's value is named after the model's own field, so a caller
@@ -3341,19 +3308,37 @@ def build_package(
         if head in absorbed:
             # Emitted already, as part of the window rewrite below.
             continue
+        builder.current = op.name
         plan = rewrites.get(head)
         if plan is not None:
+            plan = plan._replace(
+                mid_shape=_flex.flex(plan.mid_shape, varying.get(head)),
+                out_shape=_flex.flex(plan.out_shape, varying.get(plan.out_id)),
+            )
             names[plan.out_id] = _stage_permutation(builder, names[op.inputs[0]], plan)
             continue
         stuff = stuffing.get(head)
         if stuff is not None:
+            wide = _flex.flex(stuff.out_shape, varying.get(stuff.out_id))
+            stuff = dataclasses.replace(
+                stuff,
+                source_shape=[
+                    -1 if w < 0 else d
+                    for d, w in zip(stuff.source_shape, wide, strict=True)
+                ],
+                out_shape=wide,
+            )
             names[stuff.out_id] = _stage_zero_stuff(builder, names[op.inputs[0]], stuff)
             continue
         emitter = EMITTERS.get(op.name)
         if emitter is None:
             raise UnsupportedOp(op.name)
         operands = [_named(names, i, f"operation {op.name!r}") for i in op.inputs]
-        result = emitter(builder, op, operands)
+        # Under a flexible export the emitter sees its results' shapes as
+        # ``Dims``: an open axis cannot be read off them as a number.
+        result = emitter(
+            builder, _flex.GuardedOp(op, varying) if varying else op, operands
+        )
         if isinstance(result, Constant):
             # The value is the constant; there is nothing to append.
             names[op.outputs[0].id] = result.name
@@ -3377,7 +3362,7 @@ def build_package(
                 wanted_name.get(o.id, f"_v{o.id}_{op.name}"),
                 (
                     _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
-                    _flex(
+                    _flex.flex(
                         (
                             [int(d) for d in o.shape][1:]
                             if o.id in thinned
@@ -3439,7 +3424,7 @@ def build_package(
                 if is_float and not cast_out and half_io
                 else _spec.mil_dtype(tensor.dtype)
             ),
-            _flex([int(d) for d in tensor.shape], varying.get(tid)),
+            _flex.flex([int(d) for d in tensor.shape], varying.get(tid)),
         )
         # Only a float output needs bracketing back to fp32, and the
         # guard has to be here as well as on the input side: casting an
@@ -3467,7 +3452,9 @@ def build_package(
             declared.append((classifier.probabilities_name, ()))
             continue
         program.add_output(field, flexible_type)
-        declared.append((field, tuple(int(d) for d in tensor.shape)))
+        # ``-1`` on an axis that follows the input: what a handle restores
+        # an output to, since Core ML hands a 0-d result back as ``(1,)``.
+        declared.append((field, tuple(flexible_type[1])))
     if metadata is not None:
         program.set_metadata(
             metadata.description, metadata.author, metadata.license, metadata.version
