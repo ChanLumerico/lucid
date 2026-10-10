@@ -102,7 +102,7 @@ def _scalar_power(
     if base.dtype not in _REAL_FLOATS:
         return None
     e = float(exponent)
-    if base.dtype in _promotion.HALF:
+    if _promotion.is_half(base.dtype):
         e = _round_to_half(e, base.dtype)
     return _C_engine.pow_scalar(base, e)
 
@@ -261,20 +261,80 @@ def _is_opmath_operand(impl: _C_engine.TensorImpl) -> bool:
     )
 
 
-def _operand_at(
-    x: _promotion.Operand,
+_IMPL = _C_engine.TensorImpl
+
+
+def _tensor_operand(x: object) -> _C_engine.TensorImpl | None:
+    """``x``'s engine tensor, or None when ``x`` is a Python number."""
+    if isinstance(x, _promotion.NUMBER):
+        return None
+    return _unwrap_or_scalar(x)
+
+
+def _cast(
+    impl: _C_engine.TensorImpl,
+    current: _C_engine.Dtype,
     dt: _C_engine.Dtype,
-    device: _C_engine.Device,
     opmath: bool,
 ) -> _C_engine.TensorImpl:
-    """One operand of a binary op, ready for the engine at dtype ``dt``."""
-    if isinstance(x, _promotion.NUMBER):
-        if opmath and isinstance(x, (int, float)) and not isinstance(x, bool):
-            return _scalar_impl(x, _C_engine.Dtype.F32, device)
-        return _scalar_impl(x, dt, device)
-    if x.dtype == dt or (opmath and _is_opmath_operand(x)):
-        return x
-    return _C_engine.astype(x, dt)
+    """``impl`` (of dtype ``current``) at ``dt`` — or uncast, for op-math."""
+    if current == dt or (opmath and _is_opmath_operand(impl)):
+        return impl
+    return _C_engine.astype(impl, dt)
+
+
+def _beside_number(
+    t: _C_engine.TensorImpl,
+    x: bool | int | float | complex,
+    true_div: bool,
+    opmath: bool,
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """A tensor and a Python number, as ``(tensor operand, number operand)``.
+
+    The common binary case gets its own path: the dtype is the tensor's own
+    unless the number lifts its category, so in the usual ``x * 0.5`` the
+    tensor is passed through untouched and only the 0-d constant is built.
+    """
+    d = t.dtype
+    dt = _promotion.beside_number(t, d, x)
+    device = t.device
+    if true_div and _promotion.is_integral(dt):
+        dt = _promotion.default_float(device)
+    if opmath and _promotion.is_half(dt) and not isinstance(x, (bool, complex)):
+        number = _scalar_impl(x, _C_engine.Dtype.F32, device)
+    else:
+        number = _scalar_impl(x, dt, device)
+    return (t if dt is d else _C_engine.astype(t, dt)), number
+
+
+def _tensor_pair(
+    ai: _C_engine.TensorImpl,
+    da: _C_engine.Dtype,
+    bi: _C_engine.TensorImpl,
+    db: _C_engine.Dtype,
+    true_div: bool,
+    opmath: bool,
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """Two tensors of different dtypes, each brought to the pair's dtype."""
+    dt = _promotion.tensor_pair_type(ai, da, bi, db)
+    if true_div and _promotion.is_integral(dt):
+        dt = _promotion.default_float(ai.device)
+    wide = opmath and _promotion.is_half(dt)
+    return _cast(ai, da, dt, wide), _cast(bi, db, dt, wide)
+
+
+def _number_pair(
+    a: object, b: object, true_div: bool
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """Two Python numbers, as 0-d tensors on the CPU (``lucid.add(2, 3)``)."""
+    if not (isinstance(a, _promotion.NUMBER) and isinstance(b, _promotion.NUMBER)):
+        # _tensor_operand refuses anything else before this point.
+        raise TypeError(f"cannot combine {type(a).__name__} and {type(b).__name__}")
+    cpu = _C_engine.Device.CPU
+    dt = _promotion.result_type(a, b)
+    if true_div and _promotion.is_integral(dt):
+        dt = _promotion.default_float(cpu)
+    return _scalar_impl(a, dt, cpu), _scalar_impl(b, dt, cpu)
 
 
 def _binary_operands(
@@ -288,8 +348,8 @@ def _binary_operands(
 
     The single promotion path behind every spelling of a binary op — the
     operator, its reflected and in-place forms, ``Tensor.<op>`` and
-    ``lucid.<op>``.  The dtype comes from :func:`lucid._promotion.result_type`;
-    each tensor is cast to it and each Python number built at it.
+    ``lucid.<op>``.  The dtype comes from :mod:`lucid._promotion`; each
+    tensor is cast to it and each Python number built at it.
 
     Parameters
     ----------
@@ -315,30 +375,27 @@ def _binary_operands(
     TypeError
         If an operand is neither a tensor nor a Python number.
     """
-    pa: _promotion.Operand = (
-        a if isinstance(a, _promotion.NUMBER) else _unwrap_or_scalar(a)
-    )
-    pb: _promotion.Operand = (
-        b if isinstance(b, _promotion.NUMBER) else _unwrap_or_scalar(b)
-    )
-    if not isinstance(pa, _promotion.NUMBER):
-        device = pa.device
-        # The common case — two tensors of one dtype — before any tier logic.
-        if (
-            not isinstance(pb, _promotion.NUMBER)
-            and pa.dtype == pb.dtype
-            and not (true_div and _promotion.is_integral(pa.dtype))
-        ):
-            return pa, pb
-    elif not isinstance(pb, _promotion.NUMBER):
-        device = pb.device
-    else:
-        device = _C_engine.Device.CPU
-    dt = _promotion.result_type(pa, pb)
-    if true_div and _promotion.is_integral(dt):
-        dt = _promotion.default_float(device)
-    wide = opmath and dt in _promotion.HALF
-    return _operand_at(pa, dt, device, wide), _operand_at(pb, dt, device, wide)
+    # A Tensor's impl is one attribute away and a bare impl is itself; a
+    # number, or a phantom under shadow allocation, takes the general route.
+    ai = a if type(a) is _IMPL else getattr(a, "_impl", None)
+    if type(ai) is not _IMPL:
+        ai = _tensor_operand(a)
+    bi = b if type(b) is _IMPL else getattr(b, "_impl", None)
+    if type(bi) is not _IMPL:
+        bi = _tensor_operand(b)
+    if ai is not None and bi is not None:
+        da = ai.dtype
+        db = bi.dtype
+        # Two tensors of one dtype, before any tier logic.
+        if da == db and not (true_div and _promotion.is_integral(da)):
+            return ai, bi
+        return _tensor_pair(ai, da, bi, db, true_div, opmath)
+    if ai is not None and isinstance(b, _promotion.NUMBER):
+        return _beside_number(ai, b, true_div, opmath)
+    if bi is not None and isinstance(a, _promotion.NUMBER):
+        t, number = _beside_number(bi, a, true_div, opmath)
+        return number, t
+    return _number_pair(a, b, true_div)
 
 
 def _promote_impls(

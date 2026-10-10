@@ -62,30 +62,75 @@ HALF: frozenset[_C_engine.Dtype] = frozenset({_D.F16, _D.BF16})
 #: A Python number, the third tier.
 NUMBER = (bool, int, float, complex)
 
+Operand = _C_engine.TensorImpl | bool | int | float | complex
+
+# The table again, keyed by each dtype's integer code.  An engine enum hashes
+# and compares through C++ (150-250 ns a time) and this runs on every binary
+# op, so the rules below work on ints and turn the answer back into a dtype
+# once.
+_BY_CODE: dict[int, tuple[int, int]] = {d.value: kw for d, kw in _KIND_WIDTH.items()}
+_DTYPE: dict[int, _C_engine.Dtype] = {d.value: d for d in _KIND_WIDTH}
+_BOOL_C, _I64_C, _F32_C, _F64_C = (
+    _D.Bool.value,
+    _D.I64.value,
+    _D.F32.value,
+    _D.F64.value,
+)
+_C64_C, _C128_C = _D.C64.value, _D.C128.value
+_HALF_C = frozenset(d.value for d in HALF)
+_NUMBER_KIND: dict[type, int] = {
+    bool: BOOL,
+    int: INTEGER,
+    float: FLOATING,
+    complex: COMPLEX,
+}
+_CPU = _C_engine.Device.CPU
+
 
 def bit_width(d: _C_engine.Dtype) -> int:
     """The width of one element of ``d`` in bits, read from the one table.
 
     Used to wrap a Python integer to an integer dtype's width exactly.
     """
-    return _KIND_WIDTH[d][1]
+    return _BY_CODE[d.value][1]
 
 
 def is_integral(d: _C_engine.Dtype) -> bool:
     """Whether ``d`` is bool or an integer dtype — the dtypes that hold no
     fraction, which true division moves to the default float."""
-    return _KIND_WIDTH[d][0] <= INTEGER
+    return _BY_CODE[d.value][0] <= INTEGER
 
 
 def is_integer(d: _C_engine.Dtype) -> bool:
     """Whether ``d`` is an integer dtype, bool excluded — the dtypes a Python
     integer can be written into exactly."""
-    return _KIND_WIDTH[d][0] == INTEGER
+    return _BY_CODE[d.value][0] == INTEGER
 
 
-def _complex_of(d: _C_engine.Dtype) -> _C_engine.Dtype:
-    """The complex dtype whose parts are the floating dtype ``d``."""
-    return _D.C128 if d == _D.F64 else _D.C64
+def is_half(d: _C_engine.Dtype) -> bool:
+    """Whether ``d`` is float16 or bfloat16 — the dtypes the engine's
+    mul/div/floordiv op-math computes in float32 for."""
+    return d.value in _HALF_C
+
+
+def _complex_code(c: int) -> int:
+    return _C128_C if c == _F64_C else _C64_C
+
+
+def _promote(a: int, b: int) -> int:
+    if a == b:
+        return a
+    ka, wa = _BY_CODE[a]
+    kb, wb = _BY_CODE[b]
+    if ka == COMPLEX and kb != COMPLEX:
+        return _C128_C if b == _F64_C else a
+    if kb == COMPLEX and ka != COMPLEX:
+        return _C128_C if a == _F64_C else b
+    if ka != kb:
+        return a if ka > kb else b
+    if wa == wb:
+        return _F32_C
+    return a if wa > wb else b
 
 
 def promote_types(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
@@ -104,19 +149,14 @@ def promote_types(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
         complex128, and float16 beside bfloat16 — neither holds the other —
         gives float32.
     """
-    if da == db:
-        return da
-    ka, wa = _KIND_WIDTH[da]
-    kb, wb = _KIND_WIDTH[db]
-    if ka == COMPLEX and kb != COMPLEX:
-        return _D.C128 if db == _D.F64 else da
-    if kb == COMPLEX and ka != COMPLEX:
-        return _D.C128 if da == _D.F64 else db
-    if ka != kb:
-        return da if ka > kb else db
-    if wa == wb:
-        return _D.F32
-    return da if wa > wb else db
+    return _DTYPE[_promote(da.value, db.value)]
+
+
+def _default_code(device: _C_engine.Device | None) -> int:
+    c = get_default_dtype()._engine.value
+    if c == _F64_C and device is not None and device != _CPU:
+        return _F32_C
+    return c
 
 
 def default_float(device: _C_engine.Device) -> _C_engine.Dtype:
@@ -125,62 +165,117 @@ def default_float(device: _C_engine.Device) -> _C_engine.Dtype:
     The GPU stream cannot hold float64, so a float64 default answers
     float32 there.
     """
-    d = get_default_dtype()._engine
-    if d == _D.F64 and device != _C_engine.Device.CPU:
-        return _D.F32
-    return d
+    return _DTYPE[_default_code(device)]
 
 
-def scalar_dtype(
-    x: bool | int | float | complex, device: _C_engine.Device
+def _number_kind(x: bool | int | float | complex) -> int:
+    kind = _NUMBER_KIND.get(type(x))
+    if kind is not None:
+        return kind
+    # A subclass — NumPy's float64 derives from float, its bool_ from nothing.
+    if isinstance(x, bool):
+        return BOOL
+    if isinstance(x, int):
+        return INTEGER
+    return FLOATING if isinstance(x, float) else COMPLEX
+
+
+def _number_code(kind: int, holder: _C_engine.TensorImpl | None) -> int:
+    """The code of a number of ``kind`` beside ``holder`` (a tensor or None).
+
+    Reads ``holder.device`` only when a float64 default must be narrowed.
+    """
+    if kind <= INTEGER:
+        return _BOOL_C if kind == BOOL else _I64_C
+    c = get_default_dtype()._engine.value
+    if c == _F64_C and holder is not None and holder.device != _CPU:
+        c = _F32_C
+    return c if kind == FLOATING else _complex_code(c)
+
+
+def _lifts(kh: int, kl: int) -> bool:
+    """Whether a lower tier of category ``kl`` changes a higher of ``kh``.
+
+    The lower tier can lift the category only: a complex lower makes a real
+    higher complex; a floating lower meets an integral higher on the
+    lattice, as does anything beside a bool higher.
+    """
+    if kl == COMPLEX:
+        return kh != COMPLEX
+    return kh == BOOL or (kh == INTEGER and kl == FLOATING)
+
+
+def _join(higher: int, lower: int) -> int:
+    """Fold a lower tier's dtype code into a higher tier's."""
+    kh = _BY_CODE[higher][0]
+    if not _lifts(kh, _BY_CODE[lower][0]):
+        return higher
+    if kh == FLOATING:  # lifted by a complex lower: keep the precision
+        return _complex_code(higher)
+    return _promote(higher, lower)
+
+
+def _combine(higher: int | None, lower: int | None) -> int | None:
+    if higher is None or lower is None:
+        return lower if higher is None else higher
+    return _join(higher, lower)
+
+
+def beside_number(
+    t: _C_engine.TensorImpl, d: _C_engine.Dtype, x: bool | int | float | complex
 ) -> _C_engine.Dtype:
-    """The dtype a Python number stands for beside tensors on ``device``.
+    """``result_type(t, x)`` for one tensor and one number.
+
+    The common binary case — ``x * 0.5``, ``i + 1`` — answered without the
+    general walk.
 
     Parameters
     ----------
+    t : TensorImpl
+        The tensor; its ``device`` is read only to narrow a float64 default.
+    d : lucid._C.engine.Dtype
+        ``t``'s dtype, already read by the caller.
     x : bool or int or float or complex
         The number.
-    device : lucid._C.engine.Device
-        Where the tensors it meets live.
 
     Returns
     -------
     lucid._C.engine.Dtype
-        bool for a bool, int64 for an int, :func:`default_float` for a
-        float and its complex counterpart for a complex — the number's
-        tier, before any tensor is seen.
+        ``d`` itself, the same object, when the number does not lift it, so
+        the caller can tell with ``is`` that ``t`` needs no cast.
     """
-    if isinstance(x, bool):
-        return _D.Bool
-    if isinstance(x, int):
-        return _D.I64
-    if isinstance(x, float):
-        return default_float(device)
-    return _complex_of(default_float(device))
+    c = d.value
+    kl = _number_kind(x)
+    if not _lifts(_BY_CODE[c][0], kl):
+        return d
+    return _DTYPE[_join(c, _number_code(kl, t))]
 
 
-def _combine(
-    higher: _C_engine.Dtype | None, lower: _C_engine.Dtype | None
-) -> _C_engine.Dtype | None:
-    """Fold a lower tier's dtype into a higher tier's.
+def tensor_pair_type(
+    a: _C_engine.TensorImpl,
+    da: _C_engine.Dtype,
+    b: _C_engine.TensorImpl,
+    db: _C_engine.Dtype,
+) -> _C_engine.Dtype:
+    """``result_type(a, b)`` for two tensors whose dtypes the caller has read.
 
-    The lower tier can lift the category only: a complex lower makes a
-    floating higher its complex counterpart; a floating lower meets an
-    integral higher on the lattice, as does anything beside a bool higher.
-    Otherwise the higher tier's dtype stands.
+    Parameters
+    ----------
+    a, b : TensorImpl
+        The tensors; only their ``shape`` is read, for the tier.
+    da, db : lucid._C.engine.Dtype
+        Their dtypes, read once by the binary hot path rather than again here.
+
+    Returns
+    -------
+    lucid._C.engine.Dtype
+        The dtype the pair computes in.
     """
-    if higher is None or lower is None:
-        return lower if higher is None else higher
-    kh = _KIND_WIDTH[higher][0]
-    kl = _KIND_WIDTH[lower][0]
-    if kl == COMPLEX and kh != COMPLEX:
-        return _complex_of(higher) if kh == FLOATING else lower
-    if kh >= FLOATING or not (kh == BOOL or kl == FLOATING):
-        return higher
-    return promote_types(higher, lower)
-
-
-Operand = _C_engine.TensorImpl | bool | int | float | complex
+    ca, cb = da.value, db.value
+    a_dim, b_dim = bool(a.shape), bool(b.shape)
+    if a_dim == b_dim:
+        return _DTYPE[_promote(ca, cb)]
+    return _DTYPE[_join(ca, cb) if a_dim else _join(cb, ca)]
 
 
 def result_type(*operands: Operand) -> _C_engine.Dtype:
@@ -204,26 +299,25 @@ def result_type(*operands: Operand) -> _C_engine.Dtype:
     TypeError
         If no operand is given.
     """
-    dim: _C_engine.Dtype | None = None
-    zero: _C_engine.Dtype | None = None
-    device: _C_engine.Device | None = None
-    numbers: list[bool | int | float | complex] = []
+    dim: int | None = None
+    zero: int | None = None
+    first: _C_engine.TensorImpl | None = None
+    kind = -1
     for x in operands:
         if isinstance(x, NUMBER):
-            numbers.append(x)
+            kind = max(kind, _number_kind(x))
             continue
-        d = x.dtype
-        if device is None:
-            device = x.device
+        c = x.dtype.value
+        if first is None:
+            first = x
         if x.shape:
-            dim = d if dim is None else promote_types(dim, d)
+            dim = c if dim is None else _promote(dim, c)
         else:
-            zero = d if zero is None else promote_types(zero, d)
-    wrapped: _C_engine.Dtype | None = None
-    for n in numbers:
-        d = scalar_dtype(n, device if device is not None else _C_engine.Device.CPU)
-        wrapped = d if wrapped is None else promote_types(wrapped, d)
+            zero = c if zero is None else _promote(zero, c)
+    # The numbers' own join is the code of the highest kind among them:
+    # bool < int64 < the default float < its complex counterpart.
+    wrapped = None if kind < 0 else _number_code(kind, first)
     out = _combine(dim, _combine(zero, wrapped))
     if out is None:
         raise TypeError("result_type: expected at least one operand")
-    return out
+    return _DTYPE[out]

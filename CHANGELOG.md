@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - histogram runs on the device; contract tests for index composites (API-05)
 
+- binary promotion on integer dtype codes, with fast paths
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
