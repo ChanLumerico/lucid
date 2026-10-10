@@ -50,7 +50,7 @@ class QuickGELU(nn.Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Apply the activation.
 
         Parameters
@@ -125,7 +125,7 @@ class ResidualAttentionBlock(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Attention and MLP, each on the residual stream.
 
         Parameters
@@ -138,12 +138,12 @@ class ResidualAttentionBlock(nn.Module):
         Tensor
             ``(B, T, width)``.
         """
-        normed = cast(Tensor, self.ln_1(x))
+        normed = self.ln_1(x)
         attended, _ = self.attn(
             normed, normed, normed, need_weights=False, is_causal=self.causal
         )
         x = x + attended
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.ln_2(x))))
+        return x + self.mlp(self.ln_2(x))
 
 
 @final
@@ -190,7 +190,7 @@ class TransformerTower(nn.Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         """Run every block in order.
 
         Parameters

@@ -92,7 +92,7 @@ class _GPTSelfAttention(nn.Module):
         self.register_buffer("causal_mask", mask, persistent=False)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -105,7 +105,7 @@ class _GPTSelfAttention(nn.Module):
         B, T, _ = hidden.shape
         H, D = self.num_heads, self.head_dim
 
-        qkv = cast(Tensor, self.c_attn(hidden))  # (B, T, 3*hidden)
+        qkv = self.c_attn(hidden)  # (B, T, 3*hidden)
         qkv = qkv.reshape(B, T, 3, H, D).permute(2, 0, 3, 1, 4)
         q: Tensor = qkv[0]
         k: Tensor = qkv[1]
@@ -162,15 +162,15 @@ class _GPTSelfAttention(nn.Module):
         if (self.training and self.attn_dropout.p > 0) or is_compiled_decode_tracing():
             scores = q @ k.permute(0, 1, 3, 2) / self.scale + bias
             probs = F.softmax(scores, dim=-1)
-            probs = cast(Tensor, self.attn_dropout(probs))
+            probs = self.attn_dropout(probs)
             out = probs @ v  # (B, H, T, D)
         else:
             out = F.scaled_dot_product_attention(
                 q, k, v, attn_mask=bias, scale=1.0 / self.scale
             )
         out = out.permute(0, 2, 1, 3).reshape(B, T, H * D)  # (B, T, hidden)
-        out = cast(Tensor, self.c_proj(out))
-        return cast(Tensor, self.resid_dropout(out))
+        out = self.c_proj(out)
+        return self.resid_dropout(out)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,10 +188,10 @@ class _GPTMLP(nn.Module):
         self._act_name = config.hidden_act
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        h = text_activation(self._act_name, cast(Tensor, self.c_fc(x)))
-        h = cast(Tensor, self.c_proj(h))
-        return cast(Tensor, self.dropout(h))
+    def forward(self, x: Tensor) -> Tensor:
+        h = text_activation(self._act_name, self.c_fc(x))
+        h = self.c_proj(h)
+        return self.dropout(h)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,7 +209,7 @@ class _GPTBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -220,20 +220,17 @@ class _GPTBlock(nn.Module):
         use_cache: bool = False,
     ) -> Tensor:
         # Residual + post-LN, as in the original paper.
-        a = cast(
-            Tensor,
-            self.attn(
-                hidden,
-                attention_mask=attention_mask,
-                past_key_value=past_key_value,
-                layer_idx=layer_idx,
-                cache_position=cache_position,
-                use_cache=use_cache,
-            ),
+        a = self.attn(
+            hidden,
+            attention_mask=attention_mask,
+            past_key_value=past_key_value,
+            layer_idx=layer_idx,
+            cache_position=cache_position,
+            use_cache=use_cache,
         )
-        hidden = cast(Tensor, self.ln_1(hidden + a))
-        m = cast(Tensor, self.mlp(hidden))
-        hidden = cast(Tensor, self.ln_2(hidden + m))
+        hidden = self.ln_1(hidden + a)
+        m = self.mlp(hidden)
+        hidden = self.ln_2(hidden + m)
         return hidden
 
 
@@ -340,7 +337,7 @@ class GPTModel(PretrainedModel):
         self.tokens_embed = value
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -367,9 +364,9 @@ class GPTModel(PretrainedModel):
             pos_ids = cache_position.reshape(1, T)
         else:
             pos_ids = self.position_ids[:, past_len : past_len + T]
-        tok_emb = cast(Tensor, self.tokens_embed(input_ids))
-        pos_emb = cast(Tensor, self.positions_embed(pos_ids))
-        hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
+        tok_emb = self.tokens_embed(input_ids)
+        pos_emb = self.positions_embed(pos_ids)
+        hidden = self.drop(tok_emb + pos_emb)
 
         # Keys span the cached history plus the new tokens, so the padding
         # mask has to be that wide -- a T-wide mask would broadcast onto the
@@ -471,7 +468,7 @@ class GPTLMHeadModel(LanguageModelingModel, CausalLMMixin):
         self.lm_head.out_features = int(weight.shape[0])
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -484,18 +481,15 @@ class GPTLMHeadModel(LanguageModelingModel, CausalLMMixin):
         if use_cache and past_key_values is None:
             past_key_values = DynamicCache()
 
-        outputs = cast(
-            BaseModelOutput,
-            self.transformer(
-                input_ids,
-                attention_mask=attention_mask,
-                past_key_values=past_key_values,
-                use_cache=use_cache,
-                cache_position=cache_position,
-            ),
+        outputs = self.transformer(
+            input_ids,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            cache_position=cache_position,
         )
         hidden = outputs.last_hidden_state
-        logits = cast(Tensor, self.lm_head(hidden))
+        logits = self.lm_head(hidden)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -581,16 +575,13 @@ class GPTForSequenceClassification(SequenceClassificationModel):
         self.classifier = nn.Linear(config.hidden_size, config.num_labels, bias=False)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> MaskedLMOutput:
-        outputs = cast(
-            BaseModelOutput,
-            self.transformer(input_ids, attention_mask=attention_mask),
-        )
+        outputs = self.transformer(input_ids, attention_mask=attention_mask)
         hidden = outputs.last_hidden_state  # (B, T, H)
         B, T = int(hidden.shape[0]), int(hidden.shape[1])
 
@@ -611,8 +602,8 @@ class GPTForSequenceClassification(SequenceClassificationModel):
         pooled = lucid.stack(
             [hidden[b, last_idx[b], :] for b in range(B)], dim=0
         )  # (B, H)
-        pooled = cast(Tensor, self.dropout(pooled))
-        logits = cast(Tensor, self.classifier(pooled))
+        pooled = self.dropout(pooled)
+        logits = self.classifier(pooled)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -698,7 +689,7 @@ class _GPTMultipleChoiceHead(nn.Module):
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
     @override
-    def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:
         # hidden_states: (N, C, L, H); mc_token_ids: (N, C)
         N, C, L, H = hidden_states.shape
         # Gather the chosen position per (batch, choice) by *slicing*, never by
@@ -713,8 +704,8 @@ class _GPTMultipleChoiceHead(nn.Module):
                 t = int(mc_token_ids[n, c].item())
                 rows.append(hidden_states[n, c, t : t + 1, :])  # (1, H)
         pooled = lucid.cat(rows, dim=0).reshape(N, C, H)  # (N, C, H)
-        pooled = cast(Tensor, self.dropout(pooled))
-        return cast(Tensor, self.summary(pooled)).reshape(N, C)
+        pooled = self.dropout(pooled)
+        return self.summary(pooled).reshape(N, C)
 
 
 class GPTDoubleHeadsModel(LanguageModelingModel):
@@ -793,7 +784,7 @@ class GPTDoubleHeadsModel(LanguageModelingModel):
         self.lm_head.out_features = int(weight.shape[0])
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         mc_token_ids: Tensor,
@@ -814,19 +805,14 @@ class GPTDoubleHeadsModel(LanguageModelingModel):
         flat_mask = (
             attention_mask.reshape(N * C, L) if attention_mask is not None else None
         )
-        outputs = cast(
-            BaseModelOutput,
-            self.transformer(flat_ids, attention_mask=flat_mask),
-        )
+        outputs = self.transformer(flat_ids, attention_mask=flat_mask)
         hidden = outputs.last_hidden_state  # (N*C, L, H)
         H = int(hidden.shape[-1])
 
-        lm_logits_flat = cast(Tensor, self.lm_head(hidden))  # (N*C, L, V)
+        lm_logits_flat = self.lm_head(hidden)  # (N*C, L, V)
         V = int(lm_logits_flat.shape[-1])
         lm_logits = lm_logits_flat.reshape(N, C, L, V)
-        mc_logits = cast(
-            Tensor, self.mc_head(hidden.reshape(N, C, L, H), mc_token_ids)
-        )  # (N, C)
+        mc_logits = self.mc_head(hidden.reshape(N, C, L, H), mc_token_ids)  # (N, C)
 
         lm_loss: Tensor | None = None
         mc_loss: Tensor | None = None

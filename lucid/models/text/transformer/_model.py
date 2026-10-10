@@ -274,7 +274,7 @@ class TransformerModel(PretrainedModel):
         """
         T = int(ids.shape[1])
         emb = cast(Tensor, table(ids)) * math.sqrt(self._d_model)
-        full_pe = cast(Tensor, self.positional_encoding())
+        full_pe = self.positional_encoding()
         if pos_offset + T > self._max_pos:
             raise ValueError(
                 f"Sequence length {pos_offset + T} exceeds "
@@ -282,7 +282,7 @@ class TransformerModel(PretrainedModel):
             )
         pe = full_pe[pos_offset : pos_offset + T]
         emb = emb + pe.unsqueeze(0)  # broadcast over batch
-        return cast(Tensor, self.dropout(emb))
+        return self.dropout(emb)
 
     def encode(
         self,
@@ -292,9 +292,7 @@ class TransformerModel(PretrainedModel):
         """Run only the encoder; returns memory ``(B, S, d_model)``."""
         src_emb = self._embed(src_ids, self.src_tok_emb)
         kpm = _key_padding_to_kpm(src_attention_mask)
-        memory = cast(
-            Tensor, self.transformer.encoder(src_emb, src_key_padding_mask=kpm)
-        )
+        memory = self.transformer.encoder(src_emb, src_key_padding_mask=kpm)
         return memory
 
     def decode(
@@ -348,21 +346,18 @@ class TransformerModel(PretrainedModel):
         tgt_mask = None if past_len > 0 else _causal_mask(T, device=dev)
         tgt_kpm = _key_padding_to_kpm(tgt_attention_mask)
         mem_kpm = _key_padding_to_kpm(memory_attention_mask)
-        return cast(
-            Tensor,
-            self.transformer.decoder(
-                tgt_emb,
-                memory,
-                tgt_mask=tgt_mask,
-                tgt_key_padding_mask=tgt_kpm,
-                memory_key_padding_mask=mem_kpm,
-                past_key_value=past_key_value,
-                use_cache=use_cache,
-            ),
+        return self.transformer.decoder(
+            tgt_emb,
+            memory,
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=tgt_kpm,
+            memory_key_padding_mask=mem_kpm,
+            past_key_value=past_key_value,
+            use_cache=use_cache,
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         decoder_input_ids: Tensor,
@@ -480,7 +475,7 @@ class TransformerForSeq2SeqLM(LanguageModelingModel):
         self.lm_head.out_features = int(weight.shape[0])
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         decoder_input_ids: Tensor,
@@ -488,17 +483,14 @@ class TransformerForSeq2SeqLM(LanguageModelingModel):
         decoder_attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> Seq2SeqLMOutput:
-        outputs = cast(
-            TransformerModelOutput,
-            self.transformer(
-                input_ids,
-                decoder_input_ids,
-                attention_mask=attention_mask,
-                decoder_attention_mask=decoder_attention_mask,
-            ),
+        outputs = self.transformer(
+            input_ids,
+            decoder_input_ids,
+            attention_mask=attention_mask,
+            decoder_attention_mask=decoder_attention_mask,
         )
         # decoder hidden → vocab
-        logits = cast(Tensor, self.lm_head(outputs.last_hidden_state))
+        logits = self.lm_head(outputs.last_hidden_state)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -617,7 +609,7 @@ class TransformerForSeq2SeqLM(LanguageModelingModel):
                     memory,
                     memory_attention_mask=attention_mask,
                 )
-            next_logits = cast(Tensor, self.lm_head(decoded[:, -1, :]))  # (B, V)
+            next_logits = self.lm_head(decoded[:, -1, :])  # (B, V)
             finished = _select_next_ondevice(
                 next_logits, out_tokens, finished, sampling
             )
@@ -706,7 +698,7 @@ class TransformerForSequenceClassification(SequenceClassificationModel):
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -714,8 +706,8 @@ class TransformerForSequenceClassification(SequenceClassificationModel):
     ) -> MaskedLMOutput:
         memory = self.transformer.encode(input_ids, attention_mask)  # (B, S, d)
         pooled = memory[:, 0]  # (B, d)
-        pooled = cast(Tensor, self.dropout(pooled))
-        logits = cast(Tensor, self.classifier(pooled))
+        pooled = self.dropout(pooled)
+        logits = self.classifier(pooled)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -794,15 +786,15 @@ class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> MaskedLMOutput:
         memory = self.transformer.encode(input_ids, attention_mask)  # (B, S, d)
-        seq = cast(Tensor, self.dropout(memory))
-        logits = cast(Tensor, self.classifier(seq))
+        seq = self.dropout(memory)
+        logits = self.classifier(seq)
 
         loss: Tensor | None = None
         if labels is not None:

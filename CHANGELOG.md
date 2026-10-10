@@ -308,6 +308,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop dead vision casts and ignores (LCD-260-C3a)
 - drop dead generative casts and ignores (LCD-260-C3b)
 - detr reuses the shared ResNet blocks (LCD-260-C3c)
+- drop dead text/multimodal/_utils casts (LCD-260-C3c)
 
 ---
 

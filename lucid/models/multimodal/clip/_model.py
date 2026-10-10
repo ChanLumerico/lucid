@@ -104,7 +104,7 @@ class _VisionTransformer(nn.Module):
         self.proj = nn.Parameter(lucid.zeros((width, config.embed_dim)))
 
     @override
-    def forward(self, pixel_values: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, pixel_values: Tensor) -> Tensor:
         """Embed a batch of images.
 
         Parameters
@@ -118,7 +118,7 @@ class _VisionTransformer(nn.Module):
             ``(B, embed_dim)`` — unnormalised.
         """
         batch = int(pixel_values.shape[0])
-        x = cast(Tensor, self.conv1(pixel_values))
+        x = self.conv1(pixel_values)
         x = x.reshape(batch, int(x.shape[1]), -1).swapaxes(1, 2)
 
         cls = cast(Tensor, self.class_embedding).reshape(1, 1, -1)
@@ -128,11 +128,11 @@ class _VisionTransformer(nn.Module):
             1, self.num_patches + 1, -1
         )
 
-        x = cast(Tensor, self.ln_pre(x))
-        x = cast(Tensor, self.transformer(x))
+        x = self.ln_pre(x)
+        x = self.transformer(x)
         # Only the class token leaves the tower; the patch tokens have
         # done their work by conditioning it.
-        pooled = cast(Tensor, self.ln_post(x[:, 0]))
+        pooled = self.ln_post(x[:, 0])
         return pooled @ cast(Tensor, self.proj)
 
 
@@ -163,7 +163,7 @@ class _TextTransformer(nn.Module):
         self.text_projection = nn.Parameter(lucid.zeros((width, config.embed_dim)))
 
     @override
-    def forward(self, input_ids: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, input_ids: Tensor) -> Tensor:
         """Embed a batch of tokenised captions.
 
         Parameters
@@ -193,10 +193,10 @@ class _TextTransformer(nn.Module):
                 f"{self.context_length}, got {length} — the positional "
                 f"table has no entries beyond it"
             )
-        x = cast(Tensor, self.token_embedding(input_ids))
+        x = self.token_embedding(input_ids)
         x = x + cast(Tensor, self.positional_embedding).reshape(1, length, -1)
-        x = cast(Tensor, self.transformer(x))
-        x = cast(Tensor, self.ln_final(x))
+        x = self.transformer(x)
+        x = self.ln_final(x)
 
         eos = input_ids.argmax(dim=-1)
         # ``.type`` — a bare ``device`` object renders as "device('metal')",
@@ -453,7 +453,7 @@ class CLIPModel(PretrainedModel):
         >>> [round(gram[i, i].item(), 4) for i in range(3)]
         [1.0, 1.0, 1.0]
         """
-        return _l2_normalise(cast(Tensor, self.visual(pixel_values)))
+        return _l2_normalise(self.visual(pixel_values))
 
     def encode_text(self, input_ids: Tensor) -> Tensor:
         """Embed captions into the joint space, L2-normalised.
@@ -499,10 +499,10 @@ class CLIPModel(PretrainedModel):
         >>> bool(lucid.allclose(out.logits_per_image, model.scale * sims, atol=1e-5))
         True
         """
-        return _l2_normalise(cast(Tensor, self.textual(input_ids)))
+        return _l2_normalise(self.textual(input_ids))
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         pixel_values: Tensor,
         input_ids: Tensor,
@@ -588,9 +588,7 @@ class CLIPForZeroShotImageClassification(ImageClassificationModel):
         self.clip = CLIPModel(config)
 
     @override
-    def forward(  # type: ignore[override]
-        self, pixel_values: Tensor, prompt_ids: Tensor
-    ) -> CLIPZeroShotOutput:
+    def forward(self, pixel_values: Tensor, prompt_ids: Tensor) -> CLIPZeroShotOutput:
         """Score each image against each candidate prompt.
 
         Parameters

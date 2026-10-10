@@ -53,7 +53,7 @@ class LayerScale(nn.Module):
         self.gamma = nn.Parameter(lucid.full((dim,), init_value))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if x.ndim == 4:
             # (B, C, H, W) — reshape gamma to broadcast over spatial dims
             g: Tensor = self.gamma.reshape(1, -1, 1, 1)
@@ -105,7 +105,7 @@ class DropPath(nn.Module):
         self.drop_prob = drop_prob
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor) -> Tensor:
         if not self.training or self.drop_prob == 0.0:
             return x
         keep_prob = 1.0 - self.drop_prob

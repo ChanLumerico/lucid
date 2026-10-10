@@ -16,7 +16,7 @@ state dicts can be ported with a flat key rename.  Top-level layout:
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -103,7 +103,7 @@ class _BERTEmbeddings(nn.Module):
         self.register_buffer("position_ids", pos, persistent=False)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor | None = None,
         token_type_ids: Tensor | None = None,
@@ -133,21 +133,21 @@ class _BERTEmbeddings(nn.Module):
             assert input_ids is not None
             B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
             dev = input_ids.device.type
-            words = cast(Tensor, self.word_embeddings(input_ids))
+            words = self.word_embeddings(input_ids)
 
         if position_ids is None:
             pos_ids = self.position_ids[:, :T]
         else:
             pos_ids = position_ids
-        positions = cast(Tensor, self.position_embeddings(pos_ids))
+        positions = self.position_embeddings(pos_ids)
 
         if token_type_ids is None:
             token_type_ids = lucid.zeros((B, T), device=dev).long()
-        types = cast(Tensor, self.token_type_embeddings(token_type_ids))
+        types = self.token_type_embeddings(token_type_ids)
 
         emb = words + positions + types
-        emb = cast(Tensor, self.LayerNorm(emb))
-        return cast(Tensor, self.dropout(emb))
+        emb = self.LayerNorm(emb)
+        return self.dropout(emb)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -214,11 +214,11 @@ class _BERTSelfAttention(nn.Module):
                 head_mask.reshape(1, -1, 1, 1) if head_mask.ndim == 1 else head_mask
             )
             weights = weights * shaped
-        dropped = cast(Tensor, self.dropout(weights)) if self.training else weights
+        dropped = self.dropout(weights) if self.training else weights
         return dropped @ v, weights
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -226,9 +226,9 @@ class _BERTSelfAttention(nn.Module):
         output_attentions: bool = False,
     ) -> tuple[Tensor, Tensor | None]:
         B, T, _ = hidden.shape
-        q = self._shape(cast(Tensor, self.query(hidden)), B, T)
-        k = self._shape(cast(Tensor, self.key(hidden)), B, T)
-        v = self._shape(cast(Tensor, self.value(hidden)), B, T)
+        q = self._shape(self.query(hidden), B, T)
+        k = self._shape(self.key(hidden), B, T)
+        v = self._shape(self.value(hidden), B, T)
 
         weights: Tensor | None = None
         if output_attentions or head_mask is not None:
@@ -266,11 +266,9 @@ class _BERTSelfOutput(nn.Module):
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
     @override
-    def forward(  # type: ignore[override]
-        self, hidden: Tensor, input_tensor: Tensor
-    ) -> Tensor:
-        h = cast(Tensor, self.dropout(cast(Tensor, self.dense(hidden))))
-        return cast(Tensor, self.LayerNorm(h + input_tensor))
+    def forward(self, hidden: Tensor, input_tensor: Tensor) -> Tensor:
+        h = self.dropout(self.dense(hidden))
+        return self.LayerNorm(h + input_tensor)
 
 
 @final
@@ -282,7 +280,7 @@ class _BERTAttention(nn.Module):
         self.output = _BERTSelfOutput(config)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -295,7 +293,7 @@ class _BERTAttention(nn.Module):
             head_mask=head_mask,
             output_attentions=output_attentions,
         )
-        return cast(Tensor, self.output(attn_out, hidden)), weights
+        return self.output(attn_out, hidden), weights
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -311,8 +309,8 @@ class _BERTIntermediate(nn.Module):
         self._act_name = config.hidden_act
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return text_activation(self._act_name, cast(Tensor, self.dense(x)))
+    def forward(self, x: Tensor) -> Tensor:
+        return text_activation(self._act_name, self.dense(x))
 
 
 @final
@@ -324,11 +322,9 @@ class _BERTOutput(nn.Module):
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
     @override
-    def forward(  # type: ignore[override]
-        self, hidden: Tensor, input_tensor: Tensor
-    ) -> Tensor:
-        h = cast(Tensor, self.dropout(cast(Tensor, self.dense(hidden))))
-        return cast(Tensor, self.LayerNorm(h + input_tensor))
+    def forward(self, hidden: Tensor, input_tensor: Tensor) -> Tensor:
+        h = self.dropout(self.dense(hidden))
+        return self.LayerNorm(h + input_tensor)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -345,7 +341,7 @@ class _BERTLayer(nn.Module):
         self.output = _BERTOutput(config)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -358,8 +354,8 @@ class _BERTLayer(nn.Module):
             head_mask=head_mask,
             output_attentions=output_attentions,
         )
-        inter = cast(Tensor, self.intermediate(attn_out))
-        return cast(Tensor, self.output(inter, attn_out)), weights
+        inter = self.intermediate(attn_out)
+        return self.output(inter, attn_out), weights
 
 
 @final
@@ -371,7 +367,7 @@ class _BERTEncoder(nn.Module):
         )
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
@@ -432,10 +428,10 @@ class _BERTPooler(nn.Module):
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
 
     @override
-    def forward(self, hidden: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(self, hidden: Tensor) -> Tensor:
         # CLS token is position 0 by tokenization convention.
         cls_hidden = hidden[:, 0]
-        return F.tanh(cast(Tensor, self.dense(cls_hidden)))
+        return F.tanh(self.dense(cls_hidden))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -539,7 +535,7 @@ class BERTModel(PretrainedModel):
         self.embeddings.word_embeddings = value
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor | None = None,
         attention_mask: Tensor | None = None,
@@ -572,9 +568,6 @@ class BERTModel(PretrainedModel):
 
         ext_mask = extended_attention_mask(attention_mask, (B, T))
 
-        # ``Module.__call__`` is typed for Tensor positionals, so reach the
-        # embedding's own signature — which accepts ``input_ids=None`` when
-        # ``inputs_embeds`` is supplied — directly.
         hidden = self.embeddings.forward(
             input_ids,
             token_type_ids=token_type_ids,
@@ -588,7 +581,7 @@ class BERTModel(PretrainedModel):
             head_mask=head_mask,
             output_attentions=output_attentions,
         )
-        pooled_output = cast(Tensor, self.pooler(sequence_output))
+        pooled_output = self.pooler(sequence_output)
 
         return BaseModelOutputWithPooling(
             last_hidden_state=sequence_output,
@@ -612,10 +605,10 @@ class _BERTPredictionHeadTransform(nn.Module):
         self._act_name = config.hidden_act
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.dense(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.dense(x)
         x = text_activation(self._act_name, x)
-        return cast(Tensor, self.LayerNorm(x))
+        return self.LayerNorm(x)
 
 
 @final
@@ -656,9 +649,9 @@ class _BERTLMPredictionHead(nn.Module):
             self.bias = nn.Parameter(kept)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.transform(x))
-        logits = cast(Tensor, self.decoder(x))
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.transform(x)
+        logits = self.decoder(x)
         return logits + self.bias
 
 
@@ -669,8 +662,8 @@ class _BERTOnlyMLMHead(nn.Module):
         self.predictions = _BERTLMPredictionHead(config)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.predictions(x))
+    def forward(self, x: Tensor) -> Tensor:
+        return self.predictions(x)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -750,22 +743,19 @@ class BERTForMaskedLM(LanguageModelingModel, MaskedLMMixin):
         self.cls.predictions.tie_to(self.bert.embeddings.word_embeddings.weight)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> MaskedLMOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
-        prediction_scores = cast(Tensor, self.cls(outputs.last_hidden_state))
+        prediction_scores = self.cls(outputs.last_hidden_state)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -841,23 +831,20 @@ class BERTForSequenceClassification(SequenceClassificationModel):
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> SequenceClassificationOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
-        pooled = cast(Tensor, self.dropout(outputs.pooler_output))
-        logits = cast(Tensor, self.classifier(pooled))
+        pooled = self.dropout(outputs.pooler_output)
+        logits = self.classifier(pooled)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -941,23 +928,20 @@ class BERTForTokenClassification(TokenClassificationModel, MaskedLMMixin):
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> TokenClassificationOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
-        seq = cast(Tensor, self.dropout(outputs.last_hidden_state))
-        logits = cast(Tensor, self.classifier(seq))
+        seq = self.dropout(outputs.last_hidden_state)
+        logits = self.classifier(seq)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -1030,7 +1014,7 @@ class BERTForQuestionAnswering(SequenceClassificationModel):
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -1038,15 +1022,12 @@ class BERTForQuestionAnswering(SequenceClassificationModel):
         start_positions: Tensor | None = None,
         end_positions: Tensor | None = None,
     ) -> QuestionAnsweringOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
-        logits = cast(Tensor, self.qa_outputs(outputs.last_hidden_state))
+        logits = self.qa_outputs(outputs.last_hidden_state)
         # ``logits`` is (B, T, 2); split along the last dim into start / end
         # and return them as named fields rather than making every caller
         # remember which trailing index is which.
@@ -1147,8 +1128,8 @@ class _BERTOnlyNSPHead(nn.Module):
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     @override
-    def forward(self, pooled_output: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.seq_relationship(pooled_output))
+    def forward(self, pooled_output: Tensor) -> Tensor:
+        return self.seq_relationship(pooled_output)
 
 
 @final
@@ -1161,11 +1142,11 @@ class _BERTPreTrainingHeads(nn.Module):
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self, sequence_output: Tensor, pooled_output: Tensor
     ) -> tuple[Tensor, Tensor]:
-        prediction_scores = cast(Tensor, self.predictions(sequence_output))
-        seq_relationship_score = cast(Tensor, self.seq_relationship(pooled_output))
+        prediction_scores = self.predictions(sequence_output)
+        seq_relationship_score = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_score
 
 
@@ -1243,7 +1224,7 @@ class BERTForPreTraining(SequenceClassificationModel, MaskedLMMixin):
         self.cls.predictions.tie_to(self.bert.embeddings.word_embeddings.weight)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -1251,13 +1232,10 @@ class BERTForPreTraining(SequenceClassificationModel, MaskedLMMixin):
         labels: Tensor | None = None,
         next_sentence_label: Tensor | None = None,
     ) -> BERTForPreTrainingOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
         prediction_scores, seq_relationship_score = self.cls(
             outputs.last_hidden_state, outputs.pooler_output
@@ -1352,22 +1330,19 @@ class BERTForNextSentencePrediction(SequenceClassificationModel):
         self.cls = _BERTOnlyNSPHead(config)
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
     ) -> SequenceClassificationOutput:
-        outputs = cast(
-            BaseModelOutputWithPooling,
-            self.bert(
-                input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            ),
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
         )
-        seq_relationship_score = cast(Tensor, self.cls(outputs.pooler_output))
+        seq_relationship_score = self.cls(outputs.pooler_output)
 
         loss: Tensor | None = None
         if labels is not None:
@@ -1476,7 +1451,7 @@ class BERTForCausalLM(LanguageModelingModel):
         return causal_add + pad_add
 
     @override
-    def forward(  # type: ignore[override]
+    def forward(
         self,
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
@@ -1487,13 +1462,11 @@ class BERTForCausalLM(LanguageModelingModel):
         dev = input_ids.device.type
         ext_mask = self._causal_attention_mask(attention_mask, B, T, dev)
 
-        hidden = cast(
-            Tensor, self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
-        )
+        hidden = self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
         sequence_output, _, _ = self.bert.encoder.forward(
             hidden, attention_mask=ext_mask
         )
-        prediction_scores = cast(Tensor, self.cls(sequence_output))
+        prediction_scores = self.cls(sequence_output)
 
         loss: Tensor | None = None
         if labels is not None:
