@@ -23,6 +23,7 @@ import numbers
 import struct
 from collections.abc import Sequence, Set
 
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _default_dtype_enum_cached
 from lucid._dtype import _ENGINE_TO_DTYPE
@@ -166,13 +167,10 @@ def _infer_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
     types = {type(v) for v in flat}
     if types <= _PY_SCALAR_SET:  # the common literal: plain Python numbers
         return _python_literal_dtype(types, default_float)
-    # Imported here: ``lucid._tensor`` imports the converters at load time.
-    from lucid._tensor._dunders import _result_dtype
-
     dtypes = sorted(
         {_scalar_dtype(v, default_float) for v in flat}, key=lambda d: d.value
     )
-    return functools.reduce(_result_dtype, dtypes)
+    return functools.reduce(_promotion.promote_types, dtypes)
 
 
 def _real(value: object) -> float:

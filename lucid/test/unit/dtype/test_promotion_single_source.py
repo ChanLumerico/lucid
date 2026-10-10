@@ -332,11 +332,18 @@ def test_promote_types_and_can_cast_read_the_same_lattice() -> None:
 
 # ── one table ────────────────────────────────────────────────────────────────
 
-_DTYPE_KEYS = {
-    "Bool", "I8", "I16", "I32", "I64", "F16", "BF16", "F32", "F64", "C64", "C128",
-    "bool_", "int8", "int16", "int32", "int64", "float16", "bfloat16", "float32",
-    "float64", "complex64", "complex128",
-}  # fmt: skip
+#: Each dtype spelling a table key may use, and the category it belongs to.
+_KEY_CATEGORY = {
+    **dict.fromkeys(["Bool", "bool_"], "bool"),
+    **dict.fromkeys(
+        ["I8", "I16", "I32", "I64", "int8", "int16", "int32", "int64"], "int"
+    ),
+    **dict.fromkeys(
+        ["F16", "BF16", "F32", "F64", "float16", "bfloat16", "float32", "float64"],
+        "float",
+    ),
+    **dict.fromkeys(["C64", "C128", "complex64", "complex128"], "complex"),
+}
 _OWNER = Path("lucid/_promotion.py")
 
 
@@ -361,23 +368,31 @@ def _is_rank(node: ast.expr) -> bool:
     return _is_int(node)
 
 
+def _is_promotion_table(node: ast.AST) -> bool:
+    """A dict that ranks dtypes across categories: four or more dtype keys
+    from at least two of bool / int / float / complex, each mapped to a
+    category or a (category, width) pair.  An integer-only width table —
+    packing bytes, checking a range — ranks nothing and is not one."""
+    if not isinstance(node, ast.Dict):
+        return False
+    names = [_key_name(k) for k in node.keys]
+    categories = [_KEY_CATEGORY[n] for n in names if n in _KEY_CATEGORY]
+    return (
+        len(categories) >= 4
+        and len(set(categories)) >= 2
+        and all(_is_rank(v) for v in node.values)
+    )
+
+
 def test_no_other_module_holds_a_kind_width_table() -> None:
-    """A dict keyed by four or more dtypes whose values are categories or
-    (category, width) pairs is a promotion table; only the owner has one."""
     root = Path(lucid.__file__).resolve().parent
     found: list[str] = []
     for path in sorted(root.rglob("*.py")):
         rel = path.relative_to(root.parent)
         if rel == _OWNER or rel.parts[:2] == ("lucid", "test"):
             continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if not isinstance(node, ast.Dict):
-                continue
-            keys = [_key_name(k) for k in node.keys]
-            if sum(k in _DTYPE_KEYS for k in keys) < 4:
-                continue
-            if all(_is_rank(v) for v in node.values):
-                found.append(f"{rel}:{node.lineno}")
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        found += [f"{rel}:{n.lineno}" for n in ast.walk(tree) if _is_promotion_table(n)]
     assert not found, (
         "dtype kind/width tables outside lucid/_promotion.py — promote "
         "through lucid._promotion instead: " + ", ".join(found)
@@ -388,11 +403,4 @@ def test_the_owner_still_holds_its_table() -> None:
     # The scan above is only meaningful while it can recognise a table.
     root = Path(lucid.__file__).resolve().parent.parent
     tree = ast.parse((root / _OWNER).read_text(encoding="utf-8"))
-    tables = [
-        n
-        for n in ast.walk(tree)
-        if isinstance(n, ast.Dict)
-        and sum(_key_name(k) in _DTYPE_KEYS for k in n.keys) >= 4
-        and all(_is_rank(v) for v in n.values)
-    ]
-    assert len(tables) == 1
+    assert sum(_is_promotion_table(n) for n in ast.walk(tree)) == 1
