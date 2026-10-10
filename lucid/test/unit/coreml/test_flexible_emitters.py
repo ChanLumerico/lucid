@@ -177,6 +177,142 @@ def test_a_batch_range_is_exact_or_refused(
         exported.close()
 
 
+class _Strided(nn.Module):
+    """A stride-32 height and width that are 1 then 4 — as the batch is,
+    when the batch and the resolution move together."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(3, 8, 32, stride=32)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.conv(x).unsqueeze(1) * 2.0
+
+
+class _Grouped(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(3, 8, 3, padding=1)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return F.group_norm(self.conv(x), 2).unsqueeze(1).squeeze(1)
+
+
+class _Flattened(nn.Module):
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return x.reshape(x.shape[0], x.shape[1], -1).unsqueeze(2) + 1.0
+
+
+_BATCH_AND_PLANE = {0: (1, 4), 2: (32, 128), 3: (32, 128)}
+#: Inside every range below, on its corners and off them.
+_PLANES = [
+    (1, 3, 32, 32),
+    (1, 3, 64, 64),
+    (2, 3, 32, 32),
+    (1, 3, 128, 128),
+    (2, 3, 96, 32),
+    (4, 3, 128, 64),
+    (1, 3, 96, 32),
+    (1, 3, 32, 96),
+]
+
+
+@pytest.mark.parametrize(
+    ("make", "ranges"),
+    [
+        pytest.param(_Strided, _BATCH_AND_PLANE, id="stride-32-coincidence"),
+        pytest.param(_Grouped, _BATCH_AND_PLANE, id="group_norm-batch-and-plane"),
+        pytest.param(_Flattened, _BATCH_AND_PLANE, id="reshape-batch-and-plane"),
+        pytest.param(_Grouped, {2: (32, 128), 3: (32, 128)}, id="square-plane"),
+        pytest.param(_Grouped, {2: (32, 128)}, id="height-alone"),
+        pytest.param(_Flattened, {3: (32, 128)}, id="width-alone"),
+    ],
+)
+def test_several_ranged_axes_are_told_apart(
+    make: Callable[[], nn.Module],
+    ranges: dict[int, tuple[int, int]],
+    tmp_path: object,
+) -> None:
+    """Ranged axes that moved together at every probe made a stride-32
+    height look like the batch, and the package answered ``(1, 1, 8, 1, 1)``
+    for a 64x64 image. Every admitted shape here, corner or not, either
+    matches eager or the export is refused."""
+    lucid.manual_seed(0)
+    model = make().eval()
+    try:
+        exported = cml.export(
+            model,
+            lucid.randn(1, 3, 32, 32),
+            str(tmp_path / "plane.mlpackage"),
+            shape_range=ranges,
+            compute_units=cml.ComputeUnits.CPU_ONLY,
+        )
+    except cml.ShapeNotFlexible as refusal:
+        pytest.fail(f"refused a model with an exact flexible form: {refusal}")
+    default = (1, 3, 32, 32)
+    admitted = [
+        shape
+        for shape in _PLANES
+        if all(
+            ranges[axis][0] <= size <= ranges[axis][1]
+            if axis in ranges
+            else size == default[axis]
+            for axis, size in enumerate(shape)
+        )
+    ]
+    assert len(admitted) >= 2
+    try:
+        for shape in admitted:
+            x = lucid.randn(*shape)
+            _agrees(exported.predict(x), model(x))
+    finally:
+        exported.close()
+
+
+def test_a_range_moves_one_axis_at_a_time() -> None:
+    """Two probes per ranged axis and the example: ``2k + 1`` traces."""
+    from lucid.coreml._flex import plan_probes
+
+    probes, ordered, bounds = plan_probes(
+        (2, 3, 32, 32), 1, None, {0: (1, 4), 2: (16, 64), 3: (16, 64)}
+    )
+    assert probes == [
+        (2, 3, 32, 32),
+        (1, 3, 32, 32),
+        (4, 3, 32, 32),
+        (2, 3, 16, 32),
+        (2, 3, 64, 32),
+        (2, 3, 32, 16),
+        (2, 3, 32, 64),
+    ]
+    assert ordered == []
+    assert bounds == [(1, 4), (3, 3), (16, 64), (16, 64)]
+
+
+def test_a_first_call_cache_is_named_in_the_refusal() -> None:
+    """Swin fills a mask cache on its first call at each shape. When that
+    is still the difference after a second call, saying "the operations
+    differ" alone sent people looking at the wrong thing."""
+    from lucid.coreml._flex import Record, compare
+
+    def record(names: list[str], unsettled: bool) -> Record:
+        return Record(
+            [(n, {}, [(1,)]) for n in names],
+            list(range(len(names))),
+            -1,
+            [(n, (i,)) for i, n in enumerate(names)],
+            {},
+            unsettled,
+        )
+
+    with pytest.raises(cml.ShapeNotFlexible, match="cache the model fills"):
+        compare(
+            [record(["add"], False), record(["add", "mul"], True)],
+            [(1,), (2,)],
+            frozenset(),
+        )
+
+
 def test_enumerated_shapes_follow_the_batch_too(tmp_path: object) -> None:
     """The reproduction from LCD-362: ``(1, 6)`` for a batch of two."""
     model = _ClassToken().eval()

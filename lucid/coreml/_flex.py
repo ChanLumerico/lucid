@@ -147,6 +147,11 @@ class Dims(Sequence[int]):
         """The shape to declare a value with, ``-1`` on every open axis."""
         return list(self._dims)
 
+    @property
+    def open(self) -> bool:
+        """Whether any axis follows the input."""
+        return any(d < 0 for d in self._dims)
+
 
 @dataclasses.dataclass
 class Flexibility:
@@ -171,10 +176,9 @@ class Flexibility:
     def source(self, value_id: int, axis: int) -> int | None:
         """The input axis this value's axis equals at every probe.
 
-        Only a varying input axis qualifies, and only a unique one: two
-        input axes that moved together at every probe — a square range of
-        resolutions — leave the answer a guess, and ``None`` makes the
-        caller refuse rather than pick.
+        Only a varying input axis qualifies, and only a unique one, so a
+        guess is refused rather than made. The probes move one input axis
+        at a time, so two input axes never agree at all of them.
 
         Parameters
         ----------
@@ -194,6 +198,48 @@ class Flexibility:
             if [shape[j] for shape in given] == sizes
         ]
         return matches[0] if len(matches) == 1 else None
+
+    def carried(
+        self, value: tuple[int, list[int]], operand: tuple[int, list[int]]
+    ) -> dict[int, int]:
+        """Which open axes of a reshaped value are axes of its operand.
+
+        Walked from both ends: an axis is kept while the two agree on it —
+        the same fixed size, or the same size at every probe — and an axis
+        of one inserted or dropped on either side is stepped over. What a
+        reshape merges or splits stays unmatched. The kept ones are the
+        operand's own axes, so their size at run time is the operand's,
+        exactly, whatever any input axis happened to equal.
+
+        Parameters
+        ----------
+        value, operand : tuple of int and list of int
+            Each one's traced id and declared shape, ``-1`` on open axes.
+
+        Returns
+        -------
+        dict of int to int
+            Open axis of the value to the axis of the operand it is.
+        """
+        ours, theirs = self._keys(*value), self._keys(*operand)
+        found = _walk(ours, theirs, range(len(ours)), range(len(theirs)))
+        back = _walk(
+            ours, theirs, range(len(ours) - 1, -1, -1), range(len(theirs) - 1, -1, -1)
+        )
+        for axis, other in back.items():
+            if axis not in found and other not in found.values():
+                found[axis] = other
+        return {axis: other for axis, other in found.items() if ours[axis][0]}
+
+    def _keys(self, value_id: int, dims: list[int]) -> list[tuple[bool, object]]:
+        """Per axis: open or not, and the size — at every probe when open."""
+        seen = self.probes.get(value_id) or []
+        return [
+            (True, tuple(shape[axis] for shape in seen) or None)
+            if size < 0
+            else (False, size)
+            for axis, size in enumerate(dims)
+        ]
 
 
 def signature(graph: _Graph) -> list[tuple[str, tuple[int, ...]]]:
@@ -249,14 +295,17 @@ def plan_probes(
         return ordered, ordered, []
     assert shape_range is not None
     bounds = _bounds(default, shape_range)
-    # Trace at both ends as well as the default: within a range the graph
-    # has to be the same at every size, and the ends are where a
-    # dependence on the size shows up.
-    corners = [
-        tuple(low for low, _high in bounds),
-        tuple(high for _low, high in bounds),
-    ]
-    probes = [default] + [c for c in corners if c != default]
+    # Each ranged axis to its two ends, the others held at the example's
+    # size: a dependence on the size shows up at the ends, and moving one
+    # axis at a time is what tells apart two values that moving them
+    # together would make look alike — the batch and a stride-32 height
+    # are both 1 then 4. One trace per end, so ``2k + 1`` for ``k`` axes.
+    probes = [default]
+    for axis, ends in enumerate(bounds):
+        for end in ends:
+            moved = default[:axis] + (end,) + default[axis + 1 :]
+            if moved not in probes:
+                probes.append(moved)
     if len(probes) < 2:
         raise ValueError(
             f"lucid.coreml: the range admits only the example's own shape {default}"
@@ -298,6 +347,30 @@ def _bounds(
     return [shape_range.get(axis, (size, size)) for axis, size in enumerate(default)]
 
 
+def _walk(
+    ours: list[tuple[bool, object]],
+    theirs: list[tuple[bool, object]],
+    mine: range,
+    other: range,
+) -> dict[int, int]:
+    """Pair axes along one direction until the two shapes part ways."""
+    pairs: dict[int, int] = {}
+    left, right = iter(mine), iter(other)
+    i, j = next(left, None), next(right, None)
+    unit = (False, 1)
+    while i is not None and j is not None:
+        if ours[i] == theirs[j] and ours[i][1] is not None:
+            pairs[i] = j
+            i, j = next(left, None), next(right, None)
+        elif ours[i] == unit:
+            i = next(left, None)
+        elif theirs[j] == unit:
+            j = next(right, None)
+        else:
+            break
+    return pairs
+
+
 class Record(NamedTuple):
     """One probe trace, reduced to what :func:`compare` reads.
 
@@ -311,6 +384,8 @@ class Record(NamedTuple):
     signature: list[tuple[str, tuple[int, ...]]]
     #: Every external feed but the input, to its shape.
     feeds: dict[int, tuple[int, ...]]
+    #: The graph changed between two calls at this one shape.
+    unsettled: bool = False
 
 
 def compare(
@@ -373,8 +448,14 @@ def compare(
 def _agree(base: Record, other: Record, skip_attrs: frozenset[str]) -> None:
     """Refuse unless two probes traced the same graph with the same settings."""
     if [n for n, _a, _s in other.ops] != [n for n, _a, _s in base.ops]:
+        cache = (
+            " — and at one shape the graph changed between its first call and "
+            "the next, which is a cache the model fills on first use"
+            if base.unsettled or other.unsettled
+            else ""
+        )
         raise ShapeNotFlexible(
-            "<graph>", "the traced operations themselves differ between shapes"
+            "<graph>", f"the traced operations themselves differ between shapes{cache}"
         )
     if other.ids != base.ids:
         raise ShapeNotFlexible("<graph>", "the traced values differ between shapes")

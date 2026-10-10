@@ -17,7 +17,7 @@ Two things the trace hands over that the driver has to sort out:
 """
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn, cast, override
+from typing import TYPE_CHECKING, Any, NoReturn, cast, override
 
 import dataclasses
 import math
@@ -31,7 +31,7 @@ import lucid.nn.functional as _F
 import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.coreml import _flex, _spec
+from lucid.coreml import _flex, _spec, _staging
 from lucid.coreml._flex import ShapeNotFlexible
 from lucid.coreml._emit import (
     EMITTERS,
@@ -60,10 +60,6 @@ if TYPE_CHECKING:
     from lucid.nn.module import Module
 
 __all__ = ["Builder", "UnsupportedOp", "build_package", "trace"]
-
-
-# Core ML's ML Program dialect refuses tensors above this rank.
-_MAX_RANK = 5
 
 
 class UnsupportedRank(NotImplementedError):
@@ -95,7 +91,7 @@ class UnsupportedRank(NotImplementedError):
         super().__init__(
             f"lucid.coreml: op {op_name!r} produces a rank-{len(shape)} tensor "
             f"{shape}, and Core ML's program dialect allows at most rank "
-            f"{_MAX_RANK}. This is a format limit, not a missing emitter."
+            f"{_staging.MAX_RANK}. This is a format limit, not a missing emitter."
         )
         self.op_name = op_name
         self.shape = shape
@@ -1293,10 +1289,13 @@ class Builder:
         self._body_blob = body_blob
         self._half = half
         self._counter = 0
-        # Value name -> shape, for emitters that need an operand's rank
-        # rather than just its name (``layer_norm`` normalises over the
-        # trailing axes its weight covers).
-        self.shapes: dict[str, list[int]] = {}
+        # Value name -> declared shape, ``-1`` on axes a flexible export
+        # leaves open. Private: emitters read it through ``shape_of``,
+        # whose open axes cannot be read as numbers.
+        self._shapes: dict[str, list[int]] = {}
+        # Traced id -> value name, the driver's own map, so an operand's
+        # name leads back to the probes that say which of its axes vary.
+        self.traced_names: dict[int, str] = {}
         # Values that are constants.  Core ML rejects a computed operand
         # where it wants a constant, so emitters check before binding.
         self.consts: set[str] = set()
@@ -1320,14 +1319,22 @@ class Builder:
         # raises; and the flexible input, which run-time sizes are read off.
         self.current = "<driver>"
         self.flex_input: str | None = None
-        self._input_dims: dict[int, str] = {}
+        self._run_time: dict[str, str] = {}
 
-    def result_shape(self, op: TracedOp, index: int = 0) -> list[int]:
-        """One of an operation's result shapes, with varying axes as ``-1``.
+    def declare(self, name: str, shape: Sequence[int]) -> None:
+        """Record a value's declared shape, ``-1`` on its open axes."""
+        self._shapes[name] = (
+            shape.declared() if isinstance(shape, _flex.Dims) else list(shape)
+        )
 
-        Emitters that carry a shape in a constant must ask for it this
-        way — or as :meth:`result_dims`, which refuses an open axis — or a
-        flexible export bakes the default and is wrong at every other shape.
+    def result_dims(self, op: TracedOp, index: int = 0) -> _flex.Dims:
+        """One of an operation's result shapes, open axes guarded.
+
+        The form to declare an intermediate with, and the only way an
+        emitter reads a result's size: an axis a flexible export leaves
+        open raises :class:`ShapeNotFlexible` naming ``op`` when read as a
+        number — the traced size is the only number there is, and writing
+        it down is the failure. ``.declared()`` spells it with ``-1``.
 
         Parameters
         ----------
@@ -1335,11 +1342,6 @@ class Builder:
             Operation whose result to describe.
         index : int, optional, default=0
             Which result.
-
-        Returns
-        -------
-        list[int]
-            The shape, with ``-1`` where the export is flexible.
         """
         out = op.outputs[index]
         recorded = out.shape
@@ -1353,75 +1355,101 @@ class Builder:
         # would ask for the rank Core ML refused.
         if int(out.id) in self.thinned:
             shape = shape[1:]
-        return _flex.flex(shape, self.flex.varying.get(int(out.id)))
+        flexed = _flex.flex(shape, self.flex.varying.get(int(out.id)))
+        return _flex.Dims(flexed, op.name)
 
-    def result_dims(self, op: TracedOp, index: int = 0) -> _flex.Dims:
-        """A result's shape as numbers an emitter may write into a constant.
-
-        Reading an axis a flexible export leaves open raises
-        :class:`ShapeNotFlexible` naming ``op`` — the traced size is the
-        only number there is, and writing it down is the failure.
-
-        Parameters
-        ----------
-        op : TracedOp
-            Operation whose result to describe.
-        index : int, optional, default=0
-            Which result.
-        """
-        return _flex.Dims(self.result_shape(op, index), op.name)
-
-    def shape_operand(self, shape: Sequence[int], value_id: int = -1) -> str:
+    def shape_operand(
+        self,
+        shape: Sequence[int],
+        value_id: int = -1,
+        operand: str | None = None,
+        known: dict[int, tuple[str, int]] | None = None,
+    ) -> str:
         """A ``reshape`` target for ``shape``, open axes and all.
 
-        One open axis is a ``-1`` in a constant, which ``reshape`` infers;
-        more than one is read at run time, as :meth:`sizes_operand` does.
+        One open axis is a ``-1`` in a constant. More are read at run
+        time as :meth:`sizes_operand` reads them, and one of them may still
+        be left for ``reshape`` to infer.
 
         Parameters
         ----------
         shape : sequence of int
             Declared shape, ``-1`` on open axes.
         value_id : int, optional, default=-1
-            Traced value the shape belongs to, which says where its open
-            axes come from. ``-1`` when the shape is no traced value's.
+            Traced value the shape is, ``-1`` for none.
+        operand : str or None, optional, default=None
+            The value being reshaped, whose own axes are read where the
+            shape keeps them.
+        known : dict or None, optional, default=None
+            Axis to ``(value, axis)`` it is known to equal.
         """
         dims = shape.declared() if isinstance(shape, _flex.Dims) else list(shape)
         if sum(d < 0 for d in dims) <= 1:
             return self.const_ints(dims)
-        return self.sizes_operand(dims, value_id)
+        return self._sizes(dims, value_id, operand, known, infer=True)
 
-    def sizes_operand(self, sizes: list[int], value_id: int) -> str:
-        """``sizes`` as an int32 vector, each ``-1`` read at run time.
+    def sizes_operand(
+        self, sizes: Sequence[int], value_id: int, operand: str | None = None
+    ) -> str:
+        """``sizes`` as an int32 vector, each open one read at run time.
 
-        Axis ``k``'s ``-1`` is the size of the input axis that axis ``k``
-        of value ``value_id`` equalled at every traced shape — refused
-        when no single input axis did, since then there is nothing to read.
+        An open axis the operand carries — ``value_id`` keeps it from
+        ``operand`` — is the operand's own size, exactly. Any other is the
+        input axis it equalled at every probe, and refused when there is
+        none, since then there is nothing to read.
 
         Parameters
         ----------
-        sizes : list of int
+        sizes : sequence of int
             One size per axis, ``-1`` where it follows the input.
         value_id : int
             Traced value the sizes describe.
+        operand : str or None, optional, default=None
+            A value whose axes may be the open ones.
         """
+        dims = sizes.declared() if isinstance(sizes, _flex.Dims) else list(sizes)
+        return self._sizes(dims, value_id, operand, None, infer=False)
+
+    def _sizes(
+        self,
+        dims: list[int],
+        value_id: int,
+        operand: str | None,
+        known: dict[int, tuple[str, int]] | None,
+        infer: bool,
+    ) -> str:
+        where = dict(known or {})
+        traced = [tid for tid, name in self.traced_names.items() if name == operand]
+        if operand is not None and traced:
+            mine = (value_id, dims)
+            theirs = (traced[0], self._shapes[operand])
+            for axis, other in self.flex.carried(mine, theirs).items():
+                where.setdefault(axis, (operand, other))
         pieces: list[str] = []
         run: list[int] = []
-        for axis, size in enumerate(sizes):
-            if size >= 0:
+        for axis, size in enumerate(dims):
+            if size < 0 and axis not in where:
+                source = self.flex.source(value_id, axis)
+                if source is not None and self.flex_input is not None:
+                    where[axis] = (self.flex_input, source)
+                elif infer:
+                    # ``reshape`` infers one axis from the element count.
+                    infer = False
+                else:
+                    raise ShapeNotFlexible(
+                        self.current,
+                        f"axis {axis} of its result follows the input, and "
+                        "neither an operand nor a single input axis has its "
+                        "size at every traced shape, so there is nothing to "
+                        "read it from at run time",
+                    )
+            if axis not in where:
                 run.append(size)
                 continue
-            source = self.flex.source(value_id, axis)
-            if source is None or self.flex_input is None:
-                raise ShapeNotFlexible(
-                    self.current,
-                    f"axis {axis} of its result follows the input, and no single "
-                    "input axis had its size at every traced shape, so there is "
-                    "nothing to read it from at run time",
-                )
             if run:
                 pieces.append(self.const_ints(run))
                 run = []
-            pieces.append(self.input_dim(source))
+            pieces.append(self.run_time_dim(*where[axis]))
         if run:
             pieces.append(self.const_ints(run))
         if len(pieces) == 1:
@@ -1433,25 +1461,25 @@ class Builder:
                 ("axis", self.const_int(0)),
                 ("interleave", self.const_bool(False)),
             ],
-            [len(sizes)],
+            [len(dims)],
             dtype=_C_engine.coreml.DTYPE_INT32,
         )
 
-    def input_dim(self, axis: int) -> str:
-        """The flexible input's size along ``axis``, read at run time, as ``[n]``."""
-        if axis in self._input_dims:
-            return self._input_dims[axis]
-        assert self.flex_input is not None
+    def run_time_dim(self, name: str, axis: int) -> str:
+        """``name``'s size along ``axis``, read at run time, as ``[n]``."""
+        key = f"{name}:{axis}"
+        if key in self._run_time:
+            return self._run_time[key]
         int32 = _C_engine.coreml.DTYPE_INT32
-        if -1 not in self._input_dims:
-            rank = len(self.shapes[self.flex_input])
-            self._input_dims[-1] = self.emit(
-                "shape", [("x", self.flex_input)], [rank], dtype=int32
+        if name not in self._run_time:
+            rank = len(self._shapes[name])
+            self._run_time[name] = self.emit(
+                "shape", [("x", name)], [rank], dtype=int32
             )
-        picked = self.emit(
+        self._run_time[key] = self.emit(
             "gather",
             [
-                ("x", self._input_dims[-1]),
+                ("x", self._run_time[name]),
                 ("indices", self.const_ints([axis])),
                 ("axis", self.const_int(0)),
                 ("validate_indices", self.const_bool(False)),
@@ -1459,8 +1487,7 @@ class Builder:
             [1],
             dtype=int32,
         )
-        self._input_dims[axis] = picked
-        return picked
+        return self._run_time[key]
 
     def result_mil_dtype(self, op: TracedOp, index: int = 0) -> int:
         """MIL element type the driver will declare for a result.
@@ -1583,7 +1610,7 @@ class Builder:
                     [("x", name), ("dtype", self.const_str(spelling))],
                     # A scalar constant has no recorded shape, and none
                     # is the right answer for it.
-                    self.shapes.get(name, []),
+                    self._shapes.get(name, []),
                     dtype=settled,
                 )
             )
@@ -1637,7 +1664,7 @@ class Builder:
 
     def shape_of(self, name: str) -> _flex.Dims:
         """An operand's shape; reading an open axis refuses the operation."""
-        shape = self.shapes.get(name)
+        shape = self._shapes.get(name)
         if shape is None:
             raise KeyError(
                 f"lucid.coreml: no shape recorded for value {name!r} — an emitter "
@@ -1697,7 +1724,7 @@ class Builder:
         """
         name = self._const_name("intsn")
         self._program.add_int_const_shaped(name, _spec.as_int32(values, name), shape)
-        self.shapes[name] = list(shape)
+        self._shapes[name] = list(shape)
         self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
         return name
 
@@ -1751,7 +1778,7 @@ class Builder:
         """
         name = self._const_name("f32n")
         self._program.add_float_const_shaped(name, [float(v) for v in values], shape)
-        self.shapes[name] = list(shape)
+        self._shapes[name] = list(shape)
         self.dtypes[name] = _C_engine.coreml.DTYPE_FLOAT32
         return name
 
@@ -1810,7 +1837,7 @@ class Builder:
         offset = self._blob.append_tensor(_unwrap(payload), self._body_blob)
         shape = [int(d) for d in tensor.shape]
         self._program.add_blob_const(name, (self._body_mil, shape), offset)
-        self.shapes[name] = shape
+        self._shapes[name] = shape
         self.dtypes[name] = self._body_mil
         return name
 
@@ -1853,7 +1880,7 @@ class Builder:
         declared = self._result_dtype(normalised) if dtype is None else int(dtype)
         dims = shape.declared() if isinstance(shape, _flex.Dims) else list(shape)
         self._program.add_op(mil_type, normalised, name, (declared, dims))
-        self.shapes[name] = dims
+        self._shapes[name] = dims
         self.dtypes[name] = declared
         return name
 
@@ -1900,7 +1927,7 @@ class Builder:
             [(n, (declared, list(sh))) for n, sh in zip(names, shapes, strict=True)],
         )
         for n, sh in zip(names, shapes, strict=True):
-            self.shapes[n] = list(sh)
+            self._shapes[n] = list(sh)
             self.dtypes[n] = declared
         return names
 
@@ -1908,177 +1935,6 @@ class Builder:
         name = self._const_name("bool")
         self._program.add_bool_const(name, bool(value))
         return name
-
-
-class _WindowRewrite(NamedTuple):
-    """A ``reshape → permute → reshape`` whose middle exceeds the rank cap.
-
-    Keyed and cross-referenced by value id rather than by op identity:
-    ``graph.ops`` hands out fresh Python wrappers on each access, so
-    ``id(op)`` is stable only by accident and silently stops matching on
-    a graph large enough to matter.
-
-    ``absorbs`` are the two follow-on ops the rewrite consumes, so the
-    emit loop knows to skip them; ``out_id`` is the value the rewritten
-    chain has to bind, which is the final reshape's.
-    """
-
-    mid_shape: list[int]
-    perm: list[int]
-    out_shape: list[int]
-    out_id: int
-    absorbs: tuple[int, ...]
-
-
-@dataclasses.dataclass(frozen=True)
-class _StuffRewrite:
-    """A ``reshape`` / ``pad`` / ``reshape`` that stuffs zeros between elements.
-
-    Upsampling before a convolution is often written by splitting each
-    axis into ``(d, 1)``, padding the new axis out to ``(d, k)`` with
-    zeros, and merging back to ``d * k`` — every element followed by
-    ``k - 1`` zeros. Doing two axes at once needs rank 6, which Core ML
-    does not have.
-    """
-
-    source_shape: list[int]
-    factors: list[int]
-    fill: float
-    out_shape: list[int]
-    out_id: int
-    absorbs: tuple[int, ...]
-
-
-def _stuff_rewrites(graph: Any) -> dict[int, _StuffRewrite]:
-    """Find the zero-stuffing upsamples that can be staged under the cap.
-
-    Matched on shape rather than on the model: the tall tensor has to be
-    the source with singleton axes interleaved, the pad has to add only
-    at the end of exactly those axes, and the result has to merge each
-    pair back. Anything else keeps its rank and is refused as before.
-    """
-    producer: dict[int, Any] = {}
-    readers: dict[int, list[Any]] = {}
-    for op in graph.ops:
-        for out in op.outputs:
-            producer[out.id] = op
-        for iid in op.inputs:
-            readers.setdefault(iid, []).append(op)
-
-    found: dict[int, _StuffRewrite] = {}
-    for op in graph.ops:
-        if op.name != "reshape" or len(op.outputs) != 1:
-            continue
-        tall = op.outputs[0]
-        if len(tall.shape) <= _MAX_RANK:
-            continue
-        mid_readers = readers.get(tall.id, [])
-        if len(mid_readers) != 1:
-            continue
-        pad_op = mid_readers[0]
-        if pad_op.name != "pad" or len(pad_op.outputs) != 1:
-            continue
-        padded = pad_op.outputs[0]
-        down_readers = readers.get(padded.id, [])
-        if len(down_readers) != 1:
-            continue
-        down = down_readers[0]
-        if down.name != "reshape" or len(down.outputs) != 1:
-            continue
-        if len(down.outputs[0].shape) > _MAX_RANK:
-            continue
-
-        tall_shape = [int(d) for d in tall.shape]
-        pads = [int(v) for v in (pad_op.attrs.get("pads") or [])]
-        if len(pads) != 2 * len(tall_shape):
-            continue
-
-        # Only singleton axes may grow, and only at their far end: that
-        # is what makes the pad an interleave rather than a border.
-        widths: dict[int, int] = {}
-        rejected = False
-        for axis, extent in enumerate(tall_shape):
-            before, after = pads[2 * axis], pads[2 * axis + 1]
-            if before != 0 or (after != 0 and extent != 1):
-                rejected = True
-                break
-            if after:
-                widths[axis] = after + 1
-        if rejected or not widths:
-            continue
-
-        # The source is the tall shape without those singletons — read
-        # off the shapes rather than from the producing operation, which
-        # does not exist when the reshape reads a model input.
-        source_shape = [d for i, d in enumerate(tall_shape) if i not in widths]
-        factors = [1] * len(source_shape)
-        walk = -1
-        for axis, extent in enumerate(tall_shape):
-            if axis in widths:
-                if walk < 0:
-                    rejected = True
-                    break
-                factors[walk] = widths[axis]
-            else:
-                walk += 1
-        if rejected:
-            continue
-
-        out_shape = [int(d) for d in down.outputs[0].shape]
-        if [d * f for d, f in zip(source_shape, factors)] != out_shape:
-            continue
-
-        found[tall.id] = _StuffRewrite(
-            source_shape=source_shape,
-            factors=factors,
-            fill=float(pad_op.attrs.get("constant", 0.0)),
-            out_shape=out_shape,
-            out_id=down.outputs[0].id,
-            absorbs=(padded.id, down.outputs[0].id),
-        )
-    return found
-
-
-def _stage_zero_stuff(builder: Any, source: str, plan: _StuffRewrite) -> str:
-    """Stuff one axis at a time, so no stage exceeds the rank cap.
-
-    Splitting every axis at once is what needed rank 6. Splitting one
-    axis, padding it and merging it back leaves the rank where it
-    started, so a rank-4 tensor never passes rank 5 however many axes
-    are upsampled.
-    """
-    current = list(plan.source_shape)
-    value = source
-    for axis, factor in enumerate(plan.factors):
-        if factor <= 1:
-            continue
-        split = current[:axis] + [current[axis], 1] + current[axis + 1 :]
-        value = builder.emit(
-            "reshape",
-            [("x", value), ("shape", builder.shape_operand(split))],
-            split,
-        )
-        pads = [0] * (2 * len(split))
-        pads[2 * (axis + 1) + 1] = factor - 1
-        widened = list(split)
-        widened[axis + 1] = factor
-        value = builder.emit(
-            "pad",
-            [
-                ("x", value),
-                ("pad", builder.const_ints(pads)),
-                ("mode", builder.const_str("constant")),
-                ("constant_val", builder.const_float(plan.fill)),
-            ],
-            widened,
-        )
-        current[axis] = current[axis] * factor if current[axis] >= 0 else -1
-        value = builder.emit(
-            "reshape",
-            [("x", value), ("shape", builder.shape_operand(current))],
-            list(current),
-        )
-    return value
 
 
 #: Operations that a leading axis of one can be taken away from without
@@ -2316,7 +2172,7 @@ def _unit_axis_rewrites(
     tall: set[int] = set()
     for op in graph.ops:
         for out in op.outputs:
-            if len(out.shape) > _MAX_RANK and out.id not in handled:
+            if len(out.shape) > _staging.MAX_RANK and out.id not in handled:
                 if int(out.shape[0]) != 1:
                     return set()
                 tall.add(out.id)
@@ -2335,112 +2191,6 @@ def _unit_axis_rewrites(
         if touches and op.name not in _UNIT_AXIS_SAFE:
             return set()
     return tall
-
-
-def _window_rewrites(graph: Any) -> dict[int, _WindowRewrite]:
-    """Find the high-rank triples that can be staged under the cap.
-
-    A reshape that lifts a tensor past rank 5 is representable only if
-    the rank comes straight back down, which in practice means a permute
-    and a reshape follow it and nothing else reads the tall value. That
-    is the window partition (and its inverse, the merge); the pattern is
-    matched rather than the model, so a grid partition or any other
-    factorised permutation is the same code path.
-    """
-    producer: dict[int, Any] = {}
-    readers: dict[int, list[Any]] = {}
-    for op in graph.ops:
-        for out in op.outputs:
-            producer[out.id] = op
-        for iid in op.inputs:
-            readers.setdefault(iid, []).append(op)
-
-    found: dict[int, _WindowRewrite] = {}
-    for op in graph.ops:
-        if op.name != "reshape" or len(op.outputs) != 1:
-            continue
-        tall = op.outputs[0]
-        if len(tall.shape) <= _MAX_RANK:
-            continue
-        # Exactly one reader, and it has to be the permute — a second
-        # reader would need the tall tensor to exist for real.
-        mid_readers = readers.get(tall.id, [])
-        if len(mid_readers) != 1:
-            continue
-        perm_op = mid_readers[0]
-        if perm_op.name != "permute" or len(perm_op.outputs) != 1:
-            continue
-        turned = perm_op.outputs[0]
-        down_readers = readers.get(turned.id, [])
-        if len(down_readers) != 1:
-            continue
-        down = down_readers[0]
-        if down.name != "reshape" or len(down.outputs) != 1:
-            continue
-        if len(down.outputs[0].shape) > _MAX_RANK:
-            continue
-        raw = perm_op.attrs["permutation"]
-        perm = [int(a) for a in (raw if isinstance(raw, (list, tuple)) else [raw])]
-        if sorted(perm) != list(range(len(tall.shape))):
-            continue
-        found[tall.id] = _WindowRewrite(
-            mid_shape=[int(d) for d in tall.shape],
-            perm=perm,
-            out_shape=[int(d) for d in down.outputs[0].shape],
-            out_id=down.outputs[0].id,
-            absorbs=(turned.id, down.outputs[0].id),
-        )
-    return found
-
-
-def _stage_permutation(builder: Any, source: str, plan: _WindowRewrite) -> str:
-    """Realise ``plan`` without ever materialising the tall tensor.
-
-    A reshape is a reinterpretation of a contiguous buffer, so any run of
-    adjacent axes may be grouped into one. Each stage therefore views the
-    value as ``(left, a, b, right)`` — rank 4, whatever the logical rank
-    is — swaps the middle pair, and leaves the result contiguous in the
-    new order for the next stage to regroup. Sorting the axis order into
-    the wanted one by adjacent swaps then costs one stage per inversion,
-    and the tall shape stays a bookkeeping detail.
-    """
-    shape = list(plan.mid_shape)
-    order = list(range(len(shape)))
-    name = source
-
-    for slot, axis in enumerate(plan.perm):
-        at = order.index(axis)
-        while at > slot:
-            i = at - 1
-            left = _volume(shape[:i])
-            right = _volume(shape[i + 2 :])
-            grouped = [left, shape[i], shape[i + 1], right]
-            viewed = builder.emit(
-                "reshape",
-                [("x", name), ("shape", builder.shape_operand(grouped))],
-                grouped,
-            )
-            swapped = [left, shape[i + 1], shape[i], right]
-            name = builder.emit(
-                "transpose",
-                [("x", viewed), ("perm", builder.const_ints([0, 2, 1, 3]))],
-                swapped,
-            )
-            shape[i], shape[i + 1] = shape[i + 1], shape[i]
-            order[i], order[i + 1] = order[i + 1], order[i]
-            at = i
-
-    staged: str = builder.emit(
-        "reshape",
-        [("x", name), ("shape", builder.shape_operand(plan.out_shape, plan.out_id))],
-        plan.out_shape,
-    )
-    return staged
-
-
-def _volume(dims: list[int]) -> int:
-    """How many elements ``dims`` hold, or ``-1`` if an open axis is among them."""
-    return -1 if any(d < 0 for d in dims) else math.prod(dims)
 
 
 def _reachable_ops(graph: Any, output_ids: list[int]) -> list[Any]:
@@ -2590,36 +2340,50 @@ def _probe(
     """
     records: list[_flex.Record] = []
     for shape in probes:
-        probe = lucid.zeros(*shape).to(example.dtype)
-        graph, feeds, inputs, _outputs, _values = trace(
-            model, probe, output_field=output_field
-        )
-        ops = list(graph.ops)
-        records.append(
-            _flex.Record(
-                [
-                    (
-                        op.name,
-                        dict(op.attrs),
-                        [tuple(int(d) for d in out.shape) for out in op.outputs],
-                    )
-                    for op in ops
-                ],
-                [out.id for op in ops for out in op.outputs],
-                int(inputs[0][1]),
-                _flex.signature(graph),
-                {
-                    int(tid): tuple(int(d) for d in impl.shape)
-                    for tid, impl in feeds.items()
-                    if int(tid) != int(inputs[0][1])
-                },
-            )
-        )
+        record = _record(model, lucid.zeros(*shape).to(example.dtype), output_field)
+        if records and _names(record) != _names(records[0]):
+            # A cache the model fills on its first call at a shape — Swin's
+            # attention mask — makes that call's graph longer than every
+            # later one's; the later one is what an export runs.
+            again = _record(model, lucid.zeros(*shape).to(example.dtype), output_field)
+            record = again._replace(unsettled=_names(again) != _names(record))
+        records.append(record)
     # A draw records the seed it used, and each probe drew again — so its
     # attributes always differ and never because of the size. The
     # operation is either refused outright or lifted to an input, so
     # nothing downstream reads them.
     return _flex.compare(records, probes, _DRAW_OPS)
+
+
+def _names(record: _flex.Record) -> list[str]:
+    return [name for name, _ids in record.signature]
+
+
+def _record(model: Module, probe: Tensor, output_field: str | None) -> _flex.Record:
+    """One probe trace, reduced to what the comparison reads."""
+    graph, feeds, inputs, _outputs, _values = trace(
+        model, probe, output_field=output_field
+    )
+    ops = list(graph.ops)
+    given = int(inputs[0][1])
+    return _flex.Record(
+        [
+            (
+                op.name,
+                dict(op.attrs),
+                [tuple(int(d) for d in out.shape) for out in op.outputs],
+            )
+            for op in ops
+        ],
+        [out.id for op in ops for out in op.outputs],
+        given,
+        _flex.signature(graph),
+        {
+            int(tid): tuple(int(d) for d in impl.shape)
+            for tid, impl in feeds.items()
+            if int(tid) != given
+        },
+    )
 
 
 def _declare_image(
@@ -2679,7 +2443,7 @@ def _declare_image(
             scaled,
             interface,
         )
-        builder.shapes[scaled] = shape
+        builder.declare(scaled, shape)
         source = scaled
     if spec.bias:
         biased = "_image_biased"
@@ -2687,7 +2451,7 @@ def _declare_image(
         program.add_op(
             "add", _operands([("x", source), ("y", offsets)]), biased, interface
         )
-        builder.shapes[biased] = shape
+        builder.declare(biased, shape)
         source = biased
     return source
 
@@ -3159,12 +2923,12 @@ def build_package(
     # are built out of it.
     #
     # That triple is rewritten rather than refused, so the rank-6 tensor is
-    # never asked for; see ``_window_rewrites``.  Anything else that
+    # never asked for; see ``_staging.window_rewrites``.  Anything else that
     # exceeds the cap is still refused by name, because letting it through
     # produces an opaque parse failure from the compiler several steps away
     # from the operation that built the tensor.
-    rewrites = _window_rewrites(graph)
-    stuffing = _stuff_rewrites(graph)
+    rewrites = _staging.window_rewrites(graph)
+    stuffing = _staging.stuff_rewrites(graph)
     absorbed = {oid for r in rewrites.values() for oid in r.absorbs}
     absorbed |= {oid for r in stuffing.values() for oid in r.absorbs}
     # A third shape past the cap: values that are computed on at rank 6
@@ -3191,14 +2955,15 @@ def build_package(
         if head in rewrites or head in stuffing or head in absorbed:
             continue
         for out in op.outputs:
-            if len(out.shape) > _MAX_RANK and out.id not in thinned:
+            if len(out.shape) > _staging.MAX_RANK and out.id not in thinned:
                 raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.flex = flexibility
+    builder.traced_names = names
     builder.thinned = set(_pending_thinned)
-    builder.shapes.update(weight_shapes)
-    builder.shapes.update(builder_shapes_state)
+    for held_name, held_shape in {**weight_shapes, **builder_shapes_state}.items():
+        builder.declare(held_name, held_shape)
     # Weights are constants whichever way they were stored — plain, int8,
     # palettized or sparse. Emitters that must bind a constant ask here.
     # Each is recorded as the type it was declared: an integer buffer
@@ -3215,7 +2980,7 @@ def build_package(
         )
     for name, tid, tensor in plain_inputs:
         shape = _flex.flex(tensor.shape, varying.get(tid))
-        builder.shapes[name] = shape
+        builder.declare(name, shape)
         if tid == flexibility.input_id:
             builder.flex_input = name
         half_in = _half_interface(name, tensor)
@@ -3231,7 +2996,7 @@ def build_package(
             source = _declare_image(
                 program, builder, name, [int(d) for d in tensor.shape], image_input
             )
-            builder.shapes[source] = shape
+            builder.declare(source, shape)
             names[tid] = source
         # Only a float interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
@@ -3241,7 +3006,7 @@ def build_package(
             cast_name = f"_cast_in_{name}"
             mil_type, raw = emit_cast(builder, source, "fp16")
             program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
-            builder.shapes[cast_name] = shape
+            builder.declare(cast_name, shape)
             names[tid] = cast_name
     # An output's value is named after the model's own field, so a caller
     # reading the package knows which head it is looking at.  Done when the
@@ -3282,7 +3047,7 @@ def build_package(
                 _write_float_const(name, written, None)
                 builder.mark_const(name)
                 builder.dtypes[name] = body_mil
-                builder.shapes[name] = [int(d) for d in written.shape]
+                builder.declare(name, [int(d) for d in written.shape])
                 names[tid] = name
             else:
                 names[tid] = builder.const_from_tensor(written)
@@ -3315,7 +3080,9 @@ def build_package(
                 mid_shape=_flex.flex(plan.mid_shape, varying.get(head)),
                 out_shape=_flex.flex(plan.out_shape, varying.get(plan.out_id)),
             )
-            names[plan.out_id] = _stage_permutation(builder, names[op.inputs[0]], plan)
+            names[plan.out_id] = _staging.stage_permutation(
+                builder, names[op.inputs[0]], plan
+            )
             continue
         stuff = stuffing.get(head)
         if stuff is not None:
@@ -3328,7 +3095,9 @@ def build_package(
                 ],
                 out_shape=wide,
             )
-            names[stuff.out_id] = _stage_zero_stuff(builder, names[op.inputs[0]], stuff)
+            names[stuff.out_id] = _staging.stage_zero_stuff(
+                builder, names[op.inputs[0]], stuff
+            )
             continue
         emitter = EMITTERS.get(op.name)
         if emitter is None:
@@ -3380,7 +3149,7 @@ def build_package(
             program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
         for (out_name, (out_dtype, shape)), o in zip(produced, op.outputs):
             names[o.id] = out_name
-            builder.shapes[out_name] = shape
+            builder.declare(out_name, shape)
             builder.dtypes[out_name] = out_dtype
             if o.id in thinned:
                 builder.unit_axis_dropped.add(out_name)

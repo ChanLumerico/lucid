@@ -428,7 +428,7 @@ def _linear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
             ("transpose_x", b.const_bool(False)),
             ("transpose_y", b.const_bool(True)),
         ],
-        b.result_shape(op),
+        b.result_dims(op),
     )
     if len(ins) == 2:
         return "identity", [("x", product)]
@@ -486,7 +486,7 @@ def _runtime_base(b: Builder, op: TracedOp, base: str, exponent: str) -> str:
     shape = b.shape_of(exponent)
     dims = b.emit("shape", [("x", exponent)], [len(shape)], dtype=_MIL_INT32)
     ones = b.emit("fill", [("shape", dims), ("value", b.const_float(1.0))], shape)
-    return b.emit("mul", [("x", ones), ("y", base)], b.result_shape(op))
+    return b.emit("mul", [("x", ones), ("y", base)], b.result_dims(op))
 
 
 def _register_binary(lucid_name: str, mil_name: str) -> None:
@@ -519,7 +519,7 @@ def _reshape(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # The target is on the result — ``squeeze`` / ``unsqueeze`` record no
     # axes at all — and a Core ML tensor has no strides, so all three are a
     # reshape to it. The builder leaves a flexible export's open axes open.
-    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    target = b.shape_operand(b.result_dims(op), op.outputs[0].id, ins[0])
     return "reshape", [("x", ins[0]), ("shape", target)]
 
 
@@ -779,7 +779,7 @@ def _broadcast_to(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     the batch — repeats as often as the input is long there, at run time.
     """
     src = b.shape_of(ins[0]).declared()
-    out = b.result_shape(op)
+    out = b.result_dims(op).declared()
     # ``tile`` keeps its operand's type and MIL checks that it does.
     (value,) = b.agree_on_dtype([ins[0]], b.result_mil_dtype(op))
     if len(src) < len(out):
@@ -871,11 +871,12 @@ def _filled(b: Builder, op: TracedOp, value: float) -> Constant | EmitResult:
     sized at run time when the shape follows the input (``zeros(x.shape[0])``)."""
     import lucid
 
-    shape = b.result_shape(op)
+    dims = b.result_dims(op)
+    shape = dims.declared()
     kind = b.result_mil_dtype(op)
     whole = kind in (_MIL_INT32, _MIL_BOOL)
     made: Constant | EmitResult
-    if -1 in shape:
+    if dims.open:
         fill = b.const_int(int(value)) if whole else b.const_float(value)
         sizes = b.sizes_operand(shape, op.outputs[0].id)
         made = "fill", [("shape", sizes), ("value", fill)]
@@ -1139,8 +1140,8 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # tensors far from here.
         *(
             []
-            if -1 in b.result_shape(op)
-            else [("output_shape", b.const_ints(b.result_shape(op)))]
+            if b.result_dims(op).open
+            else [("output_shape", b.const_ints(list(b.result_dims(op))))]
         ),
     ]
     return "conv_transpose", bindings
@@ -1510,7 +1511,7 @@ def _var(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     if not bool(op.attrs.get("unbiased", False)):
         return "reduce_mean", bindings
     count = math.prod(shape[i] for i in dims)
-    biased = b.emit("reduce_mean", bindings, b.result_shape(op))
+    biased = b.emit("reduce_mean", bindings, b.result_dims(op))
     return "mul", [("x", biased), ("y", b.const_float(count / max(count - 1, 1)))]
 
 
@@ -1730,7 +1731,7 @@ def _unbind(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
                     ("axis", b.const_int(axis)),
                     ("validate_indices", b.const_bool(False)),
                 ],
-                b.result_shape(op, i),
+                b.result_dims(op, i),
             )
             for i in range(len(op.outputs))
         ]
@@ -1922,37 +1923,32 @@ def _bitwise_xor(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 def _group_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Normalise per group, then scale per channel.
 
-    MIL has ``layer_norm`` but no ``group_norm``. Folding the groups into
-    the batch axis turns one into the other: reshape ``(N, C, ...)`` to
-    ``(N * G, C/G, ...)``, normalise over everything but the leading axis,
-    and reshape back. The affine weights stay per channel, so they are
-    applied after the reshape rather than through ``layer_norm``.
+    MIL has ``layer_norm`` but no ``group_norm``. Splitting the groups
+    out turns one into the other: reshape ``(N, C, ...)`` to ``(N, G, -1)``,
+    normalise over the last axis, and reshape back. The affine weights stay
+    per channel, so they are applied after the reshape rather than through
+    ``layer_norm``.
     """
     shape = b.shape_of(ins[0])
     groups = _as_int(_attr(op, "num_groups"))
     channels = shape[1]
     trailing = shape.declared()[2:]
-    # Each group flattened to one row: the same mean and variance as over
-    # ``(C/G, ...)``, and the open axes of a flexible export fold into at
-    # most the two of this shape.
-    batch = shape.declared()[0]
-    grouped = [
-        batch * groups if batch >= 0 else -1,
-        -1 if -1 in trailing else channels // groups * math.prod(trailing),
-    ]
-    folded = b.emit(
-        "reshape", [("x", ins[0]), ("shape", b.shape_operand(grouped))], grouped
-    )
+    # Each group one row: an open batch is the operand's own, read at run
+    # time, and open spatial axes fold into the one ``reshape`` infers.
+    rest = -1 if -1 in trailing else channels // groups * math.prod(trailing)
+    grouped = [shape.declared()[0], groups, rest]
+    target = b.shape_operand(grouped, known={0: (ins[0], 0)})
+    folded = b.emit("reshape", [("x", ins[0]), ("shape", target)], grouped)
     normalised = b.emit(
         "layer_norm",
         [
             ("x", folded),
-            ("axes", b.const_ints([1])),
+            ("axes", b.const_ints([2])),
             ("epsilon", b.const_float(_as_float(_attr(op, "eps")))),
         ],
         grouped,
     )
-    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    target = b.shape_operand(b.result_dims(op), op.outputs[0].id, ins[0])
     restored = b.emit("reshape", [("x", normalised), ("shape", target)], shape)
     if len(ins) < 3:
         return "identity", [("x", restored)]
@@ -2022,7 +2018,7 @@ def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     tiled_shape = list(spread)
     tiled_shape[axis + 1] = repeats
     tiled = b.emit("tile", [("x", expanded), ("reps", b.const_ints(reps))], tiled_shape)
-    target = b.shape_operand(b.result_shape(op), op.outputs[0].id)
+    target = b.shape_operand(b.result_dims(op), op.outputs[0].id, ins[0])
     return "reshape", [("x", tiled), ("shape", target)]
 
 
@@ -2167,8 +2163,8 @@ def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         for x in range(width)
     ]
     base = b.const_from_tensor(lucid.tensor([rows]))
-    b.shapes[base] = [1, height * width, 3]
-    out = b.result_shape(op)
+    b.declare(base, [1, height * width, 3])
+    out = b.result_dims(op).declared()
     flat = b.emit(
         "matmul",
         [
@@ -2181,7 +2177,8 @@ def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     )
     # The product is one row per position; the grid is those rows laid
     # back out over the image.
-    return "reshape", [("x", flat), ("shape", b.shape_operand(out, op.outputs[0].id))]
+    target = b.shape_operand(out, op.outputs[0].id, ins[0])
+    return "reshape", [("x", flat), ("shape", target)]
 
 
 @_emitter("bilinear_layer")
