@@ -247,7 +247,12 @@ _RESAMPLE_AND_DROPOUT = [
         SHAPE,
         "5-D",
     ),
-    ("grid_sample_rank3", "E.nn.grid_sample(R(3, 8, 8), R(1, 4, 4, 2))", SHAPE, "4-D"),
+    (
+        "grid_sample_rank3",
+        "E.nn.grid_sample(R(3, 8, 8), R(1, 4, 4, 2))",
+        SHAPE,
+        "(N, C, H_in, W_in)",
+    ),
     ("affine_grid_negative", "E.nn.affine_grid(R(1, 2, 3), 1, -4, 4)", ARG, "affine_grid"),
     ("dropoutnd_rank1", "E.nn.dropoutnd(R(8), 0.5)", SHAPE, "at least 2-D"),
     ("drop_block_rank3", "E.nn.drop_block(R(3, 8, 8), 3, 0.5)", SHAPE, "4-D"),
