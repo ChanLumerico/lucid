@@ -1,7 +1,7 @@
 // lucid/_C/ops/bfunc/Floordiv.cpp
 //
-// Implements floordiv_op.  The backend floor-division primitive handles both
-// integer and floating-point inputs; the result is always returned as I64.
+// Implements floordiv_op.  Floating-point operands are ``floor(a / b)`` in
+// their own dtype; integer operands keep their dtype too.
 
 #include "Floordiv.h"
 
@@ -21,6 +21,7 @@
 #include "Div.h"                // div_op
 #include "_Broadcast.h"
 #include "_Detail.h"
+#include "_Opmath.h"
 
 namespace lucid {
 
@@ -33,6 +34,8 @@ using bfunc_detail::validate_pair;
 }  // namespace
 
 TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    if (auto r = opmath::try_scalar<opmath::Op::FloorDiv>(a, b, &floordiv_op))
+        return r;
     validate_pair(a, b, "floordiv");
     const Dtype dt = a->dtype();
     const Device device = a->device();
@@ -50,13 +53,31 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32 || dt == Dtype::F64) {
         return floor_op(div_op(a, b));
     }
+    // Refused here rather than in the backend, which the Metal stream let
+    // through: it cast bool and complex to float32 and answered in int64.
+    if (!is_integral(dt))
+        ErrorBuilder("floordiv")
+            .not_implemented(
+                std::string("dtype ") + std::string(dtype_name(dt)) +
+                " is not supported; floor division takes integer or real floating-point operands");
 
     auto bc = broadcast_pair(a, b);
     OpScopeFull scope{"floordiv", device, dt, bc.shape};
 
-    auto out_storage = backend::Dispatcher::for_device(device).floordiv(
-        bc.a->storage(), bc.b->storage(), bc.shape, dt);
-    auto result = fresh(std::move(out_storage), bc.shape, Dtype::I64, device);
+    // The backend divides int32 and int64 and always answers in int64.  An
+    // integer quotient keeps its operands' dtype, as Python's ``//`` and the
+    // reference do, so narrower operands are widened on the way in and the
+    // quotient narrowed on the way out.  The narrowing wraps like any
+    // integer cast: int8 ``-128 // -1`` is -128, as in the reference.
+    auto& be = backend::Dispatcher::for_device(device);
+    const bool widen = dt == Dtype::I8 || dt == Dtype::I16;
+    Storage quotient = widen ? be.floordiv(be.astype(bc.a->storage(), bc.shape, dt, Dtype::I32),
+                                           be.astype(bc.b->storage(), bc.shape, dt, Dtype::I32),
+                                           bc.shape, Dtype::I32)
+                             : be.floordiv(bc.a->storage(), bc.b->storage(), bc.shape, dt);
+    if (dt != Dtype::I64)
+        quotient = be.astype(quotient, bc.shape, Dtype::I64, dt);
+    auto result = fresh(std::move(quotient), bc.shape, dt, device);
     // Integer floor-division is non-differentiable, so it never reaches
     // ``wire_autograd`` — which is also what records a traced op's
     // operands.  Without this the op lands in the trace with no inputs,

@@ -11,6 +11,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
 #include "../complex/Conj.h"
+#include "_Opmath.h"
 
 namespace lucid {
 
@@ -53,6 +54,8 @@ std::pair<TensorImplPtr, TensorImplPtr> MulBackward::grad_formula_impl(
 }
 
 TensorImplPtr mul_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    if (auto r = opmath::try_scalar<opmath::Op::Mul>(a, b, &mul_op))
+        return r;
     return MulBackward::forward(a, b);
 }
 

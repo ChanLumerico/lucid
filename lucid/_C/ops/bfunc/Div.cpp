@@ -13,6 +13,7 @@
 #include "../../ops/ufunc/Arith.h"
 #include "../complex/Conj.h"
 #include "Mul.h"
+#include "_Opmath.h"
 
 namespace lucid {
 
@@ -65,6 +66,8 @@ std::pair<TensorImplPtr, TensorImplPtr> DivBackward::grad_formula_impl(
 }
 
 TensorImplPtr div_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    if (auto r = opmath::try_scalar<opmath::Op::Div>(a, b, &div_op))
+        return r;
     return DivBackward::forward(a, b);
 }
 
