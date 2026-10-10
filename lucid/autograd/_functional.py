@@ -1,8 +1,18 @@
 """
 Higher-order autograd utilities: jacobian, hessian, vjp, jvp.
+
+Every derivative here is taken through the graph with
+:func:`lucid.autograd.grad` — reverse mode, and reverse mode twice for
+``jvp`` — so each is exact up to rounding, and under ``create_graph`` each
+result is itself differentiable.
 """
 
+from collections.abc import Sequence
 from typing import Any, Callable, TYPE_CHECKING
+
+import lucid
+from lucid.autograd._backward import grad as _grad
+from lucid.autograd._grad_mode import enable_grad
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -21,8 +31,6 @@ def _require_differentiable(inputs: Tensor | tuple[Tensor, ...], where: str) -> 
     The reference states it as "only Tensors of floating point dtype can
     require gradients", and that is the same rule.
     """
-    import lucid  # noqa: PLC0415 - avoids a cycle at module import
-
     candidates = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
     for item in candidates:
         if hasattr(item, "dtype") and not lucid.is_floating_point(item):
@@ -53,6 +61,58 @@ def _differentiable_inputs(
     ]
 
 
+def _as_tuple(value: Tensor | Sequence[Tensor]) -> tuple[tuple[Tensor, ...], bool]:
+    """``value`` as a tuple of tensors, and whether it was one tensor."""
+    from lucid._tensor.tensor import Tensor as _Tensor
+
+    if isinstance(value, _Tensor):
+        return (value,), True
+    return tuple(value), False
+
+
+def _or_zeros(grads: Sequence[Tensor | None], like: Sequence[Tensor]) -> list[Tensor]:
+    """Each gradient, or zeros shaped like its tensor where it is unused."""
+    return [
+        lucid.zeros_like(t) if g is None else g
+        for g, t in zip(grads, like, strict=True)
+    ]
+
+
+def _jacobian_blocks(
+    output: Tensor, xs: Sequence[Tensor], create_graph: bool
+) -> list[Tensor]:
+    """``d output / d x`` for each ``x`` in ``xs``, flattened to
+    ``(output.numel(), x.numel())``.
+
+    One reverse pass per element of ``output``, each seeded with a row of
+    the identity, so row ``k`` is exactly ``d output[k] / d x``.  The graph
+    is kept between passes; under ``create_graph`` each row is
+    differentiable.
+    """
+    n = output.numel()
+    basis = lucid.eye(n, dtype=output.dtype, device=output.device)
+    rows: list[list[Tensor]] = [[] for _ in xs]
+    for k in range(n):
+        grads = _grad(
+            output,
+            list(xs),
+            grad_outputs=basis[k].reshape(output.shape),
+            retain_graph=True,
+            create_graph=create_graph,
+            allow_unused=True,
+        )
+        for row, g in zip(rows, _or_zeros(grads, xs), strict=True):
+            row.append(g.reshape(-1))
+    return [
+        (
+            lucid.stack(row)
+            if row
+            else lucid.zeros(0, x.numel(), dtype=x.dtype, device=x.device)
+        )
+        for row, x in zip(rows, xs, strict=True)
+    ]
+
+
 def jacobian(
     func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
@@ -70,13 +130,12 @@ def jacobian(
         J_{ij} = \frac{\partial f_i}{\partial x_j}, \qquad
         J \in \mathbb{R}^{m \times n}.
 
-    Lucid evaluates it row-by-row by repeated reverse-mode
-    backward passes — one per output element — seeding each pass
-    with a one-hot cotangent so the resulting input gradient is
-    exactly the corresponding Jacobian row. The cost therefore
-    scales with the output dimension :math:`m`; prefer :func:`vjp`
-    when only :math:`v^\top J` is needed and :func:`jvp` when only
-    :math:`J v` is needed.
+    Lucid evaluates it row by row with reverse-mode passes — one per
+    output element — seeding each pass with a row of the identity so the
+    resulting input gradient is exactly the corresponding Jacobian row.
+    The cost therefore scales with the output dimension :math:`m`; prefer
+    :func:`vjp` when only :math:`v^\top J` is needed and :func:`jvp` when
+    only :math:`J v` is needed.
 
     Parameters
     ----------
@@ -89,9 +148,9 @@ def jacobian(
         left as they are: the Jacobian is taken at copies that require
         grad, so the inputs' ``requires_grad`` and ``.grad`` do not change.
     create_graph : bool, optional
-        If ``True`` the Jacobian itself is differentiable, enabling
-        higher-order derivatives (e.g. building :func:`hessian` on
-        top). Defaults to ``False``.
+        If ``True`` the Jacobian itself is differentiable — with respect
+        to the inputs that require grad — enabling higher-order
+        derivatives. Defaults to ``False``.
     strict : bool, optional
         Reserved for stricter shape/dtype validation. Currently
         unused.
@@ -103,18 +162,16 @@ def jacobian(
     -------
     Tensor or tuple of Tensor
         For a single input ``x`` the returned tensor has shape
-        ``(prod(out_shape), prod(x.shape))``. For multiple inputs
-        a tuple is returned, one Jacobian block per input.
+        ``(numel(out), numel(x))``, the outputs' rows stacked in order
+        when ``func`` returns several. For a tuple of inputs a tuple is
+        returned, one Jacobian block per input.
 
     Notes
     -----
     Reverse-mode differentiation makes the cost per row
     :math:`O(\text{cost}(f))`; the full Jacobian therefore costs
-    :math:`O(m \cdot \text{cost}(f))`. For square or wide
-    Jacobians (:math:`m \ge n`) forward-mode would be cheaper —
-    Lucid does not yet ship a forward-mode implementation, so
-    this routine is preferred for tall Jacobians
-    (:math:`m \ll n`).
+    :math:`O(m \cdot \text{cost}(f))`.  An input the output does not
+    depend on gets a block of zeros.
 
     Examples
     --------
@@ -123,95 +180,24 @@ def jacobian(
     >>> x = lucid.tensor([1.0, 2.0, 3.0])
     >>> def f(x):
     ...     return x * x
-    >>> J = jacobian(f, x)
-    >>> J.shape
-    (3, 3)
+    >>> jacobian(f, x)
+    tensor([[2., 0., 0.], [0., 4., 0.], [0., 0., 6.]])
     """
     _require_differentiable(inputs, "jacobian")
-    from lucid._dispatch import _wrap
-    from lucid._C import engine as _C_engine
-    from lucid.autograd._backward import grad as _grad_fn
-
-    scalar_input = not isinstance(inputs, (list, tuple))
-    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
-
-    # Make sure inputs require grad
-    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
-
-    # Run forward
-    _raw_outputs = func(*inputs_rg)
-    outputs: list[Tensor] | tuple[Tensor, ...]
-    if not isinstance(_raw_outputs, (list, tuple)):
-        outputs = [_raw_outputs]
-    else:
-        outputs = _raw_outputs
-
-    # Flatten each output: record (tensor, numel)
-    from lucid._tensor.tensor import Tensor as _T
-
-    out_flat_list = [(o, o.numel()) for o in outputs]
-
-    results = []
-    for x in inputs_rg:
-        x_numel = x.numel()
-        sum(n for _, n in out_flat_list)
-        # Accumulate Jacobian rows as a list of 1-D tensors, then stack.
-        J_rows: list[_C_engine.TensorImpl] = []
-
-        for out_t, out_numel in out_flat_list:
-            out_shape = list(out_t.shape) if out_t.shape else []
-            for i in range(out_numel):
-                if out_numel == 1 and out_shape == []:
-                    seed_t = None
-                else:
-                    # One-hot seed via engine: zeros + scatter-like fill.
-                    seed_impl = _C_engine.zeros(
-                        [out_numel], _C_engine.F32, out_t._impl.device
-                    )
-                    ones1 = _C_engine.ones([1], _C_engine.F32, out_t._impl.device)
-                    idx1 = _C_engine.full(
-                        [1], float(i), _C_engine.I32, out_t._impl.device
-                    )
-                    seed_impl = _C_engine.scatter_add(seed_impl, idx1, ones1, 0)
-                    if out_shape:
-                        seed_impl = _C_engine.reshape(seed_impl, out_shape)
-                    seed_t = _T.__new_from_impl__(seed_impl)
-
-                # ``grad`` rather than ``backward`` and a read-back of
-                # ``x.grad``.
-                #
-                # Each row used to be produced by zeroing the grad slot,
-                # running a backward pass into it, and taking what landed
-                # there — so every row referred to the same slot, and under
-                # ``create_graph=True`` only the last one still had a graph
-                # attached by the time the rows were stacked.  The values
-                # were right; differentiating the result gave the last
-                # row's contribution and nothing else.  ``d/dx Σ jacobian(x²)``
-                # answered ``[0, 0, 6]`` where the Jacobian is ``diag(2x)``,
-                # its sum is ``2Σx``, and the derivative is ``[2, 2, 2]``.
-                #
-                # ``grad`` returns a fresh tensor per call, which is what
-                # makes the rows independent of one another.
-                (row,) = _grad_fn(
-                    out_t,
-                    x,
-                    grad_outputs=None if seed_t is None else [seed_t],
-                    retain_graph=True,
-                    create_graph=create_graph,
-                    allow_unused=True,
-                )
-                if row is not None:
-                    J_rows.append(_C_engine.reshape(row._impl, [x_numel]))
-                else:
-                    J_rows.append(
-                        _C_engine.zeros([x_numel], _C_engine.F32, x._impl.device)
-                    )
-
-        # Stack rows to shape (out_total, x_numel).
-        J_impl = _C_engine.stack(J_rows, 0)
-        results.append(_wrap(J_impl))
-
-    return results[0] if scalar_input else tuple(results)
+    inputs_t, one_input = _as_tuple(inputs)
+    xs = _differentiable_inputs(inputs_t, create_graph)
+    with enable_grad():
+        outputs, _ = _as_tuple(func(*xs))
+        per_output = [_jacobian_blocks(o, xs, create_graph) for o in outputs]
+    blocks = [
+        (
+            lucid.cat([b[j] for b in per_output], 0)
+            if len(per_output) > 1
+            else per_output[0][j]
+        )
+        for j in range(len(xs))
+    ]
+    return blocks[0] if one_input else tuple(blocks)
 
 
 def hessian(
@@ -231,24 +217,24 @@ def hessian(
         H_{ij} = \frac{\partial^2 f}{\partial x_i \, \partial x_j},
         \qquad H \in \mathbb{R}^{n \times n}.
 
-    Implemented as :func:`jacobian` of the gradient of ``func`` —
-    a forward pass produces the loss, a first backward (with
-    ``create_graph=True``) builds the gradient graph, and a second
-    backward along each gradient coordinate yields the rows of
-    :math:`H`. Cost is therefore :math:`O(n \cdot
-    \text{cost}(\nabla f))`.
+    Implemented as the :func:`jacobian` of the gradient of ``func`` —
+    one forward pass, one backward pass that records its own graph, and
+    one backward pass through that graph per gradient coordinate.  Cost
+    is therefore :math:`O(n \cdot \text{cost}(\nabla f))`.
 
     Parameters
     ----------
     func : callable
-        Scalar-valued function of one or more ``Tensor`` inputs.
+        Function of one or more ``Tensor`` inputs returning a tensor of
+        one element.
     inputs : Tensor or tuple of Tensor
         Inputs at which :math:`H` is evaluated. They are left as they
         are: the Hessian is taken at copies that require grad, so the
         inputs' ``requires_grad`` and ``.grad`` do not change.
     create_graph : bool, optional
-        If ``True`` the Hessian itself remains differentiable
-        (third-order derivatives). Defaults to ``False``.
+        If ``True`` the Hessian itself is differentiable with respect to
+        the inputs that require grad (third-order derivatives). Defaults
+        to ``False``.
     strict : bool, optional
         Reserved for stricter validation. Currently unused.
     vectorize : bool, optional
@@ -261,8 +247,13 @@ def hessian(
         For a single input the returned tensor has shape
         ``(numel(x), numel(x))``. For multiple inputs a nested
         tuple of cross-Hessian blocks is returned, with
-        ``H[i][j]`` containing :math:`\partial^2 f / (\partial
-        x_i \, \partial x_j)`.
+        ``H[i][j]`` of shape ``(numel(x_i), numel(x_j))`` containing
+        :math:`\partial^2 f / (\partial x_i \, \partial x_j)`.
+
+    Raises
+    ------
+    RuntimeError
+        ``func`` does not return a single tensor of one element.
 
     Notes
     -----
@@ -278,71 +269,30 @@ def hessian(
     >>> from lucid.autograd import hessian
     >>> x = lucid.tensor([1.0, 2.0])
     >>> def f(x):
-    ...     return (x * x).sum()
-    >>> H = hessian(f, x)
-    >>> H.shape
-    (2, 2)
+    ...     return (x ** 3).sum()
+    >>> hessian(f, x).tolist()
+    [[6.0, 0.0], [0.0, 12.0]]
     """
     _require_differentiable(inputs, "hessian")
-    from lucid._dispatch import _wrap
-    from lucid._C import engine as _C_engine
+    from lucid._tensor.tensor import Tensor as _Tensor
 
-    scalar_input = not isinstance(inputs, (list, tuple))
-    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
-
-    # Make sure inputs require grad
-    # Leaves of their own: the Hessian is read back from their ``.grad``.
-    inputs_rg = _differentiable_inputs(inputs_t, create_graph=False)
-
-    from lucid._tensor.tensor import Tensor as _T
-
-    n_inputs = len(inputs_rg)
-    blocks: list[list[Tensor]] = [[None] * n_inputs for _ in range(n_inputs)]  # type: ignore[list-item]
-
-    for i, xi in enumerate(inputs_rg):
-        ni = xi.numel()
-        for j, xj in enumerate(inputs_rg):
-            nj = xj.numel()
-            H_rows: list[_C_engine.TensorImpl] = []
-
-            for k in range(ni):
-                xi._impl.zero_grad()
-                xj._impl.zero_grad()
-                out = func(*inputs_rg)
-                out.backward(create_graph=True, retain_graph=True)
-
-                gi_impl = xi._impl.grad_as_impl()
-                if gi_impl is None:
-                    H_rows.append(_C_engine.zeros([nj], _C_engine.F32, xi._impl.device))
-                    continue
-                gi_t = _T.__new_from_impl__(gi_impl)
-
-                # One-hot mask at index k (engine ops only).
-                gi_shape = list(gi_impl.shape)
-                mask_flat = _C_engine.zeros([ni], _C_engine.F32, gi_impl.device)
-                ones1 = _C_engine.ones([1], _C_engine.F32, gi_impl.device)
-                idx1 = _C_engine.full([1], float(k), _C_engine.I32, gi_impl.device)
-                mask_flat = _C_engine.scatter_add(mask_flat, idx1, ones1, 0)
-                mask_impl = _C_engine.reshape(mask_flat, gi_shape)
-                mask_t = _T.__new_from_impl__(mask_impl)
-                gi_k = (gi_t * mask_t).sum()
-
-                xj._impl.zero_grad()
-                gi_k.backward(retain_graph=True)
-
-                gj_raw = xj._impl.grad_as_python()
-                if gj_raw is not None:
-                    row_impl = _C_engine.TensorImpl(gj_raw, xj._impl.device, False)
-                    H_rows.append(_C_engine.reshape(row_impl, [nj]))
-                else:
-                    H_rows.append(_C_engine.zeros([nj], _C_engine.F32, xj._impl.device))
-
-            H_impl = _C_engine.stack(H_rows, 0)
-            blocks[i][j] = _wrap(H_impl)
-
-    if scalar_input:
-        return blocks[0][0]
-    return tuple(tuple(row) for row in blocks)
+    inputs_t, one_input = _as_tuple(inputs)
+    xs = _differentiable_inputs(inputs_t, create_graph)
+    with enable_grad():
+        # ``object``: a callable typed to return a tensor may return a tuple.
+        out: object = func(*xs)
+        if not isinstance(out, _Tensor) or out.numel() != 1:
+            got = (
+                f"shape {tuple(out.shape)}"
+                if isinstance(out, _Tensor)
+                else type(out).__name__
+            )
+            raise RuntimeError(
+                f"hessian: func must return a single tensor of one element, got {got}"
+            )
+        firsts = _or_zeros(_grad(out, xs, create_graph=True, allow_unused=True), xs)
+        blocks = tuple(tuple(_jacobian_blocks(g, xs, create_graph)) for g in firsts)
+    return blocks[0][0] if one_input else blocks
 
 
 def vjp(
@@ -382,9 +332,9 @@ def vjp(
         Primal point :math:`x` at which :math:`J` is evaluated. Left as
         it is: the product is taken at copies that require grad.
     v : Tensor or tuple of Tensor
-        Cotangent vector(s) matching the output shape(s) of
-        ``func``. Scalar-valued ``v`` is broadcast for scalar
-        outputs.
+        Cotangent vector(s), one per output of ``func``, each of its
+        output's shape and device — the seed rules of
+        :func:`lucid.autograd.grad`.
     create_graph : bool, optional
         If ``True`` the returned VJP is itself differentiable,
         enabling double-backward. Defaults to ``False``.
@@ -394,16 +344,23 @@ def vjp(
     Returns
     -------
     tuple of (Tensor, tuple of (Tensor or None))
-        ``(output, vjp_grads)`` where ``output = func(*inputs)``
-        and ``vjp_grads[i]`` is :math:`v^\top J` projected onto
-        input ``i`` (or ``None`` if that input has no gradient
-        path).
+        ``(output, vjp_grads)`` where ``output = func(*inputs)`` —
+        detached unless ``create_graph`` — and ``vjp_grads[i]`` is
+        :math:`v^\top J` projected onto input ``i`` (or ``None`` if that
+        input has no gradient path).
+
+    Raises
+    ------
+    RuntimeError
+        The number of entries of ``v`` differs from the number of
+        outputs.
+    ShapeMismatch, DeviceMismatch
+        An entry of ``v`` does not have its output's shape or device.
 
     Notes
     -----
-    The dual to :func:`vjp` is :func:`jvp`, which computes
-    :math:`J v` via forward-mode (or finite differences in
-    Lucid's current implementation).
+    The dual to :func:`vjp` is :func:`jvp`, which computes :math:`J v`
+    by differentiating this product with respect to :math:`v`.
 
     Examples
     --------
@@ -414,44 +371,24 @@ def vjp(
     >>> def f(x):
     ...     return x * x
     >>> y, (grad_x,) = vjp(f, x, v)
+    >>> grad_x
+    tensor([2., 4., 6.])
     """
     _require_differentiable(inputs, "vjp")
-    from lucid.autograd._backward import grad as _grad
-
-    scalar_input = not isinstance(inputs, (list, tuple))
-    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
-
-    scalar_v = not isinstance(v, (list, tuple))
-    v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
-
-    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
-
-    outputs = func(*inputs_rg)
-    if not isinstance(outputs, (list, tuple)):
-        outputs_list = [outputs]
-    else:
-        outputs_list = list(outputs)
-
-    # Align v shapes to match output shapes (e.g. scalar() vs (1,))
-    aligned_v = []
-    for vi, oi in zip(v_t, outputs_list):
-        out_shape = tuple(oi.shape) if oi.shape else ()
-        v_shape = tuple(vi.shape) if vi.shape else ()
-        if out_shape != v_shape and vi.numel() == 1:
-            from lucid._C import engine as _C_engine
-            from lucid._dispatch import _wrap, _unwrap
-
-            vi = _wrap(_C_engine.reshape(_unwrap(vi), list(out_shape)))
-        aligned_v.append(vi)
-
-    grads = _grad(
-        outputs_list,
-        list(inputs_rg),
-        grad_outputs=aligned_v,
-        retain_graph=create_graph,
-        create_graph=create_graph,
-        allow_unused=True,
-    )
+    inputs_t, _ = _as_tuple(inputs)
+    v_t, _ = _as_tuple(v)
+    xs = _differentiable_inputs(inputs_t, create_graph)
+    with enable_grad():
+        outputs = func(*xs)
+        outs, _ = _as_tuple(outputs)
+        grads = _grad(
+            list(outs),
+            xs,
+            grad_outputs=list(v_t),
+            retain_graph=create_graph,
+            create_graph=create_graph,
+            allow_unused=True,
+        )
 
     # ``retain_graph`` follows ``create_graph``, so by default the graph
     # behind ``outputs`` has just been freed — while ``outputs`` itself
@@ -486,7 +423,7 @@ def jvp(
     v: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
-) -> tuple[Tensor, Tensor]:
+) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
     r"""Jacobian-vector product :math:`J v` (forward-mode directional derivative).
 
     Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian
@@ -498,23 +435,15 @@ def jvp(
         J v = \left.\frac{d}{dt} f(x + t v)\right|_{t=0}
             \in \mathbb{R}^{m}
 
-    along with the primal output :math:`y = f(x)`. JVPs are the
-    natural primitive of forward-mode AD and are useful for
-    propagating tangent information (sensitivities) through a
-    network in a single forward sweep, for computing directional
-    derivatives, and as a building block for second-order methods.
+    along with the primal output :math:`y = f(x)`.  JVPs are useful for
+    propagating tangent information (sensitivities) through a network,
+    for directional derivatives, and as a building block for
+    second-order methods.
 
-    Lucid currently realises the JVP via a symmetric central
-    finite difference
-
-    .. math::
-
-        J v \approx \frac{f(x + \varepsilon v) - f(x - \varepsilon v)}
-                         {2 \varepsilon},
-
-    with :math:`\varepsilon = 10^{-4}`. This avoids the need for a
-    true forward-mode implementation while still being accurate
-    enough for testing and most applications.
+    Computed exactly with two reverse-mode passes (the double-vjp
+    trick): :math:`g(u) = J^\top u` is linear in a dummy cotangent
+    :math:`u`, so its vector-Jacobian product with :math:`v` is
+    :math:`(J^\top)^\top v = J v`.  No finite differences are involved.
 
     Parameters
     ----------
@@ -522,12 +451,15 @@ def jvp(
         Function mapping ``Tensor`` inputs to a ``Tensor`` (or
         tuple thereof).
     inputs : Tensor or tuple of Tensor
-        Primal point :math:`x`.
+        Primal point :math:`x`.  Left as it is: the product is taken at
+        copies that require grad.
     v : Tensor or tuple of Tensor
-        Tangent vector(s) matching the input shape(s).
+        Tangent vector(s), one per input, each of its input's shape and
+        device.
     create_graph : bool, optional
-        Reserved for the future native forward-mode implementation.
-        Currently unused.
+        If ``True`` the returned outputs and tangents are differentiable
+        with respect to the inputs that require grad (and ``v``).
+        Defaults to ``False``.
     strict : bool, optional
         Reserved for stricter validation. Currently unused.
 
@@ -535,15 +467,24 @@ def jvp(
     -------
     tuple of (Tensor or tuple of Tensor, Tensor or tuple of Tensor)
         ``(primals_out, tangents_out)`` where
-        ``primals_out = func(*inputs)`` and ``tangents_out`` has the
-        same shape as ``primals_out`` and holds :math:`J v`.
+        ``primals_out = func(*inputs)`` — detached unless
+        ``create_graph`` — and ``tangents_out`` has the same structure
+        and shapes as ``primals_out`` and holds :math:`J v`.  An output
+        that does not depend on the inputs has a zero tangent.
+
+    Raises
+    ------
+    RuntimeError
+        The number of entries of ``v`` differs from the number of
+        inputs, or an op on the path has no differentiable backward
+        (the second pass differentiates the first).
+    ShapeMismatch, DeviceMismatch
+        An entry of ``v`` does not have its input's shape or device.
 
     Notes
     -----
     The complementary operation is :func:`vjp`, which computes
-    :math:`v^\top J` cheaply via reverse-mode. Use :func:`jvp`
-    when the input dimension is small relative to the output
-    dimension; otherwise reverse-mode is more efficient.
+    :math:`v^\top J` with one reverse pass.  This JVP costs two.
 
     Examples
     --------
@@ -554,90 +495,30 @@ def jvp(
     >>> def f(x):
     ...     return x * x
     >>> y, tangent = jvp(f, x, v)
+    >>> tangent
+    tensor([2., 0., 0.])
     """
     _require_differentiable(inputs, "jvp")
-
-    scalar_input = not isinstance(inputs, (list, tuple))
-    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
-
-    scalar_v = not isinstance(v, (list, tuple))
-    v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
-
-    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
-
-    # Forward pass with create_graph=True to allow higher-order differentation
-    primals_out = func(*inputs_rg)
-    if not isinstance(primals_out, (list, tuple)):
-        pass
-    else:
-        list(primals_out)
-
-    # Use a dummy ones vector for the first backward, then use v for the second
-    # Standard JVP via double-backward: jvp = d/dt[f(x + tv)] at t=0
-    # Implemented as: grad(grad(f, x).dot(v), x) applied carefully.
-
-    # Simpler approach: use autograd.grad twice
-    # 1. Get Jacobian-row vJP by forward-mode approximation
-    # For now, implement via finite-difference fallback that supports create_graph=False
-    from lucid._C import engine as _C_engine
-    from lucid._dispatch import _wrap, _unwrap
-
-    eps = 1e-4
-    # Finite-difference JVP: (f(x + eps*v) - f(x - eps*v)) / (2*eps)
-    inputs_fwd = []
-    inputs_bwd = []
-    for x, vi in zip(inputs_rg, v_t):
-        xf = _wrap(
-            _C_engine.add(
-                _unwrap(x),
-                _C_engine.mul(
-                    _unwrap(vi),
-                    _C_engine.full(
-                        _unwrap(vi).shape, eps, _unwrap(vi).dtype, _unwrap(vi).device
-                    ),
-                ),
-            )
+    inputs_t, _ = _as_tuple(inputs)
+    v_t, _ = _as_tuple(v)
+    xs = _differentiable_inputs(inputs_t, create_graph)
+    with enable_grad():
+        outputs = func(*xs)
+        outs, one_output = _as_tuple(outputs)
+        # ``u`` enters as grad_outputs, whose graph ``grad`` keeps under
+        # create_graph: the first pass is J^T u as a function of u.
+        us = [lucid.zeros_like(o).requires_grad_(True) for o in outs]
+        firsts = _grad(
+            list(outs), xs, grad_outputs=us, create_graph=True, allow_unused=True
         )
-        xb = _wrap(
-            _C_engine.sub(
-                _unwrap(x),
-                _C_engine.mul(
-                    _unwrap(vi),
-                    _C_engine.full(
-                        _unwrap(vi).shape, eps, _unwrap(vi).dtype, _unwrap(vi).device
-                    ),
-                ),
-            )
+        tangents = _grad(
+            _or_zeros(firsts, xs),
+            us,
+            grad_outputs=list(v_t),
+            create_graph=create_graph,
+            allow_unused=True,
         )
-        inputs_fwd.append(xf)
-        inputs_bwd.append(xb)
-
-    out_fwd = func(*inputs_fwd)
-    out_bwd = func(*inputs_bwd)
-
-    if isinstance(out_fwd, (list, tuple)):
-        tangents = tuple(
-            _wrap(
-                _C_engine.div(
-                    _C_engine.sub(_unwrap(f), _unwrap(b)),
-                    _C_engine.full(
-                        _unwrap(f).shape, 2 * eps, _unwrap(f).dtype, _unwrap(f).device
-                    ),
-                )
-            )
-            for f, b in zip(out_fwd, out_bwd)
-        )
-        return primals_out, tangents
-    else:
-        tangent = _wrap(
-            _C_engine.div(
-                _C_engine.sub(_unwrap(out_fwd), _unwrap(out_bwd)),
-                _C_engine.full(
-                    _unwrap(out_fwd).shape,
-                    2 * eps,
-                    _unwrap(out_fwd).dtype,
-                    _unwrap(out_fwd).device,
-                ),
-            )
-        )
-        return primals_out, tangent
+    tangents_out = _or_zeros(tangents, outs)
+    if not create_graph:
+        outputs = _detach_outputs(outputs)
+    return outputs, tangents_out[0] if one_output else tuple(tangents_out)
