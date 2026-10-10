@@ -282,25 +282,10 @@ def _mha_case(ref: Any, device: str, dtype: str, kind: str, rows: str) -> None:
         _assert_close(o.grad, t.grad, dtype, f"{name} gradient")
 
 
-_CPU_HALF_MASK = pytest.mark.xfail(
-    strict=True, reason="LCD-385: CPU f16 SDPA misreads a half attn_mask"
-)
-
-
-def _cells() -> list[Any]:
-    """(device, dtype, rows), with the CPU half cells that see a live mask pinned."""
-    cells = []
-    for device in ["cpu", "metal"] if metal_available() else ["cpu"]:
-        for dtype in _DTYPES:
-            for rows in _ROWS:
-                broken = device == "cpu" and dtype == "float16" and rows != "all"
-                marks = [_CPU_HALF_MASK] if broken else []
-                cells.append(pytest.param(device, dtype, rows, marks=marks))
-    return cells
-
-
 @pytest.mark.parity
-@pytest.mark.parametrize(("device", "dtype", "rows"), _cells())
+@pytest.mark.parametrize("rows", _ROWS)
+@pytest.mark.parametrize("dtype", list(_DTYPES))
+@pytest.mark.parametrize("device", ["cpu", "metal"] if metal_available() else ["cpu"])
 @pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("entry", ["sdpa", "mha"])
 def test_matches_the_reference(
