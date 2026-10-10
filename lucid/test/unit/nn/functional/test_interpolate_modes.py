@@ -56,6 +56,31 @@ class TestCoordinateMapping:
         assert out.dtype == lucid.int64
         assert out.shape == (1, 1, 3, 4)
 
+    @pytest.mark.parametrize(
+        ("shape", "scale", "expected"),
+        [
+            # The same-size and double-size shortcuts are the reference's 2-D
+            # kernel's alone; 1-D and 3-D step by float32 1/scale.
+            ((1, 1, 4), 1.1, [0, 0, 1, 2]),
+            ((1, 1, 5), 2.1, [0, 0, 0, 1, 1, 2, 2, 3, 3, 4]),
+            ((1, 1, 1, 4), 1.1, [0, 1, 2, 3]),
+            ((1, 1, 1, 5), 2.1, [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]),
+        ],
+    )
+    def test_nearest_pins_same_and_double_size_only_in_two_d(
+        self, shape: tuple[int, ...], scale: float, expected: list[int]
+    ) -> None:
+        n = shape[-1]
+        x = lucid.arange(n, dtype=lucid.float32).reshape(*shape)
+        scales = scale if len(shape) == 3 else (1.0, scale)
+        out = F.interpolate(x, scale_factor=scales, mode="nearest")
+        assert out.reshape(-1).tolist() == [float(i) for i in expected]
+
+    def test_antialias_leaves_a_same_size_axis_alone(self) -> None:
+        x = lucid.randn(1, 1, 3, 8)
+        out = F.interpolate(x, scale_factor=(1.1, 1.0), mode="bilinear", antialias=True)
+        assert out.reshape(-1).tolist() == x.reshape(-1).tolist()
+
     def test_same_size_returns_a_new_tensor(self) -> None:
         x = _ramp(5)
         out = F.interpolate(x, scale_factor=1.1, mode="linear")
@@ -65,18 +90,27 @@ class TestCoordinateMapping:
 
 class TestEngineStandIn:
     """The size-only kernels step by ``in / out``: allowed only when that is
-    where the reference puts every sample."""
+    where the reference puts every sample — on the device that runs them,
+    since the CPU kernel divides exactly and the Metal one in float32."""
 
     @pytest.mark.parametrize(
-        ("mode", "spatial", "sizes", "scales", "corners", "expected"),
+        ("mode", "spatial", "sizes", "scales", "corners", "cpu", "metal"),
         [
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False),
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, True),
-            ("bilinear", [5, 7], [8, 11], [None, None], False, True),
-            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, True),
-            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False),
-            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, True),
-            ("nearest", [5], [8], [None], False, True),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, True, True),
+            ("bilinear", [5, 7], [8, 11], [None, None], False, True, True),
+            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, True, True),
+            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
+            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, True, True),
+            ("nearest", [5], [8], [None], False, True, True),
+            # Metal's float32 in/out lands sample 5382 on 2153; the
+            # reference's float32 1/2.5 lands it on 2152.
+            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, True, False),
+            # With a size the reference also steps by float32 in/out, which
+            # the exact CPU division does not reproduce.
+            ("nearest", [1, 2111], [1, 5277], [None, None], False, False, True),
+            # 1-D: no same-size shortcut in the reference, so x1.1 resamples.
+            ("nearest", [4], [4], [1.1], False, False, False),
         ],
     )
     def test_when_the_kernel_may_run(
@@ -86,12 +120,32 @@ class TestEngineStandIn:
         sizes: list[int],
         scales: list[float | None],
         corners: bool,
-        expected: bool,
+        cpu: bool,
+        metal: bool,
     ) -> None:
-        assert (
-            _interpolate._engine_maps_like(mode, spatial, sizes, scales, corners)
-            is expected
-        )
+        for device, expected in (("cpu", cpu), ("metal", metal)):
+            got = _interpolate._engine_maps_like(
+                mode, spatial, sizes, scales, corners, device
+            )
+            assert got is expected, device
+
+    @pytest.mark.parametrize(
+        ("shape", "kw"),
+        [
+            ((1, 1, 1, 2155), {"scale_factor": (1.0, 2.5)}),
+            ((1, 1, 1, 2111), {"size": (1, 5277)}),
+        ],
+        ids=["metal-float32-step", "cpu-exact-division"],
+    )
+    def test_each_device_reads_what_the_mapping_says(
+        self, device: str, shape: tuple[int, ...], kw: dict[str, Any]
+    ) -> None:
+        n = shape[-1]
+        x = lucid.arange(n, dtype=lucid.float32, device=device).reshape(*shape)
+        out = F.interpolate(x, mode="nearest", **kw).reshape(-1).to("cpu").tolist()
+        scale = kw["scale_factor"][1] if "scale_factor" in kw else None
+        expected = _interpolate._nearest_indices(n, len(out), scale, False, rank=2)
+        assert out == [float(i) for i in expected]
 
 
 class TestRefusals:

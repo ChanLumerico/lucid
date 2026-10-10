@@ -47,6 +47,10 @@ def _sizings(rank: int) -> list[tuple[str, dict[str, Any]]]:
         ("x1.7-recompute", {"scale_factor": 1.7, "recompute_scale_factor": True}),
         ("x0.6-recompute", {"scale_factor": 0.6, "recompute_scale_factor": True}),
         ("size", {"size": size}),
+        # floor(n * s) lands on n and 2n with s neither 1 nor 2: the
+        # reference's 2-D nearest pins these, its 1-D and 3-D do not.
+        ("x1.1-same-size", {"scale_factor": 1.1}),
+        ("x2.1-double-size", {"scale_factor": 2.1}),
     ]
 
 
@@ -69,19 +73,31 @@ def _cases() -> list[Any]:
     return cases
 
 
+_AA_SHAPE = (2, 3, 11, 14)
 _ANTIALIAS = [
     pytest.param(
-        mode, kw, corners, id=f"{mode}-{tag}-{'corners' if corners else 'edges'}"
+        mode,
+        shape,
+        kw,
+        corners,
+        id=f"{mode}-{tag}-{'corners' if corners else 'edges'}",
     )
     for mode in ("bilinear", "bicubic")
-    for tag, kw in (
-        ("x0.5", {"scale_factor": 0.5}),
-        ("x0.3", {"scale_factor": 0.3}),
-        ("x0.37-recompute", {"scale_factor": 0.37, "recompute_scale_factor": True}),
-        ("tuple", {"scale_factor": (0.75, 0.21)}),
-        ("size", {"size": (4, 3)}),
-        ("x1.1-same-size", {"scale_factor": (1.1, 1.0)}),
-        ("x1.7-up", {"scale_factor": 1.7}),
+    for tag, shape, kw in (
+        ("x0.5", _AA_SHAPE, {"scale_factor": 0.5}),
+        ("x0.3", _AA_SHAPE, {"scale_factor": 0.3}),
+        (
+            "x0.37-recompute",
+            _AA_SHAPE,
+            {"scale_factor": 0.37, "recompute_scale_factor": True},
+        ),
+        ("tuple", _AA_SHAPE, {"scale_factor": (0.75, 0.21)}),
+        ("size", _AA_SHAPE, {"size": (4, 3)}),
+        # H = 4 at x1.1 keeps its size; the reference leaves such an axis
+        # untouched whatever the scale factor said.
+        ("x1.1-same-height", (2, 3, 4, 14), {"scale_factor": (1.1, 0.5)}),
+        ("x1.1-same-size", (1, 2, 3, 8), {"scale_factor": (1.1, 1.0)}),
+        ("x1.7-up", _AA_SHAPE, {"scale_factor": 1.7}),
     )
     for corners in (True, False)
 ]
@@ -102,9 +118,33 @@ def _compare(
     # A random cotangent, so no gradient term cancels against another.
     weight = rng.standard_normal(tuple(r_out.shape)).astype(np.float32)
     (l_out * lucid.tensor(weight, device=device)).sum().backward()
-    (r_out * ref.tensor(weight)).sum().backward()
     assert lx.grad is not None
-    assert_close(lx.grad, rx.grad, atol=1e-5, msg="input grad")
+    probe = rng.standard_normal(shape)
+    if _reference_backward_is_adjoint(ref, probe, weight, kw):
+        (r_out * ref.tensor(weight)).sum().backward()
+        assert_close(lx.grad, rx.grad, atol=1e-5, msg="input grad")
+        return
+    # The reference's backward is not the adjoint of its own forward here
+    # (an axis that keeps its size under a scale factor other than one:
+    # its backward copies while its forward resamples).  The forwards
+    # agree, so the gradient is held to the adjoint of that forward.
+    probed = F.interpolate(lucid.tensor(probe.astype(np.float32), device=device), **kw)
+    lhs = float((probed * lucid.tensor(weight, device=device)).sum().item())
+    rhs = float((np.asarray(lx.grad.to("cpu").numpy()) * probe).sum())
+    assert abs(lhs - rhs) <= 1e-4 * (1.0 + abs(lhs)), "input grad is not the adjoint"
+
+
+def _reference_backward_is_adjoint(
+    ref: Any, probe: np.ndarray, weight: np.ndarray, kw: dict[str, Any]
+) -> bool:
+    """``<J v, w> == <v, J^T w>`` for the reference, in double precision."""
+    x = ref.tensor(probe, requires_grad=True)
+    cotangent = ref.tensor(weight.astype(np.float64))
+    out = ref.nn.functional.interpolate(x, **kw)
+    (out * cotangent).sum().backward()
+    lhs = float((out.detach() * cotangent).sum())
+    rhs = float((x.grad * x.detach()).sum())
+    return abs(lhs - rhs) <= 1e-9 * (1.0 + abs(lhs))
 
 
 @pytest.mark.parity
@@ -118,17 +158,35 @@ class TestInterpolateMatrix:
 
 @pytest.mark.parity
 class TestInterpolateAntialias:
-    @pytest.mark.parametrize(("mode", "kw", "align_corners"), _ANTIALIAS)
+    @pytest.mark.parametrize(("mode", "shape", "kw", "align_corners"), _ANTIALIAS)
     def test_values_and_gradient(
         self,
         ref: Any,
         device: str,
         mode: str,
+        shape: tuple[int, ...],
         kw: dict[str, Any],
         align_corners: bool,
     ) -> None:
         kw = {**kw, "mode": mode, "align_corners": align_corners, "antialias": True}
-        _compare(ref, device, (2, 3, 11, 14), kw, seed=7)
+        _compare(ref, device, shape, kw, seed=7)
+
+    @pytest.mark.parametrize("mode", ["bilinear", "bicubic"])
+    def test_an_output_width_of_one_is_not_a_constant_column(
+        self, ref: Any, device: str, mode: str
+    ) -> None:
+        # Left out of the matrix on purpose: with antialias and an output
+        # width of one, the reference repeats one value down the column.
+        # That is not mirrored.  Resizing the transposed image (height one,
+        # which it gets right) gives the answer to hold Lucid to instead.
+        x = np.random.default_rng(3).standard_normal((1, 2, 6, 2)).astype(np.float32)
+        got = F.interpolate(
+            lucid.tensor(x, device=device), size=(3, 1), mode=mode, antialias=True
+        )
+        want = ref.nn.functional.interpolate(
+            ref.tensor(x).transpose(2, 3), size=(1, 3), mode=mode, antialias=True
+        ).transpose(2, 3)
+        assert_close(got, want, atol=1e-5)
 
 
 @pytest.mark.parity
