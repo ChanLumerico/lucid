@@ -20,11 +20,6 @@ CPU and Metal, value and both gradients, in two ways:
 * under ``-m parity``, against the reference.  Four cells differ on purpose
   (``_DEVIATIONS``), and the test pins the reference's value there too, so
   the docstrings that name it stay true.
-
-The cells listed in ``_LOG1P_BROKEN`` fail because of ``lucid.log1p``
-itself (CHA-246), not because of the convention: ``log1p(+inf)`` is NaN, and
-its gradient is NaN at ``y <= -1``.  They are strict xfails, so they turn
-into failures once the engine fix lands.
 """
 
 import ast
@@ -73,35 +68,14 @@ _DEVIATIONS: dict[tuple[str, float, float], tuple[str, float, str]] = {
     ),
 }
 
-#: Cells that are wrong because ``lucid.log1p`` is wrong at +inf and at -1.
-_LOG1P_BROKEN = frozenset(
-    {
-        ("xlog1py", 2.0, -1.0),
-        ("xlog1py", -1.0, -1.0),
-        ("xlog1py", 2.0, _INF),
-        ("xlog1py", -1.0, _INF),
-    }
-)
-
 
 def _grid() -> list[object]:
-    params: list[object] = []
-    for name in _FUNCS:
-        for x in _XS:
-            for y in _YS:
-                marks = (
-                    [
-                        pytest.mark.xfail(
-                            strict=True, reason="CHA-246: log1p at +inf / -1"
-                        )
-                    ]
-                    if (name, x, y) in _LOG1P_BROKEN
-                    else []
-                )
-                params.append(
-                    pytest.param(name, x, y, marks=marks, id=f"{name}-x{x}-y{y}")
-                )
-    return params
+    return [
+        pytest.param(name, x, y, id=f"{name}-x{x}-y{y}")
+        for name in _FUNCS
+        for x in _XS
+        for y in _YS
+    ]
 
 
 def _log(name: str, y: float) -> float:

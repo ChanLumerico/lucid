@@ -13,6 +13,7 @@
 
 #include "../../core/Dtype.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
 #include "../../core/TensorImpl.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Compare.h"
@@ -27,6 +28,7 @@
 #include "../ufunc/Astype.h"
 #include "../ufunc/Discrete.h"
 #include "../ufunc/Exponential.h"
+#include "../ufunc/Predicate.h"
 #include "../ufunc/Trig.h"
 #include "../utils/Select.h"
 
@@ -46,10 +48,7 @@ TensorImplPtr log10_op(const TensorImplPtr& a) {
 // log of that, which is where the information goes.  Below the machine
 // epsilon ``1 + x`` rounds to exactly 1 and the answer comes back 0 where
 // it should be x: ``log1p(1e-30)`` was 0.0 against the reference's 1e-30,
-// and everything under about 1e-8 had lost all of its digits.  That is
-// the entire reason ``log1p`` exists as a function of its own, and the
-// previous note here said the accuracy near zero was the log's and left
-// it at that.
+// and everything under about 1e-8 had lost all of its digits.
 //
 // The standard repair takes the log at the rounded operand and rescales
 // by the increment the rounding actually applied:
@@ -57,17 +56,37 @@ TensorImplPtr log10_op(const TensorImplPtr& a) {
 //     u = 1 + x;   log1p(x) = (u - 1 == 0) ? x : log(u) · x / (u - 1)
 //
 // ``u - 1`` recovers exactly what the addition put in — it is not
-// algebraically ``x``, and that difference is the correction.  Where the
-// increment vanished entirely, ``x`` is already the answer to within one
-// ulp.  ``log1p(-1)`` still comes back -inf, by the same route.
+// algebraically ``x``, and that difference is the correction.
+//
+// The rescaling is a value correction only.  Differentiated, it is
+// 0/0 or inf/inf wherever ``log(u)`` is not finite: the value at +inf was
+// NaN (inf · inf / inf), and the gradient was NaN at x = -1 and below,
+// where the derivative is 1 / (1 + x) — +inf at -1, finite beyond.  So
+// the graph carries ``log(u)``, whose backward is exactly 1 / (1 + x),
+// and the correction is added outside autograd, and only where
+// ``log(u)`` is finite; elsewhere ``log(u)`` already is the answer
+// (+inf, -inf at -1, NaN below -1 and at NaN).  ``x / (u - 1)`` is
+// divided before it multiplies, since it is about 1 and ``log(u) · x``
+// overflows float32 from x ≈ 4e36.
 TensorImplPtr log1p_op(const TensorImplPtr& a) {
     auto ones = full_like_op(a, 1.0);
     auto u = add_op(a, ones);
-    auto increment = sub_op(u, ones);
-    auto vanished = equal_op(increment, full_like_op(increment, 0.0));
-    auto safe = where_op(vanished, ones, increment);
-    auto rescaled = div_op(mul_op(log_op(u), a), safe);
-    return where_op(vanished, a, rescaled);
+    auto plain = log_op(u);
+    TensorImplPtr vanished;
+    TensorImplPtr correction;
+    {
+        NoGradGuard no_grad;
+        auto increment = sub_op(u, ones);
+        vanished = equal_op(increment, full_like_op(increment, 0.0));
+        auto safe = where_op(vanished, ones, increment);
+        auto accurate = mul_op(plain, div_op(a, safe));
+        correction =
+            where_op(isfinite_op(plain), sub_op(accurate, plain), full_like_op(plain, 0.0));
+    }
+    // Where the increment vanished, x is already the answer to within one
+    // ulp, its derivative 1 / (1 + x) rounds to 1, and taking x keeps
+    // log1p(-0) = -0.
+    return where_op(vanished, a, add_op(plain, correction));
 }
 
 // ``exp2(x) = exp(x · log(2))``.  Multiplying against a constant tensor keeps

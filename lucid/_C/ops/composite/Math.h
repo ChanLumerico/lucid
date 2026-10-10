@@ -63,10 +63,10 @@ LUCID_API TensorImplPtr log10_op(const TensorImplPtr& a);
 
 // Natural log of 1 + x: $y = \ln(1 + x)$.
 //
-// Composite over :func:`add_op` + :func:`log_op`.  Inherits the underlying
-// ``log_op`` precision — does **not** provide the high-accuracy small-$x$
-// behaviour of a dedicated ``log1p`` kernel.  Gradient flows through
-// ``LogBackward`` and ``AddBackward``.
+// Composite over :func:`add_op` + :func:`log_op`, with a rounding
+// correction that keeps full relative precision for $|x| \ll 1$.  The
+// gradient is ``LogBackward``'s $1 / (1 + x)$: $+\infty$ at $x = -1$ and
+// finite below it.
 //
 // Math
 // ----
@@ -77,17 +77,13 @@ LUCID_API TensorImplPtr log10_op(const TensorImplPtr& a);
 // Parameters
 // ----------
 // a : TensorImplPtr
-//     Input tensor.  Domain: $x > -1$.
+//     Input tensor.  $x = -1$ gives $-\infty$, $x < -1$ NaN, $+\infty$
+//     gives $+\infty$.
 //
 // Returns
 // -------
 // TensorImplPtr
 //     Tensor of the same shape and dtype as ``a``.
-//
-// Notes
-// -----
-// For $|x| \ll 1$ accuracy degrades relative to ``libm``'s ``log1p`` —
-// catastrophic cancellation happens before the ``log`` is applied.
 //
 // See Also
 // --------

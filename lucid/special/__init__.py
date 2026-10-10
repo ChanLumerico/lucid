@@ -20,9 +20,8 @@ Implemented (all pure-Python composites over engine ops — no C++ work):
 * ``xlog1py``               — ``x · log1p(y)``, taken as 0 wherever ``x = 0``
 * ``entr``                  — entropy element ``-x · log(x)``, 0 at x=0
 * ``multigammaln``          — log of the multivariate gamma function
-* ``polygamma``             — derivatives of ``digamma``; n=0 falls through
-                              to ``lucid.digamma``, n=1 (trigamma) uses the
-                              standard series; n ≥ 2 raises ``NotImplementedError``
+* ``polygamma``             — derivatives of ``digamma``, any order ``n``, on the
+                              whole real line (reflection for ``x < 0``)
 * ``spherical_bessel_j0``   — ``sin(x)/x`` with continuous extension at 0
 
 Deferred (would need oscillatory / Hurwitz-zeta approximations or
@@ -37,6 +36,7 @@ import math
 from typing import TYPE_CHECKING, Callable
 
 import lucid
+from lucid._ops.composite._gamma import _polygamma
 from lucid._ops.composite.elementwise import _x_times_log
 
 if TYPE_CHECKING:
@@ -828,19 +828,6 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
     return float(p * (p - 1)) / 4.0 * math.log(math.pi) + accum
 
 
-# Bernoulli numbers B_2, B_4, ... B_12, used by the polygamma asymptotic
-# series.  Only the even-index ones are needed — every odd Bernoulli number
-# past B_1 is zero, which is why the series skips odd powers.
-_BERNOULLI_2K: tuple[float, ...] = (
-    1.0 / 6.0,
-    -1.0 / 30.0,
-    1.0 / 42.0,
-    -1.0 / 30.0,
-    5.0 / 66.0,
-    -691.0 / 2730.0,
-)
-
-
 def polygamma(n: int, x: Tensor) -> Tensor:
     r"""Polygamma function :math:`\psi^{(n)}(x)`.
 
@@ -875,8 +862,8 @@ def polygamma(n: int, x: Tensor) -> Tensor:
                      = (-1)^{n+1}\, n!\, \sum_{k=0}^\infty
                        \frac{1}{(x + k)^{n+1}}.
 
-    Implementation: shift ``x`` upward by :math:`K = 6` using the
-    recurrence
+    Implementation: for ``x >= 0`` shift ``x`` upward by :math:`K = 8`
+    using the recurrence
 
     .. math::
 
@@ -885,8 +872,18 @@ def polygamma(n: int, x: Tensor) -> Tensor:
 
     accumulate the per-step corrections, then evaluate the Bernoulli
     asymptotic series at the shifted argument where it is
-    well-conditioned.  Accuracy is roughly seven decimal digits across
-    the positive-real regime.
+    well-conditioned.  For ``x < 0`` the ``n``-th derivative of the
+    reflection formula,
+
+    .. math::
+
+        \psi^{(n)}(x) = (-1)^n \psi^{(n)}(1 - x)
+                      - \pi \frac{d^n}{dx^n} \cot(\pi x),
+
+    maps the argument onto the right half.  The non-positive integers
+    (and ``-inf``) are poles: ``n = 0`` gives NaN there, except
+    ``psi(+0) = -inf`` and ``psi(-0) = +inf``; ``n >= 1`` gives
+    :math:`(-1)^{n+1} \infty`.
 
     Raises ``ValueError`` for ``n < 0``.
 
@@ -911,58 +908,7 @@ def polygamma(n: int, x: Tensor) -> Tensor:
     n = int(n)
     if n < 0:
         raise ValueError(f"polygamma: n must be ≥ 0, got {n}")
-    if n == 0:
-        return lucid.digamma(x)
-
-    # ── recurrence shift, then an asymptotic series at the shifted point.
-    #
-    #   psi^(n)(x) = psi^(n)(x+K) + (-1)^(n+1) n! * sum_{k<K} 1/(x+k)^(n+1)
-    #
-    # K=8 puts the series argument far enough out that four Bernoulli terms
-    # reach the accuracy of an independent direct-summation reference
-    # (~7e-11 relative, itself the reference's floor) for every order tried,
-    # n = 1 .. 12 — orders of magnitude below float32's resolution. ──
-    K: int = 8
-    n_terms: int = 4
-    sign: float = 1.0 if n % 2 == 1 else -1.0  # (-1)^(n+1) — n odd -> +.
-    n_fact: float = float(math.factorial(n))
-    correction: Tensor = lucid.zeros_like(x)
-    for k in range(K):
-        correction = correction + sign * n_fact / ((x + float(k)) ** (n + 1))
-    xr: Tensor = x + float(K)
-
-    # ── asymptotic series at xr (Wikipedia, "Polygamma function"):
-    #   psi^(n)(x) ~ (-1)^(n+1) [ (n-1)!/x^n + n!/(2 x^(n+1))
-    #                           + sum_{k>=1} B_2k (2k+n-1)!/(2k)! / x^(2k+n) ]
-    #
-    # The coefficients used to be tabulated by hand for n = 1, 2, 3, which is
-    # why higher orders were unreachable; they are closed-form in n, so
-    # nothing about the method was ever limited to three orders.
-    #
-    # Written with (n-1)!/xr^n factored out.  Evaluating each term as
-    # B_2k (2k+n-1)!/(2k)! / xr^(2k+n) instead overflows float32 from about
-    # n = 31 — the k=4 coefficient alone passes 3.4e38 — even though the
-    # terms themselves are tiny and the answer is representable.  Divided
-    # through by the leading term the coefficients stay small, and the one
-    # quantity that legitimately grows like a factorial is evaluated once,
-    # in log space. ──
-    lead: Tensor = lucid.exp(math.lgamma(n) - n * lucid.log(xr))
-    r2: Tensor = (1.0 / xr) ** 2
-    bracket: Tensor = 1.0 + (n / 2.0) / xr
-    pow_r2: Tensor = lucid.ones_like(x)
-    for k in range(1, n_terms + 1):
-        pow_r2 = pow_r2 * r2  # 1 / xr^(2k)
-        # (2k+n-1)! / (n-1)! is a product of 2k integers, not a factorial.
-        ratio: float = 1.0
-        for j in range(n, 2 * k + n):
-            ratio *= float(j)
-        bracket = (
-            bracket
-            + (_BERNOULLI_2K[k - 1] * ratio / float(math.factorial(2 * k))) * pow_r2
-        )
-
-    asym: Tensor = sign * lead * bracket
-    return asym + correction
+    return _polygamma(n, _real(x))
 
 
 # ── Spherical Bessel ───────────────────────────────────────────────────────
@@ -2248,8 +2194,8 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
         Exponent; must satisfy :math:`\Re(x) > 1` for the series to
         converge.  Any floating-point dtype.
     q : Tensor
-        Shift parameter; broadcast-compatible with ``x``.  Should be
-        positive (avoid the poles at non-positive integers).
+        Shift parameter; broadcast-compatible with ``x``.  The
+        non-positive integers are poles.
 
     Returns
     -------
@@ -2277,9 +2223,11 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
                     \prod_{i=0}^{2j-2}(x + i)\, a^{-x-2j+1},
 
     where :math:`a = q + N` and the :math:`B_{2j}` are Bernoulli
-    numbers.  Accuracy is roughly :math:`10^{-6}` for :math:`x > 1`
-    and moderate ``q`` — adequate for ML log-density work, not for
-    heroic-precision scientific computing.  The Riemann zeta is the
+    numbers; that is accurate to float64 rounding for :math:`x > 1`
+    and :math:`q > 0`.  A negative non-integer ``q`` is real only for
+    an integer ``x`` and is reduced to positive arguments; otherwise it
+    is NaN.  The non-positive integers ``q`` are poles (``+inf``),
+    ``x = 1`` is ``+inf`` and ``x < 1`` is NaN.  The Riemann zeta is the
     special case :math:`\zeta(x) = \zeta(x, 1)`.
 
     Examples
@@ -2292,50 +2240,100 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     tensor([1.645, 1.202])
     """
     x, q = _real(x), _real(q)
-
-    # Accumulate the explicit prefix Σ_{k=0..N-1} (k + q)^{-x}.
-    N = 12
-    s = lucid.zeros_like(q)
-    for k in range(N):
-        s = s + (q + float(k)) ** (-x)
-
-    # Euler-Maclaurin tail starting at a = q + N:
-    #   Σ_{k=N..∞} (k+q)^{-x}  ≈  a^{1-x} / (x - 1)  +  ½ · a^{-x}
-    #                            +  Σ_j  B_{2j} / (2j)! · (Π_{i=0..2j-2} (x + i)) · a^{-x - 2j + 1}
-    a = q + float(N)
+    # Broadcast both up front: every guard below is a per-element mask over
+    # the pair.
+    x, q = x + lucid.zeros_like(q), q + lucid.zeros_like(x)
+    nan = lucid.full_like(x, math.nan)
+    inf = lucid.full_like(x, math.inf)
     one = lucid.ones_like(x)
-    head = a ** (1 - x) / (x - one)
-    half = 0.5 * a ** (-x)
 
-    bernoulli = [
-        1.0 / 6.0,  # B_2
-        -1.0 / 30.0,  # B_4
-        1.0 / 42.0,  # B_6
-        -1.0 / 30.0,  # B_8
-        5.0 / 66.0,  # B_10
-    ]
-    factorial = [2.0, 24.0, 720.0, 40320.0, 3628800.0]
-    tail = lucid.zeros_like(s)
-    coef = lucid.ones_like(x)
-    for j, (b, f) in enumerate(zip(bernoulli, factorial)):
-        # coef accumulates Π_{i=0..2j} (x + i).
-        coef = coef * (x + float(2 * j)) * (x + float(2 * j + 1))
-        tail = tail + (b / f) * coef * a ** (-x - float(2 * j + 1))
+    # Each series evaluation below is handed an argument inside its domain,
+    # so the losing side of a ``where`` never meets 0/0 and no NaN reaches
+    # the gradient through the mask.
+    x_safe = lucid.where(x <= 1.0, lucid.full_like(x, 2.0), x)
+    pole = (q <= 0.0) & (q == lucid.floor(q))
+    negative = (q < 0.0) & ~pole
+    out = _hurwitz_zeta_positive(x_safe, lucid.where(negative | pole, one, q))
 
-    out = s + head + half + tail
+    # A negative non-integer q has terms (q + k)^-x of negative bases, real
+    # only for an integer x.  Writing q = f - m with f in (0, 1), the m
+    # negative terms are (-1)^x sum_{j=1..m} (j - f)^-x, which is a
+    # difference of two Hurwitz zetas at positive arguments:
+    #
+    #     zeta(x, q) = zeta(x, f) + (-1)^x [zeta(x, 1 - f) - zeta(x, 1 - q)].
+    #
+    # The direct sum it replaces needed one term per unit of |q| before the
+    # Euler-Maclaurin tail was valid; with a fixed prefix it was wrong for
+    # q below about -3 and NaN once q + 12 went negative.
+    f = q - lucid.floor(q)
+    near = _hurwitz_zeta_positive(x_safe, lucid.where(negative, f, one))
+    mirror = _hurwitz_zeta_positive(x_safe, lucid.where(negative, 1.0 - f, one))
+    far = _hurwitz_zeta_positive(x_safe, lucid.where(negative, 1.0 - q, one))
+    xd = x_safe.detach()
+    parity = 1.0 - 2.0 * (xd - 2.0 * lucid.floor(xd / 2.0))
+    out = lucid.where(negative, near + parity * (mirror - far), out)
 
-    # The Hurwitz zeta converges only for s > 1.  At or below it the
+    # x = +inf leaves only the terms with |q + k| <= 1: the series is +inf
+    # if one is below 1 and 1 if q = 1.  The Euler-Maclaurin form evaluates
+    # both as inf * 0.  With every term above 1 the limit is 0, but the
+    # reference answers NaN there (its tail is inf * 0 too) and so does this.
+    at_inf = lucid.where(q < 1.0, inf, lucid.where(q == 1.0, one, nan))
+    out = lucid.where(x == math.inf, at_inf, out)
+
+    # The remaining guards follow the reference's order of precedence,
+    # lowest first.  A negative q with a non-integer x has no real value.
+    out = lucid.where(negative & (x != lucid.floor(x)), nan, out)
+    # The non-positive integers make one term 1/0.
+    out = lucid.where(pole, inf, out)
+    # The Hurwitz zeta converges only for x > 1.  At or below it the
     # series diverges, and the Euler-Maclaurin form evaluated anyway
-    # returns an ordinary-looking number: -7.15e-06 at s = -1 on the CPU
-    # and exactly 0 on Metal, neither of which is a value ζ takes
-    # there.  The two devices disagreeing was the visible half; both
-    # answering at all was the defect.  The reference returns NaN across
-    # the whole divergent half and so does this now.
-    one = lucid.ones_like(x)
-    # s = 1 is the harmonic series, which diverges *upward* rather than
+    # returns an ordinary-looking number: -7.15e-06 at x = -1 on the CPU
+    # and exactly 0 on Metal, neither of which is a value zeta takes
+    # there.  The reference returns NaN across the whole divergent half
+    # and so does this.
+    out = lucid.where(x < 1.0, nan, out)
+    # x = 1 is the harmonic series, which diverges *upward* rather than
     # merely failing to converge — so it is +inf, not NaN.
-    out = lucid.where(x > one, out, lucid.full_like(out, float("nan")))
-    return lucid.where(x == one, lucid.full_like(out, float("inf")), out)
+    return lucid.where(x == 1.0, inf, out)
+
+
+# B_2, B_4, ..., B_10 over (2j)!, for the Euler-Maclaurin tail of ``zeta``.
+_ZETA_TAIL_COEFFS: tuple[float, ...] = (
+    (1.0 / 6.0) / 2.0,
+    (-1.0 / 30.0) / 24.0,
+    (1.0 / 42.0) / 720.0,
+    (-1.0 / 30.0) / 40320.0,
+    (5.0 / 66.0) / 3628800.0,
+)
+
+
+def _hurwitz_zeta_positive(x: Tensor, q: Tensor) -> Tensor:
+    r""":math:`\zeta(x, q)` for ``x > 1`` and ``q > 0``.
+
+    An explicit prefix of N = 12 terms, then the Euler-Maclaurin tail at
+    a = q + N:
+
+        sum_{k>=N} (k + q)^-x ~ a^(1-x)/(x-1) + a^-x/2
+                                + sum_j B_2j/(2j)! x(x+1)...(x+2j-2) a^(-x-2j+1).
+
+    The rising product has 2j - 1 factors — the (2j-1)-th derivative of
+    t^-x.  It used to start at x(x+1) and so carried one factor too many in
+    every term, which put zeta(2) at 1.6450854 against pi^2/6 = 1.6449341.
+    """
+    n_prefix = 12
+    s = lucid.zeros_like(q)
+    for k in range(n_prefix):
+        s = s + (q + float(k)) ** (-x)
+    a = q + float(n_prefix)
+    head = a ** (1.0 - x) / (x - 1.0)
+    half = 0.5 * a ** (-x)
+    tail = lucid.zeros_like(s)
+    rising = x
+    for j, c in enumerate(_ZETA_TAIL_COEFFS):
+        if j > 0:
+            rising = rising * (x + float(2 * j - 1)) * (x + float(2 * j))
+        tail = tail + c * rising * a ** (-x - float(2 * j + 1))
+    return s + head + half + tail
 
 
 # ── Name aliases matching reference framework's lucid.special surface ─────────

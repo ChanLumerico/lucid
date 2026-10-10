@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, cast
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _unwrap_or_scalar, _wrap
+from lucid._ops.composite._gamma import _lgamma, _polygamma
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar, TensorOrScalar
 
@@ -698,6 +699,10 @@ def expm1(x: Tensor) -> Tensor:
     xd = x.detach()
     u = lucid.exp(xd)
     accurate = lucid.where(u == 1.0, xd, (u - 1.0) * xd / lucid.log(u))
+    # Kahan's second guard: once u - 1 rounds to -1, -1 is the answer.  The
+    # ratio would take log(u) of a subnormal u, whose rounding is no longer
+    # relative — expm1(-100) in float32 came out -1.000169.
+    accurate = lucid.where(u - 1.0 == -1.0, u - 1.0, accurate)
     accurate = lucid.where((u == 0.0) | ~lucid.isfinite(u), u - 1.0, accurate)
     # The value is the accurate one; the gradient is exp(x)'s, carried by the
     # naive form under it, so the guards' 0/0 branches never reach backward.
@@ -707,7 +712,10 @@ def expm1(x: Tensor) -> Tensor:
         accurate - naive.detach(),
         lucid.zeros_like(accurate),
     )
-    return naive + correction.detach()
+    # Where exp(x) rounds to 1, x itself is the answer and its gradient is
+    # exp(x) to within an ulp; taking it directly also keeps expm1(-0) = -0,
+    # which ``0 + (-0)`` would turn into +0.
+    return lucid.where(u == 1.0, x, naive + correction.detach())
 
 
 def sinc(x: Tensor) -> Tensor:
@@ -1403,28 +1411,8 @@ def lcm(x: Tensor, y: Tensor) -> Tensor:
 
 # ── Log-gamma and Digamma ─────────────────────────────────────────────────
 #
-# Both are implemented as pure composites over engine primitives so that
+# Both live in ``_gamma.py`` as pure composites over engine primitives, so
 # autograd flows through them automatically.
-#
-# lgamma: Lanczos approximation (Numerical Recipes, g=7, n=9).
-#   Valid for x > 0.  Using the full Lanczos series keeps relative error
-#   below 1.5e-15 for real x > 0 (float64).
-#
-# digamma: shift via recurrence ψ(x) = ψ(x+8) − Σ 1/(x+k) to push the
-#   argument above 8, then apply the asymptotic series.
-
-_LANCZOS_G = 7.0
-_LANCZOS_P: list[float] = [
-    0.99999999999980993,
-    676.5203681218851,
-    -1259.1392167224028,
-    771.32342877765313,
-    -176.61502916214059,
-    12.507343278686905,
-    -0.13857109526572012,
-    9.9843695780195716e-6,
-    1.5056327351493116e-7,
-]
 
 
 def lgamma(x: Tensor) -> Tensor:
@@ -1433,14 +1421,14 @@ def lgamma(x: Tensor) -> Tensor:
     Implemented as a pure composite over engine primitives — uses the
     Lanczos approximation (Numerical Recipes, :math:`g = 7`, 9 series
     coefficients).  Relative error stays below ``1.5e-15`` for real
-    ``x > 0`` in float64.  Autograd flows through automatically because
-    every step is an engine op.
+    ``x > 0`` in float64; ``x < 1/2`` goes through Euler's reflection.
+    Autograd flows through automatically because every step is an engine
+    op.
 
     Parameters
     ----------
     x : Tensor
-        Real input.  Defined for ``x > 0``; behaviour on non-positive
-        reals is implementation-defined (the series diverges).
+        Real input.  The non-positive integers and ``±inf`` give ``+inf``.
 
     Returns
     -------
@@ -1451,72 +1439,25 @@ def lgamma(x: Tensor) -> Tensor:
     --------
     digamma : derivative :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
     """
-    # The Lanczos series is only valid on the right half of the line, and
-    # nothing here said so: ``lgamma(-0.5)`` came back NaN against the
-    # reference's 1.2655, and ``lgamma(1e-30)`` came back inf against
-    # 69.0776.  Γ has poles at the non-positive integers and is perfectly
-    # finite everywhere between them, so the left half is not a domain
-    # error — it is the half this implementation never covered.
-    #
-    # Euler's reflection formula supplies it:
-    #
-    #     lgamma(x) = log(π) − log|sin(πx)| − lgamma(1 − x)
-    #
-    # Both branches are evaluated, because ``where`` selects rather than
-    # short-circuits, so each is given an argument clamped into its own
-    # half.  Without that the losing branch divides by zero at ``z + k``
-    # and the NaN reaches the *gradient* through the mask, which is the
-    # usual way a where-guarded formula goes wrong.
-    half = lucid.full_like(x, 0.5)
-    reflect = x < half
-
-    right = _lgamma_lanczos(lucid.maximum(x, half))
-    mirror = _lgamma_lanczos(lucid.maximum(1.0 - x, half))
-    # ``sin(πx)`` is zero at every integer, where Γ has its poles and the
-    # answer is +inf.  Only the reflected side may see it: elsewhere it is
-    # replaced by 1, so ``log`` never meets a zero it was not asked about.
-    sin_term = lucid.abs(lucid.sin(math.pi * x))
-    sin_safe = lucid.where(reflect, sin_term, lucid.ones_like(x))
-    left = math.log(math.pi) - lucid.log(sin_safe) - mirror
-    out = lucid.where(reflect, left, right)
-
-    # The poles have to be named rather than computed.  ``sin(πx)`` is
-    # zero at every integer in exact arithmetic and merely small in
-    # floating point — π is not representable, so ``sin(π · -1.0)`` came
-    # out 1.2e-16 and lgamma(-1) answered 37.78 instead of +inf.  A large
-    # finite number in place of a pole is the kind of wrong answer that
-    # propagates quietly, so the non-positive integers are substituted
-    # directly.
-    at_pole = (x <= lucid.zeros_like(x)) & (x == lucid.round(x))
-    return lucid.where(at_pole, lucid.full_like(x, float("inf")), out)
-
-
-def _lgamma_lanczos(x: Tensor) -> Tensor:
-    """The Lanczos series proper — correct for ``x >= 0.5``."""
-    z = x - 1.0
-    t = z + (_LANCZOS_G + 0.5)
-    series = lucid.full_like(x, _LANCZOS_P[0])
-    for k in range(1, len(_LANCZOS_P)):
-        series = series + _LANCZOS_P[k] / (z + float(k))
-    return (
-        0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
-    )
+    return _lgamma(x)
 
 
 def digamma(x: Tensor) -> Tensor:
     r"""Digamma function :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
 
     Implemented as a composite of engine primitives so autograd flows
-    through naturally.  Uses the standard recurrence-plus-asymptotic
-    strategy: shift the argument by 8 via
-    :math:`\psi(x) = \psi(x + 8) - \sum_{k=0}^{7} 1/(x + k)`, then
-    evaluate the asymptotic Bernoulli series on the shifted argument
-    where the series converges quickly.
+    through naturally, and its gradient is the trigamma function.  For
+    ``x >= 0`` the argument is shifted by 8 via
+    :math:`\psi(x) = \psi(x + 8) - \sum_{k=0}^{7} 1/(x + k)` and the
+    asymptotic Bernoulli series is evaluated there; for ``x < 0`` the
+    reflection formula :math:`\psi(x) = \psi(1 - x) - \pi \cot(\pi x)`
+    maps the argument onto the right half.
 
     Parameters
     ----------
     x : Tensor
-        Real input.  Defined for ``x > 0``.
+        Real input.  The negative integers and ``-inf`` are poles and give
+        NaN; ``psi(+0)`` is ``-inf`` and ``psi(-0)`` is ``+inf``.
 
     Returns
     -------
@@ -1527,18 +1468,7 @@ def digamma(x: Tensor) -> Tensor:
     --------
     lgamma : :math:`\ln \Gamma(x)` itself.
     """
-    # Shift to xr = x + 8 accumulating the correction sum.
-    # ψ(x) = ψ(x+8) − 1/x − 1/(x+1) − … − 1/(x+7)
-    correction = lucid.zeros_like(x)
-    for k in range(8):
-        correction = correction + 1.0 / (x + float(k))
-    xr = x + 8.0
-    # Asymptotic expansion: ψ(xr) ≈ ln(xr) − 1/(2xr) − B2/(2xr²) + B4/(4xr⁴) − B6/(6xr⁶)
-    # Bernoulli-based: B2=1/6, B4=-1/30, B6=1/42
-    r = 1.0 / xr
-    r2 = r * r
-    psi = lucid.log(xr) - 0.5 * r - r2 / 12.0 + r2 * r2 / 120.0 - r2 * r2 * r2 / 252.0
-    return psi - correction
+    return _polygamma(0, x)
 
 
 # ── Modified Bessel function I₀ ───────────────────────────────────────────
