@@ -397,9 +397,13 @@ def shared_tensor(
     buffer.  An in-place op that does record a graph gives the tensor storage
     of its own, and ``is_shared`` turns ``False``.
 
-    GPU ops are lazy: evaluate a pending GPU result that reads the buffer
-    (``.eval()``, or read its values) before writing to the buffer from the
-    CPU, or the result may see the new values.
+    GPU ops are lazy, and a write through any of these tensors first runs
+    the pending GPU results that read the buffer, so each keeps the values
+    it was built from.  A NumPy array from ``.numpy()`` is the buffer too
+    (reads are zero-copy), but a write through it bypasses Lucid: call
+    :func:`synchronize` first, or a pending result may see the new values.
+    A result that MLX made without a copy, such as a ``clone()`` that has
+    already run, still shares the buffer and sees later writes.
 
     Parameters
     ----------

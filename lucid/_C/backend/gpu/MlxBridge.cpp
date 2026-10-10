@@ -31,11 +31,13 @@
 #include "MlxBridge.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -48,6 +50,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
 #include "MetalAllocator.h"
+#include "SharedBufferWrites.h"
 
 namespace lucid::gpu {
 
@@ -288,6 +291,86 @@ std::size_t evaluate_pending() {
     if (!arrays.empty())
         ::mlx::core::eval(arrays);
     return arrays.size();
+}
+
+namespace {
+
+// The noted arrays that are still pending, dropping the rest from the list.
+std::vector<std::shared_ptr<::mlx::core::array>> live_pending() {
+    std::vector<std::shared_ptr<::mlx::core::array>> live;
+    std::lock_guard<std::mutex> lock(g_pending_mu);
+    std::erase_if(g_pending, [&live](const std::weak_ptr<::mlx::core::array>& weak) {
+        auto held = weak.lock();
+        if (!held || !is_pending(*held))
+            return true;
+        live.push_back(std::move(held));
+        return false;
+    });
+    return live;
+}
+
+using ReadsMemo = std::unordered_map<std::uintptr_t, bool>;
+
+// Whether ``root``'s graph reads the bytes ``data`` holds.  An array that has
+// run reads them when it holds them; a pending one when any input does.
+// Iterative, because a lazy chain can be deeper than the C++ stack.
+bool graph_reads(const ::mlx::core::array& root,
+                 const ::mlx::core::array::Data* data,
+                 ReadsMemo& memo) {
+    // The graph holds every node alive while the walk runs, so the frames
+    // point at its arrays instead of copying their handles.
+    struct Frame {
+        const ::mlx::core::array* arr;
+        std::size_t next = 0;
+    };
+    std::vector<Frame> stack;
+    stack.push_back({&root});
+    while (!stack.empty()) {
+        Frame& top = stack.back();
+        const ::mlx::core::array& arr = *top.arr;
+        if (top.next == 0 && memo.contains(arr.id())) {
+            stack.pop_back();
+            continue;
+        }
+        if (arr.status() != ::mlx::core::array::Status::unscheduled) {
+            memo.emplace(arr.id(), arr.data_shared_ptr().get() == data);
+            stack.pop_back();
+            continue;
+        }
+        const auto& inputs = arr.inputs();
+        while (top.next < inputs.size() && memo.contains(inputs[top.next].id()))
+            ++top.next;
+        if (top.next < inputs.size()) {
+            const ::mlx::core::array* child = &inputs[top.next++];
+            stack.push_back({child});
+            continue;
+        }
+        const bool reads = std::any_of(inputs.begin(), inputs.end(),
+                                       [&memo](const auto& in) { return memo.at(in.id()); });
+        memo.emplace(arr.id(), reads);
+        stack.pop_back();
+    }
+    return memo.at(root.id());
+}
+
+}  // namespace
+
+void settle_buffer_readers(const SharedStorage& sh, std::vector<::mlx::core::array> with) {
+    // Without the pinned alias no tensor has handed the buffer to MLX.
+    std::vector<::mlx::core::array> readers = std::move(with);
+    if (sh.gpu_alias) {
+        const ::mlx::core::array::Data* data = sh.gpu_alias->data_shared_ptr().get();
+        // No reserve(): a power-of-two bucket count makes libc++ mask the
+        // identity hash of aligned pointers into a few buckets.
+        ReadsMemo memo;
+        for (const auto& arr : live_pending())
+            if (graph_reads(*arr, data, memo))
+                readers.push_back(*arr);
+    }
+    if (!readers.empty())
+        ::mlx::core::eval(readers);
+    // Work already submitted may still be reading the buffer as well.
+    ::mlx::core::synchronize();
 }
 
 namespace {

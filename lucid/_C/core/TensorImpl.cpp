@@ -31,6 +31,7 @@
 #include <mlx/ops.h>
 
 #include "../backend/gpu/MlxBridge.h"
+#include "../backend/gpu/SharedBufferWrites.h"
 #include "../compile/Tracer.h"
 #include "Allocator.h"
 #include "Error.h"
@@ -250,12 +251,20 @@ const SharedStorage* TensorImpl::metal_shared() const {
 
 namespace {
 
+// A CPU tensor carrying a shared buffer's descriptor writes into the buffer
+// itself: the GPU work built over it before the write has to read first.
+void settle_before_host_write(const std::optional<SharedStorage>& shared, const Storage& own) {
+    if (shared && storage_is_cpu(own))
+        gpu::settle_buffer_readers(*shared);
+}
+
 // Lays ``arr``'s values into the shared buffer ``sh``, which arrays aliasing
-// it then read.  The caller has synchronised the GPU.
+// it then read.
 void copy_into_shared(const SharedStorage& sh, const ::mlx::core::array& arr) {
-    // data() ignores strides, so lay the result out first.
+    // data() ignores strides, so lay the result out first — run in the same
+    // pass as the GPU work that reads the bytes it replaces.
     ::mlx::core::array packed = ::mlx::core::contiguous(arr);
-    packed.eval();
+    gpu::settle_buffer_readers(sh, {packed});
     MemoryTracker::track_host_sync(packed.nbytes());
     auto* dst = static_cast<std::byte*>(sh.cpu_ptr);
     const auto* from = reinterpret_cast<const std::byte*>(packed.data<std::uint8_t>());
@@ -270,13 +279,14 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
     if (!sh || src.dtype() != meta_.dtype || src.shape() != meta_.shape ||
         src.device() != meta_.device)
         return false;
-    // Work already queued on the GPU may still be reading these bytes.
-    ::mlx::core::synchronize();
+    // GPU work built before this write, run or not, reads the old bytes:
+    // each branch settles it before laying the new ones in.
     auto* dst = static_cast<std::byte*>(sh->cpu_ptr);
     return std::visit(overloaded{
                           [&](const CpuStorage& c) {
                               if (!c.ptr || src.storage_offset() != 0 || !src.is_contiguous())
                                   return false;
+                              gpu::settle_buffer_readers(*sh);
                               if (c.ptr.get() != dst)
                                   std::memmove(dst, c.ptr.get(), sh->nbytes);
                               return true;
@@ -288,6 +298,7 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                               return true;
                           },
                           [&](const SharedStorage& s) {
+                              gpu::settle_buffer_readers(*sh);
                               if (s.cpu_ptr != sh->cpu_ptr)
                                   std::memcpy(dst, s.cpu_ptr, sh->nbytes);
                               return true;
@@ -660,6 +671,7 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         packed = contig_snapshot_cpu(from, src.shape(), src.stride(), src.storage_offset());
         bytes = packed.data();
     }
+    settle_before_host_write(shared_, storage_);
     if (is_dense()) {
         if (n > 0)
             std::memcpy(dst.ptr.get(), bytes, n);
@@ -692,7 +704,6 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     // bytes — the values go into that buffer, so its CPU alias sees them as
     // well (take_storage_from's rule), and the root stays the buffer.
     if ((raw || !graph) && root_is_shared_buffer(shared_, root, meta_.dtype)) {
-        ::mlx::core::synchronize();
         copy_into_shared(*shared_, next);
     } else if (g.covers(static_cast<std::int64_t>(root.arr->size())) &&
                value.arr->shape() == root.arr->shape()) {
@@ -750,8 +761,12 @@ void TensorImpl::check_wholesale_writable(const char* name) const {
 }
 
 Storage& TensorImpl::mutable_storage() {
-    if (!gpu_member())
+    if (!gpu_member()) {
+        // A CPU writer (an optimizer step, BatchNorm's statistics) writes the
+        // bytes it gets in place.
+        settle_before_host_write(shared_, storage_);
         return storage_;
+    }
     check_wholesale_writable("mutable_storage");
     auto& root = std::get<GpuStorage>(*family_->root);
     if (root.arr &&
@@ -1675,17 +1690,14 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
 // DeviceMismatch error.
 void TensorImpl::copy_from(const TensorImpl& other) {
     note_inplace_write(*this, other);
-    if (other.device() != device()) {
+    if (other.device() != device())
         throw DeviceMismatch(std::string(device_name(meta_.device)),
                              std::string(device_name(other.device())), "copy_from");
-    }
-    if (other.dtype() != dtype()) {
+    if (other.dtype() != dtype())
         throw DtypeMismatch(std::string(dtype_name(meta_.dtype)),
                             std::string(dtype_name(other.dtype())), "copy_from");
-    }
-    if (other.shape() != shape()) {
+    if (other.shape() != shape())
         throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
-    }
     // A Metal family member writes into the root that every member reads.
     if (gpu_member())
         return write_gpu_member(other, "copy_from", /*raw=*/true);
@@ -1697,6 +1709,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
             refuse_overlapping_write("copy_from");
         const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
                                                 other.stride(), other.storage_offset());
+        settle_before_host_write(shared_, storage_);
         scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
                                   meta_.stride, offset_);
         bump_version();
@@ -1708,7 +1721,8 @@ void TensorImpl::copy_from(const TensorImpl& other) {
         bump_version();
         return;
     }
-
+    // A CPU destination below is written in place, its shared buffer too.
+    settle_before_host_write(shared_, storage_);
     std::visit(overloaded{
                    [&](CpuStorage& dst, const CpuStorage& src) {
                        // A view source is read through its geometry, not from
