@@ -84,7 +84,10 @@ def test_loss_is_not_frozen_across_steps(device):
     x_np, y_np, _ = _problem()
     lucid.manual_seed(0)
     model = nn.Linear(4, 1).to(device)
-    opt = optim.LBFGS(model.parameters(), lr=0.5, max_iter=20)
+    # One iteration per step: with ``max_iter=20`` a single step solves this
+    # least-squares problem outright (LCD-222), and the loss of an optimum
+    # stays put for the right reason.
+    opt = optim.LBFGS(model.parameters(), lr=0.5, max_iter=1)
     x = lucid.tensor(x_np, device=device)
     y = lucid.tensor(y_np, device=device)
     seen = []
