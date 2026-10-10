@@ -37,6 +37,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 
 #include "../../autograd/AccumulateGrad.h"
@@ -58,6 +59,7 @@
 #include "../../ops/bfunc/Div.h"
 #include "../../ops/bfunc/Mul.h"
 #include "../../ops/composite/Indexing.h"
+#include "../../ops/composite/Logical.h"
 #include "../../ops/ufunc/Transpose.h"
 #include "../../ops/utils/Select.h"
 #include "../../ops/utils/View.h"
@@ -437,6 +439,26 @@ TensorImplPtr logspace_op(double start,
 
 namespace {
 
+// The kernels read src's buffer as base's dtype and the index's as integers,
+// so an operand of any other dtype was reinterpreted byte for byte: a float64
+// src added into float32 landed as 1.875 where 1.0 was meant, and a bool
+// index scattered to the wrong slots.  The reference refuses a src whose
+// dtype is not self's for every scatter and for ``index_copy``, so these ops
+// refuse rather than cast; a caller that wants the cast makes it.
+void require_scatter_dtypes(const char* op,
+                            const TensorImplPtr& base,
+                            const TensorImplPtr& indices,
+                            const TensorImplPtr& src) {
+    const Dtype idt = indices->dtype();
+    if (idt != Dtype::I32 && idt != Dtype::I64)
+        throw DtypeMismatch("int32 or int64", std::string(dtype_name(idt)),
+                            std::string(op) + ": index");
+    if (src->dtype() != base->dtype())
+        throw DtypeMismatch(std::string(dtype_name(base->dtype())),
+                            std::string(dtype_name(src->dtype())),
+                            std::string(op) + ": src must have self's dtype");
+}
+
 struct AxisScatterOperands {
     int dim;               // normalised
     TensorImplPtr values;  // src cut to the corner the index covers
@@ -452,6 +474,7 @@ AxisScatterOperands axis_scatter_operands(const char* op,
     Validator::input(src, std::string(op) + ".src").non_null();
     Validator::pair(base, indices, op).same_device();
     Validator::pair(base, src, op).same_device();
+    require_scatter_dtypes(op, base, indices, src);
 
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
@@ -590,6 +613,9 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
     Validator::input(base, "scatter_set.base").non_null();
     Validator::input(indices, "scatter_set.indices").non_null();
     Validator::input(src, "scatter_set.src").non_null();
+    // ``scatter_op`` casts src, as an assignment must; ``index_copy``, whose
+    // door this is, refuses a src of another dtype in the reference.
+    require_scatter_dtypes("scatter_set", base, indices, src);
 
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
@@ -624,6 +650,38 @@ namespace {
 TensorImplPtr winner_mask(const TensorImplPtr& lhs, const TensorImplPtr& rhs) {
     auto eq = equal_op(lhs, rhs);  // bool
     return where_op(eq, ones_like_op(lhs), zeros_like_op(lhs));
+}
+
+// scatter_prod's gradients with respect to base and src, given grad g and the
+// forward's out.  Each operand's is g times the product of the other operands
+// at its position.  That is out / operand only where the operand is not zero;
+// at a zero it was 0 / 0, NaN, where the reference gives the product of the
+// others.  So the zeros are taken out of the division (the reference's rule):
+//   base: the product with base's zeros read as 1, divided by base with its
+//         zeros read as 1 — at a zero base, the others' product.
+//   src:  where src[j] is the only zero src at its position, the product with
+//         that zero read as 1; elsewhere out / src with src's zeros read as 1,
+//         which is 0 at a zero that has company, as it must be.
+std::pair<TensorImplPtr, TensorImplPtr> scatter_prod_grads(const TensorImplPtr& g,
+                                                           const TensorImplPtr& base,
+                                                           const TensorImplPtr& idx,
+                                                           const TensorImplPtr& src,
+                                                           const TensorImplPtr& out,
+                                                           int dim) {
+    auto base_zero = equal_op(base, zeros_like_op(base));
+    auto base_1 = where_op(base_zero, ones_like_op(base), base);
+    auto grad_base = mul_op(g, div_op(scatter_prod_op(base_1, idx, src, dim), base_1));
+
+    auto src_zero = equal_op(src, zeros_like_op(src));
+    auto src_1 = where_op(src_zero, ones_like_op(src), src);
+    auto zero_marks = where_op(src_zero, ones_like_op(src), zeros_like_op(src));
+    auto zeros_here =
+        gather_op(scatter_add_op(zeros_like_op(base), idx, zero_marks, dim), idx, dim);
+    auto lone_zero = logical_and_op(src_zero, equal_op(zeros_here, ones_like_op(zeros_here)));
+    auto without_lone = scatter_prod_op(base, idx, where_op(lone_zero, src_1, src), dim);
+    auto at_lone = gather_op(mul_op(g, without_lone), idx, dim);
+    auto elsewhere = div_op(gather_op(mul_op(g, out), idx, dim), src_1);
+    return {grad_base, where_op(lone_zero, at_lone, elsewhere)};
 }
 
 }  // anonymous namespace
@@ -837,11 +895,6 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
     auto base_edge = lucid::detail::ensure_grad_fn(base);
     auto src_edge = lucid::detail::ensure_grad_fn(src);
 
-    // Gradient of scatter_prod:
-    //   d/d(src[j])  = grad[idx[j]] * out[idx[j]] / src[j]   (product rule)
-    //   d/d(base[i]) = grad[i]      * out[i]      / base[i]  (if base ≠ 0)
-    // Both formulas involve dividing by the input, which is numerically unsafe
-    // near zero but correct elsewhere.
     struct ScatterProdNode : Node {
         int dim_;
         std::shared_ptr<TensorImpl> saved_indices_;
@@ -860,15 +913,11 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
         }
 
         std::vector<Storage> apply(Storage g) override {
+            NoGradGuard no_grad;
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
-            // grad_base = g * out / base
-            auto grad_base_impl = mul_op(g_impl, div_op(saved_out_, saved_base_));
-            Storage grad_base = grad_base_impl->storage();
-            // grad_src: gather (g * out), then divide by src
-            auto g_times_out = mul_op(g_impl, saved_out_);
-            auto gathered_g_out = gather_op(g_times_out, saved_indices_, dim_);
-            Storage grad_src = div_op(gathered_g_out, saved_src_)->storage();
-            return {std::move(grad_base), std::move(grad_src)};
+            auto [grad_base, grad_src] = scatter_prod_grads(g_impl, saved_base_, saved_indices_,
+                                                            saved_src_, saved_out_, dim_);
+            return {grad_base->storage(), grad_src->storage()};
         }
     };
 

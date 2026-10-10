@@ -144,9 +144,9 @@ concept HasReduceDispatch =
 //     ``true`` by default — most reductions need the input activation
 //     during backward.  ``SumBackward`` overrides this to ``false``.
 // kSavesOutput : bool
-//     ``false`` by default.  ``ProdBackward`` / ``MaxBackward`` /
-//     ``MinBackward`` override to ``true`` so they can route gradient
-//     through the saved output (or its argmax indicator).
+//     ``false`` by default.  ``MaxBackward`` / ``MinBackward`` override
+//     to ``true`` so they can route gradient through the saved output's
+//     argmax indicator.
 // kHasGradient : bool
 //     ``true``.  All canonical reductions participate in autograd.
 // reduce_axes_ : std::vector<int>
@@ -230,7 +230,7 @@ public:
     // matching the ``sum`` rule (every reduced element contributed with
     // unit weight).  Derived classes whose rule has a non-trivial scale
     // — :class:`MeanBackward` divides by $N$, :class:`ProdBackward`
-    // multiplies by $y / x$, the argmax variants apply an indicator
+    // multiplies by the product of the others, the argmax variants apply an indicator
     // mask — override this method to inject their factor before the
     // gradient is returned.
     //

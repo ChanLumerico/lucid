@@ -8,8 +8,7 @@ keeps ``input`` (value and gradient) at an untouched position, and with
 
 Each case runs every reduction both ways of ``include_self`` on both
 devices, values and gradients, against the reference.  The data hold no
-zeros (the engine's ``scatter_prod`` backward divides by the operands)
-and no ``input`` value tying an ``amax`` / ``amin`` result under
+``input`` value tying an ``amax`` / ``amin`` result under
 ``include_self=False`` — Lucid splits that gradient differently on
 purpose, pinned by :func:`test_self_tie_does_not_take_a_share`.
 """

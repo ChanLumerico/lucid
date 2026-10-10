@@ -145,11 +145,10 @@ public:
 // Autograd node for the multi-axis reduction product
 // $y = \prod_{i \in \text{axes}} x_i$.
 //
-// The gradient is the "product of all other elements", which can be
-// recovered cheaply from the saved output:
-// $\partial y / \partial x_i = y / x_i$.  Both the forward input
-// ($x$) and the forward output ($y$) are saved so ``grad_formula`` can
-// reconstruct the ratio without rerunning the reduction.
+// The gradient is the "product of all other elements" of $x_i$'s slice.
+// It is $y / x_i$ only where $x_i \ne 0$, so it is formed from the saved
+// input with the slice's zeros split out rather than divided by: a zero
+// gets the product of the rest (0 when the slice has another zero).
 //
 // Because no single ``IBackend`` overload spans every Accelerate /
 // MLX combination, ``prod`` provides explicit ``cpu_kernel`` and
@@ -160,7 +159,7 @@ public:
 // $$
 //   y = \prod_{i \in \text{axes}} x_i, \qquad
 //   \frac{\partial \mathcal{L}}{\partial x_i} =
-//   \frac{y}{x_i}\,
+//   \Bigl(\prod_{j \ne i} x_j\Bigr)\,
 //   \mathrm{broadcast}\!\left(\frac{\partial \mathcal{L}}{\partial y}
 //   \right).
 // $$
@@ -172,20 +171,18 @@ public:
 // kSavesInput : bool
 //     ``true``.
 // kSavesOutput : bool
-//     ``true``.
+//     ``false``.
 //
 // Notes
 // -----
 // CPU path iterates axes in **descending order** so the lower indices
 // remain valid as dimensions are successively collapsed.  GPU path
 // delegates to ``mlx::core::prod`` with ``keepdims``.  Empty
-// reductions return $1$ (multiplicative identity).  Zero elements in
-// $x$ make the division step undefined; the reference framework
-// returns NaN there and Lucid follows.
+// reductions return $1$ (multiplicative identity).
 class LUCID_API ProdBackward : public ReduceOp<ProdBackward> {
 public:
     static constexpr bool kSavesInput = true;
-    static constexpr bool kSavesOutput = true;
+    static constexpr bool kSavesOutput = false;
     static const OpSchema schema_v1;
     // CPU path: iterates axes in descending order (innermost last) to produce
     // a correct sequential multi-axis product using Accelerate primitives.
@@ -200,8 +197,8 @@ public:
                                  const std::vector<int>& axes,
                                  bool keepdims,
                                  Dtype dt);
-    // Backward — $\partial L/\partial x_i = (y / x_i) \cdot \mathrm{grad\_out}$
-    // (product of all other elements), formed from the saved input and output.
+    // Backward — $\partial L/\partial x_i = \mathrm{grad\_out} \cdot
+    // \prod_{j \ne i} x_j$, formed from the saved input.
     Storage grad_formula(const Storage& grad_out);
 
     // Graph-mode scaling.  Without this the base class returns the

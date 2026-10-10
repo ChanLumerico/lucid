@@ -34,6 +34,7 @@
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
+#include "../utils/Select.h"
 #include "Astype.h"
 #include "Exponential.h"
 #include "Var.h"
@@ -360,33 +361,69 @@ CpuStorage ProdBackward::cpu_kernel(const CpuStorage& a,
                              backend::cpu::prod_axis_f64, "prod");
 }
 
-// dL/dx_i = dL/dy * (prod_y / x_i).
-// Both broadcast_back calls expand the reduced dimensions to match the input.
-// ratio = out_bcast / input represents the "product of all others" for each x_i.
-Storage ProdBackward::grad_formula(const Storage& grad_out) {
-    const std::size_t in_numel = shape_numel(this->full_input_shape_);
-    Storage g_bcast =
-        broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
-                                  this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
-    Storage out_bcast =
-        broadcast_back_for_reduce(this->saved_output_, this->out_shape_, this->full_input_shape_,
-                                  this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
-    Storage ratio =
-        divide_storages(out_bcast, this->saved_inputs_[0], in_numel, this->dtype_, this->device_);
-    return multiply_storages(g_bcast, ratio, in_numel, this->dtype_, this->device_);
+namespace {
+
+// d prod(x) / d x_i over ``axes``, at x's shape: the product of every other
+// element of x_i's slice.  That is prod / x_i only where x_i is not zero —
+// at a zero, 0 / 0 gave NaN where the reference gives the others' product —
+// so the zeros are split out instead of divided by.  With p the product of a
+// slice's non-zero elements and Z that of its zeros (1 when it has none):
+//   x_i != 0:  p / x_i * Z
+//   x_i == 0:  p * (the slice's other zeros' product)
+// The second factor is 1 for a lone zero and 0 for three or more.  For two
+// it is the other zero, whose value is 0 but whose derivative is the one the
+// product has; Z, likewise, is a product of x rather than a 0/1 constant.
+// Both keep this formula's own derivative — the second derivative of prod —
+// right at the zeros.  Only graph mode differentiates it, so only graph mode
+// (``differentiable``) pays for the pair's term, which is 0 in value.
+TensorImplPtr
+prod_of_others(const TensorImplPtr& x, const std::vector<int>& axes, bool differentiable) {
+    const Shape& shape = x->shape();
+    auto slice_wide = [&](const TensorImplPtr& t) { return broadcast_to_op(t, shape); };
+    auto one = ones_like_op(x);
+    auto nil = zeros_like_op(x);
+    auto zero = equal_op(x, nil);
+    auto x_1 = where_op(zero, one, x);
+
+    auto nonzero_prod = slice_wide(prod_op(x_1, axes, true));
+    auto zeros_prod = slice_wide(prod_op(where_op(zero, x, one), axes, true));
+    auto zero_count = slice_wide(sum_op(where_op(zero, one, nil), axes, true));
+    auto count_is = [&](double n) { return equal_op(zero_count, full_like_op(zero_count, n)); };
+
+    auto at_nonzero = mul_op(div_op(nonzero_prod, x_1), zeros_prod);
+    auto other_zeros = where_op(count_is(1.0), one, nil);
+    if (differentiable) {
+        // (sum of the slice's zeros) - x_i: the other zero of a pair.
+        auto zeros_sum = slice_wide(sum_op(where_op(zero, x, nil), axes, true));
+        other_zeros = where_op(count_is(2.0), sub_op(zeros_sum, x), other_zeros);
+    }
+    return where_op(zero, mul_op(nonzero_prod, other_zeros), at_nonzero);
 }
 
-// Graph-mode prod backward: dL/dx_i = g_i * (y / x_i).
-//
-// Mirrors ``grad_formula`` exactly.  The output is *recomputed* from the
-// saved input impl rather than read from ``saved_output_``: the storage
-// carries no graph, and a second derivative taken through it would be
-// silently wrong even while the first stayed right.
+}  // namespace
+
+// dL/dx_i = dL/dy * (the product of x_i's slice without x_i), from the input
+// saved by value — the graph-mode formula below, value for value, under
+// no-grad.
+Storage ProdBackward::grad_formula(const Storage& grad_out) {
+    NoGradGuard no_grad;
+    const Shape& shape = this->full_input_shape_;
+    Storage g_bcast =
+        broadcast_back_for_reduce(grad_out, this->out_shape_, shape, this->reduce_axes_,
+                                  this->keepdims_, this->dtype_, this->device_);
+    auto g =
+        std::make_shared<TensorImpl>(std::move(g_bcast), shape, this->dtype_, this->device_, false);
+    auto x = std::make_shared<TensorImpl>(this->saved_inputs_[0], shape, this->dtype_,
+                                          this->device_, false);
+    return mul_op(g, prod_of_others(x, this->reduce_axes_, false))->storage();
+}
+
+// Graph-mode prod backward.  The products are recomputed from the saved
+// input impl rather than read from ``saved_output_``: the storage carries no
+// graph, and a second derivative taken through it would be silently wrong
+// even while the first stayed right.
 TensorImplPtr ProdBackward::scale_graph_grad(const TensorImplPtr& g) {
-    const auto& x = this->saved_impl_inputs_[0];
-    auto out = prod_op(x, this->reduce_axes_, /*keepdims=*/true);
-    auto out_b = broadcast_to_op(out, this->full_input_shape_);
-    return mul_op(g, div_op(out_b, x));
+    return mul_op(g, prod_of_others(this->saved_impl_inputs_[0], this->reduce_axes_, true));
 }
 
 TensorImplPtr prod_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {

@@ -390,10 +390,10 @@ LUCID_API TensorImplPtr logspace_op(double start,
 // base : TensorImplPtr
 //     Tensor providing the initial values; same shape as the output.
 // indices : TensorImplPtr
-//     Integer tensor indexing into ``base`` along ``dim``.  Shape
+//     int32 or int64 tensor indexing into ``base`` along ``dim``.  Shape
 //     matches ``src``.
 // src : TensorImplPtr
-//     Values to add.
+//     Values to add, in ``base``'s dtype.
 // dim : int
 //     Axis along which scattering occurs.
 //
@@ -401,6 +401,13 @@ LUCID_API TensorImplPtr logspace_op(double start,
 // -------
 // TensorImplPtr
 //     Same shape and dtype as ``base``.
+//
+// Raises
+// ------
+// DtypeMismatch
+//     If ``src`` is not in ``base``'s dtype or ``indices`` is not int32 /
+//     int64 — the rule of ``scatter_amax_op``, ``scatter_amin_op``,
+//     ``scatter_prod_op`` and ``scatter_set_op`` too.  Nothing is cast.
 //
 // Notes
 // -----
@@ -494,10 +501,10 @@ LUCID_API TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
 //
 // Notes
 // -----
-// Gradients use the product rule:
-//   $\partial / \partial \text{src}[j] = \text{grad}[\text{idx}[j]] \cdot \text{out}[\text{idx}[j]] / \text{src}[j]$,
-//   $\partial / \partial \text{base}[i] = \text{grad}[i] \cdot \text{out}[i] / \text{base}[i]$
-// (the latter requires ``base[i] != 0``).
+// Each operand's gradient is ``grad`` at its position times the product of
+// the other operands there — ``out / operand`` where the operand is not
+// zero, and computed without that division where it is, so a zero operand
+// gets the others' product rather than NaN.
 LUCID_API TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
                                         const TensorImplPtr& indices,
                                         const TensorImplPtr& src,

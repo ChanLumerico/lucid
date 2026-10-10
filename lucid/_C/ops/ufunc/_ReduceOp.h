@@ -68,8 +68,8 @@ namespace lucid {
 //     (:class:`SumBackward`, :class:`MeanBackward`) override this to
 //     ``false``.
 // kSavesOutput : static constexpr bool, default ``false``
-//     Set to ``true`` by :class:`ProdBackward` so the forward output
-//     $y$ is available for the $\partial y/\partial x_i = y / x_i$ rule.
+//     Set to ``true`` by :class:`MaxBackward` / :class:`MinBackward` so
+//     the forward output is available for their winner mask.
 //
 // Notes
 // -----

@@ -13,12 +13,11 @@
 //     dx = reverse(cumsum(reverse(dy)))
 //   which avoids an explicit O(n^2) summation.
 //
-// Backward for cumprod:
-//   dx_i = sum_j [ dy_j * (prod_y_j / x_i) ]
-//   where prod_y_j = saved_y_[j] (the forward cumprod output).  Reorganising:
-//     dx = reverse(cumsum(reverse(dy * saved_y))) / saved_x
-//   This reuses the reverse-cumsum primitive applied to (dy * saved_y),
-//   then divides element-wise by the saved input x.
+// Backward for cumprod (``cumprod_grad``):
+//   dx_i = sum_{j >= i} dy_j * prod_{k <= j, k != i} x_k, which is
+//   reverse(cumsum(reverse(dy * y)))_i / x_i up to the first zero of x along
+//   the axis; the first zero and what follows it are formed without that
+//   division.
 
 #include "Scan.h"
 
@@ -40,12 +39,17 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../composite/Indexing.h"
+#include "../composite/Logical.h"
 #include "../gfunc/Gfunc.h"
+#include "../utils/Layout.h"
 #include "../utils/Select.h"
 #include "Astype.h"
+#include "Reductions.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -112,6 +116,59 @@ public:
     }
 };
 
+// d cumprod(x) / dx contracted with g along ``axis``, given y = cumprod(x):
+// dx_i = sum_{k >= i} g_k * prod_{j <= k, j != i} x_j.
+//
+// Dividing the suffix sum of g * y by x_i gives that only before the slice's
+// first zero; at and after it, it was 0 / 0 — NaN where the reference has a
+// value.  So the slice is cut at its first zero z (the reference's rule):
+//   i < z:  suffix(g * y)_i / x_i                    (x_i is not zero)
+//   i = z:  prod_{j<z} x_j * sum_{k>=z} g_k * r_k    r_k = prod_{z<j<=k} x_j
+//   i > z:  0 — every product holds x_z.  Graph mode (``differentiable``)
+//           writes it as x_z * prod_{j<z} x_j * suffix(g * r)_i / x_i at a
+//           non-zero x_i, so that this formula's own derivative (cumprod's
+//           second) is right at a lone zero; past a second zero it is not.
+// Every piece is an op, so the formula serves eager and graph-mode backward.
+TensorImplPtr cumprod_grad(const TensorImplPtr& g,
+                           const TensorImplPtr& x,
+                           const TensorImplPtr& y,
+                           int axis,
+                           bool differentiable) {
+    const Shape& shape = x->shape();
+    const std::int64_t n = shape[static_cast<std::size_t>(axis)];
+    if (n == 0)
+        return zeros_like_op(x);
+    auto slice_wide = [&](const TensorImplPtr& t) { return broadcast_to_op(t, shape); };
+    auto suffix_sum = [axis](const TensorImplPtr& t) {
+        return flip_op(cumsum_op(flip_op(t, {axis}), axis), {axis});
+    };
+    auto one = ones_like_op(x);
+    auto nil = zeros_like_op(x);
+    auto zero = equal_op(x, nil);
+    auto zeros_so_far = cumsum_op(zero, axis);  // int64
+    auto so_far_is = [&](double count) {
+        return equal_op(zeros_so_far, full_like_op(zeros_so_far, count));
+    };
+    auto before = so_far_is(0.0);
+    auto first = logical_and_op(zero, so_far_is(1.0));
+    auto x_1 = where_op(zero, one, x);
+
+    auto at_before = div_op(suffix_sum(mul_op(g, y)), x_1);
+    // prod_{j<z} x_j: the last entry of the product with x read as 1 from z
+    // on (a reduction ``prod`` has no CPU bfloat16 kernel; cumprod does).
+    auto lead = slice_wide(narrow_op(cumprod_op(where_op(before, x, one), axis), axis, n - 1, 1));
+    auto restarted = cumprod_op(where_op(logical_or_op(before, first), one, x), axis);
+    auto weighted = mul_op(where_op(before, nil, g), restarted);
+    auto at_first = mul_op(lead, slice_wide(sum_op(weighted, {axis}, true)));
+    auto after = nil;
+    if (differentiable) {
+        auto x_first = slice_wide(sum_op(where_op(first, x, nil), {axis}, true));
+        after =
+            where_op(zero, nil, mul_op(mul_op(x_first, lead), div_op(suffix_sum(weighted), x_1)));
+    }
+    return where_op(before, at_before, where_op(first, at_first, after));
+}
+
 // Private backward node for cumprod.
 //
 // Saved state:
@@ -128,31 +185,24 @@ public:
     Storage saved_x_;
     Storage saved_y_;
 
-    // dx = reverse(cumsum(reverse(dy * saved_y))) / saved_x.
-    // Step 1: weight each upstream gradient by the corresponding cumprod output.
-    // Steps 2-3: apply the reverse-cumsum trick to accumulate weighted gradients.
-    // Step 4: divide by the saved input x to obtain the per-element gradient.
+    // From the values saved at forward, under no-grad.
     std::vector<Storage> apply(Storage grad_out) override {
-        const std::size_t total = shape_numel(input_shape_);
-        // dy * y  (element-wise product of gradient and cumprod output)
-        Storage p_s = multiply_storages(grad_out, saved_y_, total, dtype_, device_);
-        Storage rev = reverse_along_axis_storage(p_s, input_shape_, axis_, dtype_, device_);
-        Storage cs = cumsum_storage_along(rev, input_shape_, axis_, dtype_, device_);
-        Storage q = reverse_along_axis_storage(cs, input_shape_, axis_, dtype_, device_);
-        Storage dx = divide_storages(q, saved_x_, total, dtype_, device_);
-        return {std::move(dx)};
+        NoGradGuard no_grad;
+        auto wrap = [this](Storage s) {
+            return std::make_shared<TensorImpl>(std::move(s), input_shape_, dtype_, device_, false);
+        };
+        return {
+            cumprod_grad(wrap(std::move(grad_out)), wrap(saved_x_), wrap(saved_y_), axis_, false)
+                ->storage()};
     }
 
     // The same formula, recorded, with the product recomputed from the input
     // so it carries its own dependence on x — the saved one is data only.
-    // Divides by x exactly as the storage path does.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
         const auto& x = saved_impl_inputs_[0];
         if (!x)
             ErrorBuilder("cumprod").fail("graph-mode backward is missing its saved input");
-        auto weighted = mul_op(grad_out, cumprod_op(x, axis_));
-        auto suffix = flip_op(cumsum_op(flip_op(weighted, {axis_}), axis_), {axis_});
-        return {div_op(suffix, x)};
+        return {cumprod_grad(grad_out, x, cumprod_op(x, axis_), axis_, true)};
     }
 };
 

@@ -17,7 +17,8 @@
 //   *reverse-cumsum trick* $dx = \mathrm{reverse}(\mathrm{cumsum}
 //   (\mathrm{reverse}(dy)))$.
 // - **cumprod** — similar, weighted by the saved output and divided by
-//   the saved input.
+//   the saved input up to the first zero along the axis; the first zero
+//   and what follows it are formed without the division.
 // - **cummax** / **cummin** — gradient flows only to the first
 //   position that achieved the running extremum; computed by a
 //   right-to-left segmented accumulation against the saved output.
@@ -86,9 +87,9 @@ LUCID_API TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis);
 //
 // The output has the same shape and dtype as the input.  Backward
 // reuses the reverse-cumsum primitive against the saved cumprod
-// output and divides by the saved input:
+// output and divides by the saved input,
 // $dx = \mathrm{reverse}(\mathrm{cumsum}(\mathrm{reverse}(dy \cdot y)))
-// / x$.
+// / x$, before the first zero of $x$ along ``axis``.
 //
 // Math
 // ----
@@ -96,7 +97,7 @@ LUCID_API TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis);
 //   y_k = \prod_{j \le k} x_j, \qquad
 //   \frac{\partial \mathcal{L}}{\partial x_i} =
 //   \sum_{j \ge i} \frac{\partial \mathcal{L}}{\partial y_j}
-//   \cdot \frac{y_j}{x_i}.
+//   \cdot \prod_{k \le j,\, k \ne i} x_k.
 // $$
 //
 // Parameters
@@ -113,8 +114,10 @@ LUCID_API TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis);
 //
 // Notes
 // -----
-// Backward is undefined where $x_i = 0$ because the formula divides
-// by $x$.  Forward saves both $x$ and $y$ on the backward node.
+// At the first zero $x_z$ the gradient is
+// $\prod_{k<z} x_k \sum_{j \ge z} dy_j \prod_{z<k \le j} x_k$, and after it
+// $0$, as the reference has them.  Forward saves both $x$ and $y$ on the
+// backward node.
 LUCID_API TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis);
 
 // Inclusive cumulative maximum along a single axis,
