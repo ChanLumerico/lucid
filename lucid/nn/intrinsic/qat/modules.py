@@ -1,22 +1,27 @@
-"""QAT fused Conv+BN(+ReLU) — BatchNorm folded into the conv during training.
+"""QAT fused Conv+BN(+ReLU) — BatchNorm trained inside a fake-quantized conv.
 
-The delicate QAT primitive: a trainable conv + BatchNorm that, on every forward,
-folds BN's (running) affine into the conv weight, fake-quantizes the **folded**
-weight, convolves, optionally applies ReLU, and fake-quantizes the output.
-Gradients flow (via STE) to the conv weight and BN parameters, so the network
-learns weights that survive the eventual folded-and-quantized inference.
-:func:`convert` bakes the folded int8 weight into a quantized conv.
+The delicate QAT primitive: a trainable conv + BatchNorm whose conv weight is
+scaled by BN's running ``gamma / std`` and fake-quantized on every forward, so
+the network trains against the folded-and-quantized weight inference will use.
+In training mode the conv output is scaled back and run through the wrapped
+BatchNorm, which normalises with the **batch** statistics and updates its
+running statistics exactly as an unfused Conv → BN would; in eval mode (or
+after :meth:`_ConvBnNd.freeze_bn_stats`) BN uses its running statistics and
+the result is the folded conv.  Gradients flow (via STE) to the conv weight
+and BN parameters.  :func:`convert` bakes the folded int8 weight into a
+quantized conv.
 
-The fold is rank-generic (1d / 2d / 3d): the only rank-specific piece is the
-per-output-channel reshape and the ``F.convNd`` call, both derived from the
-conv weight's rank.
+The module is rank-generic (1d / 2d / 3d): the only rank-specific piece is the
+per-channel reshape and the ``F.convNd`` call, both derived from the conv
+weight's rank.
 """
 
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Self, cast, override
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+from lucid.nn.utils.fusion import fuse_conv_bn_weights
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -28,7 +33,7 @@ _CONV_FNS = (F.conv1d, F.conv2d, F.conv3d)
 
 
 class _ConvBnNd(nn.Module):
-    """Rank-generic fused Conv+BN(+ReLU) with fold-and-fake-quant (trainable)."""
+    """Rank-generic fused Conv+BN(+ReLU) that trains BN under a fake-quant conv."""
 
     weight_fake_quant: FakeQuantize
     activation_post_process: FakeQuantize
@@ -43,50 +48,93 @@ class _ConvBnNd(nn.Module):
         super().__init__()
         if qconfig is None:
             raise ValueError(f"{type(self).__name__} requires a qconfig")
+        if not getattr(bn, "track_running_stats", False):
+            # The weight is scaled by the running std every forward, and
+            # ``convert`` folds the running statistics into the int8 conv.
+            raise ValueError(
+                f"{type(self).__name__} requires a BatchNorm that tracks running "
+                "statistics (track_running_stats=True)"
+            )
         self.conv = conv
         self.bn = bn
         self.relu = relu
         self.qconfig = qconfig
         self.weight_fake_quant = cast("FakeQuantize", qconfig.weight())
         self.activation_post_process = cast("FakeQuantize", qconfig.activation())
+        self.freeze_bn = False
+        self.update_bn_stats()
+
+    def _bn(self) -> nn.BatchNorm2d:
+        return cast("nn.BatchNorm2d", self.bn)  # structural: all BN ranks share these
+
+    def _conv_module(self) -> nn.Conv2d:
+        return cast("nn.Conv2d", self.conv)  # structural: all conv ranks share these
 
     def _fold(self) -> tuple[Tensor, Tensor]:
         """Return the BN-folded ``(weight, bias)`` for the conv (any rank)."""
-        conv = cast("nn.Conv2d", self.conv)  # structural: all conv ranks share these
-        bn = cast("nn.BatchNorm2d", self.bn)
-        running_var = cast("Tensor", bn.running_var)
-        running_mean = cast("Tensor", bn.running_mean)
-        inv_std = (running_var + bn.eps).rsqrt()
-        gamma = cast("Tensor", bn.weight) if bn.affine else lucid.ones_like(inv_std)
-        scale = gamma * inv_std
-        out_channels = conv.weight.shape[0]
-        # (C, 1, …) with one trailing 1 per non-output weight axis → 1d/2d/3d.
-        w = conv.weight * scale.reshape(
-            (out_channels,) + (1,) * (len(conv.weight.shape) - 1)
+        conv, bn = self._conv_module(), self._bn()
+        return fuse_conv_bn_weights(
+            conv.weight,
+            conv.bias,
+            cast("Tensor", bn.running_mean),
+            cast("Tensor", bn.running_var),
+            bn.eps,
+            bn.weight if bn.affine else None,
+            bn.bias if bn.affine else None,
         )
-        conv_bias = conv.bias if conv.bias is not None else lucid.zeros_like(scale)
-        bias = (conv_bias - running_mean) * scale
-        if bn.affine:
-            bias = bias + cast("Tensor", bn.bias)
-        return w, bias
 
-    def _conv(self, x: Tensor, w: Tensor, b: Tensor) -> Tensor:
-        """Dispatch to ``F.conv{1,2,3}d`` by the conv weight's rank."""
-        conv = cast("nn.Conv2d", self.conv)
+    def _conv(self, x: Tensor, w: Tensor) -> Tensor:
+        """Bias-free ``F.conv{1,2,3}d``, dispatched by the conv weight's rank."""
+        conv = self._conv_module()
         fn = _CONV_FNS[len(conv.weight.shape) - 3]
         # ``conv`` is cast to Conv2d structurally; at runtime its rank matches the
         # selected ``fn``, so the (int|tuple) stride/padding are valid for it.
-        return fn(x, w, b, conv.stride, conv.padding, conv.dilation, conv.groups)  # type: ignore[arg-type]
+        return fn(x, w, None, conv.stride, conv.padding, conv.dilation, conv.groups)  # type: ignore[arg-type]
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        """Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output."""
-        weight, bias = self._fold()
-        w_q = self.weight_fake_quant(weight)
-        y = self._conv(x, w_q, bias)
+        """Scale and fake-quant the weight → conv → unscale → BN → (ReLU) → fake-quant."""
+        conv, bn = self._conv_module(), self._bn()
+        running_std = (cast("Tensor", bn.running_var) + bn.eps).sqrt()
+        gamma = bn.weight if bn.affine else lucid.ones_like(running_std)
+        scale = gamma / running_std
+        out_channels = conv.weight.shape[0]
+        ndim = len(conv.weight.shape)
+        w_q = self.weight_fake_quant(
+            conv.weight * scale.reshape((out_channels,) + (1,) * (ndim - 1))
+        )
+        # Dividing the scale back out leaves the unfused conv's output (up to the
+        # weight's quantization error), so ``bn`` sees what it would in the float
+        # model: batch statistics and the running-stat update in training, the
+        # running statistics — hence exactly the folded conv — in eval.
+        per_channel = (1, out_channels) + (1,) * (ndim - 2)
+        y = self._conv(x, w_q) / scale.reshape(per_channel)
+        if conv.bias is not None:
+            y = y + conv.bias.reshape(per_channel)
+        y = self.bn(y)
         if self.relu:
             y = F.relu(y)
         return self.activation_post_process(y)
+
+    def update_bn_stats(self) -> Self:
+        """Let ``bn`` normalise with batch statistics and update its running ones."""
+        self.freeze_bn = False
+        self.bn.training = True
+        return self
+
+    def freeze_bn_stats(self) -> Self:
+        """Stop the running-stat updates; ``bn`` normalises with its running stats."""
+        self.freeze_bn = True
+        self.bn.training = False
+        return self
+
+    @override
+    def train(self, mode: bool = True) -> Self:
+        """Set the mode recursively, except that a frozen ``bn`` stays frozen."""
+        super().train(mode)
+        if self.freeze_bn:
+            self.bn.training = False
+        return self
 
 
 class ConvBn1d(_ConvBnNd):
@@ -103,10 +151,9 @@ class ConvBn1d(_ConvBnNd):
 
     **Straight-through estimator (STE).** The weight fake-quant rounds the folded kernel in
     the forward pass but passes gradients *straight through* in the backward pass, so both
-    the conv weight and the BN affine / running statistics receive clean gradients despite
-    the non-differentiable ``round``. Folding inside the forward — rather than once, ahead
-    of training — is what keeps BN trainable: the fake-quantized weight always reflects the
-    *current* running statistics.
+    the conv weight and the BN affine parameters receive clean gradients despite the
+    non-differentiable ``round``. The running statistics are not learned — the wrapped
+    ``bn`` updates them from each training batch, exactly as in the unfused model.
 
     **Where it sits.** :func:`lucid.quantization.prepare_qat` builds this from a fused
     conv+BN pattern. After training, :func:`lucid.quantization.convert` folds BN one final
@@ -126,7 +173,8 @@ class ConvBn1d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)`. When the conv has no bias (the usual fused case, :math:`b_c = 0`)
     the shift reduces to :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}`.
-    The folded weight is then fake-quantized under the STE before the convolution:
+    In eval mode (or once the BN statistics are frozen) the layer is exactly that folded
+    conv, with the folded weight fake-quantized under the STE:
 
     .. math::
 
@@ -144,8 +192,9 @@ class ConvBn1d(_ConvBnNd):
     conv : nn.Conv1d
         The float 1-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm1d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     qconfig : QConfig
         Quantization recipe supplying the weight and activation
         :class:`~lucid.quantization.FakeQuantize` modules applied during training.
@@ -162,9 +211,8 @@ class ConvBn1d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
       passed through as the identity, so the conv weight *and* the BN parameters train.
     - **Both directions are wired for you.** :func:`lucid.quantization.prepare_qat` builds
@@ -222,10 +270,9 @@ class ConvBn2d(_ConvBnNd):
 
     **Straight-through estimator (STE).** The weight fake-quant rounds the folded kernel in
     the forward pass but passes gradients *straight through* in the backward pass, so both
-    the conv weight and the BN affine / running statistics receive clean gradients despite
-    the non-differentiable ``round``. Folding inside the forward — rather than once, ahead
-    of training — is what keeps BN trainable: the fake-quantized weight always reflects the
-    *current* running statistics.
+    the conv weight and the BN affine parameters receive clean gradients despite the
+    non-differentiable ``round``. The running statistics are not learned — the wrapped
+    ``bn`` updates them from each training batch, exactly as in the unfused model.
 
     **Where it sits.** :func:`lucid.quantization.prepare_qat` builds this from a fused
     conv+BN pattern. After training, :func:`lucid.quantization.convert` folds BN one final
@@ -245,7 +292,8 @@ class ConvBn2d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)`. When the conv has no bias (the usual fused case, :math:`b_c = 0`)
     the shift reduces to :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}`.
-    The folded weight is then fake-quantized under the STE before the convolution:
+    In eval mode (or once the BN statistics are frozen) the layer is exactly that folded
+    conv, with the folded weight fake-quantized under the STE:
 
     .. math::
 
@@ -258,13 +306,27 @@ class ConvBn2d(_ConvBnNd):
     :math:`\operatorname{fake\_quant}(t) = (\operatorname{clamp}(\operatorname{round}(t/s)
     + z,\ q_{\min}, q_{\max}) - z)\, s`.
 
+    In training mode the convolution instead sees the **batch** statistics, as the unfused
+    conv → BN would: the conv output is divided back by the per-channel scale
+    :math:`\gamma_c/\sqrt{\sigma_c^2+\epsilon}`, the conv bias is added, and the result runs
+    through ``bn``, which normalises with the batch mean :math:`\mu_B` and variance
+    :math:`\sigma_B^2` and updates its running statistics:
+
+    .. math::
+
+        u = \frac{\operatorname{fake\_quant}_{w}(w') \star x}{\gamma/\sqrt{\sigma^2+\epsilon}}
+            + b,
+        \qquad
+        \operatorname{BN}(u) = \gamma\,\frac{u - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}} + \beta
+
     Parameters
     ----------
     conv : nn.Conv2d
         The float 2-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm2d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     qconfig : QConfig
         Quantization recipe supplying the weight and activation
         :class:`~lucid.quantization.FakeQuantize` modules applied during training.
@@ -281,9 +343,8 @@ class ConvBn2d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
       passed through as the identity, so the conv weight *and* the BN parameters train.
     - **Both directions are wired for you.** :func:`lucid.quantization.prepare_qat` builds
@@ -305,6 +366,12 @@ class ConvBn2d(_ConvBnNd):
     ((8, 3, 3, 3), (8,))
     >>> loss = (cbn(lucid.randn(2, 3, 8, 8)) ** 2).mean()
     >>> loss.backward()                    # STE trains conv weight AND BN params
+    >>> int(cbn.bn.num_batches_tracked.item())   # bn saw the batch statistics
+    1
+    >>> _ = cbn.freeze_bn_stats()          # running statistics stop updating
+    >>> _ = cbn(lucid.randn(2, 3, 8, 8))
+    >>> int(cbn.bn.num_batches_tracked.item())
+    1
 
     A ``qconfig`` is mandatory — constructing the layer without one raises:
 
@@ -341,10 +408,9 @@ class ConvBn3d(_ConvBnNd):
 
     **Straight-through estimator (STE).** The weight fake-quant rounds the folded kernel in
     the forward pass but passes gradients *straight through* in the backward pass, so both
-    the conv weight and the BN affine / running statistics receive clean gradients despite
-    the non-differentiable ``round``. Folding inside the forward — rather than once, ahead
-    of training — is what keeps BN trainable: the fake-quantized weight always reflects the
-    *current* running statistics.
+    the conv weight and the BN affine parameters receive clean gradients despite the
+    non-differentiable ``round``. The running statistics are not learned — the wrapped
+    ``bn`` updates them from each training batch, exactly as in the unfused model.
 
     **Where it sits.** :func:`lucid.quantization.prepare_qat` builds this from a fused
     conv+BN pattern. After training, :func:`lucid.quantization.convert` folds BN one final
@@ -364,7 +430,8 @@ class ConvBn3d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)`. When the conv has no bias (the usual fused case, :math:`b_c = 0`)
     the shift reduces to :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}`.
-    The folded weight is then fake-quantized under the STE before the convolution:
+    In eval mode (or once the BN statistics are frozen) the layer is exactly that folded
+    conv, with the folded weight fake-quantized under the STE:
 
     .. math::
 
@@ -382,8 +449,9 @@ class ConvBn3d(_ConvBnNd):
     conv : nn.Conv3d
         The float 3-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm3d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     qconfig : QConfig
         Quantization recipe supplying the weight and activation
         :class:`~lucid.quantization.FakeQuantize` modules applied during training.
@@ -400,9 +468,8 @@ class ConvBn3d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
       passed through as the identity, so the conv weight *and* the BN parameters train.
     - **Both directions are wired for you.** :func:`lucid.quantization.prepare_qat` builds
@@ -457,7 +524,7 @@ class ConvBnReLU1d(_ConvBnNd):
     As in :class:`ConvBn1d`, BN is **re-folded into the conv weight on every forward** and
     the folded weight is fake-quantized under a straight-through estimator (STE): rounding
     happens forward, gradients pass straight through, so the conv weight *and* the BN affine
-    / running statistics keep training. Built by :func:`lucid.quantization.prepare_qat`;
+    keep training while ``bn`` updates its running statistics from each training batch. Built by :func:`lucid.quantization.prepare_qat`;
     :func:`lucid.quantization.convert` folds BN a final time, quantizes the folded weight to
     int8, and bakes it into a fused inference :class:`~lucid.nn.quantized.ConvReLU1d`.
 
@@ -473,8 +540,9 @@ class ConvBnReLU1d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)` (reducing to
     :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}` for a bias-free
-    conv). The folded weight is fake-quantized, convolved, passed through ReLU, then the
-    output is fake-quantized on the observed post-ReLU grid:
+    conv). In eval mode (or once the BN statistics are frozen) the layer is that folded conv:
+    the folded weight is fake-quantized, convolved, passed through ReLU, then the output is
+    fake-quantized on the observed post-ReLU grid:
 
     .. math::
 
@@ -493,8 +561,9 @@ class ConvBnReLU1d(_ConvBnNd):
     conv : nn.Conv1d
         The float 1-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm1d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     relu : bool, default=True
         Whether the fused ReLU is applied before the output fake-quant.
     qconfig : QConfig
@@ -513,9 +582,8 @@ class ConvBnReLU1d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **Post-ReLU calibration.** The activation observer sits after the ReLU, so its grid
       covers only :math:`[0, \max]`, roughly doubling resolution versus a symmetric range.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
@@ -573,7 +641,7 @@ class ConvBnReLU2d(_ConvBnNd):
     As in :class:`ConvBn2d`, BN is **re-folded into the conv weight on every forward** and
     the folded weight is fake-quantized under a straight-through estimator (STE): rounding
     happens forward, gradients pass straight through, so the conv weight *and* the BN affine
-    / running statistics keep training. Built by :func:`lucid.quantization.prepare_qat`;
+    keep training while ``bn`` updates its running statistics from each training batch. Built by :func:`lucid.quantization.prepare_qat`;
     :func:`lucid.quantization.convert` folds BN a final time, quantizes the folded weight to
     int8, and bakes it into a fused inference :class:`~lucid.nn.quantized.ConvReLU2d`.
 
@@ -589,8 +657,9 @@ class ConvBnReLU2d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)` (reducing to
     :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}` for a bias-free
-    conv). The folded weight is fake-quantized, convolved, passed through ReLU, then the
-    output is fake-quantized on the observed post-ReLU grid:
+    conv). In eval mode (or once the BN statistics are frozen) the layer is that folded conv:
+    the folded weight is fake-quantized, convolved, passed through ReLU, then the output is
+    fake-quantized on the observed post-ReLU grid:
 
     .. math::
 
@@ -609,8 +678,9 @@ class ConvBnReLU2d(_ConvBnNd):
     conv : nn.Conv2d
         The float 2-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm2d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     relu : bool, default=True
         Whether the fused ReLU is applied before the output fake-quant.
     qconfig : QConfig
@@ -629,9 +699,8 @@ class ConvBnReLU2d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **Post-ReLU calibration.** The activation observer sits after the ReLU, so its grid
       covers only :math:`[0, \max]`, roughly doubling resolution versus a symmetric range.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
@@ -689,7 +758,7 @@ class ConvBnReLU3d(_ConvBnNd):
     As in :class:`ConvBn3d`, BN is **re-folded into the conv weight on every forward** and
     the folded weight is fake-quantized under a straight-through estimator (STE): rounding
     happens forward, gradients pass straight through, so the conv weight *and* the BN affine
-    / running statistics keep training. Built by :func:`lucid.quantization.prepare_qat`;
+    keep training while ``bn`` updates its running statistics from each training batch. Built by :func:`lucid.quantization.prepare_qat`;
     :func:`lucid.quantization.convert` folds BN a final time, quantizes the folded weight to
     int8, and bakes it into a fused inference :class:`~lucid.nn.quantized.ConvReLU3d`.
 
@@ -705,8 +774,9 @@ class ConvBnReLU3d(_ConvBnNd):
     :math:`(\mu, \sigma^2)`, numerical floor :math:`\epsilon`, and conv weight / bias
     :math:`(w_c, b_c)` (reducing to
     :math:`b'_c = \beta_c - \gamma_c\,\mu_c/\sqrt{\sigma_c^2+\epsilon}` for a bias-free
-    conv). The folded weight is fake-quantized, convolved, passed through ReLU, then the
-    output is fake-quantized on the observed post-ReLU grid:
+    conv). In eval mode (or once the BN statistics are frozen) the layer is that folded conv:
+    the folded weight is fake-quantized, convolved, passed through ReLU, then the output is
+    fake-quantized on the observed post-ReLU grid:
 
     .. math::
 
@@ -725,8 +795,9 @@ class ConvBnReLU3d(_ConvBnNd):
     conv : nn.Conv3d
         The float 3-D convolution whose weight receives the folded BN affine.
     bn : nn.BatchNorm3d
-        The batch-norm layer folded into ``conv``; its running stats and affine parameters
-        keep training under the STE.
+        The batch-norm layer folded into ``conv``. It must track running statistics; its
+        affine parameters train under the STE and its running statistics update from each
+        training batch (``ValueError`` if ``track_running_stats=False``).
     relu : bool, default=True
         Whether the fused ReLU is applied before the output fake-quant.
     qconfig : QConfig
@@ -745,9 +816,8 @@ class ConvBnReLU3d(_ConvBnNd):
 
     Notes
     -----
-    - **BN re-folded every forward.** The fold happens inside ``forward`` rather than once
-      up front, so the BN parameters stay trainable and the fake-quantized weight always
-      reflects the current running statistics.
+    - **Batch statistics in training.** ``bn`` normalises with them and updates its running
+      ones; :meth:`freeze_bn_stats` / :meth:`update_bn_stats` stop and resume that.
     - **Post-ReLU calibration.** The activation observer sits after the ReLU, so its grid
       covers only :math:`[0, \max]`, roughly doubling resolution versus a symmetric range.
     - **STE differentiability.** The folded weight is rounded forward but the gradient is
