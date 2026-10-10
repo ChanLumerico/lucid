@@ -16,6 +16,7 @@ Two things the trace hands over that the driver has to sort out:
   bare ``isinstance`` check would reject every model in the zoo.
 """
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NamedTuple, cast, override
 
 import dataclasses
@@ -584,82 +585,20 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     return tracer.graph, feeds, inputs, outputs, tracer.retained_values
 
 
-def _flatten_ints(tensor: Tensor) -> list[int]:
-    """Every element of an integer tensor, in row-major order.
+def _flatten[T](tensor: Tensor, convert: Callable[[object], T]) -> list[T]:
+    """Every element of ``tensor`` in row-major order, through ``convert``.
 
     ``tolist`` is numpy-free, so reading a constant's values here keeps an
     external import out of this package (H4).
-
-    Parameters
-    ----------
-    tensor : Tensor
-        Integer tensor to read.
-
-    Returns
-    -------
-    list[int]
-        Flattened values.
     """
-    flat: list[int] = []
+    flat: list[T] = []
 
     def walk(value: object) -> None:
         if isinstance(value, list):
             for item in value:
                 walk(item)
         else:
-            flat.append(_as_int(value))
-
-    walk(tensor.tolist())
-    return flat
-
-
-def _flatten_floats(tensor: Tensor) -> list[float]:
-    """A float tensor's values, flattened, for a packed inline payload.
-
-    Parameters
-    ----------
-    tensor : Tensor
-        Float tensor to flatten.
-
-    Returns
-    -------
-    list[float]
-        Flattened values.
-    """
-    flat: list[float] = []
-
-    def walk(value: object) -> None:
-        if isinstance(value, list):
-            for item in value:
-                walk(item)
-        else:
-            flat.append(_as_float(value))
-
-    walk(tensor.tolist())
-    return flat
-
-
-def _flatten_bools(tensor: Tensor) -> list[bool]:
-    """A boolean tensor's values, flattened, for an inline MIL constant.
-
-    Parameters
-    ----------
-    tensor : Tensor
-        Boolean tensor to flatten.
-
-    Returns
-    -------
-    list[bool]
-        Flattened values.
-    """
-    flat: list[bool] = []
-
-    def walk(value: object) -> None:
-        if isinstance(value, list):
-            for item in value:
-                walk(item)
-        else:
-            flat.append(bool(value))
+            flat.append(convert(value))
 
     walk(tensor.tolist())
     return flat
@@ -1039,9 +978,9 @@ def _quantize_weight(
     # little-endian bytes, so they are packed here rather than handed to
     # the engine as numbers it would have to re-encode.
     fmt = "<e" if scale_mil == _spec.FLOAT16 else "<f"
-    scale_bytes = b"".join(struct.pack(fmt, v) for v in _flatten_floats(scale))
+    scale_bytes = b"".join(struct.pack(fmt, v) for v in _flatten(scale, _as_float))
     zero_bytes = b"".join(
-        struct.pack("<b", int(v)) for v in _flatten_floats(zero_point)
+        struct.pack("<b", int(v)) for v in _flatten(zero_point, _as_float)
     )
     return codes, scale_bytes, zero_bytes, channels
 
@@ -1792,10 +1731,10 @@ class Builder:
         shape : list[int]
             Result shape.
         dtype : int or None, optional, default=None
-            MIL element type of the result. ``None`` is the program
-            body's, which is right for arithmetic; a comparison has to
-            say ``BOOL`` or Core ML rejects the operation for producing
-            the wrong type.
+            MIL element type of the result. ``None`` is the type of the
+            ``x`` operand when that is an integer or boolean, and the
+            program body's otherwise; a comparison has to say ``BOOL``
+            or Core ML rejects the operation for producing the wrong type.
 
         Returns
         -------
@@ -1804,15 +1743,28 @@ class Builder:
         """
         name = self._next(mil_type)
         normalised = _operands(bindings)
-        self._program.add_op(
-            mil_type,
-            normalised,
-            name,
-            (self._body_mil if dtype is None else dtype, list(shape)),
-        )
+        declared = self._result_dtype(normalised) if dtype is None else int(dtype)
+        self._program.add_op(mil_type, normalised, name, (declared, list(shape)))
         self.shapes[name] = list(shape)
-        self.dtypes[name] = self._body_mil if dtype is None else int(dtype)
+        self.dtypes[name] = declared
         return name
+
+    def _result_dtype(self, operands: list[tuple[str, list[str]]]) -> int:
+        """The element type of an intermediate whose emitter named none.
+
+        MIL does not promote: an operation on an int32 ``x`` — a reshape
+        or tile of an index, a ``maximum`` holding one to a bound —
+        produces int32, and declaring the body's float type instead is
+        refused when the package is parsed. Integer and boolean ``x``
+        decide the type; a float ``x`` follows the body, whose precision
+        an fp16 program lowers it to.
+        """
+        for param, values in operands:
+            if param == "x" and len(values) == 1:
+                kind = self.dtypes.get(values[0])
+                if kind in (_C_engine.coreml.DTYPE_INT32, _C_engine.coreml.DTYPE_BOOL):
+                    return kind
+        return self._body_mil
 
     def emit_multi(
         self, mil_type: str, bindings: Bindings, shapes: list[list[int]]
@@ -1839,14 +1791,16 @@ class Builder:
             Names of the values produced, in order.
         """
         normalised = _operands(bindings)
+        declared = self._result_dtype(normalised)
         names = [self._next(f"{mil_type}{i}") for i in range(len(shapes))]
         self._program.add_op_multi(
             mil_type,
             normalised,
-            [(n, (self._body_mil, list(sh))) for n, sh in zip(names, shapes)],
+            [(n, (declared, list(sh))) for n, sh in zip(names, shapes, strict=True)],
         )
-        for n, sh in zip(names, shapes):
+        for n, sh in zip(names, shapes, strict=True):
             self.shapes[n] = list(sh)
+            self.dtypes[n] = declared
         return names
 
     def const_bool(self, value: bool) -> str:
@@ -3229,13 +3183,13 @@ def build_package(
             # A boolean buffer is a mask, not a count that happens to be 0
             # or 1, and MIL types the two apart — an int32 constant would
             # be rejected wherever a condition is wanted.
-            program.add_bool_const_shaped(name, _flatten_bools(tensor), shape)
+            program.add_bool_const_shaped(name, _flatten(tensor, bool), shape)
             weight_dtypes[name] = _C_engine.coreml.DTYPE_BOOL
         else:
             # Integer buffers (position ids, token-type ids) go inline: the
             # blob carries float payloads only, and MIL has an integer
             # tensor value already, so nothing has to be guessed.
-            program.add_int_const_shaped(name, _flatten_ints(tensor), shape)
+            program.add_int_const_shaped(name, _flatten(tensor, _as_int), shape)
             weight_dtypes[name] = _C_engine.coreml.DTYPE_INT32
         names[tid] = name
         weight_shapes[name] = shape
@@ -3369,7 +3323,7 @@ def build_package(
                 names[tid] = builder.const_from_tensor(written)
         elif folded_value.dtype in (lucid.int32, lucid.int64):
             names[tid] = builder.const_ints_shaped(
-                [int(v) for v in _flatten_ints(folded_value)],
+                [int(v) for v in _flatten(folded_value, _as_int)],
                 [int(d) for d in folded_value.shape],
             )
         else:

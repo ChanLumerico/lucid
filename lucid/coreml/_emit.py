@@ -34,7 +34,7 @@ _MIL_BOOL = 1
 # ... and for a shape, an index or a count.
 _MIL_INT32 = 23
 
-__all__ = ["EMITTERS", "MIL_OPS", "Bound", "Constant", "MultiOutput"]
+__all__ = ["EMITTERS", "Bound", "Constant", "MultiOutput"]
 
 
 class TracedValue(Protocol):
@@ -220,6 +220,13 @@ def _flag(value: object, default: bool = False) -> bool:
     return bool(value)
 
 
+def _scalar_like(b: Builder, value: str, number: int) -> str:
+    """A scalar ``number`` of ``value``'s type: MIL refuses int32 beside a float."""
+    if b.dtype_of(value) in (_MIL_INT32, _MIL_BOOL):
+        return b.const_int(number)
+    return b.const_float(float(number))
+
+
 # ── elementwise unary: Lucid name -> the MIL op that is exactly it ───────────
 #
 # A table, because these differ only by a name and writing thirty of them
@@ -251,12 +258,17 @@ _UNARY_MIL = {
     "tan": "tan",
     "tanh": "tanh",
 }
+# MIL's ``relu`` and ``relu6`` refuse an int32 ``x``; Lucid runs both on integers.
+_INTEGER_BOUNDS = {"relu": (0, None), "relu6": (0, 6)}
 
 
 def _register_unary(lucid_name: str, mil_name: str) -> None:
     """Bind one Lucid unary op to the MIL op of the same meaning."""
 
     def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        bounds = _INTEGER_BOUNDS.get(lucid_name)
+        if bounds is not None and b.dtype_of(ins[0]) == _MIL_INT32:
+            return _integer_clip(b, ins[0], *bounds)
         return mil_name, [("x", ins[0])]
 
     EMITTERS[lucid_name] = emit
@@ -288,7 +300,16 @@ for _lucid_name, _mil_name in _EPSILON_UNARY.items():
 @_emitter("neg")
 def _neg(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # MIL has no negation op; multiplying by -1 is the whole of it.
-    return "mul", [("x", ins[0]), ("y", b.const_float(-1.0))]
+    return "mul", [("x", ins[0]), ("y", _scalar_like(b, ins[0], -1))]
+
+
+def _integer_clip(b: Builder, value: str, low: int, high: int | None) -> EmitResult:
+    """``value`` held to ``[low, high]``: MIL's ``maximum`` takes int32, ``clip`` not."""
+    floor_binding: Bindings = [("x", value), ("y", b.const_int(low))]
+    if high is None:
+        return "maximum", floor_binding
+    floored = b.emit("maximum", floor_binding, b.shape_of(value))
+    return "minimum", [("x", floored), ("y", b.const_int(high))]
 
 
 @_emitter("log2")
@@ -1303,49 +1324,6 @@ def emit_cast(b: Builder, value: str, out_dtype: str) -> EmitResult:
     return "cast", [("x", value), ("dtype", b.const_str(out_dtype))]
 
 
-# Names of the MIL ops this package can produce, for diagnostics.
-MIL_OPS = (
-    "add",
-    "concat",
-    "conv_transpose",
-    "gather_along_axis",
-    "exp",
-    "cast",
-    "gather",
-    "gelu",
-    "reduce_max",
-    "reduce_min",
-    "scatter_along_axis",
-    "select",
-    "layer_norm",
-    "leaky_relu",
-    "matmul",
-    "reduce_mean",
-    "silu",
-    "split",
-    "stack",
-    "tile",
-    "upsample_bilinear",
-    "upsample_nearest_neighbor",
-    "softmax",
-    "transpose",
-    "avg_pool",
-    "batch_norm",
-    "conv",
-    "identity",
-    "linear",
-    "max_pool",
-    "mul",
-    "real_div",
-    "relu",
-    "relu6",
-    "reshape",
-    "sigmoid",
-    "sub",
-    "tanh",
-)
-
-
 # ── activations MIL spells differently, or not at all ────────────────────────
 #
 # The SELU constants are the paper's (Klambauer 2017): the fixed point of
@@ -1413,6 +1391,15 @@ def _log_softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("clip")
 def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    # An integer clamp is a histogram's bucket index. The engine's integer
+    # kernel converts each bound to the element type, truncating toward zero.
+    if b.dtype_of(ins[0]) == _MIL_INT32:
+        return _integer_clip(
+            b,
+            ins[0],
+            math.trunc(_as_float(_attr(op, "min"))),
+            math.trunc(_as_float(_attr(op, "max"))),
+        )
     return "clip", [
         ("x", ins[0]),
         ("alpha", b.const_float(_as_float(_attr(op, "min")))),
@@ -1458,13 +1445,6 @@ def _reduce_every_axis(b: Builder, value: str, mil_name: str) -> EmitResult:
     ]
 
 
-def _zero_like(b: Builder, value: str) -> str:
-    """A scalar zero of ``value``'s element type."""
-    if b.dtype_of(value) in (_MIL_INT32, _MIL_BOOL):
-        return b.const_int(0)
-    return b.const_float(0.0)
-
-
 @_emitter("isnan")
 def _isnan(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """NaN is the one value unequal to itself."""
@@ -1488,7 +1468,7 @@ def _truth_reduce(b: Builder, ins: list[str], mil_name: str) -> EmitResult:
     if b.dtype_of(truth) != _MIL_BOOL:
         truth = b.emit(
             "not_equal",
-            [("x", truth), ("y", _zero_like(b, truth))],
+            [("x", truth), ("y", _scalar_like(b, truth, 0))],
             shape,
             dtype=_MIL_BOOL,
         )
