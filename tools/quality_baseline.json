@@ -214,8 +214,7 @@
     "lucid/nn/modules/rnn.py": 171,
     "lucid/optim/lr_scheduler.py": 442,
     "lucid/special/__init__.py": 1089,
-    "lucid/utils/transforms/_color.py": 274,
-    "lucid/utils/transforms/functional.py": 54
+    "lucid/utils/transforms/_color.py": 274
    },
    "noqa[ANN401]": {
     "lucid/nn/utils/parametrize.py": 1,
@@ -1325,7 +1324,7 @@
     "lucid/utils/tokenizer/_pre_tokenizers.py": 2,
     "lucid/utils/transforms/_composition.py": 1,
     "lucid/utils/transforms/_presets.py": 1,
-    "lucid/utils/transforms/functional.py": 2
+    "lucid/utils/transforms/functional.py": 1
    },
    "B912": {
     "lucid/optim/optimizer.py": 1

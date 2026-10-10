@@ -8,7 +8,6 @@ return a transformed tensor.  The class-based transforms in
 All operations are Lucid-native (engine ops only) — no numpy / PIL.
 """
 
-import functools
 import math
 from typing import Literal
 
@@ -18,6 +17,8 @@ from lucid._tensor import Tensor
 from lucid._types import DeviceLike
 
 _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
+#: The modes ``antialias`` applies to; the others ignore it, as in the reference.
+_ANTIALIASED_MODES = frozenset({"bilinear", "bicubic"})
 
 
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
@@ -32,80 +33,6 @@ def _spatial_hw(img: Tensor) -> tuple[int, int]:
             f"expected a (C, H, W) or (B, C, H, W) tensor, got ndim={img.ndim}"
         )
     return int(img.shape[-2]), int(img.shape[-1])
-
-
-def _triangle(x: float) -> float:
-    x = abs(x)
-    return 1.0 - x if x < 1.0 else 0.0
-
-
-def _cubic(x: float) -> float:
-    # a = -0.5: the value the reference's antialiased bicubic shares with
-    # PIL.  Plain bicubic interpolation uses -0.75.
-    a = -0.5
-    x = abs(x)
-    if x < 1.0:
-        return ((a + 2.0) * x - (a + 3.0)) * x * x + 1.0
-    if x < 2.0:
-        return (((x - 5.0) * x + 8.0) * x - 4.0) * a
-    return 0.0
-
-
-#: The kernels :func:`resize` can antialias with, and each one's support
-#: at unit scale.
-_AA_FILTERS = {"bilinear": (_triangle, 1.0), "bicubic": (_cubic, 2.0)}
-
-
-@functools.lru_cache(maxsize=128)
-def _aa_taps(
-    n_in: int, n_out: int, mode: str
-) -> tuple[tuple[int, ...], tuple[float, ...]]:
-    """The non-zero entries of the ``(n_out, n_in)`` antialiased resampling
-    matrix, as flat row-major positions and their weights.
-
-    The separable scheme PIL and the reference share: output sample ``i``
-    averages the inputs under the kernel centred at ``(i + 0.5) * scale``,
-    stretched by the downscale factor, so shrinking low-pass filters the
-    image instead of sampling every ``scale``-th pixel.  Each row sums to
-    one.  Only the band under each kernel is kept — a few dozen taps a
-    row, where the dense matrix of a 12-megapixel photo has two million
-    entries and building it in Python took seconds.
-    """
-    kernel, support = _AA_FILTERS[mode]
-    scale = n_in / n_out
-    stretch = max(scale, 1.0)
-    support *= stretch
-    positions: list[int] = []
-    weights: list[float] = []
-    for i in range(n_out):
-        center = scale * (i + 0.5)
-        lo = max(int(center - support + 0.5), 0)
-        hi = min(int(center + support + 0.5), n_in)
-        taps = [kernel((j - center + 0.5) / stretch) for j in range(lo, hi)]
-        total = sum(taps)
-        if total == 0.0:
-            continue
-        for j, tap in zip(range(lo, hi), taps):
-            positions.append(i * n_in + j)
-            weights.append(tap / total)
-    return tuple(positions), tuple(weights)
-
-
-def _aa_matrix(n_in: int, n_out: int, mode: str, like: Tensor) -> Tensor:
-    """Dense ``(n_out, n_in)`` resampling matrix on ``like``'s device."""
-    positions, weights = _aa_taps(n_in, n_out, mode)
-    dense = lucid.zeros(n_out * n_in, dtype=like.dtype, device=like.device)
-    index = lucid.tensor(list(positions), device=like.device)
-    dense[index] = lucid.tensor(list(weights), dtype=like.dtype, device=like.device)
-    return dense.reshape(n_out, n_in)
-
-
-def _resize_antialiased(x: Tensor, new_h: int, new_w: int, mode: str) -> Tensor:
-    """Separable antialiased resize of a ``(B, C, H, W)`` tensor."""
-    h, w = _spatial_hw(x)
-    # Width first, (..., H, W) @ (W, W'), then (H', H) @ (..., H, W').
-    x = lucid.matmul(x, _aa_matrix(w, new_w, mode, x).mT)
-    return lucid.matmul(_aa_matrix(h, new_h, mode, x), x)
 
 
 def resize_target(h: int, w: int, size: int | tuple[int, int]) -> tuple[int, int]:
@@ -165,8 +92,9 @@ def resize(
         each output pixel averages the inputs under a kernel stretched by
         the downscale factor instead of sampling a few of them, which on a
         photo moves every value.  Applies to ``"bilinear"`` and
-        ``"bicubic"`` when either side shrinks; upscaling and the other
-        modes are unaffected.
+        ``"bicubic"`` (see ``antialias`` on
+        :func:`lucid.nn.functional.interpolate`); the other modes ignore
+        it.
 
     Returns
     -------
@@ -179,13 +107,13 @@ def resize(
     new_h, new_w = resize_target(h, w, size)
 
     mode = str(getattr(interpolation, "value", interpolation))
-    if antialias and mode in _AA_FILTERS and (new_h < h or new_w < w):
-        x = _resize_antialiased(x, new_h, new_w, mode)
-    else:
-        align = False if interpolation in _RESIZE_ALIGN_MODES else None
-        x = F.interpolate(
-            x, size=(new_h, new_w), mode=interpolation, align_corners=align
-        )
+    x = F.interpolate(
+        x,
+        size=(new_h, new_w),
+        mode=mode,
+        align_corners=False if mode in _RESIZE_ALIGN_MODES else None,
+        antialias=antialias and mode in _ANTIALIASED_MODES,
+    )
     return x[0] if unbatched else x
 
 

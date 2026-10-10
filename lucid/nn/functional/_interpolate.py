@@ -20,10 +20,11 @@ when that is the same mapping — a size, a recomputed or whole-number
 scale — and the gathers run when it is not.
 """
 
+import functools
 import math
 import struct
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -56,6 +57,7 @@ _ANTIALIASED = frozenset({"bilinear", "bicubic"})
 # Each tap: the input index every output sample reads, and its weight
 # (``None`` when the only tap has weight one — nearest).
 type _Taps = list[tuple[list[int], list[float] | None]]
+type _FrozenTaps = tuple[tuple[tuple[int, ...], tuple[float, ...] | None], ...]
 
 
 def _f32(value: float) -> float:
@@ -90,18 +92,19 @@ def _source_index(ratio: float, dst: int, align_corners: bool, cubic: bool) -> f
 
 
 def _nearest_indices(
-    in_size: int, out_size: int, scale: float | None, exact: bool
+    in_size: int, out_size: int, scale: float | None, exact: bool, rank: int
 ) -> list[int]:
     """Input index each output sample copies, for ``nearest[-exact]``."""
     last = in_size - 1
     if exact:
         ratio = _f32(_coordinate_scale(in_size, out_size, False, scale))
         return [min(math.floor(_f32((d + 0.5) * ratio)), last) for d in range(out_size)]
-    # Plain nearest pins these two cases whatever the scale factor said;
-    # the reference keeps them for compatibility, so they are the contract.
-    if out_size == in_size:
+    # Plain nearest on a 2-D input pins these two cases whatever the scale
+    # factor said; the reference keeps them for compatibility (and only in
+    # its 2-D kernel), so they are the contract there and nowhere else.
+    if rank == 2 and out_size == in_size:
         return list(range(out_size))
-    if out_size == 2 * in_size:
+    if rank == 2 and out_size == 2 * in_size:
         return [d >> 1 for d in range(out_size)]
     ratio = _f32(_coordinate_scale(in_size, out_size, False, scale))
     return [min(math.floor(_f32(d * ratio)), last) for d in range(out_size)]
@@ -177,8 +180,12 @@ def _antialias_taps(
     Downsampling by ``r`` widens the filter ``r`` times, so every input
     sample contributes; upsampling leaves it at its own width.  Weights
     are normalised per output sample, which is what lets the stretched
-    filter keep a constant image constant at the borders.
+    filter keep a constant image constant at the borders.  An axis that
+    keeps its size is left alone whatever the scale factor said, as the
+    reference does.
     """
+    if out_size == in_size:
+        return [(list(range(out_size)), None)]
     width = 4 if cubic else 2
     kernel: Callable[[float], float] = _keys_cubic if cubic else _triangle
     ratio = _coordinate_scale(in_size, out_size, align_corners, scale)
@@ -202,6 +209,22 @@ def _antialias_taps(
     return taps
 
 
+# An axis is applied as a matrix product (out x in, built from the taps)
+# while the input is at most this many times longer than the taps are
+# many; past that, the dense product does more work than gathering does.
+_DENSE_PER_TAP = 512
+
+
+class _AxisPlan(NamedTuple):
+    """How one axis is resampled — worked out once per configuration."""
+
+    taps: _FrozenTaps
+    identity: bool
+    # Non-zero entries of the (out, in) resampling matrix, row-major,
+    # when the axis is applied as a product.
+    dense: tuple[tuple[int, ...], tuple[float, ...]] | None
+
+
 def _is_identity(taps: _Taps, in_size: int) -> bool:
     out_size = len(taps[0][0])
     if out_size != in_size:
@@ -214,21 +237,52 @@ def _is_identity(taps: _Taps, in_size: int) -> bool:
     return True
 
 
-def _resample_axis(x: Tensor, axis: int, taps: _Taps) -> Tensor:
+def _dense_entries(
+    taps: _Taps, in_size: int
+) -> tuple[tuple[int, ...], tuple[float, ...]]:
+    """The taps as matrix entries; taps clamped onto one sample add up."""
+    entries: dict[int, float] = {}
+    for indices, weights in taps:
+        assert weights is not None
+        for d, (index, weight) in enumerate(zip(indices, weights, strict=True)):
+            if weight != 0.0:
+                position = d * in_size + index
+                entries[position] = entries.get(position, 0.0) + weight
+    return tuple(entries), tuple(entries.values())
+
+
+def _apply_dense(x: Tensor, axis: int, plan: _AxisPlan) -> Tensor:
+    assert plan.dense is not None
+    positions, weights = plan.dense
+    in_size, out_size = int(x.shape[axis]), len(plan.taps[0][0])
+    matrix = _lucid.zeros(out_size * in_size, dtype=x.dtype, device=x.device)
+    matrix[_lucid.tensor(list(positions), dtype=_lucid.int64, device=x.device)] = (
+        _lucid.tensor(list(weights), dtype=x.dtype, device=x.device)
+    )
+    matrix = matrix.reshape(out_size, in_size)
+    # The two trailing axes multiply in place; any other is moved there.
+    if axis == x.ndim - 1:
+        return x @ matrix.mT
+    if axis == x.ndim - 2:
+        return matrix @ x
+    return (matrix @ x.transpose(axis, -2)).transpose(axis, -2)
+
+
+def _apply_gathers(x: Tensor, axis: int, taps: _FrozenTaps) -> Tensor:
     """Sum over taps of the gathered samples times their weights."""
     device = x.device.type
     shape = [1] * x.ndim
     shape[axis] = len(taps[0][0])
     total: Tensor | None = None
     for indices, weights in taps:
+        if weights is not None and not any(weights):
+            continue
         taken = x.index_select(
-            axis, _lucid.tensor(indices, dtype=_lucid.int64, device=device)
+            axis, _lucid.tensor(list(indices), dtype=_lucid.int64, device=device)
         )
         if weights is not None:
-            if not any(weights):
-                continue
             taken = taken * _lucid.tensor(
-                weights, dtype=x.dtype, device=device
+                list(weights), dtype=x.dtype, device=device
             ).reshape(tuple(shape))
         total = taken if total is None else total + taken
     assert total is not None
@@ -337,45 +391,83 @@ def _engine_resample(
     return _wrap(_C_engine.squeeze(out, 2) if x.ndim == 3 else out)
 
 
+def _kernel_nearest(in_size: int, out_size: int, device: str) -> list[int]:
+    """Input index the engine's nearest kernel copies on ``device``.
+
+    The two backends do not agree with each other: the CPU kernel divides
+    exactly, the Metal one multiplies by ``in / out`` in single precision.
+    """
+    if device == "metal":
+        ratio = _f32(in_size / out_size)
+        return [
+            min(max(math.floor(_f32(d * ratio)), 0), in_size - 1)
+            for d in range(out_size)
+        ]
+    return [min(d * in_size // out_size, in_size - 1) for d in range(out_size)]
+
+
 def _engine_maps_like(
     mode: str,
     spatial: list[int],
     sizes: list[int],
     scales: list[float | None],
     align_corners: bool,
+    device: str,
 ) -> bool:
-    """Whether the size-only engine kernel lands every sample where the
-    reference does.  The kernels step by ``in / out`` (or pin corners)."""
+    """Whether the size-only engine kernel on ``device`` lands every sample
+    where the reference does.  The kernels step by ``in / out`` (or pin
+    corners)."""
+    rank = len(spatial)
     for n, m, s in zip(spatial, sizes, scales, strict=True):
         if mode == "nearest":
-            engine = [min(d * n // m, n - 1) for d in range(m)]
-            if engine != _nearest_indices(n, m, s, exact=False):
+            reference = _nearest_indices(n, m, s, exact=False, rank=rank)
+            if _kernel_nearest(n, m, device) != reference:
                 return False
         elif not (align_corners or m == n or s is None):
-            reference = _coordinate_scale(n, m, False, s)
-            if not math.isclose(reference, n / m, rel_tol=1e-12):
+            ratio = _coordinate_scale(n, m, False, s)
+            if not math.isclose(ratio, n / m, rel_tol=1e-12):
                 return False
     return True
 
 
-def _axis_taps(
+@functools.lru_cache(maxsize=256)
+def _axis_plan(
     mode: str,
     in_size: int,
     out_size: int,
     align_corners: bool,
     scale: float | None,
     antialias: bool,
-) -> _Taps:
+    rank: int,
+) -> _AxisPlan:
+    """How to resample one axis, frozen so the cache can hand it out again.
+
+    Building them is a Python loop over the output samples (and, for the
+    stretched antialiasing filter, over every input sample each covers),
+    which a data pipeline resizing every image to the same size would
+    otherwise repeat per call.
+    """
     if antialias:
-        return _antialias_taps(
+        taps = _antialias_taps(
             in_size, out_size, align_corners, scale, cubic=mode == "bicubic"
         )
-    if mode in ("nearest", "nearest-exact"):
+    elif mode in ("nearest", "nearest-exact"):
         exact = mode == "nearest-exact"
-        return [(_nearest_indices(in_size, out_size, scale, exact), None)]
-    if mode == "bicubic":
-        return _cubic_taps(in_size, out_size, align_corners, scale)
-    return _linear_taps(in_size, out_size, align_corners, scale)
+        taps = [(_nearest_indices(in_size, out_size, scale, exact, rank), None)]
+    elif mode == "bicubic":
+        taps = _cubic_taps(in_size, out_size, align_corners, scale)
+    else:
+        taps = _linear_taps(in_size, out_size, align_corners, scale)
+    weighted = taps[0][1] is not None
+    dense = weighted and in_size <= _DENSE_PER_TAP * len(taps)
+    return _AxisPlan(
+        taps=tuple(
+            (tuple(indices), None if weights is None else tuple(weights))
+            for indices, weights in taps
+        ),
+        identity=_is_identity(taps, in_size),
+        dense=_dense_entries(taps, in_size) if dense else None,
+    )
 
 
 def resample(
@@ -432,13 +524,20 @@ def resample(
     if (
         kernel
         and x.is_floating_point()
-        and _engine_maps_like(mode, spatial, sizes, scales, corners)
+        and _engine_maps_like(mode, spatial, sizes, scales, corners, x.device.type)
     ):
         return _engine_resample(x, mode, sizes, corners)
 
     out = x
-    for axis, (n, m, s) in enumerate(zip(spatial, sizes, scales, strict=True), 2):
-        taps = _axis_taps(mode, n, m, corners, s, antialias)
-        if not _is_identity(taps, n):
-            out = _resample_axis(out, axis, taps)
+    # Last axis first: it multiplies without a copy, and a shrinking image
+    # makes every later product smaller.
+    for axis in reversed(range(2, x.ndim)):
+        n, m, s = spatial[axis - 2], sizes[axis - 2], scales[axis - 2]
+        plan = _axis_plan(mode, n, m, corners, s, antialias, len(spatial))
+        if plan.identity:
+            continue
+        if plan.dense is not None:
+            out = _apply_dense(out, axis, plan)
+        else:
+            out = _apply_gathers(out, axis, plan.taps)
     return out.clone() if out is x else out

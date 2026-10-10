@@ -43,10 +43,12 @@ def test_a_flat_image_stays_flat(mode: str) -> None:
 
 
 def test_growing_an_image_is_unchanged_by_the_flag() -> None:
+    # The unstretched triangle is the bilinear filter, so the two agree;
+    # they are computed by different paths, hence a rounding tolerance.
     img = lucid.rand(3, 20, 30)
     filtered = F.resize(img, (40, 60))
     sampled = F.resize(img, (40, 60), antialias=False)
-    assert float((filtered - sampled).abs().max().item()) == 0.0
+    assert float((filtered - sampled).abs().max().item()) < 1e-6
 
 
 def test_the_stretching_segmentation_preset_filters_too() -> None:
