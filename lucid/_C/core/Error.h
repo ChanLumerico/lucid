@@ -525,4 +525,28 @@ public:
     explicit InvalidArgument(std::string msg) : LucidError(std::move(msg)) {}
 };
 
+// Thrown when a linear-algebra routine is handed a well-formed matrix it
+// cannot factor: a singular matrix to ``inv`` / ``solve``, a matrix that is
+// not positive definite to ``cholesky``, an SVD or eigensolver that does not
+// converge — LAPACK's ``info > 0``.
+//
+// The input passed every argument check; the failure is a property of its
+// values.  A caller probing for it (a ``*_ex`` variant, a distribution's
+// positive-definiteness test) catches this class and lets a shape or dtype
+// refusal through.  Mapped to ``lucid._C.engine.LinAlgError`` — a
+// ``LucidError`` and so a ``RuntimeError``, as the reference raises it —
+// and re-exported as ``lucid.linalg.LinAlgError``.
+//
+// Parameters
+// ----------
+// msg : std::string
+//     Fully formatted message; passed through unchanged to the
+//     :class:`LucidError` base.
+class LinAlgError : public LucidError {
+public:
+    // Construct a ``LinAlgError`` from the call site's message naming the
+    // op and the failed step (``info``).
+    explicit LinAlgError(std::string msg) : LucidError(std::move(msg)) {}
+};
+
 }  // namespace lucid

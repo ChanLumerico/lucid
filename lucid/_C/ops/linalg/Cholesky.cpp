@@ -6,8 +6,9 @@
 //   CPU path: LAPACK dpotrf reads only the lower (or upper) triangle of A,
 //             writes the Cholesky factor in-place, and zeros the other half.
 //             If LAPACK returns info > 0, the matrix is not positive-definite;
-//             check_lapack_info (via the backend) translates this to a LucidError.
-//   GPU path: mlx::core::linalg::cholesky() on the CPU stream (see _Detail.h).
+//             the backend raises LinAlgError (backend/LapackInfo.h).
+//   GPU path: mlx::core::linalg::cholesky() on the CPU stream, its failed
+//             pivot read off the factor's diagonal — the same LinAlgError.
 //
 // There is no backward node registered here; gradients through Cholesky are
 // not yet supported.  Implementing the backward requires Iain Murray's formula

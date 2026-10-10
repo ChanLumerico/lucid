@@ -71,6 +71,14 @@ void register_errors(py::module_& m) {
         make_subclass("NotImplementedError", builtins.attr("NotImplementedError"));
     static py::object invalid_argument_cls =
         make_subclass("InvalidArgument", builtins.attr("ValueError"));
+    // A matrix the routine could not factor: the reference's class of the
+    // same name is a plain ``RuntimeError``, and so is this one.
+    static py::object linalg_error_cls = make_subclass("LinAlgError");
+    linalg_error_cls.attr("__doc__") =
+        "A matrix a linear-algebra routine could not factor: singular, not "
+        "positive-definite, or an iteration that did not converge (LAPACK's "
+        "``info > 0``).  A ``RuntimeError``; argument refusals are not this "
+        "class.";
 
     // The translator is called for every active exception that crosses the
     // C++/Python boundary.  More-derived types are checked first so that they
@@ -98,6 +106,8 @@ void register_errors(py::module_& m) {
             PyErr_SetString(not_implemented_cls.ptr(), e.what());
         } catch (const InvalidArgument& e) {
             PyErr_SetString(invalid_argument_cls.ptr(), e.what());
+        } catch (const LinAlgError& e) {
+            PyErr_SetString(linalg_error_cls.ptr(), e.what());
         } catch (const LucidError& e) {
             PyErr_SetString(lucid_error_cls.ptr(), e.what());
         }

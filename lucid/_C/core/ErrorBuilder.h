@@ -254,6 +254,22 @@ public:
     //     Always.  This function does not return.
     [[noreturn]] void invalid_argument(const std::string& msg) const;
 
+    // Throws a :class:`LinAlgError` with the op name and trace.
+    //
+    // For a matrix the routine cannot factor (LAPACK's ``info > 0``), not
+    // for a malformed argument.
+    //
+    // Parameters
+    // ----------
+    // msg : const std::string&
+    //     The failed step, e.g. the ``info`` LAPACK reported.
+    //
+    // Raises
+    // ------
+    // LinAlgError
+    //     Always.  This function does not return.
+    [[noreturn]] void linalg_error(const std::string& msg) const;
+
     // Throws a :class:`ShapeMismatch` with the op name, optional detail,
     // and current trace combined as the exception's ``context`` field.
     //

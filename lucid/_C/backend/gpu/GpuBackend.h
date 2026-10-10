@@ -94,6 +94,7 @@
 #include "../IBackend.h"
 #include "AxisIndex.h"
 #include "HalfAccumulation.h"
+#include "LinalgStatus.h"
 #include "Lstm.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -2641,36 +2642,25 @@ public:
         return Storage{gpu::wrap_mlx_array(narrow_half(::mlx::core::contiguous(raw), out_dt), dt)};
     }
 
-    // Cholesky factorisation $A = L L^T$ (or $U^T U$ if ``upper``).
+    // Cholesky factorisation $A = L L^T$ (or $U^T U$ if ``upper``), on
+    // MLX's CPU linalg stream.
     //
-    // Notes
-    // -----
-    // Routed through MLX's CPU linalg stream (``k_linalg_stream``).
+    // MLX reports no failure.  Its *lower* factor keeps LAPACK's failed
+    // pivot — the first diagonal entry that is not positive, or is NaN, at
+    // the step ``potrf`` stopped — so ``info`` is read there.  Its upper
+    // factor does not: ``[[1, 2], [2, 1]]`` came back ``[[1, 2], [0, 1]]``
+    // (LCD-206).  So ``U`` of ``A`` is ``L`` of ``A^T``, transposed: the
+    // same triangle read, one check for both.
     Storage linalg_cholesky(const Storage& a, const Shape&, bool upper, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = ::mlx::core::linalg::cholesky(*ga.arr, upper, k_linalg_stream);
-
-        // MLX does not report a failed factorisation — it returns whatever
-        // the recursion produced.  A matrix that is not positive definite
-        // came back as an ordinary-looking factor with an impossible
-        // entry: ``[[1, 2], [2, 1]]`` gave ``[1, 0, 2, -3]``, a Cholesky
-        // factor with a *negative* diagonal.  LAPACK reports it and the
-        // CPU raises; the reference raises; Metal returned the garbage.
-        //
-        // The factorisation is defined exactly when every diagonal entry
-        // of the factor is finite and strictly positive, so that is the
-        // test.  It forces an evaluation, which the CPU's LAPACK call
-        // already does — the two devices now cost the same as well as
-        // answering the same.
-        auto diag = ::mlx::core::diagonal(out, 0, -2, -1, k_linalg_stream);
-        auto zero = ::mlx::core::array(0.0f, diag.dtype());
-        auto broken = ::mlx::core::any(
-            ::mlx::core::logical_or(::mlx::core::less_equal(diag, zero), ::mlx::core::isnan(diag)),
-            k_linalg_stream);
-        broken.eval();
-        MemoryTracker::track_host_sync(broken.nbytes());
-        if (broken.item<bool>())
-            ErrorBuilder("gpu_backend::linalg_cholesky").fail("matrix is not positive definite");
+        auto src = upper ? ::mlx::core::swapaxes(*ga.arr, -1, -2, k_linalg_stream) : *ga.arr;
+        auto lower = ::mlx::core::linalg::cholesky(src, /*upper=*/false, k_linalg_stream);
+        auto diag = ::mlx::core::diagonal(lower, 0, -2, -1, k_linalg_stream);
+        auto positive =
+            ::mlx::core::greater(diag, ::mlx::core::array(0.0f, diag.dtype()), k_linalg_stream);
+        gpu::raise_failed_step(::mlx::core::logical_not(positive, k_linalg_stream), "cholesky",
+                               k_linalg_stream);
+        auto out = upper ? ::mlx::core::swapaxes(lower, -1, -2, k_linalg_stream) : lower;
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -2679,7 +2669,7 @@ public:
     // Built from MLX's LU factors rather than ``linalg::inv``, which throws
     // from the CPU stream's worker thread on a singular matrix and so
     // aborts the process — see ``gpu_lu_inverse``.  A singular input raises
-    // the same ``LucidError`` the CPU stream does.
+    // the same ``LinAlgError`` the CPU stream does.
     Storage linalg_inv(const Storage& a, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = gpu_lu_inverse(*ga.arr, "inv");
@@ -5611,7 +5601,7 @@ private:
     //
     // ``linalg::lu`` reports a zero pivot by leaving it in ``U`` rather than
     // by throwing, so the pivots are read back and a singular matrix raises
-    // here — with the CPU stream's message, ``info`` being the 1-based
+    // here — the CPU stream's ``LinAlgError``, ``info`` being the 1-based
     // index of the first zero pivot, as LAPACK numbers it.  Only then are
     // the factors inverted, and ``tri_inv`` fails on nothing but an exactly
     // zero diagonal: ``U``'s was just checked, ``L``'s is all ones.  (A
@@ -5630,23 +5620,9 @@ private:
         const auto& u = factors[2];
 
         auto pivots = ::mlx::core::diagonal(u, 0, -2, -1, k_linalg_stream);
-        auto zero =
-            ::mlx::core::equal(pivots, ::mlx::core::array(0.0f, pivots.dtype()), k_linalg_stream);
-        auto any_zero = ::mlx::core::any(zero, false, k_linalg_stream);
-        any_zero.eval();
-        MemoryTracker::track_host_sync(any_zero.nbytes());
-        if (any_zero.item<bool>()) {
-            auto flags = ::mlx::core::contiguous(zero, false, k_linalg_stream);
-            flags.eval();
-            MemoryTracker::track_host_sync(flags.nbytes());
-            const std::size_t n = static_cast<std::size_t>(pivots.shape(-1));
-            const bool* f = flags.data<bool>();
-            std::size_t first = 0;
-            while (first < flags.size() && !f[first])
-                ++first;
-            ErrorBuilder(op).fail(
-                "LAPACK numerical failure (info=" + std::to_string(first % n + 1) + ")");
-        }
+        gpu::raise_failed_step(
+            ::mlx::core::equal(pivots, ::mlx::core::array(0.0f, pivots.dtype()), k_linalg_stream),
+            op, k_linalg_stream);
 
         auto u_inv = ::mlx::core::linalg::tri_inv(u, /*upper=*/true, k_linalg_stream);
         auto l_inv = ::mlx::core::linalg::tri_inv(l, /*upper=*/false, k_linalg_stream);

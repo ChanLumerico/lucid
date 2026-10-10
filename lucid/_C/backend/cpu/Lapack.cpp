@@ -791,6 +791,8 @@ void lapack_householder_product_f64(
 // ── ldl_factor ────────────────────────────────────────────────────────────────
 // LDL^T factorization of symmetric n×n matrix A. Uses ssytrf_/dsytrf_.
 // A_out receives the packed LAPACK result; ipiv receives 1-based pivot indices.
+// ``info > 0`` (an exactly-zero entry of D) still completes the factorisation,
+// so the result is written for it too; only an illegal argument writes nothing.
 
 void lapack_ldl_factor_f32(const float* A, float* A_out, int* ipiv, int n, int* info_out) {
     char uplo = 'L';
@@ -805,7 +807,7 @@ void lapack_ldl_factor_f32(const float* A, float* A_out, int* ipiv, int n, int* 
     std::vector<float> work(static_cast<std::size_t>(lwork));
     ssytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), work.data(), &lwork, &info);
     *info_out = info;
-    if (info == 0) {
+    if (info >= 0) {
         colmajor_to_rowmajor_f32(Ac.data(), A_out, n, n);
         for (int i = 0; i < n; ++i)
             ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
@@ -825,7 +827,7 @@ void lapack_ldl_factor_f64(const double* A, double* A_out, int* ipiv, int n, int
     std::vector<double> work(static_cast<std::size_t>(lwork));
     dsytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), work.data(), &lwork, &info);
     *info_out = info;
-    if (info == 0) {
+    if (info >= 0) {
         colmajor_to_rowmajor_f64(Ac.data(), A_out, n, n);
         for (int i = 0; i < n; ++i)
             ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);

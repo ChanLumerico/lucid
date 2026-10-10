@@ -277,40 +277,6 @@ inline Shape with_matrix_shape(const Shape& sh, std::initializer_list<std::int64
     return out;
 }
 
-// Translate a LAPACK ``info`` return code into a Lucid error.
-//
-// LAPACK convention
-// -----------------
-// - ``info == 0`` — success.
-// - ``info < 0``  — the ``(-info)``-th argument had an illegal value.  This
-//   is always a Lucid bug: it means our argument-marshalling routed an
-//   inconsistent shape, leading dimension, or work-size to LAPACK.
-// - ``info > 0``  — a numerical failure occurred (singular factor,
-//   non-positive Cholesky pivot, failure to converge, …).  This may be a
-//   user-data issue — e.g. passing a non-SPD matrix to Cholesky.
-//
-// Both cases are fatal at the engine level.  Because callers pre-validate
-// with ``require_float`` / ``require_square_2d``, in practice the only
-// reachable error in production is ``info > 0`` (ill-conditioned input).
-//
-// Parameters
-// ----------
-// info : int
-//     The LAPACK status return.
-// op : const char*
-//     Symbolic op name used in the error message.
-//
-// Raises
-// ------
-// LucidError
-//     If ``info != 0``.
-inline void check_lapack_info(int info, const char* op) {
-    if (info < 0)
-        ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
-    if (info > 0)
-        ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
-}
-
 // How a right-hand side B is read against a square A in ``solve``,
 // ``lu_solve`` and ``solve_triangular`` — the one place that decides it.
 //

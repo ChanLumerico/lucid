@@ -79,6 +79,7 @@
 #include "../../core/StridedCopy.h"
 #include "../Dispatcher.h"
 #include "../IBackend.h"
+#include "../LapackInfo.h"
 #include "Blas.h"
 #include "ErfPoly.h"
 #include "GeluGrad.h"
@@ -5775,13 +5776,13 @@ public:
             auto* p = reinterpret_cast<float*>(ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 cpu::lapack_cholesky_f32(p + b * per_mat, n, lower, &info);
-                check_lapack_info(info, "cholesky");
+                check_lapack_info(info, "cholesky", b, batch);
             }
         } else if (dt == Dtype::F64) {
             auto* p = reinterpret_cast<double*>(ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 cpu::lapack_cholesky_f64(p + b * per_mat, n, lower, &info);
-                check_lapack_info(info, "cholesky");
+                check_lapack_info(info, "cholesky", b, batch);
             }
         } else {
             ErrorBuilder("cpu_backend::linalg_cholesky").not_implemented("dtype not supported");
@@ -5802,13 +5803,13 @@ public:
             auto* p = reinterpret_cast<float*>(ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 cpu::lapack_inv_f32(p + b * per_mat, n, &info);
-                check_lapack_info(info, "inv");
+                check_lapack_info(info, "inv", b, batch);
             }
         } else if (dt == Dtype::F64) {
             auto* p = reinterpret_cast<double*>(ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 cpu::lapack_inv_f64(p + b * per_mat, n, &info);
-                check_lapack_info(info, "inv");
+                check_lapack_info(info, "inv", b, batch);
             }
         } else {
             ErrorBuilder("cpu_backend::linalg_inv").not_implemented("dtype not supported");
@@ -5841,7 +5842,7 @@ public:
             for (std::int64_t bi = 0; bi < batch; ++bi) {
                 std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(float));
                 cpu::lapack_solve_f32(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
-                check_lapack_info(info, "solve");
+                check_lapack_info(info, "solve", bi, batch);
             }
         } else if (dt == Dtype::F64) {
             std::vector<double> A_local(a_per);
@@ -5850,7 +5851,7 @@ public:
             for (std::int64_t bi = 0; bi < batch; ++bi) {
                 std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(double));
                 cpu::lapack_solve_f64(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
-                check_lapack_info(info, "solve");
+                check_lapack_info(info, "solve", bi, batch);
             }
         } else {
             ErrorBuilder("cpu_backend::linalg_solve").not_implemented("dtype not supported");
@@ -6552,10 +6553,11 @@ public:
         auto piv_ptr = allocate_aligned_bytes(piv_nb, Device::CPU);
         auto* piv_out = reinterpret_cast<int*>(piv_ptr.get());
 
-        // ``sytrf``'s ``info > 0`` is an exactly-zero block of D; the
-        // wrapper then writes nothing for that matrix.  The batch is refused
-        // at the first such matrix, as the reference refuses it — never
-        // returned with that block left unwritten.
+        // ``sytrf``'s ``info > 0`` is an exactly-zero entry of D: the
+        // factorisation completed and D is singular.  Like ``getrf``'s zero
+        // pivot it is part of the answer, not a failure to produce one, so
+        // the factor is returned and ``lucid.linalg`` reads it off D —
+        // ``ldl_factor`` raises, ``ldl_factor_ex`` reports it.
         int info = 0;
         if (dt == Dtype::F32) {
             const auto* src = reinterpret_cast<const float*>(cs.ptr.get());
@@ -6563,7 +6565,7 @@ public:
             for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_ldl_factor_f32(src + bi * per_mat, dst + bi * per_mat, piv_out + bi * n,
                                            n, &info);
-                check_lapack_info(info, "ldl_factor", bi, batch);
+                check_lapack_info(info < 0 ? info : 0, "ldl_factor", bi, batch);
             }
         } else {
             const auto* src = reinterpret_cast<const double*>(cs.ptr.get());
@@ -6571,7 +6573,7 @@ public:
             for (std::int64_t bi = 0; bi < batch; ++bi) {
                 cpu::lapack_ldl_factor_f64(src + bi * per_mat, dst + bi * per_mat, piv_out + bi * n,
                                            n, &info);
-                check_lapack_info(info, "ldl_factor", bi, batch);
+                check_lapack_info(info < 0 ? info : 0, "ldl_factor", bi, batch);
             }
         }
         return {Storage{CpuStorage{ld_ptr, cs.nbytes, dt}},
@@ -12408,31 +12410,6 @@ private:
         return batch;
     }
 
-    static void check_lapack_info(int info, const char* op) {
-        if (info < 0)
-            ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info));
-        if (info > 0)
-            ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")");
-    }
-
-    // ``check_lapack_info`` for matrix ``index`` of a ``batch``, naming the
-    // matrix when there is more than one.  Call it inside the batch loop:
-    // ``info`` is overwritten per matrix, so checked once after the loop it
-    // reports only the last matrix, and an earlier failure leaves its output
-    // block unwritten and returned as if it were an answer.
-    static void
-    check_lapack_info(int info, const char* op, std::int64_t index, std::int64_t batch) {
-        if (info == 0 || batch <= 1) {
-            check_lapack_info(info, op);
-            return;
-        }
-        const std::string where = " in matrix " + std::to_string(index) + " of the batch";
-        if (info < 0)
-            ErrorBuilder(op).fail("LAPACK invalid argument index" + std::to_string(-info) + where);
-        ErrorBuilder(op).fail("LAPACK numerical failure (info=" + std::to_string(info) + ")" +
-                              where);
-    }
-
     // Whether every one of the ``n`` values is finite.  LAPACK's drivers
     // reject a NaN as an illegal argument, so the linalg kernels ask first.
     template <typename T>
@@ -12481,8 +12458,7 @@ private:
             cpu::lapack_svd_f32(a, m, n, false, u.data(), s.data(), vt.data(), &info);
         else
             cpu::lapack_svd_f64(a, m, n, false, u.data(), s.data(), vt.data(), &info);
-        if (info != 0)
-            ErrorBuilder("pinv").fail("SVD did not converge");
+        check_lapack_info(info, "pinv");
 
         const T smax = (k > 0) ? *std::max_element(s.begin(), s.end()) : T{0};
         const T rcond = std::numeric_limits<T>::epsilon() * static_cast<T>(std::max(m, n));
