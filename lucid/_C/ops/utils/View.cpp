@@ -32,7 +32,6 @@
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
 #include "Contiguous.h"
-#include "ViewStrict.h"
 
 namespace lucid {
 

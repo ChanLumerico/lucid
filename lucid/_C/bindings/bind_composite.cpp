@@ -25,7 +25,6 @@
 #include "../ops/utils/Concat.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
-#include "../ops/utils/ViewStrict.h"
 
 namespace py = pybind11;
 

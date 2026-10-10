@@ -124,6 +124,21 @@ public:
 LUCID_API TensorImplPtr reshape_op(const TensorImplPtr& a,
                                    const std::vector<std::int64_t>& new_shape);
 
+// Reshape that never copies: the result always shares ``a``'s storage.
+//
+// The same view :func:`reshape_op` makes when ``a``'s elements read in place
+// as ``new_shape`` — a dense tensor on either device, or a strided view whose
+// new shape only drops or inserts size-1 axes.  Where reshape_op would copy
+// instead (``x.t().view(-1)``), this raises.
+//
+// Raises
+// ------
+// ShapeMismatch
+//     The element counts differ, or ``-1`` cannot be inferred.
+// LucidError
+//     ``a`` cannot be viewed as ``new_shape`` without a copy.
+LUCID_API TensorImplPtr view_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape);
+
 // Remove a single size-1 dimension.
 //
 // Drops the axis at position ``dim``, which must currently have size 1.
