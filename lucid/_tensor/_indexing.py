@@ -19,17 +19,37 @@ Advanced (any Tensor in the index key):
   t[int_tensor, slice]     fancy prefix + basic suffix
   t[None, int_tensor, ...] None/newaxis anywhere
 
+  t[True] / t[False]       a new leading axis of length 1 / 0     → (1|0, *t.shape)
+  t[[0, 2]], t[ndarray]    a list or array is an index tensor
+
 In-place assignment:
-  t[key] = value           all above forms via numpy round-trip
-                           (in-place, not tracked by autograd)
+  t[key] = value           every form above; the value is broadcast to
+                           what ``t[key]`` reads and written there
+
+Two stages own every decision about what a key or a value means, and both
+paths — reading and writing — go through them:
+
+* :func:`_normalize_key` turns any key into one :class:`_Key`: ``...``
+  expanded, bool scalars turned into a new axis plus an index, masks into
+  their coordinates, lists and arrays into index tensors, every index tensor
+  on the indexed tensor's device at its own integer width.  Bounds are left
+  to the engine, which checks int64 at full width.
+* :func:`_normalize_value` turns a value into a tensor of the destination's
+  dtype, on its device, at the shape it is written at — a Python scalar
+  keeping its kind and precision.
+
+Every write lands through :func:`_rebind`, which keeps what the tensor
+carries besides its values (``requires_grad``, ``retain_grad``, a gradient
+slot it reads, the views it has).
 """
 
+import operator
 from bisect import bisect_left
-from typing import Sequence, TYPE_CHECKING, cast
+from typing import Sequence, SupportsIndex, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap, _unwrap
-from lucid._dtype import bool_ as _bool_dtype
+from lucid._dispatch import _wrap
+from lucid._factories.converters import _to_impl
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -37,27 +57,6 @@ if TYPE_CHECKING:
 
 
 # ── low-level helpers ──────────────────────────────────────────────────────────
-
-
-def _is_bool_tensor(x: object) -> bool:
-    """Return ``True`` if ``x`` duck-types as a Tensor with boolean dtype."""
-    return hasattr(x, "_impl") and getattr(x, "dtype", None) is _bool_dtype
-
-
-def _is_int_tensor(x: object) -> bool:
-    """Return ``True`` if ``x`` duck-types as a Tensor with a non-boolean dtype.
-
-    Used by the index dispatcher to distinguish advanced integer indexing
-    from boolean masking.
-    """
-    return hasattr(x, "_impl") and not _is_bool_tensor(x)
-
-
-def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
-    """Ensure index tensor is int32 (engine requirement for index_select/gather)."""
-    if impl.dtype == _C_engine.I64:
-        return _C_engine.astype(impl, _C_engine.I32)
-    return impl
 
 
 def _prod(seq: Sequence[int]) -> int:
@@ -154,23 +153,218 @@ def _select_slice(
         return _C_engine.gather(impl, idx_bc, dim)
 
 
-# ── basic indexing (int / slice / None / Ellipsis only) ───────────────────────
+# ── key normalisation ─────────────────────────────────────────────────────────
+
+_BOOL = _C_engine.Dtype.Bool
+_I64 = _C_engine.Dtype.I64
+_CPU = _C_engine.Device.CPU
+_INTEGER_BITS: dict[_C_engine.Dtype, int] = {
+    _C_engine.Dtype.I8: 8,
+    _C_engine.Dtype.I16: 16,
+    _C_engine.Dtype.I32: 32,
+    _C_engine.Dtype.I64: 64,
+}
+_COMPLEX = frozenset({_C_engine.Dtype.C64, _C_engine.Dtype.C128})
 
 
-def _expand_ellipsis(idx_tuple: tuple[object, ...], ndim: int) -> list[object]:
-    """Replace `...` with `ndim - n_real` copies of `slice(None)`."""
-    n_none = sum(1 for i in idx_tuple if i is None)
-    n_ellipsis = sum(1 for i in idx_tuple if i is ...)
-    n_real = len(idx_tuple) - n_none - n_ellipsis
-    ellipsis_len = max(ndim - n_real, 0)
+class _Key:
+    """A key as every indexing path reads it.
 
-    expanded: list[object] = []
-    for i in idx_tuple:
-        if i is ...:
-            expanded.extend([slice(None)] * ellipsis_len)
+    ``items`` holds only ``None``, ``int``, ``slice`` and integer index
+    tensors (``TensorImpl``), one per dim of the source after ``unsqueeze``
+    — ``...`` expanded, a mask split into one index per dim it covers.
+    ``unsqueeze`` lists the axes a bool scalar inserts into the source, in
+    the order they are inserted.
+    """
+
+    __slots__ = ("items", "unsqueeze", "advanced")
+
+    def __init__(self) -> None:
+        self.items: list[object] = []
+        self.unsqueeze: list[int] = []
+        self.advanced = False
+
+
+def _is_bool_scalar(token: object) -> bool:
+    if isinstance(token, bool):
+        return True
+    return (
+        isinstance(token, _C_engine.TensorImpl)
+        and token.dtype == _BOOL
+        and not token.shape
+    )
+
+
+def _token(part: object) -> object:
+    """One part of a key as ``None``, ``...``, ``bool``, ``int``, ``slice``
+    or a ``TensorImpl`` — an integer index or a bool mask."""
+    if part is None or part is Ellipsis or isinstance(part, (bool, int, slice)):
+        return part
+    impl = getattr(part, "_impl", None)
+    if not isinstance(impl, _C_engine.TensorImpl):
+        if isinstance(part, SupportsIndex) and getattr(part, "ndim", 0) == 0:
+            try:
+                return operator.index(part)  # a NumPy integer
+            except TypeError:
+                pass  # a NumPy bool, which has no integer value: converted below
+        # A list or a NumPy array is an index tensor; an empty list indexes
+        # nothing, as an empty int64 index.  A NumPy scalar goes in as the
+        # array it stands for: converted as itself, it took the default
+        # float dtype.
+        to_array = getattr(part, "__array__", None)
+        if to_array is not None:
+            part = to_array()
+        elif not isinstance(part, list):
+            raise IndexError(
+                "only integers, slices, ..., None, bools, integer or bool tensors "
+                f"and lists or arrays of them are valid indices, got "
+                f"{type(part).__name__}"
+            )
+        impl = _to_impl(
+            part, dtype=_I64 if isinstance(part, list) and not part else None
+        )
+    if impl.dtype == _BOOL:
+        return impl
+    if impl.dtype not in _INTEGER_BITS:
+        raise IndexError(
+            f"tensors used as indices must be integer or bool tensors, got {impl.dtype}"
+        )
+    return impl
+
+
+def _consumes(token: object) -> int:
+    """How many dims of the indexed tensor ``token`` addresses."""
+    if token is None or token is Ellipsis or _is_bool_scalar(token):
+        return 0
+    if isinstance(token, _C_engine.TensorImpl) and token.dtype == _BOOL:
+        return len(token.shape)
+    return 1
+
+
+def _on_device(
+    index: _C_engine.TensorImpl, device: _C_engine.Device
+) -> _C_engine.TensorImpl:
+    """``index`` on ``device``.
+
+    Index tensors are built on the CPU far more often than not — a list
+    turned into a tensor, a mask from ``nonzero`` — and the reference
+    accepts them against a tensor on any device.  The other direction is
+    refused, as the reference refuses it: a metal index cannot address a
+    CPU tensor without a round trip the caller did not ask for.
+    """
+    if index.device == device:
+        return index
+    if device != _CPU:
+        return _C_engine.to_device(index, device)
+    raise RuntimeError(
+        "indexing: the index is on metal but the indexed tensor is on the CPU "
+        "— move the index to the CPU first"
+    )
+
+
+def _mask_indices(mask: _C_engine.TensorImpl) -> list[_C_engine.TensorImpl]:
+    """The int64 coordinates of ``mask``'s True elements, one tensor per dim."""
+    nz = _C_engine.nonzero(mask)  # (n_true, mask.ndim)
+    k = nz.shape[1] if len(nz.shape) > 1 else 1
+    if k == 1:
+        return [_C_engine.reshape(nz, [-1])]
+    return [
+        _C_engine.contiguous(
+            _C_engine.squeeze(_C_engine.split_at(nz, [d, d + 1], 1)[1], 1)
+        )
+        for d in range(k)
+    ]
+
+
+def _bool_scalar_index(
+    token: bool | _C_engine.TensorImpl, device: _C_engine.Device
+) -> _C_engine.TensorImpl:
+    """The index a bool scalar puts on the axis it inserts: ``[0]`` or ``[]``."""
+    if isinstance(token, bool):
+        return _C_engine.zeros([1 if token else 0], _I64, device)
+    return _mask_indices(_C_engine.reshape(_on_device(token, device), [1]))[0]
+
+
+def _normalize_key(key: object, shape: Sequence[int], device: _C_engine.Device) -> _Key:
+    """Normalise ``key`` against a tensor of ``shape`` on ``device``.
+
+    The single owner of what an index key means: ``Tensor.__getitem__``,
+    ``Tensor.__setitem__`` and any op that takes a key of the same form
+    (``index_put``) read it through here, for reading and writing alike:
+
+    * ``...`` stands for as many full slices as the other parts leave dims;
+    * a bool scalar — ``True``, ``False`` or a 0-d bool tensor — inserts an
+      axis of length 1 and indexes it with ``[0]`` or ``[]``, so ``x[True]``
+      has shape ``(1, *x.shape)`` and ``x[False]`` ``(0, *x.shape)``;
+    * a bool mask covers as many dims as it has, must match their sizes, and
+      becomes the coordinates of its True elements, wherever it stands;
+    * a list or a NumPy array is one index tensor — ``x[[[0, 1], [2, 3]]]``
+      is a ``(2, 2)`` index, as NumPy and the reference's announced
+      semantics read it, not the tuple ``x[[0, 1], [2, 3]]`` the reference
+      still reads with a deprecation warning;
+    * an integer index tensor moves to ``device`` and keeps its width, so
+      the engine checks an int64 index at full width (``2**40`` is out of
+      range, not 0).
+
+    Raises
+    ------
+    IndexError
+        A part that is not a valid index, a second ``...``, more indices
+        than ``shape`` has dims, or a mask whose shape does not match.
+    """
+    parts = key if isinstance(key, tuple) else (key,)
+    tokens = [_token(part) for part in parts]
+    if sum(1 for token in tokens if token is Ellipsis) > 1:
+        raise IndexError("an index can only have a single ellipsis ('...')")
+    ndim = len(shape)
+    used = sum(_consumes(token) for token in tokens)
+    if used > ndim:
+        raise IndexError(
+            f"too many indices for tensor of dimension {ndim} ({used} given)"
+        )
+    out = _Key()
+    sizes = list(shape)  # the source's sizes, axes inserted so far included
+    dim = 0  # the source dim the next token addresses
+    for token in tokens:
+        if token is Ellipsis:
+            out.items.extend([slice(None)] * (ndim - used))
+            dim += ndim - used
+        elif token is None:
+            out.items.append(None)
+        elif isinstance(token, (bool, _C_engine.TensorImpl)) and _is_bool_scalar(token):
+            out.unsqueeze.append(dim)
+            sizes.insert(dim, 1)
+            out.items.append(_bool_scalar_index(token, device))
+            dim += 1
+        elif isinstance(token, _C_engine.TensorImpl):
+            index = _on_device(token, device)
+            if index.dtype != _BOOL:
+                out.items.append(index)
+                dim += 1
+                continue
+            covered = sizes[dim : dim + len(index.shape)]
+            if list(index.shape) != covered:
+                raise IndexError(
+                    f"the shape of the mask {list(index.shape)} does not match the "
+                    f"shape {covered} of the dims it indexes, starting at dim {dim}"
+                )
+            out.items.extend(_mask_indices(index))
+            dim += len(index.shape)
         else:
-            expanded.append(i)
-    return expanded
+            out.items.append(token)
+            dim += 1
+    out.advanced = any(isinstance(item, _C_engine.TensorImpl) for item in out.items)
+    return out
+
+
+def _inserted(impl: _C_engine.TensorImpl, axes: list[int]) -> _C_engine.TensorImpl:
+    """``impl`` with a length-1 axis inserted at each of ``axes``, in order."""
+    for axis in axes:
+        impl = _C_engine.unsqueeze(impl, axis)
+    return impl
+
+
+# ── basic indexing (int / slice / None only) ──────────────────────────────────
 
 
 def _apply_basic_index(
@@ -195,24 +389,6 @@ def _apply_basic_index(
 # ── advanced indexing helpers ─────────────────────────────────────────────────
 
 
-def _bool_to_int_indices(bool_impl: _C_engine.TensorImpl) -> list[_C_engine.TensorImpl]:
-    """Convert a bool TensorImpl to a list of int32 index TensorImpls (one per dim)."""
-    nz = _C_engine.nonzero(bool_impl)  # shape (n_true, k)
-    k = nz.shape[1] if len(nz.shape) > 1 else 1
-    if k == 1:
-        # 1-D boolean → single 1D index
-        return [_to_i32(_C_engine.squeeze(nz, 1))]
-    # Multi-dim boolean → k separate 1D index tensors (one per dim of the mask)
-    nz.shape[0]
-    result = []
-    for d in range(k):
-        # Slice column d from nz: shape (n_true, 1) → squeeze → (n_true,)
-        col = _C_engine.split_at(nz, [d, d + 1], 1)[1]  # (n_true, 1)
-        col = _C_engine.squeeze(col, 1)  # (n_true,)
-        result.append(_to_i32(col))
-    return result
-
-
 def _fancy_select(
     impl: _C_engine.TensorImpl, dim: int, idx_impl: _C_engine.TensorImpl
 ) -> _C_engine.TensorImpl:
@@ -221,8 +397,7 @@ def _fancy_select(
     idx_impl has any shape (m0, m1, ...).
     Result shape: (*impl.shape[:dim], *idx_impl.shape, *impl.shape[dim+1:])
     """
-    idx_flat = _to_i32(_C_engine.reshape(idx_impl, [-1]))  # (M,) int32
-    _prod(idx_impl.shape)
+    idx_flat = _C_engine.reshape(idx_impl, [-1])  # (M,)
     dim_size = impl.shape[dim]
     rest = list(impl.shape[dim + 1 :])
 
@@ -245,60 +420,50 @@ def _coordinate_select(
 ) -> _C_engine.TensorImpl:
     """
     Pure coordinate selection: result[*i] = impl[int_indices[0][*i], int_indices[1][*i], ...]
-    int_indices are already broadcast-compatible int32 TensorImpls.
     Result has shape = broadcast(int_indices) + impl.shape[n_indexed:]
+
+    The indexed dims are folded into one and read through a single flat
+    index.  Each index is checked against its own dim first: folded as it
+    is, ``x[[0], [-1]]`` on a ``(2, 4)`` read element 7 rather than 3, and
+    ``x[[0], [5]]`` read element 5 rather than refusing.  A negative index
+    wraps within its dim, and an out-of-range one is sent past the end of
+    the folded axis, where the engine refuses it on the CPU and isolates it
+    on Metal, as for any other index.
     """
     n_indexed = len(int_indices)
     shape = impl.shape
     rest = list(shape[n_indexed:])  # dims not indexed
-
-    # Broadcast all index tensors to common shape
-    # Find broadcast shape
-    bcast_shape = list(int_indices[0].shape)
-    for idx in int_indices[1:]:
-        # numpy broadcast rules applied manually
-        idx_s = list(idx.shape)
-        diff = len(bcast_shape) - len(idx_s)
-        if diff > 0:
-            idx_s = [1] * diff + idx_s
-        elif diff < 0:
-            bcast_shape = [1] * (-diff) + bcast_shape
-        bcast_shape = [max(a, b) for a, b in zip(bcast_shape, idx_s)]
-
-    # Broadcast each index to bcast_shape
-    bc_indices = []
-    for idx in int_indices:
-        if list(idx.shape) != bcast_shape:
-            idx = _C_engine.broadcast_to(
-                _C_engine.reshape(
-                    idx, [1] * (len(bcast_shape) - len(idx.shape)) + list(idx.shape)
-                ),
-                bcast_shape,
-            )
-        bc_indices.append(idx)
-
-    _prod(bcast_shape)
-
-    # Compute strides for the indexed dims
-    strides = []
-    for k in range(n_indexed):
-        strides.append(_prod(shape[k + 1 : n_indexed]))
-        # stride_k = product of shape[k+1 : n_indexed]
-
-    # flat_idx = sum(idx_k * stride_k) for k in 0..n_indexed-1
-    # Build using engine add/mul with int32 tensors
+    bcast_shape = _broadcast_shape([list(idx.shape) for idx in int_indices])
+    indexed_total = _prod(shape[:n_indexed])
     dev = impl.device
-    stride_tensor = [
-        _C_engine.full(bcast_shape, float(s), _C_engine.I32, dev) for s in strides
-    ]
-    flat_idx = _C_engine.mul(_to_i32(bc_indices[0]), stride_tensor[0])
-    for k in range(1, n_indexed):
-        term = _C_engine.mul(_to_i32(bc_indices[k]), stride_tensor[k])
-        flat_idx = _C_engine.add(flat_idx, term)
-    flat_idx_1d = _to_i32(_C_engine.reshape(flat_idx, [-1]))  # (M,) int32
+
+    def scalar(v: int) -> _C_engine.TensorImpl:
+        return _C_engine.full([], float(v), _I64, dev)
+
+    zero = scalar(0)
+    flat_idx: _C_engine.TensorImpl | None = None
+    outside: _C_engine.TensorImpl | None = None
+    stride = 1
+    for k in reversed(range(n_indexed)):
+        idx = int_indices[k]
+        if idx.dtype != _I64:
+            idx = _C_engine.astype(idx, _I64)
+        size = scalar(shape[k])
+        idx = _C_engine.where(_C_engine.less(idx, zero), _C_engine.add(idx, size), idx)
+        bad = _C_engine.logical_or(
+            _C_engine.less(idx, zero), _C_engine.greater_equal(idx, size)
+        )
+        term = _C_engine.mul(idx, scalar(stride)) if stride != 1 else idx
+        flat_idx = term if flat_idx is None else _C_engine.add(flat_idx, term)
+        outside = bad if outside is None else _C_engine.logical_or(outside, bad)
+        stride *= shape[k]
+    assert flat_idx is not None and outside is not None
+    flat_idx = _C_engine.where(outside, scalar(indexed_total), flat_idx)
+    flat_idx_1d = _C_engine.reshape(
+        _C_engine.contiguous(_C_engine.broadcast_to(flat_idx, bcast_shape)), [-1]
+    )
 
     # Flatten the indexed dims of impl: (D0*...*Dk-1, *rest)
-    indexed_total = _prod(shape[:n_indexed])
     impl_flat = _C_engine.reshape(impl, [indexed_total] + rest)
 
     # index_select along dim=0: (M, *rest)
@@ -311,71 +476,27 @@ def _coordinate_select(
 # ── main advanced getitem ─────────────────────────────────────────────────────
 
 
-def _index_on_device_of(impl: _C_engine.TensorImpl, item: object) -> object:
-    """``item`` moved to ``impl``'s device when it is a CPU index tensor.
-
-    Index tensors are built on the CPU far more often than not — a list
-    turned into a tensor, a mask from ``nonzero`` — and the reference
-    framework accepts them against a tensor on any device.  Lucid handed
-    them to the engine as they were, and a metal source with a CPU index
-    failed with ``bad_variant_access`` in every indexing path, assignment
-    included.  The other direction is refused, as the reference refuses
-    it: a metal index cannot address a CPU tensor without a round trip the
-    caller did not ask for.
-    """
-    item_impl = getattr(item, "_impl", None)
-    if item_impl is None or item_impl.device == impl.device:
-        return item
-    if impl.device == _C_engine.Device.GPU:
-        return _wrap(_C_engine.to_device(item_impl, _C_engine.Device.GPU))
-    raise RuntimeError(
-        "indexing: the index is on metal but the indexed tensor is on the CPU "
-        "— move the index to the CPU first"
-    )
-
-
 def _advanced_getitem(
     impl: _C_engine.TensorImpl, idx_list: list[object]
 ) -> _C_engine.TensorImpl:
-    """
-    idx_list has already had Ellipsis expanded.
-    Contains a mix of int, slice, None, and Tensor elements.
-    """
-    len(impl.shape)
-    idx_list = [_index_on_device_of(impl, item) for item in idx_list]
-
-    # Phase 1: expand any bool Tensors to int index lists, replacing each
-    # bool Tensor at position p with one or more int tensors.
+    """Read ``impl`` through ``idx_list``, a normalised key's items
+    (:class:`_Key`) with at least one index tensor among them."""
+    # Phase 1: tag each item with its kind.
     expanded: list[tuple[str, object]] = []
     for item in idx_list:
-        if _is_bool_tensor(item):
-            int_idx_list = _bool_to_int_indices(_unwrap(item))  # type: ignore[arg-type]
-            # Each int index covers one dim; append consecutively
-            for ii in int_idx_list:
-                expanded.append(("__tensor__", ii))
-        elif _is_int_tensor(item):
-            expanded.append(("__tensor__", _to_i32(_unwrap(item))))  # type: ignore[arg-type]
+        if isinstance(item, _C_engine.TensorImpl):
+            expanded.append(("__tensor__", item))
         elif item is None:
             expanded.append(("__none__", None))
         elif isinstance(item, int):
             expanded.append(("__int__", item))
-        elif isinstance(item, slice):
-            expanded.append(("__slice__", item))
         else:
-            raise IndexError(
-                f"Unsupported index type in advanced indexing: {type(item).__name__}"
-            )
+            expanded.append(("__slice__", item))
 
     # Phase 2: Find the span of tensor indices (first to last)
     tensor_positions = [
         k for k, (kind, _) in enumerate(expanded) if kind == "__tensor__"
     ]
-    if not tensor_positions:
-        # Shouldn't happen (caller ensures at least one tensor)
-        return _apply_basic_index(
-            impl, [val if kind != "__none__" else None for kind, val in expanded]
-        )
-
     first_t = tensor_positions[0]
     last_t = tensor_positions[-1]
 
@@ -454,7 +575,6 @@ def _advanced_getitem(
 
     if n_tensors == 1:
         # Single tensor: direct fancy select at adv_start_dim + tensor_local_dims[0]
-        adv_start_dim + tensor_local_dims[0]
         # Apply basic ops that come before the tensor dim
         for ld, kind, val in basic_local_dims:
             if ld < tensor_local_dims[0]:
@@ -533,7 +653,9 @@ def _advanced_getitem(
                 real += 1
 
         t_dims_abs = [
-            t for t, (_, k, _) in zip(targets, mid_entries) if k == "__tensor__"
+            t
+            for t, (_, k, _) in zip(targets, mid_entries, strict=True)
+            if k == "__tensor__"
         ]
         indexed = set(t_dims_abs)
         keep = [d for d in range(len(result.shape)) if d not in indexed]
@@ -548,7 +670,7 @@ def _advanced_getitem(
         # wherever the next real dim would have gone.
         n_bc = len(bc_shape)
         inserted = 0
-        for (_, kind, val), target in zip(mid_entries, targets):
+        for (_, kind, val), target in zip(mid_entries, targets, strict=True):
             if kind == "__slice__":
                 pos = n_bc + bisect_left(keep, target) + inserted
                 result = _select_slice(result, pos, cast(slice, val))
@@ -586,166 +708,172 @@ def _advanced_getitem(
 
 
 def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
-    """Compute numpy-style broadcast shape from a list of shape lists."""
+    """The shape index tensors of ``shapes`` broadcast to together.
+
+    Raises
+    ------
+    IndexError
+        If two of them cannot be broadcast together.
+    """
     max_ndim = max(len(s) for s in shapes)
     result: list[int] = []
     for d in range(max_ndim):
-        sizes: list[int] = []
-        for s in shapes:
-            offset = max_ndim - len(s)
-            if d >= offset:
-                sizes.append(s[d - offset])
-            else:
-                sizes.append(1)
-        result.append(max(sizes))
+        sizes = {s[d - (max_ndim - len(s))] for s in shapes if d >= max_ndim - len(s)}
+        sizes.discard(1)
+        if len(sizes) > 1:
+            raise IndexError(
+                "shape mismatch: indexing tensors could not be broadcast together "
+                f"with shapes {', '.join(str(list(s)) for s in shapes)}"
+            )
+        result.append(sizes.pop() if sizes else 1)
     return result
 
 
-# ── public entry points ───────────────────────────────────────────────────────
+# ── value normalisation ───────────────────────────────────────────────────────
 
 
-def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
-    """Top-level dispatcher for ``Tensor.__getitem__``.
-
-    Routes between three code paths:
-
-    * pure basic indexing (ints, slices, ``None``, ``...``);
-    * advanced indexing (one or more integer / boolean Tensor selectors);
-    * mixed basic + advanced indexing.
-
-    Parameters
-    ----------
-    t : Tensor
-        The tensor being indexed.
-    idx : _IndexType
-        Index spec — either a single index element or a tuple of them.
-
-    Returns
-    -------
-    Tensor
-        The selected sub-tensor (a view where possible, a copy otherwise).
-    """
-    impl = t._impl
-
-    # Normalize to tuple
-    if not isinstance(idx, tuple):
-        idx = (idx,)
-
-    # Check for advanced indexing (any Tensor element)
-    has_advanced = any(hasattr(i, "_impl") for i in idx)
-
-    expanded = _expand_ellipsis(idx, len(impl.shape))
-    if not has_advanced:
-        # Pure basic indexing
-        out = _apply_basic_index(impl, expanded)
-    else:
-        out = _advanced_getitem(impl, expanded)
-    if out is impl:
-        # An index that selects everything (``x[:]``, ``x[...]``, ``x[()]``,
-        # ``x[0:n]``) came back as ``t``'s own TensorImpl, so the result
-        # was ``t`` under another name: ``x[:].requires_grad_(True)`` turned
-        # on ``x``'s flag and ``x[:].grad`` was ``x.grad``.  The reference's
-        # result is a view — a tensor of its own over the same storage, in
-        # ``t``'s graph when ``t`` requires grad — and so is this one.
-        out = _C_engine.view(impl, list(impl.shape))
-    return _wrap(out)
-
-
-def _dim_indicator(
-    size: int, positions_impl: _C_engine.TensorImpl, device: _C_engine.Device
+def _scalar_impl(
+    value: complex, dtype: _C_engine.Dtype, device: _C_engine.Device
 ) -> _C_engine.TensorImpl:
+    """A Python number as a 0-d tensor of ``dtype``, with nothing lost on the way.
+
+    A float carries every real value a float can hold.  An int written into
+    an integer tensor does not go through one — ``2**60 + 1`` would round —
+    and neither does a complex number, whose imaginary part ``float()``
+    refused outright.
+
+    Raises
+    ------
+    TypeError
+        A complex value for a tensor that is not complex.
+    OverflowError
+        An int outside the range of an integer ``dtype``.
     """
-    Build a 1-D float indicator of length ``size``:
-    1.0 at positions listed in ``positions_impl`` (int32), 0.0 elsewhere.
-    Uses only engine primitives — no numpy.
-    """
-    n = _prod(positions_impl.shape) if positions_impl.shape else 0
-    zeros = _C_engine.zeros([size], _C_engine.F32, device)
-    if n == 0:
-        return zeros
-    ones = _C_engine.full([n], 1.0, _C_engine.F32, device)
-    idx32 = _to_i32(_C_engine.reshape(positions_impl, [-1]))
-    return _C_engine.scatter_add(zeros, idx32, ones, 0)
+    if isinstance(value, complex) and dtype not in _COMPLEX:
+        raise TypeError(
+            f"cannot write the complex value {value!r} into a {dtype} tensor"
+        )
+    exact = dtype in _COMPLEX or (
+        type(value) is int and dtype in _INTEGER_BITS  # not bool, not float
+    )
+    if not exact:
+        return _C_engine.full([], float(value.real), dtype, device)
+    bits = _INTEGER_BITS.get(dtype)
+    if bits is not None and not -(2 ** (bits - 1)) <= int(value.real) < 2 ** (bits - 1):
+        raise OverflowError(f"{value} is out of range for a {dtype} tensor")
+    return _to_impl(value, dtype=dtype, device=device)
 
 
-def _slice_positions(
-    s: slice, size: int, device: _C_engine.Device
+def _normalize_value(
+    value: object, dst: _C_engine.TensorImpl, shape: list[int]
 ) -> _C_engine.TensorImpl:
-    """Convert a Python slice to an int32 position TensorImpl via engine arange."""
-    start, stop, step = s.indices(size)
-    if step > 0:
-        n = max(0, (stop - start + step - 1) // step)
-    else:
-        n = max(0, (stop - start + step + 1) // step)
-    if n == 0:
-        return _C_engine.zeros([0], _C_engine.I32, device)
-    return _C_engine.arange(start, stop, step, _C_engine.I32, device)
+    """``value`` as what is written into ``dst`` at ``shape``.
+
+    In ``dst``'s dtype, on ``dst``'s device — moved there, as the reference
+    moves it, and differentiably — and broadcast to ``shape``; size-1 dims
+    in front of the value's shape are dropped as the reference drops them.
+    A Python number keeps its kind and precision (:func:`_scalar_impl`);
+    anything else that is not a tensor is converted as ``lucid.tensor``
+    would convert it.
+    """
+    impl = getattr(value, "_impl", None)
+    if not isinstance(impl, _C_engine.TensorImpl):
+        if isinstance(value, (bool, int, float, complex)):
+            impl = _scalar_impl(value, dst.dtype, dst.device)
+        else:
+            impl = _to_impl(value, device=dst.device)
+    if impl.device != dst.device:
+        impl = _C_engine.to_device(impl, dst.device)
+    if impl.dtype != dst.dtype:
+        impl = _C_engine.astype(impl, dst.dtype)
+    value_shape = list(impl.shape)
+    if value_shape == shape:
+        return impl
+    lead = 0
+    while len(value_shape) - lead > len(shape) and value_shape[lead] == 1:
+        lead += 1
+    value_shape = value_shape[lead:]
+    pad = len(shape) - len(value_shape)
+    impl = _C_engine.reshape(impl, [1] * pad + value_shape)
+    return _C_engine.broadcast_to(impl, shape)
+
+
+# ── landing a write ───────────────────────────────────────────────────────────
+
+
+def _take(t: Tensor, impl: _C_engine.TensorImpl) -> None:
+    """Make ``impl`` ``t``'s tensor, keeping what ``t`` asked of autograd.
+
+    The single owner of rebinding a tensor's impl: every Python path that
+    gives a tensor a new impl — assignment here, an in-place op whose dtype
+    promotion produced a new one (:func:`_adopt_inplace`), and the in-place
+    index ops in ``lucid._ops.composite.indexing`` — goes through it, so a
+    per-tensor flag that lives on the impl is carried in one place.
+
+    ``retain_grad`` is registered on the slot of the tensor's producer, so
+    a new impl does not have it: ``y.retain_grad(); y[0] = v`` left
+    ``y.grad`` None (LCD-296).  The reference moves it to the new place in
+    the graph, as the engine's in-place ops do.
+    """
+    retains = t._impl.retains_grad
+    t._impl = impl
+    if retains:
+        impl.retain_grad_()
 
 
 def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
-    """Swap a tensor's impl while keeping the flags that live on it.
+    """Make ``impl`` — same shape, dtype and device — ``t``'s values.
 
-    ``requires_grad`` is carried by the impl, so rebinding wholesale drops
-    it.  A Parameter assigned that way stays a Parameter, stays a leaf,
-    stays in ``parameters()`` and ``state_dict()``, and simply never
-    receives a gradient again.  Both paths of ``_setitem`` come through
-    here.  The whole-tensor one lost the flag first (``x[:] = v``); the
-    general scatter path lost it later, once it was rewritten to assign
-    ``t._impl`` itself — which froze ``weight[pad] = 0`` under ``no_grad``.
+    Every write lands here, and it keeps what lives on ``t`` besides its
+    values:
+
+    * a write that records no graph goes into ``t``'s own buffer, so ``t``
+      stays the tensor it was — a Parameter keeps its flag and its place in
+      the graph that already used it (``weight[pad] = 0`` under
+      ``no_grad``), a tensor read from ``.grad`` writes the gradient
+      (``p.grad[0] = v``), a Metal shared buffer and a tensor a compile
+      trace reads see the values, as does the array a NumPy-backed tensor
+      shares;
+    * a tensor with live views takes the values into its buffer, where the
+      views read them, by the engine's in-place rules, graph included;
+    * otherwise ``t`` takes ``impl`` and with it ``impl``'s place in the
+      graph, keeping ``retain_grad`` (:func:`_take`).
     """
-    keep = t._impl.requires_grad
-    # A tensor over a Metal shared buffer takes the values into the buffer,
-    # so every alias of it sees the assignment; rebinding would leave them
-    # holding the old values.  Only outside a graph, as for the engine's
-    # in-place ops, since ``copy_from`` keeps no grad_fn.
-    if (
-        t._impl.is_metal_shared
-        and not keep
-        and not impl.requires_grad
-        and list(impl.shape) == list(t._impl.shape)
-        and impl.dtype == t._impl.dtype
-        and impl.device == t._impl.device
-    ):
-        t._impl.copy_from(impl)
+    old = t._impl
+    if old.is_metal_shared and not old.requires_grad and not impl.requires_grad:
+        old.copy_from(impl)
         return
-    # A tensor with live views takes the values into its buffer, where the
-    # views read them; rebinding would leave them holding the old ones.  The
-    # engine applies the in-place ops' rules to the write, graph included.
-    if t._impl.is_aliased():
-        _C_engine.assign_inplace(t._impl, impl, "__setitem__")
+    if old.is_aliased():
+        _C_engine.assign_inplace(old, impl, "__setitem__")
         return
-    # Under a compile trace, write into the tensor rather than rebind it.  An
-    # executable reads the tensor it was traced against — a module's buffer,
-    # say — and a rebinding happens only in Python, where the trace cannot
-    # see it: every compiled call went on reading the old values.
-    if (
-        _C_engine.compile.current_tracer() is not None
-        and not keep
-        and not impl.requires_grad
-        and list(impl.shape) == list(t._impl.shape)
-        and impl.dtype == t._impl.dtype
-        and impl.device == t._impl.device
-    ):
-        t._impl.copy_from(impl)
+    # A strided tensor with no live views left (its base is gone) cannot
+    # take a dense buffer's bytes as they are; it takes the impl instead.
+    if not impl.requires_grad and (old.is_dense() or old.device != _CPU):
+        old.copy_from(impl)
         return
-    # A tensor that requires grad taking values that carry no graph — a write
-    # under no_grad, ``weight[pad] = 0`` — is written in place.  Rebinding
-    # swapped a new impl under the Parameter while the graph kept the old
-    # one: a weight already used in a forward accumulated its gradient into
-    # the impl it was swapped out of, and ``.grad`` stayed None, silently.
-    # Written in place, the version bump tells backward the saved weight
-    # changed, as the reference does; before any forward it just takes the
-    # values.
-    if (
-        keep
-        and not impl.requires_grad
-        and list(impl.shape) == list(t._impl.shape)
-        and impl.dtype == t._impl.dtype
-        and impl.device == t._impl.device
-    ):
-        t._impl.copy_from(impl)
-        return
-    t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
+    _take(t, impl)
+
+
+def _read_for_write(t: Tensor, value: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
+    """``t``'s values, for a write into ``t`` to be computed from.
+
+    A write that records a graph and lands in ``t``'s buffer (``t`` has live
+    views — any tensor an earlier assignment rebound has) must not read
+    ``t`` through an engine op: the op records ``t``'s version, the write
+    bumps it, and backward refused the very write it was computing —
+    ``out[0] = a; out[1] = b; out.sum().backward()``.  It reads a snapshot
+    instead, which stands in for ``t`` in the graph and records nothing.
+    """
+    impl = t._impl
+    records = _C_engine.grad_enabled() and (impl.requires_grad or value.requires_grad)
+    if not (records and impl.is_aliased()):
+        return impl
+    from lucid._ops.composite.indexing import _Snapshot
+    from lucid._tensor.tensor import Tensor as _Tensor
+
+    snapshot = _Snapshot.apply(t)
+    assert isinstance(snapshot, _Tensor)
+    return snapshot._impl
 
 
 def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
@@ -763,20 +891,101 @@ def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
             f"{t._impl.dtype} tensor that shares storage with a live view — cast "
             "it first, or use the out-of-place form"
         )
-    t._impl = impl
+    if impl is not t._impl:
+        _take(t, impl)
     return t
+
+
+# ── public entry points ───────────────────────────────────────────────────────
+
+
+def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
+    """Top-level dispatcher for ``Tensor.__getitem__``.
+
+    The key is normalised once (:func:`_normalize_key`), then read by the
+    basic path (ints, slices, ``None``) or the advanced one (index tensors
+    among them).
+
+    Parameters
+    ----------
+    t : Tensor
+        The tensor being indexed.
+    idx : _IndexType
+        Index spec — either a single index element or a tuple of them.
+
+    Returns
+    -------
+    Tensor
+        The selected sub-tensor (a view where possible, a copy otherwise).
+    """
+    impl = t._impl
+    key = _normalize_key(idx, impl.shape, impl.device)
+    source = _inserted(impl, key.unsqueeze)
+    if key.advanced:
+        out = _advanced_getitem(source, key.items)
+    else:
+        out = _apply_basic_index(source, key.items)
+    if out is impl:
+        # An index that selects everything (``x[:]``, ``x[...]``, ``x[()]``,
+        # ``x[0:n]``) came back as ``t``'s own TensorImpl, so the result
+        # was ``t`` under another name: ``x[:].requires_grad_(True)`` turned
+        # on ``x``'s flag and ``x[:].grad`` was ``x.grad``.  The reference's
+        # result is a view — a tensor of its own over the same storage, in
+        # ``t``'s graph when ``t`` requires grad — and so is this one.
+        out = _C_engine.view(impl, list(impl.shape))
+    return _wrap(out)
+
+
+def _written_positions(
+    shape: list[int], key: _Key, device: _C_engine.Device
+) -> tuple[_C_engine.TensorImpl, list[int]]:
+    """The flat positions ``t[key]`` reads, and the shape it reads them in.
+
+    Read through the reading path itself, from a map of positions, so a
+    write can never name other elements than the same key reads: deriving
+    them a second time wrote the whole ``rows x cols`` rectangle for
+    ``t[rows, cols] = v``, and every touched row for a full-shape mask.
+
+    An advanced key's map counts from 1.  On Metal an integer gather reads
+    an out-of-range index as 0, and counted from 0 that is the first
+    element: ``x[[1, 99]] = v`` wrote ``x[0]`` (LCD-209).  Counted from 1,
+    the 0 is told apart and sent past the end, where the scatter drops it,
+    as every Metal scatter drops an out-of-range write.
+    """
+    total = _prod(shape)
+    dtype = _C_engine.Dtype.I32 if total < 2**31 - 1 else _I64
+    first = 1 if key.advanced else 0
+    positions = _C_engine.reshape(
+        _C_engine.arange(first, total + first, 1, dtype, device), shape
+    )
+    positions = _inserted(positions, key.unsqueeze)
+    if key.advanced:
+        target = _advanced_getitem(positions, key.items)
+    else:
+        target = _apply_basic_index(positions, key.items)
+    flat = _C_engine.reshape(_C_engine.contiguous(target), [-1])
+    if key.advanced:
+        one = _C_engine.full([], 1.0, dtype, device)
+        flat = _C_engine.where(
+            _C_engine.equal(flat, _C_engine.full([], 0.0, dtype, device)),
+            _C_engine.full([], float(total), dtype, device),
+            _C_engine.sub(flat, one),
+        )
+    return flat, list(target.shape)
 
 
 def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     """
     In-place assignment using Lucid engine ops only — no numpy.
 
-    Whole-tensor assignment (``t[:] = v``) has its own path; everything
-    else routes the flat positions through the *reading* path and scatters
-    into whatever comes back, so assignment can never name a different set
-    of elements than the same key would have read.
+    The key and the value are normalised once (:func:`_normalize_key`,
+    :func:`_normalize_value`).  Whole-tensor assignment (``t[:] = v``) has
+    its own path; everything else scatters the value into the positions
+    the reading path names (:func:`_written_positions`).  Either way the
+    result lands through :func:`_rebind`.
     """
-    if t._impl.requires_grad and t._impl.is_leaf and _C_engine.grad_enabled():
+    impl = t._impl
+    if impl.requires_grad and impl.is_leaf and _C_engine.grad_enabled():
         # Both paths below rebind ``t`` to the written result, which under
         # autograd carries a grad_fn: a Parameter assigned this way stopped
         # being a leaf and never received ``.grad`` again, so the optimiser
@@ -786,101 +995,29 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
             "in place — wrap the assignment in lucid.no_grad(), or build a new "
             "tensor"
         )
-    device = t._impl.device
-    shape = list(t._impl.shape)
-    ndim = len(shape)
+    shape = list(impl.shape)
+    key = _normalize_key(idx, shape, impl.device)
 
-    if not isinstance(idx, tuple):
-        idx = (idx,)
-    expanded = _expand_ellipsis(idx, ndim)
-
-    # ── whole-tensor assignment: no indices to compute, no scatter ────────────
-    # ``t[:] = v`` and ``t[...] = v`` select every element, so the general
-    # path below builds an ``arange`` per dimension, forms the flat index of
-    # the entire cross-product, and scatters through it — random-access
-    # writes over every element to express a straight copy.  Measured on a
-    # 64x3x128x128 tensor: 51.7 ms this way against 0.63 ms for the same
-    # bytes, an **82x** penalty on one of the most common idioms there is.
-    #
-    # Rebinding ``_impl`` is what the general path does at the end too, so
-    # the aliasing semantics are unchanged, and the value keeps its own
-    # autograd history rather than acquiring a scatter node.
-    #
-    # ``contiguous`` is not decoration.  The general path scatters into a
-    # *fresh* buffer, so ``t`` never ends up sharing storage with the value
-    # assigned into it; binding the value's own storage instead would make
-    # ``x[:] = y`` alias, and a later ``y.copy_(...)`` or ``y.add_(...)``
-    # would silently rewrite ``x``.  A first draft of this fast path did
-    # exactly that and traded a slow idiom for a wrong one.
-    if expanded and all(
-        isinstance(item, slice) and item == slice(None) for item in expanded
+    # ``t[:] = v`` and ``t[...] = v`` select every element, and scattering
+    # through the flat index of the entire tensor costs random-access writes
+    # over every element to express a straight copy: 51.7 ms against
+    # 0.63 ms on a 64x3x128x128 tensor.  ``contiguous`` keeps ``t`` from
+    # sharing the value's storage, which would make a later write to the
+    # value rewrite ``t``.
+    if (
+        key.items
+        and not key.unsqueeze
+        and all(isinstance(item, slice) and item == slice(None) for item in key.items)
     ):
-        if hasattr(value, "_impl"):
-            val_impl = _unwrap(value)  # type: ignore[arg-type]
-            if list(val_impl.shape) != shape:
-                pad = ndim - len(val_impl.shape)
-                if pad > 0:
-                    val_impl = _C_engine.reshape(
-                        val_impl, [1] * pad + list(val_impl.shape)
-                    )
-                val_impl = _C_engine.broadcast_to(val_impl, shape)
-            if val_impl.dtype != t._impl.dtype:
-                val_impl = _C_engine.astype(val_impl, t._impl.dtype)
-            _rebind(t, _C_engine.contiguous(val_impl))
-        else:
-            _rebind(t, _C_engine.full(shape, float(value), t._impl.dtype, device))
+        _rebind(t, _C_engine.contiguous(_normalize_value(value, impl, shape)))
         return
 
-    # ── general path: read the positions, scatter into what came back ────────
-    # The set of elements ``t[key]`` names is exactly what ``t[key]`` reads.
-    # Deriving it a second time is where this went wrong: the old path
-    # collected one position list per dimension and took their *cross
-    # product*, which is right for slices and ints and wrong for every
-    # advanced key with more than one index array.  ``t[rows, cols] = v``
-    # wrote the whole rows x cols rectangle instead of the zipped pairs, and
-    # ``t[mask] = v`` with a full-shape mask wrote every row the mask touched
-    # anywhere.  Both wrote a superset — no error, no shape complaint, just
-    # more elements than were asked for.
-    #
-    # So index a map of flat positions through the reading path instead.  The
-    # result carries both the positions to write and the shape the value has
-    # to broadcast to, and the two paths cannot drift apart again.
-    total = _prod(shape)
-    positions = _C_engine.reshape(
-        _C_engine.arange(0, total, 1, _C_engine.I32, device), shape
+    flat_idx, target_shape = _written_positions(shape, key, impl.device)
+    flat_val = _C_engine.reshape(
+        _C_engine.contiguous(_normalize_value(value, impl, target_shape)), [-1]
     )
-    if any(hasattr(item, "_impl") for item in expanded):
-        target = _advanced_getitem(positions, expanded)
-    else:
-        target = _apply_basic_index(positions, expanded)
-
-    target_shape = list(target.shape)
-    flat_idx_1d = _to_i32(_C_engine.reshape(_C_engine.contiguous(target), [-1]))
-
-    if hasattr(value, "_impl"):
-        val_impl = _unwrap(value)  # type: ignore[arg-type]
-        val_shape = list(val_impl.shape)
-        if val_shape != target_shape:
-            n_miss = len(target_shape) - len(val_shape)
-            if n_miss > 0:
-                val_impl = _C_engine.reshape(val_impl, [1] * n_miss + val_shape)
-            val_impl = _C_engine.broadcast_to(val_impl, target_shape)
-        flat_val = _C_engine.reshape(_C_engine.contiguous(val_impl), [-1])
-        if flat_val.dtype != t._impl.dtype:
-            flat_val = _C_engine.astype(flat_val, t._impl.dtype)
-    else:
-        flat_val = _C_engine.full(
-            [_prod(target_shape)], float(value), t._impl.dtype, device
-        )
-
-    flat_t = _C_engine.reshape(_C_engine.contiguous(t._impl), [total])
-    flat_out = _C_engine.scatter(flat_t, 0, flat_idx_1d, flat_val)
-    # Through ``_rebind``, like the whole-tensor path above.  Assigning
-    # ``t._impl`` directly dropped ``requires_grad`` whenever the scatter ran
-    # under ``no_grad``, so ``weight[pad] = 0`` in an initialiser froze the
-    # parameter — BERT's word table never trained.
+    flat_t = _C_engine.reshape(
+        _C_engine.contiguous(_read_for_write(t, flat_val)), [_prod(shape)]
+    )
+    flat_out = _C_engine.scatter(flat_t, 0, flat_idx, flat_val)
     _rebind(t, _C_engine.reshape(flat_out, shape))
-
-
-# Legacy export used in tensor.py (kept for compatibility)
-_select_slice = _select_slice

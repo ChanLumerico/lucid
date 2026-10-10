@@ -162,8 +162,8 @@ def _row_cases(bad: int) -> dict[str, tuple[Callable[[str], lucid.Tensor], objec
 # Python call sites that cast a user index to int32 before the engine sees it,
 # so 2**40 arrives as 0 — a valid index (LCD-228 FOUND, api follow-up).
 # ``test_engine_checks_the_full_width`` pins the engine itself at 2**40.
+# ``x[i]`` and ``x[i] = v`` pass the index through at full width (API-02).
 _NARROWED_IN_PYTHON = {
-    "getitem",
     "index_add",
     "index_copy",
     "index_fill",
@@ -366,7 +366,8 @@ def test_engine_checks_the_full_width(device: str, name: str) -> None:
     _check(device, lambda: run(device), answer)
 
 
-def _setitem(device: str, case: str) -> None:
+@pytest.mark.parametrize("case", list(_WRAPPING))
+def test_setitem(device: str, case: str) -> None:
     bad = _WRAPPING[case]
     x = lucid.zeros(N).to(device)
 
@@ -375,25 +376,6 @@ def _setitem(device: str, case: str) -> None:
         return x
 
     _check(device, run, [0.0, 5.0, 0.0, 0.0])
-
-
-@pytest.mark.parametrize(
-    "case",
-    [pytest.param(c, marks=[_LCD_273] if c == "huge" else [], id=c) for c in _WRAPPING],
-)
-def test_setitem_cpu(device_cpu_only: str, case: str) -> None:
-    _setitem(device_cpu_only, case)
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-209: __setitem__ gathers the flat positions through the read "
-    "path; an integer gather answers 0 out of range, so the write lands on "
-    "position 0 instead of being dropped",
-)
-@pytest.mark.parametrize("case", list(_WRAPPING))
-def test_setitem_metal(device_gpu_only: str, case: str) -> None:
-    _setitem(device_gpu_only, case)
 
 
 def test_scatter_leaves_its_base_alone(device_gpu_only: str) -> None:

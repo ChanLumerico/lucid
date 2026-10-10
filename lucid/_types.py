@@ -22,6 +22,7 @@ Naming conventions
 - Leading underscore   → private / implementation detail (may change).
 """
 
+from types import EllipsisType
 from typing import (
     Callable,
     Literal,
@@ -215,13 +216,19 @@ type TensorLike = Tensor | np.ndarray | list[object] | int | float | bool
 # Right-hand operand for arithmetic dunders (+, -, *, /, **, …).
 type TensorOrScalar = Tensor | Scalar
 
-# All legal index forms for Tensor.__getitem__ / __setitem__.
+# All legal index forms for Tensor.__getitem__ / __setitem__: an int; a bool
+# (a new axis of length 1 or 0); a slice; ``...``; ``None``; an integer or bool
+# tensor; a list or NumPy array (one index tensor); or a tuple of them.  Read
+# by ``lucid._tensor._indexing._normalize_key``, the one place a key is
+# interpreted.
 type _IndexType = (
     int
     | slice
+    | EllipsisType
     | Tensor
-    | list[int]
-    | tuple[int | slice | Tensor | list[int] | None, ...]
+    | np.ndarray
+    | list[object]
+    | tuple[int | slice | EllipsisType | Tensor | np.ndarray | list[object] | None, ...]
     | None
 )
 

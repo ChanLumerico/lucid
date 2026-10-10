@@ -65,6 +65,10 @@ WRITES: dict[str, Callable[[lucid.Tensor, str], object]] = {
     "zero_": lambda t, d: t.zero_(),
     "copy_": lambda t, d: t.copy_(lucid.full((3,), 5.0, device=d)),
     "index_fill_": lambda t, d: t.index_fill_(0, lucid.tensor([0], device=d), 5.0),
+    # Writes into ``t`` itself, as the reference does.  It used to give ``t``
+    # a new impl and leave the saved one as it was, so backward ran on the
+    # old values where the reference refuses (API-02).
+    "setitem": lambda t, d: t.__setitem__(1, 7.0),
 }
 
 
@@ -274,19 +278,6 @@ def test_a_second_backward_with_a_retained_graph_runs(device: str) -> None:
     out.backward()
     assert w.grad is not None
     assert w.grad.tolist() == [2.0, 2.0, 2.0]
-
-
-def test_a_rebound_tensor_hands_backward_the_values_it_saved(device: str) -> None:
-    # ``buf[1] = 7`` on a tensor that needs no grad gives ``buf`` a new impl
-    # and leaves the saved one as it was, so no version moves — but
-    # ``backward`` must read the saved values, not the new ones, as a
-    # built-in op does.  (The reference refuses this backward instead.)
-    w, buf, out = _saved(device)
-    buf[1] = 7.0
-    out.backward()
-    assert w.grad is not None
-    assert w.grad.tolist() == [1.0, 1.0, 1.0]
-    assert buf.tolist() == [1.0, 7.0, 1.0]
 
 
 def test_the_opt_out_lets_backward_read_the_new_values(device: str) -> None:

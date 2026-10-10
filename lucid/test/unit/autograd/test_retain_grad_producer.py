@@ -214,30 +214,21 @@ _SCENARIOS: dict[str, Callable[[ModuleType, str], dict[str, object]]] = {
 }
 
 
-#: ``y[0] = v`` rebinds the Python tensor to a new impl (``_tensor/_indexing.py``
-#: ``_rebind``) that does not carry the retain flag, so ``.grad`` stays None —
-#: on main as well.  A Metal view writes back into its base the same way
-#: (``_tensor/_metal_views.py`` ``write_back``).  The fix is on the Python side
-#: (CHA-151-A): these turn into failures, as a reminder, once it lands.
-_SETITEM_REBINDS = {"after-setitem": None, "after-a-write-through-a-view": "metal"}
-
-
 @pytest.mark.parametrize("name", list(_SCENARIOS))
 def test_matches_the_reference(name: str, ref: ModuleType, device: str) -> None:
-    if name in _SETITEM_REBINDS and _SETITEM_REBINDS[name] in (None, device):
-        pytest.xfail("setitem rebinds the impl without the retain flag (CHA-151-A)")
     _compare(_SCENARIOS[name](lucid, device), _SCENARIOS[name](ref, "cpu"))
 
 
-@pytest.mark.parametrize("name", sorted(_SETITEM_REBINDS))
-def test_setitem_still_loses_the_retain_flag(name: str, device: str) -> None:
-    # Pins the gap above until the Python side carries the flag over.
-    if _SETITEM_REBINDS[name] not in (None, device):
-        pytest.skip("the engine handles this write on this device")
-    assert _SCENARIOS[name](lucid, device)["y"] is None
-
-
 # ── without the reference ──────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("name", ["after-setitem", "after-a-write-through-a-view"])
+def test_an_assignment_keeps_the_retain_flag(name: str, device: str) -> None:
+    # ``y[0] = v`` gives y a new tensor, and a Metal view writes back into
+    # its base the same way; the flag used to stay behind (LCD-296).
+    y_grad = _SCENARIOS[name](lucid, device)["y"]
+    assert isinstance(y_grad, lucid.Tensor)
+    assert y_grad.tolist() == [5.0, 5.0, 5.0]
 
 
 def test_the_reported_gaps(device: str) -> None:
