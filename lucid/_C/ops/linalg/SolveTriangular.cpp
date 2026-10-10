@@ -92,7 +92,8 @@ TensorImplPtr solve_triangular_op(const TensorImplPtr& a,
         ErrorBuilder("solve_triangular").fail("A and b must have the same dtype");
     if (a->device() != b->device())
         ErrorBuilder("solve_triangular").fail("A and b must be on the same device");
-    const SolveRhs rhs = solve_rhs_contract(a->shape(), b->shape(), "solve_triangular");
+    const SolveRhs rhs =
+        solve_rhs_contract(a->shape(), b->shape(), VectorRhs::OneD, "solve_triangular");
     OpScopeFull scope{"solve_triangular", a->device(), a->dtype(), rhs.a_shape};
 
     // An empty system has an empty solution; BLAS will not be the one to say

@@ -2213,7 +2213,7 @@ def solve_triangular(
         Triangular coefficient matrix of shape ``(*, n, n)``.  Only
         the relevant triangle is read; the other half is ignored.
     B : Tensor
-        Right-hand side of shape ``(*, n, k)`` (or ``(*, n)``).
+        Right-hand side ``(*, n, k)`` or ``(n,)``; batch dims broadcast with ``A``.
     upper : bool, keyword-only, optional
         If ``True`` (default) :math:`A` is upper-triangular; if
         ``False`` lower-triangular.
@@ -2228,7 +2228,7 @@ def solve_triangular(
     Returns
     -------
     Tensor
-        Solution :math:`X` shaped like :math:`B`.
+        Solution :math:`X` — the broadcast batch, then ``(n, k)`` (or ``(n,)``).
 
     Notes
     -----
@@ -3050,12 +3050,12 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
         Pivot indices of shape ``(*, n)`` from :func:`lu_factor`
         (1-based, LAPACK convention).
     B : Tensor
-        Right-hand side of shape ``(*, n, k)`` (or ``(*, n)``).
+        Right-hand side ``(*, n, k)`` or ``(n,)``, broadcast against ``LU``.
 
     Returns
     -------
     Tensor
-        Solution :math:`X`, same shape as ``B``.
+        Solution :math:`X`: broadcast batch, then ``(n, k)``, or ``(n,)`` for 1-D ``B``.
 
     Notes
     -----

@@ -72,7 +72,10 @@ TensorImplPtr spread_over_matrix(const TensorImplPtr& t, const Shape& like) {
 // det(A) · A⁻ᵀ: below 100 ε the inverse is not trusted (at an exact zero
 // pivot it is refused outright), which is the reference's threshold too.
 // The answer steers which formula runs, so it is read on the host — the
-// data-dependent carve-out.
+// data-dependent carve-out.  This adds no new kind of sync: the invertible
+// branch already synchronises inside ``inv``, whose LAPACK call runs on the
+// host.  ``det`` accepts only F32/F64 (``float_only``), so those two
+// epsilons are the only ones that can apply.
 bool any_near_singular(const TensorImplPtr& det) {
     NoGradGuard ng;
     const double eps = det->dtype() == Dtype::F64 ? std::numeric_limits<double>::epsilon()

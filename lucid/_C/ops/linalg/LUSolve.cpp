@@ -131,7 +131,7 @@ lu_solve_op(const TensorImplPtr& LU, const TensorImplPtr& pivots, const TensorIm
         throw ShapeMismatch(piv_expected, pivots->shape(),
                             "lu_solve: pivots must have shape LU.shape[:-1]");
 
-    const SolveRhs rhs = solve_rhs_contract(lu_sh, b->shape(), "lu_solve");
+    const SolveRhs rhs = solve_rhs_contract(lu_sh, b->shape(), VectorRhs::OneD, "lu_solve");
     OpScopeFull scope{"lu_solve", LU->device(), LU->dtype(), rhs.a_shape};
 
     // An empty system has an empty solution; LAPACK will not be the one to

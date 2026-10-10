@@ -102,7 +102,7 @@ TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     using namespace linalg_detail;
     Validator::input(a, "solve.a").float_only().square_2d();
     Validator::pair(a, b, "solve").same_dtype().same_device();
-    const SolveRhs rhs = solve_rhs_contract(a->shape(), b->shape(), "solve");
+    const SolveRhs rhs = solve_rhs_contract(a->shape(), b->shape(), VectorRhs::OrBatched, "solve");
     OpScopeFull scope{"solve", a->device(), a->dtype(), rhs.a_shape};
 
     // An empty system has an empty solution; LAPACK will not be the one to

@@ -23,8 +23,8 @@
 // - The CPU stream dispatches to LAPACK ``sgetrs_``/``dgetrs_`` via
 //   ``IBackend::linalg_lu_solve()``.
 // - ``b`` follows the solve family's right-hand-side contract
-//   (``solve_rhs_contract``): ``(*, n, k)``, or a vector — ``(n,)`` or
-//   exactly ``LU.shape[:-1]`` — with the batch axes of ``LU`` (and its
+//   (``solve_rhs_contract``, ``VectorRhs::OneD``): ``(*, n, k)``, or a 1-D
+//   ``(n,)`` vector, with the batch axes of ``LU`` (and its
 //   pivots) and ``b`` broadcast.  Any other shape raises ``ShapeMismatch``
 //   before LAPACK is called.
 // - Differentiable in ``LU`` and ``b`` through [[LUSolveBackward]].
@@ -94,9 +94,9 @@ public:
 // -----
 // - ``LU``: ``(*, n, n)``.
 // - ``pivots``: ``LU.shape[:-1]``.
-// - ``b``: ``(*, n, k)``, ``(n,)``, or ``LU.shape[:-1]`` (vector RHS).
-// - Output: the broadcast batch followed by ``(n, k)``, or ``(n,)`` for a
-//   vector RHS.
+// - ``b``: ``(*, n, k)``, or ``(n,)`` (vector RHS).
+// - Output: the broadcast batch followed by ``(n, k)``, or by ``(n,)`` for
+//   a vector RHS.
 //
 // Raises
 // ------

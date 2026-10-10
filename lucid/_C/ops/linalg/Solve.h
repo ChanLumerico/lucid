@@ -145,8 +145,8 @@ public:
 // -----
 // - ``a``: ``(*, N, N)``.
 // - ``b``: ``(*, N, K)``, ``(N,)``, or ``a.shape[:-1]`` (vector RHS).
-// - Output: the broadcast batch followed by ``(N, K)``, or ``(N,)`` for a
-//   vector RHS.
+// - Output: the broadcast batch followed by ``(N, K)``, or by ``(N,)`` for
+//   a vector RHS.
 //
 // Raises
 // ------

@@ -322,14 +322,20 @@ inline void check_lapack_info(int info, const char* op) {
 // vectors had its batch axis taken for the column count.  So the shape is
 // settled here, before any backend sees it:
 //
-// - B is a vector right-hand side when it is 1-D, or when its shape is
-//   exactly ``A.shape[:-1]`` (one vector per matrix).  It is solved as a
-//   single column and handed back without that column.
+// - B is a vector right-hand side when it is 1-D.  Under
+//   ``VectorRhs::OrBatched`` (``solve`` only, as the reference reads it)
+//   a B of exactly ``A.shape[:-1]`` is one too — one vector per matrix.
+//   ``lu_solve`` and ``solve_triangular`` take ``VectorRhs::OneD``: there
+//   the reference has no batch-of-vectors reading, and such a B — e.g.
+//   (3, 3) against A (3, 3, 3) — is a matrix broadcast over the batch.
+//   A vector is solved as a single column and handed back without it.
 // - Otherwise B must be ``(*, n, k)`` with ``n = A.shape[-1]``.
 // - The batch axes of A and B broadcast against each other.
 //
 // Any other B is refused with ``ShapeMismatch`` here, so no LAPACK or MLX
 // call ever receives operands whose extents disagree.
+enum class VectorRhs { OneD, OrBatched };
+
 struct SolveRhs {
     bool vector = false;
     Shape a_shape;    // batch + (n, n): A as the backend receives it
@@ -337,19 +343,21 @@ struct SolveRhs {
     Shape out_shape;  // the solution's shape as returned to the caller
 };
 
-inline SolveRhs solve_rhs_contract(const Shape& a, const Shape& b, const char* op) {
+inline SolveRhs
+solve_rhs_contract(const Shape& a, const Shape& b, VectorRhs vectors, const char* op) {
     const std::size_t ra = a.size();
     const std::int64_t n = a[ra - 1];
     SolveRhs rhs;
-    rhs.vector = b.size() == 1 || (b.size() + 1 == ra && std::equal(b.begin(), b.end(), a.begin()));
+    const bool one_per_matrix = vectors == VectorRhs::OrBatched && b.size() + 1 == ra &&
+                                std::equal(b.begin(), b.end(), a.begin());
+    rhs.vector = b.size() == 1 || one_per_matrix;
     Shape b_mat = b;
     if (rhs.vector)
         b_mat.push_back(1);
     if (b_mat.size() < 2 || b_mat[b_mat.size() - 2] != n)
         throw ShapeMismatch(Shape{n, b.empty() ? 1 : b.back()}, b,
-                            std::string(op) +
-                                ": B must be (*, n, k), or (*, n) as a vector right-hand "
-                                "side, with n = A.shape[-1]");
+                            std::string(op) + ": B must be (*, n, k) or a vector right-hand side, "
+                                              "with n = A.shape[-1]");
     const Shape a_batch(a.begin(), a.end() - 2);
     const Shape b_batch(b_mat.begin(), b_mat.end() - 2);
     auto batch = ::lucid::detail::try_broadcast_shapes(a_batch, b_batch);

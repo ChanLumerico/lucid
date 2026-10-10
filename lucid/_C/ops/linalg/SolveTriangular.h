@@ -31,8 +31,9 @@
 // Notes
 // -----
 // - ``B`` follows the solve family's right-hand-side contract
-//   (``solve_rhs_contract``): ``(*, N, K)``, or a vector — ``(N,)`` or
-//   exactly ``A.shape[:-1]`` — with the batch axes broadcast.  Any other
+//   (``solve_rhs_contract``, ``VectorRhs::OneD``): ``(*, N, K)``, or a 1-D
+//   ``(N,)`` vector, with the batch axes broadcast.  A B of shape
+//   ``A.shape[:-1]`` is a matrix here, not a batch of vectors.  Any other
 //   ``B`` raises ``ShapeMismatch`` before the backend is called.
 // - Differentiable in ``A`` and ``B`` through [[SolveTriangularBackward]].
 
@@ -119,9 +120,9 @@ public:
 // Shape
 // -----
 // - ``a`` : ``(*, N, N)``.
-// - ``b`` : ``(*, N, K)``, ``(N,)``, or ``a.shape[:-1]`` (vector RHS).
-// - return: the broadcast batch followed by ``(N, K)``, or ``(N,)`` for a
-//   vector RHS.
+// - ``b`` : ``(*, N, K)``, or ``(N,)`` (vector RHS).
+// - return: the broadcast batch followed by ``(N, K)``, or by ``(N,)`` for
+//   a vector RHS.
 //
 // Raises
 // ------
