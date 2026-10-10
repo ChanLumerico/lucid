@@ -86,7 +86,7 @@ def _run(
 
 class TestEverySettingCompiles:
     @pytest.mark.parametrize("align_corners", [False, True], ids=["edges", "corners"])
-    @pytest.mark.parametrize("padding_mode", ["zeros", "border"])
+    @pytest.mark.parametrize("padding_mode", ["zeros", "border", "reflection"])
     @pytest.mark.parametrize("mode", ["bilinear", "nearest"])
     def test_it_matches_eager(self, mode, padding_mode, align_corners):
         compiled, error = _run(

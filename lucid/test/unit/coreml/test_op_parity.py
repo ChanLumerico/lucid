@@ -1034,14 +1034,13 @@ class TestGridSampleReachesTheExport:
             tmp_path,
         )
 
-    def test_reflection_follows_the_engine_and_not_core_ml(
-        self, tmp_path: object
-    ) -> None:
-        """The engine has no true reflection; it clamps, so the export must.
+    def test_reflection_exports_as_reflection(self, tmp_path: object) -> None:
+        """Reflection reaches the trace as a reflected grid sampled with border.
 
-        Emitting Core ML's real reflection would make the package
-        disagree with the model it was built from — right by Core ML's
-        definition and wrong as a translation.
+        ``F.grid_sample`` mirrors the grid in elementwise ops and hands the
+        kernel ``border`` padding, so the export carries those ops and
+        ``resample`` with ``border`` — and agrees with the eager model,
+        which matches the reference's reflection.
         """
         lucid.manual_seed(2)
         grid = lucid.rand(1, 4, 4, 2) * 3.0 - 1.5
