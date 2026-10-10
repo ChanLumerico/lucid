@@ -1919,7 +1919,7 @@
     "lucid/utils/tokenizer/_unigram.py": 1
    },
    "unused-method": {
-    "lucid/_tensor/tensor.py": 10,
+    "lucid/_tensor/tensor.py": 9,
     "lucid/autograd/function.py": 1,
     "lucid/compile/_entry/fused_step.py": 1,
     "lucid/metal/__init__.py": 1,
