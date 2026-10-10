@@ -1,6 +1,6 @@
 // lucid/_C/backend/cpu/Shape.cpp
 //
-// Implements the N-D permute_copy operation for every element width.  The
+// Implements the N-D permute_copy operation for any element width.  The
 // permuted tensor is the input read through reordered strides, so the copy
 // is :func:`strided::pack` of that view: axes merged, the innermost run moved
 // as one memcpy when it is contiguous, a merged 2-D transpose copied in
@@ -40,15 +40,17 @@ std::vector<std::int64_t> elem_strides(const std::vector<std::int64_t>& shape) {
     return s;
 }
 
-// Generic N-D permutation: the output is the input viewed with its axes in
-// ``perm`` order (shape ``in_shape[perm[d]]``, stride ``in_strides[perm[d]]``),
-// packed dense and row-major.  Bitwise a copy, so the result is the same as
-// the element walk it replaces for every dtype, NaN payload included.
-template <typename T>
-void permute_typed(const T* in,
-                   T* out,
-                   const std::vector<std::int64_t>& in_shape,
-                   const std::vector<int>& perm) {
+}  // namespace
+
+// The output is the input viewed with its axes in ``perm`` order (shape
+// ``in_shape[perm[d]]``, stride ``in_strides[perm[d]]``), packed dense and
+// row-major.  Bitwise a copy, so the result is the same as the element walk
+// it replaces for every dtype, NaN payload included.
+void permute_copy(const std::byte* in,
+                  std::byte* out,
+                  const std::vector<std::int64_t>& in_shape,
+                  const std::vector<int>& perm,
+                  std::size_t elem) {
     const std::size_t ndim = in_shape.size();
     const auto in_strides = elem_strides(in_shape);
     Shape view_shape(ndim);
@@ -56,61 +58,11 @@ void permute_typed(const T* in,
     for (std::size_t d = 0; d < ndim; ++d) {
         const auto axis = static_cast<std::size_t>(perm[d]);
         view_shape[d] = in_shape[axis];
-        view_stride[d] = in_strides[axis] * static_cast<std::int64_t>(sizeof(T));
+        view_stride[d] = in_strides[axis] * static_cast<std::int64_t>(elem);
     }
     if (shape_numel(view_shape) == 0)
         return;
-    strided::pack(reinterpret_cast<const std::byte*>(in), reinterpret_cast<std::byte*>(out),
-                  view_shape, view_stride, sizeof(T));
-}
-
-}  // namespace
-
-void permute_copy_f32(const float* in,
-                      float* out,
-                      const std::vector<std::int64_t>& in_shape,
-                      const std::vector<int>& perm) {
-    permute_typed<float>(in, out, in_shape, perm);
-}
-
-void permute_copy_f64(const double* in,
-                      double* out,
-                      const std::vector<std::int64_t>& in_shape,
-                      const std::vector<int>& perm) {
-    permute_typed<double>(in, out, in_shape, perm);
-}
-
-void permute_copy_i32(const std::int32_t* in,
-                      std::int32_t* out,
-                      const std::vector<std::int64_t>& in_shape,
-                      const std::vector<int>& perm) {
-    permute_typed<std::int32_t>(in, out, in_shape, perm);
-}
-
-void permute_copy_i64(const std::int64_t* in,
-                      std::int64_t* out,
-                      const std::vector<std::int64_t>& in_shape,
-                      const std::vector<int>& perm) {
-    permute_typed<std::int64_t>(in, out, in_shape, perm);
-}
-
-// Two- and one-byte widths.  Permutation moves bytes and never reads a
-// value, so ``float16`` rides the 16-bit copy and ``bool`` the 8-bit one —
-// which is why these are named by width rather than by meaning.  Their
-// absence made every transpose, permute and shuffle refuse those dtypes on
-// the CPU while Metal ran them.
-void permute_copy_i16(const std::int16_t* in,
-                      std::int16_t* out,
-                      const std::vector<std::int64_t>& in_shape,
-                      const std::vector<int>& perm) {
-    permute_typed<std::int16_t>(in, out, in_shape, perm);
-}
-
-void permute_copy_i8(const std::int8_t* in,
-                     std::int8_t* out,
-                     const std::vector<std::int64_t>& in_shape,
-                     const std::vector<int>& perm) {
-    permute_typed<std::int8_t>(in, out, in_shape, perm);
+    strided::pack(in, out, view_shape, view_stride, elem);
 }
 
 }  // namespace lucid::backend::cpu

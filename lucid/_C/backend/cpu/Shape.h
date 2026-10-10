@@ -19,21 +19,27 @@
 
 namespace lucid::backend::cpu {
 
-// Copies a single-precision tensor into a permuted, densely-packed output
-// buffer using the supplied axis permutation.
+// Copies a tensor of ``elem``-byte elements into a permuted, densely-packed
+// output buffer using the supplied axis permutation.
 //
 // The output is the input viewed through its C-order strides reordered by
 // ``perm``, packed by :func:`strided::pack` — axes merged, contiguous runs
 // moved by memcpy, a merged 2-D transpose copied in tiles.  This is an
 // out-of-place layout transform — there is no in-place fast path.
 //
+// Permutation moves bytes and never reads a value, so one entry point keyed
+// by element width serves every dtype.  It used to be one function per
+// element type, and the backend's switch over them named float16 but not
+// bfloat16 and had no 8- or 16-byte case for complex, so the backward of a
+// transpose refused those dtypes on the CPU while Metal ran them.
+//
 // Parameters
 // ----------
-// in : const float*
+// in : const std::byte*
 //     Source buffer laid out densely (C-order) according to ``in_shape``.
-// out : float*
+// out : std::byte*
 //     Destination buffer.  Caller must pre-allocate
-//     ``numel(in_shape) * sizeof(float)`` bytes.  May not alias ``in``.
+//     ``numel(in_shape) * elem`` bytes.  May not alias ``in``.
 // in_shape : const std::vector<int64_t>&
 //     Shape of the source tensor.  An empty vector is treated as a 0-D scalar
 //     and produces a single-element copy.
@@ -41,6 +47,8 @@ namespace lucid::backend::cpu {
 //     Axis permutation of length ``in_shape.size()``.  ``perm[d]`` names the
 //     source axis whose extent becomes output axis ``d``.  Must be a valid
 //     permutation of ``[0, ndim)``.
+// elem : std::size_t
+//     Element width in bytes (``dtype_size``).
 //
 // Shape
 // -----
@@ -57,83 +65,10 @@ namespace lucid::backend::cpu {
 // Cost is one pass over the bytes plus one odometer step per run, not per
 // element; a permutation that keeps the last axis in place moves whole rows.
 // Single-threaded.
-//
-// See Also
-// --------
-// permute_copy_f64, permute_copy_i32, permute_copy_i64 : Same operation for
-//     other element types.
-LUCID_INTERNAL void permute_copy_f32(const float* in,
-                                     float* out,
-                                     const std::vector<std::int64_t>& in_shape,
-                                     const std::vector<int>& perm);
-
-// Double-precision counterpart to :cpp:func:`permute_copy_f32`.
-//
-// Parameters
-// ----------
-// in : const double*
-//     Source buffer laid out densely (C-order) according to ``in_shape``.
-// out : double*
-//     Pre-allocated destination buffer of ``numel(in_shape) * sizeof(double)``
-//     bytes.
-// in_shape : const std::vector<int64_t>&
-//     Shape of the source tensor.
-// perm : const std::vector<int>&
-//     Axis permutation; ``perm[d]`` names the source axis whose extent becomes
-//     output axis ``d``.
-LUCID_INTERNAL void permute_copy_f64(const double* in,
-                                     double* out,
-                                     const std::vector<std::int64_t>& in_shape,
-                                     const std::vector<int>& perm);
-
-// Int32 counterpart to :cpp:func:`permute_copy_f32`.
-//
-// Used for argmax / index tensors that need to be re-laid out as part of a
-// larger op (e.g. transposed indexing).
-//
-// Parameters
-// ----------
-// in : const int32_t*
-//     Source buffer laid out densely (C-order) according to ``in_shape``.
-// out : int32_t*
-//     Pre-allocated destination buffer.
-// in_shape : const std::vector<int64_t>&
-//     Shape of the source tensor.
-// perm : const std::vector<int>&
-//     Axis permutation; see :cpp:func:`permute_copy_f32`.
-LUCID_INTERNAL void permute_copy_i32(const std::int32_t* in,
-                                     std::int32_t* out,
-                                     const std::vector<std::int64_t>& in_shape,
-                                     const std::vector<int>& perm);
-
-// Two-byte counterpart to :cpp:func:`permute_copy_f32`, shared by ``int16``
-// and ``float16`` — permutation moves bytes, so the width is what matters.
-LUCID_INTERNAL void permute_copy_i16(const std::int16_t* in,
-                                     std::int16_t* out,
-                                     const std::vector<std::int64_t>& in_shape,
-                                     const std::vector<int>& perm);
-
-// One-byte counterpart, shared by ``int8`` and ``bool``.
-LUCID_INTERNAL void permute_copy_i8(const std::int8_t* in,
-                                    std::int8_t* out,
-                                    const std::vector<std::int64_t>& in_shape,
-                                    const std::vector<int>& perm);
-
-// Int64 counterpart to :cpp:func:`permute_copy_f32`.
-//
-// Parameters
-// ----------
-// in : const int64_t*
-//     Source buffer laid out densely (C-order) according to ``in_shape``.
-// out : int64_t*
-//     Pre-allocated destination buffer.
-// in_shape : const std::vector<int64_t>&
-//     Shape of the source tensor.
-// perm : const std::vector<int>&
-//     Axis permutation; see :cpp:func:`permute_copy_f32`.
-LUCID_INTERNAL void permute_copy_i64(const std::int64_t* in,
-                                     std::int64_t* out,
-                                     const std::vector<std::int64_t>& in_shape,
-                                     const std::vector<int>& perm);
+LUCID_INTERNAL void permute_copy(const std::byte* in,
+                                 std::byte* out,
+                                 const std::vector<std::int64_t>& in_shape,
+                                 const std::vector<int>& perm,
+                                 std::size_t elem);
 
 }  // namespace lucid::backend::cpu

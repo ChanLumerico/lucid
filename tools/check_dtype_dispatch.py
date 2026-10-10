@@ -52,6 +52,15 @@ Rules
     capability guard, not a float test, and passes.  The negated refusal
     form ``dt != Dtype::F32 && dt != Dtype::F64`` passes too.
 
+``half-pair``
+    A ``switch`` whose own ``case Dtype::...`` labels name F16 but not
+    BF16.  The two 16-bit floats share every code path on the CPU (widen
+    to float32, or move the sixteen bits as they are), so a dispatch that
+    wrote the float16 case and stopped refuses bfloat16 in its default
+    while float16 works: bfloat16 training died in gradient accumulation
+    and in the backward of every transpose that way (LCD-248).  Name both,
+    or take the pair through ``is_half_float`` before the switch.
+
 Known sites
 -----------
 Sites that predate the rule are listed in ``_KNOWN`` by
@@ -71,6 +80,7 @@ Usage
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +133,29 @@ _KNOWN: dict[tuple[str, str, str], tuple[int, str]] = {
         "`real_lane_of(cs.dtype)` is F32 or F64 for the complex storages "
         "complex_real / complex_imag receive, and the ops refuse a real "
         "input before the kernel. Retire: refuse !is_complex(cs.dtype).",
+    ),
+    ("lucid/_C/ops/bfunc/_Opmath.h", "is_wide_scalar", "float-list"): (
+        1,
+        "not a float test: it asks whether a 0-d operand is a float32 (or "
+        "CPU float64) scalar a half tensor may compute against; half "
+        "operands are the other side of the pair. Retire: spell it "
+        "`!is_half_float(dt) && is_floating_point(dt)` plus the device rule.",
+    ),
+    ("lucid/_C/ops/ufunc/Reductions.cpp", "reduce_one_axis", "half-pair"): (
+        1,
+        "live gap: CPU prod over a bfloat16 tensor raises NotImplementedError "
+        "while float16 widens. Refused loudly, not misread. Retire: "
+        "LCD-288+289 (bf16 prod widen).",
+    ),
+    ("lucid/_C/compile/MpsDtype.h", "mps_dtype_of", "half-pair"): (
+        1,
+        "compiled graphs refuse bfloat16 at the MPS dtype map; refused, "
+        "not misread. Retire: export card (MPSDataTypeBFloat16).",
+    ),
+    ("lucid/_C/compile/OpEmitters/nn/Embedding.mm", "emit", "half-pair"): (
+        1,
+        "compiled embedding refuses a bfloat16 table; refused, not misread. "
+        "Retire: export card, with mps_dtype_of.",
     ),
     ("lucid/_C/nn/Interpolate.cpp", "resample_matrix", "bare-else"): (
         1,
@@ -557,6 +590,46 @@ def scan_text(text: str, rel: str) -> list[Hit]:
                     f"is_floating_point / is_complex",
                 )
             )
+    hits.extend(_half_pair_hits(s, rel, functions, line_of))
+    return hits
+
+
+_SWITCH = re.compile(r"\bswitch\b")
+_CASE_DTYPE = re.compile(r"\bcase\s+Dtype::(\w+)")
+
+
+def _half_pair_hits(
+    s: str, rel: str, functions: list[Function], line_of: Callable[[int], int]
+) -> list[Hit]:
+    """Switches whose own case labels name F16 but not BF16."""
+    bodies: list[tuple[int, int, int]] = []  # (switch keyword, ``{``, ``}``)
+    for m in _SWITCH.finditer(s):
+        paren = _skip_ws(s, m.end())
+        if paren >= len(s) or s[paren] != "(":
+            continue
+        brace = _skip_ws(s, _match(s, paren) + 1)
+        if brace < len(s) and s[brace] == "{":
+            bodies.append((m.start(), brace, _match(s, brace)))
+    hits: list[Hit] = []
+    for start, lo, hi in bodies:
+        nested = [(a, b) for _, a, b in bodies if lo < a and b < hi]
+        labels = {
+            c.group(1)
+            for c in _CASE_DTYPE.finditer(s, lo, hi)
+            if not any(a < c.start() < b for a, b in nested)
+        }
+        if "F16" in labels and "BF16" not in labels:
+            f = _function_at(functions, start)
+            hits.append(
+                Hit(
+                    rel,
+                    line_of(start),
+                    f.name if f else "<file scope>",
+                    "half-pair",
+                    "switch names F16 but not BF16; bfloat16 reaches the "
+                    "default. Name both 16-bit floats (they share a path)",
+                )
+            )
     return hits
 
 
@@ -616,6 +689,27 @@ _SELF_TEST: list[tuple[str, list[tuple[str, str]]]] = [
         "void k(Dtype dt) {\n"
         "    if (dt == Dtype::F32 || dt == Dtype::F64) { go(); }\n"
         '    else { ErrorBuilder("k").not_implemented("dtype"); }\n}\n',
+        [],
+    ),
+    (  # a switch with a float16 case and no bfloat16 one (LCD-248)
+        "void k(Dtype dt) {\n"
+        "    switch (dt) {\n"
+        "    case Dtype::F32: a(); break;\n"
+        "    case Dtype::F16: h(); break;\n"
+        '    default: ErrorBuilder("k").not_implemented("dtype");\n'
+        "    }\n}\n",
+        [("half-pair", "k")],
+    ),
+    (  # both halves named; a nested switch's labels are its own
+        "void k(Dtype dt, Dtype it) {\n"
+        "    switch (dt) {\n"
+        "    case Dtype::F16: case Dtype::BF16: h(); break;\n"
+        "    case Dtype::I32:\n"
+        "        switch (it) { case Dtype::I8: break; default: break; }\n"
+        "        break;\n"
+        "    default: break;\n"
+        "    }\n"
+        "    switch (dt) { case Dtype::I8: case Dtype::Bool: b(); break; default: break; }\n}\n",
         [],
     ),
     (  # the predicates, the half test, and a bad chain inside a comment
@@ -702,8 +796,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"\n[check_dtype_dispatch] {len(new)} dtype dispatch(es) without a "
             "refusal.  End the chain in `else ErrorBuilder(...).not_implemented(...)`, "
-            "widen half through float32 (detail::as_f32 / back_to_f16), and ask "
-            "is_floating_point / is_complex instead of listing dtypes.",
+            "widen half through float32 (detail::as_f32 / back_to_f16), name F16 "
+            "and BF16 together, and ask is_floating_point / is_complex instead of "
+            "listing dtypes.",
             file=sys.stderr,
         )
     if new or stale:

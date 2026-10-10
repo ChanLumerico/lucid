@@ -50,21 +50,49 @@ void add_typed(std::byte* dst, const std::byte* src, std::size_t numel) {
         td[i] = td[i] + ts[i];
 }
 
-// dst[i] += src[i] for half, accumulated in float.
+// dst[i] += src[i] for a 16-bit float format, accumulated in float.
 //
 // Not add_typed<std::uint16_t> — that would add the *bit patterns*.  Widening
 // each pair, adding, and rounding once is also what IEEE says a single half
 // addition means, so the result matches the GPU rather than merely running.
+// float16 and bfloat16 differ only in how the sixteen bits are read.
+template <float (*Widen)(std::uint16_t), std::uint16_t (*Narrow)(float)>
 void add_half_inplace(std::byte* dst, const std::byte* src, std::size_t numel) {
     auto* td = reinterpret_cast<std::uint16_t*>(dst);
     const auto* ts = reinterpret_cast<const std::uint16_t*>(src);
     for (std::size_t i = 0; i < numel; ++i)
-        td[i] = backend::detail::float_to_half_bits(backend::detail::half_bits_to_float(td[i]) +
-                                                    backend::detail::half_bits_to_float(ts[i]));
+        td[i] = Narrow(Widen(td[i]) + Widen(ts[i]));
+}
+
+// dst[i] += src[i] for n lanes of a native arithmetic dtype.
+void add_lanes(Dtype lane, std::byte* dst, const std::byte* src, std::size_t n) {
+    switch (lane) {
+    case Dtype::F32:
+        add_typed<float>(dst, src, n);
+        break;
+    case Dtype::F64:
+        add_typed<double>(dst, src, n);
+        break;
+    case Dtype::I64:
+        add_typed<std::int64_t>(dst, src, n);
+        break;
+    case Dtype::I32:
+        add_typed<std::int32_t>(dst, src, n);
+        break;
+    case Dtype::I16:
+        add_typed<std::int16_t>(dst, src, n);
+        break;
+    case Dtype::I8:
+        add_typed<std::int8_t>(dst, src, n);
+        break;
+    default:
+        ErrorBuilder("accumulate_into")
+            .not_implemented("no accumulation for dtype " + std::string(dtype_name(lane)));
+    }
 }
 
 // Perform dst += src for two CpuStorage buffers.
-// Validates dtype and byte-count equality, then dispatches to add_typed<T>.
+// Validates dtype and byte-count equality, then adds at the dtype's width.
 void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
     if (dst.dtype != src.dtype) {
         throw DtypeMismatch(std::string(dtype_name(dst.dtype)), std::string(dtype_name(src.dtype)),
@@ -74,22 +102,25 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
         ErrorBuilder("accumulate_into").fail("nbytes mismatch");
     }
     const std::size_t n = dst.nbytes / dtype_size(dst.dtype);
+    std::byte* d = dst.ptr.get();
+    const std::byte* s = src.ptr.get();
     switch (dst.dtype) {
-    case Dtype::F32:
-        add_typed<float>(dst.ptr.get(), src.ptr.get(), n);
-        break;
-    case Dtype::F64:
-        add_typed<double>(dst.ptr.get(), src.ptr.get(), n);
-        break;
-    case Dtype::I32:
-        add_typed<std::int32_t>(dst.ptr.get(), src.ptr.get(), n);
-        break;
-    case Dtype::I64:
-        add_typed<std::int64_t>(dst.ptr.get(), src.ptr.get(), n);
-        break;
     case Dtype::F16:
-        add_half_inplace(dst.ptr.get(), src.ptr.get(), n);
+        add_half_inplace<backend::detail::half_bits_to_float, backend::detail::float_to_half_bits>(
+            d, s, n);
         break;
+    case Dtype::BF16:
+        add_half_inplace<backend::detail::bfloat_bits_to_float,
+                         backend::detail::float_to_bfloat_bits>(d, s, n);
+        break;
+    case Dtype::Bool: {
+        // bool + bool is logical or; adding the bytes would leave a 2.
+        auto* td = reinterpret_cast<std::uint8_t*>(d);
+        const auto* ts = reinterpret_cast<const std::uint8_t*>(s);
+        for (std::size_t i = 0; i < n; ++i)
+            td[i] = (td[i] | ts[i]) != 0 ? 1 : 0;
+        break;
+    }
     case Dtype::C64:
     case Dtype::C128:
         // Complex addition *is* lane-wise addition, so an interleaved
@@ -100,13 +131,10 @@ void cpu_add_inplace(CpuStorage& dst, const CpuStorage& src) {
         // backwards, and the first thing that did was ``abs(z)``, which
         // reads ``z`` through both projections and so needs its two
         // contributions summed.
-        if (dst.dtype == Dtype::C64)
-            add_typed<float>(dst.ptr.get(), src.ptr.get(), n * 2);
-        else
-            add_typed<double>(dst.ptr.get(), src.ptr.get(), n * 2);
+        add_lanes(real_lane_of(dst.dtype), d, s, n * 2);
         break;
     default:
-        ErrorBuilder("accumulate_into").not_implemented("dtype not yet supported in Phase 2");
+        add_lanes(dst.dtype, d, s, n);
     }
 }
 

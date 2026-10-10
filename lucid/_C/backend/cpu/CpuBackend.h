@@ -91,6 +91,7 @@
 #include "Parallel.h"
 #include "Pool.h"
 #include "Reduce.h"
+#include "ScatterReduce.h"
 #include "Shape.h"
 #include "Vdsp.h"
 #include "Vforce.h"
@@ -4709,6 +4710,12 @@ public:
         else if (dt == Dtype::I64)
             run(reinterpret_cast<std::int64_t*>(ptr.get()),
                 reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+        else if (dt == Dtype::C64)
+            run(reinterpret_cast<std::complex<float>*>(ptr.get()),
+                reinterpret_cast<const std::complex<float>*>(cs.ptr.get()));
+        else if (dt == Dtype::C128)
+            run(reinterpret_cast<std::complex<double>*>(ptr.get()),
+                reinterpret_cast<const std::complex<double>*>(cs.ptr.get()));
         else
             ErrorBuilder("cpu_backend::scatter_add").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nbytes, dt}};
@@ -4836,7 +4843,8 @@ private:
     }
 
     // Generic scatter-reduce loop shared by scatter_amax / scatter_amin / scatter_prod.
-    // Op is a binary functor: (T& dst_elem, T src_elem) → void  (modifies dst in-place).
+    // Every dtype at its own width but half, which widens to float32 here;
+    // see ScatterReduce.h.
     //
     // The index is read at its own width and checked against the axis.  This
     // loop read every index as int32 lanes (an int64 index of 2^32 + 1 was 1)
@@ -4846,7 +4854,6 @@ private:
     // index and src and took the process down with SIGBUS.
     // ``axis_scatter_walk`` places them now, as it does for scatter_add and
     // scatter_set.
-    template <typename Op>
     Storage scatter_reduce_loop(const Storage& base,
                                 const Storage& indices,
                                 const Storage& src,
@@ -4855,7 +4862,12 @@ private:
                                 int dim,
                                 Dtype dt,
                                 const char* name,
-                                Op op) {
+                                cpu::ScatterReduce reduce) {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                scatter_reduce_loop(detail::as_f32(base), indices, detail::as_f32(src), base_shape,
+                                    idx_shape, dim, Dtype::F32, name, reduce),
+                dt);
         const auto& cb = std::get<CpuStorage>(base);
         const auto& ci = std::get<CpuStorage>(indices);
         const auto& cs = std::get<CpuStorage>(src);
@@ -4898,18 +4910,15 @@ private:
                         const std::size_t at = w.outer_off[o] +
                                                static_cast<std::size_t>(tgt) * w.dim_stride +
                                                w.inner_off[j];
-                        op(dst[at], sp[row + j]);
+                        cpu::scatter_combine(reduce, dst[at], sp[row + j]);
                     }
                 }
         };
 
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else
-            ErrorBuilder(name).not_implemented("dtype not supported");
+        cpu::visit_scatter_reduce_type(dt, reduce, name, [&](auto tag) {
+            using T = decltype(tag);
+            run(reinterpret_cast<T*>(ptr.get()), reinterpret_cast<const T*>(cs.ptr.get()));
+        });
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
@@ -4922,10 +4931,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_amax", [](auto& d, auto s) {
-                                       if (s > d)
-                                           d = s;
-                                   });
+                                   "cpu_backend::scatter_amax", cpu::ScatterReduce::Amax);
     }
 
     Storage scatter_amin(const Storage& base,
@@ -4936,10 +4942,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_amin", [](auto& d, auto s) {
-                                       if (s < d)
-                                           d = s;
-                                   });
+                                   "cpu_backend::scatter_amin", cpu::ScatterReduce::Amin);
     }
 
     Storage scatter_prod(const Storage& base,
@@ -4950,7 +4953,7 @@ public:
                          int dim,
                          Dtype dt) override {
         return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_prod", [](auto& d, auto s) { d *= s; });
+                                   "cpu_backend::scatter_prod", cpu::ScatterReduce::Prod);
     }
 
     // Overwrite scatter: a copy of ``base`` with
@@ -7496,38 +7499,7 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         if (nb == 0)
             return Storage{CpuStorage{ptr, nb, dt}};
-        switch (dt) {
-        case Dtype::F32:
-            cpu::permute_copy_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                                  reinterpret_cast<float*>(ptr.get()), shape, perm);
-            break;
-        case Dtype::F64:
-            cpu::permute_copy_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                                  reinterpret_cast<double*>(ptr.get()), shape, perm);
-            break;
-        case Dtype::I32:
-            cpu::permute_copy_i32(reinterpret_cast<const std::int32_t*>(cs.ptr.get()),
-                                  reinterpret_cast<std::int32_t*>(ptr.get()), shape, perm);
-            break;
-        case Dtype::I64:
-            cpu::permute_copy_i64(reinterpret_cast<const std::int64_t*>(cs.ptr.get()),
-                                  reinterpret_cast<std::int64_t*>(ptr.get()), shape, perm);
-            break;
-        case Dtype::F16:
-        case Dtype::I16:
-            // Permutation moves bytes; it never reads a value.  Anything two
-            // bytes wide can ride the 16-bit copy whatever it means.
-            cpu::permute_copy_i16(reinterpret_cast<const std::int16_t*>(cs.ptr.get()),
-                                  reinterpret_cast<std::int16_t*>(ptr.get()), shape, perm);
-            break;
-        case Dtype::I8:
-        case Dtype::Bool:
-            cpu::permute_copy_i8(reinterpret_cast<const std::int8_t*>(cs.ptr.get()),
-                                 reinterpret_cast<std::int8_t*>(ptr.get()), shape, perm);
-            break;
-        default:
-            ErrorBuilder("cpu_backend::permute").not_implemented("dtype not supported");
-        }
+        cpu::permute_copy(cs.ptr.get(), ptr.get(), shape, perm, dtype_size(dt));
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
@@ -12874,12 +12846,12 @@ private:
                 p[i] = 1;
             break;
         }
-        case Dtype::F16: {
-            // 1.0 as IEEE binary16 is 0x3C00.  Writing the pattern avoids
-            // needing a half type here for what is only a fill.
-            auto* p = reinterpret_cast<std::uint16_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 0x3C00;
+        case Dtype::F16:
+        case Dtype::BF16: {
+            // 1.0 is 0x3C00 in IEEE binary16 and 0x3F80 in bfloat16.  Writing
+            // the pattern avoids needing a half type for what is only a fill.
+            const std::uint16_t one = dt == Dtype::BF16 ? 0x3F80 : 0x3C00;
+            std::fill_n(reinterpret_cast<std::uint16_t*>(ptr), n, one);
             break;
         }
         default:
@@ -14140,10 +14112,17 @@ private:
             run(double{});
             break;
         case Dtype::F16:
-            run(std::uint16_t{});  // bit pattern; zero is zero in IEEE half
+        case Dtype::BF16:
+            run(std::uint16_t{});  // bit pattern; zero is all-zero bits in both
             break;
         case Dtype::I64:
             run(std::int64_t{});
+            break;
+        case Dtype::C64:
+            run(std::complex<float>{});
+            break;
+        case Dtype::C128:
+            run(std::complex<double>{});
             break;
         case Dtype::I32:
             run(std::int32_t{});
@@ -14250,36 +14229,13 @@ private:
                            const Shape& src_shape,
                            const std::vector<int>& perm,
                            Dtype dt) override {
-        const std::size_t nd = src_shape.size();
         Shape dst_shape;
         for (int p : perm)
             dst_shape.push_back(src_shape[static_cast<std::size_t>(p)]);
-
-        const std::size_t total = shape_numel(dst_shape);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t nb = total * elem;
+        const std::size_t nb = shape_numel(dst_shape) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-
-        std::vector<std::size_t> src_stride(nd, 1);
-        for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 2; d >= 0; --d)
-            src_stride[static_cast<std::size_t>(d)] =
-                src_stride[static_cast<std::size_t>(d) + 1] *
-                static_cast<std::size_t>(src_shape[static_cast<std::size_t>(d) + 1]);
-
-        std::vector<std::int64_t> coord(nd, 0);
-        for (std::size_t f = 0; f < total; ++f) {
-            std::size_t src_flat = 0;
-            for (std::size_t d = 0; d < nd; ++d)
-                src_flat += static_cast<std::size_t>(coord[d]) *
-                            src_stride[static_cast<std::size_t>(perm[d])];
-            std::memcpy(ptr.get() + f * elem, src.ptr.get() + src_flat * elem, elem);
-
-            for (std::ptrdiff_t d = (std::ptrdiff_t)nd - 1; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] < dst_shape[static_cast<std::size_t>(d)])
-                    break;
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
+        if (nb > 0)
+            cpu::permute_copy(src.ptr.get(), ptr.get(), src_shape, perm, dtype_size(dt));
         return CpuStorage{ptr, nb, dt};
     }
 
