@@ -66,6 +66,35 @@ class OpEntry:
     extra_kwargs: list[str] = field(default_factory=list)
 
 
+def _bind_leading(
+    op: str,
+    names: tuple[str, ...],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> tuple[tuple[object, ...], dict[str, object]]:
+    """``args`` / ``kwargs`` with the operands named in ``names`` moved to position.
+
+    ``names`` are the parameters ``args`` would fill from its first slot
+    on.  An operand given both ways, or one given by keyword after a gap
+    in the positions before it, is refused as an ordinary call would be.
+    The free functions (``lucid._ops``) and the Tensor methods
+    (``lucid._tensor._methods``) both bind through here.
+    """
+    if kwargs.keys().isdisjoint(names):
+        return args, kwargs
+    rest = dict(kwargs)
+    filled = list(args)
+    for slot, name in enumerate(names):
+        if name not in rest:
+            continue
+        if slot < len(filled):
+            raise TypeError(f"{op}() got multiple values for argument {name!r}")
+        if slot > len(filled):
+            raise TypeError(f"{op}() missing required argument {names[len(filled)]!r}")
+        filled.append(rest.pop(name))
+    return tuple(filled), rest
+
+
 _R = _C_engine  # shorthand
 
 # fmt: off

@@ -205,6 +205,22 @@ def test_unique_along_a_dim(ref: ModuleType, device: str, dim: int) -> None:
     _same(got, want)
 
 
+@pytest.mark.parametrize(("shape", "dim"), [((0, 3), 0), ((2, 0, 3), 1)], ids=str)
+def test_unique_along_an_empty_dim(
+    ref: ModuleType, device: str, shape: tuple[int, ...], dim: int
+) -> None:
+    got = lucid.unique(
+        lucid.zeros(*shape, device=device),
+        dim=dim,
+        return_inverse=True,
+        return_counts=True,
+    )
+    want = ref.unique(
+        ref.zeros(*shape), dim=dim, return_inverse=True, return_counts=True
+    )
+    _same(got, want)
+
+
 def test_unique_sorted_false_still_answers(ref: ModuleType, device: str) -> None:
     got = lucid.unique(lucid.tensor([3, 1, 3], device=device), sorted=False)
     assert sorted(got.tolist()) == sorted(ref.unique(ref.tensor([3, 1, 3])).tolist())
@@ -263,3 +279,30 @@ def test_scatter_reduce_modes_and_a_number(ref: ModuleType, device: str) -> None
             lucid.ones(1, device=device),
             reduce="max",
         )
+
+
+_SCATTERS = {
+    "scatter": lambda b, i, s: lucid.scatter(b, 0, i, s),
+    "scatter_add": lambda b, i, s: lucid.scatter_add(b, 0, i, s),
+    "reduce_add": lambda b, i, s: lucid.scatter(b, 0, i, s, reduce="add"),
+    "reduce_multiply": lambda b, i, s: lucid.scatter(b, 0, i, s, reduce="multiply"),
+    "scatter_reduce_amax": lambda b, i, s: lucid.scatter_reduce(b, 0, i, s, "amax"),
+}
+
+
+@pytest.mark.parametrize("index_dtype", ["int64", "int32"])
+@pytest.mark.parametrize("name", list(_SCATTERS))
+def test_an_index_written_after_forward_is_refused_in_backward(
+    device: str, name: str, index_dtype: str
+) -> None:
+    # The index now reaches the node as the caller's own tensor — no
+    # narrowing copy in between — so a write into it after forward would
+    # move the gradient to other slots.  The node's version guard refuses
+    # it instead (LCD-320, LCD-351).
+    base = lucid.ones(4, device=device, requires_grad=True)
+    src = lucid.tensor([10.0, 20.0], device=device, requires_grad=True)
+    index = lucid.tensor([0, 1], dtype=getattr(lucid, index_dtype), device=device)
+    out = _SCATTERS[name](base, index, src)
+    index.add_(2)
+    with pytest.raises(_C_engine.VersionMismatch):
+        out.sum().backward()

@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._ops._registry import OpEntry, _REGISTRY
+from lucid._ops._registry import OpEntry, _REGISTRY, _bind_leading
 
 # 3.2.2: index ``_REGISTRY`` by ``free_fn_name`` so ``_make_free_fn`` and
 # ``_populate_free_fns`` skip the O(N) linear scan over ~500–1000 entries.
@@ -62,7 +62,6 @@ else:
 # to the wrappers (with TensorImpl-only signatures) instead of the builtins.
 _b_min = builtins.min
 _b_max = builtins.max
-_b_any = builtins.any
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -187,19 +186,14 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
     still works (``help()`` will be uninformative for that op).
     """
     fn = entry.engine_fn
-    # When the engine_fn is an adapter wrapping a pybind11 builtin (e.g.
-    # ``_make_arith_adapter``), it carries ``__wrapped__`` pointing at the
-    # original pybind11 function.  For signature extraction we want the
-    # *original* pybind11 docstring (which has the canonical param names and
-    # types), not the adapter's ``_Impl``-typed internal signature.
-    # Use ``follow_wrapped=False`` so ``inspect.signature`` inspects the
-    # adapter itself; if that still yields bad types, fall back to parsing the
-    # pybind11 docstring via the ``__wrapped__`` reference.
-    # Python adapters are introspectable directly.  We pass
-    # ``annotation_format=Format.FORWARDREF`` (PEP 749, Python 3.14+) so any
-    # name held under ``TYPE_CHECKING`` (e.g. ``Tensor`` in ``_adapters``) is
-    # surfaced as a ``ForwardRef`` instead of raising ``NameError`` during
-    # registry population.
+    # An adapter that stands in for one pybind11 builtin and keeps its
+    # signature (``_keep_engine_signature`` — the joins, ``outer``) carries
+    # ``__wrapped__``: its signature is the builtin's docstring, renamed.
+    # Every other adapter — the arithmetic ones included, which set their own
+    # ``(input, other)`` ``__signature__`` — is introspected directly, with
+    # ``annotation_format=Format.FORWARDREF`` (PEP 749) so a name held under
+    # ``TYPE_CHECKING`` (``Tensor`` in ``_adapters``) comes back as a
+    # ``ForwardRef`` rather than raising ``NameError``.
     pybind_fn = getattr(fn, "__wrapped__", None)
     if pybind_fn is not None:
         # Adapter wrapping a pybind11 builtin: parse the original docstring
@@ -281,33 +275,6 @@ def _leading_tensor_names(entry: OpEntry) -> tuple[str, ...]:
     return names
 
 
-def _bind_leading(
-    op: str,
-    names: tuple[str, ...],
-    args: tuple[object, ...],
-    kwargs: dict[str, object],
-) -> tuple[tuple[object, ...], dict[str, object]]:
-    """``args`` / ``kwargs`` with the operands named in ``names`` moved to position.
-
-    ``names`` are the parameters ``args`` would fill from its first slot
-    on.  An operand given both ways, or one given by keyword after a gap
-    in the positions before it, is refused as an ordinary call would be.
-    """
-    if not _b_any(name in kwargs for name in names):
-        return args, kwargs
-    rest = dict(kwargs)
-    filled = list(args)
-    for slot, name in enumerate(names):
-        if name not in rest:
-            continue
-        if slot < len(filled):
-            raise TypeError(f"{op}() got multiple values for argument {name!r}")
-        if slot > len(filled):
-            raise TypeError(f"{op}() missing required argument {names[len(filled)]!r}")
-        filled.append(rest.pop(name))
-    return tuple(filled), rest
-
-
 # ── Wrapper factories ────────────────────────────────────────────────────────
 
 
@@ -343,7 +310,7 @@ def _make_free_fn(name: str) -> object:
     leading = _leading_tensor_names(e)
 
     def _fn(*args: object, **kwargs: object) -> object:
-        if kwargs:
+        if kwargs and leading:
             args, kwargs = _bind_leading(fn_name, leading, args, kwargs)
         proc: list[object] = []
         for i, a in enumerate(args):

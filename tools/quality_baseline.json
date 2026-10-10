@@ -1449,7 +1449,6 @@
     "lucid/_ops/__init__.py": 2,
     "lucid/_tensor/_dunders.py": 1,
     "lucid/_tensor/_indexing.py": 1,
-    "lucid/_tensor/_methods.py": 2,
     "lucid/_tensor/_to.py": 2,
     "lucid/autograd/gradcheck.py": 1,
     "lucid/benchmarks/run_all.py": 1,
@@ -1746,7 +1745,6 @@
     "lucid/_ops/composite/elementwise.py": 1,
     "lucid/_ops/composite/statistics.py": 2,
     "lucid/_tensor/_indexing.py": 1,
-    "lucid/_tensor/_methods.py": 2,
     "lucid/nn/functional/normalization.py": 1
    },
    "RUF100": {

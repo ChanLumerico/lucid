@@ -2974,7 +2974,7 @@ def nan_to_num(input: Tensor, nan: _float | None = ..., posinf: _float | None = 
     Tensor([1.0, 0.0, 1e10, -1e10])
     """
     ...
-def detach(impl: Tensor) -> Tensor:
+def detach(input: Tensor) -> Tensor:
     r"""    Return a tensor that shares data but is detached from the autograd graph.
     
     The returned tensor has ``requires_grad=False`` and is no longer a leaf
@@ -2984,13 +2984,13 @@ def detach(impl: Tensor) -> Tensor:
     
     Parameters
     ----------
-    impl : Tensor
+    input : Tensor
         Source tensor.
     
     Returns
     -------
     Tensor
-        Detached view sharing storage with ``impl``.
+        Detached view sharing storage with ``input``.
     
     Notes
     -----
@@ -3948,8 +3948,8 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     Tensor([3, 4, 5, 6])
     """
     ...
-def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor | Scalar, reduce: str | None = ...) -> Tensor:
-    r"""    Write ``src`` into ``base_impl`` along ``dim`` at positions ``index``.
+def scatter(input: Tensor, dim: _int, index: Tensor, src: Tensor | Scalar, reduce: str | None = ...) -> Tensor:
+    r"""    Write ``src`` into ``input`` along ``dim`` at positions ``index``.
     
     Inverse of :func:`gather`.  For each entry of ``src`` the destination
     is determined by substituting ``index`` into the ``dim`` coordinate;
@@ -3959,14 +3959,14 @@ def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor | Scalar, r
     
     Parameters
     ----------
-    base_impl : Tensor
+    input : Tensor
         Destination tensor (will be copied — out-of-place).
     dim : int
         Axis along which to scatter.
     index : Tensor
         Integer index tensor; same shape as ``src``.
     src : Tensor or scalar
-        Values to write, of ``base_impl``'s dtype — another dtype is
+        Values to write, of ``input``'s dtype — another dtype is
         refused rather than cast — or one number written everywhere
         ``index`` points.
     reduce : str, optional
@@ -3976,7 +3976,7 @@ def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor | Scalar, r
     Returns
     -------
     Tensor
-        Updated tensor of the same shape as ``base_impl``.
+        Updated tensor of the same shape as ``input``.
     
     Notes
     -----

@@ -82,7 +82,7 @@ _BY_METHOD = {e.method_name: e for e in _REGISTRY if e.method_name}
 
 #: Stub keywords no callee takes yet — strict, so a fix flips them to XPASS.
 _KNOWN_GAPS = {
-    "bmm": "LCD-341 FOUND: tensor.pyi names bmm's operand mat2, the registry other",
+    "bmm": "LCD-357: tensor.pyi names bmm's operand mat2, the registry other",
 }
 
 

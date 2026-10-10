@@ -244,9 +244,9 @@ def _bessel_correct(
 # ── Engine-arg-order adapters ────────────────────────────────────────────────
 
 
-def _detach_adapter(impl: _Impl) -> _Impl:
+def _detach_adapter(x_impl: _Impl) -> _Impl:
     """detach(x): the same storage, cut from the graph (see Tensor.detach)."""
-    return impl.data_alias()
+    return x_impl.data_alias()
 
 
 def _scatter_add_adapter(
@@ -396,7 +396,7 @@ _SCATTER_REDUCE = {"add": _C_engine.scatter_add, "multiply": _C_engine.scatter_p
 
 
 def _scatter_adapter(
-    base_impl: _Impl,
+    x_impl: _Impl,
     dim: int,
     index: Tensor,
     src: Tensor | Scalar,
@@ -414,22 +414,22 @@ def _scatter_adapter(
     idx_impl = _unwrap(index)
     if isinstance(src, _promotion.NUMBER):
         src_impl = _C_engine.full(
-            list(idx_impl.shape), src, base_impl.dtype, base_impl.device
+            list(idx_impl.shape), src, x_impl.dtype, x_impl.device
         )
     else:
         src_impl = _unwrap(src)
-        if src_impl.dtype != base_impl.dtype:
+        if src_impl.dtype != x_impl.dtype:
             raise _C_engine.DtypeMismatch(
                 f"scatter: src must have self's dtype "
-                f"{_ENGINE_TO_DTYPE[base_impl.dtype]}, got "
+                f"{_ENGINE_TO_DTYPE[x_impl.dtype]}, got "
                 f"{_ENGINE_TO_DTYPE[src_impl.dtype]} — cast it first"
             )
     if reduce is None:
-        return _C_engine.scatter(base_impl, int(dim), idx_impl, src_impl)
+        return _C_engine.scatter(x_impl, int(dim), idx_impl, src_impl)
     kernel = _SCATTER_REDUCE.get(reduce)
     if kernel is None:
         raise ValueError(f"scatter: reduce must be 'add' or 'multiply', got {reduce!r}")
-    return kernel(base_impl, idx_impl, src_impl, int(dim))
+    return kernel(x_impl, idx_impl, src_impl, int(dim))
 
 
 def _broadcast_with_mask(op: str, a_impl: _Impl, mask: _Impl) -> tuple[_Impl, _Impl]:
@@ -1175,6 +1175,12 @@ def _histc_adapter(
     return _C_engine.histc(a_impl, int(bins), lo, hi)
 
 
+#: The dtypes the engine's own ``unique`` kernel answers exactly: integers
+#: have no NaN and no ``-0.0``, which its float path gets wrong, and it
+#: sorts several times faster than the composite below on the CPU.
+_UNIQUE_KERNEL_DTYPES = (_C_engine.I32, _C_engine.I64)
+
+
 def _unique_adapter(
     a_impl: _Impl,
     sorted: bool = True,
@@ -1191,75 +1197,109 @@ def _unique_adapter(
     is read back to size the result — the one host round trip.
     """
     del sorted  # sorted either way; the reference leaves the order open
+    plain = dim is None and not (return_inverse or return_counts)
+    if plain and a_impl.dtype in _UNIQUE_KERNEL_DTYPES:
+        return _C_engine.unique(_C_engine.reshape(a_impl, [-1]))
+    d: int | None = None  # the dim the slices run along; None reads ``a`` as 1-D
+    rest: list[int] = []  # one slice's shape
     if dim is None:
-        values, inverse, counts = _unique_rows(_C_engine.reshape(a_impl, [-1, 1]))
-        values = _C_engine.reshape(values, [-1])
         shape: list[int] = list(a_impl.shape)
+        rows = _C_engine.reshape(a_impl, [a_impl.numel(), 1])
     else:
         ndim = len(a_impl.shape)
         if not -ndim <= dim < ndim:
             raise IndexError(f"unique: dim {dim} is out of range for a {ndim}-d tensor")
         d = dim % ndim
         moved = _C_engine.contiguous(_C_engine.movedim(a_impl, [d], [0]))
+        rest = [int(s) for s in moved.shape[1:]]
         shape = [int(moved.shape[0])]
-        values, inverse, counts = _unique_rows(_C_engine.reshape(moved, [shape[0], -1]))
-        width = [int(values.shape[0]), *moved.shape[1:]]
-        values = _C_engine.movedim(_C_engine.reshape(values, width), [0], [d])
+        # The width spelled out: ``-1`` cannot be inferred with no rows.
+        rows = _C_engine.reshape(moved, [shape[0], math.prod(rest)])
+    values, inverse, counts = _unique_rows(rows, return_inverse, return_counts)
+    if d is None:
+        values = _C_engine.reshape(values, [-1])
+    else:
+        values = _C_engine.reshape(values, [int(values.shape[0]), *rest])
+        values = _C_engine.movedim(values, [0], [d])
     out = [values]
-    if return_inverse:
+    if inverse is not None:
         out.append(_C_engine.reshape(inverse, shape))
-    if return_counts:
+    if counts is not None:
         out.append(counts)
     return out[0] if len(out) == 1 else tuple(out)
 
 
-def _unique_rows(rows: _Impl) -> tuple[_Impl, _Impl, _Impl]:
+def _unique_rows(
+    rows: _Impl, inverse: bool, counts: bool
+) -> tuple[_Impl, _Impl | None, _Impl | None]:
     """The distinct rows of a 2-D ``rows``, sorted; each row's group; each group's size.
 
     Rows are ordered lexicographically by a stable sort per column, last
-    column first.  Neighbouring rows that differ anywhere start a group,
-    so NaN, which equals nothing, is a group of its own each time.
+    column first; a single column is one sort, and needs no order at all
+    when nobody asks where each row went.  Neighbouring rows that differ
+    anywhere start a group, so NaN, which equals nothing, is a group of its
+    own each time, and ``-0.0`` joins ``0.0``.  The group and size of each
+    are computed only when asked for.
     """
     n, width = int(rows.shape[0]), int(rows.shape[1])
     device = rows.device
-    order = _C_engine.arange(0, n, 1, _C_engine.I64, device)
+    order: _Impl | None = None
+    if inverse or width != 1:
+        order = _lexicographic_order(rows)
+        ranked = _C_engine.index_select(rows, 0, order)
+    else:
+        ranked = _C_engine.sort(rows, 0)
+    if n == 0:
+        empty = _C_engine.zeros([0], _C_engine.I64, device)
+        return ranked, empty if inverse else None, empty if counts else None
+    differs = _C_engine.not_equal(
+        _C_engine.narrow(ranked, 0, 1, n - 1), _C_engine.narrow(ranked, 0, 0, n - 1)
+    )
+    if width != 1:
+        differs = _C_engine.greater(
+            _C_engine.sum(_C_engine.astype(differs, _C_engine.I64), [1], False),
+            _C_engine.zeros([n - 1], _C_engine.I64, device),
+        )
+    starts = _C_engine.concatenate(
+        [_C_engine.ones([1], _C_engine.Bool, device), _C_engine.reshape(differs, [-1])],
+        0,
+    )
+    first = _C_engine.reshape(_C_engine.nonzero(starts), [-1])
+    groups: _Impl | None = None
+    if order is not None and inverse:
+        group = _C_engine.sub(
+            _C_engine.cumsum(_C_engine.astype(starts, _C_engine.I64), 0),
+            _C_engine.ones([n], _C_engine.I64, device),
+        )
+        zeros = _C_engine.zeros([n], _C_engine.I64, device)
+        groups = _C_engine.scatter(zeros, 0, order, group)
+    sizes: _Impl | None = None
+    if counts:
+        ends = _C_engine.concatenate(
+            [
+                _C_engine.narrow(first, 0, 1, int(first.shape[0]) - 1),
+                _C_engine.full([1], n, _C_engine.I64, device),
+            ],
+            0,
+        )
+        sizes = _C_engine.sub(ends, first)
+    return _C_engine.index_select(ranked, 0, first), groups, sizes
+
+
+def _lexicographic_order(rows: _Impl) -> _Impl:
+    """The ``int64`` permutation that sorts ``rows`` lexicographically, stably."""
+    n, width = int(rows.shape[0]), int(rows.shape[1])
+    if width == 1:
+        step = _C_engine.argsort(_C_engine.reshape(rows, [n]), 0)
+        return _C_engine.astype(step, _C_engine.I64)
+    order = _C_engine.arange(0, n, 1, _C_engine.I64, rows.device)
     for col in range(width - 1, -1, -1):
         key = _C_engine.index_select(
             _C_engine.reshape(_C_engine.narrow(rows, 1, col, 1), [n]), 0, order
         )
         step = _C_engine.astype(_C_engine.argsort(key, 0), _C_engine.I64)
         order = _C_engine.index_select(order, 0, step)
-    ranked = _C_engine.index_select(rows, 0, order)
-    if n == 0:
-        empty = _C_engine.zeros([0], _C_engine.I64, device)
-        return ranked, empty, empty
-    differs = _C_engine.not_equal(
-        _C_engine.narrow(ranked, 0, 1, n - 1), _C_engine.narrow(ranked, 0, 0, n - 1)
-    )
-    differs = _C_engine.greater(
-        _C_engine.sum(_C_engine.astype(differs, _C_engine.I64), [1], False),
-        _C_engine.zeros([n - 1], _C_engine.I64, device),
-    )
-    starts = _C_engine.concatenate(
-        [_C_engine.ones([1], _C_engine.Bool, device), differs], 0
-    )
-    group = _C_engine.sub(
-        _C_engine.cumsum(_C_engine.astype(starts, _C_engine.I64), 0),
-        _C_engine.ones([n], _C_engine.I64, device),
-    )
-    first = _C_engine.reshape(_C_engine.nonzero(starts), [-1])
-    ends = _C_engine.concatenate(
-        [
-            _C_engine.narrow(first, 0, 1, int(first.shape[0]) - 1),
-            _C_engine.full([1], n, _C_engine.I64, device),
-        ],
-        0,
-    )
-    inverse = _C_engine.scatter(
-        _C_engine.zeros([n], _C_engine.I64, device), 0, order, group
-    )
-    counts = _C_engine.sub(ends, first)
-    return _C_engine.index_select(ranked, 0, first), inverse, counts
+    return order
 
 
 def _cartesian_prod_adapter(*tensors: Tensor) -> _Impl:
