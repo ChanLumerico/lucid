@@ -186,7 +186,7 @@
     "frees": 54,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 36740
+    "peak_bytes": 18436
   },
   "mlp_adam/cpu": {
     "allocations": 64,
