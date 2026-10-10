@@ -301,19 +301,16 @@ class TestEmbeddingScaleGradByFreq:
         b(idx).sum().backward()
         assert np.array_equal(a.weight.grad.numpy(), b.weight.grad.numpy())
 
-    def test_two_forwards_before_backward_are_refused(self) -> None:
-        """The divisor belongs to a lookup, not to the weight.  Once two
-        lookups' gradients have summed there is no divisor that is right
-        for both, so guessing one would be worse than saying so."""
-        import pytest
-
+    def test_two_forwards_before_backward_are_each_scaled(self) -> None:
+        """The divisor belongs to a lookup, not to the weight, so each
+        forward is scaled by its own counts before the gradients sum."""
         lucid.manual_seed(0)
         emb = nn.Embedding(5, 3, scale_grad_by_freq=True)
         total = (
-            emb(lucid.tensor([1, 1]).long()).sum() + emb(lucid.tensor([2]).long()).sum()
+            emb(lucid.tensor([1, 1]).long()).sum() + emb(lucid.tensor([1]).long()).sum()
         )
-        with pytest.raises(RuntimeError, match="forward passes before backward"):
-            total.backward()
+        total.backward()
+        assert np.allclose(emb.weight.grad.numpy()[1], 2.0, atol=1e-6)
 
     def test_repeated_train_steps_each_scale_on_their_own_batch(self) -> None:
         lucid.manual_seed(0)

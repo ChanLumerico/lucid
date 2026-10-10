@@ -2,7 +2,7 @@
 Sparse / embedding modules.
 """
 
-from typing import NamedTuple, cast, override
+from typing import NamedTuple, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -11,19 +11,8 @@ from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
 import lucid as _lucid
 import lucid.nn.init as init
-from lucid.autograd import is_grad_enabled
 from lucid.nn.functional.activations import straight_through
 from lucid.nn.functional.sparse import embedding, nearest_codebook, one_hot
-
-
-def _index_counts(x: Tensor) -> dict[int, int]:
-    """How many times each index appears in an integer lookup tensor."""
-    flat = cast("list[object]", x.reshape(-1).tolist())
-    counts: dict[int, int] = {}
-    for raw in flat:
-        idx = int(cast(int, raw))
-        counts[idx] = counts.get(idx, 0) + 1
-    return counts
 
 
 class Embedding(Module):
@@ -77,12 +66,9 @@ class Embedding(Module):
     scale_grad_by_freq : bool, optional
         Divide each row's gradient by the number of times that index
         appeared in the lookup, so a token seen fifty times in a batch
-        does not take a fifty-times larger step than one seen once.
-        Applied through a gradient hook on ``weight``, which means the
-        divisor is only recoverable while a single forward is
-        outstanding: two forwards before one ``backward()`` raise
-        :exc:`RuntimeError` rather than being scaled by a merged count
-        that matches neither.  Default: ``False``.
+        does not take a fifty-times larger step than one seen once.  The
+        count belongs to each forward call: two lookups before one
+        ``backward()`` are each scaled by their own.  Default: ``False``.
     sparse : bool, optional
         Accepted for API compatibility; sparse gradient emission is
         not yet supported.  Default: ``False``.
@@ -187,21 +173,6 @@ class Embedding(Module):
         if self.padding_idx is not None:
             self._zero_pad_row()
 
-        # ``scale_grad_by_freq`` divides each row's gradient by how often that
-        # index appeared, so a token seen 50 times in a batch does not take a
-        # 50x larger step than one seen once.  The scaling is a property of
-        # the *lookup*, not of the weight, so it is applied through a gradient
-        # hook: the forward records what it looked up, the hook rescales the
-        # rows once the gradient has accumulated.
-        self._pending_counts: list[dict[int, int]] = []
-        if scale_grad_by_freq:
-            # ``Tensor.register_hook`` exists and is documented, but the
-            # ``tensor.pyi`` stub omits it — this is its first caller outside
-            # ``lucid._tensor``, which is why nothing had tripped on it.
-            self.weight.register_hook(  # type: ignore[attr-defined]
-                self._scale_grad_by_freq
-            )
-
     def _zero_pad_row(self) -> None:
         """Set ``weight[padding_idx]`` to zero, written through in place.
 
@@ -261,43 +232,12 @@ class Embedding(Module):
         """
         if self.max_norm is not None:
             self._renorm_weight_inplace()
-        if self.scale_grad_by_freq and is_grad_enabled():
-            self._pending_counts.append(_index_counts(x))
-        return embedding(x, self.weight, self.padding_idx)
-
-    def _scale_grad_by_freq(self, grad: Tensor) -> Tensor | None:
-        """Divide each looked-up row of ``grad`` by its occurrence count.
-
-        Fires once the whole gradient has accumulated, which is why more
-        than one outstanding forward is refused rather than approximated:
-        by then the per-lookup contributions have been summed and there is
-        no way to give each its own divisor.  Two forwards with different
-        index distributions genuinely want two different scalings.
-        """
-        pending = self._pending_counts
-        self._pending_counts = []
-        if not pending:
-            return None
-        if len(pending) > 1:
-            raise RuntimeError(
-                f"Embedding(scale_grad_by_freq=True) saw {len(pending)} forward "
-                "passes before backward().  The per-row divisor is a property "
-                "of each lookup, and by the time the gradient has accumulated "
-                "the contributions can no longer be told apart.  Call "
-                "backward() once per forward, or turn scale_grad_by_freq off."
-            )
-
-        counts = pending[0]
-        repeated = {idx: c for idx, c in counts.items() if c > 1}
-        if not repeated:
-            return None
-        scale_rows = [1.0] * self.num_embeddings
-        for idx, count in repeated.items():
-            scale_rows[idx] = 1.0 / float(count)
-        scale = _lucid.tensor(
-            [[v] for v in scale_rows], device=grad.device, dtype=grad.dtype
+        return embedding(
+            x,
+            self.weight,
+            self.padding_idx,
+            scale_grad_by_freq=self.scale_grad_by_freq,
         )
-        return grad * scale
 
     @override
     def extra_repr(self) -> str:

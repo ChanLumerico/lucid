@@ -8,6 +8,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._unsupported import unsupported_if
+from lucid.autograd._hooks import _register_tensor_hook
 from lucid.nn.functional._index_checks import (
     _check_indices,
     _check_table,
@@ -113,9 +114,11 @@ def embedding(
         The :math:`p` value of the :math:`L_p` norm used by ``max_norm``.
         Default ``2.0``.
     scale_grad_by_freq : bool, optional
-        If ``True``, scale gradients of each embedding row by the inverse
-        of its frequency in the mini-batch — useful for highly skewed
-        token distributions.
+        If ``True``, the gradient reaching each row of ``weight`` from this
+        call is divided by how many times that row's index occurs in
+        ``x`` — useful for highly skewed token distributions.  The count
+        is per call: two lookups before one backward are each scaled by
+        their own.
     sparse : bool, optional
         Request a sparse gradient w.r.t. ``weight``.  Lucid currently
         always produces a dense gradient; this flag is accepted for
@@ -142,6 +145,15 @@ def embedding(
     >>> out = embedding(ids, table)
     >>> out.shape
     (2, 3, 4)
+
+    With ``scale_grad_by_freq``, row 1 — looked up three times — gets the
+    mean of its gradients rather than their sum:
+
+    >>> w = lucid.ones(5, 2, requires_grad=True)
+    >>> ids = lucid.tensor([1, 1, 1, 3], dtype=lucid.int64)
+    >>> embedding(ids, w, scale_grad_by_freq=True).sum().backward()
+    >>> w.grad[1].tolist(), w.grad[3].tolist()
+    ([1.0, 1.0], [1.0, 1.0])
     """
     unsupported_if(
         max_norm is not None,
@@ -149,9 +161,6 @@ def embedding(
         "max_norm",
         max_norm,
         detail="Rows are never renormalised.",
-    )
-    unsupported_if(
-        scale_grad_by_freq, "embedding", "scale_grad_by_freq", scale_grad_by_freq
     )
     unsupported_if(
         sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
@@ -166,7 +175,37 @@ def embedding(
     # survive; relying on that is relying on an over-read staying inside
     # the page.
     idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
-    return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad))
+    out = _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad))
+    if scale_grad_by_freq and out.requires_grad:
+        return _scale_grad_by_freq(out, idx, int(weight.shape[0]))
+    return out
+
+
+def _scale_grad_by_freq(out: Tensor, idx: Tensor, num_embeddings: int) -> Tensor:
+    """``out`` whose gradient reaches the table divided by each index's count.
+
+    The count is a property of this one lookup, so it is applied at this
+    lookup's node: a hook on the gather's output divides the gradient at
+    every position by how often that position's index occurs in ``idx``.
+    Summed back into the table, row ``i`` receives the sum of its
+    positions' gradients over ``count(i)`` — the scaled row gradient.  The
+    hook is owned by the graph node, not by any module or table, so it
+    lives and dies with the graph, follows the lookup across ``.to()`` and
+    copies, and keeps a second lookup before the same backward scaled by
+    its own counts.  The caller sees a view of the gather, so a hook or
+    ``retain_grad`` of their own on the result reads the unscaled gradient.
+    """
+    flat = idx.reshape(-1)
+    counts = lucid.zeros(num_embeddings, dtype=lucid.int64, device=idx.device)
+    counts = counts.scatter_add(0, flat, lucid.ones_like(flat))
+    scale = 1.0 / counts.index_select(0, flat).to(out.dtype)
+    scale = scale.reshape(*idx.shape, 1)
+
+    def divide_by_count(grad: Tensor) -> Tensor:
+        return grad * scale
+
+    _register_tensor_hook(out, divide_by_count)
+    return out.view(tuple(out.shape))
 
 
 def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
