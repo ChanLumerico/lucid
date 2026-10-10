@@ -113,10 +113,11 @@ def _select_slice(
     # DESCENDING split points and segfaulted.  (``x[2:2]`` survived because the
     # points were equal.)  ``s.indices`` has already clamped both bounds into
     # [0, length], so this single test covers every empty case for both signs.
+    # The result is a zero-width narrow of ``impl``, not a fresh ``zeros``: a
+    # new constant has no grad_fn, so the slice cut the autograd edge and a
+    # module that sliced its input at batch 0 lost its weights' gradients.
     if (step > 0 and stop <= start) or (step < 0 and stop >= start):
-        empty_shape = list(impl.shape)
-        empty_shape[dim] = 0
-        return _C_engine.zeros(empty_shape, impl.dtype, impl.device)
+        return _narrow(impl, dim, 0, 0, length)
 
     if step == 1:
         return _narrow(impl, dim, start, stop, length)
@@ -140,10 +141,6 @@ def _select_slice(
         # because the error only bites when the range does not divide evenly.)
         # ``range`` computes the count exactly; do not re-derive it.
         n = len(range(start, stop, step))
-        if n <= 0:
-            out_shape = list(impl.shape)
-            out_shape[dim] = 0
-            return _C_engine.zeros(out_shape, impl.dtype, impl.device)
         idx_1d = _C_engine.arange(start, stop, step, _C_engine.I32, impl.device)
         out_shape = list(impl.shape)
         out_shape[dim] = n

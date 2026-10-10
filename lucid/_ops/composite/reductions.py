@@ -194,7 +194,11 @@ def nanmedian(
         sorted_vals = lucid.sort(flat)
         nn = int(not_nan.sum().item())
         if nn == 0:
-            return lucid.tensor(math.nan, dtype=x.dtype, device=x.device)
+            # Every entry is NaN, or there is none: the answer is NaN.  A fresh
+            # constant would cut the autograd edge; the mean of the entries is
+            # NaN as well and spreads the gradient evenly over them, as the
+            # reference does.
+            return lucid.mean(x.reshape(-1))
         return sorted_vals[(nn - 1) // 2]
 
     sorted_vals = lucid.sort(safe, dim)

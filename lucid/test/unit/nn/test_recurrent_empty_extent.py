@@ -37,25 +37,14 @@ _LAYOUTS: dict[str, tuple[dict[str, object], bool]] = {
 }
 _BATCH_LAYOUTS = ("dense", "batch_first", "bidir_2layer", "proj")
 
-# ``_indexing._select_slice`` answers an empty slice with fresh zeros, so
-# GRUCell's gate slices at batch 0 lose the graph and backward has nothing
-# to reach.
-_GRU_EMPTY_SLICE = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-361: an empty basic slice detaches from autograd",
-)
 
-
-def _cases(
-    layouts: tuple[str, ...], *, gru_marks: tuple[object, ...] = ()
-) -> list[object]:
+def _cases(layouts: tuple[str, ...]) -> list[object]:
     cases: list[object] = []
     for kind in _KINDS:
         for layout in layouts:
             if layout == "proj" and kind != "LSTM":
                 continue
-            marks = gru_marks if kind == "GRU" else ()
-            cases.append(pytest.param(kind, layout, id=f"{kind}-{layout}", marks=marks))
+            cases.append(pytest.param(kind, layout, id=f"{kind}-{layout}"))
     return cases
 
 
@@ -209,9 +198,7 @@ def test_empty_batch_forward_matches_reference(
         _assert_same(got, want)
 
 
-@pytest.mark.parametrize(
-    "kind,layout", _cases(_BATCH_LAYOUTS, gru_marks=(_GRU_EMPTY_SLICE,))
-)
+@pytest.mark.parametrize("kind,layout", _cases(_BATCH_LAYOUTS))
 def test_empty_batch_gradients_match_reference(
     ref: ModuleType, kind: str, layout: str, device: str
 ) -> None:
