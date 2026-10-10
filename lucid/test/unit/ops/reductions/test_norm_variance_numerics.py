@@ -13,14 +13,20 @@ each used to get one of them wrong:
 * **the accumulator** — a half-precision norm summed its squares in half
   precision and overflowed: the norm of 65 536 ones was ``inf``, not 256.
 
-Alongside: a dim named twice is refused rather than counted twice, and a
-positional bool means what it means to the reference — ``var(x, False)`` is
-``unbiased=False``; ``var(x, dim, keepdim)`` still reads ``keepdim`` but
-warns, until 3.18.0 makes it ``unbiased``.
+``cdist`` and ``nn.functional.pairwise_distance`` take the same roots, and
+had the same ``nan`` at coincident points.
+
+Alongside: every reduction refuses a dim named twice, or a dim that is not
+an integer, in its own name; and the four variance functions share one
+reading of their arguments — a positional bool means what it means to the
+reference (``var(x, False)`` is ``unbiased=False``), while ``var(x, dim,
+keepdim)`` still reads ``keepdim`` but warns, until 3.18.0 makes it
+``unbiased``.
 
 The parity tests compare values and gradients against the reference on
-both devices.  A gradient the reference gives as finite must be finite and
-equal here; one it gives as ``nan``/``inf`` must not be finite here either.
+both devices.  A value or a gradient the reference gives as finite must be
+finite and equal here; a value it gives as ``nan``/``inf`` must be the same
+here.
 """
 
 import math
@@ -268,6 +274,51 @@ def test_half_precision_does_not_overflow(
     np.testing.assert_allclose(ours.item(), theirs.item(), rtol=1e-2)
 
 
+# ── Distances: the same zero-root class ──────────────────────────────────────
+
+#: Rows 0 and 2 of ``_A`` coincide with row 0 of ``_B``: a zero distance.
+#: No difference vector holds a tie in magnitude, so the ``inf`` order's
+#: subgradient is unambiguous.
+_A = [[0.0, 1.0], [2.0, 4.5], [0.0, 1.0]]
+_B = [[0.0, 1.0], [5.0, 5.5]]
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("p", [2.0, 1.0, 3.0, 1.5, 0.5, math.inf], ids=str)
+def test_cdist_at_coincident_points_matches(
+    ref: ModuleType, device: str, p: float
+) -> None:
+    y, ry = lucid.tensor(_B, device=device), ref.tensor(_B)
+    _compare(
+        ref,
+        device,
+        _A,
+        lambda t: lucid.cdist(t, y, p),
+        lambda t: ref.cdist(t, ry, p),
+        f"cdist(p={p})",
+    )
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("eps", [0.0, 1e-6], ids=str)
+@pytest.mark.parametrize("p", [2.0, 1.0, 3.0, 1.5, 0.5], ids=str)
+def test_pairwise_distance_at_coincident_points_matches(
+    ref: ModuleType, device: str, p: float, eps: float
+) -> None:
+    import lucid.nn.functional as F
+
+    other = [[0.0, 1.0], [1.0, 2.0], [0.0, 1.0]]
+    y, ry = lucid.tensor(other, device=device), ref.tensor(other)
+    _compare(
+        ref,
+        device,
+        _A,
+        lambda t: F.pairwise_distance(t, y, p, eps),
+        lambda t: ref.nn.functional.pairwise_distance(t, ry, p, eps),
+        f"pairwise_distance(p={p}, eps={eps})",
+    )
+
+
 # ── Axes ─────────────────────────────────────────────────────────────────────
 
 _ALL_FNS: dict[str, Callable[[lucid.Tensor, object], object]] = {
@@ -282,85 +333,150 @@ _ALL_FNS: dict[str, Callable[[lucid.Tensor, object], object]] = {
     "prod": lambda t, d: lucid.prod(t, d),
     "max": lambda t, d: lucid.max(t, d),
     "min": lambda t, d: lucid.min(t, d),
+    "amax": lambda t, d: lucid.amax(t, d),
+    "amin": lambda t, d: lucid.amin(t, d),
+    "nansum": lambda t, d: lucid.nansum(t, d),
+    "nanmean": lambda t, d: lucid.nanmean(t, d),
+    "count_nonzero": lambda t, d: lucid.count_nonzero(t, d),
+    "logsumexp": lambda t, d: lucid.logsumexp(t, d),
 }
 
 
 @pytest.mark.parametrize("dim", [(1, 1), (1, -1), (0, 1, 0)], ids=str)
 @pytest.mark.parametrize("fn", list(_ALL_FNS))
-def test_an_axis_named_twice_is_refused(device: str, fn: str, dim: object) -> None:
-    # ``var`` counted the axis into N twice; the reference refuses the call.
+def test_an_axis_named_twice_is_refused_in_the_ops_own_name(
+    device: str, fn: str, dim: object
+) -> None:
+    # ``var`` counted the axis into N twice and ``logsumexp`` failed in
+    # ``squeeze``; the reference refuses the call.  The message names the op
+    # that was called, not the one it is built on (``amax`` is not ``max``).
     # ``norm`` hands two axes to ``matrix_norm``, which words it its own way.
     x = lucid.ones(2, 3, device=device)
-    with pytest.raises(ValueError, match="multiple times|distinct axes|one or two"):
+    expected = "matrix_norm|norm" if fn == "norm" else rf"^{fn}\(\): .*multiple times"
+    with pytest.raises(ValueError, match=expected):
         _ALL_FNS[fn](x, dim)
 
 
-# ── The positional contract ──────────────────────────────────────────────────
+@pytest.mark.parametrize("dim", [1.0, (0, 1.5), "1"], ids=str)
+@pytest.mark.parametrize("fn", [f for f in _ALL_FNS if f != "norm"])
+def test_a_non_integer_dim_is_a_type_error_naming_dim(fn: str, dim: object) -> None:
+    # A float used to truncate, or fail as "'float' object is not iterable".
+    with pytest.raises(TypeError, match=rf"{fn}\(\): dim must be an int"):
+        _ALL_FNS[fn](lucid.ones(2, 3), dim)
+
+
+# ── The positional contract — one reading for all four ───────────────────────
 
 _X = [[1.0, 2.0, 3.0, 4.0], [2.0, 4.0, 6.0, 8.0]]
 
+#: Every spelling the reference accepts.  ``(dim, bool)`` is the one that
+#: differs: ``var`` / ``std`` still read it as ``(dim, keepdim)`` until 3.18.
+_SPELLINGS: list[tuple[tuple[object, ...], dict[str, object]]] = [
+    ((), {}),
+    ((1,), {}),
+    ((False,), {}),
+    ((True,), {}),
+    ((1, False), {}),
+    ((1, True), {}),
+    ((1, True, True), {}),
+    ((1, False, False), {}),
+    (((0, 1), False, True), {}),
+    ((1,), {"keepdim": True}),
+    ((), {"unbiased": False}),
+    ((), {"dim": 1, "unbiased": False}),
+    ((1,), {"unbiased": True, "keepdim": True}),
+    ((), {"dim": 1, "correction": 0, "keepdim": True}),
+    ((), {"correction": True}),
+    ((), {"correction": False}),
+    ((), {"correction": 0.5, "dim": 1}),
+    ((0,), {"correction": 2}),
+    ((), {"dim": (0, 1), "correction": 0}),
+    ((1, False), {"keepdim": True}),
+]
+
+
+def _deprecated_spelling(fn: str, args: tuple[object, ...]) -> bool:
+    return fn in ("var", "std") and len(args) == 2
+
+
+def _callers(fn: str, x: lucid.Tensor) -> list[Callable[..., object]]:
+    free = getattr(lucid, fn)
+    if fn in ("var", "std"):
+        return [
+            lambda *a, **k: free(x, *a, **k),
+            lambda *a, **k: getattr(x, fn)(*a, **k),
+        ]
+    return [lambda *a, **k: free(x, *a, **k)]
+
 
 @pytest.mark.parity
-@pytest.mark.parametrize("fn", ["var", "std"])
 @pytest.mark.parametrize(
-    "args",
-    [(False,), (True,), (1, False, True), (1, True, False), ((0, 1), False, True)],
-    ids=str,
+    "args, kwargs", _SPELLINGS, ids=[f"{a}-{k}" for a, k in _SPELLINGS]
 )
-def test_a_positional_bool_is_unbiased(
-    ref: ModuleType, device: str, fn: str, args: tuple[object, ...]
+@pytest.mark.parametrize("fn", _VARIANCE_FNS)
+def test_every_spelling_matches_the_reference(
+    ref: ModuleType,
+    device: str,
+    fn: str,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
 ) -> None:
     x = lucid.tensor(_X, device=device)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        for ours in (getattr(lucid, fn)(x, *args), getattr(x, fn)(*args)):
-            theirs = getattr(ref, fn)(ref.tensor(_X), *args)
-            _assert_matches(_lucid_np(ours), _ref_np(theirs), f"{fn}{args}")
+    for call in _callers(fn, x):
+        if _deprecated_spelling(fn, args):
+            _assert_still_keepdim(call, args, kwargs)
+            continue
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            ours = _outputs(call(*args, **kwargs))
+        with warnings.catch_warnings():
+            # The reference warns that N <= correction; Lucid answers silently.
+            warnings.simplefilter("ignore", UserWarning)
+            theirs = _outputs(getattr(ref, fn)(ref.tensor(_X), *args, **kwargs))
+        for o, t in zip(ours, theirs, strict=True):
+            _assert_matches(_lucid_np(o), _ref_np(t), f"{fn}{args}{kwargs}")
 
 
-@pytest.mark.parametrize("fn", ["var", "std"])
-def test_a_third_positional_argument_is_still_keepdim_and_warns(
+def _assert_still_keepdim(
+    call: Callable[..., object], args: tuple[object, ...], kwargs: dict[str, object]
+) -> None:
+    """``var(x, dim, b)`` reads ``b`` as ``keepdim`` and warns, until 3.18."""
+    if "keepdim" in kwargs:
+        with pytest.warns(LucidDeprecationWarning), pytest.raises(TypeError):
+            call(*args, **kwargs)
+        return
+    with pytest.warns(LucidDeprecationWarning, match=r"removed in 3\.18\.0"):
+        got = call(*args, **kwargs)
+    expected = call(args[0], keepdim=args[1], **kwargs)
+    assert got.shape == expected.shape
+    np.testing.assert_allclose(_lucid_np(got), _lucid_np(expected))
+
+
+@pytest.mark.parametrize("fn", ["var_mean", "std_mean"])
+def test_the_pairs_keep_their_released_positional_correction(
     device: str, fn: str
 ) -> None:
-    x = lucid.tensor(_X, device=device)
-    expected = getattr(lucid, fn)(x, 1, keepdim=True)
-    for call in (
-        lambda: getattr(lucid, fn)(x, 1, True),
-        lambda: getattr(x, fn)(1, True),
-    ):
-        with pytest.warns(LucidDeprecationWarning, match=r"removed in 3\.18\.0"):
-            got = call()
-        assert got.shape == (2, 1)
-        np.testing.assert_allclose(_lucid_np(got), _lucid_np(expected))
-
-
-@pytest.mark.parametrize("fn", ["var", "std"])
-@pytest.mark.parametrize(
-    "args, kwargs",
-    [
-        ((), {}),
-        ((1,), {}),
-        ((1,), {"keepdim": True}),
-        ((), {"dim": 1, "unbiased": False}),
-        ((), {"dim": (0, 1), "correction": 0, "keepdim": True}),
-        ((0,), {"correction": 2}),
-        ((), {"input": None, "dim": 1}),
-    ],
-    ids=str,
-)
-def test_keyword_and_short_calls_stay_silent(
-    device: str, fn: str, args: tuple[object, ...], kwargs: dict[str, object]
-) -> None:
+    # ``var_mean(x, dim, correction, keepdim)`` is how the pair was spelled
+    # before the shared reading; an int in that place stays a correction.
     x = lucid.tensor(_X, device=device)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        if "input" in kwargs:
-            getattr(lucid, fn)(**{**kwargs, "input": x})
-        else:
-            getattr(lucid, fn)(x, *args, **kwargs)
-            getattr(x, fn)(*args, **kwargs)
+        got = getattr(lucid, fn)(x, 1, 2, True)
+        by_name = getattr(lucid, fn)(x=x, dim=1, correction=2, keepdim=True)
+    for g, b in zip(got, by_name, strict=True):
+        assert g.shape == (2, 1)
+        np.testing.assert_allclose(_lucid_np(g), _lucid_np(b))
 
 
+@pytest.mark.parametrize("fn", ["var", "std"])
+def test_input_by_keyword_stays_silent(device: str, fn: str) -> None:
+    x = lucid.tensor(_X, device=device)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        getattr(lucid, fn)(input=x, dim=1)
+
+
+@pytest.mark.parametrize("fn", _VARIANCE_FNS)
 @pytest.mark.parametrize(
     "args, kwargs",
     [
@@ -375,8 +491,8 @@ def test_keyword_and_short_calls_stay_silent(
     ids=str,
 )
 def test_malformed_calls_are_refused(
-    args: tuple[object, ...], kwargs: dict[str, object]
+    fn: str, args: tuple[object, ...], kwargs: dict[str, object]
 ) -> None:
     x = lucid.tensor(_X)
     with pytest.raises(TypeError):
-        lucid.var(x, *args, **kwargs)
+        getattr(lucid, fn)(x, *args, **kwargs)

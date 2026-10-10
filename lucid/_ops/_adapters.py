@@ -785,12 +785,7 @@ def _logsumexp_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """logsumexp(a, dim=None, keepdim=False) — accept axis/None like sum/mean."""
-    if dim is None:
-        axes: list[int] = []
-    elif isinstance(dim, (list, tuple)):
-        axes = [int(d) for d in dim]
-    else:
-        axes = [int(cast(int, dim))]
+    axes = _reduction_axes(a_impl, dim, "logsumexp")
     # An integer or bool input is summed in the default float dtype, as the
     # reference framework does — the engine op computes in the input dtype.
     if _promotion.is_integral(a_impl.dtype):

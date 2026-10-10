@@ -8,6 +8,13 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._types import DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
+from lucid._ops._reduce import (
+    _corrected_variance,
+    _p_norm,
+    _reduction_axes,
+    _variance_operands,
+    _zero_safe_root,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -376,42 +383,33 @@ def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
         Shape ``(..., P, R)``.  Entry :math:`(\ldots, i, j)` =
         :math:`\|x_1[\ldots, i, :] - x_2[\ldots, j, :]\|_p`.
     """
+    from lucid._dispatch import _unwrap, _wrap
+
     if p == 2.0:
-        # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ  (numerically stable)
+        # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ, which never materialises
+        # the (..., P, R, M) difference.
         x1_sq = (x1 * x1).sum(dim=-1, keepdim=True)  # (..., P, 1)
         x2_sq = (x2 * x2).sum(dim=-1, keepdim=True)  # (..., R, 1)
         cross = lucid.matmul(x1, x2.swapaxes(-1, -2))  # (..., P, R)
         sq = x1_sq + x2_sq.swapaxes(-1, -2) - 2.0 * cross
         sq = lucid.clamp(sq, 0.0, float("inf"))  # clamp numerical noise
-        # sqrt has an infinite derivative at 0, so coincident points (any
-        # self-distance, e.g. every diagonal entry of cdist(x, x) as used by
-        # pdist) would backprop 0 * inf = NaN.  Route those entries around the
-        # sqrt and restore the exact zero, giving the standard 0 subgradient.
-        zero = lucid.zeros_like(sq)
-        is_zero = sq == zero
-        safe = lucid.where(is_zero, lucid.ones_like(sq), sq)
-        return lucid.where(is_zero, zero, lucid.sqrt(safe))
-    elif p == 1.0:
-        diff = x1.unsqueeze(-2) - x2.unsqueeze(-3)  # (..., P, R, M)
-        return lucid.abs(diff).sum(dim=-1)
-    elif p == float("inf"):
-        diff = x1.unsqueeze(-2) - x2.unsqueeze(-3)
-        return lucid.abs(diff).max(dim=-1)
-    elif p == 0.0:
-        diff = x1.unsqueeze(-2) - x2.unsqueeze(-3)
-        # count non-zero: use abs > 0 comparison via isfinite trick
-        abs_diff = lucid.abs(diff)
-        # 1.0 where nonzero else 0.0  — engine has no lt/gt yet; use where+isnan workaround
-        nonzero = lucid.where(
-            lucid.isnan(abs_diff) | (abs_diff == lucid.zeros_like(abs_diff)),
-            lucid.zeros_like(abs_diff),
-            lucid.ones_like(abs_diff),
+        # Coincident points — every diagonal entry of cdist(x, x) — sit at
+        # the root's infinite slope; the shared zero-safe root gives them
+        # the 0 subgradient.
+        return _wrap(_zero_safe_root(_unwrap(sq), 2))
+    diff = _unwrap(x1.unsqueeze(-2) - x2.unsqueeze(-3))  # (..., P, R, M)
+    last = [len(diff.shape) - 1]
+    if p == 0.0:
+        # Count the non-zero differences; NaN is not one.
+        abs_diff = _C_engine.abs(diff)
+        counted = _C_engine.logical_and(
+            _C_engine.not_equal(abs_diff, _C_engine.zeros_like(abs_diff)),
+            _C_engine.logical_not(_C_engine.isnan(abs_diff)),
         )
-        return nonzero.sum(dim=-1)
-    else:
-        diff = x1.unsqueeze(-2) - x2.unsqueeze(-3)  # (..., P, R, M)
-        abs_diff = lucid.abs(diff)
-        return (abs_diff**p).sum(dim=-1) ** (1.0 / p)
+        return _wrap(_C_engine.astype(_C_engine.sum(counted, last, False), diff.dtype))
+    # Every other order — 1, inf, and the general p whose root used to give
+    # coincident points a nan gradient — is the shared vector p-norm.
+    return _wrap(_p_norm(diff, float(p), last, False))
 
 
 # ── bincount ──────────────────────────────────────────────────────────────────
@@ -1057,12 +1055,7 @@ def _uniform_bucket(values: Tensor, edges: Tensor, bins: int) -> Tensor:
     return bucket - below.to(lucid.int64) + above.to(lucid.int64)
 
 
-def std_mean(
-    x: Tensor,
-    dim: int | Sequence[int] | None = None,
-    correction: int = 1,
-    keepdim: bool = False,
-) -> tuple[Tensor, Tensor]:
+def std_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
     """Return ``(std, mean)`` along ``dim`` in a single call.
 
     Fused convenience over :func:`lucid.std` + :func:`lucid.mean` — the
@@ -1076,15 +1069,18 @@ def std_mean(
         Input.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) reduces over every
-        axis to a scalar pair.
-    correction : int, optional
-        Bessel correction passed to :func:`lucid.std`.  ``1`` is the
-        unbiased sample std (default); ``0`` gives the biased
-        population std.  A bool is read as the reference's ``unbiased``,
-        also in the place of ``dim``: ``std_mean(x, False)``.
+        axis to a scalar pair.  A bool here is ``unbiased``:
+        ``std_mean(x, False)``.
+    unbiased : bool, optional
+        ``True`` is ``correction=1``, ``False`` ``correction=0``.  A
+        number in this place is the ``correction`` itself, as
+        ``std_mean(x, dim, 0)`` has always been read.
     keepdim : bool, optional
         Retain the reduced axes as size-1 dimensions.  Default
         ``False``.
+    correction : int or float, optional
+        Bessel correction, as :func:`lucid.std` takes it.  ``1`` is the
+        unbiased sample std (default); ``0`` the population std.
 
     Returns
     -------
@@ -1109,21 +1105,10 @@ def std_mean(
     >>> lucid.std_mean(lucid.tensor([1.0, 2.0, 3.0, 4.0]), correction=0)
     (tensor(1.118), tensor(2.5))
     """
-    if isinstance(dim, bool):
-        # ``std_mean(x, unbiased)``, the reference's two-argument spelling.
-        correction = int(dim)
-        dim = None
-    axes = dim if dim is None or isinstance(dim, int) else list(dim)
-    s = lucid.std(x, dim=axes, correction=correction, keepdim=keepdim)
-    return s, lucid.mean(x, axes, keepdim)
+    return _moments("std_mean", x, args, kwargs)
 
 
-def var_mean(
-    x: Tensor,
-    dim: int | Sequence[int] | None = None,
-    correction: int = 1,
-    keepdim: bool = False,
-) -> tuple[Tensor, Tensor]:
+def var_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
     """Return ``(var, mean)`` along ``dim`` in a single call.
 
     Variance counterpart to :func:`std_mean`.  Useful inside
@@ -1137,14 +1122,17 @@ def var_mean(
         Input.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) → full-tensor
-        reduction.
-    correction : int, optional
-        Bessel correction passed to :func:`lucid.var`.  Default ``1``
-        (unbiased sample variance).  A bool is read as the reference's
-        ``unbiased``, also in the place of ``dim``: ``var_mean(x, False)``.
+        reduction.  A bool here is ``unbiased``: ``var_mean(x, False)``.
+    unbiased : bool, optional
+        ``True`` is ``correction=1``, ``False`` ``correction=0``.  A
+        number in this place is the ``correction`` itself, as
+        ``var_mean(x, dim, 0)`` has always been read.
     keepdim : bool, optional
         Retain the reduced axes as size-1 dimensions.  Default
         ``False``.
+    correction : int or float, optional
+        Bessel correction, as :func:`lucid.var` takes it.  Default ``1``
+        (unbiased sample variance).
 
     Returns
     -------
@@ -1167,13 +1155,31 @@ def var_mean(
     >>> lucid.var_mean(lucid.tensor([[1.0, 3.0], [2.0, 6.0]]), 1)
     (tensor([2., 8.]), tensor([2., 4.]))
     """
-    if isinstance(dim, bool):
-        # ``var_mean(x, unbiased)``, the reference's two-argument spelling.
-        correction = int(dim)
-        dim = None
-    axes = dim if dim is None or isinstance(dim, int) else list(dim)
-    v = lucid.var(x, dim=axes, correction=correction, keepdim=keepdim)
-    return v, lucid.mean(x, axes, keepdim)
+    return _moments("var_mean", x, args, kwargs)
+
+
+def _moments(
+    name: str, x: Tensor, args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[Tensor, Tensor]:
+    """``(var or std, mean)``, the arguments read as ``var`` reads them.
+
+    The positional contract has one owner, ``_variance_operands``; these
+    two used to keep their own copies of it, which drifted — one refused a
+    ``correction=True`` the released code accepted.  The third positional
+    argument is ``unbiased`` or a ``correction`` here, never ``keepdim``:
+    ``var_mean`` never read it as ``keepdim``, so it has no deprecation.
+    """
+    from lucid._dispatch import _unwrap, _wrap
+
+    dim, correction, keepdim = _variance_operands(
+        name, args, kwargs, keepdim_third=False
+    )
+    xi = _unwrap(x)
+    axes = _reduction_axes(xi, dim, name)
+    spread = _corrected_variance(xi, axes, correction, keepdim)
+    if name == "std_mean":
+        spread = _zero_safe_root(spread, 2)
+    return _wrap(spread), _wrap(_C_engine.mean(xi, axes, keepdim))
 
 
 __all__ = [

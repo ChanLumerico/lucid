@@ -2273,6 +2273,19 @@ def _sig_from_callable(name: str, fn: object) -> str:
     return f"def {name}({', '.join(parts)}) -> {ret}: ..."
 
 
+# Composites whose runtime signature is open (*args, **kwargs) because they
+# read their arguments through one shared parser — the stub shows the
+# reference order that parser accepts (H9: no *args / **kwargs in a stub).
+_COMPOSITE_SIGNATURES: dict[str, str] = {
+    name: (
+        f"def {name}(x: Tensor, dim: _int | Sequence[_int] | None = None, "
+        "unbiased: _bool | None = None, keepdim: _bool = False, *, "
+        "correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ..."
+    )
+    for name in ("var_mean", "std_mean")
+}
+
+
 # Return-type override map for composite ops that don't return Tensor.
 _RETURN_TYPE_MAP: dict[str, str] = {
     "allclose": "bool",
@@ -2501,10 +2514,9 @@ def gen_init_pyi() -> tuple[str, int]:
         if fn is None or not callable(fn):
             continue
         seen.add(n)
+        line = _COMPOSITE_SIGNATURES.get(n) or _sig_from_callable(n, fn)
         composite_lines.append(
-            _format_with_docstring(
-                _avoid_dtype_shadow(_sig_from_callable(n, fn)), n, _existing_docs
-            )
+            _format_with_docstring(_avoid_dtype_shadow(line), n, _existing_docs)
         )
 
     # ── nn.functional / linalg / method aliases ───────────────────────────────

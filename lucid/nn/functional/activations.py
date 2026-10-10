@@ -1173,8 +1173,8 @@ def pairwise_distance(
         Order of the norm.  ``2`` for Euclidean, ``1`` for Manhattan.
         Default ``2.0``.
     eps : float, optional
-        Small constant added to ``|x1 - x2|`` before the power so the
-        derivative is finite even at coincident points.  Default ``1e-6``.
+        Small constant added to ``x1 - x2`` before the norm, as the
+        reference does.  Default ``1e-6``.
     keepdim : bool, optional
         If ``True``, retain the reduced dimension with size ``1``.
         Default ``False``.
@@ -1188,13 +1188,14 @@ def pairwise_distance(
     -----
     .. math::
 
-        d_p(x_1, x_2) = \big\| |x_1 - x_2| + \epsilon \big\|_p
-        = \Big(\sum_i (|x_{1,i} - x_{2,i}| + \epsilon)^p\Big)^{1/p}
+        d_p(x_1, x_2) = \| x_1 - x_2 + \epsilon \|_p
+        = \Big(\sum_i |x_{1,i} - x_{2,i} + \epsilon|^p\Big)^{1/p}
 
-    The ``eps`` shift inside the norm matters for gradient stability — at
-    :math:`x_1 = x_2` the bare :math:`L_p` distance is non-differentiable
-    when :math:`p < 2`; the offset converts the kink into a finite-slope
-    smooth point.
+    The ``eps`` shift keeps coincident points off the norm's kink.  With
+    ``eps=0`` they sit on it, and their gradient is 0 — the subgradient
+    the reference picks — not ``nan``.  The shift used to be added to
+    ``|x1 - x2|`` instead, which differs by up to ``2 * eps`` per entry
+    where ``x1 < x2``.
 
     Examples
     --------
@@ -1205,24 +1206,10 @@ def pairwise_distance(
     >>> pairwise_distance(a, b, p=2.0)
     tensor([5.])
     """
-    diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
-    # |diff|_p = (sum |diff|^p)^(1/p)
-    abs_diff = _C_engine.abs(diff)
-    powered = _C_engine.pow(
-        _C_engine.add(
-            abs_diff,
-            _C_engine.full(abs_diff.shape, eps, abs_diff.dtype, abs_diff.device),
-        ),
-        _C_engine.full(abs_diff.shape, p, abs_diff.dtype, abs_diff.device),
-    )
-    ndim = len(powered.shape)
-    last_dim = ndim - 1
-    s = _C_engine.sum(powered, [last_dim], False)
-    inv_p = _C_engine.full(s.shape, 1.0 / p, s.dtype, s.device)
-    dist = _C_engine.pow(s, inv_p)
-    if keepdim:
-        dist = _C_engine.unsqueeze(dist, last_dim)
-    return _wrap(dist)
+    # The shared vector norm, so a zero distance (``eps=0`` at coincident
+    # points) has the 0 subgradient rather than a nan one, half inputs
+    # reduce in float32, and ``p=0`` counts instead of dividing by zero.
+    return _l.linalg.vector_norm(x1 - x2 + eps, p, -1, keepdim)
 
 
 def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:

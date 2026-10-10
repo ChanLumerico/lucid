@@ -1,8 +1,9 @@
 """The numerics the norm and variance reductions share.
 
-``var`` / ``std`` (registry adapters), ``var_mean`` / ``std_mean`` and
-``linalg.vector_norm`` / ``linalg.norm`` all end in the same three places,
-and each used to get one of them wrong on its own:
+``var`` / ``std`` (registry adapters), ``var_mean`` / ``std_mean``,
+``linalg.vector_norm`` / ``linalg.norm``, ``cdist`` and
+``nn.functional.pairwise_distance`` all end in the same three places, and
+each used to get one of them wrong on its own:
 
 * **the root of a sum** — ``sqrt(sum)`` and ``sum ** (1/p)`` have an
   infinite slope at zero, so a zero norm or a constant slice's ``std``
@@ -11,8 +12,12 @@ and each used to get one of them wrong on its own:
 * **the divisor of a variance** — ``max(N - correction, 0)``, so too few
   elements answer ``nan`` (no spread to divide) or ``inf``, never a
   variance that silently skipped its correction (:func:`_bessel_correct`);
-* **the axes** — a dim named twice is refused, rather than counted twice
-  in ``N`` (:func:`_reduction_axes`).
+* **the axes** — a dim named twice, or one that is not an integer, is
+  refused in the called op's name, rather than counted twice in ``N``
+  (:func:`_reduction_axes`; every reduction adapter takes its axes here).
+
+The four variance functions also read their arguments in one place,
+:func:`_variance_operands`.
 """
 
 import math
@@ -29,39 +34,53 @@ _Impl = _C_engine.TensorImpl
 # ── Axes ─────────────────────────────────────────────────────────────────────
 
 
-def _to_axes(dim: int | Sequence[int] | None) -> list[int]:
-    """Convert ``None | int | list[int]`` → ``list[int]`` for the engine."""
+def _to_axes(dim: object, name: str) -> list[int]:
+    """``dim`` — ``None``, an index or a sequence of them — as engine axes."""
     if dim is None:
         return []
     if type(dim) is int:
         return [dim]
-    if isinstance(dim, SupportsIndex):
-        return [operator.index(dim)]
-    return [int(d) for d in dim]
+    # Plain ints in a tuple or list skip the protocol checks below, which
+    # cost more than the reduction they guard.
+    if type(dim) is tuple or type(dim) is list:
+        axes = list(dim)
+        for axis in axes:
+            if type(axis) is not int:
+                break
+        else:
+            return axes
+    try:
+        if isinstance(dim, SupportsIndex):
+            return [operator.index(dim)]
+        if isinstance(dim, Sequence) and not isinstance(dim, str):
+            return [operator.index(d) for d in dim]
+    except TypeError:
+        pass  # an element that is not an index; refused below with the whole dim
+    raise TypeError(
+        f"{name}(): dim must be an int, a sequence of ints or None, got {dim!r}"
+    )
 
 
-def _reduction_axes(
-    x_impl: _Impl, dim: int | Sequence[int] | None, name: str
-) -> list[int]:
-    """``dim`` as engine axes, refusing an axis named twice.
+def _reduction_axes(x_impl: _Impl, dim: object, name: str) -> list[int]:
+    """``dim`` as engine axes, refusing a non-integer one or an axis named twice.
 
     The engine reduces a repeated axis once, so ``sum`` gave the right
     number and ``var`` the wrong one — its element count multiplied the
-    axis in twice.  The reference refuses the call; so does this.  An axis
-    out of range is left for the engine to report.
+    axis in twice.  The reference refuses the call; so does this, in the
+    name of the public op that was called.  A float used to truncate
+    (``int(1.5)``) or fail as "not iterable".  An axis out of range is left
+    for the engine to report.
     """
-    axes = _to_axes(dim)
+    axes = _to_axes(dim, name)
     if len(axes) > 1:
         ndim = len(x_impl.shape)
-        seen: set[int] = set()
-        for axis in axes:
-            canonical = axis + ndim if axis < 0 else axis
-            if canonical in seen:
-                raise ValueError(
-                    f"{name}(): dim {canonical} appears multiple times in the "
-                    f"list of dims {tuple(axes)}"
-                )
-            seen.add(canonical)
+        if len({axis + ndim if axis < 0 else axis for axis in axes}) != len(axes):
+            canonical = [axis + ndim if axis < 0 else axis for axis in axes]
+            repeated = next(a for a in canonical if canonical.count(a) > 1)
+            raise ValueError(
+                f"{name}(): dim {repeated} appears multiple times in the "
+                f"list of dims {tuple(axes)}"
+            )
     return axes
 
 
@@ -173,8 +192,12 @@ def _bessel_correct(
 
 
 def _scale(impl: _Impl, factor: float) -> _Impl:
-    """``impl * factor``, the factor a constant of ``impl``'s dtype and device."""
-    factor_t = _C_engine.full(list(impl.shape), factor, impl.dtype, impl.device)
+    """``impl * factor``, the factor a 0-d constant of ``impl``'s dtype and device.
+
+    0-d rather than ``impl``'s shape: it broadcasts, and a full-size
+    constant cost an allocation and a fill the size of the result.
+    """
+    factor_t = _C_engine.full([], factor, impl.dtype, impl.device)
     return _C_engine.mul(impl, factor_t)
 
 
@@ -194,21 +217,9 @@ _VAR_REMOVAL = "3.18.0"
 _VAR_KEYWORDS = frozenset({"dim", "unbiased", "keepdim", "correction"})
 
 
-def _as_dim(name: str, value: object) -> int | Sequence[int] | None:
-    """``value`` as a ``dim``: ``None``, an int or a sequence of ints."""
-    if value is None or type(value) is int or isinstance(value, (list, tuple)):
-        return value
-    if isinstance(value, SupportsIndex):
-        return operator.index(value)
-    raise TypeError(
-        f"{name}(): dim must be an int, a sequence of ints or None, "
-        f"got {type(value).__name__}"
-    )
-
-
 def _as_correction(name: str, value: object) -> float:
-    """``value`` as a ``correction``: a real number."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    """``value`` as a ``correction``: a real number, a bool as 1 or 0."""
+    if isinstance(value, (int, float)):
         return float(value)
     raise TypeError(
         f"{name}(): correction must be a number, got {type(value).__name__}"
@@ -216,16 +227,24 @@ def _as_correction(name: str, value: object) -> float:
 
 
 def _variance_operands(
-    name: str, args: tuple[object, ...], kwargs: dict[str, object]
-) -> tuple[int | Sequence[int] | None, float, bool]:
-    """``(dim, correction, keepdim)`` from any spelling of a ``var`` call.
+    name: str,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+    *,
+    keepdim_third: bool,
+) -> tuple[object, float, bool]:
+    """``(dim, correction, keepdim)`` from any spelling of a variance call.
 
-    The reference spellings are ``var(input, dim, unbiased, keepdim)``,
-    ``var(input, unbiased)`` and keywords for the rest.  A bool where the
-    ``dim`` goes is therefore ``unbiased`` — it used to reduce axis 0 or 1.
-    Three positional arguments after ``input`` bind the reference way.
-    Two are Lucid's released ``(dim, keepdim)``: they still answer that
-    way and warn, until :data:`_VAR_REMOVAL`.
+    The one reading of ``var`` / ``std`` / ``var_mean`` / ``std_mean``'s
+    arguments.  The reference spellings are ``f(input, dim, unbiased,
+    keepdim)``, ``f(input, unbiased)`` and keywords for the rest, so a bool
+    where the ``dim`` goes is ``unbiased`` — it used to reduce axis 0 or 1.
+    A number rather than a bool after ``dim`` is a ``correction``, as
+    ``var_mean(x, dim, correction)`` has always been spelled.
+
+    ``keepdim_third`` is ``var`` / ``std``'s released ``(dim, keepdim)``
+    spelling: with it, exactly two arguments after ``input`` still answer
+    that way and warn, until :data:`_VAR_REMOVAL`.
     """
     unknown = sorted(set(kwargs) - _VAR_KEYWORDS)
     if unknown:
@@ -243,7 +262,7 @@ def _variance_operands(
                 f"pass dim and keepdim by keyword"
             )
         names = ("unbiased",)
-    elif len(args) == 2:
+    elif len(args) == 2 and keepdim_third:
         warn_deprecated(
             _VAR_KEEPDIM_POSITIONAL,
             since=_VAR_SINCE,
@@ -252,7 +271,10 @@ def _variance_operands(
         )
         names = ("dim", "keepdim")
     else:
-        names = ("dim", "unbiased", "keepdim")[: len(args)]
+        bias = (
+            "unbiased" if len(args) < 2 or isinstance(args[1], bool) else "correction"
+        )
+        names = ("dim", bias, "keepdim")[: len(args)]
     bound = dict(kwargs)
     for key, value in zip(names, args, strict=True):
         if key in bound:
@@ -264,8 +286,15 @@ def _variance_operands(
         correction = 1.0 if unbiased else 0.0
     else:
         correction = 1.0 if given is None else _as_correction(name, given)
-    dim = _as_dim(name, bound.get("dim"))
-    return dim, correction, bool(bound.get("keepdim", False))
+    return bound.get("dim"), correction, bool(bound.get("keepdim", False))
+
+
+def _corrected_variance(
+    x_impl: _Impl, axes: list[int], correction: float, keepdim: bool
+) -> _Impl:
+    """The variance over ``axes`` divided by ``max(N - correction, 0)``."""
+    biased = _C_engine.var(x_impl, axes, keepdim)
+    return _bessel_correct(biased, x_impl, axes, correction)
 
 
 def _variance(
@@ -274,13 +303,14 @@ def _variance(
     """The corrected variance a ``var`` / ``std`` call asks for."""
     if not kwargs and len(args) < 2 and not (args and isinstance(args[0], bool)):
         # ``x.var()`` / ``x.var(dim)``: nothing to parse.
-        dim = _as_dim(name, args[0]) if args else None
+        dim: object = args[0] if args else None
         correction, keepdim = 1.0, False
     else:
-        dim, correction, keepdim = _variance_operands(name, args, kwargs)
+        dim, correction, keepdim = _variance_operands(
+            name, args, kwargs, keepdim_third=True
+        )
     axes = _reduction_axes(x_impl, dim, name)
-    biased = _C_engine.var(x_impl, axes, keepdim)
-    return _bessel_correct(biased, x_impl, axes, correction)
+    return _corrected_variance(x_impl, axes, correction, keepdim)
 
 
 def _var_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:

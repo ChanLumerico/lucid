@@ -3,6 +3,7 @@
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._ops._reduce import _reduction_axes
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -61,7 +62,7 @@ def nansum(
     safe = lucid.where(lucid.isnan(x), lucid.full_like(x, 0.0), x)
     if dim is None:
         return lucid.sum(safe)
-    _dim = list(dim) if not isinstance(dim, int) else dim
+    _dim = _reduction_axes(x._impl, dim, "nansum")
     return lucid.sum(safe, _dim, keepdim)
 
 
@@ -120,7 +121,7 @@ def nanmean(
     not_nan = lucid.where(mask, lucid.full_like(x, 0.0), lucid.full_like(x, 1.0))
     if dim is None:
         return lucid.sum(safe) / lucid.sum(not_nan)
-    _dim = list(dim) if not isinstance(dim, int) else dim
+    _dim = _reduction_axes(x._impl, dim, "nanmean")
     return lucid.sum(safe, _dim, keepdim) / lucid.sum(not_nan, _dim, keepdim)
 
 
@@ -299,7 +300,7 @@ def count_nonzero(
     reduction, from a time the CPU could not sum a bool.
     """
     mask = x != 0
-    _dim2 = list(dim) if dim is not None and not isinstance(dim, int) else dim
+    _dim2 = None if dim is None else _reduction_axes(x._impl, dim, "count_nonzero")
     return lucid.sum(mask) if _dim2 is None else lucid.sum(mask, _dim2, False)
 
 
@@ -338,7 +339,7 @@ def amax(
     """
     if dim is None:
         return lucid.max(x)
-    _dim = list(dim) if not isinstance(dim, int) else dim
+    _dim = _reduction_axes(x._impl, dim, "amax")
     return lucid.max(x, _dim, keepdim)
 
 
@@ -376,7 +377,7 @@ def amin(
     """
     if dim is None:
         return lucid.min(x)
-    _dim = list(dim) if not isinstance(dim, int) else dim
+    _dim = _reduction_axes(x._impl, dim, "amin")
     return lucid.min(x, _dim, keepdim)
 
 
