@@ -276,6 +276,17 @@ class Bernoulli(ExponentialFamily):
 
     @override
     @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Bernoulli distribution: ``1`` if :math:`p > 0.5`, ``0``
+        if :math:`p < 0.5`, and ``nan`` at :math:`p = 0.5`, where both
+        outcomes are equally likely.
+        """
+        p = self._probs
+        mode = (p >= 0.5).to(p.dtype)
+        return lucid.where(p == 0.5, float("nan"), mode)
+
+    @override
+    @property
     def variance(self) -> Tensor:
         r"""Variance of the distribution.
 
@@ -574,6 +585,15 @@ class Geometric(Distribution):
         tensor(1.)
         """
         return (1.0 - self.probs) / self.probs
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        """Mode of the Geometric distribution: ``0`` failures, for every ``p``.
+
+        :math:`P(X = k) = (1 - p)^k p` decreases in :math:`k`.
+        """
+        return lucid.zeros_like(self.probs)
 
     @override
     @property

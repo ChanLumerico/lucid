@@ -188,7 +188,7 @@ class Categorical(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         r"""Support of the distribution: integer interval :math:`\{0, \ldots, K-1\}`.
 
         Returns
@@ -246,6 +246,19 @@ class Categorical(Distribution):
             device=self._probs.device,
             dtype=self._probs.dtype,
         )
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        """Mode of the Categorical distribution: the most probable category.
+
+        Returns
+        -------
+        Tensor
+            Integer category indices of shape ``batch_shape``; the first one
+            on a tie.
+        """
+        return self._probs.argmax(dim=-1)
 
     @override
     @property
@@ -504,7 +517,7 @@ class OneHotCategorical(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         """Support of the distribution: one-hot vectors.
 
         Returns
@@ -608,6 +621,24 @@ class OneHotCategorical(Distribution):
             Probabilities of shape ``batch_shape + (K,)``.
         """
         return self._cat._probs
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        """Mode of the OneHotCategorical distribution: the most probable
+        category, one-hot encoded.
+
+        Returns
+        -------
+        Tensor
+            One-hot vectors of shape ``batch_shape + (K,)``.
+        """
+        from lucid.nn.functional.sparse import one_hot
+
+        probs = self._cat._probs
+        return one_hot(self._cat.mode, num_classes=self._cat._num_events).to(
+            probs.dtype
+        )
 
     @override
     @property

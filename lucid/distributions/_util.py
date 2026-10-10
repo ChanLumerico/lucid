@@ -1,6 +1,6 @@
 """Tiny helpers shared across the distribution implementations."""
 
-from typing import Any, Callable, Self, overload
+from typing import Any, Callable, Self, overload, override
 
 import lucid
 from lucid._dtype import finfo
@@ -137,7 +137,7 @@ def _clamp_probs(probs: Tensor) -> Tensor:
     return probs.clip(eps, 1.0 - eps)
 
 
-class _lazy_param:
+class _lazy_param(property):
     """A parameter a distribution either stores or derives from its dual.
 
     ``Bernoulli`` takes ``probs`` *or* ``logits``, and the reference
@@ -150,6 +150,11 @@ class _lazy_param:
     ties every later use to the autograd graph of whichever step happened
     to read it first.
 
+    It is a ``property`` subclass so that it is one wherever a property is
+    looked for: ``MultivariateNormal.covariance_matrix`` was a plain
+    property before it could also be given, and introspection that lists a
+    class's properties still finds it.
+
     Parameters
     ----------
     derive : callable
@@ -157,6 +162,7 @@ class _lazy_param:
     """
 
     def __init__(self, derive: Callable[[Any], Tensor]) -> None:
+        super().__init__(derive)
         self._derive = derive
         self._name = derive.__name__
         self.__doc__ = derive.__doc__
@@ -170,6 +176,7 @@ class _lazy_param:
     @overload
     def __get__(self, instance: object, owner: type | None = None) -> Tensor: ...
 
+    @override
     def __get__(
         self, instance: object | None, owner: type | None = None
     ) -> Self | Tensor:
@@ -178,6 +185,7 @@ class _lazy_param:
         stored: Tensor | None = vars(instance).get(self._name)
         return stored if stored is not None else self._derive(instance)
 
+    @override
     def __set__(self, instance: object, value: Tensor) -> None:
         vars(instance)[self._name] = value
 

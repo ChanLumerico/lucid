@@ -377,7 +377,7 @@ class Binomial(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         r"""Support of the Binomial distribution: :math:`\{0, 1, \ldots, n\}`.
 
         Returns
@@ -422,6 +422,13 @@ class Binomial(Distribution):
             Mean values of shape ``batch_shape``.
         """
         return self.total_count * self._probs
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Binomial distribution: :math:`\min(\lfloor (n+1) p \rfloor, n)`."""
+        n = self.total_count
+        return lucid.minimum(((n + 1.0) * self._probs).floor(), n)
 
     @override
     @property
@@ -760,6 +767,18 @@ class NegativeBinomial(Distribution):
         # E[X] = r · p / (1 − p).
         p: Tensor = self._probs
         return self.total_count * p / (1.0 - p)
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Negative Binomial distribution.
+
+        .. math::
+
+            \max\left(\left\lfloor \frac{(r - 1)\, p}{1 - p} \right\rfloor, 0\right)
+        """
+        ratio = self._logits.exp()
+        return ((self.total_count - 1.0) * ratio).floor().clip(0.0, None)
 
     @override
     @property

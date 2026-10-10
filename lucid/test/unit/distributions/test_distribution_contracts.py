@@ -32,7 +32,9 @@ import lucid.distributions as D
 
 
 def test_exponential_cdf_is_zero_below_the_support() -> None:
-    dist = D.Exponential(lucid.tensor(np.array([1.0])))
+    # Validation refuses a value below the support outright; the formula is
+    # what this pins, so it is read with validation off.
+    dist = D.Exponential(lucid.tensor(np.array([1.0])), validate_args=False)
     values = lucid.tensor(np.array([-2.0, -1.0, 0.0, 0.5, 1.0, 2.0]))
     got = dist.cdf(values).numpy()
     assert ((got >= 0.0) & (got <= 1.0)).all(), "cdf left [0, 1]"

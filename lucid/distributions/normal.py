@@ -263,8 +263,6 @@ class Normal(ExponentialFamily):
             Log-density at ``value``, shape
             ``broadcast(value, batch_shape)``.
         """
-        if self._validate_args:
-            self._validate_sample(value)
         var = self.variance
         log_scale = self.scale.log()
         return -((value - self.loc) ** 2) / (2.0 * var) - log_scale - _LOG_SQRT_2PI
@@ -530,8 +528,6 @@ class LogNormal(Distribution):
         Tensor
             Log-density at ``value``.
         """
-        if self._validate_args:
-            self._validate_sample(value)
         log_v = value.log()
         return self._base.log_prob(log_v) - log_v
 

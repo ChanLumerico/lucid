@@ -70,7 +70,7 @@ class Constraint:
     @override
     def __repr__(self) -> str:
         """Return a developer-facing string representation of the instance."""
-        return f"{type(self).__name__}()"
+        return f"{type(self).__name__.lstrip('_')}()"
 
 
 def _all_trailing(result: Tensor, ndims: int) -> Tensor:
@@ -310,6 +310,61 @@ class _Simplex(Constraint):
 
 
 @final
+class _Multinomial(Constraint):
+    """Count vectors of at most ``upper_bound`` draws: entries ``>= 0`` along
+    the last dimension, summing to at most ``upper_bound`` — the support of
+    :class:`~lucid.distributions.Multinomial`.
+
+    The reference framework checks this weaker condition rather than
+    whole counts summing to exactly ``upper_bound``, and so does this.
+    """
+
+    is_discrete = True
+    event_dim = 1
+
+    def __init__(self, upper_bound: float | Tensor) -> None:
+        """Store the most draws a count vector may hold."""
+        self.upper_bound = upper_bound
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` per vector where it is non-negative and sums to at
+        most ``upper_bound``."""
+        nonneg = _all_trailing(value >= 0, 1)
+        return nonneg & (value.sum(dim=-1) <= self.upper_bound)
+
+    @override
+    def __repr__(self) -> str:
+        return f"Multinomial(upper_bound={self.upper_bound})"
+
+
+@final
+class _LowerCholesky(Constraint):
+    """Lower-triangular square matrices with a positive diagonal — a
+    Cholesky factor, the domain of a ``scale_tril``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> constraints.lower_cholesky.check(lucid.tensor([[1.0, 0.0], [0.5, 2.0]]))
+    tensor(True, dtype=lucid.bool)
+    >>> constraints.lower_cholesky.check(lucid.tensor([[-1.0, 0.0], [0.5, 2.0]]))
+    tensor(False, dtype=lucid.bool)
+    """
+
+    event_dim = 2
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` per matrix where it is lower-triangular with a
+        positive diagonal."""
+        lower = _all_trailing(lucid.tril(value) == value, 2)
+        positive_diagonal = _all_trailing(value.diagonal(dim1=-2, dim2=-1) > 0, 1)
+        return lower & positive_diagonal
+
+
+@final
 class _OneHot(Constraint):
     """One-hot vectors: entries in ``{0, 1}`` that sum to ``1`` along the
     last dimension — the support of
@@ -456,7 +511,10 @@ simplex = _Simplex()
 one_hot = _OneHot()
 positive_definite = _PositiveDefinite()
 corr_cholesky = _CorrCholesky()
+lower_cholesky = _LowerCholesky()
 nonnegative_integer = _IntegerGreaterThan(0)
+# ``ℝⁿ`` read as one event: a vector with no NaN in it.
+real_vector = _IndependentConstraint(real, 1)
 
 # ``(0, 1]`` — a success probability that may be certain but not impossible
 # (``Geometric``: with p = 0 no trial ever succeeds).  The reference
@@ -583,6 +641,32 @@ def integer_interval(
         Constraint instance accepting whole numbers in the inclusive range.
     """
     return _IntegerInterval(lower_bound, upper_bound)
+
+
+def multinomial(upper_bound: float | Tensor) -> Constraint:
+    """Construct the support of a multinomial of ``upper_bound`` draws.
+
+    Parameters
+    ----------
+    upper_bound : float or Tensor
+        The number of draws; a tensor is compared batch member by batch
+        member.
+
+    Returns
+    -------
+    Constraint
+        Constraint accepting vectors, along the last dimension, whose entries
+        are non-negative and sum to at most ``upper_bound``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import constraints
+    >>> c = constraints.multinomial(5)
+    >>> c.check(lucid.tensor([[1.0, 2.0, 2.0], [3.0, 3.0, 0.0]]))
+    tensor([True, False], dtype=lucid.bool)
+    """
+    return _Multinomial(upper_bound)
 
 
 def independent(

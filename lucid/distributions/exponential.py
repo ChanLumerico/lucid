@@ -257,8 +257,6 @@ class Exponential(ExponentialFamily):
         >>> d.log_prob(lucid.tensor(1.0))  # -1.0
         tensor(-1.)
         """
-        if self._validate_args:
-            self._validate_sample(value)
         return self.rate.log() - self.rate * value
 
     @override
@@ -484,6 +482,12 @@ class Laplace(Distribution):
 
     @override
     @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Laplace distribution: the location :math:`\mu`."""
+        return self.loc
+
+    @override
+    @property
     def variance(self) -> Tensor:
         r"""Variance of the Laplace distribution.
 
@@ -561,8 +565,6 @@ class Laplace(Distribution):
         >>> Laplace(loc=0.0, scale=1.0).log_prob(lucid.tensor(0.0))
         tensor(-0.6931)
         """
-        if self._validate_args:
-            self._validate_sample(value)
         return -((value - self.loc).abs()) / self.scale - (2.0 * self.scale).log()
 
     @override
@@ -855,6 +857,12 @@ class Cauchy(Distribution):
             Tensor of ``float('nan')`` with shape ``batch_shape``.
         """
         return lucid.full_like(self.scale, float("nan"))
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Cauchy distribution: the location :math:`x_0`."""
+        return self.loc
 
     @override
     @property

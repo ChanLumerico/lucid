@@ -122,7 +122,7 @@ class Pareto(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         r"""Support of the Pareto distribution: :math:`[x_m, \infty)`.
 
         Returns
@@ -153,6 +153,13 @@ class Pareto(Distribution):
         return lucid.where(
             self.alpha > 1.0, closed, lucid.full_like(closed, float("inf"))
         )
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Pareto distribution: the scale :math:`x_m`, where the
+        density is largest."""
+        return self.scale
 
     @override
     @property
@@ -346,7 +353,7 @@ class Weibull(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         r"""Support of the Weibull distribution: :math:`(0, \infty)`.
 
         Returns
@@ -370,6 +377,25 @@ class Weibull(Distribution):
         """
         # μ = λ · Γ(1 + 1/k).
         return self.scale * lucid.lgamma(1.0 + 1.0 / self.concentration).exp()
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Weibull distribution.
+
+        .. math::
+
+            \lambda \left(\frac{k - 1}{k}\right)^{1/k} \quad (k > 1),
+            \qquad 0 \quad (k \leq 1)
+
+        For :math:`k \leq 1` the density decreases from the origin, so the
+        mode is ``0``.  The reference framework evaluates the first formula
+        there too and answers ``nan`` or a meaningless positive number; this
+        answers ``0``.
+        """
+        k = self.concentration
+        interior = self.scale * ((k - 1.0) / k) ** k.reciprocal()
+        return lucid.where(k > 1.0, interior, lucid.zeros_like(interior))
 
     @override
     @property
@@ -568,6 +594,12 @@ class HalfNormal(Distribution):
 
     @override
     @property
+    def mode(self) -> Tensor:
+        """Mode of the half-Normal distribution: ``0``, where the density peaks."""
+        return lucid.zeros_like(self.scale)
+
+    @override
+    @property
     def variance(self) -> Tensor:
         r"""Variance of the HalfNormal distribution: :math:`\operatorname{Var}[X] = \sigma^2(1 - 2/\pi)`.
 
@@ -613,10 +645,14 @@ class HalfNormal(Distribution):
         Returns
         -------
         Tensor
-            Log-density values of the same shape as ``value``.
+            Log-density values of the same shape as ``value``; ``-inf`` below
+            0, where the density is 0.
         """
-        # log p(x) = log 2 + log_normal(x | 0, σ).
-        return math.log(2.0) + self._base.log_prob(value)
+        # log p(x) = log 2 + log_normal(x | 0, σ) on x ≥ 0.  Validation refuses
+        # a negative x; without it the folded formula would score one as if
+        # the density were mirrored there.
+        log_p = math.log(2.0) + self._base.log_prob(value)
+        return lucid.where(value >= 0.0, log_p, -math.inf)
 
     @override
     def entropy(self) -> Tensor:
@@ -760,9 +796,11 @@ class HalfCauchy(Distribution):
         Returns
         -------
         Tensor
-            Log-density values of the same shape as ``value``.
+            Log-density values of the same shape as ``value``; ``-inf`` below
+            0, where the density is 0.
         """
-        return math.log(2.0) + self._base.log_prob(value)
+        log_p = math.log(2.0) + self._base.log_prob(value)
+        return lucid.where(value >= 0.0, log_p, -math.inf)
 
     # A moment that does not exist is still an answer, and the shape of the
     # answer matters: the reference returns NaN or infinity rather than
@@ -786,6 +824,12 @@ class HalfCauchy(Distribution):
             Tensor of ``inf`` with shape ``batch_shape``.
         """
         return lucid.full_like(self.scale, float("inf"))
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        """Mode of the half-Cauchy distribution: ``0``, where the density peaks."""
+        return lucid.zeros_like(self.scale)
 
     @override
     @property
@@ -918,6 +962,21 @@ class FisherSnedecor(Distribution):
         """
         # Defined for d2 > 2.
         return self.df2 / (self.df2 - 2.0)
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the F-distribution.
+
+        .. math::
+
+            \frac{d_1 - 2}{d_1} \cdot \frac{d_2}{d_2 + 2} \quad (d_1 > 2)
+
+        ``nan`` for :math:`d_1 \leq 2`, where the density is unbounded at 0,
+        as the reference framework answers.
+        """
+        interior = (self.df1 - 2.0) / self.df1 * self.df2 / (self.df2 + 2.0)
+        return lucid.where(self.df1 > 2.0, interior, float("nan"))
 
     @override
     @property

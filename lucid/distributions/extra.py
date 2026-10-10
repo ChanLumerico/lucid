@@ -20,9 +20,12 @@ from lucid.distributions.bernoulli import (
 )
 from lucid.distributions.constraints import (
     Constraint,
+    multinomial,
     nonnegative_integer,
     positive,
     real,
+    real_vector,
+    simplex,
     unit_interval,
 )
 from lucid.distributions.distribution import Distribution
@@ -307,6 +310,12 @@ class InverseGamma(Distribution):
 
     @property
     @override
+    def mode(self) -> Tensor:
+        r"""Mode of the inverse-Gamma distribution: :math:`\beta / (\alpha + 1)`."""
+        return self.rate / (self.concentration + 1.0)
+
+    @property
+    @override
     def variance(self) -> Tensor:
         """Defined for ``concentration > 2``:
         ``β² / ((α − 1)² (α − 2))``."""
@@ -467,6 +476,25 @@ class Kumaraswamy(Distribution):
 
     @property
     @override
+    def mode(self) -> Tensor:
+        r"""Mode of the Kumaraswamy distribution.
+
+        .. math::
+
+            \left(\frac{a - 1}{a b - 1}\right)^{1/a} \quad (a, b \geq 1)
+
+        with :math:`a` = ``concentration1`` and :math:`b` = ``concentration0``;
+        ``nan`` when either is below 1, as the reference framework answers.
+        The reference evaluates a different expression and answers ``nan``
+        for every :math:`b > 1` as well; this is the closed form.
+        """
+        a = self.concentration1
+        b = self.concentration0
+        interior = ((a - 1.0) / (a * b - 1.0)) ** a.reciprocal()
+        return lucid.where((a < 1.0) | (b < 1.0), float("nan"), interior)
+
+    @property
+    @override
     def variance(self) -> Tensor:
         """``Var[X] = E[X²] − E[X]²``  where ``E[X²] = b · B(1 + 2/a, b)``."""
         a, b = self.concentration1, self.concentration0
@@ -617,14 +645,13 @@ class Multinomial(Distribution):
     True
     """
 
-    # Looser than the reference, kept for now: the parameter is held in a
-    # private ``_param``, so validation never reaches ``probs`` or
-    # ``logits``, and the support is element-wise whole counts rather than
-    # a vector summing to at most ``total_count``.  Listed in the
-    # constraint-parity test's exceptions.
+    # ``total_count`` is in the table although the reference's is not: the
+    # reference takes only a Python ``int`` and refuses a negative one through
+    # the ``Binomial`` it builds, while this one also takes a tensor.
     arg_constraints = {
         "total_count": nonnegative_integer,
-        "probs": unit_interval,
+        "probs": simplex,
+        "logits": real_vector,
     }
     has_rsample: bool = False
 
@@ -642,95 +669,76 @@ class Multinomial(Distribution):
         total_count : Tensor | int, optional
             Total number of draws :math:`n \geq 0`.  Must be a scalar.
             Default is ``1`` (reduces to a one-hot Categorical).
-        probs : Tensor | None, optional
-            Unnormalised probability vector(s) of shape ``(..., K)``.
-            Normalised to sum to 1 internally.  Mutually exclusive with
-            ``logits``.
-        logits : Tensor | None, optional
-            Unnormalised log-probability vector(s) of shape ``(..., K)``.
-            Converted to probabilities via softmax.  Mutually exclusive with
-            ``probs``.
+        probs, logits : Tensor | None, optional
+            The category weights, as probabilities or as log-probabilities,
+            of shape ``(..., K)`` — exactly one of the two.  Either is
+            normalised over the last axis before it is stored.
         validate_args : bool | None, optional
-            If ``True``, validate parameter constraints at construction time.
+            Whether to check the parameters here and the counts later scored.
+
+        Raises
+        ------
+        ValueError
+            If both or neither of ``probs`` and ``logits`` are given, or —
+            under validation — a normalised parameter is not a probability
+            vector or ``total_count`` is not a non-negative whole number.
         """
+        from lucid.distributions.categorical import Categorical
+
         if (probs is None) == (logits is None):
             raise ValueError("Multinomial: pass exactly one of `probs` or `logits`.")
-        if probs is not None:
-            self._param = _as_tensor(probs)
-            self._is_logits = False
+        # The categorical normalises whichever was given, and the normalised
+        # value is what is stored here, so it is what validation checks — as
+        # for ``Categorical`` itself.
+        self._cat = Categorical(probs=probs, logits=logits, validate_args=False)
+        self._is_logits = logits is not None
+        if self._is_logits:
+            self.logits = self._cat.logits
         else:
-            self._param = _as_tensor(logits)  # type: ignore[arg-type]
-            self._is_logits = True
+            self.probs = self._cat.probs
         # An ``int`` count becomes a 0-dim host tensor; it joins the
         # probabilities on their device, or ``n · p`` cannot run on Metal.
-        self._total_count: Tensor = _align_device(_as_tensor(total_count), self._param)
-        # batch_shape is everything but the last (category) dim.
-        batch_shape: tuple[int, ...] = tuple(self._param.shape[:-1])
-        event_shape: tuple[int, ...] = (int(self._param.shape[-1]),)
+        self._total_count: Tensor = _align_device(
+            _as_tensor(total_count), self._cat._probs
+        )
         super().__init__(
-            batch_shape=batch_shape,
-            event_shape=event_shape,
+            batch_shape=tuple(self._cat._batch_shape),
+            event_shape=(self._cat._num_events,),
             validate_args=validate_args,
         )
 
     @property
     @override
-    def support(self) -> Constraint:  # type: ignore[override]
-        """Support of the distribution: non-negative integers.
+    def support(self) -> Constraint:
+        """Count vectors of ``total_count`` draws.
 
         Returns
         -------
         Constraint
-            ``nonnegative_integer`` — the multinomial event count vector lives
-            in :math:`\\mathbb{Z}_{\\geq 0}^K`, subject to the additional
-            constraint that the counts sum to ``total_count``.
+            ``multinomial(total_count)`` — non-negative entries summing to at
+            most ``total_count``, the reference framework's support.
         """
-        return nonnegative_integer
+        return multinomial(self.total_count)
 
     @property
     def _probs(self) -> Tensor:
-        """Lazily resolved category probabilities (summing to 1 along the last axis).
-
-        Applies a max-shifted softmax to the stored logits when the
-        distribution was constructed from ``logits``; otherwise renormalises
-        the stored raw probabilities along the final axis.
-        """
-        if self._is_logits:
-            lp: Tensor = self._param
-            # softmax along last dim
-            lp_max = lp - lp.max(dim=-1, keepdim=True)
-            exp_lp = lp_max.exp()
-            return exp_lp / exp_lp.sum(dim=-1, keepdim=True)
-        # Normalise raw probs.
-        p = self._param
-        return p / p.sum(dim=-1, keepdim=True)
-
-    @property
-    def _logits(self) -> Tensor:
-        """Lazily resolved per-category logits.
-
-        Returns the stored parameter when constructed from ``logits``;
-        otherwise computes :math:`\\log(p/(1-p))` from the normalised probs.
-        """
-        if self._is_logits:
-            return self._param
-        return _probs_to_logits(self._probs)
+        """Category probabilities, summing to 1 along the last axis."""
+        return self._cat._probs
 
     @_lazy_param
     def probs(self) -> Tensor:
         """Category probabilities, normalised along the last axis."""
-        return self._probs
+        return self._cat.probs
 
     @_lazy_param
     def logits(self) -> Tensor:
-        """Log-probabilities — the ``logits`` argument as given, or derived.
+        """Log-probabilities — the ``logits`` argument shifted by its
+        ``logsumexp``, or derived from ``probs`` on access.
 
         Derived as ``log(probs)`` with ``probs`` clamped one epsilon inside
         ``[0, 1]``, as the reference framework derives it.
         """
-        if self._is_logits:
-            return self._param
-        return _clamp_probs(self._probs).log()
+        return self._cat.logits
 
     @property
     def total_count(self) -> Tensor:
@@ -739,9 +747,8 @@ class Multinomial(Distribution):
         Returns
         -------
         Tensor
-            The integer-valued ``n`` parameter broadcast over the batch shape.
-            Each independent Multinomial sums to this many trials across the
-            ``K`` categories.
+            The integer-valued ``n`` parameter.  Each independent
+            Multinomial sums to this many trials across the ``K`` categories.
         """
         return self._total_count
 
@@ -749,31 +756,31 @@ class Multinomial(Distribution):
     @override
     def mean(self) -> Tensor:
         """``n · p`` (element-wise)."""
-        return self._total_count * self._probs
+        return self.total_count * self._probs
 
     @property
     @override
     def variance(self) -> Tensor:
         """``n · p · (1 − p)`` (element-wise)."""
         p: Tensor = self._probs
-        return self._total_count * p * (1.0 - p)
+        return self.total_count * p * (1.0 - p)
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
-        r"""``log C(n; k₁,…,kK) + Σ kᵢ log pᵢ``.
+        r"""``log C(n; k₁,…,kK) + Σ kᵢ log pᵢ`` with :math:`n = Σ kᵢ`.
 
-        A category with :math:`k_i = 0` contributes ``0`` even where
+        The coefficient counts the arrangements of the counts given, as the
+        reference framework's does, so a vector summing to less than
+        ``total_count`` is scored as a multinomial of its own total.  A
+        category with :math:`k_i = 0` contributes ``0`` even where
         :math:`p_i = 0` (a zero in ``probs`` or a logit of ``-inf``), rather
         than ``0 · (-inf) = NaN``.
         """
-        n: Tensor = self._total_count
-        # Multinomial coefficient: lgamma(n+1) - sum_i lgamma(k_i+1)
-        log_coeff: Tensor = lucid.lgamma(n + 1.0) - lucid.lgamma(value + 1.0).sum(
-            dim=-1
-        )
+        log_coeff: Tensor = lucid.lgamma(value.sum(dim=-1) + 1.0) - lucid.lgamma(
+            value + 1.0
+        ).sum(dim=-1)
         if self._is_logits:
-            lp: Tensor = self._param
-            log_p: Tensor = lp - lucid.logsumexp(lp, dim=-1, keepdim=True)
+            log_p: Tensor = self.logits
             # ``log_softmax`` differentiates without dividing by p, so the
             # masked infinity can be swapped out after it is formed.
             log_p = lucid.where((value == 0) & lucid.isinf(log_p), 0.0, log_p)
@@ -785,14 +792,11 @@ class Multinomial(Distribution):
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw samples by summing one-hot Categorical draws."""
-        from lucid.distributions.categorical import Categorical
-
-        n: int = int(self._total_count.item())
+        n: int = int(self.total_count.item())
         p: Tensor = self._probs  # (..., K)
         K: int = int(p.shape[-1])
-        cat = Categorical(probs=p)
         # Draw n categorical samples: (n, *batch_shape)
-        draws: list[Tensor] = [cat.sample(sample_shape) for _ in range(n)]
+        draws: list[Tensor] = [self._cat.sample(sample_shape) for _ in range(n)]
         # Count each category k in {0, ..., K-1}.
         counts: list[Tensor] = [
             lucid.stack([(d == k).to(p.dtype) for d in draws]).sum(dim=0)

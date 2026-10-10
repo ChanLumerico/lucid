@@ -14,15 +14,17 @@ import lucid
 import lucid.linalg as _la
 import lucid.special as _sp
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _as_tensor, _lazy_param
 from lucid.distributions.constraints import (
     Constraint,
     corr_cholesky,
+    lower_cholesky,
     positive,
     positive_definite,
 )
 from lucid.distributions.distribution import Distribution
 from lucid.distributions.gamma import Beta, _sample_standard_gamma
+from lucid.distributions.multivariate import _precision_of, _scale_tril_of
 
 # ── Wishart ───────────────────────────────────────────────────────────────────
 
@@ -110,12 +112,15 @@ class Wishart(Distribution):
     (4, 2, 2)
     """
 
-    # Looser than the reference on purpose, like ``MultivariateNormal``:
-    # the scale matrix is not in the table.  ``covariance_matrix`` and
-    # ``precision_matrix`` fail their Cholesky factorisation when not
-    # positive-definite; a ``scale_tril`` is taken as given.  Listed in the
-    # constraint-parity test's exceptions.
-    arg_constraints = {"df": positive}
+    # ``df`` must also exceed ``D - 1``; the constructor refuses that whether
+    # or not it validates, as the reference framework's does, so the table
+    # only needs it positive.
+    arg_constraints = {
+        "covariance_matrix": positive_definite,
+        "precision_matrix": positive_definite,
+        "scale_tril": lower_cholesky,
+        "df": positive,
+    }
     has_rsample: bool = False
 
     def __init__(
@@ -149,6 +154,17 @@ class Wishart(Distribution):
             shape ``(..., D, D)`` with positive diagonal.
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
+
+        Raises
+        ------
+        ValueError
+            If not exactly one scale specification is given, if
+            :math:`\nu \leq D - 1`, or — under validation — if the matrix
+            given is not positive-definite (a ``scale_tril``: not
+            lower-triangular with a positive diagonal).
+        lucid.linalg.LinAlgError
+            With validation off, if a covariance or precision matrix has no
+            Cholesky factorisation.
         """
         n_spec = sum(
             x is not None for x in (covariance_matrix, precision_matrix, scale_tril)
@@ -159,17 +175,24 @@ class Wishart(Distribution):
                 "precision_matrix, or scale_tril."
             )
 
+        # The matrix given is stored under its own name, so validation checks
+        # it before anything factorises it.
+        given = _as_tensor(
+            next(
+                m
+                for m in (covariance_matrix, precision_matrix, scale_tril)
+                if m is not None
+            )
+        )
         if scale_tril is not None:
-            self.scale_tril = _as_tensor(scale_tril)
+            self.scale_tril = given
         elif covariance_matrix is not None:
-            cov = _as_tensor(covariance_matrix)
-            self.scale_tril = _la.cholesky(cov)
-        else:  # precision_matrix
-            prec = _as_tensor(precision_matrix)  # type: ignore[arg-type]
-            self.scale_tril = _la.cholesky(_la.inv(prec))
+            self.covariance_matrix = given
+        else:
+            self.precision_matrix = given
 
         self.df = _as_tensor(df)
-        dim: int = int(self.scale_tril.shape[-1])
+        dim: int = int(given.shape[-1])
         self._dim = dim
 
         # ``support`` promises positive-definite draws, and the Bartlett
@@ -183,20 +206,36 @@ class Wishart(Distribution):
                 f"non-singular distribution, got {float(self.df.min().item())}."
             )
 
-        # Pre-compute covariance for mean/variance.
-        self._cov = self.scale_tril @ self.scale_tril.mT
-
-        batch_shape: tuple[int, ...] = tuple(self.scale_tril.shape[:-2])
+        batch_shape: tuple[int, ...] = tuple(given.shape[:-2])
         event_shape: tuple[int, ...] = (dim, dim)
         super().__init__(
             batch_shape=batch_shape,
             event_shape=event_shape,
             validate_args=validate_args,
         )
+        if scale_tril is None:
+            given_cov = given if covariance_matrix is not None else None
+            self.scale_tril = _scale_tril_of(
+                given_cov, given if given_cov is None else None
+            )
+        # Pre-compute covariance for mean/variance.
+        self._cov = self.scale_tril @ self.scale_tril.mT
+
+    @_lazy_param
+    def covariance_matrix(self) -> Tensor:
+        r"""Scale matrix :math:`\Sigma = L L^\top` — as given, or derived
+        from ``scale_tril`` on access."""
+        return self.scale_tril @ self.scale_tril.mT
+
+    @_lazy_param
+    def precision_matrix(self) -> Tensor:
+        r""":math:`\Sigma^{-1}` — as given, or derived from ``scale_tril`` on
+        access."""
+        return _precision_of(self.scale_tril)
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         """Constraint: positive-definite symmetric matrices."""
         return positive_definite
 
@@ -205,6 +244,18 @@ class Wishart(Distribution):
     def mean(self) -> Tensor:
         """``df · Σ``."""
         return self.df * self._cov
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Wishart distribution: :math:`(\nu - D - 1)\, \Sigma`.
+
+        ``nan`` where :math:`\nu \leq D + 1`, as the reference framework
+        answers.
+        """
+        factor = self.df - self._dim - 1.0
+        factor = lucid.where(factor > 0.0, factor, float("nan"))
+        return factor.unsqueeze(-1).unsqueeze(-1) * self._cov
 
     @override
     @property
@@ -424,7 +475,7 @@ class LKJCholesky(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         """Constraint: Cholesky factors of correlation matrices (``corr_cholesky``)."""
         return corr_cholesky
 

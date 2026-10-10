@@ -403,8 +403,9 @@ class TestSupportBoundaries:
 
     def test_fisher_snedecor_at_zero(self, device: str) -> None:
         """``scipy.stats.f.logpdf([0, 1], 2, 5)``.  The reference itself gives
-        NaN at 0; the density there is exactly 1."""
-        d = D.FisherSnedecor(_t(2.0, device), _t(5.0, device))
+        NaN at 0; the density there is exactly 1.  The support is ``x > 0``,
+        so validation refuses 0; the limit is read with it off."""
+        d = D.FisherSnedecor(_t(2.0, device), _t(5.0, device), validate_args=False)
         np.testing.assert_allclose(
             _np(d.log_prob(_t([0.0, 1.0], device))), [0.0, -1.17765283], atol=1e-5
         )

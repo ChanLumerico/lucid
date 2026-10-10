@@ -146,7 +146,7 @@ class MixtureSameFamily(Distribution):
 
     @property
     @override
-    def support(self) -> Constraint | None:  # type: ignore[override]
+    def support(self) -> Constraint | None:
         """Support of the distribution — that of the components.
 
         Returns

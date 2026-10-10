@@ -6,13 +6,72 @@ Concrete distributions subclass this and override the bits that apply
 default behaviours mimic the reference framework: methods that aren't
 implemented raise :class:`NotImplementedError`, ``sample`` is
 ``rsample`` detached, and ``stddev = √variance``.
+
+Argument validation belongs to the base, not to each family.  A subclass
+declares ``arg_constraints`` and ``support``; the base checks the parameters
+in ``__init__`` and the value given to every ``log_prob`` / ``cdf`` /
+``icdf`` a subclass defines (:meth:`Distribution.__init_subclass__` wraps
+them), so no family can forget to.
 """
 
+import functools
+import inspect
+from collections.abc import Callable
+from contextvars import ContextVar
 from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions.constraints import Constraint
+from lucid.distributions.constraints import Constraint, unit_interval
+
+# The distribution whose validated ``log_prob`` / ``cdf`` / ``icdf`` call is
+# running.  A subclass method that calls ``super().log_prob`` — or another of
+# its own validated methods — has had its value checked once already, so the
+# inner call skips the check.  A context variable rather than an instance
+# flag, so two threads scoring with one distribution do not switch each
+# other's checks off.
+_VALIDATING: ContextVar[object] = ContextVar("_VALIDATING", default=None)
+
+
+def _validated(
+    method: Callable[..., Tensor], *, probability: bool
+) -> Callable[..., Tensor]:
+    """``method`` checking its value first, when its distribution validates.
+
+    ``probability`` selects the check: an ``icdf`` takes a probability, any
+    other scorer a point of the support.  With validation off the wrapper
+    costs one attribute read.
+    """
+
+    @functools.wraps(method)
+    def validated(self: Distribution, value: Tensor) -> Tensor:
+        if not self._validate_args or _VALIDATING.get() is self:
+            return method(self, value)
+        if probability:
+            self._validate_probability(value)
+        else:
+            self._validate_sample(value)
+        token = _VALIDATING.set(self)
+        try:
+            return method(self, value)
+        finally:
+            _VALIDATING.reset(token)
+
+    return validated
+
+
+# Every wrapper ``_validated`` builds shares this code object, which is how a
+# method already wrapped — inherited by aliasing, say — is told apart.
+_VALIDATED_CODE = _validated(lambda _s, v: v, probability=False).__code__
+
+
+def _is_validated(method: object) -> bool:
+    """Whether ``method`` is a scorer the base validates."""
+    return getattr(method, "__code__", None) is _VALIDATED_CODE
+
+
+# The scorers the base validates, and whether each takes a probability.
+_SCORERS: dict[str, bool] = {"log_prob": False, "cdf": False, "icdf": True}
 
 
 class Distribution:
@@ -44,11 +103,12 @@ class Distribution:
         distributions such as :class:`~lucid.distributions.Dirichlet`
         have a non-empty ``event_shape``.  Default is ``()``.
     validate_args : bool or None, optional
-        If ``True``, parameter constraints and sample support are
-        validated at construction time and in :meth:`log_prob`.  Useful
-        during development; disable in production for speed.  ``None``
-        inherits the class-level ``_validate_args`` flag.  Default is
-        ``None``.
+        If ``True``, the parameters are checked against
+        :attr:`arg_constraints` at construction, and the value given to
+        :meth:`log_prob`, :meth:`cdf` and :meth:`icdf` is checked before it
+        is scored; a violation raises :class:`ValueError`.  ``None`` takes
+        the default, which is on and is changed for every distribution by
+        :meth:`set_default_validate_args`.  Default is ``None``.
 
     Attributes
     ----------
@@ -59,7 +119,8 @@ class Distribution:
     support : Constraint or None
         Constraint describing the set on which the distribution has
         positive density (or probability mass).  ``None`` means
-        unconstrained.
+        unconstrained.  A family whose support depends on its parameters
+        (``Uniform``, ``Binomial``) answers it as a property.
     has_rsample : bool
         ``True`` when the distribution implements
         :meth:`rsample` — i.e., when the reparameterisation trick
@@ -98,6 +159,20 @@ class Distribution:
     the backbone of the VAE objective (ELBO) and stochastic computation
     graphs in general.
 
+    **Validation**
+
+    With validation on, :meth:`log_prob` and :meth:`cdf` refuse a value
+    outside :attr:`support`, and every scorer refuses a value whose shape
+    does not end in ``event_shape`` or does not broadcast with
+    ``batch_shape + event_shape``.  :meth:`icdf` takes a probability, so
+    it refuses a value outside :math:`[0, 1]` instead.  That last check is
+    a deliberate difference from the reference framework, which does not
+    validate an ``icdf`` argument and answers ``nan`` there.  A family whose
+    :attr:`support` is ``None`` has declared nothing to check a value
+    against, and its ``log_prob`` / ``cdf`` values are not checked.  A
+    subclass gets all of this by defining the scorer: it does not call the
+    checks itself.
+
     Examples
     --------
     >>> import lucid.distributions as dist
@@ -112,7 +187,6 @@ class Distribution:
     """
 
     arg_constraints: dict[str, Constraint] = {}
-    support: Constraint | None = None
     has_rsample: bool = False
     has_enumerate_support: bool = False
 
@@ -124,6 +198,52 @@ class Distribution:
     # machinery to catch that was already here and simply was not armed.
     # A caller who wants the cost back can pass ``validate_args=False``.
     _validate_args: bool = True
+
+    @override
+    def __init_subclass__(cls) -> None:
+        """Validate the value given to each scorer ``cls`` defines.
+
+        Wrapping in place, rather than having subclasses implement a
+        private hook behind a public template, keeps every family's
+        ``log_prob`` its own: its signature, docstring and source location
+        are unchanged.
+        """
+        super().__init_subclass__()
+        for name, probability in _SCORERS.items():
+            method = cls.__dict__.get(name)
+            if inspect.isfunction(method) and not _is_validated(method):
+                setattr(cls, name, _validated(method, probability=probability))
+
+    @staticmethod
+    def set_default_validate_args(value: bool) -> None:
+        """Turn argument validation on or off for every distribution.
+
+        Applies to distributions built afterwards without an explicit
+        ``validate_args``.  Validation is on by default.
+
+        Parameters
+        ----------
+        value : bool
+            Whether to validate.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not a ``bool``.
+
+        Examples
+        --------
+        >>> import lucid.distributions as dist
+        >>> dist.Distribution.set_default_validate_args(False)
+        >>> dist.Normal(0.0, -1.0).scale  # not refused
+        tensor(-1.)
+        >>> dist.Distribution.set_default_validate_args(True)
+        """
+        if not isinstance(value, bool):
+            raise TypeError(
+                f"set_default_validate_args: expected a bool, got {type(value).__name__}"
+            )
+        Distribution._validate_args = value
 
     def __init__(
         self,
@@ -193,6 +313,21 @@ class Distribution:
             ``sample_shape + batch_shape + event_shape``.
         """
         return tuple(sample_shape) + self._batch_shape + self._event_shape
+
+    @property
+    def support(self) -> Constraint | None:
+        """The set the random variable takes values in.
+
+        A family declares it as a class attribute, or as a property when it
+        depends on the parameters.  ``None`` — this default — means no
+        value is refused.
+
+        Returns
+        -------
+        Constraint or None
+            The support, or ``None`` when it is unconstrained.
+        """
+        return None
 
     # ── moments / closed-form quantities ───────────────────────────────────
 
@@ -377,6 +512,9 @@ class Distribution:
 
         Raises
         ------
+        ValueError
+            With validation on, if ``value`` is outside :attr:`support` or
+            its shape does not fit the distribution.
         NotImplementedError
             If not implemented by the concrete subclass.
         """
@@ -405,6 +543,9 @@ class Distribution:
 
         Raises
         ------
+        ValueError
+            Under validation, for a point the distribution cannot take or a
+            shape that does not broadcast against it.
         NotImplementedError
             If not implemented by the concrete subclass.
         """
@@ -437,6 +578,11 @@ class Distribution:
 
         Raises
         ------
+        ValueError
+            With validation on, if ``value`` is outside :math:`[0, 1]` or
+            its shape does not fit the distribution.  The reference
+            framework does not check an ``icdf`` argument; refusing one
+            that is not a probability is a deliberate difference.
         NotImplementedError
             If not implemented by the concrete subclass.
         """
@@ -495,33 +641,93 @@ class Distribution:
                 continue
             if not bool(constraint.check(v).all().item()):
                 raise ValueError(
-                    f"{type(self).__name__} parameter {name!r} "
-                    f"out of constraint {constraint!r}"
+                    f"Expected parameter {name} of shape {tuple(v.shape)} of "
+                    f"distribution {type(self).__name__} to satisfy the "
+                    f"constraint {constraint!r}"
+                )
+
+    def _validate_value_shape(self, value: Tensor) -> None:
+        """Check that ``value`` is a tensor a scorer can broadcast.
+
+        Its trailing axes must be ``event_shape``, and the rest must
+        broadcast with ``batch_shape``.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not a :class:`~lucid.Tensor`.
+        ValueError
+            If its shape does not end in ``event_shape`` or does not
+            broadcast with ``batch_shape + event_shape``.
+        """
+        if not isinstance(value, Tensor):
+            raise TypeError(
+                f"{type(self).__name__}: the value to score must be a Tensor, "
+                f"got {type(value).__name__}"
+            )
+        shape = tuple(value.shape)
+        event = self._event_shape
+        if shape[len(shape) - len(event) :] != event:
+            raise ValueError(
+                f"{type(self).__name__}: the right-most size of the value must "
+                f"match event_shape: {shape} vs {event}"
+            )
+        expected = self._batch_shape + event
+        for got, want in zip(reversed(shape), reversed(expected), strict=False):
+            if got != 1 and want != 1 and got != want:
+                raise ValueError(
+                    f"{type(self).__name__}: the value is not broadcastable with "
+                    f"batch_shape + event_shape: {shape} vs {expected}"
                 )
 
     def _validate_sample(self, value: Tensor) -> None:
-        """Check that ``value`` lies within the distribution's support.
+        """Check that ``value`` can be scored and lies in :attr:`support`.
 
-        Called inside :meth:`log_prob` when ``_validate_args`` is ``True``.
-        For example, passing a negative value to an Exponential
-        distribution would raise :class:`ValueError` here rather than
-        silently returning ``-inf`` or ``NaN``.
+        Run before every :meth:`log_prob` and :meth:`cdf` when validation is
+        on, so a point outside the support raises rather than scoring as
+        ``-inf`` or ``nan`` — or, worse, as a finite number.  A distribution
+        that declares no support (``None``) declares nothing to check a value
+        against, its shape included, and is not checked.
 
         Parameters
         ----------
         value : Tensor
-            Sample tensor to validate.
+            The value about to be scored.
 
         Raises
         ------
+        TypeError
+            If ``value`` is not a :class:`~lucid.Tensor`.
         ValueError
-            If any element of ``value`` is outside :attr:`support`.
+            If its shape does not fit the distribution, or any element of it
+            is outside :attr:`support`.
         """
-        if self.support is None:
+        support = self.support
+        if support is None:
             return
-        if not bool(self.support.check(value).all().item()):
+        self._validate_value_shape(value)
+        if not bool(support.check(value).all().item()):
             raise ValueError(
-                f"{type(self).__name__}: value out of support {self.support!r}"
+                f"Expected value argument of shape {tuple(value.shape)} to be "
+                f"within the support ({support!r}) of the distribution {self!r}"
+            )
+
+    def _validate_probability(self, value: Tensor) -> None:
+        """Check that ``value`` is a probability :meth:`icdf` can invert.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not a :class:`~lucid.Tensor`.
+        ValueError
+            If its shape does not fit the distribution, or any element of it
+            is outside :math:`[0, 1]`.
+        """
+        self._validate_value_shape(value)
+        if not bool(unit_interval.check(value).all().item()):
+            raise ValueError(
+                f"Expected the icdf argument of shape {tuple(value.shape)} of "
+                f"{self!r} to be a probability in [0, 1]"
             )
 
     # ── pretty-printing ────────────────────────────────────────────────────

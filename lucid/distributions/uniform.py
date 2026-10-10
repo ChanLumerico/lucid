@@ -139,7 +139,7 @@ class Uniform(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint:  # type: ignore[override]
+    def support(self) -> Constraint:
         """The support constraint of the Uniform distribution.
 
         Returns
@@ -189,6 +189,17 @@ class Uniform(Distribution):
         tensor(5.)
         """
         return 0.5 * (self.low + self.high)
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        """Mode of the Uniform distribution — ``nan``.
+
+        Every point of ``[low, high]`` is equally likely, so there is no
+        single mode; ``nan`` of the batch shape, as the reference framework
+        answers.
+        """
+        return self.high * float("nan")
 
     @override
     @property

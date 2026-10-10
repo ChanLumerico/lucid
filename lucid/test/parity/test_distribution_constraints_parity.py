@@ -17,6 +17,18 @@ offered to both libraries and the two verdicts must agree.
 * ``test_support`` offers candidate values to ``support.check``.
 * ``test_constraint_table`` compares the names in ``arg_constraints`` and the
   ``is_discrete`` / ``event_dim`` of the support.
+* ``test_scored_value_validation`` offers the same values to ``log_prob`` and
+  ``cdf`` with validation on: Lucid must refuse — with ``ValueError`` — exactly
+  the values the reference refuses.  The check lives in the ``Distribution``
+  base, so a family that slipped past it fails here.
+* ``test_scored_values_without_validation`` scores, with validation off, every
+  value the reference's support admits, and the answers must agree.
+* ``test_mode`` asks both for ``mode``: present in one exactly when present in
+  the other, and equal.
+* ``test_own_samples_pass_validation`` scores a distribution's own draws with
+  validation on, which must not refuse them.
+
+The value and mode tests run on CPU and on Metal.
 
 ``_EXCEPTIONS`` lists every difference kept on purpose, with the reason.  A
 listed difference must still be there — fixing one fails until its entry is
@@ -304,23 +316,18 @@ CASES: dict[str, _Case] = {
 CASES["Multinomial"].values = _COUNT_VALUES
 
 # Every difference from the reference that is kept on purpose, keyed by
-# (distribution, aspect) — the aspect is ``param:<name>``, ``support`` or
-# ``table`` — with the reason.
+# (distribution, aspect) — the aspect is ``param:<name>``, ``support``,
+# ``table``, ``validates:<method>``, ``values:<method>`` or ``mode`` — with the
+# reason.
 _EXCEPTIONS: dict[tuple[str, str], str] = {
-    ("Multinomial", "param:probs"): "the parameter is held privately, so "
-    "validation never reaches it — any vector constructs",
-    ("Multinomial", "param:logits"): "as for probs",
-    ("Multinomial", "support"): "element-wise whole counts, where the reference "
-    "admits any non-negative vector summing to at most total_count",
-    ("Multinomial", "table"): "the table holds total_count and probs, and the "
-    "support's event_dim is 0",
-    ("MultivariateNormal", "param:scale_tril"): "only loc is in the table; a "
-    "scale_tril is taken as given",
-    ("MultivariateNormal", "table"): "only loc is in the table, and the support "
-    "is the element-wise real line",
-    ("Wishart", "param:scale_tril"): "only df is in the table; a scale_tril is "
-    "taken as given",
-    ("Wishart", "table"): "only df is in the table",
+    ("Kumaraswamy", "values:log_prob"): "at 0 and 1 the density is 0 and Lucid "
+    "answers -inf; the reference answers nan",
+    ("Kumaraswamy", "mode"): "Lucid answers the closed form "
+    "((a-1)/(ab-1))^(1/a); the reference evaluates another expression, nan "
+    "for every concentration0 > 1",
+    ("Multinomial", "table"): "total_count is in the table: it may be a tensor "
+    "here, where the reference takes only an int and refuses a negative one "
+    "through the Binomial it builds",
     ("RelaxedBernoulli", "param:temperature"): "the reference does not validate "
     "it; a non-positive temperature divides the logits by zero or flips them",
     ("RelaxedBernoulli", "table"): "temperature is in the table",
@@ -386,9 +393,18 @@ def test_every_exception_names_a_case() -> None:
     for name, aspect in _EXCEPTIONS:
         assert name in CASES, name
         kind, _, param = aspect.partition(":")
-        assert kind in ("param", "support", "table"), aspect
+        assert kind in (
+            "param",
+            "support",
+            "table",
+            "validates",
+            "values",
+            "mode",
+        ), aspect
         if kind == "param":
             assert param in CASES[name].params, aspect
+        if kind in ("validates", "values"):
+            assert param in _SCORERS, aspect
 
 
 _PARAMS = [(n, p) for n in sorted(CASES) for p in CASES[n].params]
@@ -437,3 +453,133 @@ def test_constraint_table(name: str, ref: Any) -> None:
             if getattr(ours.support, attr) != getattr(theirs.support, attr):
                 differences.append((attr, getattr(ours.support, attr)))
     _judge(name, "table", differences)
+
+
+# ── values given to the scorers, and the mode ─────────────────────────────────
+
+_DEVICES = ["cpu", "metal"]
+_SCORERS = ("log_prob", "cdf")
+
+# Validation cases a known defect keeps from matching, each pinned so the fix
+# shows up as an XPASS.
+_VALIDATION_XFAILS: dict[tuple[str, str], str] = {
+    ("TransformedDistribution", "log_prob"): "LCD-397: transforms declare no "
+    "domain/codomain",
+}
+
+
+def _lucid_on(device: str) -> Callable[[Any], lucid.Tensor]:
+    # Built on the host and moved: ``lucid.tensor(<0-d array>, device=...)``
+    # comes out with shape (1,) rather than ().
+    return lambda v: _lucid_tensor(v).to(device)
+
+
+def _outcome(call: Callable[[], Any]) -> tuple[str, Any]:
+    """``("ok", values)``, ``("refused", None)`` for a ``ValueError``,
+    ``("absent", None)`` where the method is not implemented, or
+    ``("error", name)`` for any other exception."""
+    try:
+        out = call()
+    except ValueError:
+        return "refused", None
+    except NotImplementedError:
+        return "absent", None
+    except Exception as e:  # noqa: BLE001 — any other failure is its own verdict
+        return "error", type(e).__name__
+    return "ok", np.asarray(out.numpy(), dtype=np.float64)
+
+
+def _agree(ours: tuple[str, Any], theirs: tuple[str, Any]) -> bool:
+    if ours[0] != theirs[0]:
+        return False
+    if ours[0] != "ok":
+        return True
+    a, b = ours[1], theirs[1]
+    return a.shape == b.shape and bool(
+        np.allclose(a, b, rtol=1e-4, atol=1e-5, equal_nan=True)
+    )
+
+
+def _scorer_params(xfails: dict[tuple[str, str], str]) -> list[Any]:
+    params = []
+    for name in sorted(CASES):
+        for method in _SCORERS:
+            for device in _DEVICES:
+                reason = xfails.get((name, method))
+                marks = (
+                    [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
+                )
+                params.append(
+                    pytest.param(
+                        name,
+                        method,
+                        device,
+                        marks=marks,
+                        id=f"{name}.{method}-{device}",
+                    )
+                )
+    return params
+
+
+@pytest.mark.parametrize("name,method,device", _scorer_params(_VALIDATION_XFAILS))
+def test_scored_value_validation(name: str, method: str, device: str, ref: Any) -> None:
+    case = CASES[name]
+    lt, rt = _lucid_on(device), _ref_tensor(ref)
+    ours_dist = case.build(D, lt, True)
+    theirs_dist = case.build(ref.distributions, rt, True)
+    differences = []
+    for v in case.values:
+        ours = _outcome(lambda: getattr(ours_dist, method)(lt(v)))
+        theirs = _outcome(lambda: getattr(theirs_dist, method)(rt(v)))
+        if "absent" in (ours[0], theirs[0]):
+            continue  # a scorer one side lacks is a separate gap
+        if (ours[0] == "refused") != (theirs[0] == "refused"):
+            differences.append((v, "Lucid refuses" if ours[0] == "refused" else ours))
+    _judge(name, f"validates:{method}", differences)
+
+
+@pytest.mark.parametrize("name,method,device", _scorer_params({}))
+def test_scored_values_without_validation(
+    name: str, method: str, device: str, ref: Any
+) -> None:
+    case = CASES[name]
+    lt, rt = _lucid_on(device), _ref_tensor(ref)
+    ours_dist = case.build(D, lt, False)
+    theirs_dist = case.build(ref.distributions, rt, False)
+    theirs_support = case.build(ref.distributions, rt, True).support
+    differences = []
+    for v in case.values:
+        if not _admits(theirs_support, rt(v)):
+            continue  # off the support each library answers in its own way
+        ours = _outcome(lambda: getattr(ours_dist, method)(lt(v)))
+        theirs = _outcome(lambda: getattr(theirs_dist, method)(rt(v)))
+        if "absent" in (ours[0], theirs[0]):
+            continue
+        if not _agree(ours, theirs):
+            differences.append((v, ours, theirs))
+    _judge(name, f"values:{method}", differences)
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_mode(name: str, device: str, ref: Any) -> None:
+    case = CASES[name]
+    ours = _outcome(lambda: case.build(D, _lucid_on(device), True).mode)
+    theirs = _outcome(
+        lambda: case.build(ref.distributions, _ref_tensor(ref), True).mode
+    )
+    _judge(name, "mode", [] if _agree(ours, theirs) else [(ours, theirs)])
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_own_samples_pass_validation(name: str, device: str) -> None:
+    """The guard's other side: validation that refused a distribution's own
+    draws would break every likelihood computed from them."""
+    lucid.manual_seed(0)
+    dist = CASES[name].build(D, _lucid_on(device), True)
+    try:
+        draws = dist.sample((256,))
+    except NotImplementedError:
+        pytest.skip(f"{name} has no sampler")
+    dist.log_prob(draws)

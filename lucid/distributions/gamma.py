@@ -628,6 +628,27 @@ class Beta(ExponentialFamily):
 
     @override
     @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Beta distribution.
+
+        .. math::
+
+            \frac{\alpha - 1}{\alpha + \beta - 2} \quad (\alpha, \beta \geq 1)
+
+        with each excess :math:`\alpha - 1`, :math:`\beta - 1` floored at 0,
+        so one concentration below 1 puts the mode at that end.  With both
+        below 1 the density is unbounded at both ends and ``1`` is returned;
+        at :math:`\alpha = \beta = 1` (uniform) the answer is ``nan`` — both
+        as the reference framework answers.
+        """
+        excess1 = (self.concentration1 - 1.0).clip(0.0, None)
+        excess0 = (self.concentration0 - 1.0).clip(0.0, None)
+        interior = excess1 / (excess1 + excess0)
+        both_below = (self.concentration1 < 1.0) & (self.concentration0 < 1.0)
+        return lucid.where(both_below, 1.0, interior)
+
+    @override
+    @property
     def variance(self) -> Tensor:
         r"""Variance of the Beta distribution.
 
@@ -907,6 +928,30 @@ class Dirichlet(ExponentialFamily):
         """
         s = self.concentration.sum(dim=-1, keepdim=True)
         return self.concentration / s
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode of the Dirichlet distribution.
+
+        .. math::
+
+            \frac{\alpha_i - 1}{\sum_j (\alpha_j - 1)}
+
+        with each excess floored at 0.  With every concentration below 1 the
+        density is unbounded at every vertex and the first vertex
+        :math:`e_0` is returned; with all equal to 1 (uniform on the
+        simplex) the answer is ``nan`` — both as the reference framework
+        answers.
+        """
+        excess = (self.concentration - 1.0).clip(0.0, None)
+        interior = excess / excess.sum(dim=-1, keepdim=True)
+        all_below = (self.concentration < 1.0).min(dim=-1).unsqueeze(-1)
+        k = int(self.concentration.shape[-1])
+        first_vertex = (lucid.arange(k, device=self.concentration.device) == 0).to(
+            interior.dtype
+        )
+        return lucid.where(all_below, first_vertex, interior)
 
     @override
     @property

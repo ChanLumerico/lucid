@@ -158,7 +158,7 @@ class Independent(Distribution):
 
     @override
     @property
-    def support(self) -> Constraint | None:  # type: ignore[override]
+    def support(self) -> Constraint | None:
         """Support of the distribution — the base support, read per event.
 
         Returns

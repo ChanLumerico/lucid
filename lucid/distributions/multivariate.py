@@ -5,9 +5,12 @@ from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.distributions._util import _lazy_param
 from lucid.distributions.constraints import (
     Constraint,
-    real,
+    lower_cholesky,
+    positive_definite,
+    real_vector,
 )
 from lucid.distributions.distribution import Distribution
 
@@ -34,6 +37,33 @@ def _precision_to_scale_tril(precision: Tensor) -> Tensor:
     )
     eye = eye.broadcast_to(tuple(l_inv.shape))
     return lucid.linalg.solve_triangular(l_inv, eye, upper=False)
+
+
+def _scale_tril_of(
+    covariance_matrix: Tensor | None, precision_matrix: Tensor | None
+) -> Tensor:
+    """The lower Cholesky factor of the covariance given by one of the two.
+
+    Shared by every family parameterised by a covariance, a precision or a
+    ``scale_tril``.  Called only after the given matrix has been validated,
+    so a matrix that is not positive-definite is refused by validation with
+    a ``ValueError`` and reaches the factorisation only when validation is
+    off — where :class:`lucid.linalg.LinAlgError` reports it.
+    """
+    if covariance_matrix is not None:
+        return lucid.linalg.cholesky(covariance_matrix)
+    if precision_matrix is None:
+        raise ValueError("pass a covariance_matrix or a precision_matrix")
+    return _precision_to_scale_tril(precision_matrix)
+
+
+def _precision_of(scale_tril: Tensor) -> Tensor:
+    r"""The precision :math:`(L L^\top)^{-1} = L^{-\top} L^{-1}`."""
+    eye = lucid.eye(
+        int(scale_tril.shape[-1]), dtype=scale_tril.dtype, device=scale_tril.device
+    ).broadcast_to(tuple(scale_tril.shape))
+    l_inv = lucid.linalg.solve_triangular(scale_tril, eye, upper=False)
+    return l_inv.mT @ l_inv
 
 
 class MultivariateNormal(Distribution):
@@ -132,13 +162,13 @@ class MultivariateNormal(Distribution):
     tensor(-1.838)
     """
 
-    # Looser than the reference on purpose: only ``loc`` is in the table.
-    # The scale is factorised at construction, so a covariance or
-    # precision matrix that is not positive-definite fails in Cholesky
-    # rather than in validation; a ``scale_tril`` is taken as given.
-    # Listed in the constraint-parity test's exceptions.
-    arg_constraints = {"loc": real}
-    support: Constraint | None = real
+    arg_constraints = {
+        "loc": real_vector,
+        "covariance_matrix": positive_definite,
+        "precision_matrix": positive_definite,
+        "scale_tril": lower_cholesky,
+    }
+    support: Constraint | None = real_vector
     has_rsample = True
 
     def __init__(
@@ -173,7 +203,13 @@ class MultivariateNormal(Distribution):
         Raises
         ------
         ValueError
-            If not exactly one of the covariance parameterisations is given.
+            If not exactly one of the covariance parameterisations is given,
+            or — under validation — the one given is not positive-definite
+            (a ``scale_tril``: not lower-triangular with a positive
+            diagonal).
+        lucid.linalg.LinAlgError
+            With validation off, if a covariance or precision matrix has no
+            Cholesky factorisation.
         """
         n_set = sum(
             x is not None for x in (covariance_matrix, precision_matrix, scale_tril)
@@ -184,13 +220,14 @@ class MultivariateNormal(Distribution):
                 "precision_matrix / scale_tril must be provided."
             )
         self.loc = loc
+        # The matrix given is stored under its own name, so validation checks
+        # it before anything factorises it.
         if scale_tril is not None:
             self.scale_tril = scale_tril
         elif covariance_matrix is not None:
-            self.scale_tril = lucid.linalg.cholesky(covariance_matrix)
-        else:
-            assert precision_matrix is not None
-            self.scale_tril = _precision_to_scale_tril(precision_matrix)
+            self.covariance_matrix = covariance_matrix
+        elif precision_matrix is not None:
+            self.precision_matrix = precision_matrix
 
         D = int(self.loc.shape[-1])
         self._D = D
@@ -199,10 +236,13 @@ class MultivariateNormal(Distribution):
             event_shape=(D,),
             validate_args=validate_args,
         )
+        if scale_tril is None:
+            self.scale_tril = _scale_tril_of(covariance_matrix, precision_matrix)
 
-    @property
+    @_lazy_param
     def covariance_matrix(self) -> Tensor:
-        r"""Full covariance matrix :math:`\Sigma = L L^\top`.
+        r"""Full covariance matrix :math:`\Sigma = L L^\top` — as given, or
+        derived from ``scale_tril`` on access.
 
         Returns
         -------
@@ -210,6 +250,19 @@ class MultivariateNormal(Distribution):
             Positive-definite covariance matrix of shape ``(*batch_shape, D, D)``.
         """
         return self.scale_tril @ self.scale_tril.mT
+
+    @_lazy_param
+    def precision_matrix(self) -> Tensor:
+        r"""Precision matrix :math:`\Sigma^{-1}` — as given, or derived from
+        ``scale_tril`` on access.
+
+        Returns
+        -------
+        Tensor
+            Positive-definite precision matrix of shape
+            ``(*batch_shape, D, D)``.
+        """
+        return _precision_of(self.scale_tril)
 
     @override
     @property

@@ -195,6 +195,12 @@ class StudentT(Distribution):
 
     @override
     @property
+    def mode(self) -> Tensor:
+        r"""Mode of Student's t: the location :math:`\mu`, for every ``df``."""
+        return self.loc
+
+    @override
+    @property
     def variance(self) -> Tensor:
         r"""Variance of the Student's t-distribution.
 
