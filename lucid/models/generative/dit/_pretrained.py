@@ -17,16 +17,14 @@ The 512-pixel model is the same ``XL/2`` config over a 64-wide latent —
 paper states it uses "identical hyperparameters as the 256x256 model".
 """
 
-from dataclasses import replace
-
 import lucid.weights as weights_mod
 from lucid.models.generative.dit._weights import DiTXLarge2Weights
 from lucid.weights import WeightsEnum
-from typing import Any, cast
 
 from lucid.models._registry import register_model
 from lucid.models.generative.dit._config import DiTConfig
 from lucid.models.generative.dit._model import DiTForImageGeneration, DiTModel
+from lucid.models._utils._common import apply_overrides
 
 __all__ = [
     "dit_small_2",
@@ -68,10 +66,6 @@ _CFG_LARGE_8 = DiTConfig(patch_size=8, hidden_size=1024, depth=24, num_heads=16)
 _CFG_XLARGE_2 = DiTConfig(patch_size=2, hidden_size=1152, depth=28, num_heads=16)
 _CFG_XLARGE_4 = DiTConfig(patch_size=4, hidden_size=1152, depth=28, num_heads=16)
 _CFG_XLARGE_8 = DiTConfig(patch_size=8, hidden_size=1152, depth=28, num_heads=16)
-
-
-def _apply(cfg: DiTConfig, overrides: dict[str, object]) -> DiTConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 def _latent_for(
@@ -145,7 +139,7 @@ def dit_small_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 2)
     """
-    return DiTModel(_apply(_CFG_SMALL_2, overrides))
+    return DiTModel(apply_overrides(_CFG_SMALL_2, overrides))
 
 
 @register_model(
@@ -185,7 +179,7 @@ def dit_small_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 4)
     """
-    return DiTModel(_apply(_CFG_SMALL_4, overrides))
+    return DiTModel(apply_overrides(_CFG_SMALL_4, overrides))
 
 
 @register_model(
@@ -225,7 +219,7 @@ def dit_small_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 384, 8)
     """
-    return DiTModel(_apply(_CFG_SMALL_8, overrides))
+    return DiTModel(apply_overrides(_CFG_SMALL_8, overrides))
 
 
 @register_model(
@@ -265,7 +259,7 @@ def dit_base_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 2)
     """
-    return DiTModel(_apply(_CFG_BASE_2, overrides))
+    return DiTModel(apply_overrides(_CFG_BASE_2, overrides))
 
 
 @register_model(
@@ -305,7 +299,7 @@ def dit_base_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 4)
     """
-    return DiTModel(_apply(_CFG_BASE_4, overrides))
+    return DiTModel(apply_overrides(_CFG_BASE_4, overrides))
 
 
 @register_model(
@@ -345,7 +339,7 @@ def dit_base_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (12, 768, 8)
     """
-    return DiTModel(_apply(_CFG_BASE_8, overrides))
+    return DiTModel(apply_overrides(_CFG_BASE_8, overrides))
 
 
 @register_model(
@@ -385,7 +379,7 @@ def dit_large_2(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 2)
     """
-    return DiTModel(_apply(_CFG_LARGE_2, overrides))
+    return DiTModel(apply_overrides(_CFG_LARGE_2, overrides))
 
 
 @register_model(
@@ -425,7 +419,7 @@ def dit_large_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 4)
     """
-    return DiTModel(_apply(_CFG_LARGE_4, overrides))
+    return DiTModel(apply_overrides(_CFG_LARGE_4, overrides))
 
 
 @register_model(
@@ -465,7 +459,7 @@ def dit_large_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (24, 1024, 8)
     """
-    return DiTModel(_apply(_CFG_LARGE_8, overrides))
+    return DiTModel(apply_overrides(_CFG_LARGE_8, overrides))
 
 
 @register_model(
@@ -518,7 +512,7 @@ def dit_xlarge_2(
     (28, 1152, 2)
     """
     entry = weights_mod.resolve_weights(DiTXLarge2Weights, pretrained, weights)
-    model = DiTModel(_apply(_CFG_XLARGE_2, _latent_for(entry, overrides)))
+    model = DiTModel(apply_overrides(_CFG_XLARGE_2, _latent_for(entry, overrides)))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="dit_xlarge_2")
     return model
@@ -561,7 +555,7 @@ def dit_xlarge_4(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (28, 1152, 4)
     """
-    return DiTModel(_apply(_CFG_XLARGE_4, overrides))
+    return DiTModel(apply_overrides(_CFG_XLARGE_4, overrides))
 
 
 @register_model(
@@ -601,7 +595,7 @@ def dit_xlarge_8(pretrained: bool = False, **overrides: object) -> DiTModel:
     >>> config.depth, config.hidden_size, config.patch_size
     (28, 1152, 8)
     """
-    return DiTModel(_apply(_CFG_XLARGE_8, overrides))
+    return DiTModel(apply_overrides(_CFG_XLARGE_8, overrides))
 
 
 @register_model(
@@ -639,7 +633,7 @@ def dit_small_2_gen(
     >>> from lucid.models import dit_small_2_gen
     >>> model = dit_small_2_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_SMALL_2, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_SMALL_2, overrides))
 
 
 @register_model(
@@ -677,7 +671,7 @@ def dit_small_4_gen(
     >>> from lucid.models import dit_small_4_gen
     >>> model = dit_small_4_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_SMALL_4, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_SMALL_4, overrides))
 
 
 @register_model(
@@ -715,7 +709,7 @@ def dit_small_8_gen(
     >>> from lucid.models import dit_small_8_gen
     >>> model = dit_small_8_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_SMALL_8, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_SMALL_8, overrides))
 
 
 @register_model(
@@ -753,7 +747,7 @@ def dit_base_2_gen(
     >>> from lucid.models import dit_base_2_gen
     >>> model = dit_base_2_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_BASE_2, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_BASE_2, overrides))
 
 
 @register_model(
@@ -791,7 +785,7 @@ def dit_base_4_gen(
     >>> from lucid.models import dit_base_4_gen
     >>> model = dit_base_4_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_BASE_4, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_BASE_4, overrides))
 
 
 @register_model(
@@ -829,7 +823,7 @@ def dit_base_8_gen(
     >>> from lucid.models import dit_base_8_gen
     >>> model = dit_base_8_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_BASE_8, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_BASE_8, overrides))
 
 
 @register_model(
@@ -867,7 +861,7 @@ def dit_large_2_gen(
     >>> from lucid.models import dit_large_2_gen
     >>> model = dit_large_2_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_LARGE_2, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_LARGE_2, overrides))
 
 
 @register_model(
@@ -905,7 +899,7 @@ def dit_large_4_gen(
     >>> from lucid.models import dit_large_4_gen
     >>> model = dit_large_4_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_LARGE_4, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_LARGE_4, overrides))
 
 
 @register_model(
@@ -943,7 +937,7 @@ def dit_large_8_gen(
     >>> from lucid.models import dit_large_8_gen
     >>> model = dit_large_8_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_LARGE_8, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_LARGE_8, overrides))
 
 
 @register_model(
@@ -990,7 +984,9 @@ def dit_xlarge_2_gen(
     >>> model = dit_xlarge_2_gen()  # doctest: +SKIP
     """
     entry = weights_mod.resolve_weights(DiTXLarge2Weights, pretrained, weights)
-    model = DiTForImageGeneration(_apply(_CFG_XLARGE_2, _latent_for(entry, overrides)))
+    model = DiTForImageGeneration(
+        apply_overrides(_CFG_XLARGE_2, _latent_for(entry, overrides))
+    )
     if entry is not None:
         # The checkpoint holds the backbone, which this wrapper keeps
         # under ``dit`` — so the load targets that, not the wrapper.
@@ -1033,7 +1029,7 @@ def dit_xlarge_4_gen(
     >>> from lucid.models import dit_xlarge_4_gen
     >>> model = dit_xlarge_4_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_XLARGE_4, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_XLARGE_4, overrides))
 
 
 @register_model(
@@ -1071,4 +1067,4 @@ def dit_xlarge_8_gen(
     >>> from lucid.models import dit_xlarge_8_gen
     >>> model = dit_xlarge_8_gen()  # doctest: +SKIP
     """
-    return DiTForImageGeneration(_apply(_CFG_XLARGE_8, overrides))
+    return DiTForImageGeneration(apply_overrides(_CFG_XLARGE_8, overrides))

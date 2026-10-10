@@ -19,15 +19,13 @@ thirds of its depth should land near two thirds of its 459M, and it
 does.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.mean_flow._config import MeanFlowConfig
 from lucid.models.generative.mean_flow._model import (
     MeanFlowForImageGeneration,
     MeanFlowModel,
 )
+from lucid.models._utils._common import apply_overrides
 
 __all__ = [
     "mean_flow_base_4",
@@ -64,10 +62,6 @@ _CFG_XLARGE_2 = MeanFlowConfig(
     guidance_scale=0.2,
     guidance_interval=(0.0, 0.75),
 )
-
-
-def _apply(cfg: MeanFlowConfig, overrides: dict[str, object]) -> MeanFlowConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -114,7 +108,7 @@ def mean_flow_base_4(pretrained: bool = False, **overrides: object) -> MeanFlowM
     >>> config.patch_size, config.num_patches
     (4, 64)
     """
-    return MeanFlowModel(_apply(_CFG_BASE_4, overrides))
+    return MeanFlowModel(apply_overrides(_CFG_BASE_4, overrides))
 
 
 @register_model(
@@ -155,7 +149,7 @@ def mean_flow_base_2(pretrained: bool = False, **overrides: object) -> MeanFlowM
     >>> config.hidden_size, config.depth, config.num_patches
     (768, 12, 256)
     """
-    return MeanFlowModel(_apply(_CFG_BASE_2, overrides))
+    return MeanFlowModel(apply_overrides(_CFG_BASE_2, overrides))
 
 
 @register_model(
@@ -199,7 +193,7 @@ def mean_flow_medium_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     >>> config.hidden_size, config.depth
     (1024, 16)
     """
-    return MeanFlowModel(_apply(_CFG_MEDIUM_2, overrides))
+    return MeanFlowModel(apply_overrides(_CFG_MEDIUM_2, overrides))
 
 
 @register_model(
@@ -244,7 +238,7 @@ def mean_flow_large_2(pretrained: bool = False, **overrides: object) -> MeanFlow
     >>> config.depth, config.guidance_interval
     (24, (0.0, 0.8))
     """
-    return MeanFlowModel(_apply(_CFG_LARGE_2, overrides))
+    return MeanFlowModel(apply_overrides(_CFG_LARGE_2, overrides))
 
 
 @register_model(
@@ -288,13 +282,13 @@ def mean_flow_xlarge_2(pretrained: bool = False, **overrides: object) -> MeanFlo
     >>> config.hidden_size, config.depth, config.num_heads
     (1152, 28, 16)
     """
-    return MeanFlowModel(_apply(_CFG_XLARGE_2, overrides))
+    return MeanFlowModel(apply_overrides(_CFG_XLARGE_2, overrides))
 
 
 def _gen(
     cfg: MeanFlowConfig, overrides: dict[str, object]
 ) -> MeanFlowForImageGeneration:
-    return MeanFlowForImageGeneration(_apply(cfg, overrides))
+    return MeanFlowForImageGeneration(apply_overrides(cfg, overrides))
 
 
 @register_model(

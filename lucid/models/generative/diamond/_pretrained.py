@@ -18,9 +18,6 @@ it in four places, so the number a factory builds is exactly what the
 published checkpoints hold.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.diamond._config import DIAMONDConfig
@@ -30,6 +27,7 @@ from lucid.models.generative.diamond._model import (
 )
 from lucid.models.generative.diamond._weights import DIAMONDWeights
 from lucid.weights import WeightsEnum
+from lucid.models._utils._common import apply_overrides
 
 __all__ = ["diamond", "diamond_world_model", "diamond_csgo"]
 
@@ -55,10 +53,6 @@ _CFG_CSGO = DIAMONDConfig(
     upsampler_attn_depths=(0, 0, 0, 1),
     upsampling_factor=5,
 )
-
-
-def _apply(cfg: DIAMONDConfig, overrides: dict[str, object]) -> DIAMONDConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 def _tag(pretrained: bool | str) -> bool | str:
@@ -217,7 +211,7 @@ def diamond(
     21
     """
     entry = weights_mod.resolve_weights(DIAMONDWeights, _tag(pretrained), weights)
-    model = DIAMONDModel(_apply(_CFG_ATARI, _actions_for(entry, overrides)))
+    model = DIAMONDModel(apply_overrides(_CFG_ATARI, _actions_for(entry, overrides)))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="diamond")
     return model
@@ -284,7 +278,9 @@ def diamond_world_model(
     ((1, 3, 3, 16, 16), (1, 3))
     """
     entry = weights_mod.resolve_weights(DIAMONDWeights, _tag(pretrained), weights)
-    model = DIAMONDForWorldModeling(_apply(_CFG_ATARI, _actions_for(entry, overrides)))
+    model = DIAMONDForWorldModeling(
+        apply_overrides(_CFG_ATARI, _actions_for(entry, overrides))
+    )
     if entry is not None:
         # The checkpoint is the agent's; this wrapper keeps it under
         # ``diamond``, so the load targets that rather than the wrapper.
@@ -353,7 +349,7 @@ def diamond_csgo(
     False
     """
     entry = weights_mod.resolve_weights(DIAMONDWeights, _csgo_tag(pretrained), weights)
-    model = DIAMONDModel(_apply(_CFG_CSGO, overrides))
+    model = DIAMONDModel(apply_overrides(_CFG_CSGO, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="diamond_csgo")
     return model

@@ -26,9 +26,6 @@ the reference activation by activation, not merely loaded — see
 residual that is the CPU kernel's rather than the conversion's.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
@@ -39,6 +36,7 @@ from lucid.models.generative.stable_diffusion._model import (
     StableDiffusionForImageGeneration,
     StableDiffusionModel,
 )
+from lucid.models._utils._common import apply_overrides
 
 __all__ = [
     "stable_diffusion",
@@ -46,12 +44,6 @@ __all__ = [
 ]
 
 _CFG_V1 = StableDiffusionConfig()
-
-
-def _apply(
-    cfg: StableDiffusionConfig, overrides: dict[str, object]
-) -> StableDiffusionConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -102,7 +94,7 @@ def stable_diffusion(
     >>> config.latent_size, config.cross_attention_dim
     (64, 768)
     """
-    model = StableDiffusionModel(_apply(_CFG_V1, overrides))
+    model = StableDiffusionModel(apply_overrides(_CFG_V1, overrides))
     entry = weights_mod.resolve_weights(StableDiffusionWeights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="stable_diffusion")
@@ -154,7 +146,7 @@ def stable_diffusion_gen(
     >>> StableDiffusionConfig().sample_size
     512
     """
-    model = StableDiffusionForImageGeneration(_apply(_CFG_V1, overrides))
+    model = StableDiffusionForImageGeneration(apply_overrides(_CFG_V1, overrides))
     entry = weights_mod.resolve_weights(StableDiffusionWeights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(

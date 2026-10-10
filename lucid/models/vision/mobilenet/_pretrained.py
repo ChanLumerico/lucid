@@ -1,8 +1,5 @@
 """Registry factories for MobileNet v1."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet._config import MobileNetConfig
@@ -11,22 +8,12 @@ from lucid.models.vision.mobilenet._model import (
     MobileNetForImageClassification,
 )
 from lucid.models.vision.mobilenet._weights import MobileNetWeights
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_100 = MobileNetConfig(width_mult=1.0)
 _CFG_075 = MobileNetConfig(width_mult=0.75)
 _CFG_050 = MobileNetConfig(width_mult=0.5)
 _CFG_025 = MobileNetConfig(width_mult=0.25)
-
-
-def _b(cfg: MobileNetConfig, kw: dict[str, object]) -> MobileNet:
-    return MobileNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: MobileNetConfig, kw: dict[str, object]) -> MobileNetForImageClassification:
-    return MobileNetForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -84,7 +71,7 @@ def mobilenet(pretrained: bool = False, **overrides: object) -> MobileNet:
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet", alternative="mobilenet_cls")
-    return _b(_CFG_100, overrides)
+    return MobileNet(apply_overrides(_CFG_100, overrides))
 
 
 @register_model(
@@ -136,7 +123,7 @@ def mobilenet_075(pretrained: bool = False, **overrides: object) -> MobileNet:
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_075", alternative="mobilenet_cls")
-    return _b(_CFG_075, overrides)
+    return MobileNet(apply_overrides(_CFG_075, overrides))
 
 
 @register_model(
@@ -188,7 +175,7 @@ def mobilenet_050(pretrained: bool = False, **overrides: object) -> MobileNet:
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_050", alternative="mobilenet_cls")
-    return _b(_CFG_050, overrides)
+    return MobileNet(apply_overrides(_CFG_050, overrides))
 
 
 @register_model(
@@ -242,7 +229,7 @@ def mobilenet_025(pretrained: bool = False, **overrides: object) -> MobileNet:
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_025", alternative="mobilenet_cls")
-    return _b(_CFG_025, overrides)
+    return MobileNet(apply_overrides(_CFG_025, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -311,7 +298,7 @@ def mobilenet_cls(
     (2, 10)
     """
     entry = weights_mod.resolve_weights(MobileNetWeights, pretrained, weights)
-    model = _c(_CFG_100, overrides)
+    model = MobileNetForImageClassification(apply_overrides(_CFG_100, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_cls")
     return model
@@ -367,7 +354,7 @@ def mobilenet_075_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_075_cls", alternative="mobilenet_cls")
-    return _c(_CFG_075, overrides)
+    return MobileNetForImageClassification(apply_overrides(_CFG_075, overrides))
 
 
 @register_model(
@@ -420,7 +407,7 @@ def mobilenet_050_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_050_cls", alternative="mobilenet_cls")
-    return _c(_CFG_050, overrides)
+    return MobileNetForImageClassification(apply_overrides(_CFG_050, overrides))
 
 
 @register_model(
@@ -475,4 +462,4 @@ def mobilenet_025_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("mobilenet_025_cls", alternative="mobilenet_cls")
-    return _c(_CFG_025, overrides)
+    return MobileNetForImageClassification(apply_overrides(_CFG_025, overrides))

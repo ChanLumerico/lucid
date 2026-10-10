@@ -20,11 +20,8 @@ that would not be a guess.
 No weights were released for either configuration.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.genie._config import GenieConfig
 from lucid.models.generative.genie._model import GenieForWorldModeling, GenieModel
 
@@ -67,10 +64,6 @@ _CFG_COINRUN = GenieConfig(
     dynamics_head_dim=None,
     temperature=1.0,
 )
-
-
-def _apply(cfg: GenieConfig, overrides: dict[str, object]) -> GenieConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -136,7 +129,7 @@ def genie(pretrained: bool = False, **overrides: object) -> GenieModel:
     """
     if pretrained:
         reject_unavailable_pretrained("genie")
-    return GenieModel(_apply(_CFG_PLATFORMERS, overrides))
+    return GenieModel(apply_overrides(_CFG_PLATFORMERS, overrides))
 
 
 @register_model(
@@ -192,7 +185,7 @@ def genie_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("genie_world_model")
-    return GenieForWorldModeling(_apply(_CFG_PLATFORMERS, overrides))
+    return GenieForWorldModeling(apply_overrides(_CFG_PLATFORMERS, overrides))
 
 
 @register_model(
@@ -243,7 +236,7 @@ def genie_coinrun(pretrained: bool = False, **overrides: object) -> GenieModel:
     """
     if pretrained:
         reject_unavailable_pretrained("genie_coinrun")
-    return GenieModel(_apply(_CFG_COINRUN, overrides))
+    return GenieModel(apply_overrides(_CFG_COINRUN, overrides))
 
 
 @register_model(
@@ -299,4 +292,4 @@ def genie_coinrun_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("genie_coinrun_world_model")
-    return GenieForWorldModeling(_apply(_CFG_COINRUN, overrides))
+    return GenieForWorldModeling(apply_overrides(_CFG_COINRUN, overrides))

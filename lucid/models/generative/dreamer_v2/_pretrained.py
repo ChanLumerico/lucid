@@ -30,10 +30,9 @@ figure anyway.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.dreamer_v2._config import DreamerV2Config
 from lucid.models.generative.dreamer_v2._model import (
     DreamerV2ForWorldModeling,
@@ -41,10 +40,6 @@ from lucid.models.generative.dreamer_v2._model import (
 )
 
 _CFG_DREAMER_V2 = DreamerV2Config()
-
-
-def _apply(cfg: DreamerV2Config, overrides: dict[str, object]) -> DreamerV2Config:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -89,7 +84,7 @@ def dreamer_v2(pretrained: bool = False, **overrides: object) -> DreamerV2Model:
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2")
-    return DreamerV2Model(_apply(_CFG_DREAMER_V2, overrides))
+    return DreamerV2Model(apply_overrides(_CFG_DREAMER_V2, overrides))
 
 
 @register_model(
@@ -141,7 +136,7 @@ def dreamer_v2_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2_world_model")
-    return DreamerV2ForWorldModeling(_apply(_CFG_DREAMER_V2, overrides))
+    return DreamerV2ForWorldModeling(apply_overrides(_CFG_DREAMER_V2, overrides))
 
 
 # The paper's Atari column, as the released implementation writes it.
@@ -227,7 +222,7 @@ def dreamer_v2_atari(pretrained: bool = False, **overrides: object) -> DreamerV2
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2_atari")
-    return DreamerV2Model(_apply(_CFG_ATARI, overrides))
+    return DreamerV2Model(apply_overrides(_CFG_ATARI, overrides))
 
 
 @register_model(
@@ -272,7 +267,7 @@ def dreamer_v2_atari_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2_atari_world_model")
-    return DreamerV2ForWorldModeling(_apply(_CFG_ATARI, overrides))
+    return DreamerV2ForWorldModeling(apply_overrides(_CFG_ATARI, overrides))
 
 
 @register_model(
@@ -322,7 +317,7 @@ def dreamer_v2_dmc(pretrained: bool = False, **overrides: object) -> DreamerV2Mo
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2_dmc")
-    return DreamerV2Model(_apply(_CFG_DMC, overrides))
+    return DreamerV2Model(apply_overrides(_CFG_DMC, overrides))
 
 
 @register_model(
@@ -366,4 +361,4 @@ def dreamer_v2_dmc_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v2_dmc_world_model")
-    return DreamerV2ForWorldModeling(_apply(_CFG_DMC, overrides))
+    return DreamerV2ForWorldModeling(apply_overrides(_CFG_DMC, overrides))

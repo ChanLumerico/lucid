@@ -377,7 +377,10 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("ModelConfig", "lucid.models._base", "ModelConfig"),
         ("PretrainedModel", "lucid.models._base", "PretrainedModel"),
     ),
-    "lucid.models._utils._common": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid.models._utils._common": (
+        ("DataclassInstance", "_typeshed", "DataclassInstance"),
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+    ),
     "lucid.nn.functional._index_checks": (
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),

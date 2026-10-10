@@ -1,8 +1,5 @@
 """Registry factories for MaskFormer variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.maskformer._config import MaskFormerConfig
@@ -11,6 +8,7 @@ from lucid.models.vision.maskformer._weights import (
     MaskFormerResNet50Weights,
     MaskFormerResNet101Weights,
 )
+from lucid.models._utils._common import apply_overrides
 
 _CFG_R50 = MaskFormerConfig(
     num_classes=150,
@@ -45,14 +43,6 @@ _CFG_R101 = MaskFormerConfig(
     num_queries=100,
     fpn_out_channels=256,
 )
-
-
-def _build(
-    cfg: MaskFormerConfig, kw: dict[str, object]
-) -> MaskFormerForSemanticSegmentation:
-    return MaskFormerForSemanticSegmentation(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -119,7 +109,7 @@ def maskformer_resnet50(
     21
     """
     entry = weights_mod.resolve_weights(MaskFormerResNet50Weights, pretrained, weights)
-    model = _build(_CFG_R50, overrides)
+    model = MaskFormerForSemanticSegmentation(apply_overrides(_CFG_R50, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maskformer_resnet50")
     return model
@@ -184,7 +174,7 @@ def maskformer_resnet101(
     150
     """
     entry = weights_mod.resolve_weights(MaskFormerResNet101Weights, pretrained, weights)
-    model = _build(_CFG_R101, overrides)
+    model = MaskFormerForSemanticSegmentation(apply_overrides(_CFG_R101, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maskformer_resnet101")
     return model

@@ -7,9 +7,6 @@ in ``tools/convert_weights/cspnet.py`` is a single ``map_key`` for all
 three variants).
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.cspnet._config import CSPNetConfig
@@ -19,7 +16,7 @@ from lucid.models.vision.cspnet._weights import (
     CSPResNet50Weights,
     CSPResNeXt50Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Per-variant configs (timm ``model_cfgs`` values, paper-faithful).
@@ -81,16 +78,6 @@ _CFG_CSPDARKNET_53 = CSPNetConfig(
 )
 
 
-def _b(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNet:
-    return CSPNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification:
-    return CSPNetForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
-
-
 # ---------------------------------------------------------------------------
 # Backbones (task="base")
 # ---------------------------------------------------------------------------
@@ -125,7 +112,7 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     """
     if pretrained:
         reject_unavailable_pretrained("cspresnet_50", alternative="cspresnet_50_cls")
-    return _b(_CFG_CSPRESNET_50, overrides)
+    return CSPNet(apply_overrides(_CFG_CSPRESNET_50, overrides))
 
 
 @register_model(
@@ -157,7 +144,7 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     """
     if pretrained:
         reject_unavailable_pretrained("cspresnext_50", alternative="cspresnext_50_cls")
-    return _b(_CFG_CSPRESNEXT_50, overrides)
+    return CSPNet(apply_overrides(_CFG_CSPRESNEXT_50, overrides))
 
 
 @register_model(
@@ -190,7 +177,7 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
     """
     if pretrained:
         reject_unavailable_pretrained("cspdarknet_53", alternative="cspdarknet_53_cls")
-    return _b(_CFG_CSPDARKNET_53, overrides)
+    return CSPNet(apply_overrides(_CFG_CSPDARKNET_53, overrides))
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +234,7 @@ def cspresnet_50_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPResNet50Weights, pretrained, weights)
-    model = _c(_CFG_CSPRESNET_50, overrides)
+    model = CSPNetForImageClassification(apply_overrides(_CFG_CSPRESNET_50, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cspresnet_50_cls")
     return model
@@ -301,7 +288,7 @@ def cspresnext_50_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPResNeXt50Weights, pretrained, weights)
-    model = _c(_CFG_CSPRESNEXT_50, overrides)
+    model = CSPNetForImageClassification(apply_overrides(_CFG_CSPRESNEXT_50, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cspresnext_50_cls")
     return model
@@ -355,7 +342,7 @@ def cspdarknet_53_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPDarknet53Weights, pretrained, weights)
-    model = _c(_CFG_CSPDARKNET_53, overrides)
+    model = CSPNetForImageClassification(apply_overrides(_CFG_CSPDARKNET_53, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="cspdarknet_53_cls")
     return model

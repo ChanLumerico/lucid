@@ -1,8 +1,5 @@
 """Registry factories for ResNeSt."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnest._config import ResNeStConfig
@@ -16,7 +13,7 @@ from lucid.models.vision.resnest._weights import (
     ResNeSt200Weights,
     ResNeSt269Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # H11 marker: `resnest_14` and `resnest_26` are **not paper variants**.
 # Zhang et al. (arXiv:2004.08955) define exactly four depths — 50, 101, 200
@@ -87,7 +84,7 @@ def resnest_14(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_14")
-    cfg = replace(_CFG_14, **cast(dict[str, Any], overrides)) if overrides else _CFG_14
+    cfg = apply_overrides(_CFG_14, overrides)
     return ResNeSt(cfg)
 
 
@@ -139,7 +136,7 @@ def resnest_26(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_26")
-    cfg = replace(_CFG_26, **cast(dict[str, Any], overrides)) if overrides else _CFG_26
+    cfg = apply_overrides(_CFG_26, overrides)
     return ResNeSt(cfg)
 
 
@@ -193,7 +190,7 @@ def resnest_50(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_50", alternative="resnest_50_cls")
-    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
+    cfg = apply_overrides(_CFG_50, overrides)
     return ResNeSt(cfg)
 
 
@@ -245,9 +242,7 @@ def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_101", alternative="resnest_101_cls")
-    cfg = (
-        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
-    )
+    cfg = apply_overrides(_CFG_101, overrides)
     return ResNeSt(cfg)
 
 
@@ -298,9 +293,7 @@ def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_200", alternative="resnest_200_cls")
-    cfg = (
-        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
-    )
+    cfg = apply_overrides(_CFG_200, overrides)
     return ResNeSt(cfg)
 
 
@@ -354,9 +347,7 @@ def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_269", alternative="resnest_269_cls")
-    cfg = (
-        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
-    )
+    cfg = apply_overrides(_CFG_269, overrides)
     return ResNeSt(cfg)
 
 
@@ -414,7 +405,7 @@ def resnest_14_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_14_cls")
-    cfg = replace(_CFG_14, **cast(dict[str, Any], overrides)) if overrides else _CFG_14
+    cfg = apply_overrides(_CFG_14, overrides)
     return ResNeStForImageClassification(cfg)
 
 
@@ -467,7 +458,7 @@ def resnest_26_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("resnest_26_cls")
-    cfg = replace(_CFG_26, **cast(dict[str, Any], overrides)) if overrides else _CFG_26
+    cfg = apply_overrides(_CFG_26, overrides)
     return ResNeStForImageClassification(cfg)
 
 
@@ -532,7 +523,7 @@ def resnest_50_cls(
     (2, 10)
     """
     entry = weights_mod.resolve_weights(ResNeSt50Weights, pretrained, weights)
-    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
+    cfg = apply_overrides(_CFG_50, overrides)
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_50_cls")
@@ -598,9 +589,7 @@ def resnest_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt101Weights, pretrained, weights)
-    cfg = (
-        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
-    )
+    cfg = apply_overrides(_CFG_101, overrides)
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_101_cls")
@@ -666,9 +655,7 @@ def resnest_200_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt200Weights, pretrained, weights)
-    cfg = (
-        replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
-    )
+    cfg = apply_overrides(_CFG_200, overrides)
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_200_cls")
@@ -735,9 +722,7 @@ def resnest_269_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ResNeSt269Weights, pretrained, weights)
-    cfg = (
-        replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
-    )
+    cfg = apply_overrides(_CFG_269, overrides)
     model = ResNeStForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnest_269_cls")

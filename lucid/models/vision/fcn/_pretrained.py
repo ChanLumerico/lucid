@@ -1,8 +1,5 @@
 """Registry factories for FCN variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.fcn._config import FCNConfig
@@ -11,6 +8,7 @@ from lucid.models.vision.fcn._weights import (
     FCNResNet50Weights,
     FCNResNet101Weights,
 )
+from lucid.models._utils._common import apply_overrides
 
 _CFG_RESNET50 = FCNConfig(
     num_classes=21,
@@ -31,12 +29,6 @@ _CFG_RESNET101 = FCNConfig(
     aux_hidden_channels=256,
     dropout=0.1,
 )
-
-
-def _build(cfg: FCNConfig, kw: dict[str, object]) -> FCNForSemanticSegmentation:
-    return FCNForSemanticSegmentation(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -98,7 +90,7 @@ def fcn_resnet50(
     (1, 21, 512, 512)
     """
     entry = weights_mod.resolve_weights(FCNResNet50Weights, pretrained, weights)
-    model = _build(_CFG_RESNET50, overrides)
+    model = FCNForSemanticSegmentation(apply_overrides(_CFG_RESNET50, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="fcn_resnet50")
     return model
@@ -153,7 +145,7 @@ def fcn_resnet101(
     (1, 21, 512, 512)
     """
     entry = weights_mod.resolve_weights(FCNResNet101Weights, pretrained, weights)
-    model = _build(_CFG_RESNET101, overrides)
+    model = FCNForSemanticSegmentation(apply_overrides(_CFG_RESNET101, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="fcn_resnet101")
     return model

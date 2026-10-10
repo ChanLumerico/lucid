@@ -18,11 +18,8 @@ for the same reason as I-JEPA: the paper's 200M and 630M describe one
 encoder, while a factory here builds two of them and a predictor.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.vision.vjepa._config import VJEPAConfig
 from lucid.models.vision.vjepa._model import VJEPAForVideoClassification, VJEPAModel
 
@@ -39,10 +36,6 @@ __all__ = [
 _CFG_LARGE_16 = VJEPAConfig(image_size=224, dim=1024, depth=24, num_heads=16)
 _CFG_HUGE_16 = VJEPAConfig(image_size=224, dim=1280, depth=32, num_heads=16)
 _CFG_HUGE_16_384 = VJEPAConfig(image_size=384, dim=1280, depth=32, num_heads=16)
-
-
-def _apply(cfg: VJEPAConfig, overrides: dict[str, object]) -> VJEPAConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -88,7 +81,7 @@ def vjepa_large_16(pretrained: bool = False, **overrides: object) -> VJEPAModel:
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_large_16")
-    return VJEPAModel(_apply(_CFG_LARGE_16, overrides))
+    return VJEPAModel(apply_overrides(_CFG_LARGE_16, overrides))
 
 
 @register_model(
@@ -129,7 +122,7 @@ def vjepa_large_16_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_large_16_cls")
-    return VJEPAForVideoClassification(_apply(_CFG_LARGE_16, overrides))
+    return VJEPAForVideoClassification(apply_overrides(_CFG_LARGE_16, overrides))
 
 
 @register_model(
@@ -173,7 +166,7 @@ def vjepa_huge_16(pretrained: bool = False, **overrides: object) -> VJEPAModel:
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_huge_16")
-    return VJEPAModel(_apply(_CFG_HUGE_16, overrides))
+    return VJEPAModel(apply_overrides(_CFG_HUGE_16, overrides))
 
 
 @register_model(
@@ -213,7 +206,7 @@ def vjepa_huge_16_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_huge_16_cls")
-    return VJEPAForVideoClassification(_apply(_CFG_HUGE_16, overrides))
+    return VJEPAForVideoClassification(apply_overrides(_CFG_HUGE_16, overrides))
 
 
 @register_model(
@@ -256,7 +249,7 @@ def vjepa_huge_16_384(pretrained: bool = False, **overrides: object) -> VJEPAMod
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_huge_16_384")
-    return VJEPAModel(_apply(_CFG_HUGE_16_384, overrides))
+    return VJEPAModel(apply_overrides(_CFG_HUGE_16_384, overrides))
 
 
 @register_model(
@@ -298,4 +291,4 @@ def vjepa_huge_16_384_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("vjepa_huge_16_384_cls")
-    return VJEPAForVideoClassification(_apply(_CFG_HUGE_16_384, overrides))
+    return VJEPAForVideoClassification(apply_overrides(_CFG_HUGE_16_384, overrides))

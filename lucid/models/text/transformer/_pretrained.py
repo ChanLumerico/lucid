@@ -1,8 +1,5 @@
 """Registry factories for the original Vaswani Transformer."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.text.transformer._config import TransformerConfig
 from lucid.models.text.transformer._model import (
@@ -11,7 +8,7 @@ from lucid.models.text.transformer._model import (
     TransformerForTokenClassification,
     TransformerModel,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Vaswani et al. (2017) §6.2 — Table 3 "base" and "big" (the only two
 # sizes the paper specifies).
@@ -23,10 +20,6 @@ _CFG_LARGE = TransformerConfig(
     hidden_dropout=0.3,
     attention_dropout=0.3,
 )
-
-
-def _apply(cfg: TransformerConfig, overrides: dict[str, object]) -> TransformerConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -93,7 +86,7 @@ def transformer_base(pretrained: bool = False, **overrides: object) -> Transform
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_base")
-    return TransformerModel(_apply(_CFG_BASE, overrides))
+    return TransformerModel(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -148,7 +141,7 @@ def transformer_large(
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_large")
-    return TransformerModel(_apply(_CFG_LARGE, overrides))
+    return TransformerModel(apply_overrides(_CFG_LARGE, overrides))
 
 
 # ── Seq2SeqLM heads ───────────────────────────────────────────────────────────
@@ -214,7 +207,7 @@ def transformer_base_seq2seq(
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_base_seq2seq")
-    return TransformerForSeq2SeqLM(_apply(_CFG_BASE, overrides))
+    return TransformerForSeq2SeqLM(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -266,7 +259,7 @@ def transformer_large_seq2seq(
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_large_seq2seq")
-    return TransformerForSeq2SeqLM(_apply(_CFG_LARGE, overrides))
+    return TransformerForSeq2SeqLM(apply_overrides(_CFG_LARGE, overrides))
 
 
 # ── Encoder-only downstream heads ─────────────────────────────────────────────
@@ -323,7 +316,7 @@ def transformer_base_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_base_cls")
-    return TransformerForSequenceClassification(_apply(_CFG_BASE, overrides))
+    return TransformerForSequenceClassification(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -386,4 +379,4 @@ def transformer_base_token_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("transformer_base_token_cls")
-    return TransformerForTokenClassification(_apply(_CFG_BASE, overrides))
+    return TransformerForTokenClassification(apply_overrides(_CFG_BASE, overrides))

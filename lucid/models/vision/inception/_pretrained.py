@@ -1,7 +1,6 @@
 """Registry factories for Inception v3."""
 
 from dataclasses import replace
-from typing import Any, cast
 
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
@@ -11,7 +10,7 @@ from lucid.models.vision.inception._model import (
     InceptionV3ForImageClassification,
 )
 from lucid.models.vision.inception._weights import InceptionV3Weights
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG = InceptionConfig(aux_logits=False)
 _CFG_AUX = InceptionConfig(aux_logits=True)
@@ -67,7 +66,7 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
     """
     if pretrained:
         reject_unavailable_pretrained("inception_v3", alternative="inception_v3_cls")
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     return InceptionV3(cfg)
 
 
@@ -155,7 +154,7 @@ def inception_v3_cls(
     >>> model = inception_v3_cls(weights=InceptionV3Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(InceptionV3Weights, pretrained, weights)
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     if entry is not None and "transform_input" not in overrides:
         # The reference builder force-enables this whenever weights are given:
         # the checkpoint is a TF port expecting (x-0.5)/0.5 inputs while the

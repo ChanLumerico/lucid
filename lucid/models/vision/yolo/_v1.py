@@ -33,8 +33,8 @@ Multi-part MSE loss matching the paper §2.2:
 """
 
 import math
-from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, ClassVar, cast, override
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -45,6 +45,7 @@ from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
+from lucid.models._utils._common import apply_overrides
 
 if TYPE_CHECKING:
     pass
@@ -851,12 +852,6 @@ _CFG_V1_TINY = YOLOConfig(
 )
 
 
-def _make_v1(cfg: YOLOConfig, overrides: dict[str, object]) -> YOLOForObjectDetection:
-    if overrides:
-        cfg = replace(cfg, **cast(dict[str, Any], overrides))
-    return YOLOForObjectDetection(cfg)
-
-
 @register_model(
     task="object-detection",
     family="yolo",
@@ -907,7 +902,7 @@ def yolo(
     >>> out.logits.shape[0]
     1
     """
-    return _make_v1(_CFG_V1, overrides)
+    return YOLOForObjectDetection(apply_overrides(_CFG_V1, overrides))
 
 
 @register_model(
@@ -961,4 +956,4 @@ def yolo_tiny(
     >>> out.logits.shape[0]
     1
     """
-    return _make_v1(_CFG_V1_TINY, overrides)
+    return YOLOForObjectDetection(apply_overrides(_CFG_V1_TINY, overrides))

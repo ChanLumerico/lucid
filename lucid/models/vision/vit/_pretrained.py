@@ -1,8 +1,5 @@
 """Registry factories for ViT variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vit._config import ViTConfig
@@ -13,23 +10,13 @@ from lucid.models.vision.vit._weights import (
     ViTLarge16Weights,
     ViTLarge32Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_B16 = ViTConfig(patch_size=16, dim=768, depth=12, num_heads=12)
 _CFG_B32 = ViTConfig(patch_size=32, dim=768, depth=12, num_heads=12)
 _CFG_L16 = ViTConfig(patch_size=16, dim=1024, depth=24, num_heads=16)
 _CFG_L32 = ViTConfig(patch_size=32, dim=1024, depth=24, num_heads=16)
 _CFG_H14 = ViTConfig(patch_size=14, dim=1280, depth=32, num_heads=16)
-
-
-def _b(cfg: ViTConfig, kw: dict[str, object]) -> ViT:
-    return ViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: ViTConfig, kw: dict[str, object]) -> ViTForImageClassification:
-    return ViTForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -87,7 +74,7 @@ def vit_base_16(pretrained: bool = False, **overrides: object) -> ViT:
     """
     if pretrained:
         reject_unavailable_pretrained("vit_base_16", alternative="vit_base_16_cls")
-    return _b(_CFG_B16, overrides)
+    return ViT(apply_overrides(_CFG_B16, overrides))
 
 
 @register_model(
@@ -135,7 +122,7 @@ def vit_base_32(pretrained: bool = False, **overrides: object) -> ViT:
     """
     if pretrained:
         reject_unavailable_pretrained("vit_base_32", alternative="vit_base_16_cls")
-    return _b(_CFG_B32, overrides)
+    return ViT(apply_overrides(_CFG_B32, overrides))
 
 
 @register_model(
@@ -184,7 +171,7 @@ def vit_large_16(pretrained: bool = False, **overrides: object) -> ViT:
     """
     if pretrained:
         reject_unavailable_pretrained("vit_large_16", alternative="vit_base_16_cls")
-    return _b(_CFG_L16, overrides)
+    return ViT(apply_overrides(_CFG_L16, overrides))
 
 
 @register_model(
@@ -231,7 +218,7 @@ def vit_large_32(pretrained: bool = False, **overrides: object) -> ViT:
     """
     if pretrained:
         reject_unavailable_pretrained("vit_large_32", alternative="vit_base_16_cls")
-    return _b(_CFG_L32, overrides)
+    return ViT(apply_overrides(_CFG_L32, overrides))
 
 
 @register_model(
@@ -283,7 +270,7 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
     """
     if pretrained:
         reject_unavailable_pretrained("vit_huge_14", alternative="vit_base_16_cls")
-    return _b(_CFG_H14, overrides)
+    return ViT(apply_overrides(_CFG_H14, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -351,7 +338,7 @@ def vit_base_16_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ViTBase16Weights, pretrained, weights)
-    model = _c(_CFG_B16, overrides)
+    model = ViTForImageClassification(apply_overrides(_CFG_B16, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vit_base_16_cls")
     return model
@@ -411,7 +398,7 @@ def vit_base_32_cls(
     (1, 10)
     """
     entry = weights_mod.resolve_weights(ViTBase32Weights, pretrained, weights)
-    model = _c(_CFG_B32, overrides)
+    model = ViTForImageClassification(apply_overrides(_CFG_B32, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vit_base_32_cls")
     return model
@@ -472,7 +459,7 @@ def vit_large_16_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ViTLarge16Weights, pretrained, weights)
-    model = _c(_CFG_L16, overrides)
+    model = ViTForImageClassification(apply_overrides(_CFG_L16, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vit_large_16_cls")
     return model
@@ -532,7 +519,7 @@ def vit_large_32_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(ViTLarge32Weights, pretrained, weights)
-    model = _c(_CFG_L32, overrides)
+    model = ViTForImageClassification(apply_overrides(_CFG_L32, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vit_large_32_cls")
     return model
@@ -585,4 +572,4 @@ def vit_huge_14_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("vit_huge_14_cls", alternative="vit_base_16_cls")
-    return _c(_CFG_H14, overrides)
+    return ViTForImageClassification(apply_overrides(_CFG_H14, overrides))

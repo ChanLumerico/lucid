@@ -27,7 +27,6 @@ citation.  ``summary="auto"`` reports the real number instead.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
@@ -42,6 +41,7 @@ from lucid.models.multimodal.clip._model import (
     CLIPModel,
     CLIPForZeroShotImageClassification,
 )
+from lucid.models._utils._common import apply_overrides
 
 __all__ = [
     "clip_vit_base_32",
@@ -83,10 +83,6 @@ _CFG_LARGE_14 = CLIPConfig(
 _CFG_LARGE_14_336 = replace(_CFG_LARGE_14, image_size=336)
 
 
-def _apply(cfg: CLIPConfig, overrides: dict[str, object]) -> CLIPConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
-
-
 @register_model(
     task="base",
     family="clip",
@@ -125,7 +121,7 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIPModel
     >>> model.config.patch_size, model.config.embed_dim
     (32, 512)
     """
-    model = CLIPModel(_apply(_CFG_BASE_32, overrides))
+    model = CLIPModel(apply_overrides(_CFG_BASE_32, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_base_32")
@@ -170,7 +166,7 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIPModel
     >>> model.config.patch_size, model.config.vision_width
     (16, 768)
     """
-    model = CLIPModel(_apply(_CFG_BASE_16, overrides))
+    model = CLIPModel(apply_overrides(_CFG_BASE_16, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_base_16")
@@ -215,7 +211,7 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIPMode
     >>> model.config.vision_layers, model.config.text_width
     (24, 768)
     """
-    model = CLIPModel(_apply(_CFG_LARGE_14, overrides))
+    model = CLIPModel(apply_overrides(_CFG_LARGE_14, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14")
@@ -262,7 +258,7 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
     >>> model.config.image_size
     336
     """
-    model = CLIPModel(_apply(_CFG_LARGE_14_336, overrides))
+    model = CLIPModel(apply_overrides(_CFG_LARGE_14_336, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14_336")
@@ -305,7 +301,7 @@ def clip_vit_base_32_zero_shot(
     >>> model.config.patch_size
     32
     """
-    model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_32, overrides))
+    model = CLIPForZeroShotImageClassification(apply_overrides(_CFG_BASE_32, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(
@@ -350,7 +346,7 @@ def clip_vit_base_16_zero_shot(
     >>> model.config.patch_size
     16
     """
-    model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_16, overrides))
+    model = CLIPForZeroShotImageClassification(apply_overrides(_CFG_BASE_16, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(
@@ -397,7 +393,9 @@ def clip_vit_large_14_zero_shot(
     >>> model.config.embed_dim
     768
     """
-    model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14, overrides))
+    model = CLIPForZeroShotImageClassification(
+        apply_overrides(_CFG_LARGE_14, overrides)
+    )
     entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(
@@ -442,7 +440,9 @@ def clip_vit_large_14_336_zero_shot(
     >>> model.config.image_size
     336
     """
-    model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14_336, overrides))
+    model = CLIPForZeroShotImageClassification(
+        apply_overrides(_CFG_LARGE_14_336, overrides)
+    )
     entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(

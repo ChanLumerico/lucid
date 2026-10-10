@@ -7,9 +7,6 @@ small variant should override config fields via
 ``create_model("roformer", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.roformer._config import RoFormerConfig
@@ -22,12 +19,9 @@ from lucid.models.text.roformer._model import (
     RoFormerModel,
 )
 from lucid.models.text.roformer._weights import RoFormerMLMWeights, RoFormerWeights
+from lucid.models._utils._common import apply_overrides
 
 _CFG_BASE = RoFormerConfig()  # paper default — the only published size
-
-
-def _apply(cfg: RoFormerConfig, overrides: dict[str, object]) -> RoFormerConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbone ──────────────────────────────────────────────────────────────────
@@ -103,7 +97,7 @@ def roformer(
     ((1, 4, 768), (1, 768))
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
-    model = RoFormerModel(_apply(_CFG_BASE, overrides))
+    model = RoFormerModel(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="roformer")
     return model
@@ -168,7 +162,7 @@ def roformer_mlm(
     (1, 4, 50000)
     """
     entry = weights_mod.resolve_weights(RoFormerMLMWeights, pretrained, weights)
-    model = RoFormerForMaskedLM(_apply(_CFG_BASE, overrides))
+    model = RoFormerForMaskedLM(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="roformer_mlm")
     return model
@@ -234,7 +228,7 @@ def roformer_cls(
     (1, 3)
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
-    model = RoFormerForSequenceClassification(_apply(_CFG_BASE, overrides))
+    model = RoFormerForSequenceClassification(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
     return model
@@ -300,7 +294,7 @@ def roformer_token_cls(
     (1, 4, 9)
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
-    model = RoFormerForTokenClassification(_apply(_CFG_BASE, overrides))
+    model = RoFormerForTokenClassification(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
     return model
@@ -369,7 +363,7 @@ def roformer_multiple_choice(
     (1, 2)
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
-    model = RoFormerForMultipleChoice(_apply(_CFG_BASE, overrides))
+    model = RoFormerForMultipleChoice(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
     return model
@@ -429,7 +423,7 @@ def roformer_qa(
     ((1, 4), (1, 4))
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
-    model = RoFormerForQuestionAnswering(_apply(_CFG_BASE, overrides))
+    model = RoFormerForQuestionAnswering(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
     return model

@@ -48,8 +48,8 @@ Loss (training)
 """
 
 import math
-from dataclasses import dataclass, replace
-from typing import Any, ClassVar, cast, final, override
+from dataclasses import dataclass
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -67,6 +67,7 @@ import lucid.weights as weights_mod
 # (yolov4.cfg says .7, yolov3's paper text says .5).  Its detection scoring
 # and NMS are v3's too.
 from lucid.models.vision.yolo._v3 import _ignore_mask, _postprocess_detections
+from lucid.models._utils._common import apply_overrides
 
 _IGNORE_IOU_THRESH = 0.7
 
@@ -1156,9 +1157,7 @@ def yolo_v4(
     >>> out.logits.shape[0]
     1
     """
-    config = (
-        replace(_CFG_V4, **cast(dict[str, Any], overrides)) if overrides else _CFG_V4
-    )
+    config = apply_overrides(_CFG_V4, overrides)
     entry = weights_mod.resolve_weights(YOLOV4Weights, pretrained, weights)
     model = YOLOV4ForObjectDetection(config)
     if entry is not None:

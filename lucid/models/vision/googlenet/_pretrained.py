@@ -1,7 +1,6 @@
 """Registry factories for GoogLeNet."""
 
 from dataclasses import replace
-from typing import Any, cast
 
 import lucid.weights as weights_mod
 import lucid.nn as nn
@@ -12,7 +11,7 @@ from lucid.models.vision.googlenet._model import (
     GoogLeNetForImageClassification,
 )
 from lucid.models.vision.googlenet._weights import GoogLeNetWeights
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG = GoogLeNetConfig()
 _CFG_NO_AUX = GoogLeNetConfig(aux_logits=False)
@@ -75,7 +74,7 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     """
     if pretrained:
         reject_unavailable_pretrained("googlenet", alternative="googlenet_cls")
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     return GoogLeNet(cfg)
 
 
@@ -147,7 +146,7 @@ def googlenet_cls(
     (2, 1000)
     """
     entry = weights_mod.resolve_weights(GoogLeNetWeights, pretrained, weights)
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     if entry is not None and "transform_input" not in overrides:
         # Matches the reference builder, which force-sets this whenever
         # ImageNet weights are requested; the checkpoint is a TF port that

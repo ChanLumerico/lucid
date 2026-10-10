@@ -1,8 +1,5 @@
 """Registry factories for MaxViT variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.maxvit._config import MaxViTConfig
@@ -13,7 +10,7 @@ from lucid.models.vision.maxvit._weights import (
     MaxViTSmallWeights,
     MaxViTTinyWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_T = MaxViTConfig(
     depths=(2, 2, 5, 2),
@@ -56,16 +53,6 @@ _CFG_XL = MaxViTConfig(
     head_dim=32,
     mlp_ratio=4.0,
 )
-
-
-def _b(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViT:
-    return MaxViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViTForImageClassification:
-    return MaxViTForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -119,7 +106,7 @@ def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_tiny", alternative="maxvit_tiny_cls")
-    return _b(_CFG_T, overrides)
+    return MaxViT(apply_overrides(_CFG_T, overrides))
 
 
 @register_model(
@@ -168,7 +155,7 @@ def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_small", alternative="maxvit_small_cls")
-    return _b(_CFG_S, overrides)
+    return MaxViT(apply_overrides(_CFG_S, overrides))
 
 
 @register_model(
@@ -217,7 +204,7 @@ def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_base", alternative="maxvit_base_cls")
-    return _b(_CFG_B, overrides)
+    return MaxViT(apply_overrides(_CFG_B, overrides))
 
 
 @register_model(
@@ -266,7 +253,7 @@ def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_large", alternative="maxvit_large_cls")
-    return _b(_CFG_L, overrides)
+    return MaxViT(apply_overrides(_CFG_L, overrides))
 
 
 @register_model(
@@ -318,7 +305,7 @@ def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_xlarge")
-    return _b(_CFG_XL, overrides)
+    return MaxViT(apply_overrides(_CFG_XL, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -381,7 +368,7 @@ def maxvit_tiny_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(MaxViTTinyWeights, pretrained, weights)
-    model = _c(_CFG_T, overrides)
+    model = MaxViTForImageClassification(apply_overrides(_CFG_T, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maxvit_tiny_cls")
     return model
@@ -442,7 +429,7 @@ def maxvit_small_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(MaxViTSmallWeights, pretrained, weights)
-    model = _c(_CFG_S, overrides)
+    model = MaxViTForImageClassification(apply_overrides(_CFG_S, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maxvit_small_cls")
     return model
@@ -503,7 +490,7 @@ def maxvit_base_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(MaxViTBaseWeights, pretrained, weights)
-    model = _c(_CFG_B, overrides)
+    model = MaxViTForImageClassification(apply_overrides(_CFG_B, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maxvit_base_cls")
     return model
@@ -564,7 +551,7 @@ def maxvit_large_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(MaxViTLargeWeights, pretrained, weights)
-    model = _c(_CFG_L, overrides)
+    model = MaxViTForImageClassification(apply_overrides(_CFG_L, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="maxvit_large_cls")
     return model
@@ -617,4 +604,4 @@ def maxvit_xlarge_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("maxvit_xlarge_cls")
-    return _c(_CFG_XL, overrides)
+    return MaxViTForImageClassification(apply_overrides(_CFG_XL, overrides))

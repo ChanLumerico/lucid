@@ -37,7 +37,6 @@ sample_size=..., base_channels=..., channel_mult=...)``.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 from lucid.models._registry import register_model
 from lucid.models.generative.rectified_flow._config import RectifiedFlowConfig
@@ -45,7 +44,7 @@ from lucid.models.generative.rectified_flow._model import (
     RectifiedFlowForImageGeneration,
     RectifiedFlowModel,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # 32x32 — DDPM++: no filtering, no pyramid, positional time embedding,
 # four residual blocks per resolution and attention at 16x16 only.
@@ -88,12 +87,6 @@ _CFG_HIGH_RES = RectifiedFlowConfig(
 # default_lsun_configs, so those two released nets shift [0,1] inputs to
 # [-1,1] internally.  CelebA-HQ and AFHQ set it True and do not.
 _CFG_LSUN = replace(_CFG_HIGH_RES, data_centered=False)
-
-
-def _apply(
-    cfg: RectifiedFlowConfig, overrides: dict[str, object]
-) -> RectifiedFlowConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare velocity fields ──────────────────────────────────────────────────────
@@ -149,7 +142,7 @@ def rectified_flow_cifar(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_cifar")
-    return RectifiedFlowModel(_apply(_CFG_CIFAR, overrides))
+    return RectifiedFlowModel(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -190,7 +183,7 @@ def rectified_flow_bedroom(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_bedroom")
-    return RectifiedFlowModel(_apply(_CFG_LSUN, overrides))
+    return RectifiedFlowModel(apply_overrides(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -230,7 +223,7 @@ def rectified_flow_church(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_church")
-    return RectifiedFlowModel(_apply(_CFG_LSUN, overrides))
+    return RectifiedFlowModel(apply_overrides(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -272,7 +265,7 @@ def rectified_flow_celeba_hq(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_celeba_hq")
-    return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowModel(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 @register_model(
@@ -313,7 +306,7 @@ def rectified_flow_afhq_cat(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_afhq_cat")
-    return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowModel(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 # ── Generators ────────────────────────────────────────────────────────────────
@@ -365,7 +358,7 @@ def rectified_flow_cifar_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_cifar_gen")
-    return RectifiedFlowForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    return RectifiedFlowForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -407,7 +400,7 @@ def rectified_flow_bedroom_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_bedroom_gen")
-    return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowForImageGeneration(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 @register_model(
@@ -449,7 +442,7 @@ def rectified_flow_church_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_church_gen")
-    return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowForImageGeneration(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 @register_model(
@@ -491,7 +484,7 @@ def rectified_flow_celeba_hq_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_celeba_hq_gen")
-    return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowForImageGeneration(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 @register_model(
@@ -533,7 +526,7 @@ def rectified_flow_afhq_cat_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("rectified_flow_afhq_cat_gen")
-    return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
+    return RectifiedFlowForImageGeneration(apply_overrides(_CFG_HIGH_RES, overrides))
 
 
 __all__ = [

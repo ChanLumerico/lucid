@@ -1,8 +1,5 @@
 """Registry factories for Xception."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.xception._config import XceptionConfig
@@ -11,7 +8,7 @@ from lucid.models.vision.xception._model import (
     XceptionForImageClassification,
 )
 from lucid.models.vision.xception._weights import XceptionWeights
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG = XceptionConfig()
 
@@ -74,7 +71,7 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     """
     if pretrained:
         reject_unavailable_pretrained("xception", alternative="xception_cls")
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     return Xception(cfg)
 
 
@@ -151,7 +148,7 @@ def xception_cls(
     >>> model = xception_cls(weights=XceptionWeights.TF_IN1K)
     """
     entry = weights_mod.resolve_weights(XceptionWeights, pretrained, weights)
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     model = XceptionForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="xception_cls")

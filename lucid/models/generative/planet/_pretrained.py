@@ -21,11 +21,8 @@ No parameter count is registered — the paper states no trainable-parameter
 total, and the docs site introspects the real figure anyway.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.planet._config import PlaNetConfig
 from lucid.models.generative.planet._model import PlaNetForWorldModeling, PlaNetModel
 
@@ -46,10 +43,6 @@ _CFG_PLANET = PlaNetConfig(
     reward_hidden=200,
     reward_layers=2,
 )
-
-
-def _apply(cfg: PlaNetConfig, overrides: dict[str, object]) -> PlaNetConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Trunk ────────────────────────────────────────────────────────────────────
@@ -108,7 +101,7 @@ def planet(pretrained: bool = False, **overrides: object) -> PlaNetModel:
     """
     if pretrained:
         reject_unavailable_pretrained("planet")
-    return PlaNetModel(_apply(_CFG_PLANET, overrides))
+    return PlaNetModel(apply_overrides(_CFG_PLANET, overrides))
 
 
 # ── World-modeling head ──────────────────────────────────────────────────────
@@ -168,4 +161,4 @@ def planet_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("planet_world_model")
-    return PlaNetForWorldModeling(_apply(_CFG_PLANET, overrides))
+    return PlaNetForWorldModeling(apply_overrides(_CFG_PLANET, overrides))

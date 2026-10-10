@@ -1,14 +1,11 @@
 """Registry factories for AlexNet."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.alexnet._config import AlexNetConfig
 from lucid.models.vision.alexnet._model import AlexNet, AlexNetForImageClassification
 from lucid.models.vision.alexnet._weights import AlexNetWeights
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG = AlexNetConfig()
 
@@ -74,7 +71,7 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     """
     if pretrained:
         reject_unavailable_pretrained("alexnet", alternative="alexnet_cls")
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     return AlexNet(cfg)
 
 
@@ -159,7 +156,7 @@ def alexnet_cls(
     >>> model = alexnet_cls(weights=AlexNetWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(AlexNetWeights, pretrained, weights)
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     model = AlexNetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="alexnet_cls")

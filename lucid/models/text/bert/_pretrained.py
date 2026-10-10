@@ -19,9 +19,6 @@ The downstream-task heads follow a "best available canonical weights" rule:
   fine-tuning start, mirroring ``AutoModelForX.from_pretrained(<encoder>)``).
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.bert._config import BERTConfig
@@ -48,6 +45,7 @@ from lucid.models.text.bert._weights import (
     BERTSmallWeights,
     BERTTinyWeights,
 )
+from lucid.models._utils._common import apply_overrides
 
 # Devlin et al. 2018 + Turc et al. 2019 size table.
 _CFG_TINY = BERTConfig(
@@ -85,12 +83,6 @@ _CFG_NER_CONLL = BERTConfig(
     vocab_size=28_996,
     num_labels=9,
 )
-
-
-def _apply(cfg: BERTConfig, overrides: dict[str, object]) -> BERTConfig:
-    if not overrides:
-        return cfg
-    return replace(cfg, **cast(dict[str, Any], overrides))
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -151,7 +143,7 @@ def bert_tiny(
     (1, 3, 128)
     """
     entry = weights_mod.resolve_weights(BERTTinyWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_TINY, overrides))
+    model = BERTModel(apply_overrides(_CFG_TINY, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_tiny")
     return model
@@ -206,7 +198,7 @@ def bert_mini(
     (1, 3, 256)
     """
     entry = weights_mod.resolve_weights(BERTMiniWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_MINI, overrides))
+    model = BERTModel(apply_overrides(_CFG_MINI, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_mini")
     return model
@@ -261,7 +253,7 @@ def bert_small(
     (1, 3, 512)
     """
     entry = weights_mod.resolve_weights(BERTSmallWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_SMALL, overrides))
+    model = BERTModel(apply_overrides(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_small")
     return model
@@ -317,7 +309,7 @@ def bert_medium(
     (1, 3, 512)
     """
     entry = weights_mod.resolve_weights(BERTMediumWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_MEDIUM, overrides))
+    model = BERTModel(apply_overrides(_CFG_MEDIUM, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_medium")
     return model
@@ -379,7 +371,7 @@ def bert_base(
     ((1, 4, 768), (1, 768))
     """
     entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_BASE, overrides))
+    model = BERTModel(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base")
     return model
@@ -439,7 +431,7 @@ def bert_large(
     ((1, 4, 1024), (1, 1024))
     """
     entry = weights_mod.resolve_weights(BERTLargeWeights, pretrained, weights)
-    model = BERTModel(_apply(_CFG_LARGE, overrides))
+    model = BERTModel(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large")
     return model
@@ -501,7 +493,7 @@ def bert_base_mlm(
     (1, 4, 30522)
     """
     entry = weights_mod.resolve_weights(BERTBaseMLMWeights, pretrained, weights)
-    model = BERTForMaskedLM(_apply(_CFG_BASE, overrides))
+    model = BERTForMaskedLM(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base_mlm")
     return model
@@ -558,7 +550,7 @@ def bert_large_mlm(
     (1, 4, 30522)
     """
     entry = weights_mod.resolve_weights(BERTLargeMLMWeights, pretrained, weights)
-    model = BERTForMaskedLM(_apply(_CFG_LARGE, overrides))
+    model = BERTForMaskedLM(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large_mlm")
     return model
@@ -629,7 +621,7 @@ def bert_base_cls(
     (1, 3)
     """
     entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    model = BERTForSequenceClassification(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
     return model
@@ -695,7 +687,7 @@ def bert_large_cls(
     (1, 2)
     """
     entry = weights_mod.resolve_weights(BERTLargeWeights, pretrained, weights)
-    model = BERTForSequenceClassification(_apply(_CFG_LARGE, overrides))
+    model = BERTForSequenceClassification(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.bert, entry, name="bert_large")
     return model
@@ -766,7 +758,7 @@ def bert_base_token_cls(
     if entry is not None and not overrides:
         cfg = _CFG_NER_CONLL
     else:
-        cfg = _apply(_CFG_BASE, overrides)
+        cfg = apply_overrides(_CFG_BASE, overrides)
     model = BERTForTokenClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base_token_cls")
@@ -832,7 +824,7 @@ def bert_base_qa(
     ((1, 6), (1, 6))
     """
     entry = weights_mod.resolve_weights(BERTBaseQAWeights, pretrained, weights)
-    model = BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))
+    model = BERTForQuestionAnswering(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base_qa")
     return model
@@ -898,7 +890,7 @@ def bert_large_qa(
     ((1, 6), (1, 6))
     """
     entry = weights_mod.resolve_weights(BERTLargeQAWeights, pretrained, weights)
-    model = BERTForQuestionAnswering(_apply(_CFG_LARGE, overrides))
+    model = BERTForQuestionAnswering(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large_qa")
     return model
@@ -964,7 +956,7 @@ def bert_base_causal_lm(
     (1, 4, 99)
     """
     entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTForCausalLM(_apply(_CFG_BASE, overrides))
+    model = BERTForCausalLM(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
     return model
@@ -1028,7 +1020,7 @@ def bert_base_nsp(
     (1, 2)
     """
     entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTForNextSentencePrediction(_apply(_CFG_BASE, overrides))
+    model = BERTForNextSentencePrediction(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
     return model
@@ -1097,7 +1089,7 @@ def bert_base_pretrain(
     ((1, 4, 99), (1, 2))
     """
     entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTForPreTraining(_apply(_CFG_BASE, overrides))
+    model = BERTForPreTraining(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
     return model

@@ -1,12 +1,9 @@
 """Registry factories for CoAtNet variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.coatnet._config import CoAtNetConfig
 from lucid.models.vision.coatnet._model import CoAtNet, CoAtNetForImageClassification
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -163,7 +160,7 @@ def coatnet_0(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_0")
-    cfg = replace(_CFG_0, **cast(dict[str, Any], overrides)) if overrides else _CFG_0
+    cfg = apply_overrides(_CFG_0, overrides)
     return CoAtNet(cfg)
 
 
@@ -225,7 +222,7 @@ def coatnet_0_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_0_cls")
-    cfg = replace(_CFG_0, **cast(dict[str, Any], overrides)) if overrides else _CFG_0
+    cfg = apply_overrides(_CFG_0, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -266,7 +263,7 @@ def coatnet_1(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_1")
-    cfg = replace(_CFG_1, **cast(dict[str, Any], overrides)) if overrides else _CFG_1
+    cfg = apply_overrides(_CFG_1, overrides)
     return CoAtNet(cfg)
 
 
@@ -298,7 +295,7 @@ def coatnet_1_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_1_cls")
-    cfg = replace(_CFG_1, **cast(dict[str, Any], overrides)) if overrides else _CFG_1
+    cfg = apply_overrides(_CFG_1, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -334,7 +331,7 @@ def coatnet_2(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_2")
-    cfg = replace(_CFG_2, **cast(dict[str, Any], overrides)) if overrides else _CFG_2
+    cfg = apply_overrides(_CFG_2, overrides)
     return CoAtNet(cfg)
 
 
@@ -366,7 +363,7 @@ def coatnet_2_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_2_cls")
-    cfg = replace(_CFG_2, **cast(dict[str, Any], overrides)) if overrides else _CFG_2
+    cfg = apply_overrides(_CFG_2, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -403,7 +400,7 @@ def coatnet_3(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_3")
-    cfg = replace(_CFG_3, **cast(dict[str, Any], overrides)) if overrides else _CFG_3
+    cfg = apply_overrides(_CFG_3, overrides)
     return CoAtNet(cfg)
 
 
@@ -435,7 +432,7 @@ def coatnet_3_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_3_cls")
-    cfg = replace(_CFG_3, **cast(dict[str, Any], overrides)) if overrides else _CFG_3
+    cfg = apply_overrides(_CFG_3, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -472,7 +469,7 @@ def coatnet_4(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_4")
-    cfg = replace(_CFG_4, **cast(dict[str, Any], overrides)) if overrides else _CFG_4
+    cfg = apply_overrides(_CFG_4, overrides)
     return CoAtNet(cfg)
 
 
@@ -504,7 +501,7 @@ def coatnet_4_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_4_cls")
-    cfg = replace(_CFG_4, **cast(dict[str, Any], overrides)) if overrides else _CFG_4
+    cfg = apply_overrides(_CFG_4, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -549,7 +546,7 @@ def coatnet_5(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_5")
-    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
+    cfg = apply_overrides(_CFG_5, overrides)
     return CoAtNet(cfg)
 
 
@@ -581,7 +578,7 @@ def coatnet_5_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_5_cls")
-    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
+    cfg = apply_overrides(_CFG_5, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -633,7 +630,7 @@ def coatnet_6(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_6")
-    cfg = replace(_CFG_6, **cast(dict[str, Any], overrides)) if overrides else _CFG_6
+    cfg = apply_overrides(_CFG_6, overrides)
     return CoAtNet(cfg)
 
 
@@ -663,7 +660,7 @@ def coatnet_6_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_6_cls")
-    cfg = replace(_CFG_6, **cast(dict[str, Any], overrides)) if overrides else _CFG_6
+    cfg = apply_overrides(_CFG_6, overrides)
     return CoAtNetForImageClassification(cfg)
 
 
@@ -709,7 +706,7 @@ def coatnet_7(pretrained: bool = False, **overrides: object) -> CoAtNet:
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_7")
-    cfg = replace(_CFG_7, **cast(dict[str, Any], overrides)) if overrides else _CFG_7
+    cfg = apply_overrides(_CFG_7, overrides)
     return CoAtNet(cfg)
 
 
@@ -739,5 +736,5 @@ def coatnet_7_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_7_cls")
-    cfg = replace(_CFG_7, **cast(dict[str, Any], overrides)) if overrides else _CFG_7
+    cfg = apply_overrides(_CFG_7, overrides)
     return CoAtNetForImageClassification(cfg)

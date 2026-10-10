@@ -1,8 +1,5 @@
 """Registry factories for Swin Transformer variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.swin._config import SwinConfig
@@ -16,22 +13,12 @@ from lucid.models.vision.swin._weights import (
     SwinSmallWeights,
     SwinTinyWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_T = SwinConfig(embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
 _CFG_S = SwinConfig(embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
 _CFG_B = SwinConfig(embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
 _CFG_L = SwinConfig(embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
-
-
-def _b(cfg: SwinConfig, kw: dict[str, object]) -> SwinTransformer:
-    return SwinTransformer(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: SwinConfig, kw: dict[str, object]) -> SwinTransformerForImageClassification:
-    return SwinTransformerForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -89,7 +76,7 @@ def swin_tiny(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     """
     if pretrained:
         reject_unavailable_pretrained("swin_tiny", alternative="swin_tiny_cls")
-    return _b(_CFG_T, overrides)
+    return SwinTransformer(apply_overrides(_CFG_T, overrides))
 
 
 @register_model(
@@ -137,7 +124,7 @@ def swin_small(pretrained: bool = False, **overrides: object) -> SwinTransformer
     """
     if pretrained:
         reject_unavailable_pretrained("swin_small", alternative="swin_tiny_cls")
-    return _b(_CFG_S, overrides)
+    return SwinTransformer(apply_overrides(_CFG_S, overrides))
 
 
 @register_model(
@@ -186,7 +173,7 @@ def swin_base(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     """
     if pretrained:
         reject_unavailable_pretrained("swin_base", alternative="swin_tiny_cls")
-    return _b(_CFG_B, overrides)
+    return SwinTransformer(apply_overrides(_CFG_B, overrides))
 
 
 @register_model(
@@ -236,7 +223,7 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
     """
     if pretrained:
         reject_unavailable_pretrained("swin_large", alternative="swin_tiny_cls")
-    return _b(_CFG_L, overrides)
+    return SwinTransformer(apply_overrides(_CFG_L, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -301,7 +288,7 @@ def swin_tiny_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SwinTinyWeights, pretrained, weights)
-    model = _c(_CFG_T, overrides)
+    model = SwinTransformerForImageClassification(apply_overrides(_CFG_T, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="swin_tiny_cls")
     return model
@@ -361,7 +348,7 @@ def swin_small_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SwinSmallWeights, pretrained, weights)
-    model = _c(_CFG_S, overrides)
+    model = SwinTransformerForImageClassification(apply_overrides(_CFG_S, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="swin_small_cls")
     return model
@@ -423,7 +410,7 @@ def swin_base_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SwinBaseWeights, pretrained, weights)
-    model = _c(_CFG_B, overrides)
+    model = SwinTransformerForImageClassification(apply_overrides(_CFG_B, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="swin_base_cls")
     return model
@@ -488,7 +475,7 @@ def swin_large_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SwinLargeWeights, pretrained, weights)
-    model = _c(_CFG_L, overrides)
+    model = SwinTransformerForImageClassification(apply_overrides(_CFG_L, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="swin_large_cls")
     return model

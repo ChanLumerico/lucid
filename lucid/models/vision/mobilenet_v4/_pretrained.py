@@ -11,12 +11,9 @@ headless backbones have no checkpoint of their own and refuse
 ``pretrained=True``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.vision.mobilenet_v4._config import MobileNetV4Config
 from lucid.models.vision.mobilenet_v4._model import (
     MobileNetV4,
@@ -35,10 +32,6 @@ _CFG_CONV_MEDIUM = MobileNetV4Config(variant="conv_medium", dropout=0.2)
 _CFG_CONV_LARGE = MobileNetV4Config(variant="conv_large", dropout=0.2)
 _CFG_HYBRID_MEDIUM = MobileNetV4Config(variant="hybrid_medium", dropout=0.2)
 _CFG_HYBRID_LARGE = MobileNetV4Config(variant="hybrid_large", dropout=0.2)
-
-
-def _config(base: MobileNetV4Config, overrides: dict[str, object]) -> MobileNetV4Config:
-    return replace(base, **cast(dict[str, Any], overrides)) if overrides else base
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -103,7 +96,7 @@ def mobilenet_v4_conv_small(
         reject_unavailable_pretrained(
             "mobilenet_v4_conv_small", alternative="mobilenet_v4_conv_small_cls"
         )
-    return MobileNetV4(_config(_CFG_CONV_SMALL, overrides))
+    return MobileNetV4(apply_overrides(_CFG_CONV_SMALL, overrides))
 
 
 @register_model(
@@ -165,7 +158,7 @@ def mobilenet_v4_conv_medium(
         reject_unavailable_pretrained(
             "mobilenet_v4_conv_medium", alternative="mobilenet_v4_conv_medium_cls"
         )
-    return MobileNetV4(_config(_CFG_CONV_MEDIUM, overrides))
+    return MobileNetV4(apply_overrides(_CFG_CONV_MEDIUM, overrides))
 
 
 @register_model(
@@ -227,7 +220,7 @@ def mobilenet_v4_conv_large(
         reject_unavailable_pretrained(
             "mobilenet_v4_conv_large", alternative="mobilenet_v4_conv_large_cls"
         )
-    return MobileNetV4(_config(_CFG_CONV_LARGE, overrides))
+    return MobileNetV4(apply_overrides(_CFG_CONV_LARGE, overrides))
 
 
 @register_model(
@@ -289,7 +282,7 @@ def mobilenet_v4_hybrid_medium(
         reject_unavailable_pretrained(
             "mobilenet_v4_hybrid_medium", alternative="mobilenet_v4_hybrid_medium_cls"
         )
-    return MobileNetV4(_config(_CFG_HYBRID_MEDIUM, overrides))
+    return MobileNetV4(apply_overrides(_CFG_HYBRID_MEDIUM, overrides))
 
 
 @register_model(
@@ -351,7 +344,7 @@ def mobilenet_v4_hybrid_large(
         reject_unavailable_pretrained(
             "mobilenet_v4_hybrid_large", alternative="mobilenet_v4_hybrid_large_cls"
         )
-    return MobileNetV4(_config(_CFG_HYBRID_LARGE, overrides))
+    return MobileNetV4(apply_overrides(_CFG_HYBRID_LARGE, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -441,7 +434,9 @@ def mobilenet_v4_conv_small_cls(
     entry = weights_mod.resolve_weights(
         MobileNetV4ConvSmallWeights, pretrained, weights
     )
-    model = MobileNetV4ForImageClassification(_config(_CFG_CONV_SMALL, overrides))
+    model = MobileNetV4ForImageClassification(
+        apply_overrides(_CFG_CONV_SMALL, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v4_conv_small_cls")
     return model
@@ -531,7 +526,9 @@ def mobilenet_v4_conv_medium_cls(
     entry = weights_mod.resolve_weights(
         MobileNetV4ConvMediumWeights, pretrained, weights
     )
-    model = MobileNetV4ForImageClassification(_config(_CFG_CONV_MEDIUM, overrides))
+    model = MobileNetV4ForImageClassification(
+        apply_overrides(_CFG_CONV_MEDIUM, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v4_conv_medium_cls")
     return model
@@ -621,7 +618,9 @@ def mobilenet_v4_conv_large_cls(
     entry = weights_mod.resolve_weights(
         MobileNetV4ConvLargeWeights, pretrained, weights
     )
-    model = MobileNetV4ForImageClassification(_config(_CFG_CONV_LARGE, overrides))
+    model = MobileNetV4ForImageClassification(
+        apply_overrides(_CFG_CONV_LARGE, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v4_conv_large_cls")
     return model
@@ -711,7 +710,9 @@ def mobilenet_v4_hybrid_medium_cls(
     entry = weights_mod.resolve_weights(
         MobileNetV4HybridMediumWeights, pretrained, weights
     )
-    model = MobileNetV4ForImageClassification(_config(_CFG_HYBRID_MEDIUM, overrides))
+    model = MobileNetV4ForImageClassification(
+        apply_overrides(_CFG_HYBRID_MEDIUM, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(
             model, entry, name="mobilenet_v4_hybrid_medium_cls"
@@ -803,7 +804,9 @@ def mobilenet_v4_hybrid_large_cls(
     entry = weights_mod.resolve_weights(
         MobileNetV4HybridLargeWeights, pretrained, weights
     )
-    model = MobileNetV4ForImageClassification(_config(_CFG_HYBRID_LARGE, overrides))
+    model = MobileNetV4ForImageClassification(
+        apply_overrides(_CFG_HYBRID_LARGE, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(
             model, entry, name="mobilenet_v4_hybrid_large_cls"

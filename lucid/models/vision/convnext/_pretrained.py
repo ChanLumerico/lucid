@@ -1,8 +1,5 @@
 """Registry factories for ConvNeXt variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.convnext._config import ConvNeXtConfig
@@ -14,23 +11,13 @@ from lucid.models.vision.convnext._weights import (
     ConvNeXtTinyWeights,
     ConvNeXtXLargeWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_T = ConvNeXtConfig(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768))
 _CFG_S = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(96, 192, 384, 768))
 _CFG_B = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(128, 256, 512, 1024))
 _CFG_L = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(192, 384, 768, 1536))
 _CFG_XL = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(256, 512, 1024, 2048))
-
-
-def _b(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXt:
-    return ConvNeXt(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXtForImageClassification:
-    return ConvNeXtForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -85,7 +72,7 @@ def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     """
     if pretrained:
         reject_unavailable_pretrained("convnext_tiny", alternative="convnext_tiny_cls")
-    return _b(_CFG_T, overrides)
+    return ConvNeXt(apply_overrides(_CFG_T, overrides))
 
 
 @register_model(
@@ -135,7 +122,7 @@ def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
         reject_unavailable_pretrained(
             "convnext_small", alternative="convnext_small_cls"
         )
-    return _b(_CFG_S, overrides)
+    return ConvNeXt(apply_overrides(_CFG_S, overrides))
 
 
 @register_model(
@@ -187,7 +174,7 @@ def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     """
     if pretrained:
         reject_unavailable_pretrained("convnext_base", alternative="convnext_base_cls")
-    return _b(_CFG_B, overrides)
+    return ConvNeXt(apply_overrides(_CFG_B, overrides))
 
 
 @register_model(
@@ -240,7 +227,7 @@ def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
         reject_unavailable_pretrained(
             "convnext_large", alternative="convnext_large_cls"
         )
-    return _b(_CFG_L, overrides)
+    return ConvNeXt(apply_overrides(_CFG_L, overrides))
 
 
 @register_model(
@@ -294,7 +281,7 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
         reject_unavailable_pretrained(
             "convnext_xlarge", alternative="convnext_xlarge_cls"
         )
-    return _b(_CFG_XL, overrides)
+    return ConvNeXt(apply_overrides(_CFG_XL, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -358,7 +345,7 @@ def convnext_tiny_cls(
     >>> model = convnext_tiny_cls(weights=ConvNeXtTinyWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(ConvNeXtTinyWeights, pretrained, weights)
-    model = _c(_CFG_T, overrides)
+    model = ConvNeXtForImageClassification(apply_overrides(_CFG_T, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="convnext_tiny_cls")
     return model
@@ -420,7 +407,7 @@ def convnext_small_cls(
     >>> model = convnext_small_cls(weights=ConvNeXtSmallWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(ConvNeXtSmallWeights, pretrained, weights)
-    model = _c(_CFG_S, overrides)
+    model = ConvNeXtForImageClassification(apply_overrides(_CFG_S, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="convnext_small_cls")
     return model
@@ -485,7 +472,7 @@ def convnext_base_cls(
     >>> model = convnext_base_cls(weights=ConvNeXtBaseWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(ConvNeXtBaseWeights, pretrained, weights)
-    model = _c(_CFG_B, overrides)
+    model = ConvNeXtForImageClassification(apply_overrides(_CFG_B, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="convnext_base_cls")
     return model
@@ -549,7 +536,7 @@ def convnext_large_cls(
     >>> model = convnext_large_cls(weights=ConvNeXtLargeWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(ConvNeXtLargeWeights, pretrained, weights)
-    model = _c(_CFG_L, overrides)
+    model = ConvNeXtForImageClassification(apply_overrides(_CFG_L, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="convnext_large_cls")
     return model
@@ -615,7 +602,7 @@ def convnext_xlarge_cls(
     >>> model = convnext_xlarge_cls(weights=ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K)
     """
     entry = weights_mod.resolve_weights(ConvNeXtXLargeWeights, pretrained, weights)
-    model = _c(_CFG_XL, overrides)
+    model = ConvNeXtForImageClassification(apply_overrides(_CFG_XL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="convnext_xlarge_cls")
     return model

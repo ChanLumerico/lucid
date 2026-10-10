@@ -44,8 +44,8 @@ Loss (training)
 """
 
 import math
-from dataclasses import dataclass, replace
-from typing import Any, ClassVar, cast, final, override
+from dataclasses import dataclass
+from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -62,6 +62,7 @@ from lucid.models._utils._detection import (
     clip_boxes_to_image,
 )
 from lucid.models.vision.yolo._weights import YOLOV3TinyWeights, YOLOV3Weights
+from lucid.models._utils._common import apply_overrides
 import lucid.weights as weights_mod
 
 # ---------------------------------------------------------------------------
@@ -1324,9 +1325,7 @@ def yolo_v3(
     >>> out.logits.shape[0]
     1
     """
-    config = (
-        replace(_CFG_V3, **cast(dict[str, Any], overrides)) if overrides else _CFG_V3
-    )
+    config = apply_overrides(_CFG_V3, overrides)
     entry = weights_mod.resolve_weights(YOLOV3Weights, pretrained, weights)
     model = YOLOV3ForObjectDetection(config)
     if entry is not None:
@@ -1393,11 +1392,7 @@ def yolo_v3_tiny(
     >>> out.logits.shape[0]
     1
     """
-    config = (
-        replace(_CFG_V3_TINY, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_V3_TINY
-    )
+    config = apply_overrides(_CFG_V3_TINY, overrides)
     entry = weights_mod.resolve_weights(YOLOV3TinyWeights, pretrained, weights)
     model = YOLOV3TinyForObjectDetection(config)
     if entry is not None:

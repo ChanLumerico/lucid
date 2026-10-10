@@ -12,9 +12,6 @@ dropout differ.  Smaller test configs go through
 ``create_model("ddpm_cifar", base_channels=..., channel_mult=...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.ddpm._config import DDPMConfig
@@ -23,7 +20,7 @@ from lucid.models.generative.ddpm._weights import (
     DDPMChurchWeights,
     DDPMCifarWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Ho 2020 Table 9 — CIFAR-10.
 _CFG_CIFAR = DDPMConfig(
@@ -79,10 +76,6 @@ _CFG_IMAGENET64 = DDPMConfig(
     use_scale_shift_norm=True,
     rescale_timesteps=True,
 )
-
-
-def _apply(cfg: DDPMConfig, overrides: dict[str, object]) -> DDPMConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare U-Net trunks ─────────────────────────────────────────────────────────
@@ -149,7 +142,7 @@ def ddpm_cifar(
     (1, 3, 32, 32)
     """
     entry = weights_mod.resolve_weights(DDPMCifarWeights, pretrained, weights)
-    model = DDPMModel(_apply(_CFG_CIFAR, overrides))
+    model = DDPMModel(apply_overrides(_CFG_CIFAR, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="ddpm_cifar")
     return model
@@ -214,7 +207,7 @@ def ddpm_lsun(
     (1, 3, 256, 256)
     """
     entry = weights_mod.resolve_weights(DDPMChurchWeights, pretrained, weights)
-    model = DDPMModel(_apply(_CFG_LSUN, overrides))
+    model = DDPMModel(apply_overrides(_CFG_LSUN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="ddpm_lsun")
     return model
@@ -271,7 +264,7 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ddpm_imagenet64")
-    return DDPMModel(_apply(_CFG_IMAGENET64, overrides))
+    return DDPMModel(apply_overrides(_CFG_IMAGENET64, overrides))
 
 
 # ── Image-generation heads ───────────────────────────────────────────────────
@@ -333,7 +326,7 @@ def ddpm_cifar_gen(
     (1, 3, 32, 32)
     """
     entry = weights_mod.resolve_weights(DDPMCifarWeights, pretrained, weights)
-    model = DDPMForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    model = DDPMForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="ddpm_cifar")
     return model
@@ -395,7 +388,7 @@ def ddpm_lsun_gen(
     (1, 3, 256, 256)
     """
     entry = weights_mod.resolve_weights(DDPMChurchWeights, pretrained, weights)
-    model = DDPMForImageGeneration(_apply(_CFG_LSUN, overrides))
+    model = DDPMForImageGeneration(apply_overrides(_CFG_LSUN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="ddpm_lsun")
     return model
@@ -450,4 +443,4 @@ def ddpm_imagenet64_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("ddpm_imagenet64_gen")
-    return DDPMForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
+    return DDPMForImageGeneration(apply_overrides(_CFG_IMAGENET64, overrides))

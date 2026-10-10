@@ -33,10 +33,9 @@ total, and the docs site introspects the real figure anyway.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.dreamer._config import DreamerConfig
 from lucid.models.generative.dreamer._model import (
     DreamerForWorldModeling,
@@ -70,10 +69,6 @@ _CFG_DREAMER = DreamerConfig(
     reward_hidden=300,
     reward_layers=2,
 )
-
-
-def _apply(cfg: DreamerConfig, overrides: dict[str, object]) -> DreamerConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Trunk ────────────────────────────────────────────────────────────────────
@@ -125,7 +120,7 @@ def dreamer(pretrained: bool = False, **overrides: object) -> DreamerModel:
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer")
-    return DreamerModel(_apply(_CFG_DREAMER, overrides))
+    return DreamerModel(apply_overrides(_CFG_DREAMER, overrides))
 
 
 # ── World-modeling head ──────────────────────────────────────────────────────
@@ -180,7 +175,7 @@ def dreamer_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_world_model")
-    return DreamerForWorldModeling(_apply(_CFG_DREAMER, overrides))
+    return DreamerForWorldModeling(apply_overrides(_CFG_DREAMER, overrides))
 
 
 # The paper's *Discrete control* paragraph, which changes four things about
@@ -248,7 +243,7 @@ def dreamer_discrete(pretrained: bool = False, **overrides: object) -> DreamerMo
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_discrete")
-    return DreamerModel(_apply(_CFG_DISCRETE, overrides))
+    return DreamerModel(apply_overrides(_CFG_DISCRETE, overrides))
 
 
 @register_model(
@@ -294,4 +289,4 @@ def dreamer_discrete_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_discrete_world_model")
-    return DreamerForWorldModeling(_apply(_CFG_DISCRETE, overrides))
+    return DreamerForWorldModeling(apply_overrides(_CFG_DISCRETE, overrides))

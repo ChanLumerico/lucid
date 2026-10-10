@@ -1,8 +1,5 @@
 """Registry factories for all SE-ResNet variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.senet._config import SENetConfig
@@ -14,7 +11,7 @@ from lucid.models.vision.senet._weights import (
     SEResNet101Weights,
     SEResNet152Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -91,7 +88,7 @@ def se_resnet_18(pretrained: bool = False, **overrides: object) -> SENet:
     """
     if pretrained:
         reject_unavailable_pretrained("se_resnet_18", alternative="se_resnet_18_cls")
-    cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
+    cfg = apply_overrides(_CFG_18, overrides)
     return SENet(cfg)
 
 
@@ -142,7 +139,7 @@ def se_resnet_34(pretrained: bool = False, **overrides: object) -> SENet:
     """
     if pretrained:
         reject_unavailable_pretrained("se_resnet_34", alternative="se_resnet_34_cls")
-    cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
+    cfg = apply_overrides(_CFG_34, overrides)
     return SENet(cfg)
 
 
@@ -198,7 +195,7 @@ def se_resnet_50(pretrained: bool = False, **overrides: object) -> SENet:
     """
     if pretrained:
         reject_unavailable_pretrained("se_resnet_50", alternative="se_resnet_50_cls")
-    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
+    cfg = apply_overrides(_CFG_50, overrides)
     return SENet(cfg)
 
 
@@ -252,9 +249,7 @@ def se_resnet_101(pretrained: bool = False, **overrides: object) -> SENet:
     """
     if pretrained:
         reject_unavailable_pretrained("se_resnet_101", alternative="se_resnet_101_cls")
-    cfg = (
-        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
-    )
+    cfg = apply_overrides(_CFG_101, overrides)
     return SENet(cfg)
 
 
@@ -307,9 +302,7 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
     """
     if pretrained:
         reject_unavailable_pretrained("se_resnet_152", alternative="se_resnet_152_cls")
-    cfg = (
-        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
-    )
+    cfg = apply_overrides(_CFG_152, overrides)
     return SENet(cfg)
 
 
@@ -377,7 +370,7 @@ def se_resnet_18_cls(
     (2, 10)
     """
     entry = weights_mod.resolve_weights(SEResNet18Weights, pretrained, weights)
-    cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
+    cfg = apply_overrides(_CFG_18, overrides)
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_18_cls")
@@ -443,7 +436,7 @@ def se_resnet_34_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SEResNet34Weights, pretrained, weights)
-    cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
+    cfg = apply_overrides(_CFG_34, overrides)
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_34_cls")
@@ -514,7 +507,7 @@ def se_resnet_50_cls(
     (2, 10)
     """
     entry = weights_mod.resolve_weights(SEResNet50Weights, pretrained, weights)
-    cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
+    cfg = apply_overrides(_CFG_50, overrides)
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_50_cls")
@@ -582,9 +575,7 @@ def se_resnet_101_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SEResNet101Weights, pretrained, weights)
-    cfg = (
-        replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
-    )
+    cfg = apply_overrides(_CFG_101, overrides)
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_101_cls")
@@ -652,9 +643,7 @@ def se_resnet_152_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(SEResNet152Weights, pretrained, weights)
-    cfg = (
-        replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
-    )
+    cfg = apply_overrides(_CFG_152, overrides)
     model = SENetForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="se_resnet_152_cls")

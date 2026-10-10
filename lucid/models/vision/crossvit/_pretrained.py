@@ -6,9 +6,6 @@ against ``timm.models.crossvit`` so the converted timm checkpoints
 load with a direct ``blocks → stages`` key rename.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.crossvit._config import CrossViTConfig
@@ -24,7 +21,7 @@ from lucid.models.vision.crossvit._weights import (
     CrossViTSmallWeights,
     CrossViTTinyWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Paper Table 2 configurations.
@@ -82,16 +79,6 @@ _CFG_18 = CrossViTConfig(
 )
 
 
-def _b(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViT:
-    return CrossViT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassification:
-    return CrossViTForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
-
-
 # ---------------------------------------------------------------------------
 # Backbone factories (task="base")
 # ---------------------------------------------------------------------------
@@ -120,7 +107,7 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     """
     if pretrained:
         reject_unavailable_pretrained("crossvit_tiny", alternative="crossvit_tiny_cls")
-    return _b(_CFG_TINY, overrides)
+    return CrossViT(apply_overrides(_CFG_TINY, overrides))
 
 
 @register_model(
@@ -148,7 +135,7 @@ def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
         reject_unavailable_pretrained(
             "crossvit_small", alternative="crossvit_small_cls"
         )
-    return _b(_CFG_SMALL, overrides)
+    return CrossViT(apply_overrides(_CFG_SMALL, overrides))
 
 
 @register_model(
@@ -174,7 +161,7 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     """
     if pretrained:
         reject_unavailable_pretrained("crossvit_base", alternative="crossvit_base_cls")
-    return _b(_CFG_BASE, overrides)
+    return CrossViT(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -203,7 +190,7 @@ def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     """
     if pretrained:
         reject_unavailable_pretrained("crossvit_9", alternative="crossvit_9_cls")
-    return _b(_CFG_9, overrides)
+    return CrossViT(apply_overrides(_CFG_9, overrides))
 
 
 @register_model(
@@ -229,7 +216,7 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     """
     if pretrained:
         reject_unavailable_pretrained("crossvit_15", alternative="crossvit_15_cls")
-    return _b(_CFG_15, overrides)
+    return CrossViT(apply_overrides(_CFG_15, overrides))
 
 
 @register_model(
@@ -255,7 +242,7 @@ def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     """
     if pretrained:
         reject_unavailable_pretrained("crossvit_18", alternative="crossvit_18_cls")
-    return _b(_CFG_18, overrides)
+    return CrossViT(apply_overrides(_CFG_18, overrides))
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +306,7 @@ def crossvit_tiny_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTTinyWeights, pretrained, weights)
-    model = _c(_CFG_TINY, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_TINY, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_tiny_cls")
     return model
@@ -375,7 +362,7 @@ def crossvit_small_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTSmallWeights, pretrained, weights)
-    model = _c(_CFG_SMALL, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_small_cls")
     return model
@@ -431,7 +418,7 @@ def crossvit_base_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTBaseWeights, pretrained, weights)
-    model = _c(_CFG_BASE, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_base_cls")
     return model
@@ -487,7 +474,7 @@ def crossvit_9_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT9Weights, pretrained, weights)
-    model = _c(_CFG_9, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_9, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_9_cls")
     return model
@@ -543,7 +530,7 @@ def crossvit_15_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT15Weights, pretrained, weights)
-    model = _c(_CFG_15, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_15, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_15_cls")
     return model
@@ -599,7 +586,7 @@ def crossvit_18_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT18Weights, pretrained, weights)
-    model = _c(_CFG_18, overrides)
+    model = CrossViTForImageClassification(apply_overrides(_CFG_18, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="crossvit_18_cls")
     return model

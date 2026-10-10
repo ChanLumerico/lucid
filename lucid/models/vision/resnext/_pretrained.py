@@ -1,8 +1,5 @@
 """Registry factories for all ResNeXt variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnext._config import ResNeXtConfig
@@ -12,7 +9,7 @@ from lucid.models.vision.resnext._weights import (
     ResNeXt101_32x4dWeights,
     ResNeXt101_32x8dWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -88,11 +85,7 @@ def resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
         reject_unavailable_pretrained(
             "resnext_50_32x4d", alternative="resnext_50_32x4d_cls"
         )
-    cfg = (
-        replace(_CFG_50_32x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_50_32x4d
-    )
+    cfg = apply_overrides(_CFG_50_32x4d, overrides)
     return ResNeXt(cfg)
 
 
@@ -147,11 +140,7 @@ def resnext_101_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
         reject_unavailable_pretrained(
             "resnext_101_32x4d", alternative="resnext_101_32x4d_cls"
         )
-    cfg = (
-        replace(_CFG_101_32x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_32x4d
-    )
+    cfg = apply_overrides(_CFG_101_32x4d, overrides)
     return ResNeXt(cfg)
 
 
@@ -209,11 +198,7 @@ def resnext_101_32x8d(pretrained: bool = False, **overrides: object) -> ResNeXt:
         reject_unavailable_pretrained(
             "resnext_101_32x8d", alternative="resnext_101_32x8d_cls"
         )
-    cfg = (
-        replace(_CFG_101_32x8d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_32x8d
-    )
+    cfg = apply_overrides(_CFG_101_32x8d, overrides)
     return ResNeXt(cfg)
 
 
@@ -263,11 +248,7 @@ def resnext_101_64x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     """
     if pretrained:
         reject_unavailable_pretrained("resnext_101_64x4d")
-    cfg = (
-        replace(_CFG_101_64x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_64x4d
-    )
+    cfg = apply_overrides(_CFG_101_64x4d, overrides)
     return ResNeXt(cfg)
 
 
@@ -346,11 +327,7 @@ def resnext_50_32x4d_cls(
     >>> model = resnext_50_32x4d_cls(weights=ResNeXt50_32x4dWeights.IMAGENET1K_V2)
     """
     entry = weights_mod.resolve_weights(ResNeXt50_32x4dWeights, pretrained, weights)
-    cfg = (
-        replace(_CFG_50_32x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_50_32x4d
-    )
+    cfg = apply_overrides(_CFG_50_32x4d, overrides)
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_50_32x4d_cls")
@@ -427,11 +404,7 @@ def resnext_101_32x4d_cls(
     >>> model = resnext_101_32x4d_cls(weights=ResNeXt101_32x4dWeights.GLUON_IN1K)
     """
     entry = weights_mod.resolve_weights(ResNeXt101_32x4dWeights, pretrained, weights)
-    cfg = (
-        replace(_CFG_101_32x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_32x4d
-    )
+    cfg = apply_overrides(_CFG_101_32x4d, overrides)
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_101_32x4d_cls")
@@ -509,11 +482,7 @@ def resnext_101_32x8d_cls(
     >>> model = resnext_101_32x8d_cls(weights=ResNeXt101_32x8dWeights.IMAGENET1K_V2)
     """
     entry = weights_mod.resolve_weights(ResNeXt101_32x8dWeights, pretrained, weights)
-    cfg = (
-        replace(_CFG_101_32x8d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_32x8d
-    )
+    cfg = apply_overrides(_CFG_101_32x8d, overrides)
     model = ResNeXtForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="resnext_101_32x8d_cls")
@@ -567,9 +536,5 @@ def resnext_101_64x4d_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("resnext_101_64x4d_cls")
-    cfg = (
-        replace(_CFG_101_64x4d, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_101_64x4d
-    )
+    cfg = apply_overrides(_CFG_101_64x4d, overrides)
     return ResNeXtForImageClassification(cfg)

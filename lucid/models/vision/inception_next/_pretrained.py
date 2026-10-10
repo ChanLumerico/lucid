@@ -1,8 +1,5 @@
 """Registry factories for InceptionNeXt variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.inception_next._config import InceptionNeXtConfig
@@ -15,7 +12,7 @@ from lucid.models.vision.inception_next._weights import (
     InceptionNeXtSmallWeights,
     InceptionNeXtTinyWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_T = InceptionNeXtConfig(
     depths=(3, 3, 9, 3),
@@ -32,18 +29,6 @@ _CFG_B = InceptionNeXtConfig(
     dims=(128, 256, 512, 1024),
     band_kernel=11,
 )
-
-
-def _b(cfg: InceptionNeXtConfig, kw: dict[str, object]) -> InceptionNeXt:
-    return InceptionNeXt(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(
-    cfg: InceptionNeXtConfig, kw: dict[str, object]
-) -> InceptionNeXtForImageClassification:
-    return InceptionNeXtForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -103,7 +88,7 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
         reject_unavailable_pretrained(
             "inception_next_tiny", alternative="inception_next_tiny_cls"
         )
-    return _b(_CFG_T, overrides)
+    return InceptionNeXt(apply_overrides(_CFG_T, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -166,7 +151,7 @@ def inception_next_tiny_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(InceptionNeXtTinyWeights, pretrained, weights)
-    model = _c(_CFG_T, overrides)
+    model = InceptionNeXtForImageClassification(apply_overrides(_CFG_T, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_next_tiny_cls")
     return model
@@ -225,7 +210,7 @@ def inception_next_small(
         reject_unavailable_pretrained(
             "inception_next_small", alternative="inception_next_small_cls"
         )
-    return _b(_CFG_S, overrides)
+    return InceptionNeXt(apply_overrides(_CFG_S, overrides))
 
 
 @register_model(
@@ -285,7 +270,7 @@ def inception_next_small_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(InceptionNeXtSmallWeights, pretrained, weights)
-    model = _c(_CFG_S, overrides)
+    model = InceptionNeXtForImageClassification(apply_overrides(_CFG_S, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_next_small_cls")
     return model
@@ -342,7 +327,7 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
         reject_unavailable_pretrained(
             "inception_next_base", alternative="inception_next_base_cls"
         )
-    return _b(_CFG_B, overrides)
+    return InceptionNeXt(apply_overrides(_CFG_B, overrides))
 
 
 @register_model(
@@ -402,7 +387,7 @@ def inception_next_base_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(InceptionNeXtBaseWeights, pretrained, weights)
-    model = _c(_CFG_B, overrides)
+    model = InceptionNeXtForImageClassification(apply_overrides(_CFG_B, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_next_base_cls")
     return model

@@ -9,11 +9,10 @@ weights are not published, only the backbones'.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.vision.vjepa2._config import VJEPA2Config
 from lucid.models.vision.vjepa2._model import (
     VJEPA2ForVideoClassification,
@@ -48,10 +47,6 @@ _CFG_GIANT = VJEPA2Config(
     image_size=256,
 )
 _CFG_GIANT_384 = replace(_CFG_GIANT, image_size=384)
-
-
-def _apply(config: VJEPA2Config, overrides: dict[str, object]) -> VJEPA2Config:
-    return replace(config, **cast(dict[str, Any], overrides)) if overrides else config
 
 
 @register_model(
@@ -103,7 +98,7 @@ def vjepa2_vit_large(
     ((32, 16, 16), 8192)
     """
     entry = weights_mod.resolve_weights(VJEPA2ViTLargeWeights, pretrained, weights)
-    model = VJEPA2Model(_apply(_CFG_LARGE, overrides))
+    model = VJEPA2Model(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vjepa2_vit_large")
     return model
@@ -158,7 +153,7 @@ def vjepa2_vit_huge(
     ((32, 16, 16), 8192)
     """
     entry = weights_mod.resolve_weights(VJEPA2ViTHugeWeights, pretrained, weights)
-    model = VJEPA2Model(_apply(_CFG_HUGE, overrides))
+    model = VJEPA2Model(apply_overrides(_CFG_HUGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vjepa2_vit_huge")
     return model
@@ -214,7 +209,7 @@ def vjepa2_vit_giant(
     (4.3636, 4.0)
     """
     entry = weights_mod.resolve_weights(VJEPA2ViTGiantWeights, pretrained, weights)
-    model = VJEPA2Model(_apply(_CFG_GIANT, overrides))
+    model = VJEPA2Model(apply_overrides(_CFG_GIANT, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vjepa2_vit_giant")
     return model
@@ -269,7 +264,7 @@ def vjepa2_vit_giant_384(
     18432
     """
     entry = weights_mod.resolve_weights(VJEPA2ViTGiant384Weights, pretrained, weights)
-    model = VJEPA2Model(_apply(_CFG_GIANT_384, overrides))
+    model = VJEPA2Model(apply_overrides(_CFG_GIANT_384, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vjepa2_vit_giant_384")
     return model
@@ -318,7 +313,7 @@ def vjepa2_vit_large_cls(
         reject_unavailable_pretrained(
             "vjepa2_vit_large_cls", alternative="vjepa2_vit_large"
         )
-    return VJEPA2ForVideoClassification(_apply(_CFG_LARGE, overrides))
+    return VJEPA2ForVideoClassification(apply_overrides(_CFG_LARGE, overrides))
 
 
 @register_model(
@@ -369,7 +364,7 @@ def vjepa2_vit_huge_cls(
         reject_unavailable_pretrained(
             "vjepa2_vit_huge_cls", alternative="vjepa2_vit_huge"
         )
-    return VJEPA2ForVideoClassification(_apply(_CFG_HUGE, overrides))
+    return VJEPA2ForVideoClassification(apply_overrides(_CFG_HUGE, overrides))
 
 
 @register_model(
@@ -420,7 +415,7 @@ def vjepa2_vit_giant_cls(
         reject_unavailable_pretrained(
             "vjepa2_vit_giant_cls", alternative="vjepa2_vit_giant"
         )
-    return VJEPA2ForVideoClassification(_apply(_CFG_GIANT, overrides))
+    return VJEPA2ForVideoClassification(apply_overrides(_CFG_GIANT, overrides))
 
 
 @register_model(
@@ -471,4 +466,4 @@ def vjepa2_vit_giant_384_cls(
         reject_unavailable_pretrained(
             "vjepa2_vit_giant_384_cls", alternative="vjepa2_vit_giant_384"
         )
-    return VJEPA2ForVideoClassification(_apply(_CFG_GIANT_384, overrides))
+    return VJEPA2ForVideoClassification(apply_overrides(_CFG_GIANT_384, overrides))

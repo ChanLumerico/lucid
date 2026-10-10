@@ -1,11 +1,8 @@
 """Registry factories for Inception-v4."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.vision.inception_v4._config import InceptionV4Config
 from lucid.models.vision.inception_v4._model import (
     InceptionV4,
@@ -69,7 +66,7 @@ def inception_v4(pretrained: bool = False, **overrides: object) -> InceptionV4:
     """
     if pretrained:
         reject_unavailable_pretrained("inception_v4", alternative="inception_v4_cls")
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     return InceptionV4(cfg)
 
 
@@ -153,7 +150,7 @@ def inception_v4_cls(
     >>> model = inception_v4_cls(weights=InceptionV4Weights.TF_IN1K)  # doctest: +SKIP
     """
     entry = weights_mod.resolve_weights(InceptionV4Weights, pretrained, weights)
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     model = InceptionV4ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_v4_cls")

@@ -6,9 +6,6 @@ heads ship WebText pretrained weights through :mod:`lucid.weights` (per-factory
 ``*_cls`` fine-tune head carries no canonical pretrained checkpoint.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt2._config import GPT2Config
@@ -27,6 +24,7 @@ from lucid.models.text.gpt2._weights import (
     GPT2XLargeLMWeights,
     GPT2XLargeWeights,
 )
+from lucid.models._utils._common import apply_overrides
 
 # OpenAI release table — Radford et al., 2019 §2.3 (the only published
 # GPT-2 sizes are small / medium / large / XL).
@@ -49,10 +47,6 @@ _CFG_XLARGE = GPT2Config(
     num_attention_heads=25,
     intermediate_size=6400,
 )
-
-
-def _apply(cfg: GPT2Config, overrides: dict[str, object]) -> GPT2Config:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -113,7 +107,7 @@ def gpt2_small(
     (1, 4, 768)
     """
     entry = weights_mod.resolve_weights(GPT2SmallWeights, pretrained, weights)
-    model = GPT2Model(_apply(_CFG_SMALL, overrides))
+    model = GPT2Model(apply_overrides(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_small")
     return model
@@ -173,7 +167,7 @@ def gpt2_medium(
     (1, 4, 1024)
     """
     entry = weights_mod.resolve_weights(GPT2MediumWeights, pretrained, weights)
-    model = GPT2Model(_apply(_CFG_MEDIUM, overrides))
+    model = GPT2Model(apply_overrides(_CFG_MEDIUM, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_medium")
     return model
@@ -232,7 +226,7 @@ def gpt2_large(
     (1, 4, 1280)
     """
     entry = weights_mod.resolve_weights(GPT2LargeWeights, pretrained, weights)
-    model = GPT2Model(_apply(_CFG_LARGE, overrides))
+    model = GPT2Model(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_large")
     return model
@@ -290,7 +284,7 @@ def gpt2_xlarge(
     (1, 4, 1600)
     """
     entry = weights_mod.resolve_weights(GPT2XLargeWeights, pretrained, weights)
-    model = GPT2Model(_apply(_CFG_XLARGE, overrides))
+    model = GPT2Model(apply_overrides(_CFG_XLARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_xlarge")
     return model
@@ -349,7 +343,7 @@ def gpt2_small_lm(
     (1, 4, 50257)
     """
     entry = weights_mod.resolve_weights(GPT2SmallLMWeights, pretrained, weights)
-    model = GPT2LMHeadModel(_apply(_CFG_SMALL, overrides))
+    model = GPT2LMHeadModel(apply_overrides(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_small_lm")
     return model
@@ -404,7 +398,7 @@ def gpt2_medium_lm(
     (1, 4, 50257)
     """
     entry = weights_mod.resolve_weights(GPT2MediumLMWeights, pretrained, weights)
-    model = GPT2LMHeadModel(_apply(_CFG_MEDIUM, overrides))
+    model = GPT2LMHeadModel(apply_overrides(_CFG_MEDIUM, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_medium_lm")
     return model
@@ -459,7 +453,7 @@ def gpt2_large_lm(
     (1, 4, 50257)
     """
     entry = weights_mod.resolve_weights(GPT2LargeLMWeights, pretrained, weights)
-    model = GPT2LMHeadModel(_apply(_CFG_LARGE, overrides))
+    model = GPT2LMHeadModel(apply_overrides(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_large_lm")
     return model
@@ -514,7 +508,7 @@ def gpt2_xlarge_lm(
     (1, 4, 50257)
     """
     entry = weights_mod.resolve_weights(GPT2XLargeLMWeights, pretrained, weights)
-    model = GPT2LMHeadModel(_apply(_CFG_XLARGE, overrides))
+    model = GPT2LMHeadModel(apply_overrides(_CFG_XLARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt2_xlarge_lm")
     return model
@@ -584,7 +578,7 @@ def gpt2_small_cls(
     (1, 3)
     """
     entry = weights_mod.resolve_weights(GPT2SmallWeights, pretrained, weights)
-    model = GPT2ForSequenceClassification(_apply(_CFG_SMALL, overrides))
+    model = GPT2ForSequenceClassification(apply_overrides(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.transformer, entry, name="gpt2_small")
     return model

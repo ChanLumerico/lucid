@@ -15,13 +15,10 @@ user code or in follow-up paper-faithful factories when we ship pretrained
 weights.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.vae._config import VAEConfig
 from lucid.models.generative.vae._model import VAEForImageGeneration, VAEModel
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Vanilla / β-VAE default — single bottleneck ``z``.
 _CFG_VAE = VAEConfig(
@@ -41,10 +38,6 @@ _CFG_HVAE = VAEConfig(
     latent_dim=(32, 64, 128),
     down_block_channels=(64, 128, 256),
 )
-
-
-def _apply(cfg: VAEConfig, overrides: dict[str, object]) -> VAEConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare encoder-decoder ──────────────────────────────────────────────────────
@@ -111,7 +104,7 @@ def vae(pretrained: bool = False, **overrides: object) -> VAEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("vae")
-    return VAEModel(_apply(_CFG_VAE, overrides))
+    return VAEModel(apply_overrides(_CFG_VAE, overrides))
 
 
 @register_model(
@@ -174,7 +167,7 @@ def hvae(pretrained: bool = False, **overrides: object) -> VAEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("hvae")
-    return VAEModel(_apply(_CFG_HVAE, overrides))
+    return VAEModel(apply_overrides(_CFG_HVAE, overrides))
 
 
 # ── Image-generation heads ───────────────────────────────────────────────────
@@ -226,7 +219,7 @@ def vae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenerat
     """
     if pretrained:
         reject_unavailable_pretrained("vae_gen")
-    return VAEForImageGeneration(_apply(_CFG_VAE, overrides))
+    return VAEForImageGeneration(apply_overrides(_CFG_VAE, overrides))
 
 
 @register_model(
@@ -275,4 +268,4 @@ def hvae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenera
     """
     if pretrained:
         reject_unavailable_pretrained("hvae_gen")
-    return VAEForImageGeneration(_apply(_CFG_HVAE, overrides))
+    return VAEForImageGeneration(apply_overrides(_CFG_HVAE, overrides))

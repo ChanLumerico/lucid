@@ -43,13 +43,10 @@ Smaller test-scale models go through ``create_model("nice_mnist",
 input_dim=..., hidden_dim=..., num_hidden_layers=...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.nice._config import NICEConfig
 from lucid.models.generative.nice._model import NICEForImageGeneration, NICEModel
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Paper Figure 3 — MNIST: 784 dims, 5 hidden layers of 1000, logistic prior.
 _CFG_MNIST = NICEConfig(
@@ -86,10 +83,6 @@ _CFG_CIFAR = NICEConfig(
     hidden_dim=2_000,
     prior="logistic",
 )
-
-
-def _apply(cfg: NICEConfig, overrides: dict[str, object]) -> NICEConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare flows ────────────────────────────────────────────────────────────────
@@ -144,7 +137,7 @@ def nice_mnist(pretrained: bool = False, **overrides: object) -> NICEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("nice_mnist")
-    return NICEModel(_apply(_CFG_MNIST, overrides))
+    return NICEModel(apply_overrides(_CFG_MNIST, overrides))
 
 
 @register_model(
@@ -196,7 +189,7 @@ def nice_tfd(pretrained: bool = False, **overrides: object) -> NICEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("nice_tfd")
-    return NICEModel(_apply(_CFG_TFD, overrides))
+    return NICEModel(apply_overrides(_CFG_TFD, overrides))
 
 
 @register_model(
@@ -248,7 +241,7 @@ def nice_svhn(pretrained: bool = False, **overrides: object) -> NICEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("nice_svhn")
-    return NICEModel(_apply(_CFG_SVHN, overrides))
+    return NICEModel(apply_overrides(_CFG_SVHN, overrides))
 
 
 @register_model(
@@ -303,7 +296,7 @@ def nice_cifar(pretrained: bool = False, **overrides: object) -> NICEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("nice_cifar")
-    return NICEModel(_apply(_CFG_CIFAR, overrides))
+    return NICEModel(apply_overrides(_CFG_CIFAR, overrides))
 
 
 # ── Image-generation heads ───────────────────────────────────────────────────
@@ -356,7 +349,7 @@ def nice_mnist_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("nice_mnist_gen")
-    return NICEForImageGeneration(_apply(_CFG_MNIST, overrides))
+    return NICEForImageGeneration(apply_overrides(_CFG_MNIST, overrides))
 
 
 @register_model(
@@ -406,7 +399,7 @@ def nice_tfd_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("nice_tfd_gen")
-    return NICEForImageGeneration(_apply(_CFG_TFD, overrides))
+    return NICEForImageGeneration(apply_overrides(_CFG_TFD, overrides))
 
 
 @register_model(
@@ -454,7 +447,7 @@ def nice_svhn_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("nice_svhn_gen")
-    return NICEForImageGeneration(_apply(_CFG_SVHN, overrides))
+    return NICEForImageGeneration(apply_overrides(_CFG_SVHN, overrides))
 
 
 @register_model(
@@ -506,4 +499,4 @@ def nice_cifar_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("nice_cifar_gen")
-    return NICEForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    return NICEForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))

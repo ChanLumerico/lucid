@@ -17,11 +17,8 @@ is redistributed from here.  ViT-B/16 and ViT-L/16 were never released at
 all, which is an open issue on that repository.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.vision.ijepa._config import IJEPAConfig
 from lucid.models.vision.ijepa._model import IJEPAForImageClassification, IJEPAModel
 
@@ -52,10 +49,6 @@ _CFG_HUGE_14 = IJEPAConfig(
 _CFG_HUGE_16_448 = IJEPAConfig(
     image_size=448, patch_size=16, dim=1280, depth=32, num_heads=16, predictor_depth=12
 )
-
-
-def _apply(cfg: IJEPAConfig, overrides: dict[str, object]) -> IJEPAConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -99,7 +92,7 @@ def ijepa_base_16(pretrained: bool = False, **overrides: object) -> IJEPAModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_base_16")
-    return IJEPAModel(_apply(_CFG_BASE_16, overrides))
+    return IJEPAModel(apply_overrides(_CFG_BASE_16, overrides))
 
 
 @register_model(
@@ -145,7 +138,7 @@ def ijepa_base_16_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_base_16_cls")
-    return IJEPAForImageClassification(_apply(_CFG_BASE_16, overrides))
+    return IJEPAForImageClassification(apply_overrides(_CFG_BASE_16, overrides))
 
 
 @register_model(
@@ -187,7 +180,7 @@ def ijepa_large_16(pretrained: bool = False, **overrides: object) -> IJEPAModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_large_16")
-    return IJEPAModel(_apply(_CFG_LARGE_16, overrides))
+    return IJEPAModel(apply_overrides(_CFG_LARGE_16, overrides))
 
 
 @register_model(
@@ -227,7 +220,7 @@ def ijepa_large_16_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_large_16_cls")
-    return IJEPAForImageClassification(_apply(_CFG_LARGE_16, overrides))
+    return IJEPAForImageClassification(apply_overrides(_CFG_LARGE_16, overrides))
 
 
 @register_model(
@@ -273,7 +266,7 @@ def ijepa_huge_14(pretrained: bool = False, **overrides: object) -> IJEPAModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_huge_14")
-    return IJEPAModel(_apply(_CFG_HUGE_14, overrides))
+    return IJEPAModel(apply_overrides(_CFG_HUGE_14, overrides))
 
 
 @register_model(
@@ -313,7 +306,7 @@ def ijepa_huge_14_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_huge_14_cls")
-    return IJEPAForImageClassification(_apply(_CFG_HUGE_14, overrides))
+    return IJEPAForImageClassification(apply_overrides(_CFG_HUGE_14, overrides))
 
 
 @register_model(
@@ -358,7 +351,7 @@ def ijepa_huge_16_448(pretrained: bool = False, **overrides: object) -> IJEPAMod
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_huge_16_448")
-    return IJEPAModel(_apply(_CFG_HUGE_16_448, overrides))
+    return IJEPAModel(apply_overrides(_CFG_HUGE_16_448, overrides))
 
 
 @register_model(
@@ -398,4 +391,4 @@ def ijepa_huge_16_448_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("ijepa_huge_16_448_cls")
-    return IJEPAForImageClassification(_apply(_CFG_HUGE_16_448, overrides))
+    return IJEPAForImageClassification(apply_overrides(_CFG_HUGE_16_448, overrides))

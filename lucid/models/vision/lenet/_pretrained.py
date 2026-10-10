@@ -6,13 +6,10 @@ paper-defined variants — get them via ``create_model("lenet_5",
 activation="relu", pooling="max")`` instead.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.lenet._config import LeNetConfig
 from lucid.models.vision.lenet._model import LeNet, LeNetForImageClassification
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_5 = LeNetConfig()  # paper original (tanh + avg-pool)
 
@@ -77,7 +74,7 @@ def lenet_5(pretrained: bool = False, **overrides: object) -> LeNet:
     """
     if pretrained:
         reject_unavailable_pretrained("lenet_5")
-    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
+    cfg = apply_overrides(_CFG_5, overrides)
     return LeNet(cfg)
 
 
@@ -138,5 +135,5 @@ def lenet_5_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("lenet_5_cls")
-    cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
+    cfg = apply_overrides(_CFG_5, overrides)
     return LeNetForImageClassification(cfg)

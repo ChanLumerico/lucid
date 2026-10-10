@@ -1,8 +1,5 @@
 """Registry factories for Mask2Former Swin variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
@@ -13,6 +10,7 @@ from lucid.models.vision.mask2former._weights import (
     Mask2FormerSwinSmallWeights,
     Mask2FormerSwinTinyWeights,
 )
+from lucid.models._utils._common import apply_overrides
 
 
 def _swin_cfg(
@@ -46,14 +44,6 @@ _CFG_SWIN_SMALL = _swin_cfg(96, (2, 2, 18, 2), (3, 6, 12, 24))
 # base/large use the 384-pretrained Swin with window 12 (tiny/small use 7).
 _CFG_SWIN_BASE = _swin_cfg(128, (2, 2, 18, 2), (4, 8, 16, 32), window_size=12)
 _CFG_SWIN_LARGE = _swin_cfg(192, (2, 2, 18, 2), (6, 12, 24, 48), window_size=12)
-
-
-def _build(
-    cfg: Mask2FormerConfig, kw: dict[str, object]
-) -> Mask2FormerForSemanticSegmentation:
-    return Mask2FormerForSemanticSegmentation(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -107,7 +97,9 @@ def mask2former_swin_tiny(
     150
     """
     entry = weights_mod.resolve_weights(Mask2FormerSwinTinyWeights, pretrained, weights)
-    model = _build(_CFG_SWIN_TINY, overrides)
+    model = Mask2FormerForSemanticSegmentation(
+        apply_overrides(_CFG_SWIN_TINY, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask2former_swin_tiny")
     return model
@@ -162,7 +154,9 @@ def mask2former_swin_small(
     entry = weights_mod.resolve_weights(
         Mask2FormerSwinSmallWeights, pretrained, weights
     )
-    model = _build(_CFG_SWIN_SMALL, overrides)
+    model = Mask2FormerForSemanticSegmentation(
+        apply_overrides(_CFG_SWIN_SMALL, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask2former_swin_small")
     return model
@@ -214,7 +208,9 @@ def mask2former_swin_base(
     150
     """
     entry = weights_mod.resolve_weights(Mask2FormerSwinBaseWeights, pretrained, weights)
-    model = _build(_CFG_SWIN_BASE, overrides)
+    model = Mask2FormerForSemanticSegmentation(
+        apply_overrides(_CFG_SWIN_BASE, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask2former_swin_base")
     return model
@@ -269,7 +265,9 @@ def mask2former_swin_large(
     entry = weights_mod.resolve_weights(
         Mask2FormerSwinLargeWeights, pretrained, weights
     )
-    model = _build(_CFG_SWIN_LARGE, overrides)
+    model = Mask2FormerForSemanticSegmentation(
+        apply_overrides(_CFG_SWIN_LARGE, overrides)
+    )
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask2former_swin_large")
     return model

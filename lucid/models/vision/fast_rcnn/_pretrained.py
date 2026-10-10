@@ -1,12 +1,9 @@
 """Registry factories for Fast R-CNN variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
 from lucid.models.vision.fast_rcnn._model import FastRCNNForObjectDetection
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_VGG16 = FastRCNNConfig(
     num_classes=80,
@@ -20,12 +17,6 @@ _CFG_VGG16 = FastRCNNConfig(
     nms_thresh=0.3,
     max_detections=300,
 )
-
-
-def _det(cfg: FastRCNNConfig, kw: dict[str, object]) -> FastRCNNForObjectDetection:
-    return FastRCNNForObjectDetection(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -88,4 +79,4 @@ def fast_rcnn(
     """
     if pretrained:
         reject_unavailable_pretrained("fast_rcnn")
-    return _det(_CFG_VGG16, overrides)
+    return FastRCNNForObjectDetection(apply_overrides(_CFG_VGG16, overrides))

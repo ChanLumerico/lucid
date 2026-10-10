@@ -4,6 +4,8 @@ These helpers are task-agnostic and may be imported by any model
 regardless of its output task (classification, detection, segmentation …).
 """
 
+from collections.abc import Mapping
+from dataclasses import replace
 from typing import TYPE_CHECKING, cast
 
 import lucid
@@ -12,7 +14,46 @@ import lucid.optim as optim
 import lucid.nn.functional as F
 
 if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
     from lucid._tensor.tensor import Tensor
+
+
+def apply_overrides[C: DataclassInstance](cfg: C, overrides: Mapping[str, object]) -> C:
+    """Merge a factory's ``**overrides`` into its frozen default config.
+
+    Every registered factory takes untyped ``**overrides`` and folds them
+    into a frozen dataclass config.  This is the one place that merge
+    happens, so no factory has to launder the keyword mapping's type.
+
+    Parameters
+    ----------
+    cfg : dataclass instance
+        The factory's default config.
+    overrides : Mapping[str, object]
+        Field replacements.  An unknown key raises ``TypeError`` from
+        :func:`dataclasses.replace`.
+
+    Returns
+    -------
+    dataclass instance
+        ``cfg`` itself when ``overrides`` is empty, otherwise a new config
+        of the same type with the fields replaced.
+
+    Examples
+    --------
+    >>> from dataclasses import dataclass
+    >>> from lucid.models._utils._common import apply_overrides
+    >>> @dataclass(frozen=True)
+    ... class Cfg:
+    ...     width: int = 8
+    >>> base = Cfg()
+    >>> apply_overrides(base, {}) is base
+    True
+    >>> apply_overrides(base, {"width": 16})
+    Cfg(width=16)
+    """
+    return replace(cfg, **overrides) if overrides else cfg
 
 
 def make_divisible(

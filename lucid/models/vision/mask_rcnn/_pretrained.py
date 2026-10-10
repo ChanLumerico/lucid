@@ -1,23 +1,15 @@
 """Registry factories for Mask R-CNN variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
 from lucid.models.vision.mask_rcnn._model import MaskRCNNForObjectDetection
 from lucid.models.vision.mask_rcnn._weights import MaskRCNNResNet50FPNWeights
+from lucid.models._utils._common import apply_overrides
 
 # COCO config — the pretrained checkpoint uses num_classes=91 (90 COCO
 # categories + background slot 0).
 _CFG_R50_FPN = MaskRCNNConfig(num_classes=91)
-
-
-def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetection:
-    return MaskRCNNForObjectDetection(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -72,7 +64,7 @@ def mask_rcnn(
     (28, 28)
     """
     entry = weights_mod.resolve_weights(MaskRCNNResNet50FPNWeights, pretrained, weights)
-    model = _seg(_CFG_R50_FPN, overrides)
+    model = MaskRCNNForObjectDetection(apply_overrides(_CFG_R50_FPN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask_rcnn")
     return model
@@ -139,7 +131,7 @@ def mask_rcnn_resnet50_fpn(
     (28, 28)
     """
     entry = weights_mod.resolve_weights(MaskRCNNResNet50FPNWeights, pretrained, weights)
-    model = _seg(_CFG_R50_FPN, overrides)
+    model = MaskRCNNForObjectDetection(apply_overrides(_CFG_R50_FPN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mask_rcnn_resnet50_fpn")
     return model

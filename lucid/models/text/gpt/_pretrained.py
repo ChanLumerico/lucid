@@ -7,9 +7,6 @@ that needs a small variant should override config fields via
 ``create_model("gpt", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt._config import GPTConfig
@@ -19,12 +16,9 @@ from lucid.models.text.gpt._model import (
     GPTModel,
 )
 from lucid.models.text.gpt._weights import GPTLMWeights, GPTWeights
+from lucid.models._utils._common import apply_overrides
 
 _CFG_BASE = GPTConfig()  # Radford et al. defaults — the paper's only size
-
-
-def _apply(cfg: GPTConfig, overrides: dict[str, object]) -> GPTConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Backbone ──────────────────────────────────────────────────────────────────
@@ -97,7 +91,7 @@ def gpt(
     (1, 4, 768)
     """
     entry = weights_mod.resolve_weights(GPTWeights, pretrained, weights)
-    model = GPTModel(_apply(_CFG_BASE, overrides))
+    model = GPTModel(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt")
     return model
@@ -169,7 +163,7 @@ def gpt_lm(
     (1, 4, 40478)
     """
     entry = weights_mod.resolve_weights(GPTLMWeights, pretrained, weights)
-    model = GPTLMHeadModel(_apply(_CFG_BASE, overrides))
+    model = GPTLMHeadModel(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="gpt_lm")
     return model
@@ -247,7 +241,7 @@ def gpt_cls(
     (1, 3)
     """
     entry = weights_mod.resolve_weights(GPTWeights, pretrained, weights)
-    model = GPTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    model = GPTForSequenceClassification(apply_overrides(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.transformer, entry, name="gpt")
     return model

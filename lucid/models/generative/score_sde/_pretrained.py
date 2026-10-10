@@ -10,11 +10,8 @@ the backbone is DDPM's rather than the paper's NCSN++/DDPM++, so quoting
 the paper's figures would attribute someone else's architecture to it.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.score_sde._config import ScoreSDEConfig
 from lucid.models.generative.score_sde._model import (
     ScoreSDEForImageGeneration,
@@ -24,10 +21,6 @@ from lucid.models.generative.score_sde._model import (
 _CFG_VP = ScoreSDEConfig(sde_type="vp")
 _CFG_VE = ScoreSDEConfig(sde_type="ve")
 _CFG_SUBVP = ScoreSDEConfig(sde_type="subvp")
-
-
-def _apply(cfg: ScoreSDEConfig, overrides: dict[str, object]) -> ScoreSDEConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -66,7 +59,7 @@ def score_sde_vp(pretrained: bool = False, **overrides: object) -> ScoreSDEModel
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_vp")
-    return ScoreSDEModel(_apply(_CFG_VP, overrides))
+    return ScoreSDEModel(apply_overrides(_CFG_VP, overrides))
 
 
 @register_model(
@@ -108,7 +101,7 @@ def score_sde_vp_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_vp_gen")
-    return ScoreSDEForImageGeneration(_apply(_CFG_VP, overrides))
+    return ScoreSDEForImageGeneration(apply_overrides(_CFG_VP, overrides))
 
 
 @register_model(
@@ -148,7 +141,7 @@ def score_sde_ve(pretrained: bool = False, **overrides: object) -> ScoreSDEModel
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_ve")
-    return ScoreSDEModel(_apply(_CFG_VE, overrides))
+    return ScoreSDEModel(apply_overrides(_CFG_VE, overrides))
 
 
 @register_model(
@@ -193,7 +186,7 @@ def score_sde_ve_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_ve_gen")
-    return ScoreSDEForImageGeneration(_apply(_CFG_VE, overrides))
+    return ScoreSDEForImageGeneration(apply_overrides(_CFG_VE, overrides))
 
 
 @register_model(
@@ -236,7 +229,7 @@ def score_sde_subvp(pretrained: bool = False, **overrides: object) -> ScoreSDEMo
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_subvp")
-    return ScoreSDEModel(_apply(_CFG_SUBVP, overrides))
+    return ScoreSDEModel(apply_overrides(_CFG_SUBVP, overrides))
 
 
 @register_model(
@@ -277,4 +270,4 @@ def score_sde_subvp_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("score_sde_subvp_gen")
-    return ScoreSDEForImageGeneration(_apply(_CFG_SUBVP, overrides))
+    return ScoreSDEForImageGeneration(apply_overrides(_CFG_SUBVP, overrides))

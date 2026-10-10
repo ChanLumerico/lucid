@@ -1,8 +1,5 @@
 """Registry factories for VGG variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vgg._config import VGGConfig
@@ -17,7 +14,7 @@ from lucid.models.vision.vgg._weights import (
     VGG19BNWeights,
     VGG19Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_11 = VGGConfig(arch=(1, 1, 2, 2, 2))
 _CFG_13 = VGGConfig(arch=(2, 2, 2, 2, 2))
@@ -27,20 +24,6 @@ _CFG_11_BN = VGGConfig(arch=(1, 1, 2, 2, 2), batch_norm=True)
 _CFG_13_BN = VGGConfig(arch=(2, 2, 2, 2, 2), batch_norm=True)
 _CFG_16_BN = VGGConfig(arch=(2, 2, 3, 3, 3), batch_norm=True)
 _CFG_19_BN = VGGConfig(arch=(2, 2, 4, 4, 4), batch_norm=True)
-
-
-def _backbone(cfg: VGGConfig, overrides: dict[str, object]) -> VGG:
-    if overrides:
-        cfg = replace(cfg, **cast(dict[str, Any], overrides))
-    return VGG(cfg)
-
-
-def _classifier(
-    cfg: VGGConfig, overrides: dict[str, object]
-) -> VGGForImageClassification:
-    if overrides:
-        cfg = replace(cfg, **cast(dict[str, Any], overrides))
-    return VGGForImageClassification(cfg)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -99,7 +82,7 @@ def vgg_11(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_11", alternative="vgg_11_cls")
-    return _backbone(_CFG_11, overrides)
+    return VGG(apply_overrides(_CFG_11, overrides))
 
 
 @register_model(
@@ -150,7 +133,7 @@ def vgg_13(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_13", alternative="vgg_13_cls")
-    return _backbone(_CFG_13, overrides)
+    return VGG(apply_overrides(_CFG_13, overrides))
 
 
 @register_model(
@@ -205,7 +188,7 @@ def vgg_16(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_16", alternative="vgg_16_cls")
-    return _backbone(_CFG_16, overrides)
+    return VGG(apply_overrides(_CFG_16, overrides))
 
 
 @register_model(
@@ -260,7 +243,7 @@ def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_19", alternative="vgg_19_cls")
-    return _backbone(_CFG_19, overrides)
+    return VGG(apply_overrides(_CFG_19, overrides))
 
 
 @register_model(
@@ -308,7 +291,7 @@ def vgg_11_bn(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_11_bn", alternative="vgg_11_bn_cls")
-    return _backbone(_CFG_11_BN, overrides)
+    return VGG(apply_overrides(_CFG_11_BN, overrides))
 
 
 @register_model(
@@ -352,7 +335,7 @@ def vgg_13_bn(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_13_bn", alternative="vgg_13_bn_cls")
-    return _backbone(_CFG_13_BN, overrides)
+    return VGG(apply_overrides(_CFG_13_BN, overrides))
 
 
 @register_model(
@@ -399,7 +382,7 @@ def vgg_16_bn(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_16_bn", alternative="vgg_16_bn_cls")
-    return _backbone(_CFG_16_BN, overrides)
+    return VGG(apply_overrides(_CFG_16_BN, overrides))
 
 
 @register_model(
@@ -445,7 +428,7 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     """
     if pretrained:
         reject_unavailable_pretrained("vgg_19_bn", alternative="vgg_19_bn_cls")
-    return _backbone(_CFG_19_BN, overrides)
+    return VGG(apply_overrides(_CFG_19_BN, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -511,7 +494,7 @@ def vgg_11_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG11Weights, pretrained, weights)
-    model = _classifier(_CFG_11, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_11, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_11_cls")
     return model
@@ -575,7 +558,7 @@ def vgg_13_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG13Weights, pretrained, weights)
-    model = _classifier(_CFG_13, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_13, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_13_cls")
     return model
@@ -639,7 +622,7 @@ def vgg_16_cls(
     (2, 1000)
     """
     entry = weights_mod.resolve_weights(VGG16Weights, pretrained, weights)
-    model = _classifier(_CFG_16, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_16, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_16_cls")
     return model
@@ -703,7 +686,7 @@ def vgg_19_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG19Weights, pretrained, weights)
-    model = _classifier(_CFG_19, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_19, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_19_cls")
     return model
@@ -770,7 +753,7 @@ def vgg_11_bn_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG11BNWeights, pretrained, weights)
-    model = _classifier(_CFG_11_BN, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_11_BN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_11_bn_cls")
     return model
@@ -834,7 +817,7 @@ def vgg_13_bn_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG13BNWeights, pretrained, weights)
-    model = _classifier(_CFG_13_BN, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_13_BN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_13_bn_cls")
     return model
@@ -899,7 +882,7 @@ def vgg_16_bn_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG16BNWeights, pretrained, weights)
-    model = _classifier(_CFG_16_BN, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_16_BN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_16_bn_cls")
     return model
@@ -964,7 +947,7 @@ def vgg_19_bn_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(VGG19BNWeights, pretrained, weights)
-    model = _classifier(_CFG_19_BN, overrides)
+    model = VGGForImageClassification(apply_overrides(_CFG_19_BN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vgg_19_bn_cls")
     return model

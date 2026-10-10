@@ -1,11 +1,9 @@
 """Registry factories for ZFNet."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.zfnet._config import ZFNetConfig
 from lucid.models.vision.zfnet._model import ZFNet, ZFNetForImageClassification
+from lucid.models._utils._common import apply_overrides
 
 # ---------------------------------------------------------------------------
 # Canonical config
@@ -74,7 +72,7 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     >>> out.last_hidden_state.shape   # (B, 256, 6, 6)
     (1, 256, 6, 6)
     """
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     if pretrained:
         # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
         # returns whatever comes back, with no check that weights loaded.
@@ -144,7 +142,7 @@ def zfnet_cls(
     >>> out.logits.shape
     (2, 1000)
     """
-    cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    cfg = apply_overrides(_CFG, overrides)
     if pretrained:
         # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
         # returns whatever comes back, with no check that weights loaded.

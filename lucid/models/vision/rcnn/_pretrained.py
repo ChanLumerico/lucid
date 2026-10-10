@@ -1,12 +1,9 @@
 """Registry factories for R-CNN variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.rcnn._config import RCNNConfig
 from lucid.models.vision.rcnn._model import RCNNForObjectDetection
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Base configurations (matching original paper)
@@ -27,12 +24,6 @@ _CFG_ALEXNET = RCNNConfig(
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
-
-
-def _det(cfg: RCNNConfig, kw: dict[str, object]) -> RCNNForObjectDetection:
-    return RCNNForObjectDetection(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -108,4 +99,4 @@ def rcnn(
     """
     if pretrained:
         reject_unavailable_pretrained("rcnn")
-    return _det(_CFG_ALEXNET, overrides)
+    return RCNNForObjectDetection(apply_overrides(_CFG_ALEXNET, overrides))

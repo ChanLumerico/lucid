@@ -1,8 +1,5 @@
 """Registry factories for PVT v2 variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.pvt._config import PVTConfig
@@ -15,7 +12,7 @@ from lucid.models.vision.pvt._weights import (
     PVTv2B4Weights,
     PVTv2B5Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ── Canonical configs ─────────────────────────────────────────────────────────
 
@@ -95,16 +92,6 @@ _CFG_B5 = PVTConfig(
 )
 
 
-def _b(cfg: PVTConfig, kw: dict[str, object]) -> PVT:
-    return PVT(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: PVTConfig, kw: dict[str, object]) -> PVTForImageClassification:
-    return PVTForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
-
-
 # ── Backbones ─────────────────────────────────────────────────────────────────
 
 
@@ -155,7 +142,7 @@ def pvt_v2_b0(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b0", alternative="pvt_v2_b0_cls")
-    return _b(_CFG_B0, overrides)
+    return PVT(apply_overrides(_CFG_B0, overrides))
 
 
 @register_model(
@@ -204,7 +191,7 @@ def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b1", alternative="pvt_v2_b1_cls")
-    return _b(_CFG_B1, overrides)
+    return PVT(apply_overrides(_CFG_B1, overrides))
 
 
 @register_model(
@@ -251,7 +238,7 @@ def pvt_v2_b2(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b2", alternative="pvt_v2_b2_cls")
-    return _b(_CFG_B2, overrides)
+    return PVT(apply_overrides(_CFG_B2, overrides))
 
 
 @register_model(
@@ -298,7 +285,7 @@ def pvt_v2_b2_li(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b2_li")
-    return _b(_CFG_B2_LI, overrides)
+    return PVT(apply_overrides(_CFG_B2_LI, overrides))
 
 
 @register_model(
@@ -346,7 +333,7 @@ def pvt_v2_b3(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b3", alternative="pvt_v2_b3_cls")
-    return _b(_CFG_B3, overrides)
+    return PVT(apply_overrides(_CFG_B3, overrides))
 
 
 @register_model(
@@ -393,7 +380,7 @@ def pvt_v2_b4(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b4", alternative="pvt_v2_b4_cls")
-    return _b(_CFG_B4, overrides)
+    return PVT(apply_overrides(_CFG_B4, overrides))
 
 
 @register_model(
@@ -443,7 +430,7 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     """
     if pretrained:
         reject_unavailable_pretrained("pvt_v2_b5", alternative="pvt_v2_b5_cls")
-    return _b(_CFG_B5, overrides)
+    return PVT(apply_overrides(_CFG_B5, overrides))
 
 
 @register_model(
@@ -500,7 +487,7 @@ def pvt_v2_b0_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B0Weights, pretrained, weights)
-    model = _c(_CFG_B0, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B0, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b0_cls")
     return model
@@ -558,7 +545,7 @@ def pvt_v2_b1_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B1Weights, pretrained, weights)
-    model = _c(_CFG_B1, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B1, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b1_cls")
     return model
@@ -616,7 +603,7 @@ def pvt_v2_b2_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B2Weights, pretrained, weights)
-    model = _c(_CFG_B2, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B2, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b2_cls")
     return model
@@ -674,7 +661,7 @@ def pvt_v2_b3_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B3Weights, pretrained, weights)
-    model = _c(_CFG_B3, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B3, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b3_cls")
     return model
@@ -732,7 +719,7 @@ def pvt_v2_b4_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B4Weights, pretrained, weights)
-    model = _c(_CFG_B4, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B4, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b4_cls")
     return model
@@ -792,7 +779,7 @@ def pvt_v2_b5_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(PVTv2B5Weights, pretrained, weights)
-    model = _c(_CFG_B5, overrides)
+    model = PVTForImageClassification(apply_overrides(_CFG_B5, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b5_cls")
     return model

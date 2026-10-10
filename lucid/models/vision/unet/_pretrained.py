@@ -1,12 +1,9 @@
 """Registry factories for U-Net variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.vision.unet._config import UNetConfig
 from lucid.models.vision.unet._model import UNetForSemanticSegmentation
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_BASE = UNetConfig(
     num_classes=2,
@@ -53,12 +50,6 @@ _CFG_RES_3D = UNetConfig(
     dim=3,
     block="res",
 )
-
-
-def _build(cfg: UNetConfig, kw: dict[str, object]) -> UNetForSemanticSegmentation:
-    return UNetForSemanticSegmentation(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -115,7 +106,7 @@ def unet(
     """
     if pretrained:
         reject_unavailable_pretrained("unet")
-    return _build(_CFG_BASE, overrides)
+    return UNetForSemanticSegmentation(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -185,7 +176,7 @@ def res_unet_2d(
     """
     if pretrained:
         reject_unavailable_pretrained("res_unet_2d")
-    return _build(_CFG_RES_2D, overrides)
+    return UNetForSemanticSegmentation(apply_overrides(_CFG_RES_2D, overrides))
 
 
 @register_model(
@@ -239,7 +230,7 @@ def unet_3d(
     """
     if pretrained:
         reject_unavailable_pretrained("unet_3d")
-    return _build(_CFG_3D, overrides)
+    return UNetForSemanticSegmentation(apply_overrides(_CFG_3D, overrides))
 
 
 @register_model(
@@ -297,4 +288,4 @@ def res_unet_3d(
     """
     if pretrained:
         reject_unavailable_pretrained("res_unet_3d")
-    return _build(_CFG_RES_3D, overrides)
+    return UNetForSemanticSegmentation(apply_overrides(_CFG_RES_3D, overrides))

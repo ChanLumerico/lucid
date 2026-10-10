@@ -12,13 +12,10 @@ following NCSNv2 §3.2 "Technique 1" (use ``σ_max`` ≈ max pairwise data
 distance).
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.ncsn._config import NCSNConfig
 from lucid.models.generative.ncsn._model import NCSNForImageGeneration, NCSNModel
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Song & Ermon 2019 CIFAR-10 setup (§4.1) — L=10, σ_1=1, σ_10=0.01.  NCSNv2
 # bumped σ_max up to 50 for CIFAR; we follow the v2 recommendation as the
@@ -65,10 +62,6 @@ _CFG_CELEBA = NCSNConfig(
     # configs/celeba.yml: step_lr 3.3e-6 -> eps = 6.6e-6.
     langevin_eps=6.6e-6,
 )
-
-
-def _apply(cfg: NCSNConfig, overrides: dict[str, object]) -> NCSNConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare score networks ───────────────────────────────────────────────────────
@@ -125,7 +118,7 @@ def ncsn_cifar(pretrained: bool = False, **overrides: object) -> NCSNModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ncsn_cifar")
-    return NCSNModel(_apply(_CFG_CIFAR, overrides))
+    return NCSNModel(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -179,7 +172,7 @@ def ncsn_celeba(pretrained: bool = False, **overrides: object) -> NCSNModel:
     """
     if pretrained:
         reject_unavailable_pretrained("ncsn_celeba")
-    return NCSNModel(_apply(_CFG_CELEBA, overrides))
+    return NCSNModel(apply_overrides(_CFG_CELEBA, overrides))
 
 
 # ── Image-generation heads ───────────────────────────────────────────────────
@@ -231,7 +224,7 @@ def ncsn_cifar_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("ncsn_cifar_gen")
-    return NCSNForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    return NCSNForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -282,4 +275,4 @@ def ncsn_celeba_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("ncsn_celeba_gen")
-    return NCSNForImageGeneration(_apply(_CFG_CELEBA, overrides))
+    return NCSNForImageGeneration(apply_overrides(_CFG_CELEBA, overrides))

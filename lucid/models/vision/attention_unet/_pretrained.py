@@ -1,14 +1,13 @@
 """Registry factories for Attention U-Net variants."""
 
 from dataclasses import replace
-from typing import Any, cast
 
 from lucid.models._registry import register_model
 from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 from lucid.models.vision.attention_unet._model import (
     AttentionUNetForSemanticSegmentation,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_BASE = AttentionUNetConfig(
     num_classes=2,
@@ -20,14 +19,6 @@ _CFG_BASE = AttentionUNetConfig(
 
 
 _CFG_3D = replace(_CFG_BASE, spatial_dims=3)
-
-
-def _build(
-    cfg: AttentionUNetConfig, kw: dict[str, object]
-) -> AttentionUNetForSemanticSegmentation:
-    return AttentionUNetForSemanticSegmentation(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -92,7 +83,7 @@ def attention_unet(
     """
     if pretrained:
         reject_unavailable_pretrained("attention_unet")
-    return _build(_CFG_BASE, overrides)
+    return AttentionUNetForSemanticSegmentation(apply_overrides(_CFG_BASE, overrides))
 
 
 @register_model(
@@ -142,4 +133,4 @@ def attention_unet_3d(
     """
     if pretrained:
         reject_unavailable_pretrained("attention_unet_3d")
-    return _build(_CFG_3D, overrides)
+    return AttentionUNetForSemanticSegmentation(apply_overrides(_CFG_3D, overrides))

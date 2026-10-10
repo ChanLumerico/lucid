@@ -1,8 +1,5 @@
 """Registry factories for DETR variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.detr._config import DETRConfig
@@ -11,6 +8,7 @@ from lucid.models.vision.detr._weights import (
     DETRResNet50Weights,
     DETRResNet101Weights,
 )
+from lucid.models._utils._common import apply_overrides
 
 # COCO 2017 configs — the pretrained checkpoints use num_classes=91
 # (91 foreground + 1 no-object slot).
@@ -45,12 +43,6 @@ _CFG_R101 = DETRConfig(
     bbox_hidden_dim=256,
     score_thresh=0.7,
 )
-
-
-def _det(cfg: DETRConfig, kw: dict[str, object]) -> DETRForObjectDetection:
-    return DETRForObjectDetection(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -115,7 +107,7 @@ def detr_resnet50(
     (1, 100, 92)
     """
     entry = weights_mod.resolve_weights(DETRResNet50Weights, pretrained, weights)
-    model = _det(_CFG_R50, overrides)
+    model = DETRForObjectDetection(apply_overrides(_CFG_R50, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="detr_resnet50")
     return model
@@ -181,7 +173,7 @@ def detr_resnet101(
     (1, 100, 92)
     """
     entry = weights_mod.resolve_weights(DETRResNet101Weights, pretrained, weights)
-    model = _det(_CFG_R101, overrides)
+    model = DETRForObjectDetection(apply_overrides(_CFG_R101, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="detr_resnet101")
     return model

@@ -36,10 +36,9 @@ box.  Neither is a property of the rung.
 """
 
 from dataclasses import replace
-from typing import Any, cast
 
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 from lucid.models.generative.dreamer_v3._config import (
     DREAMER_V3_SIZES,
     DreamerV3Config,
@@ -71,10 +70,6 @@ _CFG_50M = _rung("50m")
 _CFG_100M = _rung("100m")
 _CFG_200M = _rung("200m")
 _CFG_400M = _rung("400m")
-
-
-def _apply(cfg: DreamerV3Config, overrides: dict[str, object]) -> DreamerV3Config:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 @register_model(
@@ -122,7 +117,7 @@ def dreamer_v3_12m(pretrained: bool = False, **overrides: object) -> DreamerV3Mo
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_12m")
-    return DreamerV3Model(_apply(_CFG_12M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_12M, overrides))
 
 
 @register_model(
@@ -170,7 +165,7 @@ def dreamer_v3_12m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_12m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_12M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_12M, overrides))
 
 
 @register_model(
@@ -216,7 +211,7 @@ def dreamer_v3_25m(pretrained: bool = False, **overrides: object) -> DreamerV3Mo
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_25m")
-    return DreamerV3Model(_apply(_CFG_25M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_25M, overrides))
 
 
 @register_model(
@@ -260,7 +255,7 @@ def dreamer_v3_25m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_25m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_25M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_25M, overrides))
 
 
 @register_model(
@@ -307,7 +302,7 @@ def dreamer_v3_50m(pretrained: bool = False, **overrides: object) -> DreamerV3Mo
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_50m")
-    return DreamerV3Model(_apply(_CFG_50M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_50M, overrides))
 
 
 @register_model(
@@ -351,7 +346,7 @@ def dreamer_v3_50m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_50m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_50M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_50M, overrides))
 
 
 @register_model(
@@ -395,7 +390,7 @@ def dreamer_v3_100m(pretrained: bool = False, **overrides: object) -> DreamerV3M
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_100m")
-    return DreamerV3Model(_apply(_CFG_100M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_100M, overrides))
 
 
 @register_model(
@@ -439,7 +434,7 @@ def dreamer_v3_100m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_100m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_100M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_100M, overrides))
 
 
 @register_model(
@@ -487,7 +482,7 @@ def dreamer_v3_200m(pretrained: bool = False, **overrides: object) -> DreamerV3M
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_200m")
-    return DreamerV3Model(_apply(_CFG_200M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_200M, overrides))
 
 
 @register_model(
@@ -538,7 +533,7 @@ def dreamer_v3_200m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_200m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_200M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_200M, overrides))
 
 
 @register_model(
@@ -585,7 +580,7 @@ def dreamer_v3_400m(pretrained: bool = False, **overrides: object) -> DreamerV3M
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_400m")
-    return DreamerV3Model(_apply(_CFG_400M, overrides))
+    return DreamerV3Model(apply_overrides(_CFG_400M, overrides))
 
 
 @register_model(
@@ -629,4 +624,4 @@ def dreamer_v3_400m_world_model(
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_400m_world_model")
-    return DreamerV3ForWorldModeling(_apply(_CFG_400M, overrides))
+    return DreamerV3ForWorldModeling(apply_overrides(_CFG_400M, overrides))

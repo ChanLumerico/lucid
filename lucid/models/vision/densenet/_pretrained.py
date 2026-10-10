@@ -1,8 +1,5 @@
 """Registry factories for DenseNet variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.densenet._config import DenseNetConfig
@@ -13,7 +10,7 @@ from lucid.models.vision.densenet._weights import (
     DenseNet169Weights,
     DenseNet201Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_121 = DenseNetConfig(
     block_config=(6, 12, 24, 16), growth_rate=32, num_init_features=64
@@ -37,16 +34,6 @@ _CFG_201 = DenseNetConfig(
 _CFG_264 = DenseNetConfig(
     block_config=(6, 12, 64, 48), growth_rate=32, num_init_features=64
 )
-
-
-def _b(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNet:
-    return DenseNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNetForImageClassification:
-    return DenseNetForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -102,7 +89,7 @@ def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_121", alternative="densenet_121_cls")
-    return _b(_CFG_121, overrides)
+    return DenseNet(apply_overrides(_CFG_121, overrides))
 
 
 @register_model(
@@ -153,7 +140,7 @@ def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_169", alternative="densenet_169_cls")
-    return _b(_CFG_169, overrides)
+    return DenseNet(apply_overrides(_CFG_169, overrides))
 
 
 @register_model(
@@ -204,7 +191,7 @@ def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_201", alternative="densenet_201_cls")
-    return _b(_CFG_201, overrides)
+    return DenseNet(apply_overrides(_CFG_201, overrides))
 
 
 @register_model(
@@ -256,7 +243,7 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_264")
-    return _b(_CFG_264, overrides)
+    return DenseNet(apply_overrides(_CFG_264, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -318,7 +305,7 @@ def densenet_121_cls(
     >>> model = densenet_121_cls(weights=DenseNet121Weights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(DenseNet121Weights, pretrained, weights)
-    model = _c(_CFG_121, overrides)
+    model = DenseNetForImageClassification(apply_overrides(_CFG_121, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="densenet_121_cls")
     return model
@@ -373,7 +360,7 @@ def densenet_169_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(DenseNet169Weights, pretrained, weights)
-    model = _c(_CFG_169, overrides)
+    model = DenseNetForImageClassification(apply_overrides(_CFG_169, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="densenet_169_cls")
     return model
@@ -428,7 +415,7 @@ def densenet_201_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(DenseNet201Weights, pretrained, weights)
-    model = _c(_CFG_201, overrides)
+    model = DenseNetForImageClassification(apply_overrides(_CFG_201, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="densenet_201_cls")
     return model
@@ -480,7 +467,7 @@ def densenet_264_cls(
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_264_cls")
-    return _c(_CFG_264, overrides)
+    return DenseNetForImageClassification(apply_overrides(_CFG_264, overrides))
 
 
 # ── DenseNet-161 (k=48, 96-channel stem) ────────────────────────────────────────
@@ -543,7 +530,7 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     """
     if pretrained:
         reject_unavailable_pretrained("densenet_161", alternative="densenet_161_cls")
-    return _b(_CFG_161, overrides)
+    return DenseNet(apply_overrides(_CFG_161, overrides))
 
 
 @register_model(
@@ -599,7 +586,7 @@ def densenet_161_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(DenseNet161Weights, pretrained, weights)
-    model = _c(_CFG_161, overrides)
+    model = DenseNetForImageClassification(apply_overrides(_CFG_161, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="densenet_161_cls")
     return model

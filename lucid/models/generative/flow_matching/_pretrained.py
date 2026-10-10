@@ -25,16 +25,13 @@ Smaller test models go through ``create_model("flow_matching_cifar",
 sample_size=..., base_channels=..., channel_mult=...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.flow_matching._config import FlowMatchingConfig
 from lucid.models.generative.flow_matching._model import (
     FlowMatchingForImageGeneration,
     FlowMatchingModel,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # 32x32 — four stages, 32 → 16 → 8 → 4, attention at 32/16/8.
 _CFG_CIFAR = FlowMatchingConfig(
@@ -84,10 +81,6 @@ _CFG_IMAGENET128 = FlowMatchingConfig(
     attention_resolutions=(32, 16, 8),
     num_head_channels=64,
 )
-
-
-def _apply(cfg: FlowMatchingConfig, overrides: dict[str, object]) -> FlowMatchingConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare velocity fields ──────────────────────────────────────────────────────
@@ -143,7 +136,7 @@ def flow_matching_cifar(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_cifar")
-    return FlowMatchingModel(_apply(_CFG_CIFAR, overrides))
+    return FlowMatchingModel(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -184,7 +177,7 @@ def flow_matching_imagenet32(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet32")
-    return FlowMatchingModel(_apply(_CFG_IMAGENET32, overrides))
+    return FlowMatchingModel(apply_overrides(_CFG_IMAGENET32, overrides))
 
 
 @register_model(
@@ -225,7 +218,7 @@ def flow_matching_imagenet64(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet64")
-    return FlowMatchingModel(_apply(_CFG_IMAGENET64, overrides))
+    return FlowMatchingModel(apply_overrides(_CFG_IMAGENET64, overrides))
 
 
 @register_model(
@@ -267,7 +260,7 @@ def flow_matching_imagenet128(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet128")
-    return FlowMatchingModel(_apply(_CFG_IMAGENET128, overrides))
+    return FlowMatchingModel(apply_overrides(_CFG_IMAGENET128, overrides))
 
 
 # ── Generators ────────────────────────────────────────────────────────────────
@@ -317,7 +310,7 @@ def flow_matching_cifar_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_cifar_gen")
-    return FlowMatchingForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    return FlowMatchingForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -359,7 +352,7 @@ def flow_matching_imagenet32_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet32_gen")
-    return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET32, overrides))
+    return FlowMatchingForImageGeneration(apply_overrides(_CFG_IMAGENET32, overrides))
 
 
 @register_model(
@@ -401,7 +394,7 @@ def flow_matching_imagenet64_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet64_gen")
-    return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
+    return FlowMatchingForImageGeneration(apply_overrides(_CFG_IMAGENET64, overrides))
 
 
 @register_model(
@@ -443,7 +436,7 @@ def flow_matching_imagenet128_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("flow_matching_imagenet128_gen")
-    return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET128, overrides))
+    return FlowMatchingForImageGeneration(apply_overrides(_CFG_IMAGENET128, overrides))
 
 
 __all__ = [

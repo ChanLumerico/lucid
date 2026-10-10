@@ -1,8 +1,5 @@
 """Registry factories for EfficientNet B0–B7."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientnet._config import EfficientNetConfig
@@ -20,7 +17,7 @@ from lucid.models.vision.efficientnet._weights import (
     EfficientNetB6Weights,
     EfficientNetB7Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Compound scaling: (width_mult, depth_mult, dropout)
 _CFGS = {
@@ -41,18 +38,6 @@ _CFGS = {
         width_mult=2.0, depth_mult=3.1, dropout=0.5, bn_eps=1e-3, bn_momentum=0.01
     ),
 }
-
-
-def _b(key: str, kw: dict[str, object]) -> EfficientNet:
-    cfg = _CFGS[key]
-    return EfficientNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(key: str, kw: dict[str, object]) -> EfficientNetForImageClassification:
-    cfg = _CFGS[key]
-    return EfficientNetForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -110,7 +95,7 @@ def efficientnet_b0(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b0", alternative="efficientnet_b0_cls"
         )
-    return _b("b0", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b0"], overrides))
 
 
 @register_model(
@@ -163,7 +148,7 @@ def efficientnet_b1(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b1", alternative="efficientnet_b1_cls"
         )
-    return _b("b1", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b1"], overrides))
 
 
 @register_model(
@@ -216,7 +201,7 @@ def efficientnet_b2(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b2", alternative="efficientnet_b2_cls"
         )
-    return _b("b2", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b2"], overrides))
 
 
 @register_model(
@@ -269,7 +254,7 @@ def efficientnet_b3(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b3", alternative="efficientnet_b3_cls"
         )
-    return _b("b3", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b3"], overrides))
 
 
 @register_model(
@@ -322,7 +307,7 @@ def efficientnet_b4(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b4", alternative="efficientnet_b4_cls"
         )
-    return _b("b4", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b4"], overrides))
 
 
 @register_model(
@@ -375,7 +360,7 @@ def efficientnet_b5(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b5", alternative="efficientnet_b5_cls"
         )
-    return _b("b5", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b5"], overrides))
 
 
 @register_model(
@@ -428,7 +413,7 @@ def efficientnet_b6(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b6", alternative="efficientnet_b6_cls"
         )
-    return _b("b6", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b6"], overrides))
 
 
 @register_model(
@@ -483,7 +468,7 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
         reject_unavailable_pretrained(
             "efficientnet_b7", alternative="efficientnet_b7_cls"
         )
-    return _b("b7", overrides)
+    return EfficientNet(apply_overrides(_CFGS["b7"], overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -559,7 +544,7 @@ def efficientnet_b0_cls(
     >>> model = efficientnet_b0_cls(pretrained=True)            # DEFAULT tag
     """
     entry = weights_mod.resolve_weights(EfficientNetB0Weights, pretrained, weights)
-    model = _c("b0", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b0"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b0_cls")
     return model
@@ -625,7 +610,7 @@ def efficientnet_b1_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB1Weights, pretrained, weights)
-    model = _c("b1", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b1"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b1_cls")
     return model
@@ -691,7 +676,7 @@ def efficientnet_b2_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB2Weights, pretrained, weights)
-    model = _c("b2", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b2"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b2_cls")
     return model
@@ -757,7 +742,7 @@ def efficientnet_b3_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB3Weights, pretrained, weights)
-    model = _c("b3", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b3"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b3_cls")
     return model
@@ -823,7 +808,7 @@ def efficientnet_b4_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB4Weights, pretrained, weights)
-    model = _c("b4", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b4"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b4_cls")
     return model
@@ -889,7 +874,7 @@ def efficientnet_b5_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB5Weights, pretrained, weights)
-    model = _c("b5", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b5"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b5_cls")
     return model
@@ -955,7 +940,7 @@ def efficientnet_b6_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB6Weights, pretrained, weights)
-    model = _c("b6", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b6"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b6_cls")
     return model
@@ -1024,7 +1009,7 @@ def efficientnet_b7_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientNetB7Weights, pretrained, weights)
-    model = _c("b7", overrides)
+    model = EfficientNetForImageClassification(apply_overrides(_CFGS["b7"], overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientnet_b7_cls")
     return model

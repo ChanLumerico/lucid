@@ -1,8 +1,5 @@
 """Registry factories for EfficientFormer variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientformer._config import EfficientFormerConfig
@@ -15,7 +12,7 @@ from lucid.models.vision.efficientformer._weights import (
     EfficientFormerL3Weights,
     EfficientFormerL7Weights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Stochastic depth is 0.0 for every variant: both reference implementations
 # leave ``drop_path_rate`` at its 0.0 default, snap-research's training entry
@@ -55,18 +52,6 @@ _CFG_L7 = EfficientFormerConfig(
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
     num_vit=8,
 )
-
-
-def _b(cfg: EfficientFormerConfig, kw: dict[str, object]) -> EfficientFormer:
-    return EfficientFormer(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
-
-
-def _c(
-    cfg: EfficientFormerConfig, kw: dict[str, object]
-) -> EfficientFormerForImageClassification:
-    return EfficientFormerForImageClassification(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -128,7 +113,7 @@ def efficientformer_l1(
         reject_unavailable_pretrained(
             "efficientformer_l1", alternative="efficientformer_l1_cls"
         )
-    return _b(_CFG_L1, overrides)
+    return EfficientFormer(apply_overrides(_CFG_L1, overrides))
 
 
 @register_model(
@@ -182,7 +167,7 @@ def efficientformer_l3(
         reject_unavailable_pretrained(
             "efficientformer_l3", alternative="efficientformer_l3_cls"
         )
-    return _b(_CFG_L3, overrides)
+    return EfficientFormer(apply_overrides(_CFG_L3, overrides))
 
 
 @register_model(
@@ -237,7 +222,7 @@ def efficientformer_l7(
         reject_unavailable_pretrained(
             "efficientformer_l7", alternative="efficientformer_l7_cls"
         )
-    return _b(_CFG_L7, overrides)
+    return EfficientFormer(apply_overrides(_CFG_L7, overrides))
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -303,7 +288,7 @@ def efficientformer_l1_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientFormerL1Weights, pretrained, weights)
-    model = _c(_CFG_L1, overrides)
+    model = EfficientFormerForImageClassification(apply_overrides(_CFG_L1, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientformer_l1_cls")
     return model
@@ -367,7 +352,7 @@ def efficientformer_l3_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientFormerL3Weights, pretrained, weights)
-    model = _c(_CFG_L3, overrides)
+    model = EfficientFormerForImageClassification(apply_overrides(_CFG_L3, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientformer_l3_cls")
     return model
@@ -433,7 +418,7 @@ def efficientformer_l7_cls(
     (1, 1000)
     """
     entry = weights_mod.resolve_weights(EfficientFormerL7Weights, pretrained, weights)
-    model = _c(_CFG_L7, overrides)
+    model = EfficientFormerForImageClassification(apply_overrides(_CFG_L7, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="efficientformer_l7_cls")
     return model

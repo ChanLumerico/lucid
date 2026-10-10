@@ -22,16 +22,13 @@ Smaller test-scale models go through ``create_model("realnvp_cifar",
 sample_size=..., num_scales=..., residual_blocks=..., base_dim=...)``.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.realnvp._config import RealNVPConfig
 from lucid.models.generative.realnvp._model import (
     RealNVPForImageGeneration,
     RealNVPModel,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Paper §4.1 — CIFAR-10: 8 residual blocks, 64 feature maps, one downscale.
 _CFG_CIFAR = RealNVPConfig(
@@ -86,10 +83,6 @@ _CFG_CELEBA = RealNVPConfig(
 )
 
 
-def _apply(cfg: RealNVPConfig, overrides: dict[str, object]) -> RealNVPConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
-
-
 # ── Bare flows ────────────────────────────────────────────────────────────────
 
 
@@ -142,7 +135,7 @@ def realnvp_cifar(pretrained: bool = False, **overrides: object) -> RealNVPModel
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_cifar")
-    return RealNVPModel(_apply(_CFG_CIFAR, overrides))
+    return RealNVPModel(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -188,7 +181,7 @@ def realnvp_imagenet32(pretrained: bool = False, **overrides: object) -> RealNVP
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_imagenet32")
-    return RealNVPModel(_apply(_CFG_IMAGENET32, overrides))
+    return RealNVPModel(apply_overrides(_CFG_IMAGENET32, overrides))
 
 
 @register_model(
@@ -233,7 +226,7 @@ def realnvp_imagenet64(pretrained: bool = False, **overrides: object) -> RealNVP
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_imagenet64")
-    return RealNVPModel(_apply(_CFG_IMAGENET64, overrides))
+    return RealNVPModel(apply_overrides(_CFG_IMAGENET64, overrides))
 
 
 @register_model(
@@ -281,7 +274,7 @@ def realnvp_lsun(pretrained: bool = False, **overrides: object) -> RealNVPModel:
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_lsun")
-    return RealNVPModel(_apply(_CFG_LSUN, overrides))
+    return RealNVPModel(apply_overrides(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -327,7 +320,7 @@ def realnvp_celeba(pretrained: bool = False, **overrides: object) -> RealNVPMode
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_celeba")
-    return RealNVPModel(_apply(_CFG_CELEBA, overrides))
+    return RealNVPModel(apply_overrides(_CFG_CELEBA, overrides))
 
 
 # ── Image-generation heads ───────────────────────────────────────────────────
@@ -377,7 +370,7 @@ def realnvp_cifar_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_cifar_gen")
-    return RealNVPForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    return RealNVPForImageGeneration(apply_overrides(_CFG_CIFAR, overrides))
 
 
 @register_model(
@@ -423,7 +416,7 @@ def realnvp_imagenet32_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_imagenet32_gen")
-    return RealNVPForImageGeneration(_apply(_CFG_IMAGENET32, overrides))
+    return RealNVPForImageGeneration(apply_overrides(_CFG_IMAGENET32, overrides))
 
 
 @register_model(
@@ -469,7 +462,7 @@ def realnvp_imagenet64_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_imagenet64_gen")
-    return RealNVPForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
+    return RealNVPForImageGeneration(apply_overrides(_CFG_IMAGENET64, overrides))
 
 
 @register_model(
@@ -515,7 +508,7 @@ def realnvp_lsun_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_lsun_gen")
-    return RealNVPForImageGeneration(_apply(_CFG_LSUN, overrides))
+    return RealNVPForImageGeneration(apply_overrides(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -565,4 +558,4 @@ def realnvp_celeba_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("realnvp_celeba_gen")
-    return RealNVPForImageGeneration(_apply(_CFG_CELEBA, overrides))
+    return RealNVPForImageGeneration(apply_overrides(_CFG_CELEBA, overrides))

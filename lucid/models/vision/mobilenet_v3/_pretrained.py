@@ -1,8 +1,5 @@
 """Registry factories for MobileNet v3."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
@@ -14,7 +11,7 @@ from lucid.models.vision.mobilenet_v3._weights import (
     MobileNetV3LargeWeights,
     MobileNetV3SmallWeights,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 _CFG_LARGE = MobileNetV3Config(variant="large")
 _CFG_SMALL = MobileNetV3Config(variant="small")
@@ -76,11 +73,7 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
         reject_unavailable_pretrained(
             "mobilenet_v3_large", alternative="mobilenet_v3_large_cls"
         )
-    cfg = (
-        replace(_CFG_LARGE, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_LARGE
-    )
+    cfg = apply_overrides(_CFG_LARGE, overrides)
     return MobileNetV3(cfg)
 
 
@@ -138,11 +131,7 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
         reject_unavailable_pretrained(
             "mobilenet_v3_small", alternative="mobilenet_v3_small_cls"
         )
-    cfg = (
-        replace(_CFG_SMALL, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_SMALL
-    )
+    cfg = apply_overrides(_CFG_SMALL, overrides)
     return MobileNetV3(cfg)
 
 
@@ -217,11 +206,7 @@ def mobilenet_v3_large_cls(
     >>> model = mobilenet_v3_large_cls(weights=MobileNetV3LargeWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV3LargeWeights, pretrained, weights)
-    cfg = (
-        replace(_CFG_LARGE, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_LARGE
-    )
+    cfg = apply_overrides(_CFG_LARGE, overrides)
     model = MobileNetV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_large_cls")
@@ -295,11 +280,7 @@ def mobilenet_v3_small_cls(
     >>> model = mobilenet_v3_small_cls(weights=MobileNetV3SmallWeights.IMAGENET1K_V1)
     """
     entry = weights_mod.resolve_weights(MobileNetV3SmallWeights, pretrained, weights)
-    cfg = (
-        replace(_CFG_SMALL, **cast(dict[str, Any], overrides))
-        if overrides
-        else _CFG_SMALL
-    )
+    cfg = apply_overrides(_CFG_SMALL, overrides)
     model = MobileNetV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_small_cls")

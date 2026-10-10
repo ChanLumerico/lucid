@@ -5,9 +5,6 @@ encoder, while a factory here builds that encoder and the 24-block
 action-conditioned predictor beside it.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.vjepa2_ac._config import VJEPA2ACConfig
@@ -16,15 +13,12 @@ from lucid.models.generative.vjepa2_ac._model import (
     VJEPA2ACModel,
 )
 from lucid.models.generative.vjepa2_ac._weights import VJEPA2ACWeights
+from lucid.models._utils._common import apply_overrides
 
 __all__ = ["vjepa2_ac_vit_giant", "vjepa2_ac_vit_giant_world_model"]
 
 
 _CFG_GIANT = VJEPA2ACConfig()
-
-
-def _apply(config: VJEPA2ACConfig, overrides: dict[str, object]) -> VJEPA2ACConfig:
-    return replace(config, **cast(dict[str, Any], overrides)) if overrides else config
 
 
 @register_model(
@@ -80,7 +74,7 @@ def vjepa2_ac_vit_giant(
     256
     """
     entry = weights_mod.resolve_weights(VJEPA2ACWeights, pretrained, weights)
-    model = VJEPA2ACModel(_apply(_CFG_GIANT, overrides))
+    model = VJEPA2ACModel(apply_overrides(_CFG_GIANT, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="vjepa2_ac_vit_giant")
     return model
@@ -135,7 +129,7 @@ def vjepa2_ac_vit_giant_world_model(
     (True, False)
     """
     entry = weights_mod.resolve_weights(VJEPA2ACWeights, pretrained, weights)
-    model = VJEPA2ACForWorldModeling(_apply(_CFG_GIANT, overrides))
+    model = VJEPA2ACForWorldModeling(apply_overrides(_CFG_GIANT, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(
             model.vjepa2_ac, entry, name="vjepa2_ac_vit_giant_world_model"

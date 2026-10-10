@@ -1,23 +1,15 @@
 """Registry factories for Faster R-CNN variants."""
 
-from dataclasses import replace
-from typing import Any, cast
-
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 from lucid.models.vision.faster_rcnn._model import FasterRCNNForObjectDetection
 from lucid.models.vision.faster_rcnn._weights import FasterRCNNResNet50FPNWeights
+from lucid.models._utils._common import apply_overrides
 
 # COCO config — the pretrained checkpoint uses num_classes=91 (90 COCO
 # categories + background slot 0).
 _CFG_R50_FPN = FasterRCNNConfig(num_classes=91)
-
-
-def _det(cfg: FasterRCNNConfig, kw: dict[str, object]) -> FasterRCNNForObjectDetection:
-    return FasterRCNNForObjectDetection(
-        replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
-    )
 
 
 @register_model(
@@ -73,7 +65,7 @@ def faster_rcnn(
     entry = weights_mod.resolve_weights(
         FasterRCNNResNet50FPNWeights, pretrained, weights
     )
-    model = _det(_CFG_R50_FPN, overrides)
+    model = FasterRCNNForObjectDetection(apply_overrides(_CFG_R50_FPN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="faster_rcnn")
     return model
@@ -139,7 +131,7 @@ def faster_rcnn_resnet50_fpn(
     entry = weights_mod.resolve_weights(
         FasterRCNNResNet50FPNWeights, pretrained, weights
     )
-    model = _det(_CFG_R50_FPN, overrides)
+    model = FasterRCNNForObjectDetection(apply_overrides(_CFG_R50_FPN, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="faster_rcnn_resnet50_fpn")
     return model

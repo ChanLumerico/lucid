@@ -22,16 +22,13 @@ paper's setting exactly::
 which is two-dimensional, and therefore keeps the exact trace.
 """
 
-from dataclasses import replace
-from typing import Any, cast
-
 from lucid.models._registry import register_model
 from lucid.models.generative.neural_ode._config import NeuralODEConfig
 from lucid.models.generative.neural_ode._model import (
     NeuralODEForImageGeneration,
     NeuralODEModel,
 )
-from lucid.models._utils._common import reject_unavailable_pretrained
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # Paper §4: the vector field is a gated sum of M = 64 functions.  Two
 # blocks is the shallowest stack that lets the gates act on a hidden
@@ -43,10 +40,6 @@ _CFG_DEFAULT = NeuralODEConfig(
     hidden_dim=64,
     num_blocks=2,
 )
-
-
-def _apply(cfg: NeuralODEConfig, overrides: dict[str, object]) -> NeuralODEConfig:
-    return replace(cfg, **cast(dict[str, Any], overrides)) if overrides else cfg
 
 
 # ── Bare flow ─────────────────────────────────────────────────────────────────
@@ -106,7 +99,7 @@ def neural_ode(pretrained: bool = False, **overrides: object) -> NeuralODEModel:
     """
     if pretrained:
         reject_unavailable_pretrained("neural_ode")
-    return NeuralODEModel(_apply(_CFG_DEFAULT, overrides))
+    return NeuralODEModel(apply_overrides(_CFG_DEFAULT, overrides))
 
 
 # ── Generator ─────────────────────────────────────────────────────────────────
@@ -161,7 +154,7 @@ def neural_ode_gen(
     """
     if pretrained:
         reject_unavailable_pretrained("neural_ode_gen")
-    return NeuralODEForImageGeneration(_apply(_CFG_DEFAULT, overrides))
+    return NeuralODEForImageGeneration(apply_overrides(_CFG_DEFAULT, overrides))
 
 
 __all__ = ["neural_ode", "neural_ode_gen"]

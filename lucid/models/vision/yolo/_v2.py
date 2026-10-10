@@ -63,8 +63,8 @@ where the responsible anchor is the one with highest IoU vs GT.
 """
 
 import math
-from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, ClassVar, cast, final, override
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -78,6 +78,7 @@ from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
 from lucid.models.vision.yolo._v1 import _threshold_by_class
 from lucid.models.vision.yolo._weights import YOLOV2Weights
+from lucid.models._utils._common import apply_overrides
 import lucid.weights as weights_mod
 
 if TYPE_CHECKING:
@@ -1014,14 +1015,6 @@ def _best_gt_iou(
     return best
 
 
-def _make_v2(
-    cfg: YOLOV2Config, overrides: dict[str, object]
-) -> YOLOV2ForObjectDetection:
-    if overrides:
-        cfg = replace(cfg, **cast(dict[str, Any], overrides))
-    return YOLOV2ForObjectDetection(cfg)
-
-
 @register_model(
     task="object-detection",
     family="yolo",
@@ -1088,7 +1081,7 @@ def yolo_v2(
         if overrides.get("darknet_reorg") is False:
             raise ValueError("published YOLOv2 weights require darknet_reorg=True")
         overrides = {**overrides, "darknet_reorg": True}
-    model = _make_v2(_CFG_V2, overrides)
+    model = YOLOV2ForObjectDetection(apply_overrides(_CFG_V2, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="yolo_v2")
     return model
