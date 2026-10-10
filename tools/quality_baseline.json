@@ -1029,8 +1029,6 @@
     "lucid/_C/utils/tokenizer/Unigram.cpp": 2,
     "lucid/_C/utils/tokenizer/WordPiece.cpp": 2,
     "lucid/_ops/_adapters.py": 2,
-    "lucid/_ops/composite/indexing.py": 1,
-    "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_indexing.py": 2,
     "lucid/_tensor/_to.py": 1,
     "lucid/benchmarks/run_all.py": 1,
@@ -1136,7 +1134,7 @@
     "lucid/_C/utils/tokenizer/Unigram.cpp": 1,
     "lucid/_C/utils/tokenizer/WordPiece.cpp": 1,
     "lucid/_factories/creation.py": 1,
-    "lucid/_ops/composite/statistics.py": 2,
+    "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_dunders.py": 1,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/_to.py": 2,
@@ -1460,8 +1458,6 @@
    "C901": {
     "lucid/_ops/__init__.py": 2,
     "lucid/_ops/_adapters.py": 2,
-    "lucid/_ops/composite/indexing.py": 1,
-    "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_dunders.py": 1,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/_methods.py": 2,
@@ -1634,7 +1630,6 @@
    },
    "PLR0912": {
     "lucid/_ops/__init__.py": 1,
-    "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/_to.py": 1,
     "lucid/benchmarks/run_all.py": 1,
@@ -1760,7 +1755,7 @@
    },
    "RET505": {
     "lucid/_ops/composite/elementwise.py": 1,
-    "lucid/_ops/composite/statistics.py": 3,
+    "lucid/_ops/composite/statistics.py": 2,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/_methods.py": 2,
     "lucid/nn/functional/normalization.py": 1

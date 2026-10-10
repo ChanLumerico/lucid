@@ -10,6 +10,13 @@ All ops here follow the reference-framework API surface:
 
 All implementations use only engine primitives — no numpy at the Python level.
 
+Index tensors reach the engine at the width the caller gave them: the
+engine checks an ``int64`` index at full width, refusing an out-of-range one
+on the CPU and dropping its write on Metal.  Narrowed to ``int32`` first,
+``2**40`` wrapped to 0 and wrote the first element.  A ``source`` / ``src``
+/ ``values`` of another dtype than ``input``'s is refused, as the reference
+refuses it.
+
 The in-place forms (``Tensor.index_add_`` and the rest, and
 :func:`index_put_`) run the out-of-place op and write its result into the
 destination through :func:`_write_inplace`.
@@ -22,6 +29,13 @@ import lucid
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import iinfo
 import lucid._C.engine as _C_engine
+from lucid._tensor._indexing import (
+    _broadcast_shape,
+    _normalize_key,
+    _normalize_value,
+    _take,
+    _written_positions,
+)
 from lucid.autograd.function import Function, FunctionCtx
 
 if TYPE_CHECKING:
@@ -52,17 +66,59 @@ class _Snapshot(Function):
         return grad
 
 
-def _like_input(source: Tensor, input: Tensor) -> Tensor:
-    """``source`` in ``input``'s dtype.
+def _require_input_dtype(name: str, input: Tensor, source: Tensor, what: str) -> None:
+    """Refuse a ``source`` whose dtype is not ``input``'s.
 
-    The engine's scatter kernels read ``source``'s buffer as if it held
-    ``input``'s dtype: a float64 source added into a float32 tensor landed
-    as 1.875 where 1.0 was meant, and an int64 one as 1e-45.  Cast first,
-    so the result keeps ``input``'s dtype, as a write into ``input`` must.
+    The write keeps ``input``'s dtype, and the reference refuses rather
+    than cast the values written into it; so does the engine's own scatter
+    door (``require_scatter_dtypes``), whose exception this raises, a
+    ``RuntimeError`` and a ``TypeError`` both.  ``Tensor.__setitem__`` is
+    the one write that casts, and it does not come through here.
     """
-    if source._impl.dtype == input._impl.dtype:
-        return source
-    return source.to(input.dtype)
+    if source._impl.dtype != input._impl.dtype:
+        raise _C_engine.DtypeMismatch(
+            f"{name}: {what} must have input's dtype {input.dtype}, got "
+            f"{source.dtype} — cast it first"
+        )
+
+
+def _scatter_add(base: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
+    """``base`` with ``src`` added at ``index`` along ``dim``, by the engine.
+
+    The engine op directly, not ``Tensor.scatter_add``, whose adapter
+    narrows an ``int64`` index to ``int32`` on the way.
+    """
+    return _wrap(_C_engine.scatter_add(_unwrap(base), _unwrap(index), _unwrap(src), dim))
+
+
+def _along(index: Tensor, dim: int, shape: list[int]) -> _C_engine.TensorImpl:
+    """A 1-D ``index`` of positions along ``dim``, broadcast to ``shape``.
+
+    The index every slice-wise write (``index_add``, ``index_copy``)
+    scatters with: ``shape[dim]`` must be the index's length.
+    """
+    ndim = len(shape)
+    along = [1] * ndim
+    along[dim] = shape[dim]
+    flat = _C_engine.reshape(_unwrap(index), [-1])
+    return _C_engine.broadcast_to(_C_engine.reshape(flat, along), shape)
+
+
+def _dim_of(dim: int, ndim: int) -> int:
+    """``dim`` counted from the front.
+
+    Raises
+    ------
+    IndexError
+        ``dim`` outside ``[-ndim, ndim)`` (a 0-d tensor has one dim, 0).
+    """
+    rank = max(ndim, 1)
+    if not -rank <= dim < rank:
+        raise IndexError(
+            f"dimension out of range (expected to be in range of "
+            f"[{-rank}, {rank - 1}], but got {dim})"
+        )
+    return dim + rank if dim < 0 else dim
 
 
 def _write_inplace[T: Tensor](
@@ -79,7 +135,8 @@ def _write_inplace[T: Tensor](
       buffer, where the views read them, and the engine moves ``input``
       and its views to the result's place in the graph;
     * autograd records: ``input`` takes the result's tensor, and with it
-      the result's place in the graph.  Copied into ``input``'s buffer
+      the result's place in the graph, keeping ``retain_grad``
+      (``lucid._tensor._indexing._take``).  Copied into ``input``'s buffer
       instead, a tensor that only *received* a gradient-carrying ``source``
       kept its leaf flag, and every later in-place op refused it;
     * otherwise the values are copied into ``input``'s buffer.
@@ -129,38 +186,10 @@ def _write_inplace[T: Tensor](
     if aliased:
         _C_engine.assign_inplace(input._impl, result._impl, name)
     elif records:
-        input._impl = result._impl
+        _take(input, result._impl)
     else:
         input._impl.assign_from(result._impl, name)
     return input
-
-
-def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
-    """Cast an engine index tensor to ``int32`` if it is not already.
-
-    Used internally by the scatter / gather composites because the engine
-    indexing primitives expect ``int32`` index buffers.
-    """
-    if impl.dtype == _C_engine.I64:
-        return _C_engine.astype(impl, _C_engine.I32)
-    if impl.dtype != _C_engine.I32:
-        return _C_engine.astype(impl, _C_engine.I32)
-    return impl
-
-
-def _dim_indicator(
-    size: int,
-    positions_impl: _C_engine.TensorImpl,
-    device: _C_engine.Device,
-) -> _C_engine.TensorImpl:
-    """1-D float F32 indicator of length *size*; 1.0 at each listed position."""
-    n = int(positions_impl.shape[0]) if positions_impl.shape else 0
-    zeros = _C_engine.zeros([size], _C_engine.F32, device)
-    if n == 0:
-        return zeros
-    ones = _C_engine.full([n], 1.0, _C_engine.F32, device)
-    idx32 = _to_i32(_C_engine.reshape(positions_impl, [-1]))
-    return _C_engine.scatter_add(zeros, idx32, ones, 0)
 
 
 # ── public API ─────────────────────────────────────────────────────────────
@@ -194,24 +223,25 @@ def index_fill(
         Same shape and dtype as ``input``; indexed slices replaced by
         ``value``, others unchanged.
     """
-    ndim = input.ndim
-    if dim < 0:
-        dim += ndim
-    n = input.shape[dim]
+    shape = list(input.shape)
+    if not shape:
+        shape = [1]
+    dim = _dim_of(dim, input.ndim)
+    n = shape[dim]
     device = input._impl.device
-
-    idx_impl = _to_i32(_unwrap(index))
-    indicator = _dim_indicator(n, idx_impl, device)
-
-    bcast_shape = [1] * ndim
-    bcast_shape[dim] = n
-    mask = _wrap(
-        _C_engine.broadcast_to(
-            _C_engine.reshape(indicator, bcast_shape), list(input.shape)
-        )
+    positions = _C_engine.reshape(_unwrap(index), [-1])
+    hits = _C_engine.scatter_add(
+        _C_engine.zeros([n], _C_engine.I32, device),
+        positions,
+        _C_engine.full([int(positions.shape[0])], 1.0, _C_engine.I32, device),
+        0,
     )
-
-    return lucid.where(mask > 0.0, lucid.full_like(input, float(value)), input)
+    along = [1] * len(shape)
+    along[dim] = n
+    mask = _wrap(_C_engine.reshape(hits, along)) > 0
+    if input.ndim == 0:
+        mask = mask.reshape(())
+    return lucid.where(mask, lucid.full_like(input, value), input)
 
 
 def index_add(
@@ -238,8 +268,8 @@ def index_add(
         ``dim`` to accumulate into.
     source : Tensor
         Per-slice update tensor; same shape as ``input`` except
-        ``source.shape[dim] == m`` (matching ``index`` length).  Cast to
-        ``input``'s dtype first.
+        ``source.shape[dim] == m`` (matching ``index`` length), and
+        ``input``'s dtype.
     alpha : float, optional
         Scalar multiplier applied to ``source`` before accumulation.
         Default ``1.0``.
@@ -249,23 +279,21 @@ def index_add(
     Tensor
         Same shape and dtype as ``input``; positions listed in
         ``index`` carry ``input[..., index[i], ...] + alpha * source[..., i, ...]``.
+
+    Raises
+    ------
+    lucid._C.engine.DtypeMismatch
+        ``source``'s dtype is not ``input``'s (a ``RuntimeError`` and a
+        ``TypeError``).
+    IndexError
+        On the CPU, an ``index`` value outside ``[-size, size)`` of
+        ``dim``; Metal drops such a write.
     """
-    source = _like_input(source, input)
-    ndim = input.ndim
-    if dim < 0:
-        dim += ndim
-    m = int(source.shape[dim])
-
-    # Reshape the 1-D index to broadcast along dim, then expand to source.shape.
-    idx_impl = _to_i32(_unwrap(index))
-    rs = [1] * ndim
-    rs[dim] = m
-    idx_rs = _C_engine.reshape(idx_impl, rs)
-    idx_bc = _C_engine.broadcast_to(idx_rs, list(source.shape))
-    idx_t = _wrap(idx_bc)
-
-    scaled = source * float(alpha) if alpha != 1.0 else source
-    return input.scatter_add(dim, idx_t, scaled)
+    _require_input_dtype("index_add", input, source, "source")
+    dim = _dim_of(dim, input.ndim)
+    index_t = _wrap(_along(index, dim, list(source.shape)))
+    scaled = source * alpha if alpha != 1 else source
+    return _scatter_add(input, dim, index_t, scaled)
 
 
 def index_copy(
@@ -294,27 +322,28 @@ def index_copy(
     source : Tensor
         Replacement slices.  All non-``dim`` dimensions must match
         ``input``; ``source.shape[dim]`` must equal ``index.shape[0]``.
-        Cast to ``input``'s dtype first.
+        Must have ``input``'s dtype.
 
     Returns
     -------
     Tensor
         Same shape and dtype as ``input``; values at the indexed
         positions are taken from ``source``, others from ``input``.
+
+    Raises
+    ------
+    lucid._C.engine.DtypeMismatch
+        ``source``'s dtype is not ``input``'s.
+    IndexError
+        On the CPU, an ``index`` value outside ``[-size, size)`` of
+        ``dim``; Metal drops such a write.
     """
-    source = _like_input(source, input)
-    ndim = input.ndim
-    if dim < 0:
-        dim += ndim
-    m = int(source.shape[dim])
-    # Broadcast the 1-D index to source's shape, then a single set-scatter.
-    idx_impl = _to_i32(_unwrap(index))
-    reshaped = [1] * ndim
-    reshaped[dim] = m
-    idx_bc = _C_engine.broadcast_to(
-        _C_engine.reshape(idx_impl, reshaped), list(source.shape)
+    _require_input_dtype("index_copy", input, source, "source")
+    dim = _dim_of(dim, input.ndim)
+    index_impl = _along(index, dim, list(source.shape))
+    return _wrap(
+        _C_engine.scatter_set(_unwrap(input), index_impl, _unwrap(source), dim)
     )
-    return _wrap(_C_engine.scatter_set(_unwrap(input), idx_bc, _unwrap(source), dim))
 
 
 def _scatter_into(
@@ -322,46 +351,59 @@ def _scatter_into(
 ) -> Tensor:
     """``src`` reduced into ``base`` by ``reduce`` — a ``'mean'`` as its sum."""
     if reduce in ("sum", "mean"):
-        return base.scatter_add(dim, index, src)
-    # Coerce index to int32 (engine scatter kernels require int32).
-    idx_impl = _unwrap(index)
-    idx_i32 = _wrap(_to_i32(idx_impl))
-
+        return _scatter_add(base, dim, index, src)
     _fn = {
         "amax": _C_engine.scatter_amax,
         "amin": _C_engine.scatter_amin,
         "prod": _C_engine.scatter_prod,
     }[reduce]
-    return _wrap(_fn(_unwrap(base), _unwrap(idx_i32), _unwrap(src), dim))
+    return _wrap(_fn(_unwrap(base), _unwrap(index), _unwrap(src), dim))
 
 
 def _divide(total: Tensor, count: Tensor) -> Tensor:
     """``total / count`` in ``total``'s dtype, floored for an integer dtype."""
-    if total.is_floating_point():
+    if total.is_floating_point() or total.is_complex():
         return total / count
     # ``//`` widens int32 to int64.
     return (total // count).to(total.dtype)
 
 
-def _scatter_count(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
-    """How many ``src`` entries ``index`` sends to each position of ``input``."""
-    return lucid.zeros_like(input).scatter_add(dim, index, lucid.ones_like(src))
+def _scatter_count(input: Tensor, dim: int, index: Tensor) -> Tensor:
+    """How many entries ``index`` sends to each position of ``input``.
+
+    Counted in ``int64`` whatever ``input``'s dtype: counted in it, a
+    complex count could not be compared with 0, and a bool one saturated.
+    """
+    zeros = lucid.zeros(tuple(input.shape), dtype=lucid.int64, device=input.device)
+    ones = lucid.ones(tuple(index.shape), dtype=lucid.int64, device=input.device)
+    return _scatter_add(zeros, dim, index, ones)
 
 
-def _reduce_identity(reduce: str, input: Tensor) -> float:
+def _reduce_identity(reduce: str, input: Tensor) -> bool | float:
     """The value a ``reduce`` leaves unchanged, within ``input``'s dtype.
 
     What an ``include_self=False`` reduction starts from, so a position
     ``src`` reaches comes out as the reduction of those entries alone.
     An integer dtype holds no infinity, so ``amax`` / ``amin`` start from
-    its bounds.
+    its bounds, and a bool from ``False`` / ``True``.
+
+    Raises
+    ------
+    NotImplementedError
+        ``amax`` / ``amin`` of a complex tensor, which has no order.
     """
     if reduce in ("sum", "mean"):
         return 0.0
     if reduce == "prod":
         return 1.0
+    if input.is_complex():
+        raise NotImplementedError(
+            f"scatter_reduce: {reduce} has no order on complex values"
+        )
     if input.is_floating_point():
         return float("-inf") if reduce == "amax" else float("inf")
+    if input.dtype == lucid.bool_:
+        return reduce == "amin"
     info = iinfo(input.dtype)
     return info.min if reduce == "amax" else info.max
 
@@ -403,7 +445,7 @@ def scatter_reduce(
         the position along ``dim`` of ``input`` to update.
     src : Tensor
         Values to scatter into ``input`` at the positions named by
-        ``index``.  Cast to ``input``'s dtype first.
+        ``index``.  Must have ``input``'s dtype.
     reduce : str, optional
         Reduction op applied when multiple ``src`` values collide on
         the same target.  One of ``'sum'`` (default), ``'mean'``,
@@ -424,6 +466,10 @@ def scatter_reduce(
     ------
     ValueError
         If ``reduce`` is not one of the five reductions.
+    lucid._C.engine.DtypeMismatch
+        ``src``'s dtype is not ``input``'s.
+    NotImplementedError
+        ``'amax'`` / ``'amin'`` on a complex tensor, which has no order.
 
     Examples
     --------
@@ -441,7 +487,7 @@ def scatter_reduce(
             f"scatter_reduce: unknown reduce={reduce!r}; "
             "expected 'sum', 'mean', 'prod', 'amax', or 'amin'."
         )
-    src = _like_input(src, input)
+    _require_input_dtype("scatter_reduce", input, src, "src")
     if include_self:
         out = _scatter_into(input, dim, index, src, reduce)
         if reduce != "mean":
@@ -449,7 +495,7 @@ def scatter_reduce(
     else:
         identity = lucid.full_like(input, _reduce_identity(reduce, input))
         out = _scatter_into(identity, dim, index, src, reduce)
-    count = _scatter_count(input, dim, index, src)
+    count = _scatter_count(input, dim, index)
     if reduce == "mean":
         # A position no index names divides by 1 rather than 0: it is
         # replaced by ``input`` below, and 0 / 0 there would turn its
@@ -459,20 +505,71 @@ def scatter_reduce(
 
 
 def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor:
-    """Copy elements from ``source`` into ``input`` at positions where ``mask`` is True."""
-    flat_input = input.reshape(-1)
-    flat_mask = mask.reshape(-1)
+    """Fill the positions where ``mask`` holds with ``source``'s leading elements.
 
-    true_idx = lucid.nonzero(flat_mask)  # (n_true, 1)
-    n_true = int(true_idx.shape[0])
-    if n_true == 0:
-        return input
+    ``input`` and ``mask`` broadcast together; the ``k``-th position the
+    mask selects, in row-major order, takes ``source.reshape(-1)[k]``, and
+    every other position keeps ``input``'s value.  Differentiable through
+    ``input`` (where the mask is False) and ``source`` (its elements that
+    were written).
 
-    true_idx_1d = true_idx.squeeze(1).int()  # (n_true,) int32
-    src_vals = source.reshape(-1).narrow(0, 0, n_true)
+    Parameters
+    ----------
+    input : Tensor
+        Destination values; not mutated.
+    mask : Tensor
+        Bool tensor broadcasting against ``input``.
+    source : Tensor
+        Values to write, of ``input``'s dtype and any shape, with at least
+        as many elements as the mask selects.
 
-    result_flat = index_copy(flat_input, 0, true_idx_1d, src_vals)
-    return result_flat.reshape(input.shape)
+    Returns
+    -------
+    Tensor
+        A new tensor of the broadcast shape of ``input`` and ``mask``, in
+        ``input``'s dtype — never ``input`` itself, even when the mask
+        selects nothing.
+
+    Raises
+    ------
+    lucid._C.engine.DtypeMismatch
+        ``mask`` is not bool, or ``source``'s dtype is not ``input``'s.
+    lucid._C.engine.ShapeMismatch
+        ``source`` has fewer elements than the mask selects.
+    IndexError
+        ``input`` and ``mask`` do not broadcast together.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> mask = lucid.tensor([True, False])
+    >>> lucid.masked_scatter(lucid.zeros(2, 2), mask, lucid.tensor([1.0, 2.0, 3.0]))
+    tensor([[1., 0.], [2., 0.]])
+    """
+    if mask.dtype != lucid.bool_:
+        raise _C_engine.DtypeMismatch(
+            f"masked_scatter: the mask must be a bool tensor, got {mask.dtype}"
+        )
+    _require_input_dtype("masked_scatter", input, source, "source")
+    shape = _broadcast_shape([list(input.shape), list(mask.shape)])
+    values = input.broadcast_to(tuple(shape)).contiguous().reshape(-1)
+    selected = mask.broadcast_to(tuple(shape)).reshape(-1)
+    # nonzero is the one host round trip: how many positions the mask
+    # selects decides how much of source is read, and a source too short
+    # for them is refused rather than read past its end.
+    positions = lucid.nonzero(selected).reshape(-1)
+    count = int(positions.shape[0])
+    available = source.numel()
+    if count > available:
+        raise _C_engine.ShapeMismatch(
+            f"masked_scatter: the mask selects {count} elements, but source "
+            f"has only {available}"
+        )
+    picked = source.reshape(-1).narrow(0, 0, count)
+    out = _C_engine.scatter_set(
+        _unwrap(values), _unwrap(positions), _unwrap(picked), 0
+    )
+    return _wrap(_C_engine.reshape(out, shape))
 
 
 def index_put(
@@ -483,92 +580,82 @@ def index_put(
 ) -> Tensor:
     """Out-of-place advanced-indexing write.
 
-    Equivalent to ``out = input.clone(); out[indices] = values`` (or
-    ``out[indices] += values`` when ``accumulate=True``) under reference
-    framework semantics.  ``indices`` is a sequence of integer tensors,
-    one per leading dimension; broadcasting between them follows the
-    standard rules.
-
-    Fewer index tensors than dimensions index the leading dimensions and
-    take the rest whole, as the reference does: ``index_put(x, (i,), v)``
-    on a ``(4, 3)`` tensor writes whole rows.
+    Equivalent to ``out = input.clone(); out[tuple(indices)] = values``
+    (adding at each position when ``accumulate=True``): ``indices`` is
+    read as the key ``Tensor.__setitem__`` reads, by the same owner
+    (``lucid._tensor._indexing._normalize_key``).  A bool mask selects its
+    True positions; integer index tensors broadcast together and address
+    the leading dimensions, the rest taken whole —
+    ``index_put(x, (i,), v)`` on a ``(4, 3)`` tensor writes whole rows.
 
     Parameters
     ----------
     input : Tensor
-        Destination tensor.
+        Destination tensor; not mutated.
     indices : sequence of Tensors
-        One integer index tensor per leading dimension of ``input``; the
-        dimensions after them are taken whole.  All broadcast to a common
-        shape.
+        One integer index tensor per leading dimension of ``input``, or a
+        bool mask covering as many dims as it has.
     values : Tensor
-        Values to scatter, broadcastable to the common index shape
-        followed by the dimensions taken whole.
+        Values of ``input``'s dtype, broadcastable to the shape
+        ``input[tuple(indices)]`` reads.
     accumulate : bool, default False
-        If True, add at each position; otherwise overwrite — a position
-        named twice keeps the last write on the CPU and an unspecified one
-        of its values on Metal.
+        If True, add at each position — a position named twice receives
+        both; otherwise overwrite — a position named twice keeps the last
+        write on the CPU and an unspecified one of its values on Metal.
+
+    Returns
+    -------
+    Tensor
+        A new tensor of ``input``'s shape and dtype.
+
+    Raises
+    ------
+    ValueError
+        ``indices`` is not a non-empty sequence.
+    IndexError
+        More indices than ``input`` has dims, a mask whose shape does not
+        match, index tensors that do not broadcast together, or — on the
+        CPU — an index out of range; Metal drops such a write.
+    lucid._C.engine.DtypeMismatch
+        ``values``'s dtype is not ``input``'s.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> mask = lucid.tensor([False, False, True, True])
+    >>> lucid.index_put(lucid.zeros(4), (mask,), lucid.tensor(5.0))
+    tensor([0., 0., 5., 5.])
     """
     if not isinstance(indices, (list, tuple)) or len(indices) == 0:
         raise ValueError("index_put: `indices` must be a non-empty sequence of Tensors")
-    if len(indices) > input.ndim:
-        raise IndexError(
-            f"index_put: too many indices for a {input.ndim}-D tensor: "
-            f"got {len(indices)}"
-        )
+    _require_input_dtype("index_put", input, values, "values")
+    impl = _unwrap(input)
+    shape = list(impl.shape)
+    key = _normalize_key(tuple(indices), shape, impl.device)
+    positions, target_shape = _written_positions(shape, key, impl.device)
+    flat_values = _C_engine.reshape(
+        _C_engine.contiguous(_normalize_value(values, impl, target_shape)), [-1]
+    )
+    return _put_flat(input, positions, flat_values, accumulate)
 
-    # Broadcast all index tensors to a common shape.
-    common_shape: tuple[int, ...] = tuple(indices[0].shape)
-    for idx in indices[1:]:
-        common_shape = (
-            lucid._tensor.tensor.broadcast_shapes(common_shape, tuple(idx.shape))
-            if hasattr(lucid._tensor, "tensor")
-            and hasattr(lucid._tensor.tensor, "broadcast_shapes")
-            else common_shape
-        )
 
-    bcast_indices: list[Tensor] = []
-    for idx in indices:
-        if tuple(idx.shape) != common_shape:
-            zero = lucid.zeros(common_shape, dtype=idx.dtype, device=idx.device)
-            bcast_indices.append(idx + zero)
-        else:
-            bcast_indices.append(idx)
-
-    # Compute flat indices via multi-dim row-major contraction.
-    shape: tuple[int, ...] = tuple(int(s) for s in input.shape)
-    strides: list[int] = []
-    s: int = 1
-    for d in reversed(range(len(shape))):
-        strides.insert(0, s)
-        s *= shape[d]
-
-    flat_idx: Tensor | None = None
-    for d, idx in enumerate(bcast_indices):
-        contrib = idx * strides[d]
-        flat_idx = contrib if flat_idx is None else flat_idx + contrib
-    assert flat_idx is not None
-
-    # The dimensions after the indexed ones are taken whole.  They are
-    # contiguous in row-major order, so each index selects a run of flat
-    # positions: the block's start plus 0, 1, ..., block - 1.
-    block_shape = shape[len(indices) :]
-    block = 1
-    for extent in block_shape:
-        block *= extent
-    if block_shape:
-        offsets = lucid.arange(block, dtype=flat_idx.dtype, device=flat_idx.device)
-        flat_idx = flat_idx.reshape(*common_shape, 1) + offsets
-    target_shape = common_shape + block_shape
-
-    # Broadcast values to the indexed shape if scalar/smaller.
-    if tuple(values.shape) != target_shape:
-        zero = lucid.zeros(target_shape, dtype=values.dtype, device=values.device)
-        values_b = values + zero
+def _put_flat(
+    input: Tensor,
+    positions: _C_engine.TensorImpl,
+    values: _C_engine.TensorImpl,
+    accumulate: bool,
+) -> Tensor:
+    """``input`` with 1-D ``values`` written at its flat ``positions``."""
+    impl = _unwrap(input)
+    shape = list(impl.shape)
+    if not impl.is_contiguous():
+        impl = _C_engine.contiguous(impl)
+    flat = _C_engine.reshape(impl, [int(input.numel())])
+    if accumulate:
+        out = _C_engine.scatter_add(flat, positions, values, 0)
     else:
-        values_b = values
-
-    return put(input, flat_idx, values_b, accumulate=accumulate)
+        out = _C_engine.scatter(flat, 0, positions, values)
+    return _wrap(_C_engine.reshape(out, shape))
 
 
 def put(
@@ -581,36 +668,46 @@ def put(
 
     Mirrors the reference framework's ``Tensor.put`` semantics: indices
     refer to the row-major linearisation of ``input``, regardless of its
-    shape.  ``accumulate=True`` performs additive scatter (duplicates
-    add).  Otherwise a position named twice keeps the last write on the
-    CPU and one of its values, which one unspecified, on Metal
-    (``scatter`` semantics).
+    shape, and a negative one counts from the end.  ``accumulate=True``
+    performs additive scatter (duplicates add).  Otherwise a position
+    named twice keeps the last write on the CPU and one of its values,
+    which one unspecified, on Metal (``scatter`` semantics).
 
     Parameters
     ----------
     input : Tensor
         Destination — its shape is preserved in the output.
     index : Tensor
-        1-D (or flattenable) integer tensor of flat positions in
-        ``[0, input.numel())``.
+        Integer tensor of any shape of flat positions in
+        ``[-input.numel(), input.numel())``.
     source : Tensor
-        Values to scatter; must be flattenable to the same length as
-        ``index``.
+        Values of ``input``'s dtype, as many as ``index`` has.
     accumulate : bool, default False
         If True, add to the existing value at each position; otherwise
         overwrite.
-    """
-    flat_input: Tensor = input.reshape(-1)
-    n: int = int(index.numel())
-    flat_index: Tensor = index.reshape(-1)
-    flat_source: Tensor = source.reshape(-1).narrow(0, 0, n)
 
-    flat_idx32: Tensor = flat_index.int()
-    if accumulate:
-        result_flat: Tensor = index_add(flat_input, 0, flat_idx32, flat_source)
-    else:
-        result_flat = index_copy(flat_input, 0, flat_idx32, flat_source)
-    return result_flat.reshape(input.shape)
+    Returns
+    -------
+    Tensor
+        A new tensor of ``input``'s shape and dtype.
+
+    Raises
+    ------
+    lucid._C.engine.DtypeMismatch
+        ``source``'s dtype is not ``input``'s.
+    IndexError
+        ``source`` and ``index`` hold different numbers of elements, or —
+        on the CPU — an index is out of range; Metal drops such a write.
+    """
+    _require_input_dtype("put", input, source, "source")
+    if source.numel() != index.numel():
+        raise IndexError(
+            f"put: source and index must have the same number of elements, "
+            f"got {source.numel()} and {index.numel()}"
+        )
+    positions = _C_engine.reshape(_unwrap(index), [-1])
+    values = _C_engine.reshape(_C_engine.contiguous(_unwrap(source)), [-1])
+    return _put_flat(input, positions, values, accumulate)
 
 
 def index_put_(

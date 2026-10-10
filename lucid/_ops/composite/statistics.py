@@ -1,11 +1,13 @@
-"""Statistical composite ops: quantile, cov, corrcoef, cdist."""
+"""Statistical composite ops: quantile, cov, corrcoef, cdist, bincount,
+multinomial, poisson and the histogram family."""
 
 import math
-from bisect import bisect_right
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
+from lucid._dtype import dtype as DType
+from lucid._ops.composite.indexing import _scatter_add
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -435,12 +437,17 @@ def bincount(
 ) -> Tensor:
     """Count occurrences of each integer value in ``input``.
 
+    One ``scatter_add`` into a zero tensor of the output's length.  That
+    length depends on the largest value, so it costs one read of the
+    input's minimum and maximum back to the host — the device round trip
+    every data-dependent output size takes on Metal.
+
     Parameters
     ----------
     input : Tensor
-        1-D non-negative integer tensor.  Negative values raise.
+        1-D tensor of non-negative integers.
     weights : Tensor, optional
-        Same length as ``input``.  When supplied, ``output[i]`` is the
+        1-D, as long as ``input``.  When supplied, ``output[i]`` is the
         *sum of weights* for entries with value ``i`` (rather than the
         plain count).  Default ``None``.
     minlength : int, optional
@@ -450,31 +457,66 @@ def bincount(
     Returns
     -------
     Tensor
-        1-D tensor; dtype is float when ``weights`` is given, otherwise
-        int64.
+        1-D tensor on ``input``'s device: ``int64`` counts without
+        ``weights``; with them, the weights' dtype for ``float32`` /
+        ``float64`` weights and ``float64`` for any other (``float32`` on
+        Metal, which holds no ``float64``).
 
     Raises
     ------
+    TypeError
+        ``input`` is not an integer tensor.
     ValueError
-        If ``input`` contains negative values.
+        ``input`` is not 1-D or holds a negative value, ``minlength`` is
+        negative, or ``weights`` is not 1-D and as long as ``input``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.bincount(lucid.tensor([0, 1, 1, 3]))
+    tensor([1, 2, 0, 1])
+    >>> lucid.bincount(lucid.tensor([0, 1, 1]), weights=lucid.tensor([1.0, 2.0, 3.0]))
+    tensor([1., 5.])
     """
-    flat = input.reshape(-1)
-    n = int(flat.shape[0])
-    vals = [int(flat[i].item()) for i in range(n)]
-    if vals and min(vals) < 0:
-        raise ValueError("bincount: input must contain non-negative integers")
-    length = max((max(vals) + 1 if vals else 0), minlength)
-    if weights is not None:
-        wflat = weights.reshape(-1)
-        result: list[object] = [0.0] * length
-        for i, v in enumerate(vals):
-            result[v] += float(wflat[i].item())
-        return lucid.tensor(result, dtype=lucid.float64, device=input.device)
-    else:
-        counts: list[object] = [0] * length
-        for v in vals:
-            counts[v] += 1
-        return lucid.tensor(counts, dtype=lucid.int64, device=input.device)
+    if input.is_floating_point() or input.is_complex() or input.dtype == lucid.bool_:
+        raise TypeError(
+            f"bincount: input must be an integer tensor, got {input.dtype}"
+        )
+    if input.ndim != 1:
+        raise ValueError(
+            f"bincount: input must be 1-D, got shape {tuple(input.shape)}"
+        )
+    if minlength < 0:
+        raise ValueError(f"bincount: minlength must be non-negative, got {minlength}")
+    n = int(input.shape[0])
+    if weights is not None and tuple(weights.shape) != (n,):
+        raise ValueError(
+            f"bincount: weights must be 1-D and as long as input ({n}), got "
+            f"shape {tuple(weights.shape)}"
+        )
+    length = minlength
+    if n:
+        lowest, highest = lucid.stack([input.min(), input.max()]).tolist()
+        if lowest < 0:
+            raise ValueError(
+                f"bincount: input must hold non-negative integers, got {lowest}"
+            )
+        length = max(int(highest) + 1, minlength)
+    device = input.device
+    if weights is None:
+        counts = lucid.zeros(length, dtype=lucid.int64, device=device)
+        ones = lucid.ones(n, dtype=lucid.int64, device=device)
+        return _scatter_add(counts, 0, input, ones)
+    dtype = _bincount_dtype(weights)
+    totals = lucid.zeros(length, dtype=dtype, device=device)
+    return _scatter_add(totals, 0, input, weights.to(dtype))
+
+
+def _bincount_dtype(weights: Tensor) -> DType:
+    """The dtype weighted bin totals are summed in, as the reference sums them."""
+    if weights.dtype in (lucid.float32, lucid.float64):
+        return weights.dtype
+    return lucid.float64 if weights.device.type == "cpu" else lucid.float32
 
 
 # Elements of the (batch, samples, categories) comparison multinomial makes
@@ -849,109 +891,138 @@ def histogramdd(
 
 def histogram(
     input: Tensor,
-    bins: int | Sequence[float] = 10,
+    bins: int | Sequence[float] | Tensor = 10,
     range: tuple[float, float] | None = None,
     density: bool = False,
     weight: Tensor | None = None,
 ) -> tuple[Tensor, Tensor]:
     """Compute a 1-D histogram of ``input`` values.
 
+    Each value's bin is found on the device — by its position on the
+    uniform grid, corrected against the edges themselves, or by a
+    ``searchsorted`` over explicit edges — and the bins filled with one
+    ``scatter_add``.  Without a ``range``, the extremes of ``input`` set it,
+    which costs one read of them back to the host.
+
     Parameters
     ----------
     input : Tensor
         Values to bin.  Flattened internally — shape doesn't matter.
-    bins : int or sequence of float, optional
+    bins : int, sequence of float or Tensor, optional
         When an int, the number of equal-width bins (default ``10``).
-        When a sequence, the explicit bin edges (length ``bins_n + 1``).
+        Otherwise the increasing bin edges (length ``bins_n + 1``).
     range : tuple[float, float], optional
         ``(lo, hi)``.  Values outside the range are dropped.  Ignored
-        when ``bins`` is a sequence of explicit edges.  ``None``
-        (default) → ``(input.min(), input.max())``.
+        when ``bins`` gives the edges.  ``None`` (default) →
+        ``(input.min(), input.max())``.  A range of zero width is widened
+        to ``(lo - 0.5, hi + 0.5)``.
     density : bool, optional
         When ``True`` divide by total count × bin width to yield a
         probability density that integrates to 1.  Default ``False``.
     weight : Tensor, optional
-        Same length as ``input``.  When supplied, sums weights per bin
-        rather than counting.  Default ``None``.
+        As many elements as ``input``.  When supplied, sums weights per
+        bin rather than counting.  Default ``None``.
 
     Returns
     -------
     tuple of Tensor
-        ``(hist, bin_edges)``.  ``hist`` is a 1-D count/density tensor;
-        ``bin_edges`` is 1-D of length ``bins + 1``.
+        ``(hist, bin_edges)``, both in ``input``'s floating dtype (the
+        default float dtype for an integer ``input``) and on its device.
+        ``hist`` holds counts, weight sums or densities; ``bin_edges`` has
+        length ``bins + 1``.  Every bin is half-open but the last, which
+        holds its right edge.
+
+    Raises
+    ------
+    ValueError
+        ``bins`` is not positive or its edges are fewer than two, the
+        range is not finite or its ``lo`` exceeds its ``hi``, or ``weight``
+        has another number of elements than ``input``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> hist, edges = lucid.histogram(lucid.tensor([1.0, 2.0, 1.0, 4.0]), bins=4)
+    >>> hist
+    tensor([2., 1., 0., 1.])
+    >>> edges
+    tensor([1., 1.75, 2.5, 3.25, 4.])
     """
-    # ``range`` is a function parameter that shadows the Python
-    # builtin — capture the builtin once for use below.
-    py_range = (
-        __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range
-    )
-
-    flat = input.reshape(-1)
-    n = int(flat.shape[0])
-    vals = [float(flat[i].item()) for i in py_range(n)]
-
-    if range is None:
-        lo = min(vals) if vals else 0.0
-        hi = max(vals) if vals else 1.0
-        if lo == hi:
-            hi = lo + 1.0
-    else:
-        lo, hi = float(range[0]), float(range[1])
-
+    dtype = input.dtype if input.is_floating_point() else lucid.get_default_dtype()
+    values = input.reshape(-1).to(dtype)
+    device = input.device
     if isinstance(bins, int):
-        n_bins = bins
-        edges = [lo + (hi - lo) * i / n_bins for i in py_range(n_bins + 1)]
+        if bins <= 0:
+            raise ValueError(f"histogram: bins must be positive, got {bins}")
+        lo, hi = _histogram_range(values, range)
+        edges = lucid.linspace(lo, hi, bins + 1, dtype=dtype, device=device)
+        bucket = _uniform_bucket(values, edges, lo, hi, bins)
     else:
-        edges = [float(b) for b in bins]
-        n_bins = len(edges) - 1
-        lo, hi = edges[0], edges[-1]
-
-    w_list = None
-    if weight is not None:
-        wflat = weight.reshape(-1)
-        w_list = [float(wflat[i].item()) for i in py_range(int(wflat.shape[0]))]
-
-    # The result rides the input's device.  MLX-Metal has no float64, so a
-    # GPU histogram is emitted at float32 — the alternative is refusing to
-    # return on the caller's device at all.
-    _f = lucid.float64 if input.device.type == "cpu" else lucid.float32
-    if density:
-        counts: list[float] = [0.0] * n_bins
-    else:
-        counts = [0.0] * n_bins
-
-    # ``(v - lo) / (hi - lo) * n_bins`` is only the bin index when the edges
-    # are equally spaced.  Given explicit edges it silently re-bins the data
-    # onto a uniform grid of the same span: on 50 standard normals over
-    # ``[-3, -1, 0, 1, 3]`` it returned ``[1, 19, 23, 7]`` for ``[8, 12, 17,
-    # 13]`` — the right total, so nothing looks amiss.
-    uniform = isinstance(bins, int)
-    for i, v in enumerate(vals):
-        if v < lo or v > hi:
-            continue
-        if uniform:
-            bin_idx = min(int((v - lo) / (hi - lo) * n_bins), n_bins - 1)
+        if isinstance(bins, lucid.Tensor):
+            edges = bins.reshape(-1).to(dtype=dtype, device=device)
         else:
-            bin_idx = min(bisect_right(edges, v) - 1, n_bins - 1)
-        w = w_list[i] if w_list is not None else 1
-        counts[bin_idx] += w
-
-    if density:
-        total = sum(counts)
-        if total > 0:
-            counts = [
-                c / (total * (edges[j + 1] - edges[j])) for j, c in enumerate(counts)
-            ]
-        hist_t = lucid.tensor(counts, dtype=_f, device=input.device)
-    elif w_list is not None:
-        # Weighted sums are not counts.  Emitting them at ``int64`` truncated
-        # every bin toward zero — ``2.2035`` came back as ``2``.
-        hist_t = lucid.tensor(counts, dtype=_f, device=input.device)
+            edges = lucid.tensor(list(bins), dtype=dtype, device=device)
+        if edges.numel() < 2:
+            raise ValueError("histogram: bin edges must hold at least two values")
+        bucket = lucid.searchsorted(edges, values, right=True) - 1
+    n_bins = int(edges.numel()) - 1
+    inside = (values >= edges[0]) & (values <= edges[-1])
+    if weight is None:
+        mass = lucid.ones(values.shape, dtype=dtype, device=device)
+    elif weight.numel() != values.numel():
+        raise ValueError(
+            f"histogram: weight must have as many elements as input "
+            f"({values.numel()}), got {weight.numel()}"
+        )
     else:
-        hist_t = lucid.tensor(counts, dtype=lucid.int64, device=input.device)
+        mass = weight.reshape(-1).to(dtype)
+    mass = lucid.where(inside, mass, lucid.zeros_like(mass))
+    bucket = bucket.clamp(0, n_bins - 1)
+    hist = _scatter_add(
+        lucid.zeros(n_bins, dtype=dtype, device=device), 0, bucket, mass
+    )
+    if density:
+        hist = hist / (hist.sum() * (edges[1:] - edges[:-1]))
+    return hist, edges
 
-    edges_t = lucid.tensor(edges, dtype=_f, device=input.device)
-    return hist_t, edges_t
+
+def _histogram_range(
+    values: Tensor, range: tuple[float, float] | None
+) -> tuple[float, float]:
+    """The ``(lo, hi)`` a uniform histogram spans, read from ``values`` when
+    no ``range`` is given — the one host read the histogram takes."""
+    if range is not None:
+        lo, hi = float(range[0]), float(range[1])
+    elif values.numel():
+        lo, hi = lucid.stack([values.min(), values.max()]).tolist()
+    else:
+        lo, hi = 0.0, 1.0
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        raise ValueError(f"histogram: the range [{lo}, {hi}] is not finite")
+    if lo > hi:
+        raise ValueError(f"histogram: the range's lo {lo} exceeds its hi {hi}")
+    if lo == hi:
+        return lo - 0.5, hi + 0.5
+    return lo, hi
+
+
+def _uniform_bucket(
+    values: Tensor, edges: Tensor, lo: float, hi: float, bins: int
+) -> Tensor:
+    """The bin of each value on ``bins`` equal bins over ``[lo, hi]``.
+
+    The position on the grid, ``(v - lo) * bins / (hi - lo)``, rounds: a
+    value on an edge can land one bin off from what the edges say.  So it
+    is checked against the edges either side and moved by one where they
+    disagree, as the reference corrects it — the edges are the truth.
+    """
+    scaled = (values - lo) * (bins / (hi - lo))
+    finite = lucid.isfinite(scaled)
+    scaled = lucid.where(finite, scaled, lucid.zeros_like(scaled))
+    bucket = scaled.floor().to(lucid.int64).clamp(0, bins - 1)
+    below = values < edges[bucket]
+    above = (values >= edges[(bucket + 1).clamp(max=bins)]) & (bucket < bins - 1)
+    return bucket - below.to(lucid.int64) + above.to(lucid.int64)
 
 
 def std_mean(

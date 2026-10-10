@@ -22,6 +22,7 @@ import pytest
 
 import lucid
 import lucid.nn as nn
+from lucid._C import engine as _C_engine
 import lucid.nn.functional as F
 from lucid._deprecation import LucidDeprecationWarning
 from lucid.test._helpers.compare import assert_close
@@ -395,20 +396,18 @@ class TestOutOfPlace:
         want[[3, 1]] = values
         assert_close(out, want)
 
-    def test_a_source_of_another_dtype_is_cast_not_reinterpreted(
+    def test_a_source_of_another_dtype_is_refused_not_reinterpreted(
         self, device: str
     ) -> None:
-        # The engine's scatter read an int source's bits as float32.
+        # The engine's scatter read an int source's bits as float32; then the
+        # composites cast it, where the reference refuses (LCD-324).
         x = lucid.zeros(3, device=device)
         src = lucid.tensor([1, 2], dtype=lucid.int32, device=device)
         index = lucid.tensor([0, 2], device=device)
-        assert_close(
-            x.index_add(0, index, src), np.array([1.0, 0.0, 2.0], dtype=np.float32)
-        )
-        assert_close(
-            x.index_copy(0, index, src), np.array([1.0, 0.0, 2.0], dtype=np.float32)
-        )
-        assert x.index_add(0, index, src).dtype == lucid.float32
+        with pytest.raises(_C_engine.DtypeMismatch, match="index_add"):
+            x.index_add(0, index, src)
+        with pytest.raises(_C_engine.DtypeMismatch, match="index_copy"):
+            x.index_copy(0, index, src)
 
 
 class TestInPlace:

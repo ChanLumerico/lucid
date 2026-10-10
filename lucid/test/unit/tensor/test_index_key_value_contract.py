@@ -260,7 +260,6 @@ def test_retain_grad_survives_an_assignment(device: str) -> None:
     assert x.grad is not None and x.grad.tolist() == [0.0, 10.0, 10.0]
 
 
-@pytest.mark.xfail(strict=True, reason="API-05: index_put keys not yet normalised")
 def test_index_put_reads_a_bool_mask_as_a_mask(device: str) -> None:
     out = lucid.zeros(4, device=device).index_put(
         (lucid.tensor([False, False, True, True], device=device),),

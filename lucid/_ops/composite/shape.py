@@ -5,8 +5,11 @@ miscellaneous fillers (``rot90``, ``vander``, ``take_along_dim``).
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
 from lucid._ops.composite._shared import _swap_dims
+from lucid._tensor._indexing import _broadcast_shape
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -782,33 +785,42 @@ def tensor_split(
 # ── Misc ───────────────────────────────────────────────────────────────────
 
 
-def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
+def take_along_dim(x: Tensor, indices: Tensor, dim: int | None = None) -> Tensor:
     r"""Gather elements from ``x`` at positions ``indices`` along ``dim``.
 
     Advanced indexing primitive analogous to ``np.take_along_axis``:
     selects one element from ``x`` for every entry in ``indices``,
     broadcasting the remaining (non-``dim``) axes between the two
-    tensors.  Thin wrapper around :func:`lucid.gather` to align with
-    the reference-framework spelling.
+    tensors — :func:`lucid.gather` after that broadcast, which ``gather``
+    itself does not do.  With ``dim=None`` both are read flattened.
 
     Parameters
     ----------
     x : Tensor
         Source tensor.
     indices : Tensor
-        Integer tensor of positions along ``dim``.  Its shape must be
-        broadcast-compatible with ``x`` on every axis other than ``dim``;
-        the size along ``dim`` controls the size of the output along
-        that axis.
-    dim : int
+        Integer tensor of positions along ``dim``, with as many dims as
+        ``x``.  Its shape must be broadcast-compatible with ``x`` on every
+        axis other than ``dim``; the size along ``dim`` controls the size
+        of the output along that axis.  A negative position counts from
+        the end.
+    dim : int, optional
         Axis along which to gather.  Negative values count from the end.
+        ``None`` (default) reads ``x`` and ``indices`` flattened.
 
     Returns
     -------
     Tensor
         Tensor with the broadcast shape of ``x`` and ``indices`` (with
-        the size along ``dim`` taken from ``indices``).  Dtype matches
-        ``x``.
+        the size along ``dim`` taken from ``indices``), 1-D when ``dim``
+        is ``None``.  Dtype matches ``x``.
+
+    Raises
+    ------
+    lucid._C.engine.ShapeMismatch
+        ``indices`` has another number of dims than ``x``.
+    IndexError
+        The shapes do not broadcast on an axis other than ``dim``.
 
     Notes
     -----
@@ -834,7 +846,55 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     >>> lucid.take_along_dim(x, idx, dim=1)
     tensor([[3., 1.], [5., 6.]])
     """
-    return lucid.gather(x, dim, indices)
+    if dim is None:
+        return lucid.gather(x.reshape(-1), 0, indices.reshape(-1))
+    if indices.ndim != x.ndim:
+        raise _C_engine.ShapeMismatch(
+            f"take_along_dim: input and indices should have the same number of "
+            f"dims, got {x.ndim} and {indices.ndim}"
+        )
+    if x.ndim == 0:
+        return lucid.gather(x.reshape(1), 0, indices.reshape(1)).reshape(())
+    dim = dim + x.ndim if dim < 0 else dim
+    x_shape = list(x.shape)
+    i_shape = list(indices.shape)
+    x_shape[dim] = i_shape[dim] = 1
+    shape = _broadcast_shape([x_shape, i_shape])
+    x_to = list(shape)
+    x_to[dim] = int(x.shape[dim])
+    i_to = list(shape)
+    i_to[dim] = int(indices.shape[dim])
+    return lucid.gather(
+        x.broadcast_to(tuple(x_to)), dim, indices.broadcast_to(tuple(i_to))
+    )
+
+
+def _triangle_indices(
+    row: int,
+    col: int | None,
+    offset: int,
+    *,
+    lower: bool,
+    dtype: DTypeLike,
+    device: DeviceLike,
+) -> Tensor:
+    """The ``(2, N)`` coordinates where ``j - i <= offset`` (``lower``) or
+    ``>= offset`` holds in a ``(row, col)`` matrix, in row-major order.
+
+    Found by one comparison over the matrix and one ``nonzero``, on the CPU
+    — a size known before any value is read, so no device round trip.
+    """
+    if col is None:
+        col = row
+    rows = lucid.arange(row, dtype=lucid.int64, device="cpu").reshape(row, 1)
+    cols = lucid.arange(col, dtype=lucid.int64, device="cpu").reshape(1, col)
+    diagonal = cols - rows
+    keep = diagonal <= offset if lower else diagonal >= offset
+    coords = lucid.nonzero(keep).transpose(0, 1).contiguous()
+    out_dtype: DTypeLike = dtype if dtype is not None else lucid.int64
+    return coords.to(
+        dtype=out_dtype, device=device if device is not None else get_default_device()
+    )
 
 
 def tril_indices(
@@ -870,17 +930,7 @@ def tril_indices(
         Shape ``(2, N)``.  Row ``0`` holds row indices, row ``1`` holds
         column indices, in row-major order.
     """
-    if col is None:
-        col = row
-    rows: list[int] = []
-    cols: list[int] = []
-    for i in range(row):
-        for j in range(col):
-            if j - i <= offset:
-                rows.append(i)
-                cols.append(j)
-    out_dtype: DTypeLike = dtype if dtype is not None else lucid.int64
-    return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
+    return _triangle_indices(row, col, offset, lower=True, dtype=dtype, device=device)
 
 
 def triu_indices(
@@ -917,17 +967,7 @@ def triu_indices(
         Shape ``(2, N)``.  Row ``0`` holds row indices, row ``1`` holds
         column indices, in row-major order.
     """
-    if col is None:
-        col = row
-    rows: list[int] = []
-    cols: list[int] = []
-    for i in range(row):
-        for j in range(col):
-            if j - i >= offset:
-                rows.append(i)
-                cols.append(j)
-    out_dtype: DTypeLike = dtype if dtype is not None else lucid.int64
-    return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
+    return _triangle_indices(row, col, offset, lower=False, dtype=dtype, device=device)
 
 
 def combinations(
@@ -937,9 +977,9 @@ def combinations(
 ) -> Tensor:
     """All ``r``-length combinations of the elements of a 1-D ``input``.
 
-    Composite over Python ``itertools`` — non-differentiable (treats
-    the values as opaque scalars).  Use only for low-rate utility code;
-    don't put on a hot path.
+    The positions of every combination are built on the CPU, then read
+    from ``input`` with one ``index_select`` — differentiable through
+    ``input``, and on its device.
 
     Parameters
     ----------
@@ -956,24 +996,56 @@ def combinations(
     Returns
     -------
     Tensor
-        Shape ``(C, r)`` where :math:`C` is the combination count.
+        Shape ``(C, r)`` where :math:`C` is the combination count, in
+        lexicographic order of positions; shape ``(0,)`` when ``r`` is 0.
         Dtype and device follow ``input``.
-    """
-    import itertools as _it
 
+    Raises
+    ------
+    ValueError
+        ``input`` is not 1-D, or ``r`` is negative.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.combinations(lucid.tensor([1, 2, 3]), r=2)
+    tensor([[1, 2], [1, 3], [2, 3]])
+    """
     if input.ndim != 1:
-        raise ValueError("combinations: input must be 1-D")
-    n = int(input.shape[0])
-    py_vals = [input[i].item() for i in range(n)]
-    iterator = (
-        _it.combinations_with_replacement(py_vals, r)
-        if with_replacement
-        else _it.combinations(py_vals, r)
-    )
-    rows = [list(combo) for combo in iterator]
-    if not rows:
-        return lucid.zeros(0, r, dtype=input.dtype, device=input.device)
-    return lucid.tensor(rows, dtype=input.dtype, device=input.device)
+        raise ValueError(
+            f"combinations: input must be 1-D, got shape {tuple(input.shape)}"
+        )
+    if r < 0:
+        raise ValueError(f"combinations: r must be non-negative, got {r}")
+    if r == 0:
+        return lucid.empty(0, dtype=input.dtype, device=input.device)
+    rows = _combination_indices(int(input.shape[0]), r, with_replacement)
+    picked = lucid.index_select(input, 0, rows.reshape(-1).to(input.device))
+    return picked.reshape(int(rows.shape[0]), r)
+
+
+def _combination_indices(n: int, r: int, with_replacement: bool) -> Tensor:
+    """The ``(C, r)`` int64 positions of every combination, in lexicographic
+    order, built on the CPU one column at a time.
+
+    A row ending in ``last`` has a child for each position after it (from
+    it, ``with_replacement``); the children of all rows are laid out in
+    one run, and each finds its parent by where it falls in the running
+    total of children — a ``searchsorted``, not a Python loop per row.
+    """
+    combos = lucid.arange(n, dtype=lucid.int64, device="cpu").reshape(n, 1)
+    first = 0 if with_replacement else 1
+    for _ in range(r - 1):
+        last = combos[:, -1]
+        children = (n - first) - last
+        ends = lucid.cumsum(children, 0)
+        total = int(ends[-1].item()) if ends.numel() else 0
+        slots = lucid.arange(total, dtype=lucid.int64, device="cpu")
+        parent = lucid.searchsorted(ends, slots, right=True)
+        starts = ends - children
+        position = last[parent] + first + (slots - starts[parent])
+        combos = lucid.cat([combos[parent], position.reshape(total, 1)], dim=1)
+    return combos
 
 
 def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
