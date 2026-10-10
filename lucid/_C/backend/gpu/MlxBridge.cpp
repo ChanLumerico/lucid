@@ -31,11 +31,14 @@
 #include "MlxBridge.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -311,64 +314,102 @@ std::vector<std::shared_ptr<::mlx::core::array>> live_pending() {
 
 using ReadsMemo = std::unordered_map<std::uintptr_t, bool>;
 
-// Whether ``root``'s graph reads the bytes ``data`` holds.  An array that has
-// run reads them when it holds them; a pending one when any input does.
-// Iterative, because a lazy chain can be deeper than the C++ stack.
-bool graph_reads(const ::mlx::core::array& root,
-                 const ::mlx::core::array::Data* data,
-                 ReadsMemo& memo) {
-    // The graph holds every node alive while the walk runs, so the frames
-    // point at its arrays instead of copying their handles.
+// Graph nodes the settles may inspect between two points where nothing is
+// pending, before one stops telling readers from the rest and runs every
+// pending array instead.  Shared by the settles, not given to each: pending
+// work that reads nothing stays pending and would be searched again by every
+// write, so a run of writes over the same graph — or a graph that grows
+// between them — spends this much in all and then runs it, which leaves the
+// next write nothing to search.  About a millisecond of walking.
+constexpr std::size_t kSettleWalkBudget = 4096;
+std::atomic<std::size_t> g_walk_credit{kSettleWalkBudget};
+
+// Whether ``root``'s graph reads the bytes ``data`` holds: an array that has
+// run reads them when it holds them, a pending one when any input does.
+// Empty once the walk has spent ``budget``.  Iterative, because a lazy chain
+// can be deeper than the C++ stack.  Frames hold handles, not pointers into
+// a parent's inputs, which another thread's eval may clear.
+std::optional<bool> graph_reads(const ::mlx::core::array& root,
+                                const ::mlx::core::array::Data* data,
+                                ReadsMemo& memo,
+                                std::size_t& budget) {
     struct Frame {
-        const ::mlx::core::array* arr;
+        ::mlx::core::array arr;
         std::size_t next = 0;
     };
     std::vector<Frame> stack;
-    stack.push_back({&root});
+    stack.push_back({root});
     while (!stack.empty()) {
         Frame& top = stack.back();
-        const ::mlx::core::array& arr = *top.arr;
-        if (top.next == 0 && memo.contains(arr.id())) {
+        if (top.next == 0 && memo.contains(top.arr.id())) {
             stack.pop_back();
             continue;
         }
-        if (arr.status() != ::mlx::core::array::Status::unscheduled) {
-            memo.emplace(arr.id(), arr.data_shared_ptr().get() == data);
+        if (top.next == 0 && budget-- == 0)
+            return std::nullopt;
+        if (top.arr.status() != ::mlx::core::array::Status::unscheduled) {
+            memo.emplace(top.arr.id(), top.arr.data_shared_ptr().get() == data);
             stack.pop_back();
             continue;
         }
-        const auto& inputs = arr.inputs();
+        const auto& inputs = top.arr.inputs();
         while (top.next < inputs.size() && memo.contains(inputs[top.next].id()))
             ++top.next;
         if (top.next < inputs.size()) {
-            const ::mlx::core::array* child = &inputs[top.next++];
-            stack.push_back({child});
+            ::mlx::core::array child = inputs[top.next++];
+            stack.push_back({std::move(child)});
             continue;
         }
         const bool reads = std::any_of(inputs.begin(), inputs.end(),
                                        [&memo](const auto& in) { return memo.at(in.id()); });
-        memo.emplace(arr.id(), reads);
+        memo.emplace(top.arr.id(), reads);
         stack.pop_back();
     }
     return memo.at(root.id());
 }
 
+// The pending arrays that read ``sh``, or all of them once the walk credit
+// (kSettleWalkBudget) runs out.
+std::vector<::mlx::core::array> buffer_readers(const SharedStorage& sh) {
+    std::vector<::mlx::core::array> readers;
+    const auto pending = live_pending();
+    if (pending.empty()) {
+        g_walk_credit.store(kSettleWalkBudget, std::memory_order_relaxed);
+        return readers;
+    }
+    // Without the pinned alias no tensor has handed the buffer to MLX.
+    if (!sh.gpu_alias)
+        return readers;
+    const ::mlx::core::array::Data* data = sh.gpu_alias->data_shared_ptr().get();
+    // No reserve(): a power-of-two bucket count makes libc++ mask the
+    // identity hash of aligned pointers into a few buckets.
+    ReadsMemo memo;
+    std::size_t budget = g_walk_credit.load(std::memory_order_relaxed);
+    for (const auto& arr : pending) {
+        const auto reads = graph_reads(*arr, data, memo, budget);
+        if (!reads) {
+            // Everything runs now, so nothing is left to search.
+            g_walk_credit.store(kSettleWalkBudget, std::memory_order_relaxed);
+            readers.clear();
+            for (const auto& each : pending)
+                readers.push_back(*each);
+            return readers;
+        }
+        if (*reads)
+            readers.push_back(*arr);
+    }
+    g_walk_credit.store(budget, std::memory_order_relaxed);
+    return readers;
+}
+
 }  // namespace
 
 void settle_buffer_readers(const SharedStorage& sh, std::vector<::mlx::core::array> with) {
-    // Without the pinned alias no tensor has handed the buffer to MLX.
-    std::vector<::mlx::core::array> readers = std::move(with);
-    if (sh.gpu_alias) {
-        const ::mlx::core::array::Data* data = sh.gpu_alias->data_shared_ptr().get();
-        // No reserve(): a power-of-two bucket count makes libc++ mask the
-        // identity hash of aligned pointers into a few buckets.
-        ReadsMemo memo;
-        for (const auto& arr : live_pending())
-            if (graph_reads(*arr, data, memo))
-                readers.push_back(*arr);
-    }
-    if (!readers.empty())
-        ::mlx::core::eval(readers);
+    std::vector<::mlx::core::array> run = buffer_readers(sh);
+    run.insert(run.end(), std::make_move_iterator(with.begin()),
+               std::make_move_iterator(with.end()));
+    if (!run.empty())
+        ::mlx::core::eval(run);
     // Work already submitted may still be reading the buffer as well.
     ::mlx::core::synchronize();
 }

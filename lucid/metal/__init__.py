@@ -402,8 +402,12 @@ def shared_tensor(
     it was built from.  A NumPy array from ``.numpy()`` is the buffer too
     (reads are zero-copy), but a write through it bypasses Lucid: call
     :func:`synchronize` first, or a pending result may see the new values.
-    A result that MLX made without a copy, such as a ``clone()`` that has
-    already run, still shares the buffer and sees later writes.
+    A result that MLX makes without copying the elements shares the buffer
+    once it has run — and a write runs the pending ones — so it sees later
+    writes, built before them or not: ``clone()``, ``contiguous()``, a
+    ``reshape``, a run slice such as ``x[1:3]``, ``cat`` or ``stack`` of a
+    single tensor.  Results that compute new elements (arithmetic,
+    reductions, a strided slice such as ``x[::2]``) keep their values.
 
     Parameters
     ----------

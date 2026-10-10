@@ -99,6 +99,75 @@ def test_a_reader_of_a_reshape_member_keeps_its_value() -> None:
     assert y.tolist() == [4.0, 6.0]
 
 
+#: Engine view-family members whose geometry is not a run of the buffer.
+FAMILY_MEMBERS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "strided": lambda g: _wrap(_C_engine.TensorImpl._make_view(g._impl, [2], [2], 0)),
+    "transpose": lambda g: _wrap(_C_engine.TensorImpl._make_view(g._impl, [2, 2], [1, 2], 0)),
+}
+#: The same geometries, made by ops: values of their own on Metal so far.
+OP_VIEWS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "step": lambda g: g[::2],
+    "T": lambda g: g.reshape(2, 2).T,
+}
+STRIDED_PRE = {"strided": [1.0, 3.0], "transpose": [1.0, 3.0, 2.0, 4.0]}
+STRIDED_PRE.update(step=STRIDED_PRE["strided"], T=STRIDED_PRE["transpose"])
+
+
+def _write_through(writer: str, s: lucid.Tensor, g: lucid.Tensor) -> None:
+    with lucid.no_grad():
+        (g if writer == "metal" else s).add_(10.0)
+
+
+@pytest.mark.parametrize("writer", ["metal", "cpu"])
+@pytest.mark.parametrize("order", ["empty", "filled", "reader"])
+@pytest.mark.parametrize("member", list(FAMILY_MEMBERS))
+def test_a_strided_member_shows_the_write_its_earlier_reader_does_not(
+    member: str, order: str, writer: str
+) -> None:
+    s = _buffer()
+    g = s.to("metal")
+    v = FAMILY_MEMBERS[member](g)
+    y = v * 1.0 if order == "reader" else None
+    if order == "filled":
+        v.tolist()  # the member's packed elements are cached now
+    _write_through(writer, s, g)
+    assert _flat(v) == [x + 10.0 for x in STRIDED_PRE[member]]
+    if y is not None:
+        assert _flat(y) == STRIDED_PRE[member]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="LCD-18: strided Metal producers are not view-family members yet (ARC-01 MV-ENG-2)",
+)
+@pytest.mark.parametrize("writer", ["metal", "cpu"])
+@pytest.mark.parametrize("order", ["empty", "filled"])
+@pytest.mark.parametrize("op", list(OP_VIEWS))
+def test_an_op_view_shows_a_later_write(op: str, order: str, writer: str) -> None:
+    s = _buffer()
+    g = s.to("metal")
+    v = OP_VIEWS[op](g)
+    if order == "filled":
+        v.tolist()
+    _write_through(writer, s, g)
+    assert _flat(v) == [x + 10.0 for x in STRIDED_PRE[op]]
+
+
+def test_a_reader_keeps_its_value_when_the_search_gives_up() -> None:
+    # Past the walk budget every pending array runs, the reader included.
+    g = _buffer().to("metal")
+    y = g * 2.0
+    unrelated = lucid.zeros(4, device="metal")
+    for _ in range(2_000):
+        unrelated = unrelated + 1.0
+    for step in range(3):
+        with lucid.no_grad():
+            g.add_(1.0)
+        assert _flat(g) == [v + step + 1.0 for v in PRE]
+    assert _flat(y) == [2.0 * v for v in PRE]
+    assert _flat(unrelated) == [2000.0] * 4
+
+
 def test_a_deep_lazy_chain_is_searched_without_recursion() -> None:
     g = _buffer().to("metal")
     y = g
