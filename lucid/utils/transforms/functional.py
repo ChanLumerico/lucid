@@ -10,7 +10,7 @@ All operations are Lucid-native (engine ops only) — no numpy / PIL.
 
 import functools
 import math
-from typing import Literal, cast
+from typing import Literal
 
 import lucid
 import lucid.nn.functional as F
@@ -23,11 +23,6 @@ _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
     """``lucid.concat`` wrapper (absorbs the int32-typed ``dim`` stub)."""
     return lucid.concat(tensors, dim=dim)
-
-
-def _inv(x: Tensor) -> Tensor:
-    """``lucid.linalg.inv`` wrapper with a precise return type."""
-    return cast(Tensor, lucid.linalg.inv(x))
 
 
 def _spatial_hw(img: Tensor) -> tuple[int, int]:
@@ -784,8 +779,8 @@ def affine_theta(
     ih, iw = in_hw
     oh, ow = out_hw
     no = _norm_to_pixel(oh, ow, matrix.device)
-    ni_inv = _inv(_norm_to_pixel(ih, iw, matrix.device))
-    m_inv = _inv(matrix)
+    ni_inv = lucid.linalg.inv(_norm_to_pixel(ih, iw, matrix.device))
+    m_inv = lucid.linalg.inv(matrix)
     theta = lucid.matmul(lucid.matmul(ni_inv, m_inv), no)  # norm_out → norm_in
     return theta[:2].reshape(1, 2, 3)
 
@@ -992,7 +987,7 @@ def perspective_matrix(
         rhs.append(dy)
     a: Tensor = lucid.tensor(rows, device=device)
     b: Tensor = lucid.tensor([[v] for v in rhs], device=device)
-    h = lucid.matmul(_inv(a), b).reshape(-1)
+    h = lucid.matmul(lucid.linalg.inv(a), b).reshape(-1)
     hl = h.numpy().tolist()
     return lucid.tensor(
         [[hl[0], hl[1], hl[2]], [hl[3], hl[4], hl[5]], [hl[6], hl[7], 1.0]],

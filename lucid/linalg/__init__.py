@@ -15,11 +15,18 @@ from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
 
+#: Raised for a matrix a routine could not factor — singular, not
+#: positive-definite, an iteration that did not converge.  A
+#: ``RuntimeError``, distinct from the argument refusals (``ShapeMismatch``,
+#: ``DtypeMismatch``, ...), so ``except LinAlgError`` catches exactly the
+#: numerical failures.  The ``*_ex`` variants report it through ``info``.
+LinAlgError = _C_engine.LinAlgError
+
 
 # ── Decorator: auto-unwrap Tensor inputs / re-wrap TensorImpl outputs ─────────
 
 
-def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
+def _linalg_op[R](fn: Callable[..., R]) -> Callable[..., R]:
     """Unwrap every ``Tensor`` argument before the call; re-wrap ``TensorImpl``
     results (including those inside tuples) back to ``Tensor`` afterwards.
 
@@ -29,18 +36,20 @@ def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
     """
 
     @functools.wraps(fn)
-    def wrapper(*args: object, **kwargs: object) -> object:
+    def wrapper(*args: object, **kwargs: object) -> R:
         """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
         ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type]
         uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type]
-        out = fn(*ua, **uk)
+        out: object = fn(*ua, **uk)
         if isinstance(out, tuple):
-            return tuple(
+            out = tuple(
                 _wrap(o) if isinstance(o, _C_engine.TensorImpl) else o for o in out
             )
-        if isinstance(out, _C_engine.TensorImpl):
-            return _wrap(out)
-        return out
+        elif isinstance(out, _C_engine.TensorImpl):
+            out = _wrap(out)
+        # ``fn`` is annotated with what the caller gets once it is re-wrapped,
+        # so call sites see ``inv(A)`` as a ``Tensor`` without a cast each.
+        return cast(R, out)
 
     return wrapper
 
@@ -1216,7 +1225,7 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     if n == 0:
         return cast(Tensor, _MatrixPowerZero.apply(x))
 
-    base: Tensor = cast(Tensor, inv(x)) if n < 0 else x
+    base: Tensor = inv(x) if n < 0 else x
     exponent: int = -n if n < 0 else n
     if exponent == 1:
         # A new tensor, never the argument itself: handing ``x`` back made
@@ -1781,6 +1790,13 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     right-hand sides — factorization is shared.  For the explicit
     :math:`(P, L, U)` triple see :func:`lu`.
 
+    Raises
+    ------
+    LinAlgError
+        If a pivot :math:`U_{kk}` is exactly zero — :func:`lu_solve` would
+        divide by it.  :func:`lu_factor_ex` returns the factors of such a
+        matrix with a non-zero ``info`` instead.
+
     Examples
     --------
     >>> import lucid
@@ -1790,6 +1806,16 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     >>> b = lucid.tensor([[3.0], [13.0]])
     >>> lu_solve(LU, piv, b)
     tensor([[0.8], [1.4]])
+    """
+    LU, pivots, _ = _lu_factor_ex(A, check_errors=True, op="lu_factor")
+    return LU, pivots
+
+
+def _lu_factor_packed(A: Tensor) -> tuple[Tensor, Tensor]:
+    """``getrf``'s packed factor and pivots, differentiable in square ``A``.
+
+    The kernel completes on a singular matrix, as ``getrf`` does, so this
+    never raises for one; whether that is an error is the caller's call.
     """
     lu, pivots = _la.lu_factor(_unwrap(A))
     LU, piv = _wrap(lu), _wrap(pivots)
@@ -1888,7 +1914,7 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     >>> sign, logabs
     (tensor(-1.), tensor(0.6931))
     """
-    d = cast(Tensor, det(A))
+    d = det(A)
     sign = _wrap(_C_engine.sign(_unwrap(d)))
     return sign, cast(Tensor, _LogAbsDet.apply(d))
 
@@ -3214,6 +3240,13 @@ def ldl_factor(
     upper one as it found it — the input's own entries.  Those are
     cleared here, so ``LD`` holds the factorization and nothing else.
 
+    Raises
+    ------
+    LinAlgError
+        If a :math:`1 \times 1` block of :math:`D` is exactly zero — the
+        factorization completes, but :math:`D` is singular.
+        :func:`ldl_factor_ex` returns it with a non-zero ``info`` instead.
+
     Examples
     --------
     >>> import lucid
@@ -3225,405 +3258,10 @@ def ldl_factor(
     >>> piv
     tensor([1, 2], dtype=lucid.int32)
     """
-    unsupported_if(
-        not hermitian,
-        "ldl_factor",
-        "hermitian",
-        hermitian,
-        detail="Only the Hermitian case is computed.",
+    LD, pivots, _ = _ldl_factor_ex(
+        A, hermitian=hermitian, check_errors=True, op="ldl_factor"
     )
-    ld_impl, piv_impl = _la.ldl_factor(_unwrap(A))
-    return lucid.tril(_wrap(ld_impl)), _wrap(piv_impl)
-
-
-# ── *_ex variants — return (result, info) instead of raising ───────────────
-#
-# LAPACK's ``*_ex`` contract is one ``info`` integer per matrix of the
-# batch: ``0`` on success, otherwise the routine's own code — for ``getrf``
-# the 1-based index of the first exactly-zero pivot of ``U``, for ``potrf``
-# the order of the leading minor that is not positive definite.  A matrix
-# that succeeded keeps its answer whatever its neighbours did.
-#
-# The kernels refuse a whole batch the moment one matrix fails, and the
-# error does not say which one, so these wrappers used to report *every*
-# matrix as failed, with an invented ``info = 1`` and a zero result for
-# all of them — the identity's inverse was lost because the matrix next to
-# it was singular.  Each failure is now located per matrix; the failed
-# matrices are swapped for the identity so the kernel runs on the batch,
-# and only their results are replaced (by zeros — LAPACK leaves them
-# undefined).  The successes, and their gradients, are the kernel's.
-
-
-def _info_zero(A: Tensor) -> Tensor:
-    """Build a scalar (or batched) int32 ``info`` tensor of zeros aligned
-    with the leading-batch dims of ``A`` (everything except the trailing
-    two matrix dims).  Mirrors LAPACK's batched-info contract."""
-    batch = list(A.shape[:-2])
-    if not batch:
-        return lucid.zeros(tuple(), dtype=lucid.int32, device=A.device)
-    return lucid.zeros(*batch, dtype=lucid.int32, device=A.device)
-
-
-def _check_square(A: Tensor, op: str) -> None:
-    """Refuse anything but a (batch of) square matrices, up front.
-
-    The kernels' own shape refusal is a bare ``LucidError`` — the same type
-    as a failed factorisation — so once it is raised it can no longer be
-    told apart from a singular matrix, and a ``(2, 3)`` input came back as
-    ``info = 1`` instead of an error.
-    """
-    if A.ndim < 2 or A.shape[-1] != A.shape[-2]:
-        raise ValueError(
-            f"{op}: A must be a square matrix or a batch of them, "
-            f"got shape {tuple(A.shape)}"
-        )
-
-
-def _is_numerical_failure(err: RuntimeError) -> bool:
-    """Whether an engine error is a failed factorisation, not a refusal.
-
-    A failed factorisation — LAPACK's ``info > 0`` on the CPU, the pivot or
-    diagonal check on Metal — is raised as a bare ``LucidError``.  Every
-    other engine error is a subclass of it (shape, dtype, device, index,
-    memory, a missing GPU, a version mismatch) or not an engine error at
-    all, and must reach the caller rather than be reported as a singular
-    matrix.  The kernels' shape refusal is a bare ``LucidError`` too, which
-    is why the ``_ex`` variants check squareness before calling them.
-    """
-    return type(err) is _C_engine.LucidError
-
-
-def _getrf_info(A: Tensor) -> Tensor:
-    """LAPACK ``getrf``'s ``info`` for each matrix of ``A``.
-
-    The 1-based index of the first exactly-zero pivot of ``U`` — the test
-    ``getrf`` applies, and the division ``getri`` / ``getrs`` would then
-    fail on — or ``0`` when there is none.  ``int32``, shaped like ``A``'s
-    batch, on ``A``'s device.
-
-    Factorising does not fail on a singular matrix, so this answers for
-    every matrix of the batch at once — the ``inv`` / ``solve`` kernels
-    report only the first failure they meet.
-    """
-    n = int(A.shape[-1])
-    if n == 0 or A.numel() == 0:
-        return _info_zero(A)
-    with lucid.no_grad():
-        LU, _ = lu_factor(A.detach())
-        zero = LU.diagonal(dim1=-2, dim2=-1) == 0
-        position = lucid.arange(1, n + 1, dtype=lucid.int64, device=A.device)
-        first = lucid.amin(lucid.where(zero, position, n + 1), dim=-1)
-        info = lucid.where(first > n, 0, first)
-    return info.to(lucid.int32)
-
-
-def _cholesky_succeeds(M: Tensor, upper: bool) -> bool:
-    """Whether the Cholesky kernel factorises the single matrix ``M``."""
-    try:
-        _la.cholesky(_unwrap(M.contiguous()), upper)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
-        return False
-    return True
-
-
-def _potrf_info(A: Tensor, upper: bool) -> Tensor:
-    """LAPACK ``potrf``'s ``info`` for each matrix of ``A``.
-
-    The order of the first leading minor that is not positive definite, or
-    ``0``.  The kernel reports only that *some* matrix failed — and Metal
-    not even the order — so the failures are found by bisection twice over.
-    Across the batch: a slice that factorises clears every matrix in it at
-    once, so ``f`` failures among ``B`` matrices cost about ``2 f log2 B``
-    calls rather than ``B``.  Within a failed matrix, over its leading
-    blocks: the first ``j`` steps of a Cholesky factorisation read nothing
-    outside the leading ``j × j`` block, so that block fails exactly when
-    the whole matrix fails within ``j`` steps.  Reached only once the
-    batched call has failed, so the whole batch is known to.
-    """
-    n = int(A.shape[-1])
-    batch = tuple(int(s) for s in A.shape[:-2])
-    with lucid.no_grad():
-        flat = A.detach().reshape(-1, n, n)
-        codes = [0] * int(flat.shape[0])
-        # (start, stop, known to fail) slices of the batch still to settle.
-        pending = [(0, len(codes), True)]
-        while pending:
-            start, stop, failed = pending.pop()
-            if not failed and _cholesky_succeeds(flat[start:stop], upper):
-                continue
-            if stop - start > 1:
-                middle = (start + stop) // 2
-                pending += [(start, middle, False), (middle, stop, False)]
-                continue
-            M = flat[start]
-            lo, hi = 1, n  # order n fails; find the smallest order that does
-            while lo < hi:
-                mid = (lo + hi) // 2
-                if _cholesky_succeeds(M[:mid, :mid], upper):
-                    lo = mid + 1
-                else:
-                    hi = mid
-            codes[start] = lo
-    if not batch:
-        return lucid.tensor(codes[0], dtype=lucid.int32, device=A.device)
-    return lucid.tensor(codes, dtype=lucid.int32, device=A.device).reshape(*batch)
-
-
-def _raise_ex_failure(op: str, info: Tensor, reason: Callable[[int], str]) -> None:
-    """Raise for the first failed matrix, naming it as the reference does."""
-    codes = cast(list[int], info.reshape(-1).tolist())
-    for b, code in enumerate(codes):
-        if code:
-            where = f"(Batch element {b}): " if info.ndim else ""
-            raise _C_engine.LucidError(f"{op}: {where}{reason(int(code))}")
-
-
-def _singular_reason(action: str) -> Callable[[int], str]:
-    """The ``getrf`` failure message for an ``inv`` / ``solve`` variant."""
-
-    def reason(code: int) -> str:
-        """The message for a zero pivot at 1-based position ``code``."""
-        return (
-            f"The diagonal element {code} is zero, the {action} could not be "
-            f"completed because the input matrix is singular."
-        )
-
-    return reason
-
-
-def _not_positive_definite(code: int) -> str:
-    """The ``potrf`` failure message for a leading minor of order ``code``."""
-    return (
-        "The factorization could not be completed because the input is not "
-        f"positive-definite (the leading minor of order {code} is not "
-        "positive-definite)."
-    )
-
-
-def _on_the_rest(fn: Callable[[Tensor], Tensor], A: Tensor, info: Tensor) -> Tensor:
-    """``fn(A)`` with the failed matrices of ``A`` left out.
-
-    Each matrix whose ``info`` is non-zero is swapped for the identity, so
-    the kernel can run on the batch, and its result is zeroed afterwards.
-    Both swaps are ``where`` selections, so the matrices that succeeded keep
-    their gradient and the failed ones receive none.
-    """
-    failed = info != 0
-    batch = tuple(failed.shape)
-    eye = lucid.eye(int(A.shape[-1]), dtype=A.dtype, device=A.device)
-    out = fn(lucid.where(failed.reshape(*batch, 1, 1), eye, A))
-    # A solve against a vector right-hand side drops one trailing axis.
-    trailing = (1, 1) if out.ndim >= A.ndim else (1,)
-    return lucid.where(failed.reshape(*batch, *trailing), lucid.zeros_like(out), out)
-
-
-def cholesky_ex(
-    A: Tensor,
-    *,
-    upper: bool = False,
-    check_errors: bool = False,
-) -> tuple[Tensor, Tensor]:
-    r"""Cholesky factorization with an explicit success flag.
-
-    Variant of :func:`cholesky` that, instead of raising when the
-    input fails to be positive-definite, returns the factor together
-    with an integer ``info`` code following LAPACK's convention:
-
-    * ``info == 0`` — success; :math:`L` (or :math:`U`) is meaningful.
-    * ``info == k > 0`` — the leading minor of order :math:`k` is not
-      positive-definite; that matrix's factor is zero-filled.
-
-    Parameters
-    ----------
-    A : Tensor
-        Candidate SPD matrix of shape ``(*, n, n)``.
-    upper : bool, keyword-only, optional
-        If ``True`` return the upper-triangular factor :math:`U` such
-        that :math:`A = U^\top U`.  Default ``False``.
-    check_errors : bool, keyword-only, optional
-        If ``True``, raise for the first matrix that fails instead of
-        reporting it through ``info`` — useful while debugging.
-
-    Returns
-    -------
-    L : Tensor
-        Cholesky factor of shape ``(*, n, n)`` — zeros for the matrices
-        that failed.
-    info : Tensor
-        ``int32`` status, scalar or shape ``(*,)`` matching the batch
-        of ``A``.
-
-    Notes
-    -----
-    Designed for code paths where a failed Cholesky is an expected
-    event (e.g., trial steps in trust-region optimisers).  Callers
-    must inspect ``info`` before trusting ``L``.
-
-    Each matrix of a batch is judged on its own: one failure leaves the
-    other factors, and their gradients, intact.  The batch is factorised
-    once; only when that fails is each matrix tried alone, and a failed
-    one bisected over its leading blocks to find the order LAPACK reports.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.linalg import cholesky_ex
-    >>> A = lucid.tensor([[4.0, 2.0], [2.0, 3.0]])
-    >>> L, info = cholesky_ex(A)
-    >>> int(info)
-    0
-    >>> _, info = cholesky_ex(lucid.tensor([[1.0, 0.0], [0.0, -1.0]]))
-    >>> int(info)
-    2
-    """
-    _check_square(A, "cholesky_ex")
-    try:
-        return cholesky(A, upper=upper), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
-    info = _potrf_info(A, upper)
-    if check_errors:
-        _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
-    return _on_the_rest(lambda M: cholesky(M, upper=upper), A, info), info
-
-
-def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
-    r"""Matrix inverse with an explicit success flag.
-
-    Variant of :func:`inv` that returns an ``info`` code instead of
-    raising on a singular input.
-
-    * ``info == 0`` — success; ``Ainv`` is :math:`A^{-1}`.
-    * ``info == k > 0`` — :math:`U_{kk}` of :math:`PA = LU` is exactly
-      zero, so :math:`A` is singular; that matrix's ``Ainv`` is
-      zero-filled.
-
-    Parameters
-    ----------
-    A : Tensor
-        Square matrix of shape ``(*, n, n)``.
-    check_errors : bool, keyword-only, optional
-        If ``True``, raise for the first singular matrix instead of
-        reporting it through ``info``.
-
-    Returns
-    -------
-    Ainv : Tensor
-        Inverse of shape ``(*, n, n)`` — zeros for the singular matrices.
-    info : Tensor
-        ``int32`` status, scalar or shape ``(*,)`` matching the batch of
-        ``A``.
-
-    Notes
-    -----
-    Useful in algorithms that occasionally probe near-singular
-    matrices (e.g., iterative refinement, regularisation grid
-    searches) without wanting to wrap every call in a ``try``.
-
-    Each matrix of a batch is judged on its own: a singular one leaves the
-    other inverses, and their gradients, intact.  The batch is inverted
-    directly; only when that fails is it factorised again to find which
-    matrices failed and at which pivot.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.linalg import inv_ex
-    >>> Ainv, info = inv_ex(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
-    >>> int(info)
-    0
-    >>> _, info = inv_ex(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))
-    >>> int(info)
-    2
-    """
-    _check_square(A, "inv_ex")
-    try:
-        return cast(Tensor, inv(A)), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
-    info = _getrf_info(A)
-    if check_errors:
-        _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
-    return _on_the_rest(lambda M: cast(Tensor, inv(M)), A, info), info
-
-
-def solve_ex(
-    A: Tensor,
-    B: Tensor,
-    *,
-    left: bool = True,
-    check_errors: bool = False,
-) -> tuple[Tensor, Tensor]:
-    r"""Solve :math:`AX = B` with an explicit success flag.
-
-    Variant of :func:`solve` that returns an ``info`` code instead of
-    raising on a singular coefficient matrix.
-
-    * ``info == 0`` — success; :math:`X` is the unique solution.
-    * ``info == k > 0`` — :math:`U_{kk}` of :math:`PA = LU` is exactly
-      zero, so :math:`A` is singular; that system's :math:`X` is
-      zero-filled.
-
-    Parameters
-    ----------
-    A : Tensor
-        Coefficient matrix of shape ``(*, n, n)``.
-    B : Tensor
-        Right-hand side of shape ``(*, n, k)`` (or ``(*, n)``).
-    left : bool, keyword-only, optional
-        Currently must be ``True``.  ``False`` (``X A = B``) is not yet
-        implemented and raises ``NotImplementedError``.
-    check_errors : bool, keyword-only, optional
-        If ``True``, raise for the first singular matrix instead of
-        reporting it through ``info``.
-
-    Returns
-    -------
-    X : Tensor
-        Solution shaped like :func:`solve`'s — zeros for the systems whose
-        ``A`` was singular.
-    info : Tensor
-        ``int32`` status, scalar or shape ``(*,)`` matching the batch of
-        ``A``.
-
-    Notes
-    -----
-    This is the recommended form when calling from inside a batched /
-    jit-compiled / vmapped routine where raising would break control
-    flow; manually inspect ``info`` afterwards and decide whether to
-    recover.
-
-    Each system of a batch is judged on its own: a singular ``A`` leaves
-    the other solutions, and their gradients, intact.  The batch is solved
-    directly; only when that fails is ``A`` factorised again to find which
-    systems failed and at which pivot.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.linalg import solve_ex
-    >>> A = lucid.tensor([[3.0, 1.0], [1.0, 2.0]])
-    >>> b = lucid.tensor([9.0, 8.0])
-    >>> X, info = solve_ex(A, b)
-    >>> int(info)
-    0
-    """
-    if not left:
-        raise NotImplementedError("solve_ex: only left=True is supported")
-    _check_square(A, "solve_ex")
-    try:
-        return cast(Tensor, solve(A, B)), _info_zero(A)
-    except RuntimeError as err:
-        if not _is_numerical_failure(err):
-            raise
-    info = _getrf_info(A)
-    if check_errors:
-        _raise_ex_failure("solve_ex", info, _singular_reason("solve"))
-    return _on_the_rest(lambda M: cast(Tensor, solve(M, B)), A, info), info
+    return LD, pivots
 
 
 # ── Full LU decomposition (P, L, U) ────────────────────────────────────────
@@ -3687,7 +3325,8 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
         raise ValueError(f"lu requires a square matrix in the last two dims, got {sh}")
     n = int(sh[-1])
 
-    LU, pivots = lu_factor(A)
+    # A singular matrix has an LU factorization; only lu_factor refuses it.
+    LU, pivots = _lu_factor_packed(A)
 
     # Split the packed LU into L (unit-lower) and U (upper).
     eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)
@@ -4241,7 +3880,20 @@ def diagonal(
     return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
 
 
+# The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
+# ``ldl_factor`` above are its checked forms.
+from lucid.linalg._ex import (
+    _ldl_factor_ex,
+    _lu_factor_ex,
+    cholesky_ex,
+    inv_ex,
+    ldl_factor_ex,
+    lu_factor_ex,
+    solve_ex,
+)
+
 __all__ = [
+    "LinAlgError",
     "inv",
     "det",
     "solve",
@@ -4262,6 +3914,7 @@ __all__ = [
     "multi_dot",
     "vander",
     "lu_factor",
+    "lu_factor_ex",
     "solve_triangular",
     "cross",
     "vecdot",
@@ -4274,6 +3927,7 @@ __all__ = [
     "lu_solve",
     "householder_product",
     "ldl_factor",
+    "ldl_factor_ex",
     "ldl_solve",
     "lu",
     "cholesky_ex",

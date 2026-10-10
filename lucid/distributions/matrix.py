@@ -166,7 +166,7 @@ class Wishart(Distribution):
             self.scale_tril = _la.cholesky(cov)
         else:  # precision_matrix
             prec = _as_tensor(precision_matrix)  # type: ignore[arg-type]
-            self.scale_tril = _la.cholesky(_la.inv(prec))  # type: ignore[arg-type]
+            self.scale_tril = _la.cholesky(_la.inv(prec))
 
         self.df = _as_tensor(df)
         dim: int = int(self.scale_tril.shape[-1])
