@@ -15,10 +15,16 @@ Keeping them here avoids byte-identical duplication across every family
 file and gives future text models a single canonical implementation.
 """
 
+import lucid
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 
-__all__ = ["text_activation", "extended_attention_mask"]
+__all__ = [
+    "text_activation",
+    "extended_attention_mask",
+    "token_at",
+    "last_kept_token",
+]
 
 
 def text_activation(name: str, x: Tensor) -> Tensor:
@@ -133,3 +139,63 @@ def extended_attention_mask(
     else:
         mask = attention_mask
     return (1.0 - mask.float()) * -1e4
+
+
+def token_at(hidden: Tensor, positions: Tensor) -> Tensor:
+    """The hidden state at ``positions`` along the sequence axis, per row.
+
+    Args:
+        hidden:    ``(*lead, T, H)`` hidden states.
+        positions: ``(*lead)`` integer positions into ``T``.
+
+    Returns:
+        ``(*lead, H)`` — one hidden state per leading index.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._text import token_at
+    >>> hidden = lucid.arange(12).reshape(2, 3, 2).float()
+    >>> token_at(hidden, lucid.tensor([2, 0])).tolist()
+    [[4.0, 5.0], [6.0, 7.0]]
+
+    A gather rather than an index read on the host: the position stays a
+    tensor, so a compiled or exported graph picks it from each call's
+    inputs, and the gradient reaches the gathered rows.
+    """
+    lead = tuple(int(d) for d in positions.shape)
+    index = positions.long().reshape(*lead, 1, 1)
+    picked = lucid.take_along_dim(hidden, index, dim=-2)
+    return picked.reshape(*lead, int(hidden.shape[-1]))
+
+
+def last_kept_token(hidden: Tensor, attention_mask: Tensor | None) -> Tensor:
+    """The hidden state at the last position ``attention_mask`` keeps.
+
+    Args:
+        hidden:         ``(B, T, H)`` hidden states.
+        attention_mask: ``(B, T)`` padding mask, a value above 0.5 kept;
+            ``None`` means every position is real.
+
+    Returns:
+        ``(B, H)``.  A row whose mask keeps nothing pools position 0.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._text import last_kept_token
+    >>> hidden = lucid.arange(8).reshape(2, 4, 1).float()
+    >>> mask = lucid.tensor([[0, 0, 1, 1], [1, 1, 0, 0]])
+    >>> last_kept_token(hidden, mask).tolist()
+    [[3.0], [5.0]]
+
+    The last kept position, not ``count - 1``: under left padding
+    (``[0, 0, 1, 1]``) the count says index 1, which is a pad slot.
+    """
+    if attention_mask is None:
+        return hidden[:, -1, :]
+    T = int(attention_mask.shape[-1])
+    kept = (attention_mask.float() > 0.5).long()
+    positions = lucid.arange(T, device=attention_mask.device)
+    # Unkept slots score 0, so an all-pad row lands on position 0.
+    return token_at(hidden, (kept * positions).max(dim=-1))

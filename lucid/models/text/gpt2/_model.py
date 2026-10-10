@@ -41,7 +41,12 @@ from lucid.models._output import (
     MaskedLMOutput,
     ModelOutput,
 )
-from lucid.models._utils._text import extended_attention_mask, text_activation
+from lucid.models._utils._text import (
+    extended_attention_mask,
+    last_kept_token,
+    text_activation,
+    token_at,
+)
 from lucid.models.text.gpt2._config import GPT2Config
 from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
@@ -599,8 +604,9 @@ class GPT2ForSequenceClassification(SequenceClassificationModel):
     Reference: Radford et al., *"Language Models are Unsupervised
     Multitask Learners"*, OpenAI Technical Report, 2019.
 
-    Pooling picks index :math:`t^\star = \sum_t \mathbf{1}[\mathrm{mask}_t]
-    - 1` (the rightmost real token) per row, then computes
+    Pooling picks index :math:`t^\star = \max\{t : \mathrm{mask}_t = 1\}`
+    (the rightmost real token, so left padding pools correctly; 0 for an
+    all-pad row) per row, then computes
 
     .. math::
 
@@ -644,23 +650,7 @@ class GPT2ForSequenceClassification(SequenceClassificationModel):
         labels: Tensor | None = None,
     ) -> MaskedLMOutput:
         outputs = self.transformer(input_ids, attention_mask=attention_mask)
-        hidden = outputs.last_hidden_state
-        B, T = int(hidden.shape[0]), int(hidden.shape[1])
-
-        if attention_mask is None:
-            last_idx = [T - 1] * B
-        else:
-            # The last *real* token is the last position the mask keeps, not
-            # ``count - 1``: under left padding ([0, 0, 1, 1]) the count says
-            # index 1, which is a pad slot.  One .tolist() pulls the whole
-            # mask across in a single sync rather than one per row.
-            rows = cast(list[list[float]], attention_mask.float().tolist())
-            last_idx = []
-            for row in rows:
-                kept = [i for i, v in enumerate(row) if v > 0.5]
-                last_idx.append(kept[-1] if kept else 0)
-
-        pooled = lucid.stack([hidden[b, last_idx[b], :] for b in range(B)], dim=0)
+        pooled = last_kept_token(outputs.last_hidden_state, attention_mask)
         pooled = self.dropout(pooled)
         logits = self.classifier(pooled)
 
@@ -739,17 +729,8 @@ class _GPT2MultipleChoiceHead(nn.Module):
 
     @override
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:
-        N, C, L, H = hidden_states.shape
-        # Slice out the chosen position per (batch, choice); reading the values
-        # with ``.item()`` and rebuilding a tensor would detach the head, so
-        # ``mc_loss`` would train the summary Linear and nothing else.  Only the
-        # token index is read as an int — it carries no gradient anyway.
-        rows: list[Tensor] = []
-        for n in range(N):
-            for c in range(C):
-                t = int(mc_token_ids[n, c].item())
-                rows.append(hidden_states[n, c, t : t + 1, :])  # (1, H)
-        pooled = lucid.cat(rows, dim=0).reshape(N, C, H)  # (N, C, H)
+        N, C = int(hidden_states.shape[0]), int(hidden_states.shape[1])
+        pooled = token_at(hidden_states, mc_token_ids)  # (N, C, H)
         pooled = self.dropout(pooled)
         return self.summary(pooled).reshape(N, C)
 

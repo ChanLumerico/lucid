@@ -32,7 +32,11 @@ from lucid.models._output import (
     SequenceClassificationOutput,
     TokenClassificationOutput,
 )
-from lucid.models._utils._text import extended_attention_mask, text_activation
+from lucid.models._utils._text import (
+    extended_attention_mask,
+    last_kept_token,
+    text_activation,
+)
 from lucid.nn.functional import apply_rotary_emb
 from lucid.nn.module import Module
 from lucid.models.text.roformer._config import RoFormerConfig
@@ -925,19 +929,8 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         # state directly, with no pooler projection — pooling the CLS token
         # through the tanh pooler puts a trained-elsewhere projection between
         # the encoder and the scorer, and reads the wrong position besides.
-        hidden = outputs.last_hidden_state  # (N*C, L, H)
-        if flat_mask is None:
-            last = hidden[:, -1, :]
-        else:
-            rows = cast(list[list[float]], flat_mask.float().tolist())
-            idx: list[int] = []
-            for row in rows:
-                kept = [i for i, v in enumerate(row) if v > 0.5]
-                idx.append(kept[-1] if kept else 0)
-            last = lucid.stack(
-                [hidden[b, idx[b], :] for b in range(int(hidden.shape[0]))], dim=0
-            )
-        pooled = self.dropout(last)  # (N*C, H)
+        last = last_kept_token(outputs.last_hidden_state, flat_mask)  # (N*C, H)
+        pooled = self.dropout(last)
         logits_flat = self.classifier(pooled)  # (N*C, 1)
         logits = logits_flat.reshape(N, C)  # (N, C)
 
