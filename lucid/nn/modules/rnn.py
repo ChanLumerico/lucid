@@ -150,17 +150,22 @@ def _carry(state: Tensor, updated: Tensor, bs: int) -> Tensor:
     return _lucid.cat([updated, tail], axis)
 
 
-def _restore_batch_order(state: Tensor, template: object) -> Tensor:
+def _restore_batch_order(
+    state: Tensor, template: object, into_packed: bool = False
+) -> Tensor:
     """Undo the descending-length permutation on a ``(N, B, H)`` state.
 
     The recurrence runs in packed order; the caller never asked for that.
     ``unsorted_indices[i]`` is where original row ``i`` ended up after the
-    sort, so gathering by it puts the batch back.
+    sort, so gathering by it puts the batch back.  ``into_packed`` goes the
+    other way, for a caller's initial state: the recurrence starts row ``i``
+    from the caller's row ``sorted_indices[i]``.
     """
     src = cast("PackedSequence", template)
-    if src.unsorted_indices is None:
+    indices = src.sorted_indices if into_packed else src.unsorted_indices
+    if indices is None:
         return state
-    order = _int_tensor_to_list(src.unsorted_indices)
+    order = _int_tensor_to_list(indices)
     if order == list(range(len(order))):
         return state
     return stack([state[:, i] for i in order], 1)
@@ -682,47 +687,38 @@ class LSTM(Module):
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Run one ``lstm_forward`` engine call for a single layer / direction."""
         suffix: str = "_reverse" if direction == 1 else ""
-        weights: list[object] = []
-        p_wih = self._parameters[f"weight_ih_l{layer}{suffix}"]
-        p_whh = self._parameters[f"weight_hh_l{layer}{suffix}"]
-        assert p_wih is not None
-        assert p_whh is not None
-        weights.append(_unwrap(p_wih))
-        weights.append(_unwrap(p_whh))
-        gate_size: int = 4 * self.hidden_size
-        if self.bias:
-            p_bih = self._parameters[f"bias_ih_l{layer}{suffix}"]
-            p_bhh = self._parameters[f"bias_hh_l{layer}{suffix}"]
-            assert p_bih is not None
-            assert p_bhh is not None
-            weights.append(_unwrap(p_bih))
-            weights.append(_unwrap(p_bhh))
-        else:
-            dev = _unwrap(layer_input).device
-            # Engine zero buffer — same dtype as the tensors we'll concat with.
-            zero_b = _C_engine.zeros([gate_size], _C_engine.F32, dev)
-            weights.append(zero_b)
-            weights.append(zero_b)
-        if self.proj_size > 0:
-            p_hr = self._parameters[f"weight_hr_l{layer}{suffix}"]
-            assert p_hr is not None
-            weights.append(_unwrap(p_hr))
+        x_impl = _unwrap(layer_input)
 
-        lstm_result = _C_engine.nn.lstm_forward(
-            _unwrap(layer_input),
+        def param(name: str) -> _C_engine.TensorImpl:
+            p = self._parameters[f"{name}_l{layer}{suffix}"]
+            assert p is not None
+            return _unwrap(p)
+
+        if self.bias:
+            biases = [param("bias_ih"), param("bias_hh")]
+        else:
+            # The engine requires every operand in the input's dtype.
+            zero_b = _C_engine.zeros(
+                [4 * self.hidden_size], x_impl.dtype, x_impl.device
+            )
+            biases = [zero_b, zero_b]
+        weights = [param("weight_ih"), param("weight_hh"), *biases]
+        if self.proj_size > 0:
+            weights.append(param("weight_hr"))
+
+        # One layer, one direction, sequence-first: the loops above do the rest.
+        out_impl, h_impl, c_impl = _C_engine.nn.lstm_forward(
+            x_impl,
             _unwrap(h0_layer),
             _unwrap(c0_layer),
-            cast(list[_C_engine.TensorImpl], weights),
+            weights,
             self.hidden_size,
-            1,  # single-layer engine call
-            False,  # batch_first handled by us
-            False,  # bidirectional handled by us
+            1,
+            False,
+            False,
             True,
             self.proj_size,
         )
-        out_impl: _C_engine.TensorImpl = lstm_result[0]
-        h_impl: _C_engine.TensorImpl = lstm_result[1]
-        c_impl: _C_engine.TensorImpl = lstm_result[2]
         return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
 
     @override
@@ -765,6 +761,9 @@ class LSTM(Module):
             )
         else:
             h0_full, c0_full = hx
+            if packed_src is not None:
+                h0_full = _restore_batch_order(h0_full, packed_src, into_packed=True)
+                c0_full = _restore_batch_order(c0_full, packed_src, into_packed=True)
 
         h_n_layers: list[Tensor] = []
         c_n_layers: list[Tensor] = []

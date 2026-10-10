@@ -15,11 +15,14 @@
 //
 // LstmBackward inherits directly from Node (not FuncOp) because the 7-edge
 // topology {input, h0, c0, wih, whh, bih, bhh} is built manually rather than
-// through the generic NaryKernel machinery.  Only the output hidden sequence
-// (res[0]) carries the grad_fn; hn and cn are detached.
+// through the generic NaryKernel machinery.  All three outputs — the hidden
+// sequence, hn and cn — carry it as their grad_fn, at output slots 0 / 1 / 2.
 
 #pragma once
 
+#include <array>
+#include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "../api.h"
@@ -57,10 +60,13 @@ namespace lucid {
 // hand: each tensor that requires a gradient gets an explicit
 // ``AccumulateGrad`` leaf wired in ``forward()``, and non-differentiable
 // tensors (such as biases when ``has_bias=false``) get a null edge.
-// Only the output sequence ``res[0]`` carries this node as its
-// ``grad_fn``; ``hn`` and ``cn`` are detached so they can be reused as
-// initial states for a subsequent stacked layer in pure Python without
-// double-counting gradients.
+// All three outputs carry this node as their ``grad_fn``, at output slots
+// ``0`` (sequence), ``1`` (``hn``) and ``2`` (``cn``).  The final state is
+// a differentiable output: an encoder's ``hn`` seeding a decoder, or the
+// state a packed sequence carries from one run of timesteps to the next,
+// sends its gradient back through BPTT as ``dh_n`` / ``dc_n``.  The node is
+// therefore a barrier (:meth:`is_barrier`): the engine parks each output's
+// gradient in its slot and runs the backward once, after the last arrives.
 //
 // Math
 // ----
@@ -93,7 +99,9 @@ namespace lucid {
 // cells_all : Storage
 //     Cell states ``c_0, c_1, ..., c_T`` shaped ``(T+1, B, H)``;
 //     ``cells_all[0]`` is the supplied ``c_0`` and
-//     ``cells_all[T]`` is ``cn``.
+//     ``cells_all[T]`` is ``cn``.  For the 16-bit dtypes both trajectories
+//     are float32: the backends compute those in float32 and only
+//     ``lstm_backward`` reads them.
 // opts : backend::IBackend::LstmOpts
 //     Bundle of structural parameters propagated from ``forward()`` to
 //     ``apply()`` — ``input_size``, ``hidden_size``, ``seq_len``,
@@ -109,8 +117,10 @@ namespace lucid {
 // Notes
 // -----
 // **Backend dispatch.**  CPU runs Apple Accelerate-backed hand-rolled
-// BLAS through ``lstm_forward_train`` / ``lstm_backward``.  GPU dispatches
-// to the MLX backend.  The Python wrapper in
+// BLAS through ``lstm_forward_train`` / ``lstm_backward`` (float32 and
+// float64 natively, the 16-bit formats through float32 — see
+// ``backend/cpu/Lstm.h``).  GPU dispatches to the MLX backend
+// (``backend/gpu/Lstm.h``).  The Python wrapper in
 // :class:`lucid.nn.modules.rnn.LSTM` always invokes the engine
 // one-layer-one-direction at a time and composes stacking,
 // bidirectionality and inter-layer dropout itself, so this node only
@@ -154,29 +164,37 @@ public:
     //     The literal ``"LstmBackward"``.
     std::string_view name() const noexcept { return "LstmBackward"; }
 
-    // Run the BPTT backward and return per-edge gradients.
+    // The output sequence's gradient alone: slot 0, then the barrier flush.
+    // The engine never calls this (the node is a barrier); it keeps a
+    // direct ``apply`` meaning what it always meant.
+    std::vector<Storage> apply(Storage grad_out) override;
+
+    bool is_barrier() const noexcept override { return true; }
+
+    // Park one output's gradient in its slot (0 = sequence, 1 = ``hn``,
+    // 2 = ``cn``).  A slot reached by several paths sums them, into a copy
+    // this node owns.  Slots from an earlier backward pass are dropped.
     //
-    // Dispatches to ``IBackend::lstm_backward`` which unrolls $T$ time
-    // steps in reverse using the saved ``gates_all`` and ``cells_all``
-    // tensors.  Gradients for ``hn`` and ``cn`` at the sequence end are
-    // synthesised as zero buffers (matching detached outputs), because
-    // only the output sequence ``res[0]`` is connected in the autograd
-    // graph for the single-layer case.
-    //
-    // Parameters
-    // ----------
-    // grad_out : Storage
-    //     Upstream gradient with respect to the output sequence,
-    //     shaped ``(T, B, H_out)`` where ``H_out == proj_size`` if
-    //     projection is enabled, else ``hidden_size``.
+    // Raises
+    // ------
+    // LucidError
+    //     ``input_nr`` names no output of this node.
+    void accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) override;
+
+    // Run BPTT once with every output's gradient, seeding the recurrence
+    // with ``dh_n`` / ``dc_n``.  An output the loss never reached
+    // contributes zeros.
     //
     // Returns
     // -------
     // std::vector<Storage>
-    //     Seven Storage objects in edge order ``{dInput, dh0, dc0, dW_ih,
-    //     dW_hh, db_ih, db_hh}``.  Bias slots are zero buffers when
-    //     ``opts.has_bias == false``.
-    std::vector<Storage> apply(Storage grad_out) override;
+    //     Edge order ``{dInput, dh0, dc0, dW_ih, dW_hh, db_ih, db_hh}``
+    //     (plus ``dW_hr`` when projected).
+    std::vector<Storage> apply_barrier() override;
+
+    // Free the saved forward state once a pass that did not retain the
+    // graph has run.
+    void release_saved() override;
 
     // Run the LSTM forward pass and return ``{output, hn, cn}``.
     //
@@ -219,21 +237,32 @@ public:
     // std::vector<TensorImplPtr>
     //     Three tensors ``{output, hn, cn}`` where ``output`` is shaped
     //     ``(T, B, H_out)``, ``hn`` is shaped ``(1, B, H_out)`` and
-    //     ``cn`` is shaped ``(1, B, hidden_size)``.  Only ``output``
-    //     carries an autograd edge when the training path is taken;
-    //     ``hn`` and ``cn`` are returned detached.
+    //     ``cn`` is shaped ``(1, B, hidden_size)``.  On the training
+    //     path all three share this node as their ``grad_fn``.
     //
     // Raises
     // ------
-    // ErrorBuilder
-    //     If any of ``input``, ``h0``, ``c0`` or a weight tensor is null,
-    //     or if a backend method is not implemented for the current
-    //     device.
+    // InvalidArgument
+    //     An operand is null, or the weight count is not 4 (5 projected).
+    // DeviceMismatch
+    //     ``h0``, ``c0`` or a weight is not on the input's device.
+    // DtypeMismatch
+    //     The input is not floating point, or an operand's dtype differs.
+    // ShapeMismatch
+    //     An operand's shape does not follow from ``opts``.
+    // NotImplementedError
+    //     ``num_layers != 1``, ``bidirectional`` or ``batch_first``.
     static std::vector<TensorImplPtr> forward(const TensorImplPtr& input,
                                               const TensorImplPtr& h0,
                                               const TensorImplPtr& c0,
                                               const std::vector<TensorImplPtr>& weights,
                                               const backend::IBackend::LstmOpts& opts);
+
+private:
+    // One slot per output; engaged once a gradient has arrived.
+    std::array<std::optional<Storage>, 3> grad_slots_;
+    // The backward pass the slots were filled in (BackwardPass id).
+    std::uint64_t slots_pass_ = 0;
 };
 
 // Run a single-layer LSTM forward pass and return ``{output, hn, cn}``.
@@ -282,10 +311,8 @@ public:
 //
 // Notes
 // -----
-// Only ``output`` participates in autograd; ``hn`` and ``cn`` are
-// returned as detached tensors so the Python wrapper can feed them as
-// initial states to a stacked next-layer call without leaking gradient
-// edges between layers.
+// ``output``, ``hn`` and ``cn`` are all differentiable — see
+// :class:`LstmBackward`.
 //
 // See Also
 // --------
