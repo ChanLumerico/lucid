@@ -8,12 +8,13 @@ persist through ``state_dict`` and move with ``.to(device)``; its
 ``forward`` observes the input and returns it unchanged (identity), which
 lets it be dropped into a model or wrapped by a :class:`FakeQuantize`.
 
-Buffers are updated by **re-registering** them (``register_buffer`` with
-the same name) rather than plain assignment: Lucid's
-``Module.__setattr__`` removes a name from ``_buffers`` on reassignment,
-so re-registration is the correct way to update a running statistic
-(and it transparently handles the scalar→per-channel shape change on the
-first observation).
+Statistics are not differentiable.  Every statistics-gathering ``forward``
+folds its batch in under :func:`lucid.no_grad`, and every buffer is written
+through ``_store_running_stat``, which keeps no autograd history and
+writes in place (re-registering only when the buffer changes shape or
+device, as the scalar seed does on a per-channel observer's first batch).
+A buffer that carried a step's graph would chain every later step onto
+it and keep each step's activations alive until memory runs out.
 
 All statistics are computed with the public ``lucid.*`` op surface — no
 external libraries (H4); the :class:`HistogramObserver` uses the engine
@@ -21,6 +22,7 @@ external libraries (H4); the :class:`HistogramObserver` uses the engine
 """
 
 import functools
+from collections.abc import Callable
 from typing import TYPE_CHECKING, cast, override
 
 import lucid
@@ -37,6 +39,52 @@ from lucid.quantization._qscheme import (
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+
+def _store_running_stat(module: nn.Module, name: str, value: Tensor) -> None:
+    """Write ``value`` into ``module``'s statistics buffer ``name``, graph-free.
+
+    The one place observer and fake-quantize statistics are stored.  A
+    statistic computed from a grad-requiring input would otherwise carry
+    that step's graph; the next step folds the buffer into its own update,
+    so every step's activations stay reachable and a training loop grows
+    until it runs out of memory.  The value is written in place, so whatever
+    holds the buffer (a compile trace, a ``state_dict``) sees the update.
+    It is re-registered only when the buffer changes shape or device: a
+    per-channel observer's scalar seed becoming a ``(C,)`` vector, or a
+    fixed qparam that lives on another device.
+    """
+    value = value.detach()
+    current = module._buffers.get(name)
+    if (
+        current is not None
+        and current.shape == value.shape
+        and current.dtype == value.dtype
+        and current.device == value.device
+    ):
+        with lucid.no_grad():
+            current.copy_(value)
+        return
+    module.register_buffer(name, value)
+
+
+def _observes[O: ObserverBase](
+    forward: Callable[[O, Tensor], Tensor],
+) -> Callable[[O, Tensor], Tensor]:
+    """Run an observer's ``forward`` graph-free, on buffers aligned to ``x``'s device.
+
+    Every statistics-gathering ``forward`` wears this, so none of them can
+    record the autograd graph into a buffer; the gradient reaches ``x``
+    only through whatever consumes the returned tensor.
+    """
+
+    @functools.wraps(forward)
+    def observe(self: O, x: Tensor) -> Tensor:
+        with lucid.no_grad():
+            self._align_running_buffers(x)
+            return forward(self, x)
+
+    return observe
 
 
 class ObserverBase(nn.Module):
@@ -122,12 +170,14 @@ class ObserverBase(nn.Module):
     - **Identity forward.** ``forward`` returns its input unchanged; only the side effect
       of updating the running buffers matters. This is what lets an observer be spliced
       into a prepared model transparently.
-    - **Buffer re-registration contract.** Subclasses update their running statistics by
-      *re-registering* the buffer (``register_buffer`` with the same name), never by
-      plain attribute assignment: Lucid's ``Module.__setattr__`` drops a name from
-      ``_buffers`` on reassignment, so re-registration is the only correct in-place
-      update — and it transparently absorbs the scalar-seed → per-channel-vector shape
-      change on the first observation.
+    - **Statistics carry no graph.** A statistics-gathering ``forward`` is decorated
+      with ``_observes``, which runs it under :func:`lucid.no_grad` on buffers aligned to
+      ``x``'s device, and it writes each statistic through
+      ``_store_running_stat``: in place when shape, dtype and device agree, re-registered
+      otherwise (the scalar-seed → per-channel-vector change on the first observation).
+      Gradients reach ``x`` only through whatever consumes the returned tensor — a
+      :class:`FakeQuantize` straight-through estimator — never through the buffers, so a
+      training loop does not keep one step's graph alive per iteration.
     - **Not instantiated directly.** ``ObserverBase`` is abstract; its
       :meth:`calculate_qparams` raises :class:`NotImplementedError`. Use a concrete
       subclass, or :meth:`with_args` to defer construction into a
@@ -212,9 +262,10 @@ class ObserverBase(nn.Module):
         into it failed on a size mismatch — which meant a quantized model's
         calibration could be saved and never restored.
 
-        Re-registering is how these buffers are updated everywhere else in
-        this file (see :meth:`_align_running_buffers` and ``forward``), so
-        the load path uses it too rather than inventing a second mechanism.
+        Re-registering is how these buffers change shape or device
+        everywhere else in this file (see :meth:`_align_running_buffers` and
+        ``_store_running_stat``), so the load path uses it too rather than
+        inventing a second mechanism.
         """
         for name, current in list(self.named_buffers(recurse=False)):
             saved = state_dict.get(prefix + name)
@@ -307,8 +358,8 @@ class MinMaxObserver(ObserverBase):
     - **Cumulative, not per-batch.** ``min_val`` / ``max_val`` are monotone: they only
       widen across calibration, so the final range reflects the extreme of *all* data
       seen, not any single batch. This is the source of the outlier sensitivity.
-    - **Buffer re-registration.** ``forward`` updates the range via ``register_buffer``
-      (same name), per the :class:`ObserverBase` in-place-update contract.
+    - **No autograd history.** The range is folded in under :func:`lucid.no_grad` and
+      written in place, per the :class:`ObserverBase` contract.
     - **Symmetric vs affine.** With a symmetric ``qscheme`` the base-class math pins
       ``zero_point`` (0 for a signed dtype, mid-range for unsigned); with an affine
       scheme ``zero_point`` is free.
@@ -361,11 +412,11 @@ class MinMaxObserver(ObserverBase):
         self.register_buffer("max_val", lucid.tensor(float("-inf")))
 
     @override
+    @_observes
     def forward(self, x: Tensor) -> Tensor:
         """Fold ``x``'s global min/max into the running statistics."""
-        self._align_running_buffers(x)
-        self.register_buffer("min_val", lucid.minimum(self.min_val, x.min()))
-        self.register_buffer("max_val", lucid.maximum(self.max_val, x.max()))
+        _store_running_stat(self, "min_val", lucid.minimum(self.min_val, x.min()))
+        _store_running_stat(self, "max_val", lucid.maximum(self.max_val, x.max()))
         return x
 
     @override
@@ -440,8 +491,8 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
       on. Without this the average would be corrupted by the infinite seed.
     - **Not cumulative.** Unlike :class:`MinMaxObserver`, the range can *shrink* between
       batches — this is exactly why a lone outlier does not permanently widen the grid.
-    - **Buffer re-registration.** The EMA update is written back via ``register_buffer``
-      (same name), per the :class:`ObserverBase` contract.
+    - **No autograd history.** The EMA update runs under :func:`lucid.no_grad` and is
+      written back in place, per the :class:`ObserverBase` contract.
     - **Symmetric vs affine** behaves as in the base class; ``averaging_constant`` only
       affects the running range, not the range → qparams reduction.
     - Default activation observer of :func:`~lucid.quantization.get_default_qat_qconfig`
@@ -487,9 +538,9 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
         self.averaging_constant = averaging_constant
 
     @override
+    @_observes
     def forward(self, x: Tensor) -> Tensor:
         """EMA-update the running min/max (seeded on the first batch)."""
-        self._align_running_buffers(x)
         c = self.averaging_constant
         cur_min, cur_max = x.min(), x.max()
         # On the first batch (min == +inf) seed directly; else EMA toward cur.
@@ -500,8 +551,8 @@ class MovingAverageMinMaxObserver(MinMaxObserver):
         new_max = lucid.where(
             first, cur_max, self.max_val + c * (cur_max - self.max_val)
         )
-        self.register_buffer("min_val", new_min)
-        self.register_buffer("max_val", new_max)
+        _store_running_stat(self, "min_val", new_min)
+        _store_running_stat(self, "max_val", new_max)
         return x
 
 
@@ -571,9 +622,8 @@ class PerChannelMinMaxObserver(ObserverBase):
     -----
     - **Scalar seed → per-channel vector.** The buffers start as scalar ``±inf``; the
       first ``forward`` broadcasts that seed against the length-``C`` batch range, so
-      ``min_val`` / ``max_val`` acquire shape ``(C,)`` on the first observation. This
-      shape change rides on the buffer re-registration contract (plain assignment would
-      drop the buffer from ``_buffers``).
+      ``min_val`` / ``max_val`` acquire shape ``(C,)`` on the first observation; that one
+      write re-registers the buffers, and every later one lands in place.
     - **Cumulative** per channel — like :class:`MinMaxObserver`, the ranges only widen,
       so the observer is outlier-sensitive; smooth with the moving-average variant.
     - **Symmetric vs affine.** The default per-channel-symmetric scheme fixes
@@ -632,9 +682,9 @@ class PerChannelMinMaxObserver(ObserverBase):
         self.register_buffer("max_val", lucid.tensor(float("-inf")))
 
     @override
+    @_observes
     def forward(self, x: Tensor) -> Tensor:
         """Fold per-channel min/max (reduced over all non-channel axes)."""
-        self._align_running_buffers(x)
         axis = self.ch_axis if self.ch_axis is not None else 0
         perm = lucid.moveaxis(x, axis, 0)
         num_channels = perm.shape[0]
@@ -642,8 +692,8 @@ class PerChannelMinMaxObserver(ObserverBase):
         cur_min = lucid.amin(flat, dim=1)
         cur_max = lucid.amax(flat, dim=1)
         # A scalar +inf/-inf seed broadcasts to per-channel on the first call.
-        self.register_buffer("min_val", lucid.minimum(self.min_val, cur_min))
-        self.register_buffer("max_val", lucid.maximum(self.max_val, cur_max))
+        _store_running_stat(self, "min_val", lucid.minimum(self.min_val, cur_min))
+        _store_running_stat(self, "max_val", lucid.maximum(self.max_val, cur_max))
         return x
 
     @override
@@ -726,8 +776,9 @@ class HistogramObserver(ObserverBase):
       ``.item()`` and the search runs in Python over ``histogram.tolist()``; this is a
       sanctioned CPU round-trip (data-dependent output), still H4-pure (engine ``histc``,
       no external histogram library).
-    - **Buffer re-registration.** ``min_val`` / ``max_val`` / ``histogram`` are all
-      updated via ``register_buffer`` (same name) per the :class:`ObserverBase` contract.
+    - **No autograd history.** ``min_val`` / ``max_val`` / ``histogram`` are all
+      updated under :func:`lucid.no_grad` and written in place, per the
+      :class:`ObserverBase` contract.
     - **Symmetric vs affine.** The reduction honours ``qscheme``; the default per-tensor
       affine leaves ``zero_point`` free to fit the (clipped) asymmetric range.
     - Default activation observer of :func:`~lucid.quantization.get_default_qconfig`.
@@ -819,6 +870,7 @@ class HistogramObserver(ObserverBase):
         return lucid.scatter_add(out, 0, dst, hist)
 
     @override
+    @_observes
     def forward(self, x: Tensor) -> Tensor:
         """Update the running range and accumulate the histogram."""
         cur_min, cur_max = float(x.min().item()), float(x.max().item())
@@ -835,9 +887,10 @@ class HistogramObserver(ObserverBase):
                 hist = hist + self._rebin(
                     self.histogram, old_min, old_max, new_min, new_max
                 )
-        self.register_buffer("min_val", lucid.tensor(float(new_min)))
-        self.register_buffer("max_val", lucid.tensor(float(new_max)))
-        self.register_buffer("histogram", hist)
+        device = x.device
+        _store_running_stat(self, "min_val", lucid.tensor(new_min, device=device))
+        _store_running_stat(self, "max_val", lucid.tensor(new_max, device=device))
+        _store_running_stat(self, "histogram", hist)
         return x
 
     def _search_clip_range(self) -> tuple[float, float]:
@@ -961,8 +1014,9 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
       directly; the EMA recurrence runs only from the second batch on.
     - **Not cumulative** — each channel's range can shrink between batches (the whole
       point of the EMA), unlike :class:`PerChannelMinMaxObserver`.
-    - **Buffer re-registration** carries both the scalar-seed → ``(C,)`` shape change and
-      every later in-place EMA update, per the :class:`ObserverBase` contract.
+    - **No autograd history.** The scalar-seed → ``(C,)`` first write re-registers the
+      buffers and every later EMA update lands in place under :func:`lucid.no_grad`, per
+      the :class:`ObserverBase` contract.
     - **Symmetric vs affine** behaves as in the per-channel base class; the default pins
       each ``zero_point`` to 0.
 
@@ -1000,9 +1054,9 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
         self.averaging_constant = averaging_constant
 
     @override
+    @_observes
     def forward(self, x: Tensor) -> Tensor:
         """EMA-update the per-channel min/max (seeded on the first batch)."""
-        self._align_running_buffers(x)
         c = self.averaging_constant
         axis = self.ch_axis if self.ch_axis is not None else 0
         perm = lucid.moveaxis(x, axis, 0)
@@ -1015,8 +1069,8 @@ class MovingAveragePerChannelMinMaxObserver(PerChannelMinMaxObserver):
         else:
             new_min = self.min_val + c * (cur_min - self.min_val)
             new_max = self.max_val + c * (cur_max - self.max_val)
-        self.register_buffer("min_val", new_min)
-        self.register_buffer("max_val", new_max)
+        _store_running_stat(self, "min_val", new_min)
+        _store_running_stat(self, "max_val", new_max)
         return x
 
 

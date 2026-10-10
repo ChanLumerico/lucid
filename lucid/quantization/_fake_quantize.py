@@ -20,7 +20,11 @@ import lucid
 import lucid.nn as nn
 from lucid.quantization._functional import fake_quantize
 from lucid.quantization._qscheme import QDtype, QScheme
-from lucid.quantization.observer import MovingAverageMinMaxObserver, ObserverBase
+from lucid.quantization.observer import (
+    MovingAverageMinMaxObserver,
+    ObserverBase,
+    _store_running_stat,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -182,10 +186,14 @@ class FakeQuantize(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Refresh qparams (if observing) then fake-quantize (if enabled)."""
         if self._observer_enabled:
-            self.activation_post_process(x)
-            scale, zero_point = self.activation_post_process.calculate_qparams()
-            self.register_buffer("scale", scale)
-            self.register_buffer("zero_point", zero_point)
+            # The qparams are statistics, not a function of ``x`` to
+            # differentiate: the gradient reaches ``x`` through the
+            # straight-through estimator below, never through them.
+            with lucid.no_grad():
+                self.activation_post_process(x)
+                scale, zero_point = self.activation_post_process.calculate_qparams()
+                _store_running_stat(self, "scale", scale)
+                _store_running_stat(self, "zero_point", zero_point)
         if self._fake_quant_enabled:
             return fake_quantize(
                 x,
