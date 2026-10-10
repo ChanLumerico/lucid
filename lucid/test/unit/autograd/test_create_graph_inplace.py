@@ -419,12 +419,12 @@ def test_a_write_into_a_gradient_with_an_operand_that_requires_grad(
     np.testing.assert_allclose(_np(h), first(np.full(3, 2.0), V), rtol=1e-5)
 
 
-# ── over-refusal (CHA-62) ─────────────────────────────────────────────────────
+# ── no over-refusal (CHA-62, LCD-320) ─────────────────────────────────────────
 #
-# validate_versions checks every input a node was given, not only the ones it
-# saved.  A write that records a graph moves the version, so a node that took
-# the tensor without saving it — ``add``, ``sum`` and ``concatenate`` read
-# none of its values — now refuses where the reference lets it through.
+# validate_versions checks the inputs a node saved by value, not every input it
+# was given.  A write that records a graph moves the version, and a node that
+# took the tensor without saving it — ``add``, ``sum`` and ``concatenate`` read
+# none of its values — let it through, as the reference does.
 
 
 def _through_add(y: lucid.Tensor) -> lucid.Tensor:
@@ -454,11 +454,6 @@ _UNSAVED: dict[str, tuple[Callable[[lucid.Tensor], lucid.Tensor], list[float]]] 
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=_C_engine.VersionMismatch,
-    reason="over-refusal: node validates inputs it did not save (see CHA-62)",
-)
 @pytest.mark.parametrize("create_graph", [False, True], ids=["eager", "graph"])
 @pytest.mark.parametrize("consumer", list(_UNSAVED))
 def test_a_write_into_an_input_the_node_did_not_save(
