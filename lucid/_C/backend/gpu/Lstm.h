@@ -30,6 +30,7 @@
 #include "../../core/Dtype.h"
 #include "../../core/Storage.h"
 #include "../IBackend.h"
+#include "HalfAccumulation.h"
 #include "MlxBridge.h"
 
 namespace lucid::gpu::lstm {
@@ -37,8 +38,8 @@ namespace lucid::gpu::lstm {
 namespace mx = ::mlx::core;
 
 inline Storage cast(const Storage& s, Dtype to) {
-    return Storage{
-        gpu::wrap_mlx_array(mx::astype(*std::get<GpuStorage>(s).arr, gpu::to_mlx_dtype(to)), to)};
+    return Storage{gpu::wrap_mlx_array(
+        backend::narrow_to(*std::get<GpuStorage>(s).arr, gpu::to_mlx_dtype(to)), to)};
 }
 
 inline std::vector<Storage> cast(const std::vector<Storage>& v, Dtype to) {
@@ -210,9 +211,11 @@ inline std::vector<Storage> backward(const Storage& grad_output,
     }
 
     // b_ih and b_hh enter the pre-activation as one sum, so they share dB.
+    // dh0 / dc0 leave in the (1, B, ·) of the h0 / c0 they lead to: a rank-2
+    // array reaching that tensor's slice or cat backward fails on its rank.
     std::vector<Storage> result{wrap(mx::stack(dX_steps, 0), dt),
-                                wrap(dh_next, dt),
-                                wrap(dc_next, dt),
+                                wrap(mx::reshape(dh_next, mx::Shape{1, B, Hrec}), dt),
+                                wrap(mx::reshape(dc_next, mx::Shape{1, B, H}), dt),
                                 wrap(dWih, dt),
                                 wrap(dWhh, dt),
                                 wrap(dB, dt),

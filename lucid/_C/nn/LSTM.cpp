@@ -146,21 +146,32 @@ std::vector<Storage> LstmBackward::apply_barrier() {
     grad_slots_ = {};
 
     auto& be = backend::Dispatcher::for_device(device);
-    auto res = be.lstm_backward(grads[0], grads[1], grads[2], saved_input, saved_h0, saved_weights,
-                                gates_all, cells_all, opts, dtype);
-    // The backends hand dh0 / dc0 back as (B, ·); the edge expects the
-    // (1, B, ·) of the tensor it leads to — a 2-D MLX array reaching a
-    // slice or cat backward there fails on its rank.
-    for (std::size_t i = 1; i <= 2 && i < res.size(); ++i) {
-        const Shape& state = shapes[i];
-        res[i] = be.reshape(res[i], Shape{state[1], state[2]}, state, dtype);
-    }
-    return res;
+    return be.lstm_backward(grads[0], grads[1], grads[2], saved_input, saved_h0, saved_weights,
+                            gates_all, cells_all, opts, dtype);
 }
 
 std::vector<Storage> LstmBackward::apply(Storage grad_out) {
     accumulate_barrier_grad(0, std::move(grad_out));
     return apply_barrier();
+}
+
+namespace {
+
+[[noreturn]] void refuse_create_graph() {
+    ErrorBuilder("LstmBackward")
+        .not_implemented("create_graph=True is not yet supported for op 'LstmBackward'; use "
+                         "retain_graph=True with multiple backward calls instead");
+}
+
+}  // namespace
+
+void LstmBackward::accumulate_barrier_grad_for_graph(std::uint32_t /*input_nr*/,
+                                                     TensorImplPtr /*grad*/) {
+    refuse_create_graph();
+}
+
+std::vector<TensorImplPtr> LstmBackward::apply_barrier_for_graph() {
+    refuse_create_graph();
 }
 
 void LstmBackward::release_saved() {

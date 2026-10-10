@@ -150,25 +150,33 @@ def _carry(state: Tensor, updated: Tensor, bs: int) -> Tensor:
     return _lucid.cat([updated, tail], axis)
 
 
-def _restore_batch_order(
-    state: Tensor, template: object, into_packed: bool = False
-) -> Tensor:
-    """Undo the descending-length permutation on a ``(N, B, H)`` state.
+def _reorder_batch(state: Tensor, template: object, *, to_packed: bool) -> Tensor:
+    """Permute the batch axis of a ``(N, B, H)`` state across a packed input.
 
-    The recurrence runs in packed order; the caller never asked for that.
-    ``unsorted_indices[i]`` is where original row ``i`` ended up after the
-    sort, so gathering by it puts the batch back.  ``into_packed`` goes the
-    other way, for a caller's initial state: the recurrence starts row ``i``
-    from the caller's row ``sorted_indices[i]``.
+    The recurrence runs the batch sorted by descending length.
+    ``to_packed=True`` takes a caller's initial state into that order — row
+    ``i`` becomes the caller's row ``sorted_indices[i]``.  ``to_packed=False``
+    takes a final state back to the caller's order by ``unsorted_indices``.
     """
     src = cast("PackedSequence", template)
-    indices = src.sorted_indices if into_packed else src.unsorted_indices
+    indices = src.sorted_indices if to_packed else src.unsorted_indices
     if indices is None:
         return state
     order = _int_tensor_to_list(indices)
     if order == list(range(len(order))):
         return state
     return stack([state[:, i] for i in order], 1)
+
+
+def _initial_state(
+    hx: Tensor | None, packed_src: object, shape: tuple[int, int, int], like: Tensor
+) -> Tensor:
+    """The caller's ``(N, B, H)`` initial state in run order, or zeros."""
+    if hx is None:
+        return zeros(*shape, device=like.device, dtype=like.dtype)
+    if packed_src is None:
+        return hx
+    return _reorder_batch(hx, packed_src, to_packed=True)
 
 
 def _pad_rows(x: Tensor, total: int) -> Tensor:
@@ -751,19 +759,11 @@ class LSTM(Module):
         L: int = self.num_layers
         rec_size: int = self.proj_size if self.proj_size > 0 else self.hidden_size
 
-        # Allocate / split the initial states.
-        if hx is None:
-            h0_full: Tensor = _lucid.zeros(
-                L * num_dirs, B, rec_size, device=seq.device, dtype=seq.dtype
-            )
-            c0_full: Tensor = _lucid.zeros(
-                L * num_dirs, B, self.hidden_size, device=seq.device, dtype=seq.dtype
-            )
-        else:
-            h0_full, c0_full = hx
-            if packed_src is not None:
-                h0_full = _restore_batch_order(h0_full, packed_src, into_packed=True)
-                c0_full = _restore_batch_order(c0_full, packed_src, into_packed=True)
+        h_in, c_in = (None, None) if hx is None else hx
+        h0_full = _initial_state(h_in, packed_src, (L * num_dirs, B, rec_size), seq)
+        c0_full = _initial_state(
+            c_in, packed_src, (L * num_dirs, B, self.hidden_size), seq
+        )
 
         h_n_layers: list[Tensor] = []
         c_n_layers: list[Tensor] = []
@@ -804,8 +804,8 @@ class LSTM(Module):
             return (
                 _padded_to_packed(layer_input, batch_sizes, packed_src),
                 (
-                    _restore_batch_order(h_n_final, packed_src),
-                    _restore_batch_order(c_n_final, packed_src),
+                    _reorder_batch(h_n_final, packed_src, to_packed=False),
+                    _reorder_batch(c_n_final, packed_src, to_packed=False),
                 ),
             )
 
@@ -1514,14 +1514,9 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
             # both become identities, so this is the dense path unchanged.
             batch_sizes = [B] * T
 
-        if hx is None:
-            hx = zeros(
-                self.num_layers * num_dirs,
-                B,
-                self.hidden_size,
-                device=seq.device,
-                dtype=seq.dtype,
-            )
+        hx = _initial_state(
+            hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq
+        )
 
         h_n: list[Tensor] = []
         inp = seq
@@ -1573,7 +1568,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         if packed_src is not None:
             return (
                 _padded_to_packed(out, batch_sizes, packed_src),
-                _restore_batch_order(h_n_tensor, packed_src),
+                _reorder_batch(h_n_tensor, packed_src, to_packed=False),
             )
 
         if self.batch_first:
@@ -1789,14 +1784,9 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         if packed_src is None:
             batch_sizes = [B] * T
 
-        if hx is None:
-            hx = zeros(
-                self.num_layers * num_dirs,
-                B,
-                self.hidden_size,
-                device=seq.device,
-                dtype=seq.dtype,
-            )
+        hx = _initial_state(
+            hx, packed_src, (self.num_layers * num_dirs, B, self.hidden_size), seq
+        )
 
         h_n: list[Tensor] = []
         inp = seq
@@ -1845,7 +1835,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         if packed_src is not None:
             return (
                 _padded_to_packed(out, batch_sizes, packed_src),
-                _restore_batch_order(h_n_tensor, packed_src),
+                _reorder_batch(h_n_tensor, packed_src, to_packed=False),
             )
 
         if self.batch_first:

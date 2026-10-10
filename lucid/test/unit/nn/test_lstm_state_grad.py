@@ -249,6 +249,76 @@ def test_autograd_grad_reaches_through_the_final_state() -> None:
     assert float(gx.abs().sum().item()) > 0.0
 
 
+@pytest.mark.parametrize(
+    "device,dtype", device_dtype_params((lucid.float32, lucid.float64))
+)
+def test_hooks_on_the_outputs_see_and_replace_each_slots_gradient(
+    ref: ModuleType, device: str, dtype: lucid.dtype
+) -> None:
+    """Each output's hook runs on its own slot's summed gradient, before BPTT.
+
+    ``h`` is read twice so its slot sums two arrivals before the hook sees
+    it; the ``h`` and ``out`` hooks replace the gradient, the ``c`` hook only
+    looks.  What every hook saw and every gradient behind the node must match.
+    """
+    ours, theirs = _make_pair(ref, dtype, device)
+    data = _inputs(dtype)
+
+    def run(model: object, x: object, w: dict) -> list[np.ndarray]:
+        seen: list[object] = []
+        out, (h, c) = model(x)
+
+        def keep(g: object) -> None:
+            seen.append(g)
+
+        def doubled(g: object) -> object:
+            seen.append(g)
+            return g * 2.0
+
+        out.register_hook(lambda g: g * 0.5)
+        h.register_hook(doubled)
+        c.register_hook(keep)
+        loss = (out * w["w_out"]).sum() + (h * w["w_h"]).sum() + (h * h).sum()
+        (loss + (c * w["w_c"]).sum()).backward()
+        return [_numpy(g) for g in seen]
+
+    x = lucid.tensor(data["x"], device=device, requires_grad=True)
+    w = {
+        k: lucid.tensor(v, device=device) for k, v in data.items() if k.startswith("w_")
+    }
+    got_seen = run(ours, x, w)
+    rx = ref.tensor(data["x"], requires_grad=True)
+    want_seen = run(theirs, rx, {k: ref.tensor(v) for k, v in data.items()})
+
+    tol = _TOL[dtype]
+    assert len(got_seen) == len(want_seen) == 2
+    for g, want in zip(sorted(got_seen, key=np.size), sorted(want_seen, key=np.size)):
+        np.testing.assert_allclose(g, want, rtol=tol, atol=tol)
+    np.testing.assert_allclose(_numpy(x.grad), _numpy(rx.grad), rtol=tol, atol=tol)
+    for (name, p), (_, q) in zip(
+        ours.named_parameters(), theirs.named_parameters(), strict=True
+    ):
+        np.testing.assert_allclose(
+            _numpy(p.grad), _numpy(q.grad), rtol=tol, atol=tol, err_msg=name
+        )
+
+
+@pytest.mark.parametrize("proj_size", [0, 3])
+def test_create_graph_through_the_node_is_refused_by_name(proj_size: int) -> None:
+    m = nn.LSTM(_I, _H, proj_size=proj_size)
+    x = lucid.randn(_T, _B, _I, requires_grad=True)
+    out, (h, c) = m(x)
+    with pytest.raises(NotImplementedError, match="create_graph"):
+        lucid.autograd.grad((out.sum() + h.sum() + c.sum()), x, create_graph=True)
+
+
+def _numpy(t: object) -> np.ndarray:
+    """A Lucid or reference tensor as a host array."""
+    if isinstance(t, lucid.Tensor):
+        return t.to("cpu").numpy()
+    return t.detach().numpy()
+
+
 # ── dtypes ────────────────────────────────────────────────────────────────────
 
 

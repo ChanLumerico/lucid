@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "../api.h"
+#include "../autograd/GraphBarrier.h"
 #include "../autograd/Node.h"
 #include "../backend/IBackend.h"
 #include "../core/Device.h"
@@ -143,7 +144,7 @@ namespace lucid {
 // 1997).  Hochreiter, "Untersuchungen zu dynamischen neuronalen Netzen"
 // (1991) for the original analysis of the vanishing-gradient problem
 // that motivates the gating mechanism.
-class LUCID_API LstmBackward : public Node {
+class LUCID_API LstmBackward : public Node, public GraphBarrier {
 public:
     Storage saved_input;                 // Original input sequence (T, B, input_size).
     Storage saved_h0;                    // Initial hidden state (1, B, H).
@@ -191,6 +192,19 @@ public:
     //     Edge order ``{dInput, dh0, dc0, dW_ih, dW_hh, db_ih, db_hh}``
     //     (plus ``dW_hr`` when projected).
     std::vector<Storage> apply_barrier() override;
+
+    // create_graph is not supported: BPTT runs on storages, not graph ops.
+    // Implementing the graph half of the barrier protocol makes the refusal
+    // a clear NotImplementedError at the first arriving gradient, rather
+    // than the engine summing the three outputs' gradients into one tensor
+    // (a ShapeMismatch when hn and the sequence differ in shape).
+    //
+    // Raises
+    // ------
+    // NotImplementedError
+    //     Always.
+    void accumulate_barrier_grad_for_graph(std::uint32_t input_nr, TensorImplPtr grad) override;
+    std::vector<TensorImplPtr> apply_barrier_for_graph() override;
 
     // Free the saved forward state once a pass that did not retain the
     // graph has run.
