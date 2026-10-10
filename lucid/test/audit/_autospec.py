@@ -741,7 +741,10 @@ def _value_for(
     if name == "v" and re.search(r"vjp", op_name):
         # ``autograd.vjp(func, inputs, v)`` — the cotangent has the shape
         # of the *output*, and the probe function reduces to a scalar.
-        return True, _probe.as_f64(np.array(1.0)), False
+        # Built directly: ``_probe.as_f64`` goes through
+        # ``np.ascontiguousarray``, which turns a 0-d array into shape
+        # ``(1,)``, and ``vjp`` refuses a seed of another shape (LCD-367).
+        return True, lucid.tensor(1.0, dtype=lucid.float64), False
     if name == "name" and re.search(r"weight|param", op_name):
         return True, "weight", False
     if name == "lengths":

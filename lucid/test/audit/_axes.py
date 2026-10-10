@@ -558,6 +558,7 @@ class _DifferenceAxis(Axis):
 NOT_DIFFERENTIABLE: dict[str, str] = {
     "Tensor.data": "a detached alias by definition",
     "Tensor.detach": "detached by definition",
+    "lucid.detach": "detached by definition",
     "Tensor.new_empty": "a new tensor that reads only shape, dtype and device",
     "Tensor.new_full": "a new tensor that reads only shape, dtype and device",
     "Tensor.new_ones": "a new tensor that reads only shape, dtype and device",
@@ -3359,6 +3360,10 @@ def _forward_companion(
         ]
     if name in ("key", "value", "other", "target_seq", "memory"):
         return [cast(_probe.sample("moderate", shape, 1 if name == "key" else 2))]
+    if name == "var":
+        # ``GaussianNLLLoss`` refuses a negative variance, as the reference
+        # does, and a draw around zero is one (LCD-216).
+        return [cast(_probe.sample("positive", shape, 2))]
     return [cast(_probe.sample("moderate", shape, 1))]
 
 
@@ -3518,6 +3523,16 @@ def _forward_inputs(module: Any, shape: tuple[int, ...]) -> list[list[Any]]:
             # ...and the pair losses want a +/-1 sign per row.
             signs = cast(_probe.rng(_probe.SEED_A).choice([-1.0, 1.0], (shape[0],)))
             out.append([one, two, signs])
+        # A probability loss reads both operands as probabilities and
+        # refuses either outside [0, 1], as the reference does — every
+        # pair above is drawn around zero, so ``BCELoss`` took none of
+        # them (LCD-367).
+        out.append(
+            [
+                cast(_probe.sample("small_pos", shape, 0)),
+                cast(_probe.sample("small_pos", shape, 1)),
+            ]
+        )
     return out
 
 

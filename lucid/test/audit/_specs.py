@@ -78,9 +78,14 @@ class Call:
         keeps the call's own values rather than moving them to
         ``|x| + 1``, out of the domain; and a ``ValueError`` for a
         non-finite probe is the op's answer, not a gap in it.
+    joint : callable or None
+        For an op whose operands constrain each other by more than a
+        shared shape, the rule that rebuilds the whole call around a
+        resized primary — ``(call, array) -> Call``.  Set from
+        :data:`_JOINT_RESIZE` by :func:`invocations`; see there.
     """
 
-    __slots__ = ("args", "kwargs", "primary", "note", "same_shape", "domain")
+    __slots__ = ("args", "kwargs", "primary", "note", "same_shape", "domain", "joint")
 
     def __init__(
         self,
@@ -90,6 +95,7 @@ class Call:
         note: str = "",
         same_shape: tuple[int, ...] = (),
         domain: tuple[float, float] | None = None,
+        joint: Callable[[Call, np.ndarray], Call] | None = None,
     ) -> None:
         self.args = args
         self.kwargs = kwargs or {}
@@ -97,6 +103,7 @@ class Call:
         self.note = note
         self.same_shape = same_shape
         self.domain = domain
+        self.joint = joint
 
     def with_primary(self, array: np.ndarray) -> Call:
         """A copy whose differentiated argument is replaced by ``array``.
@@ -120,6 +127,7 @@ class Call:
             self.note,
             self.same_shape,
             self.domain,
+            self.joint,
         )
 
     def resized(self, array: np.ndarray) -> Call:
@@ -132,7 +140,12 @@ class Call:
         the loss takes an empty input *against a full target*, and a loss
         that refuses a target of another shape (as the reference does)
         was filed as refusing empty input.
+
+        A call with a ``joint`` rule is rebuilt by that rule instead: its
+        operands are related by more than one shape.
         """
+        if self.joint is not None:
+            return self.joint(self, array)
         call = self.with_primary(array)
         for index in self.same_shape:
             peer = self.args[index]
@@ -665,8 +678,14 @@ def _shape_with_args(name: str, domain: str) -> Iterator[Call]:
         yield Call([_f((2, 3, 4), domain), 2], {}, 0, "split(x, n)")
     elif name in ("narrow",):
         yield Call([flat, 1, 0, 2], {}, 0, "narrow(x, dim, start, length)")
-    elif name in ("view", "reshape"):
-        yield Call([flat, (3, 2)], {}, 0, "reshape(x, shape)")
+    elif name in ("view",):
+        # A shape every layout of ``x`` can be viewed as, so the strided
+        # half of the layout axis still asks something.  ``view`` never
+        # copies: it refuses a shape the strides cannot read in place, and
+        # ``(2, 3) -> (3, 2)`` regroups a strided slice's rows.  A size-1
+        # axis moves no element, so inserting one is a view of any layout
+        # (LCD-367).
+        yield Call([x, (2, 1, 3, 4)], {}, 0, "view(x, shape with a size-1 axis)")
     elif name in ("flatten", "ravel"):
         yield Call([x], {}, 0, "flatten(x)")
 
@@ -1173,12 +1192,44 @@ _EXACT: dict[str, Callable[[str, str], Iterator[Call]]] = {
 }
 
 
+def _autograd_grad(domain: str) -> Iterator[Call]:
+    """``autograd.grad(outputs, inputs)`` over a graph the probe builds.
+
+    The short name ``grad`` is the tensor accessor's, which hands it one
+    tensor, and the signature derivation hands it two unrelated leaves.
+    Neither is a graph, and since ``grad`` refuses a non-scalar output
+    without its seed, as the reference does, every candidate was refused
+    (LCD-367).  The graph is retained because an axis calls the same
+    invocation more than once; the primary is ``inputs``, the tensor the
+    gradient is taken with respect to.
+    """
+    x = _f((2, 3), domain)
+    x.requires_grad_(True)
+    y = (x * x).sum()
+    yield Call(
+        [y, x], {"retain_graph": True}, 1, "grad(outputs, inputs) of (x * x).sum()"
+    )
+
+
+def _retain_grad(domain: str) -> Iterator[Call]:
+    """``retain_grad()`` on an interior node of a graph.
+
+    A tensor that does not require grad is refused — no gradient will
+    ever reach it — so a fresh probe is the one input it cannot take.
+    """
+    leaf = _f((2, 3), domain)
+    leaf.requires_grad_(True)
+    yield Call([leaf * 2.0], {}, 0, "retain_grad() on a non-leaf")
+
+
 #: Keyed by the *qualified* name, because a short name is not unique:
 #: ``einops.repeat`` takes a pattern string while ``lucid.repeat`` takes
 #: a repeat count, and ``Tensor.unfold`` slides a window while
 #: ``F.unfold`` extracts image patches.  Matching on the short name alone
 #: sent four of these to the wrong builder.
 _QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
+    "lucid.autograd.grad": _autograd_grad,
+    "Tensor.retain_grad": _retain_grad,
     "lucid.einops.repeat": lambda d: iter(
         [
             Call(
@@ -1268,6 +1319,93 @@ _QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
 }
 
 
+# ── joint resizing ───────────────────────────────────────────────────────────
+# ``Call.same_shape`` covers a peer that keeps the primary's shape.  These
+# ops relate their operands by more than that, and an axis that resizes
+# the primary alone hands them a problem whose parts disagree.  Since the
+# ops refuse such a problem, as the reference does, the edge axis read
+# the refusal as "rejects empty input" (LCD-275 for ``ctc_loss``,
+# LCD-367 for these).  Each rule rebuilds the whole problem around the
+# requested primary, and answers an empty request with an empty *batch*
+# of the original problem when emptying the requested axis leaves no
+# coherent problem at all.
+
+
+def _all_tensors(call: Call) -> bool:
+    return all(hasattr(a, "shape") and hasattr(a, "dtype") for a in call.args)
+
+
+def _linear_system_resized(call: Call, array: np.ndarray) -> Call:
+    """``solve(A, B)``, ``solve_triangular`` and the factor solves.
+
+    The right-hand side shares the matrix's batch and row count, and a
+    factor solve's pivots (``lu_solve(LU, pivots, B)``, ``ldl_solve``)
+    are a permutation of its order — the identity at any size.  Emptying
+    the first axis of an unbatched ``(n, n)`` matrix leaves ``(0, n)``,
+    which no solver can be handed, so that request becomes an empty
+    batch ``(0, n, n)``.
+    """
+    if call.primary != 0 or len(call.args) not in (2, 3) or not _all_tensors(call):
+        return call.with_primary(array)
+    matrix, rhs = call.args[0], call.args[-1]
+    if array.ndim < 2 or array.shape[-1] != array.shape[-2]:
+        if array.size:
+            return call.with_primary(array)
+        array = np.zeros((0, *tuple(matrix.shape)[-2:]))
+    rebuilt = call.with_primary(array)
+    first = _probe.to_numpy(rhs)
+    fill = first.flat[0] if first is not None and first.size else 0.0
+    columns = tuple(rhs.shape)[len(matrix.shape) - 1 :]
+    rebuilt.args[-1] = _rebuild(rhs, np.full((*array.shape[:-1], *columns), fill))
+    if len(call.args) == 3:
+        order = array.shape[-1]
+        identity = np.broadcast_to(np.arange(1, order + 1), array.shape[:-1])
+        rebuilt.args[1] = _rebuild(call.args[1], identity, keep_integer=True)
+    return rebuilt
+
+
+def _padded_batch_resized(call: Call, array: np.ndarray) -> Call:
+    """``pack_padded_sequence(input, lengths)``: one length per sequence.
+
+    Every length is at least 1 and at most the padded length, so a
+    resized input takes ``lengths`` of its own batch, each the full
+    padded length.  An empty time axis admits no length at all; the
+    empty problem is an empty batch, which takes no lengths.
+    """
+    if call.primary != 0 or len(call.args) < 2 or array.ndim < 2:
+        return call.with_primary(array)
+    batch_first = bool(
+        call.args[2] if len(call.args) > 2 else call.kwargs.get("batch_first", False)
+    )
+    time, batch = (1, 0) if batch_first else (0, 1)
+    if array.shape[time] == 0:
+        shape = list(array.shape)
+        shape[time] = int(call.args[0].shape[time])
+        shape[batch] = 0
+        array = np.zeros(shape)
+    lengths = [int(array.shape[time])] * int(array.shape[batch])
+    rebuilt = call.with_primary(array)
+    peer = call.args[1]
+    rebuilt.args[1] = (
+        _probe.as_int(np.array(lengths, dtype=np.int64))
+        if hasattr(peer, "shape")
+        else lengths
+    )
+    return rebuilt
+
+
+#: Keyed by qualified name; consulted by :func:`invocations`, which sets
+#: the rule on every candidate it yields for that symbol.
+_JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
+    "lucid.linalg.solve": _linear_system_resized,
+    "lucid.linalg.solve_ex": _linear_system_resized,
+    "lucid.linalg.solve_triangular": _linear_system_resized,
+    "lucid.linalg.lu_solve": _linear_system_resized,
+    "lucid.linalg.ldl_solve": _linear_system_resized,
+    "lucid.nn.utils.pack_padded_sequence": _padded_batch_resized,
+}
+
+
 def invocations(
     name: str,
     domain: str,
@@ -1313,6 +1451,17 @@ def invocations(
     # Fresh draw counters per invocation, so a run stays reproducible and
     # a finding can still be re-derived by hand.
     _DRAWN.clear()
+    joint = _JOINT_RESIZE.get(qualname) if qualname is not None else None
+    for call in _candidates(name, domain, qualname, fn):
+        if joint is not None and call.joint is None:
+            call.joint = joint
+        yield call
+
+
+def _candidates(
+    name: str, domain: str, qualname: str | None, fn: Any
+) -> Iterator[Call]:
+    """The tiers of :func:`invocations`, in order."""
     if qualname is not None and qualname in _QUALIFIED:
         yield from _QUALIFIED[qualname](domain)
     if name in _EXACT:
