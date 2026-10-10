@@ -17,8 +17,10 @@ class Collector:
     name = ""
     local = False  # counts of a file depend on that file alone
     fast = False  # cheap enough for the pre-commit path
-    default = True  # on unless asked for (False: stub / opt-in)
-    in_diff = True  # part of `--diff` (land) without --full
+    # On unless asked for (False: stub / opt-in).  Every default collector
+    # runs in --full (CI) *and* --diff (land): a land that skips one lets its
+    # count reach main and fail CI there (DS-GATE-1).
+    default = True
 
     def version(self) -> str:
         return "?"

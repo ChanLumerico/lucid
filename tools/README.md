@@ -38,7 +38,7 @@ because a different version counts differently.
 ```
 python -m tools.quality_gate --fast        # pre-commit: files changed since HEAD; ruff, counters, lizard + jscpd (~3 s)
 python -m tools.quality_gate --full        # CI: whole tree, every collector (~40 s cold on an M1 Pro)
-python -m tools.quality_gate --diff main   # SLOP DELTA for a worker report and for land
+python -m tools.quality_gate --diff main   # SLOP DELTA for a worker report and for land: every --full collector, both trees (~1–2 min)
 python -m tools.quality_gate --report      # totals per defect class (deslop SWEEP)
 python -m tools.quality_gate --update      # record decreases: lowers the baseline, never raises
 python -m tools.quality_gate --rebaseline --reason "<why>"   # orchestrator only: may raise
@@ -66,6 +66,13 @@ gate could not measure. A tool that crashes is never read as "no findings".
   `--update` rewrites the keys. A move combined with a heavy rewrite falls
   below git's similarity threshold and reads as delete + add. Record a move
   in its own commit when that matters.
+- **A count is never netted across files.** Only a git rename carries a
+  count to another path. Code that moves into a new file (a split, an
+  extracted helper) brings its findings there as new debt, even when the
+  source file's count falls in the same diff: the key `(tool, rule, new
+  file)` had no baseline row, so it starts at 0. Fix the finding while
+  moving it. Netting would need a cross-file ledger, and it would let a
+  branch trade a cheap removal for a new finding elsewhere.
 - **Counts, not sites.** Moving a finding within a file is free. Swapping
   one finding for another of the same rule in the same file is not
   detected. That is the price of not churning on every edit.
@@ -79,8 +86,13 @@ gate could not measure. A tool that crashes is never read as "no findings".
 | `agent_ws.py land` | `--diff main` on the rebased branch; `land --check` diffs against the fork point | the land (exit 6). `--allow-slop "<reason>"` overrides, and every use is appended to `~/Library/Caches/lucid-agents/slop-overrides.log` |
 
 `--diff REF` materialises REF's tree with `git archive` (no worktree, so the
-claim gate never sees it). It measures both trees: the local collectors on
-the files that differ, the cross-file ones on everything. It then also
+claim gate never sees it). It runs **every collector `--full` runs**, mypy
+included, and refuses `--fast`. It measures both trees: the local
+collectors on the files that differ, the cross-file ones on everything.
+Until DS-GATE-1 (2026-10-11) `--diff` skipped mypy and semgrep to save
+time, so a new file's mypy `redundant-expr` passed two lands and failed
+only CI's `--full` on main. The ref tree's mypy cache is cold (~30 s on an
+M1 Pro); that is the price of land seeing what CI sees. It then also
 checks the working tree against the committed baseline. On a land, that
 means the baseline the rebase merged.
 
@@ -166,7 +178,8 @@ package's own suite.
 
 1. Put a subclass of `collectors.Collector` in `tools/quality_gate/collectors/`.
    Set `local` if a file's count depends on that file alone, `fast` if it
-   is cheap enough for pre-commit, and `default`/`in_diff`. Register it in
+   is cheap enough for pre-commit, and `default` (a default collector runs
+   in both `--full` and `--diff`; there is no CI-only set). Register it in
    `all_collectors()`.
 2. Map its rules to a defect class in `config._CLASS_RULES`.
 3. Its existing findings raise counts, so the orchestrator runs

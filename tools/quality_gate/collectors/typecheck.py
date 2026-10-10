@@ -3,7 +3,8 @@
 ``mypy --strict lucid/`` is already a zero-error gate; what this adds is the
 codes that find *laundering* — an ignore that no longer suppresses anything,
 a cast to the type the value already has, a condition that is always true.
-Slow next to the others (~25 s warm), so it runs in ``--full`` only.
+Slow next to the others (~25 s warm, ~30 s cold), so ``--fast`` skips it;
+``--full`` (CI) and ``--diff`` (land, both trees) run it.
 """
 
 import json
@@ -19,7 +20,6 @@ from tools.quality_gate.core import Counts, GateError, Scope, is_py_target
 
 class MypyCollector(Collector):
     name = "mypy"
-    in_diff = False
 
     @override
     def version(self) -> str:

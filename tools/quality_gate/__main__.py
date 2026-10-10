@@ -18,7 +18,8 @@ from tools.quality_gate.core import (
 )
 
 
-def _pick(names: str | None, *, fast: bool, diff: bool, full: bool) -> list[Collector]:
+def _pick(names: str | None, *, fast: bool) -> list[Collector]:
+    """The collectors a run uses; ``--diff`` (land) takes the same set as ``--full`` (CI)."""
     every = all_collectors()
     if names:
         wanted = {n.strip() for n in names.split(",") if n.strip()}
@@ -28,8 +29,6 @@ def _pick(names: str | None, *, fast: bool, diff: bool, full: bool) -> list[Coll
         chosen = [c for c in every if c.name in wanted]
     elif fast:
         chosen = [c for c in every if c.fast]
-    elif diff and not full:
-        chosen = [c for c in every if c.default and c.in_diff]
     else:
         chosen = [c for c in every if c.default]
     slow = [c.name for c in chosen if fast and not c.local and not c.fast]
@@ -80,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         p.error("choose one of --diff / --report / --update / --rebaseline")
     if args.rebaseline and args.fast:
         p.error("--rebaseline measures the whole tree; drop --fast")
+    if args.diff and args.fast:
+        p.error("--diff runs every collector --full runs (it is land's gate); drop --fast")
 
     workdir = Path(tempfile.mkdtemp(prefix="quality-gate-"))
     try:
@@ -92,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(args: argparse.Namespace, root: Path, workdir: Path) -> int:
-    collectors = _pick(args.collectors, fast=args.fast, diff=bool(args.diff), full=args.full)
+    collectors = _pick(args.collectors, fast=args.fast)
     files = changed_files(root, "HEAD") if args.fast else None
     if args.diff:
         return gate.diff(root, collectors, args.diff, workdir)

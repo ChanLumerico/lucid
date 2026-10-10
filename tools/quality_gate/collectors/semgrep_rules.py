@@ -2,7 +2,7 @@
 
 The framework only: the rules arrive with DS-4 (LCD-263).  Until a rule file
 exists the collector measures nothing and costs nothing; once one exists it
-runs in ``--full`` and counts per rule id.
+runs in ``--full`` and ``--diff`` and counts per rule id.
 """
 
 import json
@@ -25,7 +25,6 @@ def rule_files() -> list[Path]:
 
 class SemgrepCollector(Collector):
     name = "semgrep"
-    in_diff = False
 
     @override
     def version(self) -> str:

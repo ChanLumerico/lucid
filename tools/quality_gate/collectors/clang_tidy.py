@@ -2,7 +2,8 @@
 
 It needs ``compile_commands.json`` (scripts/build_compile_commands.sh) and
 minutes per run, so it will be opt-in (``--collectors clang-tidy``) until
-DS-3 decides the check set and whether it joins ``--full``.
+DS-3 decides the check set and whether it joins the default set
+(``--full`` and ``--diff`` alike).
 """
 
 from typing import override
@@ -14,7 +15,6 @@ from tools.quality_gate.core import Counts, GateError, Scope
 class ClangTidyCollector(Collector):
     name = "clang-tidy"
     default = False
-    in_diff = False
 
     @override
     def version(self) -> str:

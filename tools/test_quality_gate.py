@@ -249,6 +249,61 @@ def test_duplicated_block_fails_full_and_diff(tmp_path: Path) -> None:
     assert gate(root, "--diff", "HEAD~1", "--collectors", "jscpd").returncode == 1
 
 
+REDUNDANT_EXPR = '''\
+def check(reduction: str) -> bool:
+    """A validator whose ``str`` guard mypy proves is always false."""
+    return not isinstance(reduction, str) or reduction == "mean"
+
+
+print(check("sum"))
+'''
+
+
+@pytest.mark.skipif(
+    shutil.which("npx") is None and not Path("/opt/homebrew/bin/npx").exists(),
+    reason="the default collector set includes jscpd, which runs through npx",
+)
+def test_diff_counts_a_mypy_finding_in_a_new_file(tmp_path: Path) -> None:
+    """DS-GATE-1: land's ``--diff`` once skipped mypy, so a new file's
+    ``redundant-expr`` reached main and failed only CI's ``--full``.
+
+    The default ``--diff`` must run what ``--full`` runs, and a file with no
+    baseline row starts at 0, so its one finding is an increase.
+    """
+    root = tmp_path / "repo"
+    (root / "lucid" / "pkg").mkdir(parents=True)
+    (root / "tools").mkdir()
+    for init in ("lucid/__init__.py", "lucid/pkg/__init__.py"):
+        (root / init).write_text("")
+    (root / "lucid" / "pkg" / "mod.py").write_text(CLEAN)
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t")
+    assert done.returncode == 0, done.stdout + done.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    (root / "lucid" / "pkg" / "checks.py").write_text(REDUNDANT_EXPR)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "new file")
+
+    out = gate(root, "--diff", "HEAD~1")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "redundant-expr" in out.stdout and "lucid/pkg/checks.py" in out.stdout, out.stdout
+    assert "0 over baseline" not in out.stdout  # the baseline has no row: 0, not "clean"
+    full = gate(root, "--full")
+    assert full.returncode == 1 and "redundant-expr" in full.stdout, full.stdout
+
+
+def test_a_finding_moved_into_a_new_file_is_an_increase(repo: Path) -> None:
+    """Counts are never netted across files: only a git rename carries them."""
+    (repo / "lucid" / "pkg" / "other.py").write_text(CLEAN)
+    (repo / "lucid" / "pkg" / "fresh.py").write_text("x = 1  # type: ignore[misc]\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "move a finding")
+    out = gate(repo, "--diff", "HEAD~1", "--collectors", FAST)
+    assert out.returncode == 1, out.stdout
+    assert "+ counters  type-ignore[misc]" in out.stdout and "lucid/pkg/fresh.py" in out.stdout
+
+
 def test_rebase_merges_concurrent_lowerings_through_the_driver(tmp_path: Path) -> None:
     """Two branches lower neighbouring keys; the rebase neither conflicts nor loses either."""
     root = tmp_path / "repo"
