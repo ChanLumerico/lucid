@@ -742,14 +742,17 @@ void TensorImpl::leave_family() {
     offset_ = 0;
 }
 
+void TensorImpl::check_wholesale_writable(const char* name) const {
+    if (gpu_member() && !covers_root())
+        ErrorBuilder(name).not_implemented(
+            "an engine in-place step (an optimizer, BatchNorm's running statistics, a compiled "
+            "step) on a Metal view of part of a tensor is not supported — clone() first");
+}
+
 Storage& TensorImpl::mutable_storage() {
     if (!gpu_member())
         return storage_;
-    if (!covers_root())
-        ErrorBuilder("mutable_storage")
-            .not_implemented("an engine in-place step (an optimizer, BatchNorm's running "
-                             "statistics, a compiled step) on a Metal view of part of a tensor "
-                             "is not supported — clone() first");
+    check_wholesale_writable("mutable_storage");
     auto& root = std::get<GpuStorage>(*family_->root);
     if (root.arr &&
         !(root.arr->ndim() == meta_.shape.size() &&
@@ -1870,7 +1873,13 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
         auto view = std::make_shared<TensorImpl>(
             Storage{gpu::wrap_mlx_array(gpu_strided::read(*root.arr, g), dtype)}, std::move(shape),
             dtype, base->meta_.device, false);
-        view->shared_ = base->shared_;
+        // The buffer's version counter only while the root still is a Metal
+        // shared buffer: the lazy read then takes whatever the buffer holds
+        // when it runs, so a write to the buffer does reach it.  A root an
+        // op replaced is an immutable array, and a write to the buffer
+        // leaves this value as it is.
+        if (root_is_shared_buffer(base->shared_, root, dtype))
+            view->shared_ = base->shared_;
         return view;
     }
     const bool gpu_family = join_family && storage_is_gpu(base->raw_storage());

@@ -228,6 +228,18 @@ public:
     //     wholesale replacement cannot write.
     Storage& mutable_storage();
 
+    // Refuses, before anything is written, a tensor :func:`mutable_storage`
+    // would refuse: a Metal view of part of its family's root.  A writer
+    // that updates several tensors in one step checks them all first, so a
+    // refusal leaves every one of them — and the writer's own state — as it
+    // was.
+    //
+    // Raises
+    // ------
+    // NotImplementedError
+    //     The tensor is a Metal view of part of its family's root.
+    void check_wholesale_writable(const char* name) const;
+
     // An identity shared by every member of this tensor's Metal view family
     // and by nothing else — where autograd measures a member's elements from
     // when it re-derives the family after a write — or ``nullptr`` when the

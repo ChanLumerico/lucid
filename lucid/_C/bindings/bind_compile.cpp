@@ -71,6 +71,25 @@ public:
 namespace lucid::bindings {
 
 namespace {
+
+// The feeds a compiled run reads once the GIL is released.  A Metal view
+// reads its value out of its family's root and caches it in the tensor, and
+// another Python thread may write the family meanwhile — replacing the root
+// and dropping that cache — so each view is resolved here, with the GIL
+// held, into a tensor that owns its value.  Anything else is fed as it is.
+std::vector<lucid::TensorImplPtr> resolve_feeds(const std::vector<lucid::TensorImplPtr>& inputs) {
+    std::vector<lucid::TensorImplPtr> feeds;
+    feeds.reserve(inputs.size());
+    for (const auto& t : inputs) {
+        if (t && t->family_key() != nullptr)
+            feeds.push_back(std::make_shared<lucid::TensorImpl>(t->storage(), t->shape(),
+                                                                t->dtype(), t->device(), false));
+        else
+            feeds.push_back(t);
+    }
+    return feeds;
+}
+
 // Python-side wrapper holding a shared reference to a compiled executable;
 // the last holder releases it via :func:`destroy_executable`.
 class PyCompiledExecutable {
@@ -306,9 +325,10 @@ void register_compile(py::module_& m) {
            const std::vector<lucid::TensorImplPtr>& inputs) -> std::vector<lucid::TensorImplPtr> {
             if (!wrapper)
                 throw std::invalid_argument("run_executable: null wrapper");
+            const auto feeds = resolve_feeds(inputs);
             // The run waits for the GPU; other Python threads need not.
             py::gil_scoped_release release;
-            return lucid::compile::run_executable(wrapper->raw(), inputs);
+            return lucid::compile::run_executable(wrapper->raw(), feeds);
         },
         py::arg("executable"), py::arg("inputs"),
         "Execute a CompiledExecutable; inputs in input_ids order, "
@@ -319,10 +339,17 @@ void register_compile(py::module_& m) {
         [](const std::shared_ptr<PyCompiledExecutable>& wrapper,
            const std::vector<lucid::TensorImplPtr>& inputs,
            const std::vector<lucid::TensorImplPtr>& output_targets) -> void {
+            // Every target is checked before anything runs, so a refused one
+            // (a Metal view of part of a tensor) leaves all of them as they
+            // were rather than the ones swapped before it written.
+            for (const auto& target : output_targets)
+                if (target)
+                    target->check_wholesale_writable("run_executable_inplace");
             if (!wrapper)
                 throw std::invalid_argument("run_executable_inplace: null wrapper");
+            const auto feeds = resolve_feeds(inputs);
             py::gil_scoped_release release;
-            lucid::compile::run_executable_inplace(wrapper->raw(), inputs, output_targets);
+            lucid::compile::run_executable_inplace(wrapper->raw(), feeds, output_targets);
         },
         py::arg("executable"), py::arg("inputs"), py::arg("output_targets"),
         "Execute a CompiledExecutable, writing each output directly into "

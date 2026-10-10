@@ -71,6 +71,18 @@ void take_running_stat(const TensorImplPtr& stat, Storage fresh) {
     stat->mutable_storage() = std::move(fresh);
 }
 
+// Takes both running statistics' new values, or neither: each is checked
+// before either is written, so a refused one leaves the other as it was.
+void take_running_stats(const TensorImplPtr& mean,
+                        const TensorImplPtr& var,
+                        Storage new_mean,
+                        Storage new_var) {
+    mean->check_wholesale_writable("batch_norm");
+    var->check_wholesale_writable("batch_norm");
+    take_running_stat(mean, std::move(new_mean));
+    take_running_stat(var, std::move(new_var));
+}
+
 }  // namespace
 
 template <>
@@ -282,8 +294,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
             new_rv_t = std::make_shared<TensorImpl>(std::move(rv_copy), stat_shape, buf_dt,
                                                     x_eff->device(), false);
         } else {
-            take_running_stat(running_mean, std::move(new_rm));
-            take_running_stat(running_var, std::move(new_rv));
+            take_running_stats(running_mean, running_var, std::move(new_rm), std::move(new_rv));
 
             if (x_eff->device() == Device::GPU) {
                 std::vector<mlx::core::array> arrs;
@@ -516,8 +527,7 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     // ``self._buffers["running_mean"] = new_rm`` — the TensorImpl identity
     // is preserved; only its underlying storage is swapped — or, for a buffer
     // with live views, its values are written into it.
-    take_running_stat(running_mean, std::move(new_rm));
-    take_running_stat(running_var, std::move(new_rv));
+    take_running_stats(running_mean, running_var, std::move(new_rm), std::move(new_rv));
 
     // GPU: break the MLX lazy expression chain so subsequent training steps
     // don't carry an ever-growing parent graph through running_mean's lineage.

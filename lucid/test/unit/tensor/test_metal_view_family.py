@@ -163,13 +163,42 @@ def test_an_optimizer_step_reaches_a_live_data_alias(
     assert _flat(p) != [1.0] * 3
 
 
-def test_an_engine_step_on_part_of_a_metal_tensor_is_refused() -> None:
+@pytest.mark.parametrize("make", [optim.SGD, optim.Adam], ids=["SGD", "Adam"])
+def test_a_refused_engine_step_leaves_every_param_and_state_as_it_was(
+    make: Callable[..., optim.Optimizer],
+) -> None:
+    # The partial Metal view is refused; nothing is written before it is:
+    # not the parameter ahead of it, not its own step count.
+    a = nn.Parameter(lucid.ones(3, device="metal"))
     base = lucid.zeros(6, device="metal")
-    p = nn.Parameter(_view(base, [3], [1], 2))
-    opt = optim.SGD([p], lr=0.5)
-    (p * p).sum().backward()
+    b = nn.Parameter(_view(base, [3], [1], 2))
+    opt = make([a, b], lr=0.5)
+    ((a * a).sum() + (b * b).sum()).backward()
     with pytest.raises(NotImplementedError, match="part of a tensor"):
         opt.step()
+    assert _flat(a) == [1.0] * 3
+    assert _flat(base) == [0.0] * 6
+    assert all(not s for s in opt.state_dict()["state"].values())
+
+
+def test_a_refused_running_stat_write_leaves_both_stats_as_they_were() -> None:
+    bn = nn.BatchNorm1d(3).to("metal")
+    base = lucid.ones(6, device="metal")
+    bn.running_var = _view(base, [3], [1], 3)
+    mean_before = _flat(bn.running_mean)
+    with pytest.raises(NotImplementedError, match="part of a tensor"):
+        bn(lucid.randn(4, 3, device="metal"))
+    assert _flat(bn.running_mean) == mean_before
+    assert _flat(base) == [1.0] * 6
+
+
+def test_a_refused_compiled_step_target_leaves_every_target_as_it_was() -> None:
+    a = lucid.ones(3, device="metal")
+    base = lucid.zeros(6, device="metal")
+    b = _view(base, [3], [1], 2)
+    with pytest.raises(NotImplementedError, match="part of a tensor"):
+        _C_engine.compile.run_executable_inplace(None, [], [a._impl, b._impl])
+    assert _flat(a) == [1.0] * 3
 
 
 # ── autograd: versions, refusals, re-derived views ──────────────────────────
@@ -353,7 +382,8 @@ def test_an_overlapping_metal_view_refuses_a_write() -> None:
         pytest.param(
             "metal",
             marks=pytest.mark.xfail(
-                strict=True, reason="a Metal transpose is still a dense copy (MV-ENG-2)"
+                strict=True,
+                reason="LCD-18: a Metal transpose is still a dense copy (ARC-01 MV-ENG-2)",
             ),
         ),
     ],
@@ -372,7 +402,9 @@ def test_view_of_a_transpose_is_refused(device: str) -> None:
             "metal",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="the Python view links write a copying reshape back (MV-API-1)",
+                reason=(
+                    "LCD-116: the Python view links write a copying reshape back (ARC-01 MV-API-1)"
+                ),
             ),
         ),
     ],
@@ -419,3 +451,31 @@ def test_a_view_write_reaches_a_metal_shared_buffer_and_its_cpu_alias() -> None:
     assert g.is_shared
     s.mul_(2.0)
     assert _flat(v) == [6.0] * 4
+
+
+def test_a_hooked_output_off_a_replaced_shared_root_is_its_own_value() -> None:
+    # A module output aliased for a full backward hook is a value of its own,
+    # not a family member.  Once a recorded write has replaced the root, a
+    # write into the shared buffer the family began on cannot reach it, so it
+    # must not move its version either: backward through it stays valid.
+    from lucid import metal
+
+    class _Flat(nn.Module):
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            return x.view(2, 2)
+
+    s = metal.shared_tensor((4,))
+    g = s.to("metal")
+    v = g.view(4)
+    v.mul_(lucid.ones(4, device="metal", requires_grad=True))  # replaces the root
+    # Run it: a lazy result still reads the buffer when it runs.
+    assert _flat(v) == [0.0] * 4
+    m = _Flat()
+    m.register_full_backward_hook(lambda mod, gi, go: None)
+    out = m(g)
+    w = lucid.ones(2, 2, device="metal", requires_grad=True)
+    z = (out * w).sum()
+    with lucid.no_grad():
+        s.add_(1.0)
+    z.backward()
+    assert w.grad is not None and _flat(w.grad) == [0.0] * 4

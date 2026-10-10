@@ -271,6 +271,12 @@ void Optimizer::set_step_count(std::int64_t count) {
 // does not advance.
 void Optimizer::step() {
     sync_slot_vectors();
+    // Every parameter this step will write is checked before any is: a
+    // refusal part-way through left the earlier parameters stepped and the
+    // refused one's state initialised and counted.
+    for (const auto& p : params_)
+        if (p && p->grad_storage().has_value())
+            p->check_wholesale_writable("Optimizer.step");
     // GPU param arrays updated this step, flushed in one batched eval below.
     std::vector<::mlx::core::array> to_flush;
     for (std::size_t i = 0; i < params_.size(); ++i) {

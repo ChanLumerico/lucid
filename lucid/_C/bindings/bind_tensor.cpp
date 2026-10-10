@@ -49,11 +49,20 @@ void note_host_read(const std::shared_ptr<lucid::TensorImpl>& t) {
 // process — a server thread froze for each 1.6-3 s model pass.  Reading the
 // values back afterwards (``item``, ``tolist``, ``numpy``) builds Python
 // objects, so it runs with the GIL again and finds the array evaluated.
+//
+// The array is resolved while the GIL is still held.  A Metal view reads it
+// out of its family's root and caches it in the tensor, and another Python
+// thread may write the family meanwhile — replacing the root and dropping
+// that cache — so only a handle owned here is safe to wait on unlocked.
 void evaluate_without_gil(const lucid::TensorImpl& t) {
     if (t.device() != lucid::Device::GPU)
         return;
+    const auto* gpu_st = std::get_if<lucid::GpuStorage>(&t.storage());
+    if (gpu_st == nullptr || !gpu_st->arr)
+        return;
+    const std::shared_ptr<mlx::core::array> arr = gpu_st->arr;
     py::gil_scoped_release release;
-    t.eval();
+    arr->eval();
 }
 }  // namespace
 
@@ -590,10 +599,12 @@ void register_tensor_impl(py::module_& m) {
         [](const std::shared_ptr<TensorImpl>& t) {
             if (!t || t->device() != Device::GPU)
                 return;
-            const auto& gs = std::get<GpuStorage>(t->storage());
-            if (gs.arr) {
+            // A handle of its own, taken with the GIL held: see
+            // evaluate_without_gil.
+            const std::shared_ptr<mlx::core::array> arr = std::get<GpuStorage>(t->storage()).arr;
+            if (arr) {
                 py::gil_scoped_release release;
-                gs.arr->eval();
+                arr->eval();
             }
         },
         py::arg("tensor"),

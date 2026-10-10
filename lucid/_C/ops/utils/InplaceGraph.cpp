@@ -290,12 +290,14 @@ struct Footprint {
 
 Footprint footprint(const TensorImpl& t) {
     Footprint f;
-    const std::byte* base = static_cast<const std::byte*>(t.family_key());
+    // An address as an integer: a Metal family's identity is no buffer, so
+    // offsets from it are counted rather than pointed at.
+    auto base = reinterpret_cast<std::uintptr_t>(t.family_key());
     if (const auto* cpu = std::get_if<CpuStorage>(&t.raw_storage()))
-        base = cpu->ptr.get();
-    if (!base)
+        base = reinterpret_cast<std::uintptr_t>(cpu->ptr.get());
+    if (base == 0)
         return f;
-    f.first = base + t.storage_offset();
+    f.first = reinterpret_cast<const std::byte*>(base + t.storage_offset());
     f.n = t.numel();
     f.item = dtype_size(t.dtype());
     if (t.is_contiguous() || f.n == 0)
