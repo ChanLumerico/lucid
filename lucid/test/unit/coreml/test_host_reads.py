@@ -16,7 +16,12 @@ import pytest
 import lucid
 import lucid.coreml as cml
 from lucid._C import engine as _C_engine
-from lucid.test.unit.compile._host_reads import HOST_READS, Apply, inputs
+from lucid.test.unit.compile._host_reads import (
+    CONSTANT_READS,
+    HOST_READS,
+    Apply,
+    inputs,
+)
 
 pytestmark = pytest.mark.skipif(
     not hasattr(_C_engine, "coreml"),
@@ -33,14 +38,11 @@ def test_a_host_read_is_refused(name: str, tmp_path: object) -> None:
         )
 
 
-def test_a_value_made_on_the_spot_may_be_read(tmp_path: object) -> None:
-    """A tensor built from Python numbers holds no input data: it exports."""
-
-    def fn(x: lucid.Tensor) -> lucid.Tensor:
-        return x * lucid.tensor([2.0, 3.0]).tolist()[1]
-
+@pytest.mark.parametrize("name", list(CONSTANT_READS))
+def test_a_read_that_feeds_nothing_exports(name: str, tmp_path: object) -> None:
     first, second = inputs()
-    exported = cml.export(Apply(fn).eval(), first, f"{tmp_path}/spot.mlpackage")
+    model = Apply(CONSTANT_READS[name]).eval()
+    exported = cml.export(model, first, f"{tmp_path}/{name}.mlpackage")
     got = exported.predict(second)
     assert isinstance(got, lucid.Tensor)
     assert float((got - second * 3).abs().max().item()) <= 1e-5

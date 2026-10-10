@@ -33,6 +33,26 @@ HOST_READS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
 }
 
 
+def _made_on_the_spot(x: lucid.Tensor) -> lucid.Tensor:
+    return x * lucid.tensor([2.0, 3.0]).tolist()[1]
+
+
+def _validation_only(x: lucid.Tensor) -> lucid.Tensor:
+    with lucid.compile._host_check():
+        if bool((x < -1e6).any()):
+            raise ValueError("unreachable on these inputs")
+    return x * 3
+
+
+#: Reads that leave the trace whole: each answers ``x * 3``. A tensor built
+#: from Python numbers holds no input data, and a read under
+#: ``lucid.compile._host_check()`` only decides whether to raise.
+CONSTANT_READS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "made-on-the-spot": _made_on_the_spot,
+    "validation-only": _validation_only,
+}
+
+
 class Apply(nn.Module):
     def __init__(self, fn: Callable[[lucid.Tensor], lucid.Tensor]) -> None:
         super().__init__()

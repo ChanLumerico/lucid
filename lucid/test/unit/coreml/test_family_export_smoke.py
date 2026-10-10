@@ -190,9 +190,11 @@ SAMPLING = [
 ]
 
 #: Detectors that take their region proposals rather than making them.
-#: Passing only an image sent them down a path the trace could not
-#: follow, which is what "traces to a graph holding an empty constant"
-#: was describing — not the exporter, the call.
+#: Their forward reads each box's corners on the host (``.item()``) to
+#: crop it, so a traced program would carry the example's boxes as
+#: constants and crop the same windows for every input. They exported
+#: and verified — on the very proposals they were traced with — until
+#: export refused host reads (LCD-337); now the refusal is the contract.
 WITH_PROPOSALS = [
     (
         "fast_rcnn",
@@ -240,7 +242,8 @@ NOT_SINGLE_IMAGE = {
     # trace to a graph holding an empty constant. That was the call, not
     # the model: passing only an image left ``proposals`` at its default
     # and sent them down a path the trace could not follow. Given
-    # proposals they export, and they are in ``WITH_PROPOSALS`` above.
+    # proposals they read the boxes on the host, so export refuses them —
+    # ``WITH_PROPOSALS`` above holds that refusal.
     "faster",
     # ``neural_ode`` exports its draws now — that was what stopped it —
     # and stops on ``rk_combine`` instead, which is the solver's own
@@ -398,13 +401,27 @@ def test_a_multi_output_family_exports_and_matches(factory, shape, tmp_path):
 @pytest.mark.parametrize(
     ("factory", "make_inputs"), MULTI_INPUT, ids=[f for f, _m in MULTI_INPUT]
 )
-def test_a_multi_input_family_exports_and_matches(factory, make_inputs, tmp_path):
+def test_a_multi_input_family_exports_and_matches(
+    factory, make_inputs, tmp_path, request
+):
     """A network of a sample and a time, or of two token streams.
 
     ``relative=True`` because these return outputs of different
     magnitudes — a latent beside a log-probability — and the absolute
     worst across them says nothing about either.
     """
+    if factory == "clip_vit_base_16":
+        # The CPU advanced-index bounds check (``_indexing.py``) reads
+        # ``any(bad).item()`` only to decide whether to raise; until it runs
+        # under ``lucid.compile._host_check()`` the trace counts it as a
+        # data dependency and export refuses.
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                reason="LCD-337 follow-up: _indexing CPU bounds check must run "
+                "under _host_check",
+            )
+        )
     lucid.manual_seed(0)
     model = _without_zero_initialised_parameters(factory)
     inputs = make_inputs()
@@ -443,16 +460,11 @@ def test_a_sampling_family_exports_with_its_draws_lifted(
 @pytest.mark.parametrize(
     ("factory", "make_inputs"), WITH_PROPOSALS, ids=[f for f, _m in WITH_PROPOSALS]
 )
-def test_a_detector_given_its_proposals(factory, make_inputs, tmp_path):
+def test_a_detector_that_reads_its_proposals_is_refused(factory, make_inputs, tmp_path):
     lucid.manual_seed(0)
-    model = _without_zero_initialised_parameters(factory)
-    inputs = make_inputs()
-
-    exported = cml.export(model, inputs, str(tmp_path / f"{factory}.mlpackage"))
-    try:
-        assert exported.verify(model, inputs, relative=True) < 1e-4
-    finally:
-        exported.close()
+    model = M.create_model(factory).eval()
+    with pytest.raises(ValueError, match="read on the host"):
+        cml.export(model, make_inputs(), str(tmp_path / f"{factory}.mlpackage"))
 
 
 def test_every_family_is_either_covered_or_named():

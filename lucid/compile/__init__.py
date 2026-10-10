@@ -430,6 +430,39 @@ def _tracing(watch: Iterable[object] = ()) -> Iterator[Tracer]:
         dump_to_path_if_debug_enabled(tracer.graph)
 
 
+@contextmanager
+def _host_check() -> Iterator[None]:
+    """Run a validation read outside the active trace.
+
+    A read that only decides whether to raise — an index bounds check, a
+    "weights must be non-negative" guard — feeds nothing into the result,
+    so it is not the data dependency a host read inside a trace otherwise
+    is (see :func:`_tracing`'s ``watch``). Inside this block no tracer is
+    installed: the read does not mark the recording unsupported, and the
+    operations computing the checked value are not recorded either. The
+    check itself runs once, on the traced call's values; a compiled
+    program or an exported package does not repeat it.
+
+    Only for reads whose value cannot reach the result. Anything computed
+    from a value read here is a constant to the trace.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> def scale(x):
+    ...     with lucid.compile._host_check():
+    ...         if bool((x < 0).any()):
+    ...             raise ValueError("scale: x must be non-negative")
+    ...     return x * 2
+    """
+    tracer = _C_engine.compile.current_tracer()
+    _C_engine.compile.set_current_tracer(None)
+    try:
+        yield
+    finally:
+        _C_engine.compile.set_current_tracer(tracer)
+
+
 def compile[**P, R](
     target: Callable[P, R], *, dynamic: bool = False
 ) -> CompiledModule[P, R]:

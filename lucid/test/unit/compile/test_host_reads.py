@@ -25,7 +25,12 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid.compile._core import fallback
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
-from lucid.test.unit.compile._host_reads import HOST_READS, Apply, inputs
+from lucid.test.unit.compile._host_reads import (
+    CONSTANT_READS,
+    HOST_READS,
+    Apply,
+    inputs,
+)
 
 
 def _metal_ok() -> bool:
@@ -73,17 +78,9 @@ def test_a_host_read_runs_eagerly_and_follows_the_input(name: str) -> None:
     assert compiled.cache_info()["eager_only"]
 
 
-def test_a_value_made_on_the_spot_may_be_read() -> None:
-    """A tensor the call builds from Python numbers holds no input data.
-
-    Reading it is a constant either way, so the call still compiles.
-    """
-
-    def fn(x: lucid.Tensor) -> lucid.Tensor:
-        scale = lucid.tensor([2.0, 3.0]).tolist()
-        return x * scale[1]
-
-    model = Apply(fn).eval()
+@pytest.mark.parametrize("name", list(CONSTANT_READS))
+def test_a_read_that_feeds_nothing_stays_compiled(name: str) -> None:
+    model = Apply(CONSTANT_READS[name]).eval()
     first, second = inputs()
     compiled = lucid.compile.compile(model.to(COMPILE_DEVICE))
     with warnings.catch_warnings():
