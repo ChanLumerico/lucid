@@ -271,7 +271,7 @@ def transformer_large_seq2seq(
     model_type="transformer",
     model_class=TransformerForSequenceClassification,
     default_config=_CFG_BASE,
-    params=37861378,
+    params=37860354,
 )
 def transformer_base_cls(
     pretrained: bool = False, **overrides: object
@@ -325,7 +325,7 @@ def transformer_base_cls(
     model_type="transformer",
     model_class=TransformerForTokenClassification,
     default_config=_CFG_BASE,
-    params=37861378,
+    params=37860354,
 )
 def transformer_base_token_cls(
     pretrained: bool = False, **overrides: object

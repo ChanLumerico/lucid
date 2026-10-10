@@ -189,6 +189,35 @@ class TestTransformerForTokenClassification:
         assert out.loss is not None
 
 
+class TestEncoderOnlyHeadsCarryNoDeadWeight:
+    """LCD-204: the classification heads kept the decoder's final norm."""
+
+    @pytest.mark.parametrize(
+        "head",
+        [TransformerForSequenceClassification, TransformerForTokenClassification],
+    )
+    def test_every_parameter_gets_a_gradient(self, head: type) -> None:
+        m = head(_tiny_config(hidden_dropout=0.0)).train()
+        src = lucid.tensor([[1, 2, 3, 4]]).long()
+        m(src).logits.sum().backward()
+        dead = [n for n, p in m.named_parameters() if p.grad is None]
+        assert not dead, dead
+        assert not [n for n, _ in m.named_parameters() if ".decoder." in n]
+
+    def test_encoder_keys_match_the_full_trunk(self) -> None:
+        enc = TransformerForSequenceClassification(_tiny_config()).state_dict()
+        full = TransformerForSeq2SeqLM(_tiny_config()).state_dict()
+        enc_keys = {k for k in enc if k.startswith("transformer.transformer.")}
+        full_enc = {k for k in full if k.startswith("transformer.transformer.encoder.")}
+        assert enc_keys == full_enc
+
+    def test_encoder_only_trunk_refuses_to_decode(self) -> None:
+        m = TransformerModel(_tiny_config(encoder_only=True)).eval()
+        memory = m.encode(lucid.tensor([[1, 2, 3]]).long())
+        with pytest.raises(RuntimeError, match="encoder-only"):
+            m.decode(lucid.tensor([[1]]).long(), memory)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Causal mask correctness (decoder mustn't peek)
 # ─────────────────────────────────────────────────────────────────────────────

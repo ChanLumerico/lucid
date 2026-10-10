@@ -72,6 +72,34 @@ def _key_padding_to_kpm(mask: Tensor | None) -> Tensor | None:
     return mask.float() == 0.0
 
 
+def _activation(config: TransformerConfig) -> str:
+    """``hidden_act`` mapped onto the set the stock encoder layers accept."""
+    return "gelu" if config.hidden_act in ("gelu", "gelu_new") else "relu"
+
+
+class _EncoderStack(nn.Module):
+    """The encoder half of ``nn.Transformer``, for encoder-only heads.
+
+    Holds the stack as ``encoder`` so its state-dict keys match the
+    encoder-decoder trunk's ``transformer.encoder.*`` exactly.
+    """
+
+    def __init__(self, config: TransformerConfig) -> None:
+        super().__init__()
+        layer = nn.TransformerEncoderLayer(
+            d_model=config.hidden_size,
+            nhead=config.num_attention_heads,
+            dim_feedforward=config.intermediate_size,
+            dropout=config.hidden_dropout,
+            attention_dropout=config.attention_dropout,
+            activation=_activation(config),
+            batch_first=True,
+            layer_norm_eps=config.layer_norm_eps,
+        )
+        norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.encoder = nn.TransformerEncoder(layer, config.num_hidden_layers, norm=norm)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Bare encoder-decoder trunk
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +185,9 @@ class TransformerModel(PretrainedModel):
         Post-embedding dropout layer.
     transformer : nn.Transformer
         Underlying encoder-decoder stack built from
-        ``nn.TransformerEncoder`` + ``nn.TransformerDecoder``.
+        ``nn.TransformerEncoder`` + ``nn.TransformerDecoder``.  With
+        ``config.encoder_only`` it holds the encoder stack alone (same
+        ``transformer.encoder.*`` keys, no decoder parameters).
 
     Notes
     -----
@@ -201,7 +231,6 @@ class TransformerModel(PretrainedModel):
         super().__init__(config)
         self._max_pos = config.max_position_embeddings
         self._d_model = config.hidden_size
-        self._encoder_only = config.encoder_only
         tgt_vocab = config.effective_decoder_vocab_size
 
         # Token embeddings.  When ``share_embeddings`` is True the two tables
@@ -222,27 +251,29 @@ class TransformerModel(PretrainedModel):
         )
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
-        # Activation choice mapped to nn.Transformer's allowed set.
-        act = "gelu" if config.hidden_act in ("gelu", "gelu_new") else "relu"
-        self.transformer = nn.Transformer(
-            d_model=config.hidden_size,
-            nhead=config.num_attention_heads,
-            num_encoder_layers=config.num_hidden_layers,
-            # A classification head consumes ``encode()`` only, so building
-            # the decoder stack allocates -- and checkpoints, and moves to
-            # device -- roughly half the model as permanently dead weight.
-            num_decoder_layers=(
-                0 if config.encoder_only else config.num_decoder_layers
-            ),
-            dim_feedforward=config.intermediate_size,
-            dropout=config.hidden_dropout,
-            # Declared and set to 0.3 by _CFG_LARGE, but nn.Transformer used
-            # to drive both dropouts off one knob, so it never applied.
-            attention_dropout=config.attention_dropout,
-            activation=act,
-            batch_first=True,
-            layer_norm_eps=config.layer_norm_eps,
-        )
+        # A classification head consumes ``encode()`` only.  Even with zero
+        # decoder layers, ``nn.Transformer`` (like the reference) still builds
+        # the decoder's final norm, which then sat in every checkpoint as
+        # weight no forward reads -- so build the encoder stack alone, under
+        # the same ``transformer.encoder.*`` keys.
+        self.transformer: nn.Transformer | _EncoderStack
+        if config.encoder_only:
+            self.transformer = _EncoderStack(config)
+        else:
+            self.transformer = nn.Transformer(
+                d_model=config.hidden_size,
+                nhead=config.num_attention_heads,
+                num_encoder_layers=config.num_hidden_layers,
+                num_decoder_layers=config.num_decoder_layers,
+                dim_feedforward=config.intermediate_size,
+                dropout=config.hidden_dropout,
+                # Declared and set to 0.3 by _CFG_LARGE, but nn.Transformer
+                # used to drive both dropouts off one knob, so it never applied.
+                attention_dropout=config.attention_dropout,
+                activation=_activation(config),
+                batch_first=True,
+                layer_norm_eps=config.layer_norm_eps,
+            )
 
     @override
     def get_input_embeddings(self) -> nn.Module:
@@ -296,6 +327,15 @@ class TransformerModel(PretrainedModel):
         memory = self.transformer.encoder(src_emb, src_key_padding_mask=kpm)
         return memory
 
+    def _decoder(self) -> nn.TransformerDecoder:
+        if isinstance(self.transformer, nn.Transformer):
+            return self.transformer.decoder
+        raise RuntimeError(
+            "This TransformerModel was built encoder-only; it has no decoder "
+            "stack to run.  Build it from a config with "
+            "encoder_only=False for seq2seq use."
+        )
+
     def decode(
         self,
         tgt_ids: Tensor,
@@ -328,12 +368,7 @@ class TransformerModel(PretrainedModel):
             ``(B, T, d_model)`` decoder hidden states (the ``ForSeq2SeqLM``
             wrapper projects these through the LM head).
         """
-        if self._encoder_only:
-            raise RuntimeError(
-                "This TransformerModel was built encoder-only; it has no decoder "
-                "stack to run.  Build it from a config with "
-                "encoder_only=False for seq2seq use."
-            )
+        decoder = self._decoder()
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
         past_len = (
@@ -347,7 +382,7 @@ class TransformerModel(PretrainedModel):
         tgt_mask = None if past_len > 0 else _causal_mask(T, device=dev)
         tgt_kpm = _key_padding_to_kpm(tgt_attention_mask)
         mem_kpm = _key_padding_to_kpm(memory_attention_mask)
-        return self.transformer.decoder(
+        return decoder(
             tgt_emb,
             memory,
             tgt_mask=tgt_mask,
