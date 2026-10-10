@@ -150,11 +150,15 @@ fi
 # hand edit changes one (LCD-358: a deleted ``answered`` line left ``cells``
 # one high and a unit test red on main).  Judges the staged blobs, only when
 # one of the three is staged.  No override: the fix is to regenerate.
-BASELINE_SCRIPT="${REPO_ROOT}/tools/check_audit_baselines.py"
+# core.hooksPath is the main checkout's .githooks, so this hook is main's in
+# every worktree; take main's checker too (stdlib only), the worktree's when
+# main has none.
+BASELINE_SCRIPT="${MAIN_ROOT}/tools/check_audit_baselines.py"
+[[ -f "${BASELINE_SCRIPT}" ]] || BASELINE_SCRIPT="${REPO_ROOT}/tools/check_audit_baselines.py"
 if [[ -n "${PY}" && -f "${BASELINE_SCRIPT}" ]]; then
     if git diff --cached --name-only --diff-filter=ACMR \
         | grep -qE '^lucid/test/audit/(coverage|doctest|suite)\.json$'; then
-        if ! (cd "${REPO_ROOT}" && "${PY}" "${BASELINE_SCRIPT}" --staged); then
+        if ! (cd "${REPO_ROOT}" && "${PY}" "${BASELINE_SCRIPT}" --staged --root "${REPO_ROOT}"); then
             echo "  ❌  Pre-commit blocked: an audit baseline disagrees with itself." >&2
             exit 1
         fi
