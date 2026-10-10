@@ -591,62 +591,9 @@ class DistributionAxis(Axis):
                         f"log_prob raised {type(exc).__name__} on its own samples"
                     )
 
-        # ``getattr(obj, name, default)`` only falls back on
-        # AttributeError.  These are *properties*, so a getter that raises
-        # NotImplementedError propagates straight out — which is how
-        # "Cauchy.mean" arrived as a harness ERROR rather than as anything
-        # the axis had decided.
-        cdf, icdf = _moment(dist, "cdf"), _moment(dist, "icdf")
-        if cdf is not None:
-            grid = _probe.as_f64(np.linspace(-2.0, 2.0, 9))
-            try:
-                probs = _probe.to_numpy(cdf(grid))
-                checked.append("cdf")
-                if probs is not None:
-                    flat = np.asarray(probs, dtype=np.float64).reshape(-1)
-                    if np.any(np.diff(flat) < -1e-9):
-                        problems.append("cdf is not monotone")
-                    if flat.min() < -1e-9 or flat.max() > 1.0 + 1e-9:
-                        problems.append(
-                            f"cdf leaves [0, 1]: [{flat.min():.3f}, {flat.max():.3f}]"
-                        )
-                    if icdf is not None:
-                        # ``icdf(cdf(x)) == x`` only where the cdf is
-                        # strictly increasing.  The grid runs from -2 to 2
-                        # and most distributions have support over part of
-                        # that at best: ``Exponential`` is flat at 0 for
-                        # every negative x and ``Uniform([0, 1])`` is flat
-                        # at both ends, so the cdf there is not injective
-                        # and there is no inverse to check.  Both were
-                        # reported as "off by 2.00e+00" — the distance
-                        # from -2 back to the edge of the support, which
-                        # is the right answer to the wrong question.
-                        rises = np.diff(flat) > 1e-9
-                        invertible = np.zeros(flat.shape, dtype=bool)
-                        invertible[:-1] |= rises
-                        invertible[1:] |= rises
-                        invertible &= (flat > 1e-6) & (flat < 1 - 1e-6)
-                        if invertible.any():
-                            inside = _probe.as_f64(np.clip(flat, 1e-4, 1 - 1e-4))
-                            back = _probe.to_numpy(icdf(inside))
-                            checked.append("icdf")
-                            if back is not None:
-                                ok = np.isfinite(back).reshape(-1) & invertible
-                                if ok.any():
-                                    err = np.abs(
-                                        np.asarray(back, dtype=np.float64).reshape(-1)[
-                                            ok
-                                        ]
-                                        - np.asarray(_probe.to_numpy(grid)).reshape(-1)[
-                                            ok
-                                        ]
-                                    ).max()
-                                    if err > 1e-3:
-                                        problems.append(
-                                            f"icdf(cdf(x)) is off by {err:.2e}"
-                                        )
-            except Exception:  # noqa: BLE001
-                pass
+        cdf_problems, cdf_checked = self._check_cdf(dist)
+        problems += cdf_problems
+        checked += cdf_checked
 
         # A moment is checked for the things that are true of every
         # distribution, not for being finite.
@@ -701,6 +648,86 @@ class DistributionAxis(Axis):
         return self._finding(
             symbol, Status.PASS, f"checked {', '.join(sorted(set(checked)))}"
         )
+
+    @staticmethod
+    def _check_cdf(dist: Any) -> tuple[list[str], list[str]]:
+        """``cdf`` monotone and in [0, 1] on a grid, ``icdf`` inverting it.
+
+        Returns the problems found and the methods checked.
+
+        The grid runs from -2 to 2 on purpose, across the edge of most
+        supports, so the probe asks the formula about points the
+        distribution's argument validation refuses: ``Exponential.cdf(-1)``
+        must be 0, not raise.  Validation is turned off on this instance —
+        the probe owns it — so those points reach the formula.
+
+        A scorer the distribution does not implement raises
+        ``NotImplementedError`` and is skipped; any other exception is a
+        finding.
+        """
+        problems: list[str] = []
+        checked: list[str] = []
+        # ``getattr(obj, name, default)`` only falls back on
+        # AttributeError.  These are *properties*, so a getter that raises
+        # NotImplementedError propagates straight out — which is how
+        # "Cauchy.mean" arrived as a harness ERROR rather than as anything
+        # the axis had decided.
+        cdf, icdf = _moment(dist, "cdf"), _moment(dist, "icdf")
+        if cdf is None:
+            return problems, checked
+        dist._validate_args = False
+        grid = _probe.as_f64(np.linspace(-2.0, 2.0, 9))
+        try:
+            probs = _probe.to_numpy(cdf(grid))
+        except NotImplementedError:
+            return problems, checked
+        except Exception as exc:  # noqa: BLE001 — any other failure is a finding
+            problems.append(f"cdf raised {type(exc).__name__}: {str(exc)[:60]}")
+            return problems, checked
+        checked.append("cdf")
+        if probs is None:
+            return problems, checked
+        flat = np.asarray(probs, dtype=np.float64).reshape(-1)
+        if np.any(np.diff(flat) < -1e-9):
+            problems.append("cdf is not monotone")
+        if flat.min() < -1e-9 or flat.max() > 1.0 + 1e-9:
+            problems.append(f"cdf leaves [0, 1]: [{flat.min():.3f}, {flat.max():.3f}]")
+        if icdf is None:
+            return problems, checked
+        # ``icdf(cdf(x)) == x`` only where the cdf is strictly increasing.
+        # The grid runs from -2 to 2 and most distributions have support
+        # over part of that at best: ``Exponential`` is flat at 0 for every
+        # negative x and ``Uniform([0, 1])`` is flat at both ends, so the cdf
+        # there is not injective and there is no inverse to check.  Both
+        # were reported as "off by 2.00e+00" — the distance from -2 back to
+        # the edge of the support, which is the right answer to the wrong
+        # question.
+        rises = np.diff(flat) > 1e-9
+        invertible = np.zeros(flat.shape, dtype=bool)
+        invertible[:-1] |= rises
+        invertible[1:] |= rises
+        invertible &= (flat > 1e-6) & (flat < 1 - 1e-6)
+        if not invertible.any():
+            return problems, checked
+        inside = _probe.as_f64(np.clip(flat, 1e-4, 1 - 1e-4))
+        try:
+            back = _probe.to_numpy(icdf(inside))
+        except NotImplementedError:
+            return problems, checked
+        except Exception as exc:  # noqa: BLE001 — any other failure is a finding
+            problems.append(f"icdf raised {type(exc).__name__}: {str(exc)[:60]}")
+            return problems, checked
+        checked.append("icdf")
+        if back is None:
+            return problems, checked
+        ok = np.isfinite(back).reshape(-1) & invertible
+        if ok.any():
+            want = np.asarray(_probe.to_numpy(grid)).reshape(-1)[ok]
+            got = np.asarray(back, dtype=np.float64).reshape(-1)[ok]
+            err = np.abs(got - want).max()
+            if err > 1e-3:
+                problems.append(f"icdf(cdf(x)) is off by {err:.2e}")
+        return problems, checked
 
     def _check_kl(self, symbol: Symbol) -> Finding:
         """A divergence from a distribution to itself is zero, and never negative."""
