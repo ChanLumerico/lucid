@@ -8,3 +8,7 @@ belongs in a deletion, not here.
 
 Dunders are already ignored by the gate (``--ignore-names "__*__"``).
 """
+
+from decimal import Context
+
+Context.prec  # set through getcontext() in lucid/diffeq/_collocation.py
