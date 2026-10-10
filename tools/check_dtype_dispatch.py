@@ -141,12 +141,6 @@ _KNOWN: dict[tuple[str, str, str], tuple[int, str]] = {
         "operands are the other side of the pair. Retire: spell it "
         "`!is_half_float(dt) && is_floating_point(dt)` plus the device rule.",
     ),
-    ("lucid/_C/ops/ufunc/Reductions.cpp", "reduce_one_axis", "half-pair"): (
-        1,
-        "live gap: CPU prod over a bfloat16 tensor raises NotImplementedError "
-        "while float16 widens. Refused loudly, not misread. Retire: "
-        "LCD-288+289 (bf16 prod widen).",
-    ),
     ("lucid/_C/compile/MpsDtype.h", "mps_dtype_of", "half-pair"): (
         1,
         "compiled graphs refuse bfloat16 at the MPS dtype map; refused, "

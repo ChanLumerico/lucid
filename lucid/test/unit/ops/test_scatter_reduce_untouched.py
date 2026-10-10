@@ -56,19 +56,6 @@ def _cases():
     for device in _DEVICES:
         for dtype in _TOL:
             for reduce in _REDUCTIONS:
-                marks = ()
-                if (
-                    device == "cpu"
-                    and dtype == "float16"
-                    and reduce in ("prod", "amax", "amin")
-                ):
-                    marks = (
-                        pytest.mark.xfail(
-                            raises=NotImplementedError,
-                            strict=True,
-                            reason="the CPU scatter_prod/amax/amin kernels have no float16",
-                        ),
-                    )
                 for include_self in (True, False):
                     for case in _CASES:
                         yield pytest.param(
@@ -77,7 +64,6 @@ def _cases():
                             reduce,
                             include_self,
                             case,
-                            marks=marks,
                             id=f"{device}-{dtype}-{reduce}-self{int(include_self)}-{case}",
                         )
 
@@ -130,14 +116,13 @@ def _integer_cases():
         for dtype in ("int32", "int64"):
             for reduce in ("sum", "mean", "amax", "amin"):
                 marks = ()
-                # amax/amin start an include_self=False reduction from the
-                # dtype's bounds; only the Metal int32 kernels exist to run it.
-                if reduce in ("amax", "amin") and (device == "cpu" or dtype == "int64"):
+                # MLX scatters no int64 operand; the CPU runs every integer.
+                if reduce in ("amax", "amin") and device == "metal" and dtype == "int64":
                     marks = (
                         pytest.mark.xfail(
-                            raises=(NotImplementedError, ValueError),
+                            raises=ValueError,
                             strict=True,
-                            reason="no integer scatter_amax/amin kernel on this device",
+                            reason="no int64 scatter_amax/amin kernel on Metal",
                         ),
                     )
                 for include_self in (True, False):
