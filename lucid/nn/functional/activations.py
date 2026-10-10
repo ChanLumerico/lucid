@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor._metal_views import _check as _metal_check
 from lucid._tensor._metal_views import write_back as _metal_write_back
 from lucid._types import GeluApproximate
+from lucid.nn.functional._inplace import _in_place
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -28,8 +30,7 @@ def relu(x: Tensor, inplace: bool = False) -> Tensor:
     x : Tensor
         Input tensor of any shape.
     inplace : bool, optional
-        Reserved for API compatibility — currently a no-op (Lucid always
-        allocates a fresh output).
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -64,7 +65,16 @@ def relu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> relu(lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
     tensor([0., 0., 0., 1., 2.])
     """
-    return _wrap(_C_engine.relu(_unwrap(x)))
+    if not inplace:
+        return _wrap(_C_engine.relu(_unwrap(x)))
+    if x.requires_grad and _C_engine.grad_enabled():
+        return _in_place(x, "relu_", relu)
+    # No graph to extend: the engine's fused kernel allocates nothing (0.44 ms
+    # against 1.51 ms through the graph-preserving path on 64x3x128x128).
+    _metal_check(x)
+    _C_engine.relu_(_unwrap(x))
+    _metal_write_back(x)
+    return x
 
 
 def leaky_relu(
@@ -85,7 +95,7 @@ def leaky_relu(
         Slope :math:`\alpha` of the linear branch for negative inputs.
         Default ``0.01``.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -113,6 +123,8 @@ def leaky_relu(
     >>> leaky_relu(x, negative_slope=0.1)
     tensor([-0.2, -0.1, 0., 1.])
     """
+    if inplace:
+        return _in_place(x, "leaky_relu_", lambda t: leaky_relu(t, negative_slope))
     return _wrap(_C_engine.leaky_relu(_unwrap(x), negative_slope))
 
 
@@ -132,7 +144,7 @@ def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
         Saturation value :math:`\alpha > 0` for negative inputs.
         Default ``1.0``.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -162,6 +174,8 @@ def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> elu(x)
     tensor([-0.8647, -0.6321, 0., 1.])
     """
+    if inplace:
+        return _in_place(x, "elu_", lambda t: elu(t, alpha))
     return _wrap(_C_engine.elu(_unwrap(x), alpha))
 
 
@@ -179,7 +193,7 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     x : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -214,6 +228,8 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> selu(x)
     tensor([-1.111, 0., 1.051])
     """
+    if inplace:
+        return _in_place(x, "selu_", selu)
     return _wrap(_C_engine.selu(_unwrap(x)))
 
 
@@ -286,7 +302,7 @@ def silu(x: Tensor, inplace: bool = False) -> Tensor:
     x : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -319,6 +335,8 @@ def silu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> silu(x)
     tensor([-0.2384, -0.2689, 0., 0.7311, 1.762])
     """
+    if inplace:
+        return _in_place(x, "silu_", silu)
     return _wrap(_C_engine.silu(_unwrap(x)))
 
 
@@ -720,7 +738,7 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     x : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -748,6 +766,8 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     >>> relu6(x)
     tensor([0., 0., 3., 6.])
     """
+    if inplace:
+        return _in_place(x, "relu6_", relu6)
     return _wrap(_C_engine.relu6(_unwrap(x)))
 
 
@@ -915,7 +935,7 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
         Saturation value :math:`\alpha > 0` for negative inputs.
         Default ``1.0``.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -940,6 +960,8 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> celu(x, alpha=1.0)
     tensor([-0.8647, -0.6321, 0., 1.])
     """
+    if inplace:
+        return _in_place(x, "celu_", lambda t: celu(t, alpha))
     xi = _unwrap(x)
     pos = _C_engine.relu(xi)
     exp_part = _C_engine.sub(
@@ -1292,7 +1314,7 @@ def hardtanh(
     max_val : float, optional
         Upper clamp.  Default ``1.0``.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -1322,6 +1344,8 @@ def hardtanh(
     >>> hardtanh(x)
     tensor([-1., -0.5, 0., 0.5, 1.])
     """
+    if inplace:
+        return _in_place(x, "hardtanh_", lambda t: hardtanh(t, min_val, max_val))
     return _l.clamp(x, min_val, max_val)
 
 
@@ -1428,7 +1452,7 @@ def threshold(
     value : float
         Replacement constant for elements not above the threshold.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, write the result into ``x`` and return ``x``.
 
     Returns
     -------
@@ -1457,12 +1481,19 @@ def threshold(
     >>> threshold(x, threshold=0.5, value=-99.0)
     tensor([-99., -99., -99., 1.])
     """
+    if inplace:
+        return _in_place(x, "threshold_", lambda t: _threshold(t, threshold, value))
+    return _threshold(x, threshold, value)
+
+
+def _threshold(x: Tensor, threshold: float, value: float) -> Tensor:
     # ``x <= t ? v : x``, not ``x > t ? x : v``.  The two are the same
     # function everywhere except at NaN, where *both* comparisons are
     # false — so the first keeps the NaN and the second replaces it with
     # ``value``.  Written the second way, a NaN entering a network became
     # a 0 at the first threshold and the loss went finite with nothing to
-    # show for it.  The reference is the first.
+    # show for it.  The reference is the first.  (The public function's
+    # ``threshold`` argument shadows its own name, hence this helper.)
     replaced = x <= threshold
     replacement = _l.full_like(x, float(value))
     return _l.where(replaced, replacement, x)
@@ -1637,7 +1668,7 @@ def rrelu(
         If ``True`` sample a fresh slope per element; if ``False`` use the
         midpoint.  Default ``False``.
     inplace : bool, optional
-        Accepted for API compatibility; currently ignored.
+        If ``True``, ``x`` itself receives the result and is returned.
 
     Returns
     -------
@@ -1669,6 +1700,8 @@ def rrelu(
     >>> rrelu(x, training=False)
     tensor([-0.2292, 0., 1.])
     """
+    if inplace:
+        return _in_place(x, "rrelu_", lambda t: rrelu(t, lower, upper, training))
     if training:
         # Per-element uniform slope, only applied where x < 0.
         slope: Tensor = (
@@ -1684,68 +1717,34 @@ def rrelu(
     return _l.where(x >= 0, x, neg_part)
 
 
-# ── Inplace variants ──────────────────────────────────────────────────────────
-# Every one of these used to end in ``x.copy_(f(x))``, and ``Tensor.copy_``
-# documents that it does **not** extend the autograd graph.  The values were
-# right and the gradients were not: the returned tensor kept whatever
-# ``grad_fn`` ``x`` already carried, so the activation's own derivative was
-# dropped and the backward pass behaved as if no activation had been applied.
-# ``F.elu_`` on ``[-1, 0.5, 2]`` returned a gradient of ``[1, 1, 1]`` where
-# ELU's derivative is ``[0.368, 1, 1]``.  Nothing inside Lucid calls these —
-# ``nn.ReLU(inplace=True)`` forwards to the out-of-place ``relu`` — so the
-# reach was user code, silently.
-#
-# Indexed assignment does extend the graph, so ``x[...] = f(x)`` gives both
-# the mutation and the derivative.  It is not free: the temporary is still
-# allocated, so what "in-place" buys here is the aliasing contract (the
-# caller's tensor holds the result) rather than a saving in memory.
-
-
-def _write_back(x: Tensor, result: Tensor) -> Tensor:
-    """Store ``result`` into ``x``, keeping the autograd graph, and return ``x``."""
-    x[...] = result
-    return x
+# ── In-place variants ─────────────────────────────────────────────────────────
+# Each is its functional with ``inplace`` passed on (default ``True``), so
+# ``F.elu_(x)`` and ``F.elu(x, inplace=True)`` are one call: ``_in_place``.
 
 
 def relu_(x: Tensor, inplace: bool = True) -> Tensor:
     """In-place ReLU — ``x`` is overwritten with ``max(0, x)``.
 
-    Backed by the engine's native in-place ReLU kernel (no temporary
-    buffer).  ``inplace`` is accepted for API parity but ignored:
-    this entry point is always in-place.
+    Backed by the engine's native in-place ReLU kernel when no autograd
+    graph has to be extended (no temporary buffer).
 
     Parameters
     ----------
     x : Tensor
         Input; modified in place and also returned.
     inplace : bool, optional
-        Ignored; retained for signature symmetry with the out-of-place
-        :func:`relu`.  Default ``True``.
+        ``False`` returns :func:`relu`'s fresh result instead.  Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now holding ``max(0, x)``.
     """
-    if x.requires_grad and _l.is_grad_enabled():
-        return _write_back(x, relu(x))
-    # No graph to extend, so the engine's fused kernel is exactly
-    # equivalent and allocates nothing.  Measured on 64x3x128x128:
-    # 0.44 ms here against 1.51 ms through the graph-preserving path —
-    # worth a branch on the one function that has a native kernel, since
-    # avoiding the temporary is the whole reason to call this at all.
-    _C_engine.relu_(_unwrap(x))
-    # The kernel writes ``x`` alone; a Metal view of another tensor has to
-    # carry the write back itself (see lucid._tensor._metal_views).
-    _metal_write_back(x)
-    return x
+    return relu(x, inplace)
 
 
 def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
     r"""In-place ELU — overwrites ``x`` with :math:`\text{ELU}(x, \alpha)`.
-
-    Computes the out-of-place result via :func:`elu` then copies it
-    back into ``x`` (the engine has no native fused in-place kernel).
 
     Parameters
     ----------
@@ -1754,14 +1753,14 @@ def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
     alpha : float, optional
         Negative-side scale parameter :math:`\alpha`.  Default ``1.0``.
     inplace : bool, optional
-        Ignored; this entry point is always in-place.  Default ``True``.
+        ``False`` returns :func:`elu`'s fresh result instead.  Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now holding ``elu(x, alpha)``.
     """
-    return _write_back(x, elu(x, alpha))
+    return elu(x, alpha, inplace)
 
 
 def selu_(x: Tensor, inplace: bool = True) -> Tensor:
@@ -1777,14 +1776,14 @@ def selu_(x: Tensor, inplace: bool = True) -> Tensor:
     x : Tensor
         Input; modified in place.
     inplace : bool, optional
-        Ignored.  Default ``True``.
+        ``False`` returns :func:`selu`'s fresh result instead.  Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now holding ``selu(x)``.
     """
-    return _write_back(x, selu(x))
+    return selu(x, inplace)
 
 
 def leaky_relu_(
@@ -1803,14 +1802,15 @@ def leaky_relu_(
     negative_slope : float, optional
         Slope applied to the negative side.  Default ``0.01``.
     inplace : bool, optional
-        Ignored.  Default ``True``.
+        ``False`` returns :func:`leaky_relu`'s fresh result instead.
+        Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now holding ``leaky_relu(x, negative_slope)``.
     """
-    return _write_back(x, leaky_relu(x, negative_slope))
+    return leaky_relu(x, negative_slope, inplace)
 
 
 def hardtanh_(
@@ -1821,9 +1821,6 @@ def hardtanh_(
 ) -> Tensor:
     """In-place hardtanh — clamps ``x`` to ``[min_val, max_val]`` in place.
 
-    Equivalent to ``x.clamp_(min_val, max_val)`` but kept under the
-    ``nn.functional`` name for activation-API symmetry.
-
     Parameters
     ----------
     x : Tensor
@@ -1833,14 +1830,15 @@ def hardtanh_(
     max_val : float, optional
         Upper clamp bound.  Default ``1.0``.
     inplace : bool, optional
-        Ignored.  Default ``True``.
+        ``False`` returns :func:`hardtanh`'s fresh result instead.
+        Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now clamped.
     """
-    return _write_back(x, hardtanh(x, min_val, max_val))
+    return hardtanh(x, min_val, max_val, inplace)
 
 
 def threshold_(
@@ -1860,7 +1858,8 @@ def threshold_(
     value : float
         Replacement value for clipped positions.
     inplace : bool, optional
-        Ignored.  Default ``True``.
+        ``False`` returns :func:`threshold`'s fresh result instead.
+        Default ``True``.
 
     Returns
     -------
@@ -1868,7 +1867,7 @@ def threshold_(
         The same ``x`` tensor, with sub-threshold positions set to
         ``value`` and the rest unchanged.
     """
-    return _write_back(x, threshold(x, threshold_val, value))
+    return threshold(x, threshold_val, value, inplace)
 
 
 def rrelu_(
@@ -1896,14 +1895,15 @@ def rrelu_(
         When ``False`` (default) uses the deterministic midpoint slope;
         when ``True`` samples a fresh slope per element.
     inplace : bool, optional
-        Ignored.  Default ``True``.
+        ``False`` returns :func:`rrelu`'s fresh result instead.
+        Default ``True``.
 
     Returns
     -------
     Tensor
         The same ``x`` tensor, now holding ``rrelu(x, lower, upper, training)``.
     """
-    return _write_back(x, rrelu(x, lower, upper, training))
+    return rrelu(x, lower, upper, training, inplace)
 
 
 def symlog(x: Tensor) -> Tensor:

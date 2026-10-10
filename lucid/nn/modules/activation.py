@@ -43,6 +43,8 @@ from lucid.nn.functional.activations import (
     softshrink,
     softplus,
     rrelu,
+    hardtanh,
+    threshold,
     cosine_similarity,
     pairwise_distance,
 )
@@ -65,8 +67,7 @@ class ReLU(Module):
     Parameters
     ----------
     inplace : bool, optional
-        If ``True``, the operation modifies the input tensor in-place,
-        saving memory allocation.  Default: ``False``.
+        If ``True``, the input tensor itself receives the result.  Default: ``False``.
 
     Shape
     -----
@@ -82,12 +83,10 @@ class ReLU(Module):
     >>> m(x)
     tensor([0., 0., 1., 2.])
 
-    >>> # Applied to a batch of feature vectors; negatives zeroed, shape preserved
-    >>> m = nn.ReLU(inplace=True)
-    >>> x = lucid.randn(4, 64)
-    >>> out = m(x)
-    >>> out.shape
-    (4, 64)
+    >>> # In place: the input itself holds the result
+    >>> x = lucid.tensor([-1.0, 2.0])
+    >>> nn.ReLU(inplace=True)(x) is x, x
+    (True, tensor([0., 2.]))
     """
 
     def __init__(self, inplace: bool = False) -> None:
@@ -451,7 +450,7 @@ class SiLU(Module):
     Parameters
     ----------
     inplace : bool, optional
-        Accepted for API compatibility; currently unused.  Default: ``False``.
+        If ``True``, modifies the input tensor in-place.  Default: ``False``.
 
     Shape
     -----
@@ -483,6 +482,7 @@ class SiLU(Module):
     def __init__(self, inplace: bool = False) -> None:
         """Initialise the SiLU module. See the class docstring for parameter semantics."""
         super().__init__()
+        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -498,7 +498,7 @@ class SiLU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return silu(x)
+        return silu(x, self.inplace)
 
 
 class Mish(Module):
@@ -1190,7 +1190,7 @@ class ReLU6(Module):
     Parameters
     ----------
     inplace : bool, optional
-        Accepted for API compatibility; currently unused.  Default: ``False``.
+        If ``True``, modifies the input tensor in-place.  Default: ``False``.
 
     Shape
     -----
@@ -1216,6 +1216,7 @@ class ReLU6(Module):
     def __init__(self, inplace: bool = False) -> None:
         """Initialise the ReLU6 module. See the class docstring for parameter semantics."""
         super().__init__()
+        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -1231,7 +1232,7 @@ class ReLU6(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return relu6(x)
+        return relu6(x, self.inplace)
 
 
 class PReLU(Module):
@@ -1362,7 +1363,7 @@ class Threshold(Module):
     value : float
         The replacement constant for elements that do not exceed the threshold.
     inplace : bool, optional
-        Accepted for API compatibility; currently unused.  Default: ``False``.
+        If ``True``, modifies the input tensor in-place.  Default: ``False``.
 
     Shape
     -----
@@ -1391,6 +1392,7 @@ class Threshold(Module):
         super().__init__()
         self.threshold = threshold
         self.value = value
+        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -1406,11 +1408,7 @@ class Threshold(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        impl = _unwrap(x)
-        fill = _C_engine.full(impl.shape, self.value, impl.dtype, impl.device)
-        thresh = _C_engine.full(impl.shape, self.threshold, impl.dtype, impl.device)
-        mask = _C_engine.greater(impl, thresh)
-        return _wrap(_C_engine.where(mask, impl, fill))
+        return threshold(x, self.threshold, self.value, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -1444,7 +1442,7 @@ class Hardtanh(Module):
     max_val : float, optional
         Upper bound of the clamping range.  Default: ``1.0``.
     inplace : bool, optional
-        Accepted for API compatibility; currently unused.  Default: ``False``.
+        If ``True``, modifies the input tensor in-place.  Default: ``False``.
 
     Shape
     -----
@@ -1481,6 +1479,7 @@ class Hardtanh(Module):
         super().__init__()
         self.min_val = min_val
         self.max_val = max_val
+        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -1496,8 +1495,7 @@ class Hardtanh(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        impl = _unwrap(x)
-        return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
+        return hardtanh(x, self.min_val, self.max_val, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -1798,7 +1796,7 @@ class CELU(Module):
         Scale :math:`\alpha > 0` controlling the slope of the negative branch
         and the value to which it saturates.  Default: ``1.0``.
     inplace : bool, optional
-        Accepted for API compatibility; currently unused.  Default: ``False``.
+        If ``True``, modifies the input tensor in-place.  Default: ``False``.
 
     Shape
     -----
@@ -1826,6 +1824,7 @@ class CELU(Module):
         """Initialise the CELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.alpha = alpha
+        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -1841,7 +1840,7 @@ class CELU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return celu(x, self.alpha)
+        return celu(x, self.alpha, self.inplace)
 
     @override
     def extra_repr(self) -> str:

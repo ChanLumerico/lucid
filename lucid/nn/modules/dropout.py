@@ -227,7 +227,7 @@ class Dropout1d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout1d(x, self.p, self.training)
+        return dropout1d(x, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -330,7 +330,7 @@ class Dropout2d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout2d(x, self.p, self.training)
+        return dropout2d(x, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -376,9 +376,7 @@ class AlphaDropout(Module):
         Probability of replacing an element with :math:`\alpha'`.
         Must be in ``[0, 1]``.  Default: ``0.5``.
     inplace : bool, optional
-        Currently accepted for API compatibility but has no effect
-        (the affine correction always produces a new tensor).
-        Default: ``False``.
+        If ``True``, modify the input in place.  Default: ``False``.
 
     Shape
     -----
@@ -549,7 +547,7 @@ class Dropout3d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout3d(x, self.p, self.training)
+        return dropout3d(x, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -597,8 +595,7 @@ class FeatureAlphaDropout(Module):
         Probability of replacing an entire channel with :math:`\alpha'`.
         Must be in ``[0, 1]``.  Default: ``0.5``.
     inplace : bool, optional
-        Accepted for API compatibility; has no effect.
-        Default: ``False``.
+        If ``True``, modify the input in place.  Default: ``False``.
 
     Shape
     -----

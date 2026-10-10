@@ -11,9 +11,10 @@ pass behaved as though no activation had been applied.  ``F.elu_`` on
 ``[-1, 0.5, 2]`` returned ``[1, 1, 1]`` where ELU's derivative is
 ``[0.368, 1, 1]``.
 
-Nothing inside Lucid calls these — ``nn.ReLU(inplace=True)`` forwards to
-the out-of-place ``relu``, and the ``inplace=`` flag on the out-of-place
-functions is accepted and ignored — so the reach was user code, silently.
+Nothing inside Lucid called these at the time — the ``inplace=`` flag of
+the out-of-place functions and of ``nn.ReLU`` was accepted and ignored — so
+the reach was user code, silently.  Since LCD-235 the flag routes through
+the same in-place path as these (``test_inplace_flag.py``).
 
 The invariant asserted here is deliberately **not** a hand-derived
 derivative: it is that the in-place form agrees with the out-of-place
@@ -117,11 +118,11 @@ def test_relu_in_place_keeps_its_native_kernel_without_a_graph() -> None:
     assert np.allclose(x.numpy(), [0.0, 0.5, 2.0])
 
 
-def test_module_form_was_never_affected() -> None:
-    """``nn.ReLU(inplace=True)`` forwards to the out-of-place function.
+def test_module_form_gives_relus_derivative_either_way() -> None:
+    """``nn.ReLU`` differentiates the same with and without ``inplace``.
 
-    Recorded because it is why the defect stayed invisible: the path
-    almost everyone uses was correct.
+    ``inplace=True`` was once ignored, which is why the defect above stayed
+    invisible; now that it writes in place it must keep the derivative.
     """
     for inplace in (False, True):
         x = lucid.tensor(np.array(_PROBE, dtype=np.float64), dtype=lucid.float64)

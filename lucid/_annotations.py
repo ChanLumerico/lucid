@@ -384,6 +384,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid.nn.functional._index_checks": (
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
+    "lucid.nn.functional._inplace": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional._loss_checks": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.activations": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.nn.functional.attention": (
