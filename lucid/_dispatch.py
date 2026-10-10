@@ -1,5 +1,9 @@
+import math
+import struct
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
+from lucid import _promotion
 from lucid._dtype import dtype, to_engine_dtype, _ENGINE_TO_DTYPE  # noqa: F401
 from lucid._device import device, _device_from_engine  # noqa: F401
 from lucid._globals import get_default_dtype, get_default_device
@@ -61,68 +65,6 @@ def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")
 
 
-# Kind of each engine dtype, ordered so that a larger number wins a mixed-kind
-# comparison: bool < integer < floating < complex.  Only the ordering matters
-# here; width promotion between two *tensors* is the arithmetic adapter's job.
-_DTYPE_KIND: dict[_C_engine.Dtype, int] = {
-    _C_engine.Dtype.Bool: 0,
-    _C_engine.Dtype.I8: 1,
-    _C_engine.Dtype.I16: 1,
-    _C_engine.Dtype.I32: 1,
-    _C_engine.Dtype.I64: 1,
-    _C_engine.Dtype.F16: 2,
-    _C_engine.Dtype.F32: 2,
-    _C_engine.Dtype.F64: 2,
-    _C_engine.Dtype.C64: 3,
-}
-
-# What a Python scalar of each kind falls back to when it out-ranks the tensor
-# it is combined with.  A bool never out-ranks anything, so it needs no entry.
-_KIND_FALLBACK: dict[int, _C_engine.Dtype] = {
-    1: _C_engine.Dtype.I64,
-    2: _C_engine.Dtype.F32,
-}
-
-
-def _scalar_dtype(
-    x: int | float | bool,
-    ref: _C_engine.Dtype,
-    device: _C_engine.Device,
-) -> _C_engine.Dtype:
-    """Pick the engine dtype a Python scalar takes beside a tensor of ``ref``.
-
-    Parameters
-    ----------
-    x : int or float or bool
-        The scalar operand.
-    ref : lucid._C.engine.Dtype
-        Dtype of the tensor it is combined with.
-    device : lucid._C.engine.Device
-        Where the pair lives; the GPU stream cannot hold float64.
-
-    Returns
-    -------
-    lucid._C.engine.Dtype
-        ``ref`` when the scalar's kind does not exceed the tensor's, so the
-        scalar never forces a width change; otherwise the default dtype for
-        the scalar's own kind, narrowed to what ``device`` can represent.
-    """
-    kind = 0 if isinstance(x, bool) else (1 if isinstance(x, int) else 2)
-    if kind <= _DTYPE_KIND.get(ref, 2):
-        return ref
-    if kind != 2:
-        return _KIND_FALLBACK[kind]
-
-    # Track the session default so `set_default_dtype(float64)` reaches scalar
-    # promotion too, as it does every other dtype decision -- except on the
-    # GPU stream, where no tensor can be float64 in the first place, so
-    # promoting to it would produce an operand the device cannot hold.
-    fallback = to_engine_dtype(get_default_dtype())
-    if device != _C_engine.Device.CPU and fallback == _C_engine.Dtype.F64:
-        return _C_engine.Dtype.F32
-    return fallback
-
-
 # Dtypes ``pow_scalar`` computes in: the real floating ones.
 _REAL_FLOATS: frozenset[_C_engine.Dtype] = frozenset(
     {
@@ -148,12 +90,39 @@ def _scalar_power(
 
     Returns ``None`` for anything else — a tensor, a bool, an integer or
     complex base — which keeps the general path and its promotion rules.
+
+    A half base takes the exponent rounded to its own dtype, as the general
+    path would hand it over: only mul, div and floor division read a number
+    at float32 (see :func:`_binary_operands`).  The Metal kernel rounded it
+    already; the CPU kernel read the double, so ``f16 ** 1.1`` differed
+    between the two streams and from the reference.
     """
     if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
         return None
     if base.dtype not in _REAL_FLOATS:
         return None
-    return _C_engine.pow_scalar(base, float(exponent))
+    e = float(exponent)
+    if base.dtype in _promotion.HALF:
+        e = _round_to_half(e, base.dtype)
+    return _C_engine.pow_scalar(base, e)
+
+
+def _round_to_half(x: float, dt: _C_engine.Dtype) -> float:
+    """``x`` rounded to nearest-even in the half dtype ``dt``, as a float.
+
+    Done on the host with the standard library rather than through a 0-d
+    tensor, so it costs no engine call and works under shadow allocation.
+    """
+    try:
+        if dt == _C_engine.Dtype.F16:
+            return float(struct.unpack("<e", struct.pack("<e", x))[0])
+        bits = struct.unpack("<I", struct.pack("<f", x))[0]
+    except OverflowError:
+        return math.copysign(math.inf, x)
+    if math.isnan(x):
+        return x
+    bits = ((bits + 0x7FFF + ((bits >> 16) & 1)) >> 16) << 16
+    return float(struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0])
 
 
 def _refuse_bool_subtraction(a: _C_engine.TensorImpl, b: _C_engine.TensorImpl) -> None:
@@ -172,6 +141,56 @@ def _refuse_bool_subtraction(a: _C_engine.TensorImpl, b: _C_engine.TensorImpl) -
         )
 
 
+def _integer_impl(
+    x: int, dt: _C_engine.Dtype, device: _C_engine.Device
+) -> _C_engine.TensorImpl:
+    """A 0-d integer impl holding ``x`` exactly, wrapped to ``dt``'s width.
+
+    ``full`` takes its fill value as a C double, so an integer past 2**53
+    lost its low bits on the way in (``int64 + (2**60 + 1)`` was off by
+    one), and one outside ``dt``'s range met an undefined double-to-integer
+    conversion.  Those go in as bytes instead, wrapped as an integer cast
+    wraps — what the reference answers for ``int8_tensor + 300``.  The
+    rest, nearly every scalar, still take ``full``: it builds the value on
+    the device, where bytes are a host buffer the GPU stream must copy.
+    """
+    bits = _promotion.bit_width(dt)
+    if -(1 << (bits - 1)) <= x < (1 << (bits - 1)) and -(1 << 53) <= x <= (1 << 53):
+        return _C_engine.full([], float(x), dt, device)
+    if not -(1 << 63) <= x < (1 << 64):
+        raise OverflowError(
+            f"Python integer {x} does not fit in 64 bits, the widest integer "
+            "a tensor operand can hold"
+        )
+    raw = (x & ((1 << bits) - 1)).to_bytes(bits // 8, "little")
+    return _C_engine.TensorImpl.from_bytes(raw, [], dt, device, False)
+
+
+def _scalar_impl(
+    x: bool | int | float | complex,
+    dt: _C_engine.Dtype,
+    device: _C_engine.Device,
+) -> _C_engine.TensorImpl:
+    """``x`` as a 0-d impl of ``dt`` on ``device`` — where a scalar crosses.
+
+    A complex number is assembled from its parts through the engine's
+    ``complex`` op, and an integer bound for an integer dtype goes in
+    exactly; everything else is a ``full`` of the float value.
+    """
+    if isinstance(x, complex):
+        part = (
+            _C_engine.Dtype.F64 if dt == _C_engine.Dtype.C128 else _C_engine.Dtype.F32
+        )
+        out = _C_engine.complex(
+            _C_engine.full([], x.real, part, device),
+            _C_engine.full([], x.imag, part, device),
+        )
+        return out if out.dtype == dt else _C_engine.astype(out, dt)
+    if not isinstance(x, bool) and isinstance(x, int) and _promotion.is_integer(dt):
+        return _integer_impl(x, dt, device)
+    return _C_engine.full([], float(x), dt, device)
+
+
 def _unwrap_or_scalar(
     x: object,
     ref_impl: _C_engine.TensorImpl | None = None,
@@ -180,12 +199,12 @@ def _unwrap_or_scalar(
 
     Parameters
     ----------
-    x : Tensor or TensorImpl or int or float or bool
+    x : Tensor or TensorImpl or bool or int or float or complex
         Operand to normalise.
     ref_impl : TensorImpl or None, default=None
-        Tensor the scalar is being combined with; supplies the dtype and
-        device so that promotion behaves as if the scalar had been written
-        as a tensor.  Defaults to float32 on the CPU.
+        Tensor the scalar is being combined with; supplies the device, and
+        the dtype the pair promotes to (see :mod:`lucid._promotion`).
+        Without one the scalar takes its own dtype on the CPU.
 
     Returns
     -------
@@ -206,18 +225,11 @@ def _unwrap_or_scalar(
     trace-time batch would mismatch the symbolic input and abort MPSGraph's
     MLIR pass.  It also skips allocating a full-shape buffer in eager.
 
-    This is the single place a scalar crosses into the engine.  Every entry
-    point that accepts ``Tensor | scalar`` — the dunders, and the arithmetic
-    and elementwise adapters behind the method and free-function forms —
-    routes through it, so ``a + 2``, ``a.add(2)`` and ``lucid.add(a, 2)``
-    cannot drift from one another.
-
-    A scalar is *weak*: it contributes its kind (bool < int < float) but not
-    its width, so it can widen the result's kind but never its precision.
-    ``float16_tensor + 1.5`` stays float16 rather than being dragged up to
-    the default float dtype, while ``int32_tensor + 1.5`` becomes float —
-    taking the tensor's dtype unconditionally silently truncated the scalar
-    to an integer and returned the wrong numbers with no error at all.
+    A scalar is *weak*: it can lift the result's category (bool < int <
+    float < complex) but never its width, so ``float16_tensor + 1.5`` stays
+    float16 while ``int32_tensor + 1.5`` becomes floating.  The binary ops
+    reach the same rule through :func:`_binary_operands`, which builds its
+    scalar operands with the same :func:`_scalar_impl`.
     """
     impl: object = getattr(x, "_impl", None)
     if impl is not None and isinstance(impl, _C_engine.TensorImpl):
@@ -225,17 +237,130 @@ def _unwrap_or_scalar(
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
-    if isinstance(x, (int, float, bool)):
+    if isinstance(x, _promotion.NUMBER):
         if ref_impl is None:
-            return _C_engine.full(
-                [], float(x), _C_engine.Dtype.F32, _C_engine.Device.CPU
-            )
-        device = ref_impl.device
-        return _C_engine.full(
-            [], float(x), _scalar_dtype(x, ref_impl.dtype, device), device
-        )
+            return _scalar_impl(x, _promotion.result_type(x), _C_engine.Device.CPU)
+        return _scalar_impl(x, _promotion.result_type(ref_impl, x), ref_impl.device)
 
     raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
+
+
+def _is_opmath_operand(impl: _C_engine.TensorImpl) -> bool:
+    """Whether a tensor operand may reach a half op-math op uncast.
+
+    The engine's mul/div/floordiv read a 0-d float32 (float64 on the CPU)
+    operand at its own width beside a half tensor.  One that requires grad
+    is refused there — its gradient would be a reduction nothing sends yet
+    — so it is rounded to the half dtype instead, as before.
+    """
+    if impl.shape or impl.requires_grad:
+        return False
+    dt = impl.dtype
+    return dt == _C_engine.Dtype.F32 or (
+        dt == _C_engine.Dtype.F64 and impl.device == _C_engine.Device.CPU
+    )
+
+
+def _operand_at(
+    x: _promotion.Operand,
+    dt: _C_engine.Dtype,
+    device: _C_engine.Device,
+    opmath: bool,
+) -> _C_engine.TensorImpl:
+    """One operand of a binary op, ready for the engine at dtype ``dt``."""
+    if isinstance(x, _promotion.NUMBER):
+        if opmath and isinstance(x, (int, float)) and not isinstance(x, bool):
+            return _scalar_impl(x, _C_engine.Dtype.F32, device)
+        return _scalar_impl(x, dt, device)
+    if x.dtype == dt or (opmath and _is_opmath_operand(x)):
+        return x
+    return _C_engine.astype(x, dt)
+
+
+def _binary_operands(
+    a: object,
+    b: object,
+    *,
+    true_div: bool = False,
+    opmath: bool = False,
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """``a`` and ``b`` as engine operands at the dtype their op computes in.
+
+    The single promotion path behind every spelling of a binary op — the
+    operator, its reflected and in-place forms, ``Tensor.<op>`` and
+    ``lucid.<op>``.  The dtype comes from :func:`lucid._promotion.result_type`;
+    each tensor is cast to it and each Python number built at it.
+
+    Parameters
+    ----------
+    a, b : Tensor or TensorImpl or bool or int or float or complex
+        The operands, in the op's order.
+    true_div : bool, default=False
+        True division: an integral or bool result becomes the default
+        floating dtype.
+    opmath : bool, default=False
+        The op is mul, div or floordiv, whose engine kernels compute a half
+        tensor against a 0-d float32 operand in float32 and round once.  When
+        the result is half, a real Python number is handed over as a 0-d
+        float32 and a qualifying 0-d tensor uncast, rather than rounded to
+        the half dtype first.
+
+    Returns
+    -------
+    tuple[TensorImpl, TensorImpl]
+        The two operands.
+
+    Raises
+    ------
+    TypeError
+        If an operand is neither a tensor nor a Python number.
+    """
+    pa: _promotion.Operand = (
+        a if isinstance(a, _promotion.NUMBER) else _unwrap_or_scalar(a)
+    )
+    pb: _promotion.Operand = (
+        b if isinstance(b, _promotion.NUMBER) else _unwrap_or_scalar(b)
+    )
+    if not isinstance(pa, _promotion.NUMBER):
+        device = pa.device
+        # The common case — two tensors of one dtype — before any tier logic.
+        if (
+            not isinstance(pb, _promotion.NUMBER)
+            and pa.dtype == pb.dtype
+            and not (true_div and _promotion.is_integral(pa.dtype))
+        ):
+            return pa, pb
+    elif not isinstance(pb, _promotion.NUMBER):
+        device = pb.device
+    else:
+        device = _C_engine.Device.CPU
+    dt = _promotion.result_type(pa, pb)
+    if true_div and _promotion.is_integral(dt):
+        dt = _promotion.default_float(device)
+    wide = opmath and dt in _promotion.HALF
+    return _operand_at(pa, dt, device, wide), _operand_at(pb, dt, device, wide)
+
+
+def _promote_impls(
+    impls: Sequence[_C_engine.TensorImpl],
+) -> list[_C_engine.TensorImpl]:
+    """Cast ``impls`` to the one dtype they promote to together.
+
+    The n-ary form of :func:`_binary_operands`, for the ops whose engine
+    kernel wants every tensor operand at a single dtype — the joins,
+    ``where``, ``outer``, ``einsum`` — and so raised ``DtypeMismatch`` for
+    an ``int64`` beside a ``float32``, where the reference answers at their
+    common dtype.  Operands that already agree come back uncast, so the
+    common case costs one comparison each.
+    """
+    out = list(impls)
+    if not out:
+        return out
+    first = out[0].dtype
+    if all(t.dtype == first for t in out):
+        return out
+    dt = _promotion.result_type(*out)
+    return [t if t.dtype == dt else _C_engine.astype(t, dt) for t in out]
 
 
 def _wrap(impl: _C_engine.TensorImpl) -> Tensor:

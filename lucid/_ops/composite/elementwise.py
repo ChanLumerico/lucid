@@ -1675,29 +1675,6 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
     return _wrap(_C_engine.log(sm))
 
 
-def floor_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
-    r"""Element-wise floor division — :math:`\lfloor a / b \rfloor`.
-
-    Equivalent to Python's ``//`` operator but follows the framework's
-    broadcasting rules and supports ``b`` as either a tensor or a
-    scalar.  Implemented as composite ``(a / b).floor()`` — gradients
-    are zero almost everywhere (the floor is piecewise constant).
-
-    Parameters
-    ----------
-    a : Tensor
-        Numerator.
-    b : Tensor or Scalar
-        Denominator, broadcastable to the shape of ``a``.
-
-    Returns
-    -------
-    Tensor
-        Broadcast shape of ``a`` and ``b``.
-    """
-    return (a / b).floor()
-
-
 def diag_embed(
     x: Tensor,
     offset: int = 0,
@@ -1815,7 +1792,6 @@ __all__ = [
     "i0",
     "softmax",
     "log_softmax",
-    "floor_divide",
     "diag_embed",
 ]
 

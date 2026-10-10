@@ -153,6 +153,9 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("pow",      A._make_arith_adapter(_R.pow),      2, method_name="pow",      free_fn_name="pow"),
     OpEntry("maximum",  A._make_arith_adapter(_R.maximum),  2, method_name="maximum",  free_fn_name="maximum"),
     OpEntry("minimum",  A._make_arith_adapter(_R.minimum),  2, method_name="minimum",  free_fn_name="minimum"),
+    # Integer operands keep their dtype; a half tensor's scalar partner is
+    # read in float32 (op-math), as for mul and div.
+    OpEntry("floor_divide", A._make_arith_adapter(_R.floordiv), 2, method_name="floor_divide", free_fn_name="floor_divide"),
     OpEntry("matmul",   _R.matmul,   2, method_name="matmul",   free_fn_name="matmul"),
     OpEntry("dot",      _R.dot,      2, method_name="dot",      free_fn_name="dot"),
     OpEntry("inner",    _R.inner,    2, method_name="inner",    free_fn_name="inner"),

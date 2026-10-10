@@ -264,7 +264,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "erf", "erfinv",
     # ── binary math ───────────────────────────────────────────────────────
     "add", "sub", "mul", "div", "pow",
-    "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
+    "atan2", "fmod", "remainder", "floor_divide", "hypot", "logaddexp", "nextafter",
     "maximum", "minimum",
     # ── linear algebra ────────────────────────────────────────────────────
     "matmul", "mm", "bmm", "tensordot", "kron",

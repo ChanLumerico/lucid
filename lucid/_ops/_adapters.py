@@ -27,9 +27,11 @@ from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._deprecation import warn_deprecated
+from lucid import _promotion
 from lucid._dispatch import (
+    _binary_operands,
+    _promote_impls,
     _refuse_bool_subtraction,
-    _scalar_dtype,
     _scalar_power,
     _unwrap,
     _unwrap_or_scalar,
@@ -62,65 +64,6 @@ def _own_impl(out: _Impl, a_impl: _Impl) -> _Impl:
     return out
 
 
-# ── Binary dtype-promotion helpers ───────────────────────────────────────────
-# Mirrors the same table in ``_tensor/_dunders.py``.  Kept in sync manually;
-# both live in Python-only infrastructure (no external deps, H4-safe).
-
-_D = _C_engine.Dtype
-_ARITH_DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
-    _D.Bool: (0, 1),
-    _D.I8: (1, 8),
-    _D.I16: (1, 16),
-    _D.I32: (1, 32),
-    _D.I64: (1, 64),
-    _D.F16: (2, 16),
-    _D.BF16: (2, 16),
-    _D.F32: (2, 32),
-    _D.F64: (2, 64),
-    _D.C64: (3, 64),
-}
-
-
-def _arith_result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
-    """Return the promoted dtype for an arithmetic binary op."""
-    if da == db:
-        return da
-    ka, wa = _ARITH_DTYPE_KIND_WIDTH.get(da, (2, 32))
-    kb, wb = _ARITH_DTYPE_KIND_WIDTH.get(db, (2, 32))
-    if ka != kb:
-        return da if ka > kb else db
-    if wa == wb:
-        # float16 against bfloat16: neither holds the other, so both widen.
-        return _D.F32
-    return da if wa > wb else db
-
-
-def _is_integral(d: _C_engine.Dtype) -> bool:
-    """Whether ``d`` is an integer or bool dtype."""
-    return _ARITH_DTYPE_KIND_WIDTH.get(d, (2, 32))[0] < 2
-
-
-def _promote_impls(impls: Sequence[_Impl]) -> list[_Impl]:
-    """Cast ``impls`` to the one dtype they promote to together.
-
-    The n-ary form of ``_arith_result_dtype``, for the ops whose engine
-    kernel wants every tensor operand at a single dtype — the joins,
-    ``where``, ``outer``, ``einsum`` — and so raised ``DtypeMismatch`` for
-    an ``int64`` beside a ``float32``, where the reference answers at their
-    common dtype.  Operands that already agree come back uncast, so the
-    common case costs one comparison each.
-    """
-    out = list(impls)
-    if not out:
-        return out
-    tgt = out[0].dtype
-    if all(t.dtype == tgt for t in out):
-        return out
-    for t in out[1:]:
-        tgt = _arith_result_dtype(tgt, t.dtype)
-    return [t if t.dtype == tgt else _C_engine.astype(t, tgt) for t in out]
-
-
 def _keep_engine_signature(
     adapter: Callable[..., object], engine_fn: Callable[..., object]
 ) -> None:
@@ -137,31 +80,36 @@ def _keep_engine_signature(
     adapter.__wrapped__ = engine_fn  # type: ignore[attr-defined]
 
 
+#: The engine ops that compute a half tensor against a 0-d float32 operand
+#: in float32 (op-math); the reference does so for these three only.
+_OPMATH_OPS = (
+    _C_engine.mul,
+    _C_engine.mul_,
+    _C_engine.div,
+    _C_engine.div_,
+    _C_engine.floordiv,
+)
+
+
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
     *,
     floating: bool = False,
     inplace: bool = False,
 ) -> Callable[[_Impl, _Impl], _Impl]:
-    """Wrap an arithmetic binary engine function with scalars and dtype promotion.
+    """Wrap a binary engine function with scalars and dtype promotion.
 
-    A Python number in either operand becomes a 0-d constant of the other
-    operand's dtype and device, so ``a.add(2)`` and ``lucid.add(a, 2)`` mean
-    what ``a + 2`` means.  Without it the raw number reached the engine and
-    the promotion below raised ``AttributeError: 'int' object has no
-    attribute 'dtype'`` — every arithmetic op's method and free-function form
-    rejected the scalar its operator form accepted.
+    Both operands go through :func:`lucid._dispatch._binary_operands`, the
+    path the operators take too, so ``a.add(2)``, ``lucid.add(a, 2)`` and
+    ``a + 2`` cannot drift apart: a Python number becomes a 0-d constant, and
+    the pair meets at the dtype :mod:`lucid._promotion` gives it.  Two tensors
+    of one dtype pass straight through.
 
-    When both operands then have the same dtype the call is a zero-overhead
-    passthrough.  Otherwise each is cast to the promoted dtype before
-    forwarding to the engine — matching the type-promotion behaviour of the
-    reference framework.
-
-    Used by the arithmetic ops (add/sub/mul/div/pow/maximum/minimum) and by
-    the elementwise binaries the reference framework also accepts a scalar
-    for: the comparisons, fmod/remainder, and the bitwise pair ops.  Those
-    return their own dtype — Bool for a comparison — but they still want both
-    operands at a common one first, so the promotion applies unchanged.
+    Used by the arithmetic ops (add/sub/mul/div/pow/maximum/minimum,
+    floor_divide) and by the elementwise binaries the reference framework
+    also accepts a scalar for: the comparisons, fmod/remainder, and the
+    bitwise and shift ops.  Those return their own dtype — Bool for a
+    comparison — but they still want both operands at a common one first.
 
     matmul/dot/inner/outer deliberately bypass it: a scalar operand is
     meaningless there.  ``outer`` promotes its two tensors through
@@ -170,6 +118,8 @@ def _make_arith_adapter(
 
     ``floating`` adds true division's rule on top: a common dtype that is
     integral or bool becomes the default float dtype, as it does for ``/``.
+    mul, div and floor division — in place or not — hand a half tensor's
+    scalar partner over unrounded, for the engine's op-math.
 
     ``inplace`` marks the trailing-underscore form, which writes the result
     back into ``a``.  Beside ``floating`` it refuses an integral ``a``: the
@@ -181,34 +131,23 @@ def _make_arith_adapter(
 
     subtracts = engine_fn in (_C_engine.sub, _C_engine.sub_)
     powers = engine_fn is _C_engine.pow
+    opmath = engine_fn in _OPMATH_OPS
 
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
         if powers and isinstance(a, _C_engine.TensorImpl):
             scalar = _scalar_power(a, b)
             if scalar is not None:
                 return scalar
-        if not isinstance(b, _C_engine.TensorImpl):
-            b = _unwrap_or_scalar(b, a if isinstance(a, _C_engine.TensorImpl) else None)
-        if not isinstance(a, _C_engine.TensorImpl):
-            a = _unwrap_or_scalar(a, b)
-        if inplace and floating and _is_integral(a.dtype):
-            dtype = _ENGINE_TO_DTYPE.get(a.dtype, a.dtype)
-            raise RuntimeError(
-                f"{name}: true division gives a floating result, which cannot be "
-                f"written in place into a {dtype} tensor — use "
-                f"{name.removesuffix('_')} instead"
-            )
-        da, db = a.dtype, b.dtype
-        if da != db:
-            tgt = _arith_result_dtype(da, db)
-            if da != tgt:
-                a = _C_engine.astype(a, tgt)
-            if db != tgt:
-                b = _C_engine.astype(b, tgt)
-        if floating and _is_integral(a.dtype):
-            tgt = to_engine_dtype(None)
-            a = _C_engine.astype(a, tgt)
-            b = _C_engine.astype(b, tgt)
+        if inplace and floating:
+            target = _unwrap_or_scalar(a)
+            if _promotion.is_integral(target.dtype):
+                dtype = _ENGINE_TO_DTYPE.get(target.dtype, target.dtype)
+                raise RuntimeError(
+                    f"{name}: true division gives a floating result, which cannot "
+                    f"be written in place into a {dtype} tensor — use "
+                    f"{name.removesuffix('_')} instead"
+                )
+        a, b = _binary_operands(a, b, true_div=floating, opmath=opmath)
         if subtracts:
             _refuse_bool_subtraction(a, b)
         return engine_fn(a, b)
@@ -314,8 +253,7 @@ def _as_dim(value: object) -> int:
     """``value`` as a ``gather`` dim: an int, or a 0-d integer tensor."""
     impl = getattr(value, "_impl", None)
     if isinstance(impl, _Impl):
-        kind = _ARITH_DTYPE_KIND_WIDTH.get(impl.dtype, (2, 32))[0]
-        if not impl.shape and kind == 1:
+        if not impl.shape and _promotion.is_integer(impl.dtype):
             return int(cast(int, impl.item()))
         raise TypeError(
             "gather(): dim must be an int or a 0-d integer tensor, got a tensor "
@@ -869,7 +807,7 @@ def _logsumexp_adapter(
         axes = [int(cast(int, dim))]
     # An integer or bool input is summed in the default float dtype, as the
     # reference framework does — the engine op computes in the input dtype.
-    if _is_integral(a_impl.dtype):
+    if _promotion.is_integral(a_impl.dtype):
         a_impl = _C_engine.astype(a_impl, to_engine_dtype(None))
     return _C_engine.logsumexp(a_impl, axes, bool(keepdim))
 
@@ -1021,17 +959,14 @@ def _clip_adapter(
     """
     if min is None and max is None:
         raise ValueError("clip: at least one of min or max must be given")
-    tgt = x_impl.dtype
-    for bound in (min, max):
-        if bound is None:
-            continue
-        if isinstance(bound, (bool, int, float)):
-            # Read off the dtype without building the 0-d constant, so a
-            # clamp whose bounds already fit allocates nothing extra.
-            bound_dtype = _scalar_dtype(bound, x_impl.dtype, x_impl.device)
-        else:
-            bound_dtype = _unwrap(bound).dtype
-        tgt = _arith_result_dtype(tgt, bound_dtype)
+    # A number is promoted as it stands, without building its 0-d constant,
+    # so a clamp whose bounds already fit allocates nothing extra.
+    bounds: list[_promotion.Operand] = [
+        bound if isinstance(bound, _promotion.NUMBER) else _unwrap(bound)
+        for bound in (min, max)
+        if bound is not None
+    ]
+    tgt = _promotion.result_type(x_impl, *bounds)
     if tgt != x_impl.dtype:
         x_impl = _C_engine.astype(x_impl, tgt)
     if min is None or max is None:
@@ -1085,7 +1020,7 @@ def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
     if m.dtype != _C_engine.Bool:
         m = _C_engine.astype(m, _C_engine.Bool)
     fill = float(value)
-    if not math.isfinite(fill) and _is_integral(x_impl.dtype):
+    if not math.isfinite(fill) and _promotion.is_integral(x_impl.dtype):
         dtype = _ENGINE_TO_DTYPE.get(x_impl.dtype, x_impl.dtype)
         raise RuntimeError(
             f"masked_fill: {fill} cannot be written into a {dtype} tensor, "

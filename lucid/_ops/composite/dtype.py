@@ -2,68 +2,25 @@
 
 from typing import TYPE_CHECKING
 
-import lucid
+from lucid import _promotion
+from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._dtype import dtype as _DType
-from lucid._dtype import complex128 as _complex128, float32 as _float32
-from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _kind_width(d: _DType) -> tuple[int, int]:
-    """Return ``(kind, width)`` keys used for ordering dtypes during promotion.
-
-    ``kind`` orders families (``0`` boolean, ``1`` integer, ``2`` floating,
-    ``3`` complex) and ``width`` orders bit-widths within a family.
-    Unknown dtypes default to ``(2, 32)`` (i.e. ``float32``).
-    """
-    table: dict[str, tuple[int, int]] = {
-        "lucid.bool": (0, 1),
-        "lucid.int8": (1, 8),
-        "lucid.int16": (1, 16),
-        "lucid.int32": (1, 32),
-        "lucid.int64": (1, 64),
-        "lucid.float16": (2, 16),
-        "lucid.bfloat16": (2, 16),
-        "lucid.float32": (2, 32),
-        "lucid.float64": (2, 64),
-        "lucid.complex64": (3, 64),
-        "lucid.complex128": (3, 128),
-    }
-    return table.get(str(d), (2, 32))
-
-
-def _promote(a_dtype: _DType, b_dtype: _DType) -> _DType:
-    """Return the wider of two dtypes according to ``(kind, width)`` ordering.
-
-    The higher-kind dtype wins outright (e.g. ``float`` beats ``int``); ties
-    in kind are broken by the wider bit-width.
-    """
-    ka, wa = _kind_width(a_dtype)
-    kb, wb = _kind_width(b_dtype)
-    if (ka == 3 and b_dtype == lucid.float64) or (kb == 3 and a_dtype == lucid.float64):
-        return _complex128
-    if ka == kb == 2 and wa == wb == 16 and a_dtype != b_dtype:
-        return _float32
-    if ka != kb:
-        return a_dtype if ka > kb else b_dtype
-    return a_dtype if wa >= wb else b_dtype
-
-
 def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
     r"""Compute the dtype that a binary operation on the inputs would produce.
 
-    Implements NumPy-style type promotion: tensors contribute their
-    declared dtype, while Python scalars are treated as having no dtype
-    of their own and follow whichever tensor operand they appear with.
+    The dtype ``a + b`` (and every other binary op) computes in: the same
+    rule, from the same place, as the operators themselves.
 
     Parameters
     ----------
     a : Tensor | Scalar
-        First operand. Tensor operands contribute their dtype; Python
-        scalars do not.
+        First operand — a tensor or a Python number.
     b : Tensor | Scalar
         Second operand. Same convention as ``a``.
 
@@ -75,19 +32,22 @@ def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
 
     Notes
     -----
-    The promotion algorithm groups dtypes into four kinds — bool
-    :math:`< \text{int} < \text{float} < \text{complex}` — and uses
-    bit-width as a tiebreaker. Concretely:
+    Operands fall into three tiers: tensors with at least one dimension,
+    0-d tensors, and Python numbers.  Each tier's dtypes meet on the
+    :func:`promote_types` lattice, and a lower tier can lift the result's
+    category (bool :math:`<` int :math:`<` float :math:`<` complex) but
+    never its width within a category:
 
     .. math::
 
         \text{result\_type}(a, b) =
-        \begin{cases}
-            \text{dtype}(a),                        & b\ \text{is scalar}, \\
-            \text{dtype}(b),                        & a\ \text{is scalar}, \\
-            \text{float32},                          & \text{both scalar}, \\
-            \operatorname{promote}(\text{dtype}(a), \text{dtype}(b)), & \text{otherwise}.
-        \end{cases}
+        \operatorname{combine}\bigl(\text{dim},\;
+        \operatorname{combine}(\text{zero-dim},\; \text{number})\bigr)
+
+    A Python ``bool`` counts as bool, an ``int`` as int64, a ``float`` as
+    the default dtype and a ``complex`` as its complex counterpart.  Where
+    the reference would answer complex32 (float16 beside a complex
+    operand), Lucid answers complex64.
 
     See also :func:`promote_types` (operates directly on dtype objects).
 
@@ -98,18 +58,14 @@ def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
     >>> b = lucid.tensor([1., 2.], dtype=lucid.float32)
     >>> lucid.result_type(a, b)
     lucid.float32
+    >>> lucid.result_type(a, 2.5)
+    lucid.float32
+    >>> lucid.result_type(lucid.ones(2, dtype=lucid.float16), lucid.tensor(0.5))
+    lucid.float16
     """
-    da = a.dtype if _is_tensor(a) else None
-    db = b.dtype if _is_tensor(b) else None
-    if da is None and db is None:
-        return lucid.float32  # type: ignore[return-value]
-    if da is None:
-        return db  # type: ignore[return-value]
-    if db is None:
-        return da
-    if da == db:
-        return da
-    return _promote(da, db)
+    da = a._impl if isinstance(a, Tensor) else a
+    db = b._impl if isinstance(b, Tensor) else b
+    return _ENGINE_TO_DTYPE[_promotion.result_type(da, db)]
 
 
 def promote_types(a_dtype: _DType, b_dtype: _DType) -> _DType:
@@ -119,6 +75,8 @@ def promote_types(a_dtype: _DType, b_dtype: _DType) -> _DType:
     the two dtypes according to the standard kind/width ordering:
     higher kind (bool :math:`<` int :math:`<` float :math:`<` complex)
     wins outright, and ties in kind are broken by the wider bit-width.
+    A complex dtype beside float64 gives complex128, and float16 beside
+    bfloat16 — neither holds the other — gives float32.
 
     Parameters
     ----------
@@ -161,7 +119,9 @@ def promote_types(a_dtype: _DType, b_dtype: _DType) -> _DType:
     """
     if a_dtype == b_dtype:
         return a_dtype
-    return _promote(a_dtype, b_dtype)
+    return _ENGINE_TO_DTYPE[
+        _promotion.promote_types(to_engine_dtype(a_dtype), to_engine_dtype(b_dtype))
+    ]
 
 
 def can_cast(from_dtype: _DType, to_dtype: _DType) -> bool:

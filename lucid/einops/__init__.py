@@ -28,7 +28,7 @@ Wraps the C++ engine's einops module. Supports patterns like
 
 from lucid._C.engine import einops as _C_einops
 from lucid._dispatch import _unwrap, _wrap
-from lucid._ops._adapters import _promote_impls
+from lucid._dispatch import _promote_impls
 
 
 def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
