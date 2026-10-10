@@ -95,6 +95,7 @@
 #include "AxisIndex.h"
 #include "HalfAccumulation.h"
 #include "LinalgStatus.h"
+#include "LogSoftmax.h"
 #include "Lstm.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -1146,21 +1147,11 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
-    // ``x - logsumexp(x)`` along ``axis``.  It was ``log(softmax(x))``,
-    // which underflows: a probability below the dtype's smallest subnormal
-    // is 0 and its log is -inf, so float32 answered -inf at a logit 104
-    // below the row's maximum and float16 at 17, where the reference gives
-    // the finite difference.  A half input is reduced in float32.  MLX's
-    // logsumexp refuses an empty array ("Received empty array"), whose
-    // log_softmax is just as empty.
+    // ``x - logsumexp(x)``, NaN across a row whose maximum is infinite —
+    // see LogSoftmax.h.
     Storage log_softmax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto out = reduce_widened(*gs.arr, [axis](const ::mlx::core::array& w) {
-            if (w.size() == 0)
-                return w;
-            return ::mlx::core::subtract(w, ::mlx::core::logsumexp(w, axis, /*keepdims=*/true));
-        });
-        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+        return Storage{gpu::wrap_mlx_array(gpu::log_softmax_along(*gs.arr, axis), dt)};
     }
 
     Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override {

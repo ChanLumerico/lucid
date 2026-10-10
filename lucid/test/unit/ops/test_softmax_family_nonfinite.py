@@ -10,11 +10,12 @@ decide what an infinite max means — and the two devices decided differently:
 * ``log_softmax`` on Metal went through MLX's guarded ``logsumexp`` and
   answered ``[-inf, nan, -inf]`` for ``[1, inf, 2]``, where the reference
   and the CPU shift by the raw max and answer all NaN — as ``softmax``
-  does on every device.  Those Metal rows are strict xfails until the
-  GpuBackend change lands.
+  does on every device.  Its backward read the -inf back as a probability
+  of 0 and passed finite gradients, where the reference's are NaN.
 
-Every row is checked against the reference in its own dtype, and on both
-devices, so the two devices agree because each agrees with the reference.
+Every row is checked against the reference in its own dtype, forward and
+backward, and on both devices, so the two devices agree because each
+agrees with the reference.
 """
 
 import math
@@ -38,10 +39,6 @@ _ROWS = {
     "nan": [1.0, _NAN, 2.0],
 }
 
-# Rows holding +inf, where the Metal log_softmax still answers MLX's guarded
-# form until its GpuBackend change lands.  An all -inf row is NaN either way.
-_POS_INF_MAX = {"pos_inf", "pos_and_neg_inf", "two_pos_inf"}
-
 _OPS = {
     "softmax": (lambda x, d: F.softmax(x, d), lambda r, x, d: r.softmax(x, d)),
     "log_softmax": (
@@ -54,7 +51,7 @@ _OPS = {
     ),
 }
 
-_DTYPES = {"float32": 1e-6, "float64": 1e-12, "float16": 2e-3}
+_DTYPES = {"float32": 1e-6, "float64": 1e-12, "float16": 2e-3, "bfloat16": 2e-2}
 
 
 def _cases():
@@ -65,26 +62,26 @@ def _cases():
                 continue
             for op in _OPS:
                 for row in _ROWS:
-                    marks = ()
-                    if (
-                        device == "metal"
-                        and op == "log_softmax"
-                        and row in _POS_INF_MAX
-                    ):
-                        marks = (
-                            pytest.mark.xfail(
-                                strict=True,
-                                reason="LCD-286 metal: GpuBackend.h edit pending user permission",
-                            ),
-                        )
-                    yield pytest.param(
-                        device,
-                        dtype,
-                        op,
-                        row,
-                        marks=marks,
-                        id=f"{device}-{dtype}-{op}-{row}",
-                    )
+                    yield pytest.param(device, dtype, op, row, id=f"{device}-{dtype}-{op}-{row}")
+
+
+def _as_f64(t):
+    return t.detach().float().numpy().astype(np.float64)
+
+
+def _inputs(ref, row, dtype, layout, device, requires_grad=False):
+    values = np.array(_ROWS[row], dtype=np.float64)
+    # ``leading_axis`` puts the row down a column, so the reduction runs
+    # over a strided axis (the CPU's inner > 1 path) beside a finite column.
+    dim = -1
+    if layout == "leading_axis":
+        values = np.stack([values, np.arange(3, dtype=np.float64)], axis=1)
+        dim = 0
+    x = lucid.tensor(
+        values, dtype=getattr(lucid, dtype), device=device, requires_grad=requires_grad
+    )
+    xr = ref.tensor(values).to(getattr(ref, dtype)).requires_grad_(requires_grad)
+    return x, xr, dim
 
 
 def _check(got, want, dtype):
@@ -106,27 +103,23 @@ def _check(got, want, dtype):
 @pytest.mark.parametrize(("device", "dtype", "op", "row"), list(_cases()))
 @pytest.mark.parametrize("layout", ["last_axis", "leading_axis"])
 def test_matches_reference(ref, device, dtype, op, row, layout):
-    values = np.array(_ROWS[row], dtype=dtype)
-    # ``leading_axis`` puts the row down a column, so the reduction runs
-    # over a strided axis (the CPU's inner > 1 path) beside a finite column.
-    dim = -1
-    if layout == "leading_axis":
-        values = np.stack([values, np.arange(3, dtype=dtype)], axis=1)
-        dim = 0
+    x, xr, dim = _inputs(ref, row, dtype, layout, device)
     ours, theirs = _OPS[op]
-    x = lucid.tensor(values, device=device)
-    got = ours(x, dim).numpy().astype(np.float64)
-    want = theirs(ref, ref.tensor(values), dim).numpy().astype(np.float64)
-    _check(got, want, dtype)
+    _check(_as_f64(ours(x, dim)), _as_f64(theirs(ref, xr, dim)), dtype)
 
 
-@pytest.mark.parametrize("device", ["cpu", "metal"] if metal_available() else ["cpu"])
-def test_logsumexp_gradient_on_infinite_max(ref, device):
-    values = np.array([[1.0, _INF, 2.0], [1.0, 2.0, 3.0]], dtype=np.float32)
-    x = lucid.tensor(values, device=device, requires_grad=True)
-    lucid.logsumexp(x, 1).sum().backward()
-    xr = ref.tensor(values, requires_grad=True)
-    ref.logsumexp(xr, 1).sum().backward()
-    _check(
-        x.grad.numpy().astype(np.float64), xr.grad.numpy().astype(np.float64), "float32"
-    )
+@pytest.mark.parametrize(("device", "dtype", "op", "row"), list(_cases()))
+@pytest.mark.parametrize("layout", ["last_axis", "leading_axis"])
+def test_gradient_matches_reference(ref, device, dtype, op, row, layout):
+    # A non-uniform upstream gradient, so ``sum(g)`` and ``sum(y * g)`` in
+    # the backward formulas are neither zero nor proportional to the output.
+    x, xr, dim = _inputs(ref, row, dtype, layout, device, requires_grad=True)
+    ours, theirs = _OPS[op]
+    y = ours(x, dim)
+    yr = theirs(ref, xr, dim)
+    # ``tolist`` because a 0-d ndarray given a dtype comes back with shape
+    # (1,) from ``lucid.tensor`` — the reduced ``logsumexp`` output is 0-d.
+    g = np.linspace(-1.0, 2.0, int(np.prod(yr.shape))).reshape(tuple(yr.shape)).tolist()
+    y.backward(lucid.tensor(g, dtype=getattr(lucid, dtype), device=device))
+    yr.backward(ref.tensor(g, dtype=ref.float64).to(getattr(ref, dtype)))
+    _check(_as_f64(x.grad), _as_f64(xr.grad), dtype)
