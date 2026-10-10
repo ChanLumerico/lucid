@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - eigh skips the mirror; closed-form LDL D (CHA-141, 142)
 
+- histogram runs on the device; contract tests for index composites (API-05)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

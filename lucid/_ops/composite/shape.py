@@ -1009,7 +1009,7 @@ def combinations(
     --------
     >>> import lucid
     >>> lucid.combinations(lucid.tensor([1, 2, 3]), r=2)
-    tensor([[1, 2], [1, 3], [2, 3]])
+    tensor([[1, 2], [1, 3], [2, 3]], dtype=lucid.int64)
     """
     if input.ndim != 1:
         raise ValueError(

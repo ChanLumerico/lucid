@@ -6,7 +6,7 @@ from typing import Sequence, TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype as DType
+from lucid._types import DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
 
 if TYPE_CHECKING:
@@ -474,7 +474,7 @@ def bincount(
     --------
     >>> import lucid
     >>> lucid.bincount(lucid.tensor([0, 1, 1, 3]))
-    tensor([1, 2, 0, 1])
+    tensor([1, 2, 0, 1], dtype=lucid.int64)
     >>> lucid.bincount(lucid.tensor([0, 1, 1]), weights=lucid.tensor([1.0, 2.0, 3.0]))
     tensor([1., 5.])
     """
@@ -496,7 +496,7 @@ def bincount(
         )
     length = minlength
     if n:
-        lowest, highest = lucid.stack([input.min(), input.max()]).tolist()
+        lowest, highest = _extremes(input)
         if lowest < 0:
             raise ValueError(
                 f"bincount: input must hold non-negative integers, got {lowest}"
@@ -512,7 +512,16 @@ def bincount(
     return _scatter_add(totals, 0, input, weights.to(dtype))
 
 
-def _bincount_dtype(weights: Tensor) -> DType:
+def _extremes(values: Tensor) -> tuple[float, float]:
+    """``values``' minimum and maximum, in one read back to the host."""
+    pair = lucid.stack([values.min(), values.max()]).tolist()
+    assert isinstance(pair, list)
+    lowest, highest = pair
+    assert isinstance(lowest, (int, float)) and isinstance(highest, (int, float))
+    return float(lowest), float(highest)
+
+
+def _bincount_dtype(weights: Tensor) -> DTypeLike:
     """The dtype weighted bin totals are summed in, as the reference sums them."""
     if weights.dtype in (lucid.float32, lucid.float64):
         return weights.dtype
@@ -898,11 +907,11 @@ def histogram(
 ) -> tuple[Tensor, Tensor]:
     """Compute a 1-D histogram of ``input`` values.
 
-    Each value's bin is found on the device — by its position on the
-    uniform grid, corrected against the edges themselves, or by a
-    ``searchsorted`` over explicit edges — and the bins filled with one
-    ``scatter_add``.  Without a ``range``, the extremes of ``input`` set it,
-    which costs one read of them back to the host.
+    Everything happens on ``input``'s device, without reading a value back
+    to the host: the range, when not given, is the input's extremes as
+    tensors; each value's bin is its position on the uniform grid,
+    corrected against the edges themselves, or a ``searchsorted`` over
+    explicit edges; and the bins fill with one ``scatter_add``.
 
     Parameters
     ----------
@@ -930,14 +939,16 @@ def histogram(
         default float dtype for an integer ``input``) and on its device.
         ``hist`` holds counts, weight sums or densities; ``bin_edges`` has
         length ``bins + 1``.  Every bin is half-open but the last, which
-        holds its right edge.
+        holds its right edge.  When the range comes from an ``input``
+        holding a NaN or an infinity, ``hist`` is all NaN — the reference
+        refuses there, which would take a read back to the host.
 
     Raises
     ------
     ValueError
         ``bins`` is not positive or its edges are fewer than two, the
-        range is not finite or its ``lo`` exceeds its ``hi``, or ``weight``
-        has another number of elements than ``input``.
+        given ``range`` is not finite or its ``lo`` exceeds its ``hi``, or
+        ``weight`` has another number of elements than ``input``.
 
     Examples
     --------
@@ -951,20 +962,7 @@ def histogram(
     dtype = input.dtype if input.is_floating_point() else lucid.get_default_dtype()
     values = input.reshape(-1).to(dtype)
     device = input.device
-    if isinstance(bins, int):
-        if bins <= 0:
-            raise ValueError(f"histogram: bins must be positive, got {bins}")
-        lo, hi = _histogram_range(values, range)
-        edges = lucid.linspace(lo, hi, bins + 1, dtype=dtype, device=device)
-        bucket = _uniform_bucket(values, edges, lo, hi, bins)
-    else:
-        if isinstance(bins, lucid.Tensor):
-            edges = bins.reshape(-1).to(dtype=dtype, device=device)
-        else:
-            edges = lucid.tensor(list(bins), dtype=dtype, device=device)
-        if edges.numel() < 2:
-            raise ValueError("histogram: bin edges must hold at least two values")
-        bucket = lucid.searchsorted(edges, values, right=True) - 1
+    edges, bucket, finite = _histogram_bins(values, bins, range)
     n_bins = int(edges.numel()) - 1
     inside = (values >= edges[0]) & (values <= edges[-1])
     if weight is None:
@@ -983,42 +981,85 @@ def histogram(
     )
     if density:
         hist = hist / (hist.sum() * (edges[1:] - edges[:-1]))
+    if finite is not None:
+        hist = lucid.where(finite, hist, lucid.full_like(hist, math.nan))
     return hist, edges
+
+
+def _histogram_bins(
+    values: Tensor,
+    bins: int | Sequence[float] | Tensor,
+    range: tuple[float, float] | None,
+) -> tuple[Tensor, Tensor, Tensor | None]:
+    """The edges, each value's bin, and — when the range was read from the
+    values — whether that range is finite."""
+    if not isinstance(bins, int):
+        if isinstance(bins, lucid.Tensor):
+            edges = bins.reshape(-1).to(dtype=values.dtype, device=values.device)
+        else:
+            edges = lucid.tensor(list(bins), dtype=values.dtype, device=values.device)
+        if edges.numel() < 2:
+            raise ValueError("histogram: bin edges must hold at least two values")
+        return edges, lucid.searchsorted(edges, values, right=True) - 1, None
+    if bins <= 0:
+        raise ValueError(f"histogram: bins must be positive, got {bins}")
+    lo, hi = _histogram_range(values, range)
+    finite = None
+    if isinstance(lo, lucid.Tensor) and isinstance(hi, lucid.Tensor):
+        finite = lucid.isfinite(lo) & lucid.isfinite(hi)
+    edges = _uniform_edges(lo, hi, bins, values)
+    return edges, _uniform_bucket(values, edges, bins), finite
 
 
 def _histogram_range(
     values: Tensor, range: tuple[float, float] | None
-) -> tuple[float, float]:
-    """The ``(lo, hi)`` a uniform histogram spans, read from ``values`` when
-    no ``range`` is given — the one host read the histogram takes."""
+) -> tuple[float, float] | tuple[Tensor, Tensor]:
+    """The ``(lo, hi)`` a uniform histogram spans.
+
+    A given ``range`` is checked here, on the host, where it already is.
+    Read from ``values`` it stays two 0-d tensors on their device, a range
+    of zero width widened by 0.5 either side by ``where``.
+    """
     if range is not None:
         lo, hi = float(range[0]), float(range[1])
-    elif values.numel():
-        lo, hi = lucid.stack([values.min(), values.max()]).tolist()
-    else:
-        lo, hi = 0.0, 1.0
-    if not (math.isfinite(lo) and math.isfinite(hi)):
-        raise ValueError(f"histogram: the range [{lo}, {hi}] is not finite")
-    if lo > hi:
-        raise ValueError(f"histogram: the range's lo {lo} exceeds its hi {hi}")
-    if lo == hi:
-        return lo - 0.5, hi + 0.5
-    return lo, hi
+        if not (math.isfinite(lo) and math.isfinite(hi)):
+            raise ValueError(f"histogram: the range [{lo}, {hi}] is not finite")
+        if lo > hi:
+            raise ValueError(f"histogram: the range's lo {lo} exceeds its hi {hi}")
+        return (lo - 0.5, hi + 0.5) if lo == hi else (lo, hi)
+    if not values.numel():
+        return 0.0, 1.0
+    low, high = values.min(), values.max()
+    flat = low == high
+    return (
+        lucid.where(flat, low - 0.5, low),
+        lucid.where(flat, high + 0.5, high),
+    )
 
 
-def _uniform_bucket(
-    values: Tensor, edges: Tensor, lo: float, hi: float, bins: int
+def _uniform_edges(
+    lo: float | Tensor, hi: float | Tensor, bins: int, like: Tensor
 ) -> Tensor:
-    """The bin of each value on ``bins`` equal bins over ``[lo, hi]``.
+    """``bins + 1`` equally spaced edges from ``lo`` to ``hi``, both exact."""
+    if isinstance(lo, float) and isinstance(hi, float):
+        return lucid.linspace(lo, hi, bins + 1, dtype=like.dtype, device=like.device)
+    steps = lucid.arange(bins, dtype=like.dtype, device=like.device) / bins
+    inner = lo + (hi - lo) * steps
+    last = (hi + lucid.zeros(1, dtype=like.dtype, device=like.device)).reshape(1)
+    return lucid.cat([inner, last], dim=0)
+
+
+def _uniform_bucket(values: Tensor, edges: Tensor, bins: int) -> Tensor:
+    """The bin of each value on ``bins`` equal bins between ``edges``' ends.
 
     The position on the grid, ``(v - lo) * bins / (hi - lo)``, rounds: a
     value on an edge can land one bin off from what the edges say.  So it
     is checked against the edges either side and moved by one where they
     disagree, as the reference corrects it — the edges are the truth.
     """
+    lo, hi = edges[0], edges[-1]
     scaled = (values - lo) * (bins / (hi - lo))
-    finite = lucid.isfinite(scaled)
-    scaled = lucid.where(finite, scaled, lucid.zeros_like(scaled))
+    scaled = lucid.where(lucid.isfinite(scaled), scaled, lucid.zeros_like(scaled))
     bucket = scaled.floor().to(lucid.int64).clamp(0, bins - 1)
     below = values < edges[bucket]
     above = (values >= edges[(bucket + 1).clamp(max=bins)]) & (bucket < bins - 1)

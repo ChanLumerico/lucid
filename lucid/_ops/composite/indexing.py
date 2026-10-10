@@ -88,7 +88,9 @@ def _scatter_add(base: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
     The engine op directly, not ``Tensor.scatter_add``, whose adapter
     narrows an ``int64`` index to ``int32`` on the way.
     """
-    return _wrap(_C_engine.scatter_add(_unwrap(base), _unwrap(index), _unwrap(src), dim))
+    return _wrap(
+        _C_engine.scatter_add(_unwrap(base), _unwrap(index), _unwrap(src), dim)
+    )
 
 
 def _along(index: Tensor, dim: int, shape: list[int]) -> _C_engine.TensorImpl:

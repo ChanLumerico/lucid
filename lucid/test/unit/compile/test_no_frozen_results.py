@@ -85,14 +85,34 @@ def test_the_second_call_answers_the_second_input(name, fn, shape):
 
 
 def test_a_pure_python_composite_that_reads_values_runs_eager():
-    """``lucid.histogram`` (1-D) is a Python composite over ``.item()``.
+    """A composite that reads an element with ``.item()`` while it runs.
 
     Reading an element during tracing used to take the trace-time value, so
-    the whole histogram was computed on the host and baked in as constants
-    — nothing in the graph depended on the input, and every call answered
-    the first.  A host read of a traced value now marks the trace
-    unsupported: the call runs eager and tracks its input.
+    whatever was computed from it was baked in as a constant and every call
+    answered the first.  A host read of a traced value now marks the trace
+    unsupported: the call runs eager and tracks its input.  (This was
+    ``lucid.histogram`` until it became tensor operations, API-05 — see
+    ``test_a_histogram_compiles_into_the_graph``.)
     """
+    lucid.manual_seed(0)
+    model = _Apply(lambda t: t / t.abs().max().item()).eval()
+    first = lucid.randn(16)
+    second = lucid.randn(16) * 7 + 3
+    want_second = model(second)
+    assert float((model(first) - want_second).abs().max().item()) > 1e-6
+
+    _C_engine.compile.session_cache_clear()
+    compiled = lucid.compile.compile(model.to("metal"))
+    compiled(first.to("metal"))
+    got_second = compiled(second.to("metal")).to("cpu")
+    assert float((got_second - want_second).abs().max().item()) <= 1e-6
+    assert compiled.cache_info()["eager_only"]
+
+
+def test_a_histogram_compiles_into_the_graph():
+    """``lucid.histogram`` reads no value back to the host (API-05): its
+    range is the input's extremes as tensors, so it traces, and the
+    compiled graph still follows its input."""
     lucid.manual_seed(0)
     model = _Apply(lambda t: lucid.histogram(t, bins=4)[0]).eval()
     first = lucid.randn(16)
@@ -105,4 +125,3 @@ def test_a_pure_python_composite_that_reads_values_runs_eager():
     compiled(first.to("metal"))
     got_second = compiled(second.to("metal")).to("cpu")
     assert float((got_second - want_second).abs().max().item()) <= 1e-6
-    assert compiled.cache_info()["eager_only"]
