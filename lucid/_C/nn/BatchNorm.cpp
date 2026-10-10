@@ -16,6 +16,7 @@
 
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <mlx/array.h>
@@ -35,6 +36,7 @@
 #include "../core/Scope.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Add.h"
@@ -83,6 +85,63 @@ void take_running_stats(const TensorImplPtr& mean,
     take_running_stat(var, std::move(new_var));
 }
 
+// Running statistics are a pair of (C,) buffers on x's device sharing one
+// dtype: the update reads the variance at the mean's dtype and writes C
+// entries into each.
+void check_running_stats(const std::string& op,
+                         const TensorImplPtr& x,
+                         const TensorImplPtr& mean,
+                         const TensorImplPtr& var,
+                         std::int64_t C) {
+    if (!mean && !var)
+        return;
+    if (!mean || !var)
+        ErrorBuilder(op).invalid_argument("running_mean and running_var must be given together");
+    Validator::pair(x, mean, op + ": x/running_mean").same_device();
+    Validator::pair(mean, var, op + ": running_mean/running_var").same_device().same_dtype();
+    require_length(mean->shape(), C, op + ": running_mean");
+    require_length(var->shape(), C, op + ": running_var");
+}
+
+// Every operand of a training-mode batch norm over ``n_spatial`` spatial
+// axes, checked before the kernel reads ``x->shape()[2 + i]`` or C entries
+// of any per-channel operand.
+void check_batch_norm_operands(const std::string& op,
+                               int n_spatial,
+                               const TensorImplPtr& x,
+                               const TensorImplPtr& gamma,
+                               const TensorImplPtr& beta,
+                               const TensorImplPtr& running_mean,
+                               const TensorImplPtr& running_var) {
+    require_rank(x->shape(), static_cast<std::size_t>(n_spatial) + 2, op + ": x",
+                 channels_first_layout(n_spatial));
+    const std::int64_t C = x->shape()[1];
+    require_length(gamma->shape(), C, op + ": weight");
+    require_length(beta->shape(), C, op + ": bias");
+    check_running_stats(op, x, running_mean, running_var, C);
+}
+
+// The number of elements each channel's statistics reduce over.  The
+// reduction must leave exactly the (C,) channel axis the buffers hold, so
+// ``axes`` names every other axis, each once.
+int reduced_count(const std::string& op, const Shape& x_shape, const std::vector<int>& axes) {
+    const std::string refusal =
+        "reduce_axes must name every axis but the channel axis 1, each once";
+    std::vector<bool> reduced(x_shape.size(), false);
+    int n = 1;
+    for (int d : axes) {
+        if (d < 0 || d >= static_cast<int>(x_shape.size()))
+            ErrorBuilder(op).index_error("reduce axis out of range");
+        if (d == 1 || reduced[static_cast<std::size_t>(d)])
+            ErrorBuilder(op).invalid_argument(refusal);
+        reduced[static_cast<std::size_t>(d)] = true;
+        n *= static_cast<int>(x_shape[static_cast<std::size_t>(d)]);
+    }
+    if (axes.size() + 1 != x_shape.size())
+        ErrorBuilder(op).invalid_argument(refusal);
+    return n;
+}
+
 }  // namespace
 
 template <>
@@ -105,13 +164,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device() != gamma->device() || x->device() != beta->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "batch_norm");
-    // Rank check: x must be (B, C, S_0, ..., S_{N-1}).
-    if (x->device() == Device::CPU &&
-        (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        if (static_cast<int>(x->shape().size()) != N + 2)
-            throw ShapeMismatch(x->shape(), Shape{}, "batch_norm: x rank mismatch");
-    if (gamma->shape().size() != 1 || beta->shape().size() != 1)
-        throw ShapeMismatch(gamma->shape(), beta->shape(), "batch_norm: γ, β must be 1-D");
+    check_batch_norm_operands(std::string(BatchNormNdBackward<N>::schema_v1.name), N, x, gamma,
+                              beta, running_mean, running_var);
 
     // 3.3 AMP plumbing: schema_v1.amp_policy == ForceFP32.  Under
     // ``AutocastGuard(F16)`` SchemaGuard returns ``Dtype::F32`` regardless
@@ -150,9 +204,6 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         spatial_total *= S[i];
     }
-    if (gamma_eff->shape()[0] != C || beta_eff->shape()[0] != C)
-        throw ShapeMismatch(gamma_eff->shape(), x_eff->shape(),
-                            "batch_norm: γ/β must have length C");
 
     OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt,
                       x_eff->shape()};
@@ -469,18 +520,16 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
                   "is not supported in the C++ fast path");
     }
 
+    const std::string op = "batch_norm_update_running_stats";
+    require_min_rank(x->shape(), 2, op + ": x", "(N, C, *)");
+    check_running_stats(op, x, running_mean, running_var, x->shape()[1]);
+
     Device device = x->device();
     backend::IBackend& be = backend::Dispatcher::for_device(device);
     const Shape& x_shape = x->shape();
 
     // Product of reduced-dim sizes — needed for the (n/(n-1)) Bessel factor.
-    int n_total = 1;
-    for (int d : reduce_axes) {
-        if (d < 0 || d >= static_cast<int>(x_shape.size())) {
-            ErrorBuilder("batch_norm_update_running_stats").index_error("reduce axis out of range");
-        }
-        n_total *= static_cast<int>(x_shape[d]);
-    }
+    const int n_total = reduced_count(op, x_shape, reduce_axes);
 
     Dtype buf_dt = running_mean->dtype();
 

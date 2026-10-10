@@ -13,6 +13,8 @@
 
 #include "ConvTransposeNd.h"
 
+#include <algorithm>
+#include <string>
 #include <vector>
 
 #include "../autograd/Helpers.h"
@@ -25,6 +27,7 @@
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/composite/Indexing.h"
@@ -58,15 +61,23 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device() != W->device() || x->device() != b->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(W->device())), "conv_transpose");
-    if (static_cast<int>(x->shape().size()) != N + 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "conv_transpose: x rank mismatch");
-    // Weight layout for transpose: (C_in, C_out / groups, K_0, ..., K_{N-1}).
-    if (static_cast<int>(W->shape().size()) != N + 2)
-        throw ShapeMismatch(W->shape(), Shape{}, "conv_transpose: W rank mismatch");
-    if (b->shape().size() != 1)
-        throw ShapeMismatch(b->shape(), Shape{}, "conv_transpose: b must be 1-D");
-    if (groups < 1)
-        ErrorBuilder("conv_transpose").invalid_argument("groups must be >= 1");
+    const std::string op(ConvTransposeNdBackward<N>::schema_v1.name);
+    require_rank(x->shape(), N + 2, op + ": x", channels_first_layout(N, "N", "C_in"));
+    require_rank(W->shape(), N + 2, op + ": weight",
+                 channels_first_layout(N, "C_in", "C_out/groups"));
+    require_at_least(groups, 1, op + ": groups");
+    require_each_at_least(stride, 1, op + ": stride");
+    require_each_at_least(pad, 0, op + ": padding");
+    require_each_at_least(opad, 0, op + ": output_padding");
+    require_each_at_least(dilation, 1, op + ": dilation");
+    // An output padding picks one of the ``max(stride, dilation)`` output
+    // extents that map back to this input extent; any more reaches past them.
+    for (int i = 0; i < N; ++i)
+        if (opad[i] >= std::max(stride[i], dilation[i]))
+            ErrorBuilder(op).invalid_argument("output_padding must be smaller than stride or "
+                                              "dilation, got " +
+                                              std::to_string(opad[i]) + " on axis " +
+                                              std::to_string(i));
 
     const int B = static_cast<int>(x->shape()[0]);
     const int Cin = static_cast<int>(x->shape()[1]);
@@ -80,15 +91,12 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     if (Cin % groups != 0)
         throw ShapeMismatch(x->shape(), W->shape(),
                             "conv_transpose: C_in must be divisible by groups");
-    if (b->shape()[0] != Cout)
-        throw ShapeMismatch(b->shape(), W->shape(), "conv_transpose: bias C_out mismatch");
+    require_length(b->shape(), Cout, op + ": bias");
 
     int S[N], K[N], O[N];
     for (int i = 0; i < N; ++i) {
         S[i] = static_cast<int>(x->shape()[2 + i]);
         K[i] = static_cast<int>(W->shape()[2 + i]);
-        if (dilation[i] < 1)
-            ErrorBuilder("conv_transpose").invalid_argument("dilation must be >= 1");
         // Transposed-conv output formula (the inverse of the forward
         // convolution's, with ``opad`` picking one of the ``stride``
         // input extents that map to this output extent).

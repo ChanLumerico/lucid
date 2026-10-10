@@ -38,8 +38,8 @@ inline void check_uniform(int S, int O, int axis, const char* op) {
 // Validate that x is non-null and has exactly expected_rank dimensions.
 inline void check_rank(const TensorImplPtr& x, int expected_rank, const char* op) {
     Validator::input(x, std::string(op) + ".x").non_null();
-    if (static_cast<int>(x->shape().size()) != expected_rank)
-        throw ShapeMismatch(x->shape(), Shape{}, std::string(op) + ": x rank mismatch");
+    require_rank(x->shape(), static_cast<std::size_t>(expected_rank), std::string(op) + ": x",
+                 channels_first_layout(expected_rank - 2));
 }
 
 }  // namespace

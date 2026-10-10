@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <initializer_list>
+#include <string>
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
@@ -39,6 +41,25 @@
 
 namespace lucid {
 
+namespace {
+
+// Every resampler reads neighbours of each output coordinate from the
+// input's spatial extents, so neither side may be empty — an empty source
+// segfaulted, a negative output size was an allocation of 2^64 bytes.
+void check_resample(const std::string& op,
+                    const Shape& in,
+                    int n_spatial,
+                    std::initializer_list<int> out) {
+    require_rank(in, static_cast<std::size_t>(n_spatial) + 2, op + ": input",
+                 channels_first_layout(n_spatial));
+    for (int i = 0; i < n_spatial; ++i)
+        require_at_least(in[2 + i], 1, op + ": input spatial extent");
+    for (int o : out)
+        require_at_least(o, 1, op + ": output extent");
+}
+
+}  // namespace
+
 const OpSchema InterpolateBilinearBackward::schema_v1{
     "interpolate_bilinear", 1, AmpPolicy::Promote, true, "", true};
 
@@ -50,23 +71,9 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input0,
     // Resampling asks for the schema dtype the kernel templates
     // would have applied; see promote_for_schema.
     const TensorImplPtr input = promote_for_schema(schema_v1, input0);
-    if (input->shape().size() != 4)
-        throw ShapeMismatch(input->shape(), Shape{},
-                            "interpolate_bilinear: input must be 4-D (N, C, H, W)");
+    check_resample("interpolate_bilinear", input->shape(), 2, {H_out, W_out});
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
-    const int H_in = static_cast<int>(input->shape()[2]);
-    const int W_in = static_cast<int>(input->shape()[3]);
-    // The source extents were read and then explicitly discarded.  They
-    // are not decoration: bilinear sampling reads the four neighbours of
-    // each output coordinate, so a source with no rows or no columns has
-    // nothing to read and segfaulted.  ``resized_crop`` on a degenerate
-    // image reached here through ``resize``.
-    if (H_in <= 0 || W_in <= 0)
-        ErrorBuilder("interpolate_bilinear")
-            .fail("cannot interpolate from an image with a zero spatial extent");
-    if (H_out <= 0 || W_out <= 0)
-        ErrorBuilder("interpolate_bilinear").invalid_argument("output extent must be positive");
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
     scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
@@ -181,8 +188,7 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
     // Resampling asks for the schema dtype the kernel templates
     // would have applied; see promote_for_schema.
     const TensorImplPtr input = promote_for_schema(schema_v1, input0);
-    if (input->shape().size() != 5)
-        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_trilinear: input must be 5-D");
+    check_resample("interpolate_trilinear", input->shape(), 3, {D_out, H_out, W_out});
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, D_out, H_out, W_out};
@@ -259,8 +265,7 @@ InterpolateNearestBackward2D::forward(const TensorImplPtr& input0, int H_out, in
     // Resampling asks for the schema dtype the kernel templates
     // would have applied; see promote_for_schema.
     const TensorImplPtr input = promote_for_schema(schema_v1, input0);
-    if (input->shape().size() != 4)
-        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest: 4-D input required");
+    check_resample("interpolate_nearest", input->shape(), 2, {H_out, W_out});
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, H_out, W_out};
@@ -328,8 +333,7 @@ TensorImplPtr InterpolateNearestBackward3D::forward(const TensorImplPtr& input0,
     // Resampling asks for the schema dtype the kernel templates
     // would have applied; see promote_for_schema.
     const TensorImplPtr input = promote_for_schema(schema_v1, input0);
-    if (input->shape().size() != 5)
-        throw ShapeMismatch(input->shape(), Shape{}, "interpolate_nearest_3d: 5-D input required");
+    check_resample("interpolate_nearest_3d", input->shape(), 3, {D_out, H_out, W_out});
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, D_out, H_out, W_out};

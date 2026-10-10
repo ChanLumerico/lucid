@@ -184,7 +184,9 @@ public:
     // Raises
     // ------
     // LucidError
-    //     If the tensor is null or its rank differs from ``expected``.
+    //     If the tensor is null.
+    // ShapeMismatch
+    //     If its rank differs from ``expected`` (see :cpp:func:`require_rank`).
     Validator& ndim(int expected);
 
     // Asserts that the tensor has at least ``min_n`` dimensions.
@@ -204,7 +206,9 @@ public:
     // Raises
     // ------
     // LucidError
-    //     If the tensor is null or its rank is below ``min_n``.
+    //     If the tensor is null.
+    // ShapeMismatch
+    //     If its rank is below ``min_n`` (see :cpp:func:`require_min_rank`).
     Validator& ndim_at_least(int min_n);
 
     // Asserts that the tensor's shape equals ``expected``.
@@ -395,5 +399,50 @@ private:
 // is ``InvalidArgument``, unequal trailing dims ``ShapeMismatch`` (both
 // ``ValueError``s on the Python side).  ``label`` names the op and operand.
 LUCID_API void require_square_matrix(const Shape& sh, const std::string& label);
+
+// The door checks every kernel that indexes fixed axes relies on.  A kernel
+// handed a rank, a per-channel length or a geometry value it does not handle
+// reads past its operands — a segfault on the CPU, a foreign MLX exception
+// on Metal — so each op refuses such an input here, on both devices alike,
+// before anything is dispatched.  ``what`` names the op and the operand
+// (``"batch_norm: x"``); ``layout`` spells the axes the kernel indexes
+// (``"(N, C, H, W)"``).
+
+// Refuse a shape whose rank is not ``rank``: ``ShapeMismatch`` (a
+// ``ValueError``) with both ranks.  The expected shape is printed with a
+// ``-1`` wildcard per axis.
+LUCID_INTERNAL void require_rank(const Shape& sh,
+                                 std::size_t rank,
+                                 const std::string& what,
+                                 const std::string& layout = "");
+
+// Refuse a shape of rank below ``min_rank``, as :cpp:func:`require_rank`.
+LUCID_INTERNAL void require_min_rank(const Shape& sh,
+                                     std::size_t min_rank,
+                                     const std::string& what,
+                                     const std::string& layout = "");
+
+// The ``layout`` of a channels-first input over ``n_spatial`` spatial axes:
+// ``(N, C, L)``, ``(N, C, H, W)`` or ``(N, C, D, H, W)``, with ``lead`` and
+// ``channel`` naming the first two axes.
+LUCID_INTERNAL std::string channels_first_layout(int n_spatial,
+                                                 const std::string& lead = "N",
+                                                 const std::string& channel = "C");
+
+// Refuse a per-channel operand (scale, shift, bias, running statistic)
+// that is not 1-D of length ``n``: ``ShapeMismatch`` naming ``(n,)``.
+LUCID_INTERNAL void require_length(const Shape& sh, std::int64_t n, const std::string& what);
+
+// Refuse an integer hyper-parameter below ``lo`` — a kernel extent, stride,
+// dilation or group count below 1, a padding below 0, an output extent the
+// kernel would allocate negatively: ``InvalidArgument`` (a ``ValueError``).
+LUCID_INTERNAL void require_at_least(std::int64_t v, std::int64_t lo, const std::string& what);
+
+// :cpp:func:`require_at_least` over every entry of a per-axis parameter.
+template <class Range>
+void require_each_at_least(const Range& values, std::int64_t lo, const std::string& what) {
+    for (const auto v : values)
+        require_at_least(static_cast<std::int64_t>(v), lo, what);
+}
 
 }  // namespace lucid

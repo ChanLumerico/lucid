@@ -17,6 +17,7 @@
 
 #include "ConvNd.h"
 
+#include <string>
 #include <vector>
 
 #include "../autograd/Helpers.h"
@@ -75,15 +76,14 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (x->device() != W->device() || x->device() != b->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(W->device())), "conv");
-    // x must be (B, C_in, S_0...) and W must be (C_out, C_in/g, K_0...).
-    if (static_cast<int>(x->shape().size()) != N + 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "conv: x rank mismatch");
-    if (static_cast<int>(W->shape().size()) != N + 2)
-        throw ShapeMismatch(W->shape(), Shape{}, "conv: W rank mismatch");
-    if (b->shape().size() != 1)
-        throw ShapeMismatch(b->shape(), Shape{}, "conv: b must be 1-D (C_out,)");
-    if (groups < 1)
-        ErrorBuilder("conv").invalid_argument("groups must be >= 1");
+    const std::string op(ConvNdBackward<N>::schema_v1.name);
+    require_rank(x->shape(), N + 2, op + ": x", channels_first_layout(N, "N", "C_in"));
+    require_rank(W->shape(), N + 2, op + ": weight",
+                 channels_first_layout(N, "C_out", "C_in/groups"));
+    require_at_least(groups, 1, op + ": groups");
+    require_each_at_least(stride, 1, op + ": stride");
+    require_each_at_least(pad, 0, op + ": padding");
+    require_each_at_least(dilation, 1, op + ": dilation");
 
     // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under an
     // ``AutocastGuard(F16)`` scope, SchemaGuard resolves ``eff_dt`` to
@@ -130,8 +130,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (Cw != Cin_g)
         throw ShapeMismatch(W_eff->shape(), x_eff->shape(),
                             "conv: W.shape[1] must equal C_in / groups");
-    if (b_eff->shape()[0] != Cout)
-        throw ShapeMismatch(b_eff->shape(), W_eff->shape(), "conv: bias C_out mismatch");
+    require_length(b_eff->shape(), Cout, op + ": bias");
 
     int S[N];
     int K[N];
@@ -139,8 +138,6 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i) {
         S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         K[i] = static_cast<int>(W_eff->shape()[2 + i]);
-        if (dilation[i] < 1)
-            ErrorBuilder("conv").invalid_argument("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
             throw ShapeMismatch(x_eff->shape(), W_eff->shape(), "conv: output shape non-positive");
@@ -406,12 +403,16 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
 
     const int N = static_cast<int>(kernel.size());
     if (N < 1 || N > 3)
-        ErrorBuilder("unfold").fail("only 1D / 2D / 3D supported");
+        ErrorBuilder("unfold").invalid_argument("only 1D / 2D / 3D supported");
     if (static_cast<int>(stride.size()) != N || static_cast<int>(pad.size()) != N ||
         static_cast<int>(dilation.size()) != N)
-        ErrorBuilder("unfold").fail("stride/pad/dilation length must match kernel");
-    if (static_cast<int>(x->shape().size()) != N + 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "unfold: x rank mismatch");
+        ErrorBuilder("unfold").invalid_argument("stride/pad/dilation length must match kernel");
+    require_rank(x->shape(), static_cast<std::size_t>(N) + 2, "unfold: x",
+                 channels_first_layout(N));
+    require_each_at_least(kernel, 1, "unfold: kernel_size");
+    require_each_at_least(stride, 1, "unfold: stride");
+    require_each_at_least(pad, 0, "unfold: padding");
+    require_each_at_least(dilation, 1, "unfold: dilation");
 
     const int B = static_cast<int>(x->shape()[0]);
     const int C = static_cast<int>(x->shape()[1]);
@@ -513,12 +514,25 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
                       const std::vector<int>& padding,
                       const std::vector<int>& dilation) {
     Validator::input(x, "fold.x").non_null();
-    if (x->shape().size() != 3)
-        ErrorBuilder("fold").fail("input must be 3-D (N, C*kH*kW, L)");
+    require_rank(x->shape(), 3, "fold: x", "(N, C*kH*kW, L)");
+    for (const auto* v : {&output_size, &kernel_size, &stride, &padding, &dilation})
+        if (v->size() != 2)
+            ErrorBuilder("fold").invalid_argument(
+                "output_size, kernel_size, stride, padding and dilation must each have 2 "
+                "entries (only 2-D folding is supported)");
+    require_each_at_least(output_size, 1, "fold: output_size");
+    require_each_at_least(kernel_size, 1, "fold: kernel_size");
+    require_each_at_least(stride, 1, "fold: stride");
+    require_each_at_least(padding, 0, "fold: padding");
+    require_each_at_least(dilation, 1, "fold: dilation");
 
     const int kH = kernel_size[0], kW = kernel_size[1];
     const int outH = output_size[0], outW = output_size[1];
     const int N = static_cast<int>(x->shape()[0]);
+    if (x->shape()[1] % (static_cast<std::int64_t>(kH) * kW) != 0)
+        ErrorBuilder("fold").invalid_argument(
+            "x.shape[1]=" + std::to_string(x->shape()[1]) +
+            " must be a multiple of kH*kW=" + std::to_string(kH * kW));
     const int C = static_cast<int>(x->shape()[1]) / (kH * kW);
 
     // The block count must match the column axis exactly; otherwise the

@@ -260,8 +260,7 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
                                             int ignore_index) {
     if (!input || !target)
         ErrorBuilder("cross_entropy").fail("null input");
-    if (input->shape().size() < 2)
-        throw ShapeMismatch(input->shape(), Shape{}, "cross_entropy: input must be (N, C, ...)");
+    require_min_rank(input->shape(), 2, "cross_entropy: input", "(N, C, *)");
     if (input->device() != target->device())
         throw DeviceMismatch(std::string(device_name(input->device())),
                              std::string(device_name(target->device())),
@@ -346,8 +345,7 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
                                        int ignore_index) {
     if (!input || !target)
         ErrorBuilder("nll_loss").fail("null input");
-    if (input->shape().size() < 2)
-        throw ShapeMismatch(input->shape(), Shape{}, "nll_loss: input must be (N, C, ...)");
+    require_min_rank(input->shape(), 2, "nll_loss: input", "(N, C, *)");
     if (input->device() != target->device())
         throw DeviceMismatch(std::string(device_name(input->device())),
                              std::string(device_name(target->device())), "nll_loss: input/target");

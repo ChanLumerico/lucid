@@ -37,6 +37,7 @@
 #include "../core/Generator.h"
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../nn/AdaptivePool.h"
 #include "../nn/Attention.h"
 #include "../nn/BatchNorm.h"
@@ -82,6 +83,9 @@ conv_bias_or_zero(const TensorImplPtr& W, py::object bias_obj, int cout_axis, in
     if (!W) {
         throw std::invalid_argument("conv: weight must not be null");
     }
+    // Sized before the op's own door runs, so the axis it reads is checked here.
+    require_min_rank(W->shape(), static_cast<std::size_t>(cout_axis) + 1, "conv: weight");
+    require_at_least(groups, 1, "conv: groups");
     const std::int64_t cout = W->shape()[static_cast<std::size_t>(cout_axis)] * groups;
     Shape s{cout};
     auto& be = backend::Dispatcher::for_device(W->device());

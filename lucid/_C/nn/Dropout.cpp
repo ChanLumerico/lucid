@@ -199,9 +199,7 @@ namespace {
 // Build the (N, C, 1, 1, ...) mask shape used by DropoutNd.
 // All spatial dimensions become 1 so the mask broadcasts over them.
 Shape channel_mask_shape(const Shape& in) {
-    if (in.size() < 2) {
-        ErrorBuilder("dropoutnd").fail("expected ndim >= 2, got" + std::to_string(in.size()));
-    }
+    require_min_rank(in, 2, "dropoutnd: x", "(N, C, *)");
     Shape m(in.size(), 1);
     m[0] = in[0];
     m[1] = in[1];
@@ -211,8 +209,7 @@ Shape channel_mask_shape(const Shape& in) {
 // Build the (N, 1, 1, ...) mask shape used by DropPath.
 // Only the batch dimension is non-trivial; all other dims broadcast.
 Shape sample_mask_shape(const Shape& in) {
-    if (in.empty())
-        ErrorBuilder("drop_path").fail("input must have ≥1 dim");
+    require_min_rank(in, 1, "drop_path: x", "(N, *)");
     Shape m(in.size(), 1);
     m[0] = in[0];
     return m;
@@ -443,8 +440,7 @@ const OpSchema DropBlockBackward::schema_v1{
 TensorImplPtr DropBlockBackward::forward(
     const TensorImplPtr& a, std::int64_t block_size, double p, double eps, Generator* gen) {
     Validator::input(a, "drop_block.a").non_null();
-    if (a->shape().size() != 4)
-        ErrorBuilder("drop_block").fail("input must be 4-D (N, C, H, W)");
+    require_rank(a->shape(), 4, "drop_block: x", "(N, C, H, W)");
     if (p < 0.0 || p >= 1.0)
         ErrorBuilder("drop_block").invalid_argument("p must be in [0, 1)");
     if (block_size <= 0)

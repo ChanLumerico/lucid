@@ -68,8 +68,7 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
 
 TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy, double cx) {
     Validator::input(input, "rotate.input").non_null();
-    if (input->shape().size() != 4)
-        throw ShapeMismatch(input->shape(), Shape{}, "rotate: input must be 4-D (N, C, H, W)");
+    require_rank(input->shape(), 4, "rotate: input", "(N, C, H, W)");
     OpScopeFull scope{"rotate", input->device(), input->dtype(), input->shape()};
     scope.set_attr("angle_deg", angle_deg);
     scope.set_attr("cy", cy);
@@ -103,12 +102,9 @@ struct BilinearShape {
 // that all leading batch dims of s1 and s2 are equal.  Returns the flattened
 // BilinearShape.  Throws ShapeMismatch on any mismatch.
 BilinearShape flatten_bilinear(const Shape& s1, const Shape& s2, const Shape& sw) {
-    if (s1.empty() || s2.empty()) {
-        ErrorBuilder("bilinear").fail("input must have ≥1 dim");
-    }
-    if (sw.size() != 3) {
-        throw ShapeMismatch(sw, Shape{}, "bilinear: weight must be 3-D");
-    }
+    require_min_rank(s1, 1, "bilinear: x1", "(*, D1)");
+    require_min_rank(s2, 1, "bilinear: x2", "(*, D2)");
+    require_rank(sw, 3, "bilinear: weight", "(D_out, D1, D2)");
     if (s1.size() != s2.size()) {
         throw ShapeMismatch(s1, s2, "bilinear: x1/x2 must have same rank");
     }

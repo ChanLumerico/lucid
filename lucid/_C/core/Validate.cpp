@@ -66,19 +66,13 @@ Validator& Validator::dtype_in(std::initializer_list<Dtype> allowed) {
 
 Validator& Validator::ndim(int expected) {
     non_null();
-    if (static_cast<int>(t_->shape().size()) != expected) {
-        ErrorBuilder(label_).fail("expected ndim=" + std::to_string(expected) +
-                                  ", got ndim=" + std::to_string(t_->shape().size()));
-    }
+    require_rank(t_->shape(), static_cast<std::size_t>(expected), label_);
     return *this;
 }
 
 Validator& Validator::ndim_at_least(int min_n) {
     non_null();
-    if (static_cast<int>(t_->shape().size()) < min_n) {
-        ErrorBuilder(label_).fail("expected ndim>=" + std::to_string(min_n) +
-                                  ", got ndim=" + std::to_string(t_->shape().size()));
-    }
+    require_min_rank(t_->shape(), static_cast<std::size_t>(min_n), label_);
     return *this;
 }
 
@@ -115,6 +109,58 @@ void require_square_matrix(const Shape& sh, const std::string& label) {
         square[n - 1] = sh[n - 2];
         throw ShapeMismatch(square, sh, label + ": a square matrix or a batch of them");
     }
+}
+
+namespace {
+
+std::string rank_refusal(const std::string& what,
+                         const char* relation,
+                         std::size_t rank,
+                         const std::string& layout,
+                         std::size_t got) {
+    std::string msg = what + " must be " + relation + std::to_string(rank) + "-D";
+    if (!layout.empty())
+        msg += " " + layout;
+    return msg + ", got " + std::to_string(got) + "-D";
+}
+
+}  // namespace
+
+void require_rank(const Shape& sh,
+                  std::size_t rank,
+                  const std::string& what,
+                  const std::string& layout) {
+    if (sh.size() != rank)
+        throw ShapeMismatch(Shape(rank, -1), sh, rank_refusal(what, "", rank, layout, sh.size()));
+}
+
+void require_min_rank(const Shape& sh,
+                      std::size_t min_rank,
+                      const std::string& what,
+                      const std::string& layout) {
+    if (sh.size() < min_rank)
+        throw ShapeMismatch(Shape(min_rank, -1), sh,
+                            rank_refusal(what, "at least ", min_rank, layout, sh.size()));
+}
+
+std::string
+channels_first_layout(int n_spatial, const std::string& lead, const std::string& channel) {
+    static const char* const kSpatial[] = {"", ", L", ", H, W", ", D, H, W"};
+    const char* spatial = (n_spatial >= 0 && n_spatial <= 3) ? kSpatial[n_spatial] : ", *";
+    return "(" + lead + ", " + channel + spatial + ")";
+}
+
+void require_length(const Shape& sh, std::int64_t n, const std::string& what) {
+    if (sh.size() != 1 || sh[0] != n)
+        throw ShapeMismatch(Shape{n}, sh,
+                            what + " must be 1-D of length " + std::to_string(n) +
+                                " (one entry per channel)");
+}
+
+void require_at_least(std::int64_t v, std::int64_t lo, const std::string& what) {
+    if (v < lo)
+        throw InvalidArgument(what + " must be >= " + std::to_string(lo) + ", got " +
+                              std::to_string(v));
 }
 
 Validator::Pair::Pair(const TensorImplPtr& a, const TensorImplPtr& b, std::string op)

@@ -12,6 +12,7 @@
 
 #include "GroupNorm.h"
 
+#include <string>
 #include <vector>
 
 #include "../autograd/Helpers.h"
@@ -25,6 +26,7 @@
 #include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Mul.h"
@@ -62,22 +64,16 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     if (x_eff->dtype() != gamma_eff->dtype() || x_eff->dtype() != beta_eff->dtype())
         throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
                             std::string(dtype_name(gamma_eff->dtype())), "group_norm");
-    // Rank >= 2 required (at least batch and channel dims).
-    if (x_eff->device() == Device::CPU &&
-        (!x_eff->is_contiguous() || !gamma_eff->is_contiguous() || !beta_eff->is_contiguous()))
-        if (x_eff->shape().size() < 2)
-            throw ShapeMismatch(x_eff->shape(), Shape{},
-                                "group_norm: x must be at least (B, C, ...)");
-    if (gamma_eff->shape().size() != 1 || beta_eff->shape().size() != 1)
-        throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(), "group_norm: γ, β must be 1-D");
-
+    require_min_rank(x_eff->shape(), 2, "group_norm: x", "(N, C, *)");
     const int B = static_cast<int>(x_eff->shape()[0]);
     const int C = static_cast<int>(x_eff->shape()[1]);
+    require_at_least(G, 1, "group_norm: num_groups");
     if (C % G != 0)
-        ErrorBuilder("group_norm").fail("C must be divisible by num_groups");
-    if (gamma_eff->shape()[0] != C || beta_eff->shape()[0] != C)
-        throw ShapeMismatch(gamma_eff->shape(), x_eff->shape(),
-                            "group_norm: γ/β must have length C");
+        ErrorBuilder("group_norm")
+            .invalid_argument("C=" + std::to_string(C) +
+                              " must be divisible by num_groups=" + std::to_string(G));
+    require_length(gamma_eff->shape(), C, "group_norm: weight");
+    require_length(beta_eff->shape(), C, "group_norm: bias");
 
     const int N_spatial = static_cast<int>(x_eff->shape().size()) - 2;
     std::vector<int> S(N_spatial);

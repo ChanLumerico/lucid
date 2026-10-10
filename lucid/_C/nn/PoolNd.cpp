@@ -18,6 +18,7 @@
 
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
@@ -84,12 +85,21 @@ inline int compute_out(int S, int K, int stride, int pad, bool ceil_mode) {
     return out;
 }
 
-// Validate that x is non-null and has rank N+2.
+// Validate x's rank and the window geometry: a zero kernel turns the zero
+// stride sentinel into a division by zero, and a negative padding a read
+// before the first element.
 template <int N>
-void validate_input(const TensorImplPtr& x, std::string_view op_name) {
-    Validator::input(x, std::string(op_name) + ".x").non_null();
-    if (static_cast<int>(x->shape().size()) != N + 2)
-        throw ShapeMismatch(x->shape(), Shape{}, std::string(op_name) + ": x rank mismatch");
+void validate_input(const TensorImplPtr& x,
+                    std::string_view op_name,
+                    const int (&K)[N],
+                    const int (&stride_in)[N],
+                    const int (&pad)[N]) {
+    const std::string op(op_name);
+    Validator::input(x, op + ".x").non_null();
+    require_rank(x->shape(), N + 2, op + ": x", channels_first_layout(N));
+    require_each_at_least(K, 1, op + ": kernel_size");
+    require_each_at_least(stride_in, 0, op + ": stride (0 means kernel_size)");
+    require_each_at_least(pad, 0, op + ": padding");
 }
 
 }  // namespace
@@ -100,7 +110,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&stride_in)[N],
                                             const int (&pad)[N],
                                             bool ceil_mode) {
-    validate_input<N>(x, MaxPoolNdBackward<N>::schema_v1.name);
+    validate_input<N>(x, MaxPoolNdBackward<N>::schema_v1.name, K, stride_in, pad);
     int stride[N];
     // stride == 0 is a sentinel meaning "use kernel size" (non-overlapping).
     for (int i = 0; i < N; ++i)
@@ -197,7 +207,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&pad)[N],
                                             bool ceil_mode,
                                             bool count_include_pad) {
-    validate_input<N>(x, AvgPoolNdBackward<N>::schema_v1.name);
+    validate_input<N>(x, AvgPoolNdBackward<N>::schema_v1.name, K, stride_in, pad);
     int stride[N];
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];

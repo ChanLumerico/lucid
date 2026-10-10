@@ -64,8 +64,13 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
         ErrorBuilder("affine_grid").fail("null theta");
     if (theta->shape().size() != 3 || theta->shape()[0] != N || theta->shape()[1] != 2 ||
         theta->shape()[2] != 3)
-        throw ShapeMismatch(theta->shape(), Shape{static_cast<std::int64_t>(N), 2, 3},
+        throw ShapeMismatch(Shape{static_cast<std::int64_t>(N), 2, 3}, theta->shape(),
                             "affine_grid: theta must be (N, 2, 3)");
+    // A negative extent sized the output as 2^64 bytes.
+    if (H < 0 || W < 0)
+        ErrorBuilder("affine_grid")
+            .invalid_argument("H and W must be >= 0, got H=" + std::to_string(H) +
+                              ", W=" + std::to_string(W));
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(H),
                     static_cast<std::int64_t>(W), 2};

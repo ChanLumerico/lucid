@@ -108,12 +108,10 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     if (x_eff->dtype() != gamma_eff->dtype() || x_eff->dtype() != beta_eff->dtype())
         throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
                             std::string(dtype_name(gamma_eff->dtype())), "layer_norm");
-    // Contiguity required on CPU; gamma/beta shape equality checked here.
-    if (x_eff->device() == Device::CPU &&
-        (!x_eff->is_contiguous() || !gamma_eff->is_contiguous() || !beta_eff->is_contiguous()))
-        if (gamma_eff->shape() != beta_eff->shape())
-            throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(),
-                                "layer_norm: γ and β must have the same shape");
+    // The kernel reads N entries of β, N being γ's element count.
+    if (gamma_eff->shape() != beta_eff->shape())
+        throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(),
+                            "layer_norm: γ and β must have the same shape");
 
     const auto [outer, N] = resolve_shapes(x_eff->shape(), gamma_eff->shape());
 

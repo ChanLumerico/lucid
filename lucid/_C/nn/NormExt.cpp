@@ -61,17 +61,13 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
                                              double eps) {
     if (!x || !mean || !var || !gamma || !beta)
         ErrorBuilder("batch_norm_eval").fail("null input");
-    if (x->shape().size() < 2)
-        throw ShapeMismatch(x->shape(), Shape{}, "batch_norm_eval: expected >=2-D x");
+    require_min_rank(x->shape(), 2, "batch_norm_eval: x", "(N, C, *)");
 
     const int C = static_cast<int>(x->shape()[1]);
-    // All stat tensors must be 1-D with length C.
-    if (mean->shape().size() != 1 || mean->shape()[0] != C || var->shape().size() != 1 ||
-        var->shape()[0] != C || gamma->shape().size() != 1 || gamma->shape()[0] != C ||
-        beta->shape().size() != 1 || beta->shape()[0] != C) {
-        throw ShapeMismatch(mean->shape(), x->shape(),
-                            "batch_norm_eval: 1-D (C,) tensors required");
-    }
+    require_length(mean->shape(), C, "batch_norm_eval: running_mean");
+    require_length(var->shape(), C, "batch_norm_eval: running_var");
+    require_length(gamma->shape(), C, "batch_norm_eval: weight");
+    require_length(beta->shape(), C, "batch_norm_eval: bias");
     int spatial = 1;
     for (std::size_t i = 2; i < x->shape().size(); ++i)
         spatial *= static_cast<int>(x->shape()[i]);
@@ -234,8 +230,7 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
     // The kernels read gamma and beta in x's dtype.
     Validator::pair(x, gamma, "global_response_norm").same_device().same_dtype();
     Validator::pair(x, beta, "global_response_norm").same_device().same_dtype();
-    if (x->shape().size() != 4)
-        throw ShapeMismatch(x->shape(), Shape{}, "global_response_norm: x must be 4-D");
+    require_rank(x->shape(), 4, "global_response_norm: x", "(N, C, H, W)");
     const int C = static_cast<int>(x->shape()[1]);
     if (gamma->numel() != static_cast<std::size_t>(C) ||
         beta->numel() != static_cast<std::size_t>(C))
