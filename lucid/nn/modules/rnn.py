@@ -730,7 +730,7 @@ class LSTM(Module):
         return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         x: Tensor | PackedSequence,
         hx: tuple[Tensor, Tensor] | None = None,
@@ -954,7 +954,7 @@ class RNNCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
         """Run the recurrent forward pass.
 
         Parameters
@@ -1118,7 +1118,7 @@ class LSTMCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         x: Tensor,
         hx: tuple[Tensor, Tensor] | None = None,
@@ -1298,7 +1298,7 @@ class GRUCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
         """Run the recurrent forward pass.
 
         Parameters
@@ -1479,7 +1479,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         return None
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         x: Tensor | PackedSequence,
         hx: Tensor | None = None,
@@ -1528,9 +1528,8 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
             fwd_out: list[Tensor] = []
             for t in range(T):
                 bs = batch_sizes[t]
-                step = cast(
-                    "Tensor",
-                    cell_fwd(_slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))),
+                step = cell_fwd(
+                    _slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))
                 )
                 h_fwd = _carry(h_fwd, step, bs)
                 fwd_out.append(_pad_rows(step, B))
@@ -1543,11 +1542,8 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
                 rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     bs = batch_sizes[t]
-                    step = cast(
-                        "Tensor",
-                        cell_rev(
-                            _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
-                        ),
+                    step = cell_rev(
+                        _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
                     )
                     h_rev = _carry(h_rev, step, bs)
                     rev_out.append(_pad_rows(step, B))
@@ -1751,7 +1747,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         return None
 
     @override
-    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+    def forward(
         self,
         x: Tensor | PackedSequence,
         hx: Tensor | None = None,
@@ -1797,9 +1793,8 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
             fwd_out: list[Tensor] = []
             for t in range(T):
                 bs = batch_sizes[t]
-                step = cast(
-                    "Tensor",
-                    cell_fwd(_slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))),
+                step = cell_fwd(
+                    _slice(inp[t], slice(0, bs)), _slice(h_fwd, slice(0, bs))
                 )
                 h_fwd = _carry(h_fwd, step, bs)
                 fwd_out.append(_pad_rows(step, B))
@@ -1811,11 +1806,8 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
                 rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     bs = batch_sizes[t]
-                    step = cast(
-                        "Tensor",
-                        cell_rev(
-                            _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
-                        ),
+                    step = cell_rev(
+                        _slice(inp[t], slice(0, bs)), _slice(h_rev, slice(0, bs))
                     )
                     h_rev = _carry(h_rev, step, bs)
                     rev_out.append(_pad_rows(step, B))

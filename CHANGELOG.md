@@ -320,6 +320,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - detr reuses the shared ResNet blocks (LCD-260-C3c)
 - drop dead text/multimodal/_utils casts (LCD-260-C3c)
 - drop dead nn/quantization casts and ignores (LCD-260-C3d)
+- unlaunder rnn.py, drop transitional mypy section (LCD-260-C3e/C4)
 
 ---
 
