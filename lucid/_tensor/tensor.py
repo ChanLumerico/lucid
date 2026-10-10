@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, overload
 
 if TYPE_CHECKING:
@@ -1161,6 +1162,7 @@ class Tensor:
         gradient: Tensor | None = None,
         retain_graph: bool = False,
         create_graph: bool = False,
+        inputs: Tensor | Sequence[Tensor] | None = None,
     ) -> None:
         r"""Compute gradients via reverse-mode automatic differentiation.
 
@@ -1188,10 +1190,14 @@ class Tensor:
             call ``backward()`` again on the same graph (e.g. to compute
             multiple gradient signals or to inspect intermediate values).
         create_graph : bool, optional
-            Reserved for higher-order differentiation.  When ``True`` the
-            backward pass itself is differentiable, enabling gradients of
-            gradients.  Not yet fully supported; accepted for API
-            compatibility.
+            When ``True`` the backward pass itself is recorded, so the
+            gradients it leaves in ``.grad`` are differentiable (gradients
+            of gradients).
+        inputs : Tensor, sequence of Tensor, or None, optional
+            Accumulate only into these tensors' ``.grad``; every other
+            leaf keeps what it had.  A non-leaf input has its ``.grad``
+            filled as if :meth:`retain_grad` had been called.  See
+            :func:`lucid.autograd.backward`.
 
         Raises
         ------
@@ -1204,6 +1210,10 @@ class Tensor:
             provided.
         RuntimeError
             If ``gradient.shape != self.shape``.
+        RuntimeError
+            If ``inputs`` is empty or one of them does not require grad.
+        NotImplementedError
+            If ``inputs`` is given together with ``create_graph=True``.
 
         Notes
         -----
@@ -1238,14 +1248,6 @@ class Tensor:
 
             for param in model.parameters():
                 param.grad = None   # or param.grad.zero_()
-
-        **Metal flush**
-
-        On Metal devices Lucid calls ``TensorImpl::eval()`` before the
-        backward pass.  This forces MLX to evaluate the forward graph eagerly
-        so that the backward kernel sees concrete values rather than deferred
-        MLX computations.  In practice this yields roughly 2× faster
-        backward passes for typical model sizes.
 
         Examples
         --------
@@ -1286,9 +1288,7 @@ class Tensor:
         # forward values.
         from lucid.autograd._backward import backward as _backward
 
-        _backward(
-            self, gradient, retain_graph=retain_graph, create_graph=create_graph
-        )
+        _backward(self, gradient, retain_graph, create_graph, inputs)
 
     def detach(self) -> Self:
         r"""Return a new tensor that shares data but is detached from the autograd graph.

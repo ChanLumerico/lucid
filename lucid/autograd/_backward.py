@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.autograd._grad_mode import enable_grad
+from lucid.autograd._grad_mode import enable_grad, no_grad
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -148,7 +148,7 @@ def backward(
     grad_tensors: Tensor | Sequence[Tensor | None] | None = None,
     retain_graph: bool = False,
     create_graph: bool = False,
-    inputs: list[Tensor] | None = None,
+    inputs: Tensor | Sequence[Tensor] | None = None,
 ) -> None:
     r"""Compute gradients of ``tensors`` w.r.t. the leaf variables in their graph.
 
@@ -186,10 +186,14 @@ def backward(
         themselves recorded in the graph, enabling higher-order
         differentiation (e.g. Hessian-vector products, meta-learning).
         Implies stronger memory usage. Defaults to ``False``.
-    inputs : list of Tensor or None, optional
-        Reserved for the future ability to restrict gradient
-        accumulation to a specified subset of leaves. Currently
-        unused.
+    inputs : Tensor, sequence of Tensor, or None, optional
+        Restrict accumulation to these tensors: only their ``.grad``
+        changes, every other leaf in the graph keeps what it had.  An
+        input that is not a leaf has its ``.grad`` filled too (it is
+        marked :meth:`~Tensor.retain_grad`, as the reference does).  An
+        input the roots do not reach is left alone.  ``None`` (default)
+        accumulates into every leaf.  Not yet supported together with
+        ``create_graph=True``.
 
     Returns
     -------
@@ -204,9 +208,15 @@ def backward(
     ------
     RuntimeError
         A root does not require grad, the number of gradients differs
-        from the number of roots, or a non-scalar root has no gradient.
+        from the number of roots, a non-scalar root has no gradient,
+        ``inputs`` is empty, or one of ``inputs`` does not require grad.
     TypeError
-        A gradient is neither a tensor nor ``None``.
+        A gradient is neither a tensor nor ``None``, or an entry of
+        ``inputs`` is not a tensor.
+    NotImplementedError
+        ``inputs`` together with ``create_graph=True``: the engine has
+        no way yet to store a differentiable gradient into ``.grad``
+        from outside a backward pass.
     ShapeMismatch, DtypeMismatch, DeviceMismatch
         A gradient's shape or device differs from its root's, or only
         one of the two is complex.
@@ -247,6 +257,14 @@ def backward(
     >>> backward(y)
     >>> x.grad
     tensor([2., 4., 6.])
+
+    Only the tensors in ``inputs`` accumulate:
+
+    >>> a = lucid.ones(2, requires_grad=True)
+    >>> b = lucid.ones(2, requires_grad=True)
+    >>> backward((a * b * 3).sum(), inputs=[a])
+    >>> a.grad, b.grad
+    (tensor([3., 3.]), None)
     """
     roots = _as_tensors(tensors)
     for i, t in enumerate(roots):
@@ -262,12 +280,104 @@ def backward(
                 "gradients (requires_grad is True on its inputs)."
             )
     seeds = _make_seeds("backward", roots, grad_tensors)
-    for root, seed in zip(roots, seeds, strict=True):
+    if inputs is not None:
+        _backward_into(
+            roots, seeds, _backward_inputs(inputs, create_graph), retain_graph
+        )
+        return
+    for index, (root, seed) in enumerate(zip(roots, seeds, strict=True)):
         impl = _seeded_root(root, seed, keep_seed_graph=False)
         _refuse_trace()
+        # Every root but the last needs the graph kept for the next one:
+        # two roots sharing a node freed it under the second.
         _C_engine.engine_backward(
-            impl, retain_graph=retain_graph, create_graph=create_graph
+            impl,
+            retain_graph=retain_graph or index < len(roots) - 1,
+            create_graph=create_graph,
         )
+
+
+def _backward_inputs(
+    inputs: Tensor | Sequence[Tensor], create_graph: bool
+) -> list[Tensor]:
+    """Check the ``inputs`` of :func:`backward`: tensors that require grad.
+
+    Raises
+    ------
+    RuntimeError
+        ``inputs`` is empty, or one of them does not require grad.
+    TypeError
+        An entry is not a tensor.
+    NotImplementedError
+        ``create_graph`` is set (see :func:`backward`).
+    """
+    from lucid._tensor.tensor import Tensor
+
+    targets = _as_tensors(inputs)
+    if not targets:
+        raise RuntimeError(
+            "backward(): inputs cannot be empty; pass None for every leaf"
+        )
+    for i, t in enumerate(targets):
+        if not isinstance(t, Tensor):
+            raise TypeError(
+                f"backward(): inputs[{i}] must be a Tensor, got {type(t).__name__}"
+            )
+        if not t.requires_grad:
+            raise RuntimeError(
+                f"backward(): inputs[{i}] does not require grad, so no "
+                "gradient can be accumulated into it"
+            )
+    if create_graph:
+        # A gradient made under create_graph has to land in the graph-mode
+        # slot of ``.grad``, which only the engine's own accumulation can
+        # write; ``Tensor.grad = g`` keeps the values and drops the graph.
+        raise NotImplementedError(
+            "backward(): inputs= together with create_graph=True is not "
+            "supported yet; use autograd.grad(..., create_graph=True) for "
+            "differentiable gradients of chosen tensors"
+        )
+    return targets
+
+
+def _backward_into(
+    roots: list[Tensor],
+    seeds: list[Tensor | None],
+    targets: list[Tensor],
+    retain_graph: bool,
+) -> None:
+    """``backward`` restricted to ``targets``: the engine's ``grad`` walks
+    only the paths to them, then each gradient is accumulated.
+
+    A target that is not a leaf is marked to retain its gradient first, so
+    the traversal itself fills its ``.grad`` (the reference does the same);
+    a leaf's gradient is added here, after its hooks ran in the traversal.
+    """
+    for t in targets:
+        if not t.is_leaf:
+            t.retain_grad()
+    grads = grad(
+        roots,
+        targets,
+        grad_outputs=seeds,
+        retain_graph=retain_graph,
+        allow_unused=True,
+    )
+    done: set[int] = set()
+    for t, g in zip(targets, grads, strict=True):
+        # A tensor named twice is still one accumulation, as one leaf's
+        # AccumulateGrad runs once per pass.
+        if g is None or not t.is_leaf or id(t) in done:
+            continue
+        done.add(id(t))
+        current = t.grad
+        if current is None:
+            t.grad = g
+        else:
+            # In place, as the engine accumulates: a ``.grad`` the caller
+            # holds sees the new total.
+            with no_grad():
+                current.add_(g)
 
 
 def grad(
