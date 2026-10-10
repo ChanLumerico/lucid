@@ -56,17 +56,23 @@ def test_dropout_actually_drops() -> None:
     )
 
 
-def test_dropout_one_is_refused() -> None:
-    """``p = 1`` is out of range and must say so rather than divide by zero.
+def test_dropout_one_drops_every_weight() -> None:
+    """``p = 1`` zeroes every attention weight, so the output is zeros.
 
     Inverted dropout scales the survivors by ``1/(1-p)``; at ``p = 1``
-    there are none and the scale is infinite.  The engine rejects it, and
-    the attention branch has to let that refusal through rather than
-    swallow it into silent NaNs.
+    there are none and the scale is infinite.  ``F.dropout`` answers that
+    case as the reference does — ``x * 0`` — rather than dividing, so the
+    attention branch must give zeros, not NaNs and not an error.
     """
     q, k, v = _qkv()
-    with pytest.raises(Exception, match=r"p must be in"):
-        F.scaled_dot_product_attention(q, k, v, dropout_p=1.0)
+    out = F.scaled_dot_product_attention(q, k, v, dropout_p=1.0).numpy()
+    assert np.all(out == 0.0)
+
+
+def test_dropout_outside_the_unit_interval_is_refused() -> None:
+    q, k, v = _qkv()
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        F.scaled_dot_product_attention(q, k, v, dropout_p=1.5)
 
 
 def test_dropout_scales_the_survivors() -> None:

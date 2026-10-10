@@ -17,6 +17,31 @@ _SELU_SCALE = 1.0507009873554805
 _ALPHA_PRIME = -_SELU_ALPHA * _SELU_SCALE  # ≈ -1.7580993408473766
 
 
+def _check_probability(p: float) -> None:
+    """Every dropout entry point takes ``p`` in ``[0, 1]``, as the reference does.
+
+    Raises:
+        ValueError: ``p`` is outside ``[0, 1]`` (or NaN).
+    """
+    if not 0.0 <= p <= 1.0:
+        raise ValueError(f"dropout probability has to be between 0 and 1, but got {p}")
+
+
+def _drop_everything(x: Tensor, p: float, training: bool) -> Tensor | None:
+    """Check ``p``; at ``p = 1`` return the answer without drawing a mask.
+
+    Dropping every element leaves nothing to rescale — ``1 / (1 - p)`` is
+    undefined — so the engine kernels refuse ``p = 1``.  The reference
+    answers ``x * 0`` instead: zeros that keep the autograd edge, so the
+    gradient reaching ``x`` is zero rather than missing.  Returns ``None``
+    when a mask has to be drawn.
+    """
+    _check_probability(p)
+    if p < 1.0:
+        return None
+    return x * 0.0 if training else x
+
+
 def _alloc_philox_state(device: DeviceLike) -> Tensor:
     """Allocate a fresh MPSGraph Philox state tensor seeded from Lucid's RNG.
 
@@ -65,8 +90,9 @@ def dropout(
     x : Tensor
         Input activations of any shape.
     p : float, optional
-        Drop probability in :math:`[0, 1)`.  ``p = 0`` short-circuits
-        to identity.  Default ``0.5``.
+        Drop probability in :math:`[0, 1]`.  ``p = 0`` short-circuits
+        to identity; ``p = 1`` returns ``x * 0`` in training.
+        Default ``0.5``.
     training : bool, optional
         When ``False``, returns ``x`` unchanged — identity at
         inference time.  Modules built on top (``nn.Dropout``) pass
@@ -125,6 +151,9 @@ def dropout(
     .. [1] Srivastava et al., *Dropout: A Simple Way to Prevent Neural
        Networks from Overfitting*, JMLR 2014.
     """
+    dropped = _drop_everything(x, p, training)
+    if dropped is not None:
+        return dropped
     if training and p > 0.0 and _C_engine.compile.current_tracer() is not None:
         # Only route through the stateful sibling when we know the
         # downstream compile path can promote the state buffer to an
@@ -155,6 +184,25 @@ def dropout(
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 
+def _alpha_affine(p: float) -> tuple[float, float]:
+    """``(a, b)`` that restore zero mean and unit variance after alpha dropout.
+
+    With keep probability ``q = 1 - p`` a dropped element takes
+    ``alpha'``; ``a = (q (1 + p alpha'^2))^(-1/2)`` and ``b = -a alpha' p``.
+    """
+    keep = 1.0 - p
+    a = (keep * (1.0 + p * _ALPHA_PRIME**2)) ** -0.5
+    return a, -a * _ALPHA_PRIME * p
+
+
+def _channel_dropout(x: Tensor, p: float, training: bool) -> Tensor:
+    """Whole-channel dropout — the one body of dropout1d / 2d / 3d."""
+    dropped = _drop_everything(x, p, training)
+    if dropped is not None:
+        return dropped
+    return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
+
+
 def dropout1d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     r"""Channel-wise dropout for 1-D sequence / feature inputs.
 
@@ -172,7 +220,7 @@ def dropout1d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     x : Tensor
         Input tensor, typically of shape :math:`(N, C, L)`.
     p : float, optional
-        Channel-drop probability in :math:`[0, 1)` (default ``0.5``).
+        Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
         When ``False``, returns ``x`` unchanged — identity at
         inference time (default ``True``).
@@ -203,7 +251,7 @@ def dropout1d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     >>> x = lucid.ones((2, 4, 5))
     >>> y = dropout1d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
+    return _channel_dropout(x, p, training)
 
 
 def dropout2d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
@@ -223,7 +271,7 @@ def dropout2d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     x : Tensor
         Input tensor of shape :math:`(N, C, H, W)`.
     p : float, optional
-        Channel-drop probability in :math:`[0, 1)` (default ``0.5``).
+        Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
         When ``False``, identity (default ``True``).
 
@@ -249,7 +297,7 @@ def dropout2d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     >>> x = lucid.ones((2, 8, 4, 4))
     >>> y = dropout2d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
+    return _channel_dropout(x, p, training)
 
 
 def dropout3d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
@@ -267,7 +315,7 @@ def dropout3d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     x : Tensor
         Input tensor of shape :math:`(N, C, D, H, W)`.
     p : float, optional
-        Channel-drop probability in :math:`[0, 1)` (default ``0.5``).
+        Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
         When ``False``, identity (default ``True``).
 
@@ -293,7 +341,7 @@ def dropout3d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     >>> x = lucid.ones((1, 4, 3, 4, 4))
     >>> y = dropout3d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
+    return _channel_dropout(x, p, training)
 
 
 def alpha_dropout(
@@ -354,30 +402,12 @@ def alpha_dropout(
     >>> x = lucid.randn(8)
     >>> y = alpha_dropout(x, p=0.1, training=True)  # doctest: +SKIP
     """
+    dropped = _drop_everything(x, p, training)
+    if dropped is not None:
+        return dropped
     if not training or p == 0.0:
         return x
-
-    xi = _unwrap(x)
-
-    if p == 1.0:
-        return _wrap(_C_engine.zeros(xi.shape, xi.dtype, xi.device))
-
-    keep_prob = 1.0 - p
-    a_coeff = (keep_prob + _ALPHA_PRIME**2 * keep_prob * p) ** (-0.5)
-    b_coeff = -a_coeff * _ALPHA_PRIME * p
-
-    # Bernoulli mask (1 = keep, 0 = drop) via uniform sampling
-    rand_s = _C_engine.rand(xi.shape, xi.dtype, xi.device)
-    thresh = _C_engine.full(xi.shape, keep_prob, xi.dtype, xi.device)
-    keep = _C_engine.less(rand_s, thresh)  # bool mask: True → keep
-    alpha_t = _C_engine.full(xi.shape, _ALPHA_PRIME, xi.dtype, xi.device)
-    mixed = _C_engine.where(keep, xi, alpha_t)  # x or alpha' per element
-
-    # Affine: a * mixed + b
-    a_t = _C_engine.full(xi.shape, a_coeff, xi.dtype, xi.device)
-    b_t = _C_engine.full(xi.shape, b_coeff, xi.dtype, xi.device)
-    out = _C_engine.add(_C_engine.mul(a_t, mixed), b_t)
-    return _wrap(out)
+    return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), p, training))
 
 
 def feature_alpha_dropout(
@@ -416,12 +446,13 @@ def feature_alpha_dropout(
     Notes
     -----
     A Bernoulli mask of shape :math:`(N, C)` is drawn and
-    broadcast across the spatial axes; surviving channels are
-    multiplied by 1 and dropped channels by 0.  (The full alpha-
-    rescaling that :func:`alpha_dropout` applies element-wise is
-    handled at the channel level here.)  Variance preservation
-    holds in expectation when the input statistics already satisfy
-    the SELU fixed-point assumptions.
+    broadcast across the spatial axes.  A dropped channel takes the
+    SELU saturation value :math:`\alpha'` in every position, and the
+    result goes through the same affine map as :func:`alpha_dropout`:
+    a kept channel becomes :math:`a x + b`, a dropped one the constant
+    :math:`a \alpha' + b`.  Variance preservation holds in expectation
+    when the input statistics already satisfy the SELU fixed-point
+    assumptions.
 
     Examples
     --------
@@ -430,6 +461,9 @@ def feature_alpha_dropout(
     >>> x = lucid.randn(2, 4, 3, 3)
     >>> y = feature_alpha_dropout(x, p=0.25, training=True)  # doctest: +SKIP
     """
+    dropped = _drop_everything(x, p, training)
+    if dropped is not None:
+        return dropped
     if not training or p == 0.0:
         return x
 
@@ -439,18 +473,23 @@ def feature_alpha_dropout(
 
     N, C = int(xi.shape[0]), int(xi.shape[1])
     keep_prob = 1.0 - p
+    a_coeff, b_coeff = _alpha_affine(p)
 
-    # (N, C) Bernoulli mask
+    # (N, C) Bernoulli mask, broadcast over the feature dimensions.
     rand_nc = _C_engine.rand([N, C], xi.dtype, xi.device)
     thresh = _C_engine.full([N, C], keep_prob, xi.dtype, xi.device)
-    keep_nc = _C_engine.less(rand_nc, thresh)  # (N, C) bool
+    keep_nc = _C_engine.less(rand_nc, thresh)
+    mask_shape = [N, C] + [1] * (len(xi.shape) - 2)
+    keep = _C_engine.broadcast_to(
+        _C_engine.reshape(keep_nc, mask_shape), list(xi.shape)
+    )
 
-    # Reshape to (N, C, 1, 1, ...) and broadcast_to input shape
-    spatial_dims = len(xi.shape) - 2
-    mask_shape = [N, C] + [1] * spatial_dims
-    keep_broad = _C_engine.reshape(keep_nc, mask_shape)
-    keep_broad = _C_engine.broadcast_to(keep_broad, list(xi.shape))
-
-    zeros_t = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
-    out = _C_engine.where(keep_broad, xi, zeros_t)
-    return _wrap(out)
+    # A kept channel is ``a * x + b``; a dropped one is the SELU saturation
+    # value pushed through the same affine map, ``a * alpha' + b``.
+    a_t = _C_engine.full(xi.shape, a_coeff, xi.dtype, xi.device)
+    b_t = _C_engine.full(xi.shape, b_coeff, xi.dtype, xi.device)
+    kept = _C_engine.add(_C_engine.mul(a_t, xi), b_t)
+    dropped_t = _C_engine.full(
+        xi.shape, a_coeff * _ALPHA_PRIME + b_coeff, xi.dtype, xi.device
+    )
+    return _wrap(_C_engine.where(keep, kept, dropped_t))

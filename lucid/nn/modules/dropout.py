@@ -6,14 +6,15 @@ from typing import override
 
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
-from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
-from lucid.nn.functional.dropout import dropout, dropout2d, feature_alpha_dropout
-
-
-def _check_dropout_prob(p: float) -> None:
-    if p < 0.0 or p > 1.0:
-        raise ValueError(f"dropout probability must be in [0, 1], got {p!r}")
+from lucid.nn.functional.dropout import (
+    _check_probability,
+    alpha_dropout,
+    dropout,
+    dropout1d,
+    dropout2d,
+    dropout3d,
+    feature_alpha_dropout,
+)
 
 
 class Dropout(Module):
@@ -105,7 +106,7 @@ class Dropout(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the Dropout module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 
@@ -207,15 +208,12 @@ class Dropout1d(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the Dropout1d module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # The engine's ``dropoutnd`` kernel handles 3-D / 4-D / 5-D inputs by
-        # building the mask along the channel axis, so the same call works
-        # here as for ``Dropout2d``.
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -229,7 +227,7 @@ class Dropout1d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout2d(x, self.p, self.training)
+        return dropout1d(x, self.p, self.training)
 
     @override
     def extra_repr(self) -> str:
@@ -313,7 +311,7 @@ class Dropout2d(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the Dropout2d module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 
@@ -432,7 +430,7 @@ class AlphaDropout(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the AlphaDropout module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 
@@ -451,7 +449,7 @@ class AlphaDropout(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
+        return alpha_dropout(x, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -532,7 +530,7 @@ class Dropout3d(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the Dropout3d module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 
@@ -551,8 +549,6 @@ class Dropout3d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        from lucid.nn.functional.dropout import dropout3d
-
         return dropout3d(x, self.p, self.training)
 
     @override
@@ -653,7 +649,7 @@ class FeatureAlphaDropout(Module):
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
         """Initialise the FeatureAlphaDropout module. See the class docstring for parameter semantics."""
         super().__init__()
-        _check_dropout_prob(p)
+        _check_probability(p)
         self.p = p
         self.inplace = inplace
 

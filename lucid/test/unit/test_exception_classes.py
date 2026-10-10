@@ -27,6 +27,7 @@ import pytest
 import lucid
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap
 from lucid.test._fixtures.devices import metal_available
 
 _KINDS = {
@@ -61,7 +62,13 @@ _REFUSALS: dict[str, tuple[Callable[[], object], str, type[Exception]]] = {
         "DtypeMismatch",
         TypeError,
     ),
-    "dropout p": (lambda: F.dropout(lucid.ones(3), 1.5), "InvalidArgument", ValueError),
+    # The engine kernel itself: ``F.dropout`` now refuses an out-of-range
+    # ``p`` in Python before the engine sees it.
+    "dropout p": (
+        lambda: _C_engine.nn.dropout(_unwrap(lucid.ones(3)), 1.5, True),
+        "InvalidArgument",
+        ValueError,
+    ),
     "histc bins": (
         lambda: lucid.histc(lucid.ones(3), bins=0),
         "InvalidArgument",
