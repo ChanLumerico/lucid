@@ -2,9 +2,12 @@
 autograd.backward() and autograd.grad() free functions.
 """
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
+
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid.autograd._grad_mode import enable_grad
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -24,9 +27,125 @@ def _refuse_trace() -> None:
         tracer.mark_unsupported("a backward pass ran inside the traced function")
 
 
+def _as_tensors(value: Tensor | Sequence[Tensor]) -> list[Tensor]:
+    """One tensor or a sequence of them, as a list."""
+    from lucid._tensor.tensor import Tensor
+
+    return [value] if isinstance(value, Tensor) else list(value)
+
+
+def _check_seed(where: str, index: int, out: Tensor, seed: object) -> Tensor | None:
+    """Hold one seed gradient to the output it is for.
+
+    ``None`` stands for an implicit ``1`` and is allowed only for a real
+    output of one element.  A tensor must have the output's shape and
+    device, and be complex exactly when the output is; another real dtype
+    is cast to the output's, as the reference casts it.
+    """
+    from lucid._tensor.tensor import Tensor
+
+    if seed is None:
+        if out.numel() != 1:
+            raise RuntimeError(
+                f"{where}(): grad can be implicitly created only for scalar "
+                f"outputs, but output {index} has shape {tuple(out.shape)}; "
+                "pass its gradient explicitly"
+            )
+        if out.is_complex():
+            raise RuntimeError(
+                f"{where}(): grad can be implicitly created only for real "
+                f"scalar outputs, but output {index} is {out.dtype}"
+            )
+        return None
+    if not isinstance(seed, Tensor):
+        raise TypeError(
+            f"{where}(): gradient {index} must be a Tensor or None, "
+            f"got {type(seed).__name__}"
+        )
+    if tuple(seed.shape) != tuple(out.shape):
+        raise _C_engine.ShapeMismatch(
+            f"{where}(): mismatch in shape: gradient {index} has shape "
+            f"{tuple(seed.shape)} and output {index} has shape {tuple(out.shape)}"
+        )
+    if seed.is_complex() != out.is_complex():
+        raise _C_engine.DtypeMismatch(
+            f"{where}(): a complex output and its gradient must both be "
+            f"complex: gradient {index} is {seed.dtype} and output {index} "
+            f"is {out.dtype}"
+        )
+    if seed.device != out.device:
+        raise _C_engine.DeviceMismatch(
+            f"{where}(): gradient {index} is on {seed.device.type} but "
+            f"output {index} is on {out.device.type}"
+        )
+    return seed if seed.dtype == out.dtype else seed.to(out.dtype)
+
+
+def _make_seeds(
+    where: str,
+    outputs: Sequence[Tensor],
+    grads: Tensor | Sequence[Tensor | None] | None,
+) -> list[Tensor | None]:
+    """Match the seed gradients a caller passed to the outputs, one each.
+
+    The one boundary for ``grad_outputs`` / ``grad_tensors`` /
+    ``Tensor.backward(gradient)``: a single tensor or ``None`` stands for
+    a one-element sequence, the count must equal the number of outputs,
+    and each seed is checked by :func:`_check_seed`.
+
+    Raises
+    ------
+    TypeError
+        ``grads`` or one of its entries is neither a tensor nor ``None``.
+    RuntimeError
+        The counts differ, or ``None`` stands for the gradient of an
+        output that is not a real scalar.
+    ShapeMismatch, DtypeMismatch, DeviceMismatch
+        A seed does not fit its output.
+    """
+    from lucid._tensor.tensor import Tensor
+
+    seeds: list[object]
+    if grads is None:
+        seeds = [None] * len(outputs)
+    elif isinstance(grads, Tensor):
+        seeds = [grads]
+    elif isinstance(grads, (list, tuple)):
+        seeds = list(grads)
+    else:
+        raise TypeError(
+            f"{where}(): gradients must be a Tensor, a sequence of Tensors "
+            f"or None, got {type(grads).__name__}"
+        )
+    if len(seeds) != len(outputs):
+        raise RuntimeError(
+            f"{where}(): got {len(outputs)} tensors and {len(seeds)} gradients"
+        )
+    return [
+        _check_seed(where, i, out, seed)
+        for i, (out, seed) in enumerate(zip(outputs, seeds, strict=True))
+    ]
+
+
+def _seeded_root(
+    out: Tensor, seed: Tensor | None, keep_seed_graph: bool
+) -> _C_engine.TensorImpl:
+    """The scalar the engine differentiates: ``out``, or ``sum(out * seed)``.
+
+    Built with grad mode on, so a backward started under ``no_grad`` still
+    reaches ``out``'s graph.  ``keep_seed_graph`` keeps a seed's own graph
+    attached, so that under ``create_graph`` a gradient is differentiable
+    with respect to whatever computed the seed.
+    """
+    if seed is None:
+        return _unwrap(out)
+    with enable_grad():
+        return _unwrap((out * (seed if keep_seed_graph else seed.detach())).sum())
+
+
 def backward(
-    tensors: Tensor | list[Tensor],
-    grad_tensors: list[Tensor] | None = None,
+    tensors: Tensor | Sequence[Tensor],
+    grad_tensors: Tensor | Sequence[Tensor | None] | None = None,
     retain_graph: bool = False,
     create_graph: bool = False,
     inputs: list[Tensor] | None = None,
@@ -51,11 +170,12 @@ def backward(
         Root tensors at which the backward pass starts. When more
         than one root is supplied each receives its own seed and the
         contributions are summed at every shared leaf.
-    grad_tensors : list of Tensor or None, optional
-        Seed cotangent vectors, one per root tensor and matching the
-        corresponding root's shape. Required when a root is
-        non-scalar. Defaults to ``ones_like(t)`` for each root, which
-        is correct for scalar losses.
+    grad_tensors : Tensor, sequence of (Tensor or None), or None, optional
+        Seed cotangent vectors, one per root tensor, each of its root's
+        shape and device (another real dtype is cast to the root's).
+        A single tensor stands for a one-element sequence.  ``None`` —
+        for the whole argument or one entry — is an implicit ``1``,
+        allowed only for a real root of one element.
     retain_graph : bool, optional
         If ``True`` the intermediate saved tensors are not freed after
         the backward pass, so the same graph can be traversed again.
@@ -79,6 +199,17 @@ def backward(
         not overwritten — call :meth:`Tensor.zero_grad` (or the
         optimizer's ``zero_grad``) between successive backward passes
         if accumulation is undesired.
+
+    Raises
+    ------
+    RuntimeError
+        A root does not require grad, the number of gradients differs
+        from the number of roots, or a non-scalar root has no gradient.
+    TypeError
+        A gradient is neither a tensor nor ``None``.
+    ShapeMismatch, DtypeMismatch, DeviceMismatch
+        A gradient's shape or device differs from its root's, or only
+        one of the two is complex.
 
     Notes
     -----
@@ -117,28 +248,32 @@ def backward(
     >>> x.grad
     tensor([2., 4., 6.])
     """
-    if not isinstance(tensors, (list, tuple)):
-        tensors = [tensors]
-    for i, t in enumerate(tensors):
+    roots = _as_tensors(tensors)
+    for i, t in enumerate(roots):
         if not t.requires_grad:
+            # Returning quietly turned "this loss is not connected to
+            # anything trainable" into a training loop that never moved a
+            # parameter.
             raise RuntimeError(
                 f"backward(): element {i} of tensors does not require grad "
                 "and has no grad_fn, so nothing upstream of it can receive "
-                "a gradient"
+                "a gradient. If it is a loss, check that it was not computed "
+                "under lucid.no_grad() and that every op on its path tracks "
+                "gradients (requires_grad is True on its inputs)."
             )
-
-    if grad_tensors is None:
-        for t in tensors:
-            t.backward(retain_graph=retain_graph, create_graph=create_graph)
-    else:
-        for t, g in zip(tensors, grad_tensors):
-            t.backward(gradient=g, retain_graph=retain_graph, create_graph=create_graph)
+    seeds = _make_seeds("backward", roots, grad_tensors)
+    for root, seed in zip(roots, seeds, strict=True):
+        impl = _seeded_root(root, seed, keep_seed_graph=False)
+        _refuse_trace()
+        _C_engine.engine_backward(
+            impl, retain_graph=retain_graph, create_graph=create_graph
+        )
 
 
 def grad(
-    outputs: Tensor | list[Tensor],
-    inputs: Tensor | list[Tensor],
-    grad_outputs: list[Tensor] | None = None,
+    outputs: Tensor | Sequence[Tensor],
+    inputs: Tensor | Sequence[Tensor],
+    grad_outputs: Tensor | Sequence[Tensor | None] | None = None,
     retain_graph: bool | None = None,
     create_graph: bool = False,
     only_inputs: bool = True,
@@ -161,10 +296,13 @@ def grad(
         Input tensors w.r.t. which gradients are requested.  Each must be
         a leaf (or non-leaf with ``requires_grad=True`` if you want grads
         flowing into intermediate nodes).
-    grad_outputs : list of Tensor, optional
-        Seed gradients :math:`\partial \mathcal{L} / \partial \text{outputs}`
-        for non-scalar outputs.  If omitted, ``outputs`` is expected to be
-        scalar and an implicit ``ones_like`` seed is used.
+    grad_outputs : Tensor, sequence of (Tensor or None), or None, optional
+        Seed gradients :math:`\partial \mathcal{L} / \partial \text{outputs}`,
+        one per output, each of its output's shape and device (another
+        real dtype is cast to the output's).  A single tensor stands for
+        a one-element sequence.  ``None`` — for the whole argument or one
+        entry — is an implicit ``1``, allowed only for a real output of
+        one element.
     retain_graph : bool, optional
         Keep the autograd graph alive after this call so additional
         backward passes are possible.  Defaults to ``create_graph``.
@@ -185,6 +323,18 @@ def grad(
         One gradient per element of ``inputs``, in the same order.
         Entries are ``None`` only when ``allow_unused=True`` and the
         input is disconnected from ``outputs``.
+
+    Raises
+    ------
+    RuntimeError
+        The number of ``grad_outputs`` differs from the number of
+        outputs, a non-scalar output has no seed, or (without
+        ``allow_unused``) an input is unreachable from ``outputs``.
+    TypeError
+        A seed is neither a tensor nor ``None``.
+    ShapeMismatch, DtypeMismatch, DeviceMismatch
+        A seed's shape or device differs from its output's, or only one
+        of the two is complex.
 
     Notes
     -----
@@ -227,55 +377,28 @@ def grad(
     >>> gg
     tensor([6., 12., 18.])
     """
-    if not isinstance(outputs, (list, tuple)):
-        outputs = [outputs]
-    if not isinstance(inputs, (list, tuple)):
-        inputs = [inputs]
+    outs = _as_tensors(outputs)
+    ins = _as_tensors(inputs)
+    seeds = _make_seeds("grad", outs, grad_outputs)
 
     _retain = retain_graph if retain_graph is not None else create_graph
 
     # One engine call per output, summing the contributions.  The engine
     # returns the gradients rather than accumulating them, so no tensor's
     # ``.grad`` is read or written — not the requested inputs', and not any
-    # other leaf's.  The previous implementation ran a full ``backward`` and
-    # restored ``.grad`` afterwards, which could only restore the tensors
-    # named in ``inputs`` and silently corrupted every other leaf.
-    totals: list[Tensor | None] = [None] * len(inputs)
-    impls = [_unwrap(inp) for inp in inputs]
-    for index, out in enumerate(outputs):
-        # Reduce an explicit seed the same way ``Tensor.backward`` does —
-        # differentiate ``sum(out * seed)`` rather than injecting the seed
-        # storage raw.  That gets dtype promotion and the shape check for
-        # free; a raw storage of a different dtype would be reinterpreted
-        # byte-for-byte and silently produce nonsense.
-        if grad_outputs is None:
-            root = _unwrap(out)
-        else:
-            seed = grad_outputs[index]
-            if out.shape != seed.shape:
-                raise RuntimeError(
-                    f"grad(): grad_outputs[{index}] shape {tuple(seed.shape)} does "
-                    f"not match output shape {tuple(out.shape)}"
-                )
-            # Tensor-level ops so the seed is promoted to the output's dtype,
-            # matching how every other mixed-dtype pair is handled.  Under
-            # ``create_graph`` the seed stays attached: the returned gradient
-            # is ``J^T seed``, and a seed computed from something upstream
-            # (the double-backward form of a JVP, a learned weighting) must be
-            # differentiable through it.  Detached, a second ``grad`` saw no
-            # path to it and answered ``None``.
-            root = _unwrap((out * (seed if create_graph else seed.detach())).sum())
-
+    # other leaf's.
+    totals: list[Tensor | None] = [None] * len(ins)
+    impls = [_unwrap(inp) for inp in ins]
+    for index, (out, seed) in enumerate(zip(outs, seeds, strict=True)):
+        # Under ``create_graph`` the seed stays attached: the returned
+        # gradient is ``J^T seed``, and a seed computed from something
+        # upstream (the double-backward form of a JVP, a learned weighting)
+        # must be differentiable through it.
+        root = _seeded_root(out, seed, keep_seed_graph=create_graph)
         # Every output but the last needs the graph kept for the next call.
-        keep = _retain or index < len(outputs) - 1
+        keep = _retain or index < len(outs) - 1
         _refuse_trace()
-        partials = _C_engine.engine_grad(
-            root,
-            impls,
-            None,
-            keep,
-            create_graph,
-        )
+        partials = _C_engine.engine_grad(root, impls, None, keep, create_graph)
         for slot, impl in enumerate(partials):
             if impl is None:
                 continue

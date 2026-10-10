@@ -678,7 +678,7 @@ def vjp(
             _ag(
                 out_list,
                 primals_rg,
-                grad_outputs=cots,  # type: ignore[arg-type]
+                grad_outputs=cots,
                 retain_graph=True,
                 create_graph=False,
                 allow_unused=True,

@@ -353,3 +353,60 @@ def test_shapes_are_judged_as_the_reference_judges_them(
         assert got[got.index("returned") :] == want[want.index("returned") :]
     else:
         assert got == want
+
+
+# ── What backward returns must be a tensor or None (LCD-247) ────────────────
+#
+# Anything else used to become "no gradient": a ``backward`` returning ``3``
+# finished without error and left ``x.grad`` at ``None``.  The reference
+# raises TypeError, and so does ``_validate`` now — in the eager and the
+# ``create_graph`` paths alike, since both call the same ``backward_fn``.
+
+_RETURNS = {
+    "int": lambda g: 3,
+    "float": lambda g: 1.5,
+    # A list is read as the sequence of gradients, one per input — so a
+    # one-element list holding a plain list of numbers.
+    "list": lambda g: [[1.0, 1.0]],
+    "ndarray": lambda g: g.detach().cpu().numpy(),
+    "tensor": lambda g: g * 3,
+    "None": lambda g: None,
+}
+
+
+@pytest.mark.parametrize("create_graph", [False, True], ids=["eager", "create-graph"])
+@pytest.mark.parametrize("kind", list(_RETURNS))
+def test_a_result_that_is_not_a_tensor_is_a_type_error(
+    kind: str, create_graph: bool, device: str
+) -> None:
+    fn = _returning(_RETURNS[kind])
+    x = lucid.ones(2, device=device, requires_grad=True)
+    loss = fn.apply(x).sum()
+    if kind == "tensor":
+        loss.backward(create_graph=create_graph)
+        assert x.grad.tolist() == [3.0, 3.0]
+    elif kind == "None":
+        loss.backward(create_graph=create_graph)
+        assert x.grad is None
+    else:
+        with pytest.raises(TypeError, match="ReturningBackward.*index 0"):
+            loss.backward(create_graph=create_graph)
+        assert x.grad is None
+
+
+def test_a_non_tensor_is_refused_even_for_an_input_needing_no_gradient(
+    device: str,
+) -> None:
+    class Two(Function):
+        @staticmethod
+        def forward(ctx, a, b):
+            return a * b
+
+        @staticmethod
+        def backward(ctx, g):
+            return g, 3
+
+    x = lucid.ones(2, device=device, requires_grad=True)
+    k = lucid.ones(2, device=device)
+    with pytest.raises(TypeError, match="index 1"):
+        Two.apply(x, k).sum().backward()

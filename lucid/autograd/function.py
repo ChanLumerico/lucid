@@ -483,6 +483,8 @@ class Function(metaclass=FunctionMeta):
 
         Raises
         ------
+        TypeError
+            When a gradient is neither a tensor nor ``None``.
         RuntimeError
             When the number of gradients fits neither form, when a
             non-tensor argument is given a gradient other than ``None``,

@@ -1037,14 +1037,23 @@ class Tensor:
         instructs the engine to keep that gradient so it can be inspected
         afterwards.
 
+        Raises
+        ------
+        RuntimeError
+            If ``self`` does not require grad.
+
         Notes
         -----
-        This method must be called **before** the forward computation whose
-        gradient you want to inspect.  Calling it after :meth:`backward` has
-        no effect. Conceptually retains
-        :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{y}}` for
-        the intermediate node :math:`\mathbf{y}` instead of discarding it
-        after its parents have consumed it.
+        Call it before the :meth:`backward` whose gradient you want to
+        inspect; it may come after the ops that consume ``self``.  Calling
+        it after :meth:`backward` has no effect on that pass.  Conceptually
+        retains :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{y}}`
+        for the intermediate node :math:`\mathbf{y}` instead of discarding
+        it after its parents have consumed it.  The retained gradient is
+        the one left after the hooks registered with :meth:`register_hook`
+        have run, whichever was registered first, and it accumulates
+        across backward passes as a leaf's does.  A leaf keeps its
+        gradient anyway.
 
         Examples
         --------
@@ -1056,21 +1065,28 @@ class Tensor:
         >>> y.grad             # now available: d(sum(y))/dy = [1., 1., 1.]
         tensor([1., 1., 1.])
         """
-        if hasattr(self._impl, "retain_grad_"):
-            self._impl.retain_grad_()
+        if not self.requires_grad:
+            raise RuntimeError(
+                "retain_grad(): this tensor does not require grad, so no "
+                "gradient will ever reach it"
+            )
+        self._impl.retain_grad_()
 
     def register_hook(
         self, hook: Callable[[Tensor], Tensor | None]
     ) -> _RemovableHandle:
-        r"""Register a hook that fires when this tensor's gradient is computed.
+        r"""Register a hook that runs on this tensor's gradient during backward.
 
-        The hook receives the accumulated gradient tensor.  If it returns a
-        non-``None`` :class:`~lucid.Tensor`, that value replaces the gradient.
+        The hook receives the gradient of ``self`` in the current backward
+        pass, once every contribution to it has arrived.  If it returns a
+        :class:`~lucid.Tensor`, that tensor replaces the gradient for
+        everything upstream of ``self``; returning ``None`` leaves it as is.
 
         Parameters
         ----------
         hook : callable
-            ``hook(grad: Tensor) -> Tensor | None``
+            ``hook(grad: Tensor) -> Tensor | None``.  A returned tensor must
+            have the gradient's dtype, device and shape.
 
         Returns
         -------
@@ -1078,20 +1094,38 @@ class Tensor:
             Call ``.remove()`` to de-register the hook, or use it as a
             context manager.
 
+        Raises
+        ------
+        RuntimeError
+            If ``self`` does not require grad.
+
         Notes
         -----
-        * For leaf tensors the hook fires after :meth:`backward` accumulates
-          the gradient, which is the common use case (gradient clipping,
-          logging).
-        * For non-leaf tensors, call :meth:`retain_grad` before the forward
-          pass so the gradient is preserved and available when hooks fire.
-        * The hook must be registered **before** the forward computation for
-          non-leaf tensors; for leaf tensors any timing works.
+        * On a **non-leaf** the hook runs once its producer's output slot
+          has received every consumer's gradient — consumers created before
+          or after the hook alike — and before the producer's backward runs.
+          No :meth:`retain_grad` is needed.  :func:`lucid.autograd.grad`
+          runs it too when the tensor lies on a path to the requested
+          inputs.
+        * On a **leaf** the hook runs just before the pass's gradient is
+          added into ``.grad``, so it sees that pass's gradient alone, not
+          the accumulated one, and an unrelated backward never runs it.
+        * Several hooks run in registration order, each on what the one
+          before it returned.  :meth:`retain_grad` keeps the gradient left
+          after all of them.
+        * The hook runs with grad mode off, or on under
+          ``backward(create_graph=True)``, where its result stays part of
+          the graph.
+        * After an in-place op on ``self``, a hook registered earlier still
+          sees the gradient of the value before the write.
+        * The hook is kept by the graph node that produced ``self``, and is
+          released with that node's saved state after a backward without
+          ``retain_graph``.  A hook on the output of an op that saves
+          nothing for backward lives as long as the graph does.
 
         Chain-rule effect: if the hook returns a tensor :math:`\tilde g`,
         the engine substitutes :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{x}}
         \leftarrow \tilde g` before continuing backward propagation.
-        A returned ``None`` leaves the gradient untouched.
 
         Examples
         --------
@@ -1103,6 +1137,15 @@ class Tensor:
         >>> grads[0]
         tensor([2., 2., 2.])
         >>> h.remove()        # de-register
+
+        On an intermediate, the returned gradient flows on upstream:
+
+        >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
+        >>> y = x * 3
+        >>> _ = y.register_hook(lambda g: g * 10)
+        >>> y.sum().backward()
+        >>> x.grad
+        tensor([30., 30.])
         """
         if not self.requires_grad:
             raise RuntimeError(
@@ -1234,63 +1277,18 @@ class Tensor:
         >>> x.grad                          # 3*x^2 + 3*x^2 = 2 * 12 = 24
         tensor([24.])
         """
-        if not self.requires_grad:
-            # The reference framework raises here too.  Returning quietly
-            # turned "this loss is not connected to anything trainable" -
-            # a loss computed under no_grad(), or through an op that does
-            # not track gradients - into a training loop that ran without
-            # error and never moved a parameter.
-            raise RuntimeError(
-                "backward(): this tensor does not require grad and has no "
-                "grad_fn, so nothing upstream of it can receive a gradient. "
-                "If it is a loss, check that it was not computed under "
-                "lucid.no_grad() and that every op on its path tracks "
-                "gradients (requires_grad is True on its inputs)."
-            )
         # NOTE: a pre-backward ``self._impl.eval()`` was here historically
         # ("evaluate forward graph before backward → ~2× faster").  Profiling
         # on M4 Max (May 2026) showed the opposite: forcing a sync point
         # between forward and backward shatters the MLX pipeline and costs
         # 5-10% of step time in eager training loops.  MLX's backward kernel
         # itself triggers the necessary evaluation when it needs concrete
-        # forward values; the explicit ``eval()`` was redundant.  Re-enable
-        # via a custom subclass if your specific workload regresses; the
-        # default training loop benchmarks faster without it.
+        # forward values.
+        from lucid.autograd._backward import backward as _backward
 
-        if gradient is not None:
-            if self._impl.shape != gradient._impl.shape:
-                raise RuntimeError(
-                    f"backward(): gradient shape {tuple(gradient._impl.shape)} does not "
-                    f"match tensor shape {tuple(self._impl.shape)}"
-                )
-            # Tensor-level ops rather than the engine primitives: those are
-            # strict about dtype, so a float32 seed on a float64 tensor was
-            # rejected even though every other mixed-dtype pair promotes.
-            root = (self * gradient.detach()).sum()._impl
-            from lucid.autograd._backward import _refuse_trace
-
-            _refuse_trace()
-            _C_engine.engine_backward(
-                root, retain_graph=retain_graph, create_graph=create_graph
-            )
-        else:
-            if self._impl.shape and self._impl.numel() != 1:
-                raise RuntimeError(
-                    "grad can be implicitly created only for scalar outputs; "
-                    "call backward(gradient=...) for non-scalar tensors"
-                )
-            from lucid.autograd._backward import _refuse_trace
-
-            _refuse_trace()
-            _C_engine.engine_backward(
-                self._impl, retain_graph=retain_graph, create_graph=create_graph
-            )
-
-        # Fire any tensor-level gradient hooks registered via register_hook().
-        # Import lazily to avoid circular imports at module load time.
-        from lucid.autograd._hooks import _dispatch_tensor_grad_hooks
-
-        _dispatch_tensor_grad_hooks()
+        _backward(
+            self, gradient, retain_graph=retain_graph, create_graph=create_graph
+        )
 
     def detach(self) -> Self:
         r"""Return a new tensor that shares data but is detached from the autograd graph.

@@ -32,6 +32,27 @@ def _require_differentiable(inputs: Tensor | tuple[Tensor, ...], where: str) -> 
             )
 
 
+def _differentiable_inputs(
+    inputs: tuple[Tensor, ...], create_graph: bool
+) -> list[Tensor]:
+    """The tensors to differentiate ``func`` at, leaving the caller's alone.
+
+    Each is a fresh leaf that requires grad and shares the input's
+    storage, so neither the caller's ``requires_grad`` nor its ``.grad``
+    is touched.  Under ``create_graph`` an input that already requires
+    grad is passed as a view instead, so the result stays differentiable
+    with respect to it.
+    """
+    return [
+        (
+            x.view_as(x)
+            if create_graph and x.requires_grad
+            else x.detach().requires_grad_(True)
+        )
+        for x in inputs
+    ]
+
+
 def jacobian(
     func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
@@ -64,8 +85,9 @@ def jacobian(
         tuple of ``Tensor``). Must be differentiable w.r.t. each
         positional input.
     inputs : Tensor or tuple of Tensor
-        Input tensor(s) at which the Jacobian is evaluated. They
-        are silently promoted to ``requires_grad=True`` if needed.
+        Input tensor(s) at which the Jacobian is evaluated. They are
+        left as they are: the Jacobian is taken at copies that require
+        grad, so the inputs' ``requires_grad`` and ``.grad`` do not change.
     create_graph : bool, optional
         If ``True`` the Jacobian itself is differentiable, enabling
         higher-order derivatives (e.g. building :func:`hessian` on
@@ -114,11 +136,7 @@ def jacobian(
     inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     # Make sure inputs require grad
-    inputs_rg = []
-    for x in inputs_t:
-        if not x.requires_grad:
-            x = x.requires_grad_(True)
-        inputs_rg.append(x)
+    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
 
     # Run forward
     _raw_outputs = func(*inputs_rg)
@@ -143,9 +161,6 @@ def jacobian(
         for out_t, out_numel in out_flat_list:
             out_shape = list(out_t.shape) if out_t.shape else []
             for i in range(out_numel):
-                for xx in inputs_rg:
-                    xx._impl.zero_grad()
-
                 if out_numel == 1 and out_shape == []:
                     seed_t = None
                 else:
@@ -228,8 +243,9 @@ def hessian(
     func : callable
         Scalar-valued function of one or more ``Tensor`` inputs.
     inputs : Tensor or tuple of Tensor
-        Inputs at which :math:`H` is evaluated. They are silently
-        promoted to ``requires_grad=True`` if necessary.
+        Inputs at which :math:`H` is evaluated. They are left as they
+        are: the Hessian is taken at copies that require grad, so the
+        inputs' ``requires_grad`` and ``.grad`` do not change.
     create_graph : bool, optional
         If ``True`` the Hessian itself remains differentiable
         (third-order derivatives). Defaults to ``False``.
@@ -275,11 +291,8 @@ def hessian(
     inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     # Make sure inputs require grad
-    inputs_rg = []
-    for x in inputs_t:
-        if not x.requires_grad:
-            x = x.requires_grad_(True)
-        inputs_rg.append(x)
+    # Leaves of their own: the Hessian is read back from their ``.grad``.
+    inputs_rg = _differentiable_inputs(inputs_t, create_graph=False)
 
     from lucid._tensor.tensor import Tensor as _T
 
@@ -366,8 +379,8 @@ def vjp(
         Function mapping ``Tensor`` inputs to a ``Tensor`` (or
         tuple thereof).
     inputs : Tensor or tuple of Tensor
-        Primal point :math:`x` at which :math:`J` is evaluated.
-        Silently promoted to ``requires_grad=True`` if needed.
+        Primal point :math:`x` at which :math:`J` is evaluated. Left as
+        it is: the product is taken at copies that require grad.
     v : Tensor or tuple of Tensor
         Cotangent vector(s) matching the output shape(s) of
         ``func``. Scalar-valued ``v`` is broadcast for scalar
@@ -411,11 +424,7 @@ def vjp(
     scalar_v = not isinstance(v, (list, tuple))
     v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
 
-    inputs_rg = []
-    for x in inputs_t:
-        if not x.requires_grad:
-            x = x.requires_grad_(True)
-        inputs_rg.append(x)
+    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
 
     outputs = func(*inputs_rg)
     if not isinstance(outputs, (list, tuple)):
@@ -554,11 +563,7 @@ def jvp(
     scalar_v = not isinstance(v, (list, tuple))
     v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
 
-    inputs_rg = []
-    for x in inputs_t:
-        if not x.requires_grad:
-            x = x.requires_grad_(True)
-        inputs_rg.append(x)
+    inputs_rg = _differentiable_inputs(inputs_t, create_graph)
 
     # Forward pass with create_graph=True to allow higher-order differentation
     primals_out = func(*inputs_rg)

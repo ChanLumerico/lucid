@@ -107,11 +107,15 @@ def _per_input(
     )
 
 
-def _validate(name: str, index: int, grad: Tensor, meta: _InputMeta) -> Tensor:
+def _validate(name: str, index: int, grad: object, meta: _InputMeta) -> Tensor | None:
     """Hold one gradient to its input's shape, dtype and device.
 
     Follows the reference framework's check on every node's results:
 
+    * ``None`` is no gradient; anything else that is not a tensor is
+      refused, whether or not the input needs a gradient;
+    * an input that needs no gradient has no edge to deliver one to, so
+      its gradient is dropped unchecked;
     * a gradient of the input's shape passes; one the input broadcasts to
       is summed back down to it; anything else is refused;
     * a dtype that differs is cast to the input's — a complex gradient for
@@ -124,8 +128,32 @@ def _validate(name: str, index: int, grad: Tensor, meta: _InputMeta) -> Tensor:
     so before this check a gradient of the wrong size was read short or
     past its end, a wrong dtype was reinterpreted bit for bit wherever the
     input was not a leaf, and a gradient on the wrong device became a
-    ``.grad`` every read of which raised ``bad_variant_access``.
+    ``.grad`` every read of which raised ``bad_variant_access``; and a
+    value that was not a tensor at all became "no gradient".
+
+    Raises
+    ------
+    TypeError
+        ``grad`` is neither a tensor nor ``None``.
+    RuntimeError
+        ``grad`` has a shape the input does not broadcast to, or a device
+        other than the input's.
     """
+    if grad is None:
+        return None
+    if not isinstance(grad, Tensor):
+        raise TypeError(
+            f"function {name} returned a gradient at index {index} that is "
+            f"neither a Tensor nor None (got {type(grad).__name__})"
+        )
+    if not meta.requires_grad:
+        return None
+    return _fit(name, index, grad, meta)
+
+
+def _fit(name: str, index: int, grad: Tensor, meta: _InputMeta) -> Tensor:
+    """Bring a tensor gradient to its input's shape, dtype and device, or
+    refuse it — the tensor half of :func:`_validate`."""
     got = tuple(grad.shape)
     if got != meta.shape:
         if not _expandable(meta.shape, got):
@@ -201,14 +229,10 @@ def _register(
 
         result: list[_C_engine.TensorImpl | None] = []
         for i, (g, meta) in enumerate(
-            zip(_per_input(name, returned, positional, len(metas)), metas)
+            zip(_per_input(name, returned, positional, len(metas)), metas, strict=True)
         ):
-            # An input that needs no gradient has no edge to deliver one to;
-            # like the reference, its result is neither checked nor kept.
-            if not isinstance(g, Tensor) or not meta.requires_grad:
-                result.append(None)
-                continue
-            result.append(_unwrap(_validate(name, i, g, meta)))
+            checked = _validate(name, i, g, meta)
+            result.append(None if checked is None else _unwrap(checked))
         return result
 
     node = _C_engine._PythonBackwardNode()

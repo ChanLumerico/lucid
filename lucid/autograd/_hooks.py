@@ -1,41 +1,24 @@
 """
 Tensor-level gradient hooks (``Tensor.register_hook``).
 
-Hooks fire after :meth:`~lucid.Tensor.backward` completes, receiving the
-accumulated gradient of the tensor they are registered on.  Hooks may
-return a replacement gradient; returning ``None`` leaves the gradient
-unchanged.
-
-The module exposes two public helpers used by ``Tensor.register_hook``:
-
-* :func:`_register_tensor_hook` — add a hook and return a removable handle.
-* :func:`_dispatch_tensor_grad_hooks` — called by ``Tensor.backward`` to
-  fire every pending hook after ``engine_backward`` has run.
-
-Design notes
-------------
-We keep a module-level registry ``_TENSOR_HOOKS`` keyed by the Python
-``id()`` of the owning tensor.  A ``weakref.finalize`` callback prunes the
-entry automatically when the tensor is garbage-collected.  This is the
-"post-backward" model — hooks fire with the *final* accumulated gradient
-stored in ``.grad``.  This is semantically correct for leaf tensors (the
-dominant use case: parameter gradient logging/clipping).  For non-leaf
-tensors, use ``retain_grad()`` before the forward pass so the grad is
-preserved.
+A hook runs inside the backward pass, where the tensor's gradient is
+complete: for a non-leaf, on its producer's output slot once every
+consumer's contribution has arrived and before the producer runs; for a
+leaf, just before the gradient is added into ``.grad``.  What a hook
+returns is the gradient that flows on.  The engine owns where and when
+(``_C_engine._tensor_hook_runner``); this module owns what a slot's hooks
+are — their list, their order, their removal, and the check that each one
+returned a tensor or ``None``.
 """
 
-import weakref
-from typing import Callable, TYPE_CHECKING, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from lucid._dispatch import _unwrap
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-# ── Registry ─────────────────────────────────────────────────────────────────
-
-# id(tensor) → (hooks_list, weakref_to_tensor)
-_TENSOR_HOOKS: dict[int, tuple[list[Callable[..., object]], weakref.ref[object]]] = {}
 
 
 class RemovableHandle:
@@ -54,14 +37,13 @@ class RemovableHandle:
     This class is *distinct* from
     ``lucid.nn.hooks.RemovableHandle``: that one manages
     forward/backward hooks on :class:`~lucid.nn.Module`, whereas
-    this one operates on the per-tensor hooks dispatched from
-    :meth:`~lucid.Tensor.backward` after the gradient has been
-    accumulated.
+    this one operates on the per-tensor hooks the engine runs on a
+    tensor's gradient during backward.
 
     Parameters
     ----------
     hooks_list : list of callable
-        The underlying registry list owned by the tensor; on
+        The hook list of the tensor's gradient slot; on
         :meth:`remove` the hook is dropped from this list.
     hook : callable
         The exact callable to remove. Identity (``is``) is used
@@ -70,24 +52,27 @@ class RemovableHandle:
     Attributes
     ----------
     _hooks_list : list of callable
-        The registry list (private).
+        The slot's hook list (private).
     _hook : callable
         The registered hook (private).
 
     Notes
     -----
-    The post-backward hook contract is
+    The hook contract is
 
     .. math::
 
         \bar x \leftarrow h(\bar x),
 
     where :math:`\bar x = \partial \mathcal{L} / \partial x` is
-    the accumulated gradient and :math:`h` is the user-supplied
-    hook. A hook returning ``None`` leaves :math:`\bar x`
-    unchanged; returning a tensor replaces it.
+    the gradient reaching :math:`x` in the current backward pass
+    and :math:`h` is the user-supplied hook. A hook returning
+    ``None`` leaves :math:`\bar x` unchanged; returning a tensor
+    replaces it for everything upstream of :math:`x`.
 
-    :meth:`remove` is idempotent — calling it twice is harmless.
+    :meth:`remove` is idempotent — calling it twice is harmless, and
+    removes one registration even when the same callable was
+    registered more than once.
 
     Examples
     --------
@@ -102,6 +87,8 @@ class RemovableHandle:
 
     >>> with x.register_hook(lambda g: g * 2) as h:
     ...     (x * x).sum().backward()
+    >>> x.grad
+    tensor([6., 12.])
     """
 
     def __init__(
@@ -110,13 +97,17 @@ class RemovableHandle:
         """Initialise the instance.  See the class docstring for parameter semantics."""
         self._hooks_list = hooks_list
         self._hook = hook
+        self._removed = False
 
     def remove(self) -> None:
         """Remove the hook from the tensor."""
-        try:
-            self._hooks_list.remove(self._hook)
-        except ValueError:
-            pass  # already removed
+        if self._removed:
+            return
+        self._removed = True
+        for i, registered in enumerate(self._hooks_list):
+            if registered is self._hook:
+                del self._hooks_list[i]
+                return
 
     def __enter__(self) -> RemovableHandle:
         """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
@@ -127,78 +118,59 @@ class RemovableHandle:
         self.remove()
 
 
+class _HookRunner:
+    """The hooks of one gradient slot, run in registration order.
+
+    The engine holds one per slot and calls it with the slot's gradient.
+    It holds no reference to the tensor: the engine keeps it on the
+    producer node (or the leaf's autograd metadata), and a reference back
+    would be a cycle the collector cannot see through the engine.
+    """
+
+    __slots__ = ("hooks",)
+
+    def __init__(self) -> None:
+        self.hooks: list[Callable[..., object]] = []
+
+    def __call__(self, grad: _C_engine.TensorImpl) -> _C_engine.TensorImpl | None:
+        """Run every hook on the gradient; the last tensor returned flows on.
+
+        Returns ``None`` when no hook replaced the gradient, so the engine
+        keeps the one it handed over, with any in-place write a hook made.
+
+        Raises
+        ------
+        TypeError
+            A hook returned something that is neither a tensor nor ``None``.
+        """
+        from lucid._tensor.tensor import Tensor
+
+        g = _wrap(grad)
+        replaced = False
+        # A snapshot: a hook may register or remove hooks on this slot.
+        for hook in tuple(self.hooks):
+            result = hook(g)
+            if result is None:
+                continue
+            if not isinstance(result, Tensor):
+                raise TypeError(
+                    f"a tensor hook must return a Tensor or None, but "
+                    f"{getattr(hook, '__qualname__', repr(hook))} returned "
+                    f"{type(result).__name__}"
+                )
+            g = result
+            replaced = True
+        return _unwrap(g) if replaced else None
+
+
 def _register_tensor_hook(
-    tensor: Tensor, hook: Callable[..., object]
+    tensor: Tensor, hook: Callable[[Tensor], Tensor | None]
 ) -> RemovableHandle:
-    """Register *hook* on *tensor*'s gradient and return a removable handle.
+    """Add *hook* to *tensor*'s gradient slot and return a removable handle.
 
-    Called by :meth:`~lucid.Tensor.register_hook`.
+    Called by :meth:`~lucid.Tensor.register_hook`.  The slot's runner is
+    installed on the first registration and shared by every later one.
     """
-    tid = id(tensor)
-    if tid not in _TENSOR_HOOKS:
-        hooks_list: list[Callable[..., object]] = []
-
-        # Clean up the registry entry when the tensor is GC'd.
-        def _finalizer(_tid: int = tid) -> None:
-            _TENSOR_HOOKS.pop(_tid, None)
-
-        _TENSOR_HOOKS[tid] = (hooks_list, weakref.ref(tensor, lambda _: _finalizer()))
-    else:
-        hooks_list, _ = _TENSOR_HOOKS[tid]
-
-    hooks_list.append(hook)
-    return RemovableHandle(hooks_list, hook)
-
-
-def _dispatch_tensor_grad_hooks() -> None:
-    """Fire all registered tensor-gradient hooks after backward completes.
-
-    Called by :meth:`~lucid.Tensor.backward` (and by the free-function
-    ``lucid.autograd.backward``) immediately after ``engine_backward``
-    returns.
-    """
-    from lucid._tensor.tensor import Tensor
-    from lucid._dispatch import _wrap
-
-    stale: list[int] = []
-    for tid, (hooks, wr) in _TENSOR_HOOKS.items():
-        t = wr()
-        if t is None:
-            stale.append(tid)
-            continue
-        if not hooks:
-            continue
-
-        t_tensor = cast(Tensor, t)
-        # Retrieve the current gradient — both accessors below are
-        # numpy-free, used in order:
-        #   1. ``grad_as_impl`` — graph-mode grad (with ``grad_fn``).
-        #   2. ``grad_to_tensor`` — wraps the accumulated grad Storage
-        #      whether or not graph-mode tracking is in place.
-        # Previously this branched to ``grad_as_python`` + ``TensorImpl
-        # (np.ndarray, ...)`` for the detached case, which pulled numpy
-        # in for every hook fire.
-        g_impl = t_tensor._impl.grad_as_impl()
-        if g_impl is None:
-            g_impl = t_tensor._impl.grad_to_tensor()
-        if g_impl is None:
-            continue  # no grad for this tensor yet
-
-        grad = _wrap(g_impl)
-
-        # Call hooks in registration order; a non-None return replaces the grad.
-        for hook in hooks:
-            result = hook(grad)
-            if result is not None:
-                if not isinstance(result, Tensor):
-                    raise TypeError(
-                        f"Tensor grad hook must return a Tensor or None, "
-                        f"got {type(result).__name__}"
-                    )
-                grad = result
-
-        # Write the (possibly modified) gradient back.
-        t_tensor._impl.set_grad(_unwrap(grad))
-
-    for tid in stale:
-        _TENSOR_HOOKS.pop(tid, None)
+    runner = _C_engine._tensor_hook_runner(_unwrap(tensor), _HookRunner)
+    runner.hooks.append(hook)
+    return RemovableHandle(runner.hooks, hook)
