@@ -43,17 +43,21 @@ def _validated(
     costs one attribute read.
     """
 
+    # Any further arguments a subclass's scorer takes are passed through
+    # untouched; only ``value`` is checked.
     @functools.wraps(method)
-    def validated(self: Distribution, value: Tensor) -> Tensor:
+    def validated(
+        self: Distribution, value: Tensor, *args: object, **kwargs: object
+    ) -> Tensor:
         if not self._validate_args or _VALIDATING.get() is self:
-            return method(self, value)
+            return method(self, value, *args, **kwargs)
         if probability:
             self._validate_probability(value)
         else:
             self._validate_sample(value)
         token = _VALIDATING.set(self)
         try:
-            return method(self, value)
+            return method(self, value, *args, **kwargs)
         finally:
             _VALIDATING.reset(token)
 
@@ -200,7 +204,7 @@ class Distribution:
     _validate_args: bool = True
 
     @override
-    def __init_subclass__(cls) -> None:
+    def __init_subclass__(cls, **kwargs: object) -> None:
         """Validate the value given to each scorer ``cls`` defines.
 
         Wrapping in place, rather than having subclasses implement a
@@ -208,7 +212,7 @@ class Distribution:
         ``log_prob`` its own: its signature, docstring and source location
         are unchanged.
         """
-        super().__init_subclass__()
+        super().__init_subclass__(**kwargs)
         for name, probability in _SCORERS.items():
             method = cls.__dict__.get(name)
             if inspect.isfunction(method) and not _is_validated(method):
@@ -218,8 +222,11 @@ class Distribution:
     def set_default_validate_args(value: bool) -> None:
         """Turn argument validation on or off for every distribution.
 
-        Applies to distributions built afterwards without an explicit
-        ``validate_args``.  Validation is on by default.
+        Applies at once to every distribution built without an explicit
+        ``validate_args`` — those read this default whenever they score or
+        are constructed — whether built before the call or after.  One given
+        ``validate_args=True`` or ``False`` keeps its own setting.
+        Validation is on by default.
 
         Parameters
         ----------

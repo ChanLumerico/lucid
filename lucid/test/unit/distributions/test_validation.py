@@ -92,6 +92,41 @@ class _Counting(D.Normal):
         return super().log_prob(value) + 0.0
 
 
+class _Weighted(D.Normal):
+    """A user family whose scorer takes more than the value."""
+
+    def log_prob(self, value: lucid.Tensor, weight: float = 1.0) -> lucid.Tensor:
+        return super().log_prob(value) * weight
+
+
+@pytest.mark.parametrize("validate", [True, False])
+def test_a_scorer_with_extra_arguments_still_takes_them(validate: bool) -> None:
+    dist = _Weighted(0.0, 1.0, validate_args=validate)
+    base = dist.log_prob(_t(0.5)).item()
+    assert dist.log_prob(_t(0.5), weight=2.0).item() == pytest.approx(2 * base)
+    assert dist.log_prob(_t(0.5), 3.0).item() == pytest.approx(3 * base)
+    assert list(inspect.signature(_Weighted.log_prob).parameters) == [
+        "self",
+        "value",
+        "weight",
+    ]
+
+
+def test_init_subclass_forwards_class_keywords() -> None:
+    seen: dict[str, object] = {}
+
+    class _Mixin:
+        def __init_subclass__(cls, **kwargs: object) -> None:
+            seen.update(kwargs)
+            super().__init_subclass__()
+
+    class _Tagged(D.Normal, _Mixin, tag="x"):
+        pass
+
+    assert issubclass(_Tagged, D.Normal)
+    assert seen == {"tag": "x"}
+
+
 def test_a_scorer_that_calls_super_is_checked_once() -> None:
     _Counting.checks = 0
     _Counting(0.0, 1.0).log_prob(_t(0.5))
@@ -127,9 +162,15 @@ def test_a_value_of_the_wrong_shape_is_refused(
 
 
 def test_the_default_can_be_turned_off_and_on() -> None:
+    built_before = D.Exponential(1.0)
+    pinned_on = D.Exponential(1.0, validate_args=True)
     try:
         D.Distribution.set_default_validate_args(False)
         assert D.Normal(0.0, -1.0).scale.item() == -1.0
+        # An instance that took the default follows it at once.
+        assert built_before.log_prob(_t(-1.0)).item() == pytest.approx(1.0)
+        with pytest.raises(ValueError, match="support"):
+            pinned_on.log_prob(_t(-1.0))
     finally:
         D.Distribution.set_default_validate_args(True)
     with pytest.raises(ValueError, match="constraint"):

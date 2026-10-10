@@ -281,7 +281,8 @@ class Exponential(ExponentialFamily):
         --------
         >>> Exponential(rate=1.0).cdf(lucid.tensor(1.0))  # 1 - e^-1 ≈ 0.632
         tensor(0.6321)
-        >>> Exponential(rate=1.0).cdf(lucid.tensor(-1.0))  # below the support
+        >>> # below the support: refused under validation, 0 without it
+        >>> Exponential(rate=1.0, validate_args=False).cdf(lucid.tensor(-1.0))
         tensor(0.)
 
         Notes
@@ -290,7 +291,9 @@ class Exponential(ExponentialFamily):
         :math:`[0, \infty)`; evaluated at a negative argument it grows
         without bound and returned -1.718 for ``x = -1``, while the line
         above this one promises a value in :math:`[0, 1]`.  A CDF is
-        defined on the whole line and is zero to the left of its support.
+        defined on the whole line and is zero to the left of its support;
+        with validation on (the default) such a value raises ``ValueError``
+        instead.
         """
         below = value < 0.0
         return lucid.where(

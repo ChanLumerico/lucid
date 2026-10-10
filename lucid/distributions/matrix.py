@@ -214,10 +214,7 @@ class Wishart(Distribution):
             validate_args=validate_args,
         )
         if scale_tril is None:
-            given_cov = given if covariance_matrix is not None else None
-            self.scale_tril = _scale_tril_of(
-                given_cov, given if given_cov is None else None
-            )
+            self.scale_tril = _scale_tril_of(covariance_matrix, precision_matrix)
         # Pre-compute covariance for mean/variance.
         self._cov = self.scale_tril @ self.scale_tril.mT
 
