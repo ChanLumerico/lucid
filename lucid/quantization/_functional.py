@@ -56,6 +56,19 @@ def _reshape_for_channel(param: Tensor, ch_axis: int, ndim: int) -> Tensor:
     return param.reshape(shape)
 
 
+def _grid_code(x: Tensor, s: _ScaleLike, z: _ZeroPointLike) -> Tensor:
+    """Return the unclamped integer code ``round(x * (1 / s)) + z`` of ``x``.
+
+    :func:`quantize` and :func:`fake_quantize` both read their codes from
+    here, so a quantized model meets the exact rounding it trained against.
+    The reciprocal is multiplied in, as the reference does, rather than
+    ``x`` being divided: at a symmetric range's extremum ``x / s`` is
+    exactly ``q_max + 0.5`` and rounds off the grid, so the clamp moved the
+    value and the straight-through gradient there was dropped.
+    """
+    return lucid.round(x * (1.0 / s)) + z
+
+
 def quantize(
     x: Tensor,
     scale: _ScaleLike,
@@ -179,7 +192,7 @@ def quantize(
         s = _reshape_for_channel(s, ch_axis, ndim)
         if isinstance(z, Tensor):
             z = _reshape_for_channel(z, ch_axis, ndim)
-    codes = lucid.clip(lucid.round(x / s) + z, qdtype.quant_min, qdtype.quant_max)
+    codes = lucid.clip(_grid_code(x, s, z), qdtype.quant_min, qdtype.quant_max)
     storage_dtype: lucid.dtype = getattr(lucid, qdtype.storage)
     return codes.to(storage_dtype)
 
@@ -312,7 +325,7 @@ class _FakeQuantizeAffine(Function):
             s = _reshape_for_channel(s, ch_axis, ndim)
             if isinstance(z, Tensor):
                 z = _reshape_for_channel(z, ch_axis, ndim)
-        q_pre = lucid.round(x / s) + z
+        q_pre = _grid_code(x, s, z)
         q = lucid.clip(q_pre, quant_min, quant_max)
         dq = (q - z) * s
         # STE mask: 1 where the code is inside the grid, 0 where it saturates.

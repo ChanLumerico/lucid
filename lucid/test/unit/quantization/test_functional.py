@@ -111,3 +111,31 @@ class TestCalculateQParams:
         # A constant tensor (min == max == 0) must not divide by zero.
         scale, _ = Q.calculate_qparams(0.0, 0.0, Q.per_tensor_affine, Q.qint8)
         assert scale.item() > 0.0
+
+
+class TestSymmetricExtremum:
+    """The STE mask is read off ``round(x * (1 / s))``, as the reference does (LCD-393).
+
+    ``s = amax / 127.5``, so a channel's extremum sits on the ``127.5`` rounding
+    boundary.  Divided, ``x / s`` lands exactly on it and rounds off the grid;
+    multiplied by the float32 reciprocal it lands a hair to either side, and
+    which side decides whether the gradient there survives.  ``quantize`` reads
+    the same codes, so a converted model meets the rounding it trained against.
+    """
+
+    def test_mask_follows_the_reciprocal_rounding(self, device: str) -> None:
+        data = np.random.default_rng(0).standard_normal((64, 256)).astype(np.float32)
+        obs = Q.PerChannelMinMaxObserver(ch_axis=1)
+        obs(lucid.tensor(data, device=device))
+        scale, zero_point = obs.calculate_qparams()
+        x = lucid.tensor(data, device=device, requires_grad=True)
+        Q.fake_quantize(x, scale, zero_point, -128, 127, ch_axis=1).sum().backward()
+        assert x.grad is not None
+
+        inv = np.float32(1.0) / scale.numpy()
+        codes = np.round(data * inv)
+        expected = ((codes >= -128) & (codes <= 127)).astype(np.float32)
+        assert (expected == 0.0).any(), "no extremum on the boundary — tests nothing"
+        np.testing.assert_array_equal(x.grad.numpy(), expected)
+        q = Q.quantize(x.detach(), scale, zero_point, Q.qint8, ch_axis=1)
+        np.testing.assert_array_equal(q.numpy(), np.clip(codes, -128, 127))
