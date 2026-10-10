@@ -29,6 +29,7 @@ Wraps the C++ engine's einops module. Supports patterns like
 from lucid._C.engine import einops as _C_einops
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dispatch import _promote_impls
+from lucid.einops import _einsum
 
 
 def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -201,6 +202,25 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
     contractions (``"bij,bjk->bik"``), and outer products
     (``"i,j->ij"``) within one consistent notation.
 
+    A subscript repeated within one operand selects that operand's
+    diagonal over those axes (``"ii->i"``, ``"bii->bi"``), and must name
+    axes of equal size.  ``...`` stands for the remaining leading axes;
+    they broadcast across operands, right-aligned.  A subscript's size
+    may be 1 in one operand and longer in another, which broadcasts.
+    Without ``->`` the output is ``...`` followed by the subscripts that
+    occur exactly once, in sorted order.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        The equation is malformed: a subscript outside ``[a-zA-Z]``, a
+        stray ``.``, the wrong number of operands, or an output subscript
+        that repeats or appears in no input.
+    lucid._C.engine.ShapeMismatch
+        An operand's rank does not match its subscripts, or a subscript's
+        sizes disagree (within one operand, or across operands without a
+        size of 1 to broadcast).
+
     Examples
     --------
     >>> import lucid
@@ -208,13 +228,19 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
     >>> b = lucid.randn(3, 4)
     >>> lucid.einops.einsum("ij,jk->ik", a, b).shape
     (2, 4)
+    >>> m = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+    >>> lucid.einops.einsum("ii->i", m)
+    tensor([1., 4.])
+    >>> lucid.einops.einsum("ii->", m)
+    tensor(5.)
     """
     # The engine contracts operands of one dtype only, so an integer operand
     # beside a float one raised ``DtypeMismatch``.  They meet at their common
     # dtype first, as in ``a * b``; all-integer operands are left as they
     # are and keep the exact integer path.
     impl_list = _promote_impls([_unwrap(t) for t in operands])
-    return _wrap(_C_einops.einsum(equation, impl_list))  # type: ignore[arg-type]
+    explicit, impl_list = _einsum.normalise(equation, impl_list)
+    return _wrap(_C_einops.einsum(explicit, impl_list))  # type: ignore[arg-type]
 
 
 __all__ = ["rearrange", "reduce", "repeat", "einsum"]
