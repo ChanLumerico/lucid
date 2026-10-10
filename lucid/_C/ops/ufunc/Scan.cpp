@@ -43,7 +43,6 @@
 #include "../bfunc/Div.h"
 #include "../bfunc/Mul.h"
 #include "../bfunc/_BinaryOp.h"
-#include "../composite/Indexing.h"
 #include "../composite/Logical.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
@@ -135,9 +134,6 @@ TensorImplPtr cumprod_grad(const TensorImplPtr& g,
                            int axis,
                            bool differentiable) {
     const Shape& shape = x->shape();
-    const std::int64_t n = shape[static_cast<std::size_t>(axis)];
-    if (n == 0)
-        return zeros_like_op(x);
     auto slice_wide = [&](const TensorImplPtr& t) { return broadcast_to_op(t, shape); };
     auto suffix_sum = [axis](const TensorImplPtr& t) {
         return flip_op(cumsum_op(flip_op(t, {axis}), axis), {axis});
@@ -154,9 +150,7 @@ TensorImplPtr cumprod_grad(const TensorImplPtr& g,
     auto x_1 = where_op(zero, one, x);
 
     auto at_before = div_op(suffix_sum(mul_op(g, y)), x_1);
-    // prod_{j<z} x_j: the last entry of the product with x read as 1 from z
-    // on (a reduction ``prod`` has no CPU bfloat16 kernel; cumprod does).
-    auto lead = slice_wide(narrow_op(cumprod_op(where_op(before, x, one), axis), axis, n - 1, 1));
+    auto lead = slice_wide(prod_op(where_op(before, x, one), {axis}, true));  // prod_{j<z} x_j
     auto restarted = cumprod_op(where_op(logical_or_op(before, first), one, x), axis);
     auto weighted = mul_op(where_op(before, nil, g), restarted);
     auto at_first = mul_op(lead, slice_wide(sum_op(weighted, {axis}, true)));

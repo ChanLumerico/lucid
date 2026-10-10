@@ -94,14 +94,14 @@ def _weights(shape: tuple[int, ...]) -> object:
     return flat
 
 
-def _close(got: object, want: object) -> None:
+def _close(got: object, want: object, tol: float = _TOL) -> None:
     if isinstance(want, list):
         assert isinstance(got, list) and len(got) == len(want)
         for g, w in zip(got, want, strict=True):
-            _close(g, w)
+            _close(g, w, tol)
         return
     assert isinstance(got, float) and isinstance(want, float)
-    assert got == pytest.approx(want, rel=_TOL, abs=_TOL), (got, want)
+    assert got == pytest.approx(want, rel=tol, abs=tol), (got, want)
 
 
 # op name -> (lucid call, reference call)
@@ -160,6 +160,28 @@ def test_scatter_prod_gradient_matches_reference(
     _close(got.tolist(), want.tolist())
     _close(xl.grad.tolist(), xr.grad.tolist())
     _close(sl.grad.tolist(), sr.grad.tolist())
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("op", list(_REDUCE))
+@pytest.mark.parametrize("case", ["none", "lone", "pair"])
+def test_bfloat16_reduction_matches_reference(
+    ref: ModuleType, device: str, op: str, case: str
+) -> None:
+    """bfloat16 too — the CPU ``prod`` reduction had no bfloat16 kernel."""
+    ours, theirs = _REDUCE[op]
+    xr = ref.tensor(_X[case], dtype=ref.bfloat16, requires_grad=True)
+    want = theirs(xr)
+    want.backward(ref.tensor(_weights(tuple(want.shape)), dtype=ref.bfloat16))
+
+    xl = lucid.tensor(_X[case]).to(lucid.bfloat16).to(device).detach().requires_grad_()
+    got = ours(xl)
+    got.backward(lucid.tensor(_weights(tuple(got.shape))).to(lucid.bfloat16).to(device))
+
+    assert got.dtype == lucid.bfloat16
+    assert xl.grad.dtype == lucid.bfloat16
+    _close(got.float().tolist(), want.float().tolist(), tol=1e-2)
+    _close(xl.grad.float().tolist(), xr.grad.float().tolist(), tol=1e-2)
 
 
 def _f64(values: list[object]) -> lucid.Tensor:

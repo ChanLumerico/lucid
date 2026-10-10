@@ -277,7 +277,9 @@ def test_scatter_add_reads_its_index_at_the_right_width(dtype_name: str) -> None
     index had two of its values read as one — a silently wrong result —
     and an int8 index had four read as one, producing an index far outside
     the base and an out-of-bounds write.  ``pytest -m audit`` took the
-    whole process down on ``dtype-lucid.scatter_add``.
+    whole process down on ``dtype-lucid.scatter_add``.  An int8 / int16
+    index is now refused at the op's door, as ``gather`` and ``scatter``
+    refuse it (LCD-288); int32 and int64 are read at their own width.
     """
     base = lucid.tensor(np.zeros((2, 4), dtype=np.float32))
     index = lucid.tensor(
@@ -286,6 +288,10 @@ def test_scatter_add_reads_its_index_at_the_right_width(dtype_name: str) -> None
     source = lucid.tensor(
         np.array([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]], np.float32)
     )
+    if dtype_name in ("int8", "int16"):
+        with pytest.raises(TypeError, match="index"):
+            lucid.scatter_add(base, 1, index, source)
+        return
     got = lucid.scatter_add(base, 1, index, source).numpy()
     assert np.allclose(got, [[1.0, 2.0, 3.0, 4.0], [8.0, 7.0, 6.0, 5.0]]), dtype_name
 
