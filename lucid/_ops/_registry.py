@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
+from lucid._ops._reduce import _std_adapter, _var_adapter
 
 
 @dataclass(slots=True)
@@ -213,7 +214,7 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "keepdim"]),
     OpEntry("min",    A._min_adapter,    1, method_name="min",    free_fn_name="min",
             extra_kwargs=["dim", "keepdim"]),
-    OpEntry("var",    A._var_adapter,    1, method_name="var",    free_fn_name="var",
+    OpEntry("var",    _var_adapter,      1, method_name="var",    free_fn_name="var",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
     OpEntry("argmax", A._argmax_adapter, 1, method_name="argmax", free_fn_name="argmax",
             extra_kwargs=["dim", "keepdim"]),
@@ -335,7 +336,7 @@ _REGISTRY: list[OpEntry] = [
 
     # ── rsqrt / std (engine-native) ────────────────────────────────────────
     OpEntry("rsqrt", _R.rsqrt, 1, method_name="rsqrt", free_fn_name="rsqrt"),
-    OpEntry("std",   A._std_adapter, 1, method_name="std",   free_fn_name="std",
+    OpEntry("std",   _std_adapter,   1, method_name="std",   free_fn_name="std",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
 
     # ── boolean reductions ─────────────────────────────────────────────────

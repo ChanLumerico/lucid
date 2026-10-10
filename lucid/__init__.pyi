@@ -5151,8 +5151,7 @@ def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
     """
     ...
 def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
-def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
-def var(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor:
+def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
     r"""    Return the smallest element of ``x``, or the smallest along ``dim``.
     
     Only the values come back.  The reference framework's ``min(x, dim)``
@@ -5191,46 +5190,125 @@ def var(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False,
     Tensor([1., 2.])
     """
     ...
-def std(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor:
-    r"""    Compute the sample standard deviation along ``dim``.
+def var(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor:
+    r"""    Compute the variance along ``dim``.
     
-    Defined as the square root of the (corrected) sample variance.  The
-    ``correction`` keyword selects between Bessel-corrected (``correction=1``,
-    the default — divides by :math:`n-1`) and biased (``correction=0`` —
-    divides by :math:`n`) estimates.
+    The sum of squared deviations from the mean, divided by
+    :math:`\max(n - c, 0)` for ``n`` reduced elements and correction
+    :math:`c`.  ``correction=1`` (the default) is Bessel's unbiased sample
+    variance; ``correction=0`` the population variance.
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
-    dim : int or list of int, optional
-        Dimension(s) to reduce.
+    dim : int or sequence of int, optional
+        Dimension(s) to reduce.  ``None`` reduces every element.  A
+        dimension named twice is refused.
+    unbiased : bool, optional
+        ``True`` is ``correction=1``, ``False`` ``correction=0``; it
+        overrides ``correction`` when given.  A bool in the place of
+        ``dim`` — ``var(x, False)`` — is read as this.
     keepdim : bool, default False
         Whether to retain reduced dims with size 1.
-    correction : int, default 1
-        Degrees-of-freedom correction.  ``1`` for unbiased, ``0`` for biased.
+    correction : int or float, optional
+        Degrees-of-freedom correction :math:`c`.  Default ``1``.
     
     Returns
     -------
     Tensor
         Reduced floating-point tensor.
     
+    Raises
+    ------
+    ValueError
+        If ``dim`` names one dimension twice.
+    
+    Warns
+    -----
+    LucidDeprecationWarning
+        For a third positional argument, ``var(x, dim, keepdim)``.  It is
+        still read as ``keepdim`` and becomes ``unbiased`` in 3.18.0, the
+        reference's ``var(x, dim, unbiased, keepdim)``; pass
+        ``keepdim=`` by keyword.
+    
     Notes
     -----
     .. math::
     
-        \sigma \;=\; \sqrt{ \frac{1}{n - c}
-            \sum_{i=1}^{n} (x_i - \bar{x})^2 } ,
+        \sigma^2 \;=\; \frac{1}{\max(n - c, 0)}
+            \sum_{i=1}^{n} (x_i - \bar{x})^2 .
     
-    where :math:`c` is the correction and :math:`\bar{x}` is the sample
-    mean.
+    With :math:`n \le c` the divisor is 0: a slice with no spread gives
+    ``nan`` and one with spread ``inf`` — so ``var`` of a single element is
+    ``nan`` under the default correction, as is any empty reduction.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 4.0, 6.0, 8.0]])
+    >>> lucid.var(x, 1)
+    tensor([1.667, 6.667])
+    >>> lucid.var(x, 1, False, True)
+    tensor([[1.25], [5.]])
+    """
+    ...
+def std(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor:
+    r"""    Compute the standard deviation along ``dim``.
+    
+    The square root of :func:`var` with the same arguments: ``correction=1``
+    (the default) divides by :math:`n-1`, ``correction=0`` by :math:`n`.
+    
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor.
+    dim : int or sequence of int, optional
+        Dimension(s) to reduce.  ``None`` reduces every element.  A
+        dimension named twice is refused.
+    unbiased : bool, optional
+        ``True`` is ``correction=1``, ``False`` ``correction=0``; it
+        overrides ``correction`` when given.  A bool in the place of
+        ``dim`` — ``std(x, False)`` — is read as this.
+    keepdim : bool, default False
+        Whether to retain reduced dims with size 1.
+    correction : int or float, optional
+        Degrees-of-freedom correction.  Default ``1``.
+    
+    Returns
+    -------
+    Tensor
+        Reduced floating-point tensor.
+    
+    Raises
+    ------
+    ValueError
+        If ``dim`` names one dimension twice.
+    
+    Warns
+    -----
+    LucidDeprecationWarning
+        For a third positional argument, as :func:`var` does.
+    
+    Notes
+    -----
+    .. math::
+    
+        \sigma \;=\; \sqrt{ \frac{1}{\max(n - c, 0)}
+            \sum_{i=1}^{n} (x_i - \bar{x})^2 } .
+    
+    The gradient of a slice with no spread (``std`` 0) is 0, the
+    subgradient the reference picks, rather than ``nan``.  Too few elements
+    (:math:`n \le c`) give ``nan`` or ``inf``, as :func:`var` explains.
     
     Examples
     --------
     >>> import lucid
     >>> x = lucid.tensor([1.0, 2.0, 3.0, 4.0])
     >>> lucid.std(x)
-    Tensor(1.2910)
+    tensor(1.291)
+    >>> lucid.std(x, correction=0)
+    tensor(1.118)
     """
     ...
 def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor:

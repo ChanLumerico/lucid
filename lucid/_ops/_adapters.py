@@ -17,8 +17,8 @@ Adapters fall into a few buckets:
 * sub-module forwarders    — route into ``lucid.linalg`` / ``lucid.einops``
                               for top-level aliases (cross, norm, einsum).
 
-Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
-adapters and live at the top of the module.
+The reduction adapters take their axes from :mod:`lucid._ops._reduce`, which
+also holds ``var`` / ``std`` and the numerics they share with the norms.
 """
 
 import inspect
@@ -39,6 +39,7 @@ from lucid._dispatch import (
     _unwrap_or_scalar,
 )
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
+from lucid._ops._reduce import _reduction_axes
 from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
@@ -202,43 +203,6 @@ def _make_join_adapter(engine_fn: Callable[..., _Impl]) -> Callable[..., _Impl]:
 
     _keep_engine_signature(_adapter, engine_fn)
     return _adapter
-
-
-# ── Shared helpers ───────────────────────────────────────────────────────────
-
-
-def _to_axes(dim: int | Sequence[int] | None) -> list[int]:
-    """Convert ``None | int | list[int]`` → ``list[int]`` for the engine."""
-    if dim is None:
-        return []
-    if isinstance(dim, (list, tuple)):
-        return [int(d) for d in dim]
-    return [int(cast(int, dim))]
-
-
-def _bessel_correct(
-    result_impl: _Impl,
-    x_impl: _Impl,
-    axes_list: Sequence[int],
-    correction: int,
-) -> _Impl:
-    """Scale a ddof=0 variance to match ``correction``.  No-op when 0."""
-    if correction == 0:
-        return result_impl
-    n = 1
-    if axes_list:
-        for ax in axes_list:
-            n *= int(x_impl.shape[ax])
-    else:
-        for s in x_impl.shape:
-            n *= int(s)
-    if n <= correction:
-        return result_impl
-    scale = float(n) / float(n - correction)
-    scale_t = _C_engine.full(
-        list(result_impl.shape), scale, result_impl.dtype, result_impl.device
-    )
-    return _C_engine.mul(result_impl, scale_t)
 
 
 # ── Engine-arg-order adapters ────────────────────────────────────────────────
@@ -733,7 +697,7 @@ def _sum_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """sum(x, dim=None, keepdim=False)."""
-    return _C_engine.sum(x_impl, _to_axes(dim), bool(keepdim))
+    return _C_engine.sum(x_impl, _reduction_axes(x_impl, dim, "sum"), bool(keepdim))
 
 
 def _mean_adapter(
@@ -742,7 +706,7 @@ def _mean_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """mean(x, dim=None, keepdim=False)."""
-    return _C_engine.mean(x_impl, _to_axes(dim), bool(keepdim))
+    return _C_engine.mean(x_impl, _reduction_axes(x_impl, dim, "mean"), bool(keepdim))
 
 
 def _prod_adapter(
@@ -751,7 +715,7 @@ def _prod_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """prod(x, dim=None, keepdim=False)."""
-    return _C_engine.prod(x_impl, _to_axes(dim), bool(keepdim))
+    return _C_engine.prod(x_impl, _reduction_axes(x_impl, dim, "prod"), bool(keepdim))
 
 
 def _max_adapter(
@@ -760,7 +724,7 @@ def _max_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """max(x, dim=None, keepdim=False)."""
-    return _C_engine.max(x_impl, _to_axes(dim), bool(keepdim))
+    return _C_engine.max(x_impl, _reduction_axes(x_impl, dim, "max"), bool(keepdim))
 
 
 def _min_adapter(
@@ -769,40 +733,7 @@ def _min_adapter(
     keepdim: bool = False,
 ) -> _Impl:
     """min(x, dim=None, keepdim=False)."""
-    return _C_engine.min(x_impl, _to_axes(dim), bool(keepdim))
-
-
-def _var_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-    *,
-    correction: int = 1,
-    unbiased: bool | None = None,
-) -> _Impl:
-    """var(x, dim, keepdim, correction=1) — ddof default matches reference."""
-    if unbiased is not None:
-        correction = 1 if unbiased else 0
-    ax = _to_axes(dim)
-    result = _C_engine.var(x_impl, ax, bool(keepdim))
-    return _bessel_correct(result, x_impl, ax, correction)
-
-
-def _std_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-    *,
-    correction: int = 1,
-    unbiased: bool | None = None,
-) -> _Impl:
-    """std(x, dim, keepdim, correction=1) = sqrt(var(...))."""
-    if unbiased is not None:
-        correction = 1 if unbiased else 0
-    ax = _to_axes(dim)
-    v = _C_engine.var(x_impl, ax, bool(keepdim))
-    v = _bessel_correct(v, x_impl, ax, correction)
-    return _C_engine.sqrt(v)
+    return _C_engine.min(x_impl, _reduction_axes(x_impl, dim, "min"), bool(keepdim))
 
 
 def _flat_arg_reduce(

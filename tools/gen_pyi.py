@@ -1390,8 +1390,8 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def prod(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def max(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def min(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
-        "    def var(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
-        "    def std(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "    def var(self, dim: DimLike = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
+        "    def std(self, dim: DimLike = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
         "    def argmax(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "    def argmin(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "    def cumsum(self, dim: _int | None = None) -> Tensor: ...",
@@ -2424,6 +2424,9 @@ def gen_init_pyi() -> tuple[str, int]:
             "prod",
             "max",
             "min",
+            # A third positional argument binds by count during the keepdim
+            # deprecation, so the runtime signature is open (*args, **kwargs);
+            # the stub shows the reference order it is moving to.
             "var",
             "std",
             "argmax",
@@ -2464,8 +2467,8 @@ def gen_init_pyi() -> tuple[str, int]:
         "def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def var(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
-        "def std(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "def var(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
+        "def std(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
         "def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor: ...",

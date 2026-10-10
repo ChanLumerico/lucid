@@ -10,6 +10,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
+from lucid._ops._reduce import _p_norm, _reduction_axes
 from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
@@ -2435,12 +2436,22 @@ def vector_norm(
     TypeError
         If ``dtype`` would narrow ``x``, or its kind (real / complex)
         differs from ``x``'s.
+    ValueError
+        If ``dim`` names one axis twice.
 
     Notes
     -----
     All operations are routed through autograd-aware engine kernels, so
     gradients flow naturally even for non-integer :math:`p` (via
-    :math:`p`-power and root).
+    :math:`p`-power and root).  Where the norm is zero the gradient is
+    zero — the subgradient the reference picks — rather than the ``nan``
+    the root's infinite slope there would give; so is a zero entry's for
+    :math:`p < 1`.
+
+    A ``float16`` or ``bfloat16`` input is reduced in ``float32`` and the
+    result cast back, so a norm that fits the input dtype is not lost to
+    an intermediate sum that does not: the 2-norm of 65 536 half-precision
+    ones is 256, not ``inf``.
 
     A complex ``x`` is reduced through its magnitudes :math:`|x_i|`, as
     the definition says.  Squaring the entries themselves gave a complex
@@ -2473,19 +2484,15 @@ def vector_norm(
     # input keeps its signs, which no order can see: each one goes
     # through ``abs``, a square, or a comparison with zero.
     r = _C_engine.abs(xi) if xi.dtype in (_C_engine.C64, _C_engine.C128) else xi
-    axes: list[int] = []
-    if dim is None:
-        # Every axis, rather than a flatten.
-        #
-        # Flattening first threw away the rank, so ``keepdim`` had nothing
-        # left to keep and a (2, 3) input reduced to shape (1,) where it
-        # should hold its place as (1, 1).  Naming the axes gives the same
-        # numbers and the right shape.
-        axes = list(range(len(r.shape)))
-    elif isinstance(dim, (list, tuple)):
-        axes = [int(d) for d in dim]
-    else:
-        axes = [int(dim)]
+    # Every axis, rather than a flatten, for ``dim=None``: flattening first
+    # threw away the rank, so ``keepdim`` had nothing left to keep and a
+    # (2, 3) input reduced to shape (1,) where it should hold its place as
+    # (1, 1).
+    axes = (
+        list(range(len(r.shape)))
+        if dim is None
+        else _reduction_axes(r, dim, "vector_norm")
+    )
 
     if ord == 0:
         # Count non-zero elements.  Counting produces an integer, and
@@ -2499,26 +2506,7 @@ def vector_norm(
             return _wrap(_C_engine.astype(counted, r.dtype))
         return _wrap(_C_engine.astype(counted, _C_engine.F32))
 
-    if ord == float("inf"):
-        return _wrap(_C_engine.max(_C_engine.abs(r), axes, keepdim))
-
-    if ord == float("-inf"):
-        return _wrap(_C_engine.min(_C_engine.abs(r), axes, keepdim))
-
-    if ord == 1:
-        return _wrap(_C_engine.sum(_C_engine.abs(r), axes, keepdim))
-
-    if ord == 2:
-        # r² = |x|² for real and complex input alike, and one product
-        # cheaper than going through ``abs`` first for a real one.
-        sq = _C_engine.mul(r, r)
-        return _wrap(_C_engine.sqrt(_C_engine.sum(sq, axes, keepdim)))
-
-    # General p-norm: sum(|x|^p)^(1/p)
-    p = float(ord)
-    powered = _C_engine.pow_scalar(_C_engine.abs(r), p)
-    s = _C_engine.sum(powered, axes, keepdim)
-    return _wrap(_C_engine.pow_scalar(s, 1.0 / p))
+    return _wrap(_p_norm(r, float(ord), axes, keepdim))
 
 
 def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:

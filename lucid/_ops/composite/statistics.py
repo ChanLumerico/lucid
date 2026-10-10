@@ -1080,7 +1080,8 @@ def std_mean(
     correction : int, optional
         Bessel correction passed to :func:`lucid.std`.  ``1`` is the
         unbiased sample std (default); ``0`` gives the biased
-        population std.
+        population std.  A bool is read as the reference's ``unbiased``,
+        also in the place of ``dim``: ``std_mean(x, False)``.
     keepdim : bool, optional
         Retain the reduced axes as size-1 dimensions.  Default
         ``False``.
@@ -1092,18 +1093,29 @@ def std_mean(
         :func:`lucid.std` / :func:`lucid.mean` would produce
         individually.
 
+    Notes
+    -----
+    ``correction`` and ``keepdim`` apply with ``dim=None`` too; they used
+    to be dropped there.  Too few elements — no more than ``correction``
+    — give ``nan`` or ``inf``, as :func:`lucid.var` explains.
+
     See Also
     --------
     var_mean : variance + mean variant.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.std_mean(lucid.tensor([1.0, 2.0, 3.0, 4.0]), correction=0)
+    (tensor(1.118), tensor(2.5))
     """
-    if dim is not None:
-        _dim = list(dim) if not isinstance(dim, int) else dim
-        m = lucid.mean(x, _dim, keepdim)
-        s = lucid.std(x, _dim, keepdim, correction=correction)
-    else:
-        m = lucid.mean(x)
-        s = lucid.std(x)
-    return s, m
+    if isinstance(dim, bool):
+        # ``std_mean(x, unbiased)``, the reference's two-argument spelling.
+        correction = int(dim)
+        dim = None
+    axes = dim if dim is None or isinstance(dim, int) else list(dim)
+    s = lucid.std(x, dim=axes, correction=correction, keepdim=keepdim)
+    return s, lucid.mean(x, axes, keepdim)
 
 
 def var_mean(
@@ -1128,7 +1140,8 @@ def var_mean(
         reduction.
     correction : int, optional
         Bessel correction passed to :func:`lucid.var`.  Default ``1``
-        (unbiased sample variance).
+        (unbiased sample variance).  A bool is read as the reference's
+        ``unbiased``, also in the place of ``dim``: ``var_mean(x, False)``.
     keepdim : bool, optional
         Retain the reduced axes as size-1 dimensions.  Default
         ``False``.
@@ -1138,18 +1151,29 @@ def var_mean(
     tuple of Tensor
         ``(var, mean)``.
 
+    Notes
+    -----
+    ``correction`` and ``keepdim`` apply with ``dim=None`` too; they used
+    to be dropped there.  A single element has no spread to divide by
+    :math:`n - 1`, so ``var_mean(tensor([5.0]))`` is ``(nan, 5)``.
+
     See Also
     --------
     std_mean : standard-deviation + mean variant.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.var_mean(lucid.tensor([[1.0, 3.0], [2.0, 6.0]]), 1)
+    (tensor([2., 8.]), tensor([2., 4.]))
     """
-    if dim is not None:
-        _dim = list(dim) if not isinstance(dim, int) else dim
-        m = lucid.mean(x, _dim, keepdim)
-        v = lucid.var(x, _dim, keepdim, correction=correction)
-    else:
-        m = lucid.mean(x)
-        v = lucid.var(x)
-    return v, m
+    if isinstance(dim, bool):
+        # ``var_mean(x, unbiased)``, the reference's two-argument spelling.
+        correction = int(dim)
+        dim = None
+    axes = dim if dim is None or isinstance(dim, int) else list(dim)
+    v = lucid.var(x, dim=axes, correction=correction, keepdim=keepdim)
+    return v, lucid.mean(x, axes, keepdim)
 
 
 __all__ = [
