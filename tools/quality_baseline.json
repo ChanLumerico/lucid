@@ -1483,7 +1483,7 @@
     "lucid/models/text/gpt2/_model.py": 1
    },
    "PLR0911": {
-    "lucid/_factories/converters.py": 2,
+    "lucid/_factories/converters.py": 1,
     "lucid/compile/__init__.py": 1,
     "lucid/compile/_core/symbolic_gate.py": 1,
     "lucid/compile/_entry/decode_step.py": 1,

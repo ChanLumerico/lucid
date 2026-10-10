@@ -211,21 +211,13 @@ def _to_impl(
         dtype, device, requires_grad
     )
 
-    if isinstance(data, _Tensor):
-        impl = data._impl
-        if impl.requires_grad != _rg:
-            return impl.clone_with_grad(_rg)
-        # ``Tensor(x)`` used to hand back ``x``'s own TensorImpl here, so
-        # the new tensor was ``x`` under another name: a flag flipped or a
-        # gradient accumulated on either showed up on both.  A view shares
-        # the storage without sharing the tensor, and keeps a source that
-        # requires grad in the graph, as the reference's ``Tensor(x)`` does.
-        return _C_engine.view(impl, list(impl.shape))
-
-    if isinstance(data, _C_engine.TensorImpl):
-        if data.requires_grad != _rg:
-            data = data.clone_with_grad(_rg)
-        return data
+    if isinstance(data, (_Tensor, _C_engine.TensorImpl)):
+        return _source_impl(
+            data,
+            _dtype_eng if dtype is not None else None,
+            _device_eng if device is not None else None,
+            _rg,
+        )
 
     # Everything below builds the value first and makes the leaf last: a
     # ``requires_grad`` set before the bfloat16 narrowing used to hand
@@ -235,6 +227,42 @@ def _to_impl(
     if literal is not None:
         return _leaf(literal, _rg)
     return _leaf(_numpy_impl(data, explicit, _device_eng), _rg)
+
+
+def _source_impl(
+    data: Tensor | _C_engine.TensorImpl,
+    dtype_eng: _C_engine.Dtype | None,
+    device_eng: _C_engine.Device | None,
+    requires_grad: bool,
+) -> _C_engine.TensorImpl:
+    """A Tensor or engine source, converted to ``dtype_eng`` / ``device_eng``.
+
+    ``Tensor(t, dtype=float64, device="metal")`` used to drop both and hand
+    back a float32 CPU tensor.  A dtype or device that differs converts the
+    source — a new tensor, still in its graph; ``None`` or a match keeps the
+    source's own.
+    """
+    # A Tensor's own impl, which an unconverted source must not be handed
+    # back as; an engine source has none.
+    own: _C_engine.TensorImpl | None = None
+    if isinstance(data, _C_engine.TensorImpl):
+        source = data
+    else:
+        own = source = data._impl
+    if dtype_eng is not None and source.dtype != dtype_eng:
+        source = _C_engine.astype(source, dtype_eng)
+    if device_eng is not None and source.device != device_eng:
+        source = _C_engine.to_device(source, device_eng)
+    if source.requires_grad != requires_grad:
+        return source.clone_with_grad(requires_grad)
+    if source is own:
+        # ``Tensor(x)`` used to hand back ``x``'s own TensorImpl here, so
+        # the new tensor was ``x`` under another name: a flag flipped or a
+        # gradient accumulated on either showed up on both.  A view shares
+        # the storage without sharing the tensor, and keeps a source that
+        # requires grad in the graph, as the reference's ``Tensor(x)`` does.
+        return _C_engine.view(source, list(source.shape))
+    return source
 
 
 def _numpy_impl(
@@ -301,11 +329,10 @@ def _copy_tensor(
 ) -> _C_engine.TensorImpl:
     """A fresh copy of ``src`` for :func:`tensor`, as a leaf of its own.
 
-    ``_to_impl`` hands a Tensor's impl back as it is, which is right for
-    ``Tensor(t)`` and ``Parameter(t)`` — they wrap the data they are given
-    — and wrong here: ``tensor`` is documented to copy, and passing the
-    impl through made ``tensor(t, dtype=float64)`` a float32 alias of
-    ``t``'s storage, with ``dtype`` and ``device`` silently dropped.
+    ``_to_impl`` wraps a Tensor's storage when nothing is converted, which
+    is right for ``Tensor(t)`` and ``Parameter(t)`` — they wrap the data
+    they are given — and wrong here: ``tensor`` is documented to copy, and
+    to leave the source's graph.
 
     ``None`` keeps the source's own dtype and device rather than falling
     back to the global defaults, as the reference framework does.
