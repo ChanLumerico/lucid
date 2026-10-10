@@ -1180,8 +1180,7 @@
     "lucid/benchmarks/bench_ops.py": 1,
     "lucid/models/vision/ijepa/_model.py": 2,
     "lucid/models/vision/vjepa/_model.py": 2,
-    "lucid/models/vision/vjepa2/_model.py": 1,
-    "lucid/optim/lbfgs.py": 1
+    "lucid/models/vision/vjepa2/_model.py": 1
    },
    "redundant-expr": {
     "lucid/_ops/composite/indexing.py": 1,
@@ -1198,10 +1197,8 @@
     "lucid/models/generative/_common/_config.py": 1,
     "lucid/models/vision/crossvit/_config.py": 1,
     "lucid/models/vision/vjepa2/_config.py": 1,
-    "lucid/nn/functional/loss.py": 1,
     "lucid/nn/module.py": 3,
     "lucid/nn/modules/conv.py": 2,
-    "lucid/optim/lbfgs.py": 1,
     "lucid/utils/data/dataset.py": 1,
     "lucid/utils/rollout/_driver.py": 1
    }

@@ -295,7 +295,7 @@ def _cell_unbatch(unbatched: bool, state: Tensor) -> Tensor:
     return state.squeeze(0) if unbatched else state
 
 
-def _check_dropout(dropout: float, num_layers: int) -> float:
+def _check_dropout(dropout: object, num_layers: int) -> float:
     """The inter-layer ``dropout`` of RNN / GRU / LSTM, checked once.
 
     Dropout runs only *between* stacked layers, so a single-layer module

@@ -54,8 +54,11 @@ _REDUCTIONS: tuple[str, ...] = ("none", "mean", "sum")
 # computing.
 
 
-def _check_reduction(reduction: str, op: str, *, batchmean: bool = False) -> None:
-    """Refuse a ``reduction`` that the loss ``op`` does not define."""
+def _check_reduction(reduction: object, op: str, *, batchmean: bool = False) -> None:
+    """Refuse a ``reduction`` that the loss ``op`` does not define.
+
+    ``reduction`` is typed ``object``: this is the boundary, and a caller
+    may pass anything, so the ``str`` check is part of the contract."""
     valid = _REDUCTIONS + ("batchmean",) if batchmean else _REDUCTIONS
     if not isinstance(reduction, str) or reduction not in valid:
         raise ValueError(f"{op}: reduction must be one of {valid}, got {reduction!r}")
