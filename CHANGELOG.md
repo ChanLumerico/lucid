@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - binary promotion on integer dtype codes, with fast paths
 
+- run the polygamma and zeta series once per element
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

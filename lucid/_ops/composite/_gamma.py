@@ -204,11 +204,11 @@ def _polygamma(n: int, x: Tensor) -> Tensor:
     # The poles are the non-positive integers, -inf among them.
     pole = (x <= 0.0) & (x == lucid.floor(x))
     reflect = (x < 0.0) & ~pole
-    # ``where`` selects rather than short-circuits, so each branch is fed an
-    # argument inside its own domain; otherwise the losing branch's inf
-    # reaches the gradient through the mask as 0 * inf.
-    right = _positive(n, lucid.where(reflect | pole, one, x))
-    mirror = _positive(n, lucid.where(reflect, 1.0 - x, one))
+    # Each element needs the right-half series at one point only — x, or
+    # 1 - x where it is reflected — so the series runs once, at that point.
+    # A pole gets 1 instead: ``where`` selects rather than short-circuits,
+    # and a 1/0 under the mask would reach the gradient as 0 * inf.
+    series = _positive(n, lucid.where(reflect, 1.0 - x, lucid.where(pole, one, x)))
 
     # cot(pi x) has period 1, and ``x - round(x)`` is exact, so the cotangent
     # is taken at a point r in [-1/2, 1/2] instead of at pi * x, whose
@@ -219,8 +219,8 @@ def _polygamma(n: int, x: Tensor) -> Tensor:
     frac = lucid.where(reflect, x - lucid.round(x), lucid.full_like(x, 0.25))
     cot = lucid.sin(math.pi * (0.5 - lucid.abs(frac))) / lucid.sin(math.pi * frac)
     cot_term = math.pi ** (n + 1) * _horner(_cot_derivative_poly(n), cot)
-    left = (mirror if n % 2 == 0 else -mirror) - cot_term
-    out = lucid.where(reflect, left, right)
+    left = (series if n % 2 == 0 else -series) - cot_term
+    out = lucid.where(reflect, left, series)
 
     if n == 0:
         # psi(x) ~ -1/x at the origin, so psi(+0) = -inf and psi(-0) = +inf;

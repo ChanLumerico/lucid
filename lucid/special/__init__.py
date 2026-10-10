@@ -2240,8 +2240,7 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     tensor([1.645, 1.202])
     """
     x, q = _real(x), _real(q)
-    # Broadcast both up front: every guard below is a per-element mask over
-    # the pair.
+    # Broadcast up front: every guard below is a per-element mask.
     x, q = x + lucid.zeros_like(q), q + lucid.zeros_like(x)
     nan = lucid.full_like(x, math.nan)
     inf = lucid.full_like(x, math.inf)
@@ -2253,7 +2252,10 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     x_safe = lucid.where(x <= 1.0, lucid.full_like(x, 2.0), x)
     pole = (q <= 0.0) & (q == lucid.floor(q))
     negative = (q < 0.0) & ~pole
-    out = _hurwitz_zeta_positive(x_safe, lucid.where(negative | pole, one, q))
+    f = q - lucid.floor(q)
+    # zeta(x, q) itself, or for a negative q the zeta(x, f) term below.
+    q_safe = lucid.where(negative, f, lucid.where(pole, one, q))
+    out = _hurwitz_zeta_positive(x_safe, q_safe)
 
     # A negative non-integer q has terms (q + k)^-x of negative bases, real
     # only for an integer x.  Writing q = f - m with f in (0, 1), the m
@@ -2265,13 +2267,11 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     # The direct sum it replaces needed one term per unit of |q| before the
     # Euler-Maclaurin tail was valid; with a fixed prefix it was wrong for
     # q below about -3 and NaN once q + 12 went negative.
-    f = q - lucid.floor(q)
-    near = _hurwitz_zeta_positive(x_safe, lucid.where(negative, f, one))
     mirror = _hurwitz_zeta_positive(x_safe, lucid.where(negative, 1.0 - f, one))
     far = _hurwitz_zeta_positive(x_safe, lucid.where(negative, 1.0 - q, one))
     xd = x_safe.detach()
     parity = 1.0 - 2.0 * (xd - 2.0 * lucid.floor(xd / 2.0))
-    out = lucid.where(negative, near + parity * (mirror - far), out)
+    out = lucid.where(negative, out + parity * (mirror - far), out)
 
     # x = +inf leaves only the terms with |q + k| <= 1: the series is +inf
     # if one is below 1 and 1 if q = 1.  The Euler-Maclaurin form evaluates
