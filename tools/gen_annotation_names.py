@@ -4,7 +4,7 @@ Under PEP 649 a function's annotations are evaluated in its own module
 globals when something asks for them — ``inspect.signature``, ``help()``,
 an editor's tooltip, ``typing.get_type_hints``.  A name imported only inside
 ``if TYPE_CHECKING:`` is absent then, and the asking fails with
-``NameError``.  :mod:`lucid._annotation_resolver` binds those names at run
+``NameError``.  :mod:`lucid._annotations` binds those names at run
 time, once their sources exist; this tool records which they are, so that
 nothing has to parse source at import time.
 
@@ -91,7 +91,7 @@ def render(table: dict[str, tuple[Entry, ...]]) -> str:
         "",
         "Every name a module imports only under ``if TYPE_CHECKING:``, as",
         "``module -> ((bound name, source module, attribute or None), ...)``.",
-        ":mod:`lucid._annotation_resolver` binds them once their sources exist.",
+        ":mod:`lucid._annotations` binds them once their sources exist.",
         '"""',
         "",
         "NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {",

@@ -655,12 +655,12 @@ def _bind_annotation_names() -> None:
     at the moment something asks for them, so a name imported only under
     ``TYPE_CHECKING`` makes ``inspect.signature`` raise ``NameError`` —
     what ``help()``, an editor's tooltip and the docs build all call.
-    :mod:`lucid._annotation_resolver` binds those names once their
+    :mod:`lucid._annotations` binds those names once their
     sources exist, here for what ``import lucid`` loaded and for every
     ``lucid`` module imported after it.  Called last, when everything this
     package defines is in place.
     """
-    from lucid._annotation_resolver import install
+    from lucid._annotations import install
 
     install()
 

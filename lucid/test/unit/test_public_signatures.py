@@ -16,7 +16,7 @@ signature.
 That rule once covered ``lucid.__all__`` alone, by binding ``Tensor`` at the
 foot of each file; 297 callables across ``nn``, ``compile``,
 ``quantization``, ``models`` and the rest still raised.  Now
-:mod:`lucid._annotation_resolver` binds every name a module imports under
+:mod:`lucid._annotations` binds every name a module imports under
 ``TYPE_CHECKING`` once the module has finished executing, from a table
 ``tools/gen_annotation_names.py`` writes — and the whole surface is held
 here, not only the top level.

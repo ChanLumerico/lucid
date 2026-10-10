@@ -2,7 +2,7 @@
 
 Every name a module imports only under ``if TYPE_CHECKING:``, as
 ``module -> ((bound name, source module, attribute or None), ...)``.
-:mod:`lucid._annotation_resolver` binds them once their sources exist.
+:mod:`lucid._annotations` binds them once their sources exist.
 """
 
 NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
