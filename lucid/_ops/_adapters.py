@@ -21,6 +21,7 @@ Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
 adapters and live at the top of the module.
 """
 
+import inspect
 import math
 import operator
 from typing import Callable, Sequence, TYPE_CHECKING, cast
@@ -29,6 +30,7 @@ from lucid._C import engine as _C_engine
 from lucid._deprecation import warn_deprecated
 from lucid import _promotion
 from lucid._dispatch import (
+    _REAL_FLOATS,
     _binary_operands,
     _promote_impls,
     _refuse_bool_subtraction,
@@ -91,6 +93,16 @@ _OPMATH_OPS = (
 )
 
 
+#: ``(input, other)`` without annotations: either operand may be a tensor or
+#: a Python number, which the adapter's ``_Impl`` annotations do not say.
+_BINARY_SIGNATURE = inspect.Signature(
+    [
+        inspect.Parameter("input", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        inspect.Parameter("other", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+    ]
+)
+
+
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
     *,
@@ -122,7 +134,7 @@ def _make_arith_adapter(
     scalar partner over unrounded, for the engine's op-math.
 
     ``inplace`` marks the trailing-underscore form, which writes the result
-    back into ``a``.  Beside ``floating`` it refuses an integral ``a``: the
+    back into ``input``.  Beside ``floating`` it refuses an integral one: the
     quotient is floating, and an integer tensor cannot hold it in place.
     ``div_`` used to floor-divide in silence where the reference refuses —
     and where ``/=`` already refused.
@@ -133,13 +145,13 @@ def _make_arith_adapter(
     powers = engine_fn is _C_engine.pow
     opmath = engine_fn in _OPMATH_OPS
 
-    def _adapter(a: _Impl, b: _Impl) -> _Impl:
-        if powers and isinstance(a, _C_engine.TensorImpl):
-            scalar = _scalar_power(a, b)
+    def _adapter(input: _Impl, other: _Impl) -> _Impl:
+        if powers and isinstance(input, _C_engine.TensorImpl):
+            scalar = _scalar_power(input, other)
             if scalar is not None:
                 return scalar
         if inplace and floating:
-            target = _unwrap_or_scalar(a)
+            target = _unwrap_or_scalar(input)
             if _promotion.is_integral(target.dtype):
                 dtype = _ENGINE_TO_DTYPE.get(target.dtype, target.dtype)
                 raise RuntimeError(
@@ -147,13 +159,26 @@ def _make_arith_adapter(
                     f"be written in place into a {dtype} tensor — use "
                     f"{name.removesuffix('_')} instead"
                 )
-        a, b = _binary_operands(a, b, true_div=floating, opmath=opmath)
+        a, b = _binary_operands(input, other, true_div=floating, opmath=opmath)
         if subtracts:
             _refuse_bool_subtraction(a, b)
         return engine_fn(a, b)
 
-    _keep_engine_signature(_adapter, engine_fn)
+    # The adapter's own ``(input, other)`` is the op's signature — not the
+    # engine's names, which for ``atan2(y, x)`` came out as ``(other, input)``
+    # and advertised the operands in the wrong order.
+    _adapter.__doc__ = getattr(engine_fn, "__doc__", None)
+    _adapter.__name__ = name
+    _adapter.__dict__["__signature__"] = _BINARY_SIGNATURE
     return _adapter
+
+
+_complex_parts = _make_arith_adapter(_C_engine.complex)
+
+
+def _complex_adapter(real: _Impl, imag: _Impl) -> _Impl:
+    """complex(real, imag) — the reference's names for the two parts."""
+    return _complex_parts(real, imag)
 
 
 def _make_join_adapter(engine_fn: Callable[..., _Impl]) -> Callable[..., _Impl]:
@@ -232,13 +257,11 @@ def _scatter_add_adapter(
 ) -> _Impl:
     """scatter_add(x, dim, index, src) — Python order → engine order.
 
-    Engine takes ``(base, indices, src, dim)``; we reorder here.
-    The engine scatter_add is buggy for int64 indices — coerce to int32.
+    The index goes over at full width: the engine checks an ``int64`` index
+    against the axis as it is, and narrowing it to ``int32`` first wrapped
+    ``2**40`` round to ``0`` and added into the wrong slot.
     """
-    idx_impl = _unwrap(index)
-    if idx_impl.dtype == _C_engine.I64:
-        idx_impl = _C_engine.astype(idx_impl, _C_engine.I32)
-    return _C_engine.scatter_add(x_impl, idx_impl, _unwrap(src), dim)
+    return _C_engine.scatter_add(x_impl, _unwrap(index), _unwrap(src), dim)
 
 
 #: ``gather`` took ``(input, indices, dim=-1)`` until 3.16.  The reference
@@ -349,8 +372,18 @@ def _gather_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
 
 
 def _take_adapter(a_impl: _Impl, indices: Tensor) -> _Impl:
-    """take(a, indices) — second tensor needs unwrap."""
-    return _C_engine.take(a_impl, _unwrap(indices))
+    """take(a, indices) — ``a`` read as 1-D, in the shape of ``indices``.
+
+    The engine op takes a 1-D index only, so any other shape — a matrix of
+    positions, a 0-d one — raised ``ShapeMismatch`` where the reference
+    answers in the index's shape.
+    """
+    idx = _unwrap(indices)
+    shape = list(idx.shape)
+    if len(shape) == 1:
+        return _C_engine.take(a_impl, idx)
+    flat = _C_engine.take(a_impl, _C_engine.reshape(idx, [-1]))
+    return _C_engine.reshape(flat, shape)
 
 
 def _index_select_adapter(a_impl: _Impl, dim: int, index: Tensor) -> _Impl:
@@ -358,33 +391,71 @@ def _index_select_adapter(a_impl: _Impl, dim: int, index: Tensor) -> _Impl:
     return _C_engine.index_select(a_impl, int(dim), _unwrap(index))
 
 
+#: ``scatter``'s ``reduce=`` modes, each its own engine kernel.
+_SCATTER_REDUCE = {"add": _C_engine.scatter_add, "multiply": _C_engine.scatter_prod}
+
+
 def _scatter_adapter(
     base_impl: _Impl,
     dim: int,
     index: Tensor,
-    src: Tensor,
+    src: Tensor | Scalar,
     reduce: str | None = None,
 ) -> _Impl:
     """scatter(base, dim, index, src, reduce=None).
 
-    ``reduce=None``  → overwrite (composite C++ op).
-    ``reduce='add'`` → forward to ``scatter_add`` (separate engine kernel).
-    Other reduce modes are not supported and raise ``NotImplementedError``.
-
-    The engine's 1-D ``scatter_add`` path is buggy for int64 indices — coerce
-    to int32 here so callers don't trip over it; the workaround stays
-    invisible to user code.
+    ``src`` may be a Python number, written at every position the index
+    names.  A tensor ``src`` must have ``base``'s dtype: the engine's
+    overwrite scatter casts it, as an assignment inside Lucid wants, but
+    the reference refuses here as it does for every scatter — and as the
+    engine's ``reduce`` kernels already do.  The index goes over at full
+    width, so one past the axis is refused rather than wrapped.
     """
     idx_impl = _unwrap(index)
-    if idx_impl.dtype == _C_engine.I64:
-        idx_impl = _C_engine.astype(idx_impl, _C_engine.I32)
+    if isinstance(src, _promotion.NUMBER):
+        src_impl = _C_engine.full(
+            list(idx_impl.shape), src, base_impl.dtype, base_impl.device
+        )
+    else:
+        src_impl = _unwrap(src)
+        if src_impl.dtype != base_impl.dtype:
+            raise _C_engine.DtypeMismatch(
+                f"scatter: src must have self's dtype "
+                f"{_ENGINE_TO_DTYPE[base_impl.dtype]}, got "
+                f"{_ENGINE_TO_DTYPE[src_impl.dtype]} — cast it first"
+            )
     if reduce is None:
-        return _C_engine.scatter(base_impl, int(dim), idx_impl, _unwrap(src))
-    if reduce == "add":
-        return _C_engine.scatter_add(base_impl, idx_impl, _unwrap(src), int(dim))
-    raise NotImplementedError(
-        f"scatter reduce={reduce!r} is not implemented; use 'add' or None"
-    )
+        return _C_engine.scatter(base_impl, int(dim), idx_impl, src_impl)
+    kernel = _SCATTER_REDUCE.get(reduce)
+    if kernel is None:
+        raise ValueError(f"scatter: reduce must be 'add' or 'multiply', got {reduce!r}")
+    return kernel(base_impl, idx_impl, src_impl, int(dim))
+
+
+def _broadcast_with_mask(op: str, a_impl: _Impl, mask: _Impl) -> tuple[_Impl, _Impl]:
+    """``a_impl`` and ``mask`` broadcast to their common shape, as the reference's are.
+
+    The engine's masked kernels walk the two buffers side by side, so each
+    operand has to arrive at the shape the other one sees.
+    """
+    a_shape = list(a_impl.shape)
+    m_shape = list(mask.shape)
+    rank = max(len(a_shape), len(m_shape))
+    a_full = [1] * (rank - len(a_shape)) + a_shape
+    m_full = [1] * (rank - len(m_shape)) + m_shape
+    shape: list[int] = []
+    for i, (x, y) in enumerate(zip(a_full, m_full, strict=True)):
+        if x != y and 1 not in (x, y):
+            raise ValueError(
+                f"{op}: input shape {tuple(a_shape)} and mask shape "
+                f"{tuple(m_shape)} do not broadcast (dimension {i}: {x} vs {y})"
+            )
+        shape.append(max(x, y))
+    if a_shape != shape:
+        a_impl = _C_engine.broadcast_to(a_impl, shape)
+    if m_shape != shape:
+        mask = _C_engine.broadcast_to(mask, shape)
+    return a_impl, mask
 
 
 def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
@@ -398,23 +469,7 @@ def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
     goes through boolean indexing instead, which scatters the gradient
     back to the selected positions.
     """
-    a_shape = list(a_impl.shape)
-    m_shape = list(mask.shape)
-    rank = max(len(a_shape), len(m_shape))
-    a_full = [1] * (rank - len(a_shape)) + a_shape
-    m_full = [1] * (rank - len(m_shape)) + m_shape
-    shape: list[int] = []
-    for i, (x, y) in enumerate(zip(a_full, m_full)):
-        if x != y and 1 not in (x, y):
-            raise ValueError(
-                f"masked_select: input shape {tuple(a_shape)} and mask shape "
-                f"{tuple(m_shape)} do not broadcast (dimension {i}: {x} vs {y})"
-            )
-        shape.append(max(x, y))
-    if a_shape != shape:
-        a_impl = _C_engine.broadcast_to(a_impl, shape)
-    if m_shape != shape:
-        mask = _C_engine.broadcast_to(mask, shape)
+    a_impl, mask = _broadcast_with_mask("masked_select", a_impl, mask)
     if mask.dtype != _C_engine.Bool:
         mask = _C_engine.astype(mask, _C_engine.Bool)
     if a_impl.requires_grad and _C_engine.grad_enabled():
@@ -981,8 +1036,15 @@ def _clip_adapter(
     return _C_engine.clip(x_impl, float(min), float(max))
 
 
-def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
+def _where_adapter(
+    cond: Tensor,
+    x: TensorOrScalar | None = None,
+    y: TensorOrScalar | None = None,
+) -> _Impl | tuple[_Impl, ...]:
     """where(cond, x, y) — bool-cast the condition, promote the branches.
+
+    ``where(cond)`` alone is ``nonzero(cond, as_tuple=True)``, as in the
+    reference: the indices of the true elements, one tensor per dim.
 
     Either branch may be a Python scalar, which is the common spelling for
     a masked constant: ``where(x > 0, 1.0, -1.0)``.  Each is promoted
@@ -994,6 +1056,10 @@ def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
     branch beside a ``float32`` one — or beside ``1.5`` — raised
     ``DtypeMismatch`` where the reference answers in float.
     """
+    if x is None and y is None:
+        return _nonzero_adapter(_unwrap(cond), as_tuple=True)
+    if x is None or y is None:
+        raise TypeError("where() takes either cond alone, or cond, x and y")
     c = _unwrap(cond)
     if c.dtype != _C_engine.Bool:
         c = _C_engine.astype(c, _C_engine.Bool)
@@ -1010,8 +1076,30 @@ def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
     return _C_engine.where(c, x_impl, y_impl)
 
 
+def _nonzero_adapter(
+    a_impl: _Impl, *, as_tuple: bool = False
+) -> _Impl | tuple[_Impl, ...]:
+    """nonzero(a, *, as_tuple=False) — the indices of ``a``'s nonzero elements.
+
+    ``as_tuple`` returns one 1-D index tensor per dim rather than one
+    ``[count, ndim]`` matrix; a 0-d input counts as 1-D there, as in the
+    reference.  How many elements are nonzero is read back to size the
+    result — the one host round trip this op needs.
+    """
+    if not as_tuple:
+        return _C_engine.nonzero(a_impl)
+    if not a_impl.shape:
+        a_impl = _C_engine.reshape(a_impl, [1])
+    return tuple(_C_engine.unbind(_C_engine.nonzero(a_impl), 1))
+
+
 def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
     """masked_fill(x, mask, value) — auto-cast mask to bool.
+
+    ``x`` and the mask broadcast to their common shape, as the reference's
+    do: the engine kernel reads them side by side, so a ``[2, 1, 1, 4]``,
+    ``[4]`` or 0-d mask against a ``[2, 3, 4, 4]`` input raised
+    ``ShapeMismatch`` instead.
 
     An integer or bool tensor has no infinity and no NaN, and the engine's
     cast wrote whatever the conversion gave: ``-inf`` became ``INT64_MIN``
@@ -1022,6 +1110,7 @@ def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
     m = _unwrap(mask)
     if m.dtype != _C_engine.Bool:
         m = _C_engine.astype(m, _C_engine.Bool)
+    x_impl, m = _broadcast_with_mask("masked_fill", x_impl, m)
     fill = float(value)
     if not math.isfinite(fill) and _promotion.is_integral(x_impl.dtype):
         dtype = _ENGINE_TO_DTYPE.get(x_impl.dtype, x_impl.dtype)
@@ -1061,8 +1150,116 @@ def _histc_adapter(
     min: float = 0.0,
     max: float = 0.0,
 ) -> _Impl:
-    """histc(a, bins=100, min=0, max=0) — defaults match the reference framework."""
-    return _C_engine.histc(a_impl, int(bins), float(min), float(max))
+    """histc(a, bins=100, min=0, max=0) — counts over ``[min, max]``, as the reference.
+
+    ``min == max`` takes the range from the data; a range that is still a
+    single point widens to ``[v - 1, v + 1]``, which puts ``v`` in the
+    middle bin — the engine widened it to ``[v, v + 1]``, putting every
+    element in the first.  A NaN lies in no bin: the kernel's bin index for
+    one came out as 0, so it was counted there.  It is sent below the range
+    instead, where elements are skipped.
+    """
+    lo, hi = float(min), float(max)
+    if lo > hi:
+        raise ValueError(f"histc: max must be at least min, got [{lo}, {hi}]")
+    if lo == hi and a_impl.numel() > 0:
+        # The range is the data's: two scalars read back, as the engine did.
+        lo = float(_C_engine.min(a_impl, [], False).item())
+        hi = float(_C_engine.max(a_impl, [], False).item())
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        raise ValueError(f"histc: range of [{lo}, {hi}] is not finite")
+    if lo == hi:
+        lo, hi = lo - 1.0, hi + 1.0
+    if a_impl.dtype in _REAL_FLOATS:
+        a_impl = _C_engine.nan_to_num(a_impl, -math.inf, math.inf, -math.inf)
+    return _C_engine.histc(a_impl, int(bins), lo, hi)
+
+
+def _unique_adapter(
+    a_impl: _Impl,
+    sorted: bool = True,
+    return_inverse: bool = False,
+    return_counts: bool = False,
+    dim: int | None = None,
+) -> _Impl | tuple[_Impl, ...]:
+    """unique(a, sorted=True, return_inverse=False, return_counts=False, dim=None).
+
+    The values always come back sorted, which the reference allows for
+    ``sorted=False`` too.  ``dim=None`` reads ``a`` as 1-D and the inverse
+    takes ``a``'s shape; with ``dim`` the unique values are whole slices
+    along it and the inverse has one entry per slice.  How many there are
+    is read back to size the result — the one host round trip.
+    """
+    del sorted  # sorted either way; the reference leaves the order open
+    if dim is None:
+        values, inverse, counts = _unique_rows(_C_engine.reshape(a_impl, [-1, 1]))
+        values = _C_engine.reshape(values, [-1])
+        shape: list[int] = list(a_impl.shape)
+    else:
+        ndim = len(a_impl.shape)
+        if not -ndim <= dim < ndim:
+            raise IndexError(f"unique: dim {dim} is out of range for a {ndim}-d tensor")
+        d = dim % ndim
+        moved = _C_engine.contiguous(_C_engine.movedim(a_impl, [d], [0]))
+        shape = [int(moved.shape[0])]
+        values, inverse, counts = _unique_rows(_C_engine.reshape(moved, [shape[0], -1]))
+        width = [int(values.shape[0]), *moved.shape[1:]]
+        values = _C_engine.movedim(_C_engine.reshape(values, width), [0], [d])
+    out = [values]
+    if return_inverse:
+        out.append(_C_engine.reshape(inverse, shape))
+    if return_counts:
+        out.append(counts)
+    return out[0] if len(out) == 1 else tuple(out)
+
+
+def _unique_rows(rows: _Impl) -> tuple[_Impl, _Impl, _Impl]:
+    """The distinct rows of a 2-D ``rows``, sorted; each row's group; each group's size.
+
+    Rows are ordered lexicographically by a stable sort per column, last
+    column first.  Neighbouring rows that differ anywhere start a group,
+    so NaN, which equals nothing, is a group of its own each time.
+    """
+    n, width = int(rows.shape[0]), int(rows.shape[1])
+    device = rows.device
+    order = _C_engine.arange(0, n, 1, _C_engine.I64, device)
+    for col in range(width - 1, -1, -1):
+        key = _C_engine.index_select(
+            _C_engine.reshape(_C_engine.narrow(rows, 1, col, 1), [n]), 0, order
+        )
+        step = _C_engine.astype(_C_engine.argsort(key, 0), _C_engine.I64)
+        order = _C_engine.index_select(order, 0, step)
+    ranked = _C_engine.index_select(rows, 0, order)
+    if n == 0:
+        empty = _C_engine.zeros([0], _C_engine.I64, device)
+        return ranked, empty, empty
+    differs = _C_engine.not_equal(
+        _C_engine.narrow(ranked, 0, 1, n - 1), _C_engine.narrow(ranked, 0, 0, n - 1)
+    )
+    differs = _C_engine.greater(
+        _C_engine.sum(_C_engine.astype(differs, _C_engine.I64), [1], False),
+        _C_engine.zeros([n - 1], _C_engine.I64, device),
+    )
+    starts = _C_engine.concatenate(
+        [_C_engine.ones([1], _C_engine.Bool, device), differs], 0
+    )
+    group = _C_engine.sub(
+        _C_engine.cumsum(_C_engine.astype(starts, _C_engine.I64), 0),
+        _C_engine.ones([n], _C_engine.I64, device),
+    )
+    first = _C_engine.reshape(_C_engine.nonzero(starts), [-1])
+    ends = _C_engine.concatenate(
+        [
+            _C_engine.narrow(first, 0, 1, int(first.shape[0]) - 1),
+            _C_engine.full([1], n, _C_engine.I64, device),
+        ],
+        0,
+    )
+    inverse = _C_engine.scatter(
+        _C_engine.zeros([n], _C_engine.I64, device), 0, order, group
+    )
+    counts = _C_engine.sub(ends, first)
+    return _C_engine.index_select(ranked, 0, first), inverse, counts
 
 
 def _cartesian_prod_adapter(*tensors: Tensor) -> _Impl:

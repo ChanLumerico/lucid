@@ -362,11 +362,14 @@ class TestScatterShapes:
         )
         assert out.tolist() == base.tolist()
 
-    def test_the_source_takes_the_base_dtype(self, device: str) -> None:
-        out = lucid.scatter(
-            lucid.zeros(3, device=device), 0, _i([1], device), _i([7], device)
-        )
-        assert out.dtype == lucid.float32 and out.tolist() == [0.0, 7.0, 0.0]
+    def test_a_source_of_another_dtype_is_refused(self, device: str) -> None:
+        # As the reference refuses it, and as every reducing scatter does:
+        # the cast is the caller's to make (LCD-336).  DtypeMismatch is a
+        # TypeError.
+        with pytest.raises(TypeError, match="src must have self's dtype"):
+            lucid.scatter(
+                lucid.zeros(3, device=device), 0, _i([1], device), _i([7], device)
+            )
 
     def test_the_cpu_refuses_an_index_out_of_range(self) -> None:
         with pytest.raises(IndexError):

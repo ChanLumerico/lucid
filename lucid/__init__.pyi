@@ -2103,22 +2103,25 @@ def argsort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
     Tensor([4, 2, 0, 1, 3])
     """
     ...
-def nonzero(input: Tensor) -> Tensor:
+def nonzero(input: Tensor, *, as_tuple: _bool = ...) -> Tensor:
     r"""    Return the indices of all non-zero (or True) elements.
     
     The output is a 2-D ``int64`` tensor of shape ``(N, input.ndim)``
     where ``N`` is the number of non-zero entries — each row is one
-    multi-index.
+    multi-index.  With ``as_tuple=True`` it is one 1-D ``int64`` tensor
+    per dim instead (a 0-d input counts as 1-D).
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
+    as_tuple : bool, default False
+        Return the columns of the index matrix as a tuple.
     
     Returns
     -------
-    Tensor
-        2-D ``int64`` tensor of multi-indices.
+    Tensor or tuple of Tensor
+        2-D ``int64`` tensor of multi-indices, or its columns.
     
     Notes
     -----
@@ -2135,22 +2138,33 @@ def nonzero(input: Tensor) -> Tensor:
             [1, 0]])
     """
     ...
-def unique(input: Tensor) -> Tensor:
+def unique(input: Tensor, sorted: _bool = ..., return_inverse: _bool = ..., return_counts: _bool = ..., dim: _int | None = ...) -> Tensor:
     r"""    Return the sorted unique elements of ``input``.
     
     Duplicate values are removed and the output is sorted in ascending
-    order.  By default the input is flattened — pass a ``dim`` argument
-    via the underlying implementation to operate axis-wise.
+    order.  By default the input is flattened; with ``dim`` the unique
+    values are whole slices along that dim.
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
+    sorted : bool, default True
+        Accepted for compatibility; the values always come back sorted.
+    return_inverse : bool, default False
+        Also return, for every element (or slice along ``dim``), the
+        position of its value in the output — in ``input``'s shape, or
+        one entry per slice.
+    return_counts : bool, default False
+        Also return how many times each unique value occurs.
+    dim : int, optional
+        Dim whose slices are compared; ``None`` flattens ``input``.
     
     Returns
     -------
-    Tensor
-        1-D tensor of unique values in ascending order.
+    Tensor or tuple of Tensor
+        The unique values, followed by the ``int64`` inverse and counts
+        when asked for.
     
     Notes
     -----
@@ -2454,26 +2468,27 @@ def less_equal(input: Tensor, other: Tensor | Scalar) -> Tensor:
     Tensor([...])
     """
     ...
-def where(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> Tensor:
+def where(cond: Tensor, x: TensorOrScalar | None = ..., y: TensorOrScalar | None = ...) -> Tensor:
     r"""    Elementwise selection between ``x`` and ``y`` based on ``cond``.
     
     For each element position the result is ``x`` where ``cond`` is
     True and ``y`` otherwise.  All three inputs broadcast against each
-    other.
+    other.  ``where(cond)`` alone is ``nonzero(cond, as_tuple=True)``.
     
     Parameters
     ----------
     cond : Tensor
         Boolean tensor.
-    x : Tensor
+    x : Tensor, optional
         Values used where ``cond`` is True.
-    y : Tensor
+    y : Tensor, optional
         Values used where ``cond`` is False.
     
     Returns
     -------
-    Tensor
-        Tensor of the broadcast shape.
+    Tensor or tuple of Tensor
+        Tensor of the broadcast shape, or with ``cond`` alone one
+        ``int64`` index tensor per dim.
     
     Notes
     -----
@@ -3270,7 +3285,7 @@ def frac(input: Tensor) -> Tensor:
     Tensor([...])
     """
     ...
-def atan2(other: Tensor | Scalar, input: Tensor) -> Tensor:
+def atan2(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""    Element-wise quadrant-aware inverse tangent.
     
     Computes :math:`\arctan(y / x)` while using the signs of ``y`` and ``x`` to
@@ -3933,7 +3948,7 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     Tensor([3, 4, 5, 6])
     """
     ...
-def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor, reduce: str | None = ...) -> Tensor:
+def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor | Scalar, reduce: str | None = ...) -> Tensor:
     r"""    Write ``src`` into ``base_impl`` along ``dim`` at positions ``index``.
     
     Inverse of :func:`gather`.  For each entry of ``src`` the destination
@@ -3950,8 +3965,10 @@ def scatter(base_impl: Tensor, dim: _int, index: Tensor, src: Tensor, reduce: st
         Axis along which to scatter.
     index : Tensor
         Integer index tensor; same shape as ``src``.
-    src : Tensor
-        Values to write.
+    src : Tensor or scalar
+        Values to write, of ``base_impl``'s dtype — another dtype is
+        refused rather than cast — or one number written everywhere
+        ``index`` points.
     reduce : str, optional
         ``'add'`` or ``'multiply'`` to disambiguate collisions
         deterministically.
@@ -4087,8 +4104,9 @@ def histc(input: Tensor, bins: _int = ..., min: _float = ..., max: _float = ...)
     r"""    Compute a histogram of ``input`` with ``bins`` equally-spaced bins.
     
     Bins span ``[min, max]`` inclusive of the upper edge; values outside
-    the range are silently discarded.  If ``min == max == 0`` (the
-    default), the range is computed from the data.
+    the range, and NaN, are discarded.  If ``min == max`` (both 0 by
+    default), the range is the data's; a range that is still one point
+    ``v`` widens to ``[v - 1, v + 1]``.
     
     Parameters
     ----------
@@ -4104,7 +4122,13 @@ def histc(input: Tensor, bins: _int = ..., min: _float = ..., max: _float = ...)
     Returns
     -------
     Tensor
-        1-D ``int64`` tensor of length ``bins`` containing counts.
+        1-D tensor of length ``bins`` containing counts, in ``input``'s
+        dtype.
+    
+    Raises
+    ------
+    ValueError
+        ``min > max``, or the range is not finite.
     
     Notes
     -----
@@ -5009,7 +5033,7 @@ def imag(input: Tensor) -> Tensor:
     Tensor([...])
     """
     ...
-def complex(real: object, imag: object) -> Tensor: ...
+def complex(real: Tensor, imag: Tensor) -> Tensor: ...
 def conj(input: Tensor) -> Tensor:
     r"""    Element-wise complex conjugate.
     

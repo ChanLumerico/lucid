@@ -159,36 +159,17 @@ def _row_cases(bad: int) -> dict[str, tuple[Callable[[str], lucid.Tensor], objec
     }
 
 
-# Python call sites that cast a user index to int32 before the engine sees it,
-# so 2**40 arrives as 0 — a valid index (LCD-228 FOUND, api follow-up).
-# ``test_engine_checks_the_full_width`` pins the engine itself at 2**40.
-# ``x[i]`` and ``x[i] = v`` pass the index through at full width (API-02),
-# and so do the index composites (API-05); the two left are the
-# ``_scatter_adapter`` / ``_scatter_add_adapter`` casts.
-_NARROWED_IN_PYTHON = {
-    "scatter",
-    "scatter_add",
-}
-
-
-_LCD_273 = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-273: Python narrows the index to int32 before the engine checks it",
-)
-
-
+# No Python call site casts a user index to int32 before the engine sees it
+# any more (LCD-273): ``x[i]`` and ``x[i] = v`` (API-02), the index
+# composites (API-05) and the ``scatter`` / ``scatter_add`` adapters
+# (API-05b) all pass it at full width, so every ``huge`` case is refused.
 def _name_case_params(names: list[str], cases: list[str]) -> list[object]:
-    """Every (name, case) pair; the narrowed ``huge`` ones are strict xfails,
-    so they flip to XPASS, and fail, once LCD-273 lands."""
-    params: list[object] = []
-    for name in names:
-        family = name.removesuffix("_int64").removesuffix("_bool")
-        family = "scatter_reduce" if family.startswith("scatter_reduce") else family
-        for case in cases:
-            narrowed = case == "huge" and family in _NARROWED_IN_PYTHON
-            marks = [_LCD_273] if narrowed else []
-            params.append(pytest.param(name, case, marks=marks, id=f"{name}-{case}"))
-    return params
+    """Every (name, case) pair."""
+    return [
+        pytest.param(name, case, id=f"{name}-{case}")
+        for name in names
+        for case in cases
+    ]
 
 
 @pytest.mark.parametrize(

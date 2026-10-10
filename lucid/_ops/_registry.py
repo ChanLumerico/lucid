@@ -256,8 +256,8 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "descending"]),
     OpEntry("argsort",   A._argsort_adapter, 1, method_name="argsort",   free_fn_name="argsort",
             extra_kwargs=["dim", "descending"]),
-    OpEntry("nonzero",   _R.nonzero,   1, method_name="nonzero",   free_fn_name="nonzero"),
-    OpEntry("unique",    _R.unique,    1, method_name=None,        free_fn_name="unique"),
+    OpEntry("nonzero",   A._nonzero_adapter, 1, method_name="nonzero", free_fn_name="nonzero"),
+    OpEntry("unique",    A._unique_adapter,  1, method_name=None,      free_fn_name="unique"),
     OpEntry("topk",      A._topk_adapter, 1, method_name="topk",      free_fn_name="topk",
             extra_kwargs=["k", "dim", "largest"]),
     OpEntry("diagonal",  _R.diagonal,  1, method_name="diagonal",  free_fn_name="diagonal",
@@ -479,7 +479,7 @@ _REGISTRY: list[OpEntry] = [
     # ``imag`` / ``conjugate``.  ``complex`` builds a C64 from two F32 inputs.
     OpEntry("real",    _R.real,    1, method_name=None, free_fn_name="real"),
     OpEntry("imag",    _R.imag,    1, method_name=None, free_fn_name="imag"),
-    OpEntry("complex", A._make_arith_adapter(_R.complex), 2, method_name=None, free_fn_name="complex"),
+    OpEntry("complex", A._complex_adapter, 2, method_name=None, free_fn_name="complex"),
     OpEntry("conj",    _R.conj,    1, method_name=None, free_fn_name="conj"),
 ]
 # fmt: on

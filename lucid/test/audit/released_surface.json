@@ -459,7 +459,7 @@
   "lucid.asin": {"params": ["a:input"]},
   "lucid.asinh": {"params": ["a:x"]},
   "lucid.atan": {"params": ["a:input"]},
-  "lucid.atan2": {"params": ["a:other", "a:input"]},
+  "lucid.atan2": {"params": ["a:input", "a:other"]},
   "lucid.atanh": {"params": ["a:x"]},
   "lucid.atleast_1d": {"params": ["v:tensors"]},
   "lucid.atleast_2d": {"params": ["v:tensors"]},

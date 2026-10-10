@@ -292,11 +292,9 @@ def _bool_scalar_index(
 def _normalize_key(key: object, shape: Sequence[int], device: _C_engine.Device) -> _Key:
     """Normalise ``key`` against a tensor of ``shape`` on ``device``.
 
-    Meant as the single owner of what an index key means.
-    ``Tensor.__getitem__`` and ``Tensor.__setitem__`` read their keys
-    through here; ``index_put``, which takes keys of the same form, does
-    not yet and reads a bool mask as integers until it does (API-05).  For
-    reading and writing alike:
+    The single owner of what an index key means: ``Tensor.__getitem__``,
+    ``Tensor.__setitem__`` and ``index_put``, which takes keys of the same
+    form, all read their keys through here.  For reading and writing alike:
 
     * ``...`` stands for as many full slices as the other parts leave dims;
     * a bool scalar — ``True``, ``False`` or a 0-d bool tensor — inserts an
@@ -839,12 +837,11 @@ def _normalize_value(
 def _take(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     """Make ``impl`` ``t``'s tensor, keeping what ``t`` asked of autograd.
 
-    Meant as the single owner of rebinding a tensor's impl, so a flag that
-    lives on the impl is carried in one place.  Assignment and an in-place
-    op whose dtype promotion produced a new impl (:func:`_adopt_inplace`)
-    go through it; the in-place index ops in ``lucid._ops.composite.indexing``
-    (``index_fill_``, ``index_put_`` and the rest) still assign ``_impl``
-    themselves and drop ``retain_grad`` until they are routed here (API-05).
+    The single owner of rebinding a tensor's impl, so a flag that lives on
+    the impl is carried in one place.  Assignment, an in-place op whose
+    dtype promotion produced a new impl (:func:`_adopt_inplace`) and the
+    in-place index ops in ``lucid._ops.composite.indexing`` (``index_fill_``,
+    ``index_put_`` and the rest) all go through it.
 
     ``retain_grad`` is registered on the slot of the tensor's producer, so
     a new impl does not have it: ``y.retain_grad(); y[0] = v`` left

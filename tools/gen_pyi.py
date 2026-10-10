@@ -1303,6 +1303,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
             "movedim",
             "unflatten",
             "histc",
+            "take",
             # Comparison / bitwise (hand-crafted to use _float)
             "eq",
             "ne",
@@ -1425,6 +1426,8 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def flatten(self, start_axis: _int = 0, end_axis: _int = -1) -> Tensor: ...",
         "    def unflatten(self, dim: _int, sizes: Sequence[_int]) -> Tensor: ...",
         "    def histc(self, bins: _int = 100, min: _float = 0.0, max: _float = 0.0) -> Tensor: ...",
+        "    def take(self, indices: Tensor) -> Tensor: ...",
+        "    def nonzero(self, *, as_tuple: _bool = False) -> Tensor: ...",
         "    def eq(self, other: Tensor | _float) -> Tensor: ...",
         "    def ne(self, other: Tensor | _float) -> Tensor: ...",
         "    def lt(self, other: Tensor | _float) -> Tensor: ...",
