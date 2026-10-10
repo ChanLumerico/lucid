@@ -771,7 +771,9 @@ def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
 
 
 def _scalar_impl(
-    value: complex, dtype: _C_engine.Dtype, device: _C_engine.Device
+    value: bool | int | float | complex,
+    dtype: _C_engine.Dtype,
+    device: _C_engine.Device,
 ) -> _C_engine.TensorImpl:
     """A Python number as a 0-d tensor of ``dtype``, with nothing lost on the way.
 

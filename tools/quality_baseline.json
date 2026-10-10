@@ -2048,7 +2048,6 @@
     "lucid/__init__.py": 9,
     "lucid/_dispatch.py": 1,
     "lucid/_factories/converters.py": 1,
-    "lucid/_tensor/_indexing.py": 1,
     "lucid/compile/_core/fallback.py": 1,
     "lucid/coreml/_emit.py": 65,
     "lucid/coreml/_spec.py": 2,
