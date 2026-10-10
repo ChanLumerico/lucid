@@ -466,8 +466,16 @@ def _coordinate_select(
         bad = _C_engine.logical_or(
             _C_engine.less(idx, zero), _C_engine.greater_equal(idx, size)
         )
-        if dev == _CPU and _C_engine.any(bad).item():
-            _refuse_out_of_range(int_indices[k], shape[k])
+        if dev == _CPU:
+            # Only decides whether to raise — ``bad`` reaches the result
+            # through ``outside`` below, not through this read — so a trace
+            # does not count it as a data dependency.  Imported here:
+            # ``lucid.compile`` imports this package.
+            from lucid.compile import _host_check
+
+            with _host_check():
+                if _C_engine.any(bad).item():
+                    _refuse_out_of_range(int_indices[k], shape[k])
         term = _C_engine.mul(idx, scalar(stride)) if stride != 1 else idx
         flat_idx = term if flat_idx is None else _C_engine.add(flat_idx, term)
         outside = bad if outside is None else _C_engine.logical_or(outside, bad)

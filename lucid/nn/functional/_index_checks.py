@@ -67,7 +67,6 @@ from itertools import pairwise
 from typing import TYPE_CHECKING, NamedTuple, cast, overload
 
 import lucid as _lucid
-from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype
 from lucid._unsupported import unsupported_if
 
@@ -82,12 +81,11 @@ def _host_read[T](read: Callable[[], T]) -> T:
     A read inside the trace would mark it unsupported (a traced value read
     on the host) and send every step that holds a guard to eager.
     """
-    tracer = _C_engine.compile.current_tracer()
-    _C_engine.compile.set_current_tracer(None)
-    try:
+    # Imported here: ``lucid.compile`` imports ``lucid.nn``.
+    from lucid.compile import _host_check
+
+    with _host_check():
         return read()
-    finally:
-        _C_engine.compile.set_current_tracer(tracer)
 
 
 def _as_index(index: Tensor) -> Tensor:

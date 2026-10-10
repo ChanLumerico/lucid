@@ -73,12 +73,24 @@ def _validation_only(m: Apply, x: lucid.Tensor) -> lucid.Tensor:
     return x * 3
 
 
+def _advanced_index(m: Apply, x: lucid.Tensor) -> lucid.Tensor:
+    # Two coordinate indices computed from the input: the CPU checks each
+    # against its own dim by reading traced values — only to decide whether
+    # to raise (LCD-336).  ``x[rows, cols]`` on the 4 x 4 view is ``x``.
+    n = x.shape[0]
+    zero = (x * 0).long()
+    rows = zero + lucid.tensor([i // 4 for i in range(n)], device=x.device)
+    cols = zero + lucid.tensor([i % 4 for i in range(n)], device=x.device)
+    return x.reshape(n // 4, 4)[rows, cols] * 3
+
+
 #: Reads that leave the trace whole: each answers ``x * 3``. A tensor built
 #: from Python numbers holds no input data, and a read under
 #: ``lucid.compile._host_check()`` only decides whether to raise.
 CONSTANT_READS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "made-on-the-spot": _made_on_the_spot,
     "validation-only": _validation_only,
+    "advanced-index-bounds": _advanced_index,
 }
 
 

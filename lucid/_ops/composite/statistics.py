@@ -593,9 +593,17 @@ def multinomial(
     rows = input.detach().reshape(-1, k)
     if rows.dtype not in (lucid.float32, lucid.float64):
         rows = rows.float()
-    if float(rows.min().item()) < 0 or not math.isfinite(float(rows.sum().item())):
+    # The checks only decide whether to raise; nothing read here reaches
+    # the draws, so a trace does not count them as data dependencies.
+    # Imported here: ``lucid.compile`` imports the tensor this module builds on.
+    from lucid.compile import _host_check
+
+    with _host_check():
+        lowest = float(rows.min().item())
+        total = float(rows.sum().item())
+        positive = int((rows > 0).sum(dim=-1).min().item())
+    if lowest < 0 or not math.isfinite(total):
         raise ValueError("multinomial: weights must be finite and non-negative")
-    positive = int((rows > 0).sum(dim=-1).min().item())
     if positive == 0:
         raise ValueError("multinomial: every distribution needs a positive weight")
     if not replacement and positive < num_samples:

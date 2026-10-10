@@ -42,7 +42,22 @@ def test_a_host_read_is_refused(name: str, tmp_path: object) -> None:
 _EXPORTABLE = {**CONSTANT_READS, **{n: HOST_READS[n] for n in STATE_READS}}
 
 
-@pytest.mark.parametrize("name", sorted(_EXPORTABLE))
+#: Exports past the host-read check, then Core ML refuses the package: the
+#: ``broadcast_to`` (``tile``) of the folded int64 coordinate index is
+#: declared with mismatched input and output dtypes.
+_TILE_DTYPE = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-371: Core ML tile dtype mismatch on an int64-derived broadcast_to",
+)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(n, marks=[_TILE_DTYPE] if n == "advanced-index-bounds" else [])
+        for n in sorted(_EXPORTABLE)
+    ],
+)
 def test_a_read_of_a_constant_exports(name: str, tmp_path: object) -> None:
     """A tensor built from Python numbers, a validation-only read, or the
     model's weights — which a package holds as constants — all export."""

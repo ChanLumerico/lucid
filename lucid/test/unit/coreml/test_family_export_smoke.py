@@ -411,15 +411,13 @@ def test_a_multi_input_family_exports_and_matches(
     worst across them says nothing about either.
     """
     if factory == "clip_vit_base_16":
-        # The CPU advanced-index bounds check (``_indexing.py``) reads
-        # ``any(bad).item()`` only to decide whether to raise; until it runs
-        # under ``lucid.compile._host_check()`` the trace counts it as a
-        # data dependency and export refuses.
+        # The CPU advanced-index bounds check now reads under
+        # ``lucid.compile._host_check()`` and the trace exports; Core ML then
+        # refuses the ``tile`` that broadcasts the folded int64 index.
         request.applymarker(
             pytest.mark.xfail(
                 strict=True,
-                reason="LCD-336 (API-05b wraps _indexing.py bounds check in "
-                "_host_check)",
+                reason="LCD-371: Core ML tile dtype mismatch on an int64-derived broadcast_to",
             )
         )
     lucid.manual_seed(0)
