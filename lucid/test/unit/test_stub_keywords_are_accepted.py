@@ -29,7 +29,7 @@ import pytest
 
 import lucid
 import lucid._ops as ops
-from lucid._ops import _adapters
+from lucid._ops._adapters import _make_arith_adapter
 from lucid._ops._registry import _REGISTRY, OpEntry
 from lucid._tensor.tensor import Tensor
 
@@ -149,8 +149,7 @@ def _pair(device: str) -> tuple[Tensor, Tensor]:
 _ARITH = [
     e
     for e in _REGISTRY
-    if getattr(e.engine_fn, "__signature__", None) is _adapters._BINARY_SIGNATURE
-    and e.name != "complex"
+    if e.engine_fn.__qualname__.startswith(_make_arith_adapter.__qualname__)
 ]
 
 
