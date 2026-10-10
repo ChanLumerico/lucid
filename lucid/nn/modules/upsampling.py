@@ -59,12 +59,21 @@ class Upsample(Module):
         - ``'bilinear'`` — 2-D bilinear interpolation (4-D input).
         - ``'bicubic'`` — 2-D bicubic interpolation (4-D input).
         - ``'trilinear'`` — 3-D trilinear interpolation (5-D input).
+        - ``'nearest-exact'`` — nearest with half-pixel centres.
+        - ``'area'`` — adaptive average pooling to the output size.
     align_corners : bool or None, optional
         When ``True``, the corner pixels of input and output are aligned,
         meaning the interpolation grid spans exactly from the first to the
         last pixel centre.  When ``False`` (or ``None``), the grid is
         scaled by the ratio of sizes, which may shift the grid by half a
-        pixel relative to the corners.  Ignored for ``'nearest'`` mode.
+        pixel relative to the corners.  Only accepted by the
+        interpolating modes (``'linear'``, ``'bilinear'``, ``'bicubic'``,
+        ``'trilinear'``).
+    recompute_scale_factor : bool or None, optional
+        When ``True``, sample positions step by ``in / out`` of the
+        resolved output size instead of ``1 / scale_factor``; the two
+        differ when ``in * scale_factor`` is not a whole number.  Not
+        allowed with ``size``.
 
     Attributes
     ----------
@@ -76,6 +85,8 @@ class Upsample(Module):
         Stored interpolation mode.
     align_corners : bool or None
         Stored corner-alignment flag.
+    recompute_scale_factor : bool or None
+        Stored flag for how a scale factor maps sample positions.
 
     Shape
     -----
@@ -129,6 +140,7 @@ class Upsample(Module):
         scale_factor: float | tuple[float, ...] | None = None,
         mode: str = "nearest",
         align_corners: bool | None = None,
+        recompute_scale_factor: bool | None = None,
     ) -> None:
         """Initialise the Upsample module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -136,6 +148,7 @@ class Upsample(Module):
         self.scale_factor = scale_factor
         self.mode = mode
         self.align_corners = align_corners
+        self.recompute_scale_factor = recompute_scale_factor
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -157,6 +170,7 @@ class Upsample(Module):
             scale_factor=self.scale_factor,
             mode=self.mode,
             align_corners=self.align_corners,
+            recompute_scale_factor=self.recompute_scale_factor,
         )
 
     @override

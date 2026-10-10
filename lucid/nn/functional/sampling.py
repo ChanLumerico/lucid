@@ -2,7 +2,6 @@
 nn.functional sampling / interpolation / padding operations.
 """
 
-import math
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
@@ -12,9 +11,9 @@ from lucid.nn.functional._grid_sampling import (
     affine_grid_3d,
     check_options,
     composite_grid_sample,
-    cubic_coefficients,
     reflect,
 )
+from lucid.nn.functional._interpolate import resample as _resample
 from lucid.nn.functional._index_checks import (
     _check_offsets,
     _check_table,
@@ -37,67 +36,6 @@ _KERNEL_MODES = {"bilinear": 0, "nearest": 1}
 _KERNEL_PADDINGS = {"zeros": 0, "border": 1}
 
 
-def _bicubic_axis(x: Tensor, axis: int, out_size: int, align_corners: bool) -> Tensor:
-    """Resample one axis with the cubic kernel.
-
-    Bicubic is separable, so the 2-D filter is this applied twice; doing
-    it as two passes of four taps costs 8 gathers rather than 16.
-
-    Parameters
-    ----------
-    x : Tensor
-        Input.
-    axis : int
-        Axis to resample.
-    out_size : int
-        Length of that axis afterwards.
-    align_corners : bool
-        Corner convention, as documented on :func:`interpolate`.
-
-    Returns
-    -------
-    Tensor
-        ``x`` with ``axis`` resampled.
-    """
-    in_size = int(x.shape[axis])
-    if in_size == out_size:
-        return x
-
-    if align_corners:
-        scale = (in_size - 1) / (out_size - 1) if out_size > 1 else 0.0
-        centres = [index * scale for index in range(out_size)]
-    else:
-        scale = in_size / out_size
-        centres = [(index + 0.5) * scale - 0.5 for index in range(out_size)]
-
-    floors = [math.floor(c) for c in centres]
-    fracs = [c - f for c, f in zip(centres, floors)]
-    device = x.device.type
-
-    shape = [1] * x.ndim
-    shape[axis] = out_size
-    total: Tensor | None = None
-    for tap in range(4):
-        # Out-of-range taps clamp to the border, which is what makes the
-        # filter well defined at the first and last output pixel.
-        taken = x.index_select(
-            axis,
-            _lucid.tensor(
-                [min(max(f + tap - 1, 0), in_size - 1) for f in floors],
-                dtype=_lucid.int64,
-                device=device,
-            ),
-        )
-        weight = _lucid.tensor(
-            [cubic_coefficients(t)[tap] for t in fracs],
-            dtype=x.dtype,
-            device=device,
-        ).reshape(tuple(shape))
-        total = taken * weight if total is None else total + taken * weight
-    assert total is not None
-    return total
-
-
 def interpolate(
     x: Tensor,
     size: int | tuple[int, ...] | None = None,
@@ -105,6 +43,7 @@ def interpolate(
     mode: str = "nearest",
     align_corners: bool | None = None,
     recompute_scale_factor: bool | None = None,
+    antialias: bool = False,
 ) -> Tensor:
     r"""Resample an N-D tensor to a target spatial size or scale factor.
 
@@ -115,43 +54,70 @@ def interpolate(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, *spatial)`` where ``len(spatial)`` is 1
-        (linear), 2 (bilinear / bicubic / area / nearest-2d) or 3
-        (trilinear / nearest-3d).
+        Input of shape ``(N, C, *spatial)``.  ``"nearest"``,
+        ``"nearest-exact"`` and ``"area"`` take 1, 2 or 3 spatial axes;
+        ``"linear"`` takes 1, ``"bilinear"`` / ``"bicubic"`` 2 and
+        ``"trilinear"`` 3.
     size : int or tuple of int, optional
         Target spatial size.  Mutually exclusive with ``scale_factor``.
     scale_factor : float or tuple of float, optional
         Multiplicative factor applied to each spatial axis.  Output size
         is ``floor(in_size * scale_factor)``.
     mode : str, optional
-        One of ``"nearest"``, ``"linear"``, ``"bilinear"``, ``"bicubic"``,
-        ``"trilinear"``, ``"area"``, ``"nearest-exact"``.  Default
-        ``"nearest"``.
+        One of ``"nearest"``, ``"nearest-exact"``, ``"linear"``,
+        ``"bilinear"``, ``"bicubic"``, ``"trilinear"``, ``"area"``.
+        Default ``"nearest"``.
     align_corners : bool, optional
-        Only meaningful for ``"linear"`` / ``"bilinear"`` / ``"bicubic"``
-        / ``"trilinear"``.  If ``True``, the corner pixels of the input
+        Only accepted by ``"linear"`` / ``"bilinear"`` / ``"bicubic"`` /
+        ``"trilinear"``.  If ``True``, the corner pixels of the input
         and output are exactly aligned, and the values at those corners
         are preserved.  If ``False`` (default), pixels are treated as
-        ``1×1`` squares and the sampling grid is centred — this matches
-        the convention used by most modern vision frameworks.
+        ``1×1`` squares and the sampling grid is centred.
     recompute_scale_factor : bool, optional
-        If ``True``, recompute ``scale_factor`` from the resolved
-        ``size`` to avoid floating-point drift when chaining resamples.
+        If ``True``, the sampling step is ``in_size / out_size`` from the
+        resolved output size rather than ``1 / scale_factor``.  Not
+        allowed together with ``size``.
+    antialias : bool, optional
+        For ``"bilinear"`` and ``"bicubic"``: when downsampling, widen
+        the filter over every input sample an output sample covers, so
+        detail finer than the output grid is averaged rather than
+        aliased.  Default ``False``.
 
     Returns
     -------
     Tensor
         Resampled tensor of shape ``(N, C, *out_spatial)``.
 
+    Raises
+    ------
+    ValueError
+        For an unknown mode, a mode given the wrong number of spatial
+        axes, both or neither of ``size`` and ``scale_factor``,
+        ``align_corners`` or ``antialias`` with a mode that has no use
+        for it, or a non-positive size.
+    TypeError
+        For an integer input with any mode but the two nearest ones.
+
     Notes
     -----
-    The two ``align_corners`` conventions produce different sampling
-    grids — :math:`x_{\mathrm{src}} = (x_{\mathrm{dst}} + 0.5) \cdot
-    (S_{\mathrm{in}} / S_{\mathrm{out}}) - 0.5` for the default, vs
-    :math:`x_{\mathrm{src}} = x_{\mathrm{dst}} \cdot
-    ((S_{\mathrm{in}} - 1) / (S_{\mathrm{out}} - 1))` for
-    ``align_corners=True``.  The choice matters when fine alignment with
-    other ops (warping, geometric losses) is required.
+    Output sample :math:`d` reads the input around
+
+    .. math::
+
+        x_{\mathrm{src}} = \begin{cases}
+            d \cdot \frac{S_{\mathrm{in}} - 1}{S_{\mathrm{out}} - 1}
+                & \text{align\_corners} \\
+            (d + 0.5) \cdot r - 0.5 & \text{otherwise}
+        \end{cases}
+
+    where :math:`r = 1 / \text{scale\_factor}` when a scale factor is
+    given and ``recompute_scale_factor`` is not ``True``, and
+    :math:`r = S_{\mathrm{in}} / S_{\mathrm{out}}` otherwise.  The two
+    differ whenever :math:`S_{\mathrm{in}} \cdot \text{scale\_factor}`
+    is not a whole number.  ``"nearest"`` copies sample
+    :math:`\lfloor d \cdot r \rfloor` and ``"nearest-exact"`` sample
+    :math:`\lfloor (d + 0.5) \cdot r \rfloor`; ``"area"`` is adaptive
+    average pooling to the output size.
 
     Examples
     --------
@@ -161,80 +127,18 @@ def interpolate(
     >>> y = interpolate(x, scale_factor=2.0, mode="bilinear", align_corners=False)
     >>> y.shape
     (1, 3, 64, 64)
+    >>> interpolate(x, scale_factor=0.25, mode="bicubic", antialias=True).shape
+    (1, 3, 8, 8)
     """
-    if mode in ("nearest", "nearest-exact"):
-        ndim = x.ndim - 2
-        if ndim == 2:
-            if size is not None:
-                oh, ow = (size, size) if isinstance(size, int) else size
-            else:
-                assert scale_factor is not None
-                sf = (
-                    (scale_factor, scale_factor)
-                    if isinstance(scale_factor, (int, float))
-                    else scale_factor
-                )
-                oh = int(x.shape[2] * sf[0])
-                ow = int(x.shape[3] * sf[1])
-            return _wrap(_C_engine.nn.interpolate_nearest_2d(_unwrap(x), oh, ow))
-        if ndim == 3:
-            if size is not None:
-                od, oh, ow = (size, size, size) if isinstance(size, int) else size
-            else:
-                assert scale_factor is not None
-                sf = (
-                    (scale_factor,) * 3
-                    if isinstance(scale_factor, (int, float))
-                    else scale_factor
-                )
-                od = int(x.shape[2] * sf[0])
-                oh = int(x.shape[3] * sf[1])
-                ow = int(x.shape[4] * sf[2])
-            return _wrap(_C_engine.nn.interpolate_nearest_3d(_unwrap(x), od, oh, ow))
-    if mode == "bilinear":
-        if size is not None:
-            oh, ow = (size, size) if isinstance(size, int) else size
-        else:
-            assert scale_factor is not None
-            sf = (
-                (scale_factor, scale_factor)
-                if isinstance(scale_factor, (int, float))
-                else scale_factor
-            )
-            oh = int(x.shape[2] * sf[0])
-            ow = int(x.shape[3] * sf[1])
-        ac = align_corners if align_corners is not None else False
-        return _wrap(_C_engine.nn.interpolate_bilinear(_unwrap(x), oh, ow, ac))
-    if mode == "trilinear":
-        if size is not None:
-            od, oh, ow = (size, size, size) if isinstance(size, int) else size
-        else:
-            assert scale_factor is not None
-            sf = (
-                (scale_factor,) * 3
-                if isinstance(scale_factor, (int, float))
-                else scale_factor
-            )
-            od = int(x.shape[2] * sf[0])
-            oh = int(x.shape[3] * sf[1])
-            ow = int(x.shape[4] * sf[2])
-        ac = align_corners if align_corners is not None else False
-        return _wrap(_C_engine.nn.interpolate_trilinear(_unwrap(x), od, oh, ow, ac))
-    if mode == "bicubic":
-        if size is not None:
-            oh, ow = (size, size) if isinstance(size, int) else size
-        else:
-            assert scale_factor is not None
-            sf = (
-                (scale_factor, scale_factor)
-                if isinstance(scale_factor, (int, float))
-                else scale_factor
-            )
-            oh = int(x.shape[2] * sf[0])
-            ow = int(x.shape[3] * sf[1])
-        ac = align_corners if align_corners is not None else False
-        return _bicubic_axis(_bicubic_axis(x, 2, oh, ac), 3, ow, ac)
-    raise ValueError(f"Unsupported interpolation mode: {mode!r}")
+    return _resample(
+        x,
+        size,
+        scale_factor,
+        mode,
+        align_corners,
+        recompute_scale_factor,
+        antialias,
+    )
 
 
 def grid_sample(
