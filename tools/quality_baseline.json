@@ -37,7 +37,6 @@
  "counts": {
   "counters": {
    "cast": {
-    "lucid/_factories/converters.py": 3,
     "lucid/_ops/_adapters.py": 9,
     "lucid/_ops/composite/elementwise.py": 8,
     "lucid/_tensor/_indexing.py": 10,
@@ -419,8 +418,7 @@
    },
    "type-ignore[attr-defined]": {
     "lucid/_deprecation.py": 1,
-    "lucid/_factories/converters.py": 16,
-    "lucid/_factories/creation.py": 1,
+    "lucid/_factories/converters.py": 12,
     "lucid/_ops/__init__.py": 2,
     "lucid/_ops/_adapters.py": 1,
     "lucid/amp/grad_scaler.py": 1,
@@ -617,7 +615,7 @@
     "lucid/_C/utils/tokenizer/Basic.cpp": 8,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 2,
     "lucid/_C/utils/tokenizer/WordPiece.cpp": 10,
-    "lucid/_factories/creation.py": 5,
+    "lucid/_factories/creation.py": 4,
     "lucid/_factories/random.py": 4,
     "lucid/_ops/_adapters.py": 1,
     "lucid/_ops/composite/blas.py": 2,
@@ -1035,7 +1033,6 @@
     "lucid/_C/utils/tokenizer/BPE.cpp": 1,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 2,
     "lucid/_C/utils/tokenizer/WordPiece.cpp": 2,
-    "lucid/_factories/converters.py": 1,
     "lucid/_ops/_adapters.py": 2,
     "lucid/_ops/composite/indexing.py": 1,
     "lucid/_ops/composite/statistics.py": 1,
@@ -1143,7 +1140,6 @@
     "lucid/_C/utils/tokenizer/BPE.cpp": 1,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 1,
     "lucid/_C/utils/tokenizer/WordPiece.cpp": 1,
-    "lucid/_factories/converters.py": 1,
     "lucid/_factories/creation.py": 1,
     "lucid/_ops/composite/statistics.py": 2,
     "lucid/_tensor/_dunders.py": 1,
@@ -1468,7 +1464,6 @@
     "lucid/nn/module.py": 1
    },
    "C901": {
-    "lucid/_factories/converters.py": 1,
     "lucid/_ops/__init__.py": 2,
     "lucid/_ops/_adapters.py": 2,
     "lucid/_ops/composite/indexing.py": 1,
@@ -1644,7 +1639,6 @@
     "lucid/utils/transforms/_base.py": 2
    },
    "PLR0912": {
-    "lucid/_factories/converters.py": 1,
     "lucid/_ops/__init__.py": 1,
     "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_indexing.py": 1,
@@ -1801,9 +1795,6 @@
     "lucid/nn/utils/weight_norm.py": 1,
     "lucid/utils/data/dataloader.py": 3
    },
-   "SIM101": {
-    "lucid/_factories/converters.py": 1
-   },
    "SIM102": {
     "lucid/compile/_entry/fused_step.py": 2,
     "lucid/models/vision/resnet/_model.py": 1,
@@ -1820,7 +1811,6 @@
    },
    "SIM108": {
     "lucid/_dispatch.py": 2,
-    "lucid/_factories/converters.py": 2,
     "lucid/_ops/composite/statistics.py": 1,
     "lucid/autograd/_functional.py": 2,
     "lucid/compile/_entry/segmented_step.py": 1,
@@ -1918,7 +1908,6 @@
    },
    "UP035": {
     "lucid/__init__.py": 1,
-    "lucid/_factories/converters.py": 1,
     "lucid/_ops/_adapters.py": 1,
     "lucid/_ops/_registry.py": 1,
     "lucid/_ops/composite/reductions.py": 1,

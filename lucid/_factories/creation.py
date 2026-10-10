@@ -2,11 +2,11 @@ r"""
 Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_like.
 """
 
-import numbers
 import struct
 from typing import TYPE_CHECKING, SupportsFloat
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
+from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap
+from lucid._factories._build import _fill, _leaf, _python_scalar
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ def zeros(
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
     impl = _C_engine.zeros(shape, _dt, _dev)
-    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
+    return _wrap(_leaf(impl, _rg))
 
 
 def ones(
@@ -163,7 +163,7 @@ def ones(
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
     impl = _C_engine.ones(shape, _dt, _dev)
-    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
+    return _wrap(_leaf(impl, _rg))
 
 
 def empty(
@@ -234,12 +234,12 @@ def empty(
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
     impl = _C_engine.empty(shape, _dt, _dev)
-    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
+    return _wrap(_leaf(impl, _rg))
 
 
 def full(
     size: int | list[int] | tuple[int, ...],
-    fill_value: float,
+    fill_value: complex,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
@@ -264,8 +264,14 @@ def full(
         `zeros` / `ones`, this is a single positional argument, so
         multi-dimensional shapes must be passed as a list or tuple:
         ``full((2, 3), 7.0)``.
-    fill_value : float
-        The scalar constant to broadcast across all elements.
+    fill_value : bool, int, float or complex
+        The scalar constant to broadcast across all elements.  It is
+        stored exactly in ``dtype``: an integer keeps every digit (the
+        fill does not pass through a double) and a complex keeps its
+        imaginary part.  A complex value into a real ``dtype`` raises
+        ``TypeError``, a non-finite float into an integer ``dtype``
+        ``ValueError``, and an integer outside ``dtype``'s range
+        ``OverflowError``.
     dtype : lucid.dtype, optional
         Scalar data type.  If ``None``, inferred from ``fill_value``
         (integers → ``int64``, floats → the global default float dtype).
@@ -293,6 +299,13 @@ def full(
 
     >>> mask = lucid.full((4, 4), float("-inf"))
 
+    Integers past $2^{53}$ and complex values are stored exactly:
+
+    >>> lucid.full((1,), 2**60 + 1, dtype=lucid.int64).item()
+    1152921504606846977
+    >>> lucid.full((2,), 2 + 3j, dtype=lucid.complex64).tolist()
+    [(2+3j), (2+3j)]
+
     Notes
     -----
     Every output element is assigned ``fill_value`` exactly — there is no
@@ -308,8 +321,7 @@ def full(
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]
-    impl = _C_engine.full(shape, fill_value, _dt, _dev)
-    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
+    return _wrap(_leaf(_fill(shape, fill_value, _dt, _dev), _rg))
 
 
 def eye(
@@ -393,7 +405,7 @@ def eye(
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     _m = m if m is not None else n
     impl = _C_engine.eye(n, _m, 0, _dt, _dev)
-    return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
+    return _wrap(_leaf(impl, _rg))
 
 
 #: Every integer of smaller magnitude is exactly a double.  The engine
@@ -412,16 +424,10 @@ def _arange_number(value: SupportsFloat) -> int | float:
     ``bool`` and other libraries' integer scalars count as integers; a
     single-element tensor counts as whatever its element is.
     """
-    if isinstance(value, numbers.Integral):
-        return int(value)
-    if isinstance(value, float):
-        return value
-    item = getattr(value, "item", None)
-    if callable(item):
-        value = item()
-        if isinstance(value, numbers.Integral):
-            return int(value)
-    return float(value)
+    v = _python_scalar(value)
+    if isinstance(v, complex):
+        raise TypeError(f"arange: expected a real number, got {v!r}")
+    return int(v) if isinstance(v, int) else v
 
 
 def _exact_int64_arange(
@@ -455,6 +461,7 @@ def arange(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     r"""Return a 1-D tensor of evenly spaced values over a half-open interval.
 
@@ -496,6 +503,9 @@ def arange(
         ``dtype`` always wins.
     device : str or lucid.device, optional
         Target device — ``"cpu"`` or ``"metal"``.
+    requires_grad : bool, optional
+        If ``True``, the sequence comes back as a leaf whose operations
+        autograd records.  Default: ``False``.
 
     Returns
     -------
@@ -552,14 +562,17 @@ def arange(
     first = _arange_number(start)
     stop = _arange_number(end)
     stride = _arange_number(step)
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
+    _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
+    impl: _C_engine.TensorImpl | None = None
     if isinstance(first, int) and isinstance(stop, int) and isinstance(stride, int):
         if dtype is None:
             _dt = _C_engine.I64
         widest = max(abs(first), abs(stop), abs(stride), abs(stop - first))
         if _dt == _C_engine.I64 and stride != 0 and widest > _EXACT_IN_DOUBLE:
-            return _wrap(_exact_int64_arange(first, stop, stride, _dev))
-    return _wrap(_C_engine.arange(first, stop, stride, _dt, _dev))
+            impl = _exact_int64_arange(first, stop, stride, _dev)
+    if impl is None:
+        impl = _C_engine.arange(first, stop, stride, _dt, _dev)
+    return _wrap(_leaf(impl, _rg))
 
 
 def linspace(
@@ -569,6 +582,7 @@ def linspace(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     r"""Return a 1-D tensor of ``steps`` equally spaced values over a closed interval.
 
@@ -596,6 +610,9 @@ def linspace(
         Scalar data type.  Defaults to the global default float dtype.
     device : str or lucid.device, optional
         Target device — ``"cpu"`` or ``"metal"``.
+    requires_grad : bool, optional
+        If ``True``, the samples form a leaf tensor that autograd tracks.
+        Default: ``False``.
 
     Returns
     -------
@@ -642,8 +659,8 @@ def linspace(
     >>> lucid.linspace(3.0, 7.0, 1).tolist()
     [3.0]
     """
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
-    return _wrap(_C_engine.linspace(start, end, steps, _dt, _dev))
+    _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
+    return _wrap(_leaf(_C_engine.linspace(start, end, steps, _dt, _dev), _rg))
 
 
 def zeros_like(
@@ -717,7 +734,7 @@ def zeros_like(
     )
     impl = _unwrap(t)
     out = _C_engine.zeros(list(impl.shape), _dt, _dev)
-    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
+    return _wrap(_leaf(out, _rg))
 
 
 def ones_like(
@@ -785,7 +802,7 @@ def ones_like(
     )
     impl = _unwrap(t)
     out = _C_engine.ones(list(impl.shape), _dt, _dev)
-    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
+    return _wrap(_leaf(out, _rg))
 
 
 def empty_like(
@@ -847,15 +864,16 @@ def empty_like(
     )
     impl = _unwrap(t)
     out = _C_engine.empty(list(impl.shape), _dt, _dev)
-    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
+    return _wrap(_leaf(out, _rg))
 
 
 def full_like(
     t: Tensor,
-    fill_value: float,
+    fill_value: complex,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     r"""Return a constant-filled tensor with the same shape, dtype, and device as ``t``.
 
@@ -874,15 +892,18 @@ def full_like(
     t : Tensor
         Reference tensor.  Shape, dtype, and device are inherited unless
         overridden by the keyword arguments.
-    fill_value : float
-        Scalar constant to broadcast across all elements.
+    fill_value : bool, int, float or complex
+        Scalar constant to broadcast across all elements, stored exactly
+        in the result's dtype as :func:`full` stores it.
     dtype : lucid.dtype, optional
-        Override the data type.  When specified, the result is cast via
-        ``astype`` after allocation, so the output dtype matches the
-        override rather than ``t.dtype``.
+        Override the data type.  The value is filled in this dtype
+        directly, not filled in ``t.dtype`` and cast — so
+        ``full_like(int_tensor, 2.5, dtype=lucid.float32)`` holds ``2.5``.
     device : str or lucid.device, optional
-        Override the device.  When specified, the result is moved via
-        ``to`` after allocation.
+        Override the device.
+    requires_grad : bool, optional
+        If ``True``, the constant tensor is a leaf recorded by autograd.
+        Default: ``False``.
 
     Returns
     -------
@@ -919,12 +940,12 @@ def full_like(
     >>> x = lucid.randn(2, 3)
     >>> padded = lucid.full_like(x, -1.0)
     """
-    out: Tensor = _wrap(_C_engine.full_like(_unwrap(t), fill_value, False))
-    if dtype is not None and dtype is not t.dtype:
-        out = out.astype(dtype)  # type: ignore[attr-defined]
-    if device is not None and str(device) != str(t.device):
-        out = out.to(device)
-    return out
+    _dt, _dev, _rg = normalize_factory_kwargs(
+        dtype if dtype is not None else t.dtype,
+        device if device is not None else t.device,
+        requires_grad,
+    )
+    return _wrap(_leaf(_fill(list(t.shape), fill_value, _dt, _dev), _rg))
 
 
 def logspace(
@@ -935,6 +956,7 @@ def logspace(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     r"""Return a 1-D tensor of ``steps`` values evenly spaced on a logarithmic scale.
 
@@ -972,6 +994,9 @@ def logspace(
         Scalar data type.  Defaults to the global default float dtype.
     device : str or lucid.device, optional
         Target device — ``"cpu"`` or ``"metal"``.
+    requires_grad : bool, optional
+        If ``True``, a loss built from the result fills its ``.grad`` on
+        ``backward()`` — it is returned as a leaf.  Default: ``False``.
 
     Returns
     -------
@@ -1015,5 +1040,6 @@ def logspace(
     >>> d_model = 512
     >>> inv_freq = lucid.logspace(0, -1, d_model // 2, base=10000.0)
     """
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
-    return _wrap(_C_engine.logspace(start, end, steps, base, _dt, _dev))
+    _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
+    impl = _C_engine.logspace(start, end, steps, base, _dt, _dev)
+    return _wrap(_leaf(impl, _rg))

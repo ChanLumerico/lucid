@@ -13,32 +13,21 @@ graph — only ``lucid.tensor(np_array)`` and explicit ``from_numpy``
 keep the numpy bridge.
 """
 
-import struct
-from typing import TYPE_CHECKING, Sequence, SupportsFloat, SupportsInt, cast
+from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs
+from lucid._factories._build import (
+    _from_values,
+    _infer_dtype,
+    _is_scalar_leaf,
+    _leaf,
+)
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     import numpy as np
     from lucid._tensor.tensor import Tensor
-
-
-# struct format code + element size for each engine dtype that has a
-# direct CPython struct representation.  BF16 and C64 are absent — they
-# need numpy / explicit conversion, so the fast path falls through to
-# the existing numpy bridge when those are the target dtype.
-_DTYPE_STRUCT: dict[_C_engine.Dtype, tuple[str, int]] = {
-    _C_engine.Dtype.F16: ("e", 2),
-    _C_engine.Dtype.F32: ("f", 4),
-    _C_engine.Dtype.F64: ("d", 8),
-    _C_engine.Dtype.I8: ("b", 1),
-    _C_engine.Dtype.I16: ("h", 2),
-    _C_engine.Dtype.I32: ("i", 4),
-    _C_engine.Dtype.I64: ("q", 8),
-    _C_engine.Dtype.Bool: ("?", 1),
-}
 
 
 # Cached default-device engine enum for the ndarray fast path.
@@ -104,115 +93,29 @@ def _flatten_with_shape(data: object) -> tuple[list[int], list[object]] | None:
     return shape, list(data)
 
 
-def _infer_engine_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
-    """Default-dtype inference for Python scalars.
-
-    Matches numpy's behaviour at the call site:
-      * any ``complex`` element → ``C64``  (numpy promotes to complex128
-        by default; lucid pins to complex64 because the engine only
-        carries C64 today)
-      * any ``float`` element → ``F32`` (lucid's default float dtype)
-      * all ``bool`` elements → ``Bool``
-      * otherwise (ints) → ``I64``  (numpy uses platform int, but
-        lucid + reference frameworks both pin int → int64 for tensor
-        literals to avoid 32-bit-vs-64-bit footguns).
-    """
-    if not flat:
-        return _C_engine.Dtype.F32  # zero-length tensor — match numpy default
-    # complex must be checked first — Python's numeric hierarchy means
-    # `complex` is neither `float` nor `int`, but the dtype promotion
-    # rules say a single complex value upgrades everything else.
-    if any(isinstance(v, complex) for v in flat):
-        return _C_engine.Dtype.C64
-    has_float = any(isinstance(v, float) and not isinstance(v, bool) for v in flat)
-    if has_float:
-        return _C_engine.Dtype.F32
-    # bool is a subclass of int in Python, check it first.
-    if all(isinstance(v, bool) for v in flat):
-        return _C_engine.Dtype.Bool
-    return _C_engine.Dtype.I64
-
-
-def _coerce_for_struct(v: object, dtype: _C_engine.Dtype) -> object:
-    """Cast a Python scalar so ``struct.pack`` accepts it for ``dtype``."""
-    if dtype == _C_engine.Dtype.Bool:
-        return bool(v)
-    if dtype in (
-        _C_engine.Dtype.I8,
-        _C_engine.Dtype.I16,
-        _C_engine.Dtype.I32,
-        _C_engine.Dtype.I64,
-    ):
-        return int(cast(SupportsInt, v))
-    # F16 / F32 / F64
-    return float(cast(SupportsFloat, v))
-
-
-def _pack_complex64(flat: Sequence[object]) -> bytes:
-    """Pack a flat sequence of complex/real scalars as little-endian
-    interleaved (real, imag) float32 pairs — the on-disk layout the
-    engine's C64 dtype expects (matches ``TensorImpl::tolist()``'s
-    decoder in TensorImpl.cpp).
-    """
-    if not flat:
-        return b""
-    floats: list[float] = []
-    for v in flat:
-        if isinstance(v, complex):
-            c = v
-        else:
-            c = complex(cast(SupportsFloat, v))
-        floats.append(c.real)
-        floats.append(c.imag)
-    return struct.pack(f"={len(floats)}f", *floats)
-
-
-def _try_numpy_free_to_impl(
+def _python_literal_impl(
     data: object,
     dtype_eng: _C_engine.Dtype | None,
     device_eng: _C_engine.Device,
-    requires_grad: bool,
 ) -> _C_engine.TensorImpl | None:
-    """Build a TensorImpl from Python scalars/lists/tuples without numpy.
+    """Build a Python literal (scalar or nested list/tuple) without numpy.
 
-    Returns ``None`` when the input can't be handled by ``struct.pack``
-    (e.g. ragged nesting, BF16 target dtype); the caller then falls
-    through to the numpy bridge.  All currently supported engine dtypes
-    have a numpy-free path here — including C64 (packed as interleaved
-    f32 pairs).
+    NumPy *scalars* count as literal elements: they are numbers with a
+    dtype of their own, which inference keeps (``np.bool_`` → bool,
+    ``np.float16`` → float16).  Returns ``None`` — and the caller falls
+    through to the numpy bridge — for ragged nesting or any element that
+    is not a number (an ndarray, a Tensor, an object).
     """
-    if isinstance(data, (list, tuple)) or isinstance(data, (int, float, bool, complex)):
-        unpacked = _flatten_with_shape(data)
-        if unpacked is None:
-            return None  # ragged → numpy
-        shape, flat = unpacked
-        target = dtype_eng if dtype_eng is not None else _infer_engine_dtype(flat)
-
-        # C64 isn't directly encodable as a single struct format code —
-        # it ships as two f32 values per element (real, imag).  Handle
-        # it explicitly so users can write ``lucid.tensor([1+2j, ...])``
-        # without dragging numpy in just for complex literal support.
-        if target == _C_engine.Dtype.C64:
-            packed = _pack_complex64(flat)
-            return _C_engine.TensorImpl.from_bytes(
-                packed, shape, target, device_eng, requires_grad
-            )
-
-        fmt_entry = _DTYPE_STRUCT.get(target)
-        if fmt_entry is None:
-            return None  # BF16 (not yet in the enum) → numpy if it ever lands
-        fmt, _ = fmt_entry
-        n = len(flat)
-        if n == 0:
-            packed = b""
-        else:
-            packed = struct.pack(
-                f"={n}{fmt}", *(_coerce_for_struct(v, target) for v in flat)
-            )
-        return _C_engine.TensorImpl.from_bytes(
-            packed, shape, target, device_eng, requires_grad
-        )
-    return None
+    if not isinstance(data, (list, tuple)) and not _is_scalar_leaf(data):
+        return None
+    unpacked = _flatten_with_shape(data)
+    if unpacked is None:
+        return None
+    shape, flat = unpacked
+    if not all(_is_scalar_leaf(v) for v in flat):
+        return None
+    target = dtype_eng if dtype_eng is not None else _infer_dtype(flat)
+    return _from_values(flat, shape, target, device_eng)
 
 
 _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
@@ -311,9 +214,7 @@ def _to_impl(
     if isinstance(data, _Tensor):
         impl = data._impl
         if impl.requires_grad != _rg:
-            from lucid._dispatch import _impl_with_grad
-
-            return _impl_with_grad(impl, _rg)
+            return impl.clone_with_grad(_rg)
         # ``Tensor(x)`` used to hand back ``x``'s own TensorImpl here, so
         # the new tensor was ``x`` under another name: a flag flipped or a
         # gradient accumulated on either showed up on both.  A view shares
@@ -323,58 +224,51 @@ def _to_impl(
 
     if isinstance(data, _C_engine.TensorImpl):
         if data.requires_grad != _rg:
-            from lucid._dispatch import _impl_with_grad
-
-            data = _impl_with_grad(data, _rg)
+            data = data.clone_with_grad(_rg)
         return data
 
-    # 3.0.2: numpy-free fast path for pure-Python scalars / lists / tuples.
-    # Uses ``struct.pack`` + ``TensorImpl.from_bytes`` so the most common
-    # ``lucid.tensor([1, 2, 3])`` pattern doesn't transitively import
-    # numpy.  Returns None for inputs the fast path can't handle (ragged
-    # lists, BF16 / C64 dtype targets, ndarray) — caller falls through.
-    fast = _try_numpy_free_to_impl(
-        data, _dtype_eng if dtype is not None else None, _device_eng, _rg
-    )
-    if fast is not None:
-        return fast
+    # Everything below builds the value first and makes the leaf last: a
+    # ``requires_grad`` set before the bfloat16 narrowing used to hand
+    # back the narrowing's output, a non-leaf whose ``.grad`` never filled.
+    explicit = _dtype_eng if dtype is not None else None
+    literal = _python_literal_impl(data, explicit, _device_eng)
+    if literal is not None:
+        return _leaf(literal, _rg)
+    return _leaf(_numpy_impl(data, explicit, _device_eng), _rg)
 
-    # Numpy is the sanctioned conversion library for the remaining inputs
-    # (ndarray, BF16/C64 targets, ragged sequences).  Imported lazily so
-    # ``import lucid`` doesn't need numpy installed.  When numpy is
-    # missing, ``_require_numpy`` raises a guidance-rich ImportError.
+
+def _numpy_impl(
+    data: object,
+    dtype_eng: _C_engine.Dtype | None,
+    device_eng: _C_engine.Device,
+) -> _C_engine.TensorImpl:
+    """Build an ndarray — or anything ``np.array`` accepts — in its final dtype.
+
+    Without an explicit dtype the array's own dtype is kept (unsigned
+    widened to the next signed type), including for non-ndarray input
+    such as ``range`` or a list of arrays.  The result does not require
+    grad; the caller makes the leaf.
+    """
+    # Numpy is the sanctioned conversion library here, imported lazily so
+    # ``import lucid`` doesn't need it; ``_require_numpy`` explains a miss.
     np = _require_numpy("lucid.tensor() with non-Tensor input")
-
-    numpy_input = isinstance(data, np.ndarray)  # type: ignore[attr-defined]
-
-    if not numpy_input:
-        # Python list/scalar -> convert to numpy with default dtype (float32)
-        tmp = np.array(data)  # type: ignore[attr-defined]
-        if dtype is None:
-            target_eng = _dtype_eng
-        else:
-            target_eng = _dtype_eng
-        arr = tmp.astype(_engine_dtype_to_np(target_eng), copy=False)
-        _dtype_eng = target_eng
+    arr = data if isinstance(data, np.ndarray) else np.array(data)  # type: ignore[attr-defined]
+    if dtype_eng is None:
+        if arr.dtype.kind == "u":
+            arr = _widen_unsigned(arr)
+        dtype_eng = _np_dtype_to_engine(arr.dtype)
     else:
-        if dtype is not None:
-            arr = data.astype(_engine_dtype_to_np(_dtype_eng), copy=False)  # type: ignore[attr-defined]
-        else:
-            arr = data
-            if arr.dtype.kind == "u":  # type: ignore[attr-defined]
-                arr = _widen_unsigned(arr)
-            _dtype_eng = _np_dtype_to_engine(arr.dtype)  # type: ignore[attr-defined]
-
+        arr = arr.astype(_engine_dtype_to_np(dtype_eng), copy=False)
     arr = np.ascontiguousarray(arr)  # type: ignore[attr-defined]
     with np.errstate(invalid="ignore", over="ignore"):  # type: ignore[attr-defined]
-        impl = _C_engine.TensorImpl(arr, _device_eng, _rg)
+        impl = _C_engine.TensorImpl(arr, device_eng, False)
     # bfloat16 has no NumPy counterpart, so the array above is float32 and
     # the engine narrows afterwards.  Doing it this way round rather than
     # picking the nearest NumPy dtype matters: float16 is *not* a
     # substitute — a bfloat16 value can exceed float16's maximum, and
     # routing through it would turn a representable number into infinity
     # before the engine ever saw it.
-    if _dtype_eng == _C_engine.Dtype.BF16 and impl.dtype != _C_engine.Dtype.BF16:
+    if dtype_eng == _C_engine.Dtype.BF16 and impl.dtype != _C_engine.Dtype.BF16:
         impl = _C_engine.astype(impl, _C_engine.Dtype.BF16)
     return impl
 
@@ -430,7 +324,7 @@ def _copy_tensor(
         impl = _C_engine.astype(impl, dt)
     if impl.device != dev:
         impl = impl.transfer_to_device(dev, False)
-    return impl.clone_with_grad(True) if rg else impl
+    return _leaf(impl, rg)
 
 
 def tensor(
@@ -455,10 +349,10 @@ def tensor(
     data : object
         Source data.  Accepted forms:
 
-        * Python scalar (``int``, ``float``, ``bool``) — produces a 0-d
-          tensor.
-        * Nested ``list`` / ``tuple`` — recursively converted; element type
-          must be uniform.
+        * Python scalar (``bool``, ``int``, ``float``, ``complex``) or
+          NumPy scalar — produces a 0-d tensor.
+        * Nested ``list`` / ``tuple`` of those — recursively converted;
+          the nesting must be rectangular.
         * ``numpy.ndarray`` — bridge boundary
           (see :mod:`lucid._factories.converters`); the data is copied
           regardless of the source array's contiguity.
@@ -467,14 +361,23 @@ def tensor(
           :func:`as_tensor` to avoid the copy when dtype/device match).
     dtype : dtype | str | None, optional
         Target element type.  ``None`` (default) infers from ``data``:
-        integers → ``int64``, floats → ``float32``, complex → ``complex64``;
-        a Tensor keeps its own dtype.
+        ``bool`` → ``bool``, ``int`` → ``int64``, ``float`` → the default
+        dtype (`get_default_dtype`), ``complex`` → its complex counterpart
+        (``complex128`` under a ``float64`` default, else ``complex64``);
+        a NumPy scalar or array, or a Tensor, keeps its own dtype.  Mixed
+        elements take the highest kind (bool < int < float < complex) at
+        the widest width among them.  Integers are stored exactly at any
+        magnitude; a value the dtype cannot hold raises — ``TypeError``
+        for a complex into a real dtype, ``ValueError`` for NaN or
+        infinity into an integer dtype, ``OverflowError`` for an integer
+        out of range.
     device : device | str | None, optional
         Target device (``"cpu"`` or ``"metal"``).  ``None`` uses
         :func:`lucid.get_default_device`, except that a Tensor stays on its
         own device.
     requires_grad : bool, optional
         Whether the resulting tensor should record autograd operations.
+        The result is always a leaf, whatever the dtype conversion.
         Defaults to ``False``.
 
     Returns

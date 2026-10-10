@@ -11,6 +11,7 @@ import builtins
 _float = builtins.float
 _int = builtins.int
 _bool = builtins.bool
+_complex = builtins.complex
 
 import numpy as np
 
@@ -176,7 +177,7 @@ def empty(
 ) -> Tensor: ...
 def full(
     size: _int | list[_int] | tuple[_int, ...],
-    fill_value: _float,
+    fill_value: _complex,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
@@ -197,6 +198,7 @@ def arange(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def linspace(
     start: _float,
@@ -205,6 +207,7 @@ def linspace(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def zeros_like(
     t: Tensor,
@@ -228,7 +231,12 @@ def empty_like(
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def full_like(
-    t: Tensor, fill_value: _float, *, dtype: DTypeLike = None, device: DeviceLike = None
+    t: Tensor,
+    fill_value: _complex,
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def logspace(
     start: _float,
@@ -238,6 +246,7 @@ def logspace(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 
 # ── Tensor factories — random (random.py) ───────────────────────────────

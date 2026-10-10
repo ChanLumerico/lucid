@@ -8,7 +8,8 @@ from lucid._ctx import check_random_allowed as _check_random
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
+from lucid._dispatch import normalize_factory_kwargs, _wrap
+from lucid._factories._build import _leaf
 from lucid._dtype import int64
 from lucid._types import DeviceLike, DTypeLike
 
@@ -404,7 +405,7 @@ def rand(
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
     impl = _C_engine.rand(shape, _dt, _dev, _get_gen(generator))
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def randn(
@@ -490,7 +491,7 @@ def randn(
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
     impl = _C_engine.randn(shape, _dt, _dev, _get_gen(generator))
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def randint(
@@ -585,7 +586,7 @@ def randint(
     )
     shape = list(size)
     impl = _C_engine.randint(shape, low, high, _dt, _dev, _get_gen(generator))
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def bernoulli(
@@ -665,7 +666,7 @@ def bernoulli(
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size) if size is not None else [1]
     impl = _C_engine.bernoulli(shape, p, _dt, _dev, _get_gen(generator))
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def normal(
@@ -753,7 +754,7 @@ def normal(
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size)
     impl = _C_engine.normal(shape, mean, std, _dt, _dev, _get_gen(generator))
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def rand_like(
@@ -815,7 +816,7 @@ def rand_like(
         device if device is not None else t.device,
     )
     impl = _C_engine.rand(list(t.shape), _dt, _dev, None)
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 def randn_like(
@@ -884,7 +885,7 @@ def randn_like(
         device if device is not None else t.device,
     )
     impl = _C_engine.randn(list(t.shape), _dt, _dev, None)
-    return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    return _wrap(_leaf(impl, requires_grad))
 
 
 from lucid._factories.creation import _size_to_list
@@ -978,11 +979,9 @@ def randperm(
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     if n == 0:
         impl = _C_engine.zeros([0], _dt, _dev)
-        return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+        return _wrap(_leaf(impl, requires_grad))
     keys_impl = _C_engine.rand([n], _C_engine.F32, _dev, _get_gen(generator))
     perm_impl = _C_engine.argsort(keys_impl, -1)
     if perm_impl.dtype != _dt:
         perm_impl = _C_engine.astype(perm_impl, _dt)
-    return _wrap(
-        _impl_with_grad(perm_impl, requires_grad) if requires_grad else perm_impl
-    )
+    return _wrap(_leaf(perm_impl, requires_grad))
