@@ -174,15 +174,18 @@ class _Key:
     tensors (``TensorImpl``), one per dim of the source after ``unsqueeze``
     — ``...`` expanded, a mask split into one index per dim it covers.
     ``unsqueeze`` lists the axes a bool scalar inserts into the source, in
-    the order they are inserted.
+    the order they are inserted.  ``unchecked`` says an index tensor came
+    from the caller — one a mask or a bool scalar made is in range by
+    construction — so a value of it may be out of range.
     """
 
-    __slots__ = ("items", "unsqueeze", "advanced")
+    __slots__ = ("items", "unsqueeze", "advanced", "unchecked")
 
     def __init__(self) -> None:
         self.items: list[object] = []
         self.unsqueeze: list[int] = []
         self.advanced = False
+        self.unchecked = False
 
 
 def _is_bool_scalar(token: object) -> bool:
@@ -220,9 +223,15 @@ def _token(part: object) -> object:
                 f"and lists or arrays of them are valid indices, got "
                 f"{type(part).__name__}"
             )
-        impl = _to_impl(
-            part, dtype=_I64 if isinstance(part, list) and not part else None
-        )
+        try:
+            impl = _to_impl(
+                part, dtype=_I64 if isinstance(part, list) and not part else None
+            )
+        except (TypeError, ValueError) as err:
+            raise IndexError(
+                "a list index holds only integers or only bools; to index "
+                "several dims, use a tuple — x[i, j], not x[[i, j]]"
+            ) from err
     if impl.dtype == _BOOL:
         return impl
     if impl.dtype not in _INTEGER_BITS:
@@ -288,9 +297,11 @@ def _bool_scalar_index(
 def _normalize_key(key: object, shape: Sequence[int], device: _C_engine.Device) -> _Key:
     """Normalise ``key`` against a tensor of ``shape`` on ``device``.
 
-    The single owner of what an index key means: ``Tensor.__getitem__``,
-    ``Tensor.__setitem__`` and any op that takes a key of the same form
-    (``index_put``) read it through here, for reading and writing alike:
+    Meant as the single owner of what an index key means.
+    ``Tensor.__getitem__`` and ``Tensor.__setitem__`` read their keys
+    through here; ``index_put``, which takes keys of the same form, does
+    not yet and reads a bool mask as integers until it does (API-05).  For
+    reading and writing alike:
 
     * ``...`` stands for as many full slices as the other parts leave dims;
     * a bool scalar — ``True``, ``False`` or a 0-d bool tensor — inserts an
@@ -340,6 +351,7 @@ def _normalize_key(key: object, shape: Sequence[int], device: _C_engine.Device) 
             index = _on_device(token, device)
             if index.dtype != _BOOL:
                 out.items.append(index)
+                out.unchecked = True
                 dim += 1
                 continue
             covered = sizes[dim : dim + len(index.shape)]
@@ -416,7 +428,9 @@ def _fancy_select(
 
 
 def _coordinate_select(
-    impl: _C_engine.TensorImpl, int_indices: list[_C_engine.TensorImpl]
+    impl: _C_engine.TensorImpl,
+    int_indices: list[_C_engine.TensorImpl],
+    unchecked: bool,
 ) -> _C_engine.TensorImpl:
     """
     Pure coordinate selection: result[*i] = impl[int_indices[0][*i], int_indices[1][*i], ...]
@@ -428,7 +442,8 @@ def _coordinate_select(
     ``x[[0], [5]]`` read element 5 rather than refusing.  A negative index
     wraps within its dim, and an out-of-range one is sent past the end of
     the folded axis, where the engine refuses it on the CPU and isolates it
-    on Metal, as for any other index.
+    on Metal, as for any other index.  Indices a mask made (``unchecked``
+    false) are in range and non-negative by construction, and skip both.
     """
     n_indexed = len(int_indices)
     shape = impl.shape
@@ -448,17 +463,25 @@ def _coordinate_select(
         idx = int_indices[k]
         if idx.dtype != _I64:
             idx = _C_engine.astype(idx, _I64)
+        if not unchecked:
+            term = _C_engine.mul(idx, scalar(stride)) if stride != 1 else idx
+            flat_idx = term if flat_idx is None else _C_engine.add(flat_idx, term)
+            stride *= shape[k]
+            continue
         size = scalar(shape[k])
         idx = _C_engine.where(_C_engine.less(idx, zero), _C_engine.add(idx, size), idx)
         bad = _C_engine.logical_or(
             _C_engine.less(idx, zero), _C_engine.greater_equal(idx, size)
         )
+        if dev == _CPU and _C_engine.any(bad).item():
+            _refuse_out_of_range(int_indices[k], shape[k])
         term = _C_engine.mul(idx, scalar(stride)) if stride != 1 else idx
         flat_idx = term if flat_idx is None else _C_engine.add(flat_idx, term)
         outside = bad if outside is None else _C_engine.logical_or(outside, bad)
         stride *= shape[k]
-    assert flat_idx is not None and outside is not None
-    flat_idx = _C_engine.where(outside, scalar(indexed_total), flat_idx)
+    assert flat_idx is not None
+    if outside is not None:
+        flat_idx = _C_engine.where(outside, scalar(indexed_total), flat_idx)
     flat_idx_1d = _C_engine.reshape(
         _C_engine.contiguous(_C_engine.broadcast_to(flat_idx, bcast_shape)), [-1]
     )
@@ -473,14 +496,29 @@ def _coordinate_select(
     return _C_engine.reshape(selected, bcast_shape + rest)
 
 
+def _refuse_out_of_range(index: _C_engine.TensorImpl, size: int) -> None:
+    """Raise for the first value of ``index`` outside ``[-size, size)``.
+
+    The CPU says which index and which size; the folded index the engine
+    would see names neither.
+    """
+    values = _C_engine.reshape(index, [-1]).tolist()
+    assert isinstance(values, list)
+    first = next(v for v in values if not -size <= v < size)
+    raise IndexError(
+        f"index {first} is out of bounds for an indexed dimension with size {size}"
+    )
+
+
 # ── main advanced getitem ─────────────────────────────────────────────────────
 
 
 def _advanced_getitem(
-    impl: _C_engine.TensorImpl, idx_list: list[object]
+    impl: _C_engine.TensorImpl, idx_list: list[object], unchecked: bool
 ) -> _C_engine.TensorImpl:
     """Read ``impl`` through ``idx_list``, a normalised key's items
-    (:class:`_Key`) with at least one index tensor among them."""
+    (:class:`_Key`) with at least one index tensor among them; ``unchecked``
+    is the key's flag of the same name."""
     # Phase 1: tag each item with its kind.
     expanded: list[tuple[str, object]] = []
     for item in idx_list:
@@ -617,7 +655,7 @@ def _advanced_getitem(
             post_d = list(range(t_start + n_tensors, len(result.shape)))
             perm = coord_d + pre_d + post_d
             result = _C_engine.permute(result, perm)
-        coord_result = _coordinate_select(result, tensor_impls)
+        coord_result = _coordinate_select(result, tensor_impls, unchecked)
         if t_start > 0:
             n_bc = len(bc_shape)
             n_pre = t_start
@@ -662,7 +700,7 @@ def _advanced_getitem(
         result = _C_engine.permute(result, t_dims_abs + keep)
 
         # Coordinate select on first n_tensors dims → (*bc_shape, *keep)
-        result = _coordinate_select(result, tensor_impls)
+        result = _coordinate_select(result, tensor_impls, unchecked)
 
         # Apply the mid block's basic ops where their dim landed.  ``keep`` is
         # ascending, so a dim's output position is its rank in ``keep`` — and
@@ -804,11 +842,12 @@ def _normalize_value(
 def _take(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     """Make ``impl`` ``t``'s tensor, keeping what ``t`` asked of autograd.
 
-    The single owner of rebinding a tensor's impl: every Python path that
-    gives a tensor a new impl — assignment here, an in-place op whose dtype
-    promotion produced a new one (:func:`_adopt_inplace`), and the in-place
-    index ops in ``lucid._ops.composite.indexing`` — goes through it, so a
-    per-tensor flag that lives on the impl is carried in one place.
+    Meant as the single owner of rebinding a tensor's impl, so a flag that
+    lives on the impl is carried in one place.  Assignment and an in-place
+    op whose dtype promotion produced a new impl (:func:`_adopt_inplace`)
+    go through it; the in-place index ops in ``lucid._ops.composite.indexing``
+    (``index_fill_``, ``index_put_`` and the rest) still assign ``_impl``
+    themselves and drop ``retain_grad`` until they are routed here (API-05).
 
     ``retain_grad`` is registered on the slot of the tensor's producer, so
     a new impl does not have it: ``y.retain_grad(); y[0] = v`` left
@@ -838,17 +877,23 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
       views read them, by the engine's in-place rules, graph included;
     * otherwise ``t`` takes ``impl`` and with it ``impl``'s place in the
       graph, keeping ``retain_grad`` (:func:`_take`).
+
+    ``impl`` may be a view (a broadcast value) for the first two, which
+    read it through its strides; it must be a buffer of its own for the
+    third, or ``t`` would share the value's storage.  Callers that write a
+    tensor requiring grad under autograd must hand over a result that
+    records the write (the scatter): copied in, ``t`` would keep the graph
+    of the values the write replaced, and send them a gradient.
     """
     old = t._impl
-    if old.is_metal_shared and not old.requires_grad and not impl.requires_grad:
+    records = impl.requires_grad and _C_engine.grad_enabled()
+    if old.is_metal_shared and not old.requires_grad and not records:
         old.copy_from(impl)
         return
     if old.is_aliased():
         _C_engine.assign_inplace(old, impl, "__setitem__")
         return
-    # A strided tensor with no live views left (its base is gone) cannot
-    # take a dense buffer's bytes as they are; it takes the impl instead.
-    if not impl.requires_grad and (old.is_dense() or old.device != _CPU):
+    if not records:
         old.copy_from(impl)
         return
     _take(t, impl)
@@ -922,7 +967,7 @@ def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
     key = _normalize_key(idx, impl.shape, impl.device)
     source = _inserted(impl, key.unsqueeze)
     if key.advanced:
-        out = _advanced_getitem(source, key.items)
+        out = _advanced_getitem(source, key.items, key.unchecked)
     else:
         out = _apply_basic_index(source, key.items)
     if out is impl:
@@ -946,25 +991,27 @@ def _written_positions(
     them a second time wrote the whole ``rows x cols`` rectangle for
     ``t[rows, cols] = v``, and every touched row for a full-shape mask.
 
-    An advanced key's map counts from 1.  On Metal an integer gather reads
-    an out-of-range index as 0, and counted from 0 that is the first
-    element: ``x[[1, 99]] = v`` wrote ``x[0]`` (LCD-209).  Counted from 1,
-    the 0 is told apart and sent past the end, where the scatter drops it,
-    as every Metal scatter drops an out-of-range write.
+    On Metal, a key with an index tensor from the caller reads a map that
+    counts from 1.  An integer gather there reads an out-of-range index as
+    0, and counted from 0 that is the first element: ``x[[1, 99]] = v``
+    wrote ``x[0]`` (LCD-209).  Counted from 1, the 0 is told apart and sent
+    past the end, where the scatter drops it, as every Metal scatter drops
+    an out-of-range write.  The CPU refuses such an index in the gather.
     """
     total = _prod(shape)
     dtype = _C_engine.Dtype.I32 if total < 2**31 - 1 else _I64
-    first = 1 if key.advanced else 0
+    shifted = key.unchecked and device != _CPU
+    first = 1 if shifted else 0
     positions = _C_engine.reshape(
         _C_engine.arange(first, total + first, 1, dtype, device), shape
     )
     positions = _inserted(positions, key.unsqueeze)
     if key.advanced:
-        target = _advanced_getitem(positions, key.items)
+        target = _advanced_getitem(positions, key.items, key.unchecked)
     else:
         target = _apply_basic_index(positions, key.items)
     flat = _C_engine.reshape(_C_engine.contiguous(target), [-1])
-    if key.advanced:
+    if shifted:
         one = _C_engine.full([], 1.0, dtype, device)
         flat = _C_engine.where(
             _C_engine.equal(flat, _C_engine.full([], 0.0, dtype, device)),
@@ -1001,23 +1048,36 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     # ``t[:] = v`` and ``t[...] = v`` select every element, and scattering
     # through the flat index of the entire tensor costs random-access writes
     # over every element to express a straight copy: 51.7 ms against
-    # 0.63 ms on a 64x3x128x128 tensor.  ``contiguous`` keeps ``t`` from
-    # sharing the value's storage, which would make a later write to the
-    # value rewrite ``t``.
-    if (
-        key.items
-        and not key.unsqueeze
-        and all(isinstance(item, slice) and item == slice(None) for item in key.items)
-    ):
-        _rebind(t, _C_engine.contiguous(_normalize_value(value, impl, shape)))
-        return
+    # 0.63 ms on a 64x3x128x128 tensor.  A value with a graph is made a
+    # buffer of its own (``contiguous``) before ``t`` takes it, so a later
+    # write to the value cannot rewrite ``t``; one without is copied in as
+    # it is.  A tensor that requires grad taking a value without a graph
+    # goes through the scatter, which records that its old values no longer
+    # reach the result — copied in, ``t`` kept their graph, and
+    # ``w * 2`` assigned ``5`` sent ``w`` a gradient of 2.
+    whole = bool(key.items) and not key.unsqueeze
+    whole = whole and all(
+        isinstance(item, slice) and item == slice(None) for item in key.items
+    )
+    if whole:
+        val = _normalize_value(value, impl, shape)
+        records = _C_engine.grad_enabled()
+        if records and val.requires_grad:
+            _rebind(t, _C_engine.contiguous(val))
+            return
+        if not (records and impl.requires_grad):
+            _rebind(t, val)
+            return
 
     flat_idx, target_shape = _written_positions(shape, key, impl.device)
     flat_val = _C_engine.reshape(
         _C_engine.contiguous(_normalize_value(value, impl, target_shape)), [-1]
     )
-    flat_t = _C_engine.reshape(
-        _C_engine.contiguous(_read_for_write(t, flat_val)), [_prod(shape)]
-    )
+    # The scatter writes a buffer of its own, so a dense ``t`` is read in
+    # place; a copy first only cost another pass over every element.
+    base = _read_for_write(t, flat_val)
+    if not base.is_contiguous():
+        base = _C_engine.contiguous(base)
+    flat_t = _C_engine.reshape(base, [_prod(shape)])
     flat_out = _C_engine.scatter(flat_t, 0, flat_idx, flat_val)
     _rebind(t, _C_engine.reshape(flat_out, shape))

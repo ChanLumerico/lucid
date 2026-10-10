@@ -32,7 +32,6 @@ import pytest
 import lucid
 from lucid.test._fixtures.devices import metal_available
 
-_DEVICES = ["cpu", "metal"] if metal_available() else ["cpu"]
 _OTHER = {"cpu": "metal", "metal": "cpu"}
 
 # ── keys ──────────────────────────────────────────────────────────────────────
@@ -124,10 +123,11 @@ def _run(lib: ModuleType, key: str, value: str, op: str, device: str) -> object:
 @pytest.mark.parametrize("op", ["get", "set"])
 @pytest.mark.parametrize("value", list(_VALUES))
 @pytest.mark.parametrize("key", list(_KEYS))
-@pytest.mark.parametrize("device", _DEVICES)
 def test_matches_the_reference(
     ref: ModuleType, device: str, key: str, value: str, op: str
 ) -> None:
+    if value == "other-device-tensor" and not metal_available():
+        pytest.skip("needs a second device")
     if op == "get" and value not in ("float", "complex"):
         pytest.skip("a read takes no value; the float and complex dtypes cover it")
     if key in _OUT_OF_RANGE and device == "cpu":
@@ -147,13 +147,8 @@ def test_matches_the_reference(
 # ── each reported case, without the reference ────────────────────────────────
 
 
-@pytest.fixture(params=_DEVICES)
-def dev(request: pytest.FixtureRequest) -> str:
-    return str(request.param)
-
-
-def test_bool_scalars_insert_an_axis(dev: str) -> None:
-    x = lucid.zeros(2, 3, device=dev)
+def test_bool_scalars_insert_an_axis(device: str) -> None:
+    x = lucid.zeros(2, 3, device=device)
     assert x[True].shape == (1, 2, 3)
     assert x[False].shape == (0, 2, 3)
     assert x[lucid.tensor(True)].shape == (1, 2, 3)
@@ -161,21 +156,21 @@ def test_bool_scalars_insert_an_axis(dev: str) -> None:
     assert x[0, True, None].shape == (1, 1, 3)
 
 
-def test_a_bool_scalar_write(dev: str) -> None:
-    x = lucid.zeros(2, device=dev)
+def test_a_bool_scalar_write(device: str) -> None:
+    x = lucid.zeros(2, device=device)
     x[False] = 1.0
     assert x.tolist() == [0.0, 0.0]
     x[True] = 1.0
     assert x.tolist() == [1.0, 1.0]
 
 
-def test_a_mask_must_match_the_dims_it_covers(dev: str) -> None:
+def test_a_mask_must_match_the_dims_it_covers(device: str) -> None:
     with pytest.raises(IndexError, match="mask"):
-        lucid.zeros(4, device=dev)[lucid.tensor([True, False])]
+        lucid.zeros(4, device=device)[lucid.tensor([True, False])]
 
 
-def test_list_and_array_keys_are_indices(dev: str) -> None:
-    x = lucid.arange(5.0, device=dev)
+def test_list_and_array_keys_are_indices(device: str) -> None:
+    x = lucid.arange(5.0, device=device)
     assert x[[0, 1]].tolist() == [0.0, 1.0]
     assert x[np.array([4, 0])].tolist() == [4.0, 0.0]
     assert x[np.int64(3)].item() == 3.0
@@ -184,28 +179,28 @@ def test_list_and_array_keys_are_indices(dev: str) -> None:
 
 
 @pytest.mark.parametrize("bad", [1.5, "a", lucid.tensor([1.0])])
-def test_what_is_not_an_index_is_refused(dev: str, bad: object) -> None:
+def test_what_is_not_an_index_is_refused(device: str, bad: object) -> None:
     with pytest.raises(IndexError):
-        lucid.zeros(3, device=dev)[bad]  # type: ignore[index]
+        lucid.zeros(3, device=device)[bad]  # type: ignore[index]
 
 
-def test_a_coordinate_index_is_checked_per_dim(dev: str) -> None:
+def test_a_coordinate_index_is_checked_per_dim(device: str) -> None:
     # Folded into one flat index, x[[0], [-1]] read element 7 and x[[0], [5]]
     # read element 5.
-    x = lucid.arange(8.0, device=dev).reshape(2, 4)
+    x = lucid.arange(8.0, device=device).reshape(2, 4)
     assert x[lucid.tensor([0]), lucid.tensor([-1])].tolist() == [3.0]
     past = (lucid.tensor([0]), lucid.tensor([5]))
-    if dev == "cpu":
+    if device == "cpu":
         with pytest.raises(IndexError):
             x[past]
     else:
         assert np.isnan(x[past].tolist()[0])
 
 
-def test_an_int64_index_is_not_narrowed(dev: str) -> None:
-    x = lucid.arange(5.0, device=dev)
+def test_an_int64_index_is_not_narrowed(device: str) -> None:
+    x = lucid.arange(5.0, device=device)
     idx = lucid.tensor([2**40])
-    if dev == "cpu":
+    if device == "cpu":
         with pytest.raises(IndexError):
             x[idx]
         with pytest.raises(IndexError):
@@ -216,30 +211,30 @@ def test_an_int64_index_is_not_narrowed(dev: str) -> None:
     assert x.tolist() == [0.0, 7.0, 2.0, 3.0, 4.0]
 
 
-def test_python_scalars_keep_their_kind(dev: str) -> None:
-    c = lucid.zeros(3, dtype=lucid.complex64, device=dev)
+def test_python_scalars_keep_their_kind(device: str) -> None:
+    c = lucid.zeros(3, dtype=lucid.complex64, device=device)
     c[1] = 2 + 3j
     assert c.tolist() == [0j, 2 + 3j, 0j]
-    i = lucid.zeros(3, dtype=lucid.int64, device=dev)
+    i = lucid.zeros(3, dtype=lucid.int64, device=device)
     i[1] = 2**60 + 1
     assert i[1].item() == 2**60 + 1
     with pytest.raises(TypeError):
-        lucid.zeros(3, device=dev)[0] = 1j
+        lucid.zeros(3, device=device)[0] = 1j
     with pytest.raises(OverflowError):
-        lucid.zeros(3, dtype=lucid.int32, device=dev)[0] = 2**40
+        lucid.zeros(3, dtype=lucid.int32, device=device)[0] = 2**40
 
 
-def test_a_value_moves_to_the_destination(dev: str) -> None:
-    x = lucid.zeros(4, device=dev)
-    x[0:2] = lucid.ones(2, device=_OTHER[dev]) if metal_available() else 1.0
+def test_a_value_moves_to_the_destination(device: str) -> None:
+    x = lucid.zeros(4, device=device)
+    x[0:2] = lucid.ones(2, device=_OTHER[device]) if metal_available() else 1.0
     assert x.tolist() == [1.0, 1.0, 0.0, 0.0]
-    assert x.device.type == lucid.device(dev).type
+    assert x.device.type == lucid.device(device).type
 
 
-def test_slice_assignments_into_one_buffer_backpropagate(dev: str) -> None:
+def test_slice_assignments_into_one_buffer_backpropagate(device: str) -> None:
     # pad_packed_sequence builds its output this way.
-    t = lucid.randn(2, 3, device=dev, requires_grad=True)
-    out = lucid.zeros(2, 3, device=dev)
+    t = lucid.randn(2, 3, device=device, requires_grad=True)
+    out = lucid.zeros(2, 3, device=device)
     out[0] = t[0]
     out[1] = t[1] * 2
     out.sum().backward()
@@ -247,39 +242,72 @@ def test_slice_assignments_into_one_buffer_backpropagate(dev: str) -> None:
     assert t.grad.tolist() == [[1.0] * 3, [2.0] * 3]
 
 
-def test_a_write_into_grad_writes_the_gradient(dev: str) -> None:
-    p = lucid.ones(3, device=dev, requires_grad=True)
+def test_a_write_into_grad_writes_the_gradient(device: str) -> None:
+    p = lucid.ones(3, device=device, requires_grad=True)
     (p * 2).sum().backward()
     assert p.grad is not None
     p.grad[0] = 5.0
     assert p.grad.tolist() == [5.0, 2.0, 2.0]
 
 
-def test_retain_grad_survives_an_assignment(dev: str) -> None:
-    x = lucid.ones(3, device=dev, requires_grad=True)
+def test_retain_grad_survives_an_assignment(device: str) -> None:
+    x = lucid.ones(3, device=device, requires_grad=True)
     y = x * 2
     y.retain_grad()
-    y[0] = lucid.tensor(7.0, device=dev)
+    y[0] = lucid.tensor(7.0, device=device)
     (y * 5).sum().backward()
     assert y.grad is not None and y.grad.tolist() == [5.0, 5.0, 5.0]
     assert x.grad is not None and x.grad.tolist() == [0.0, 10.0, 10.0]
 
 
 @pytest.mark.xfail(strict=True, reason="API-05: index_put keys not yet normalised")
-def test_index_put_reads_a_bool_mask_as_a_mask(dev: str) -> None:
-    out = lucid.zeros(4, device=dev).index_put(
-        (lucid.tensor([False, False, True, True], device=dev),),
-        lucid.tensor(5.0, device=dev),
+def test_index_put_reads_a_bool_mask_as_a_mask(device: str) -> None:
+    out = lucid.zeros(4, device=device).index_put(
+        (lucid.tensor([False, False, True, True], device=device),),
+        lucid.tensor(5.0, device=device),
     )
     assert out.tolist() == [0.0, 0.0, 5.0, 5.0]
 
 
-def test_pad_packed_sequence_backpropagates(dev: str) -> None:
+def test_pad_packed_sequence_backpropagates(device: str) -> None:
     # It fills its output one step at a time, by slice assignment.
     from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-    x = lucid.randn(3, 2, 4, device=dev, requires_grad=True)
+    x = lucid.randn(3, 2, 4, device=device, requires_grad=True)
     out, _ = pad_packed_sequence(pack_padded_sequence(x, [3, 2]))
     out.sum().backward()
     assert x.grad is not None
     assert x.grad.sum().item() == 20.0
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(
+    "key", [slice(None), Ellipsis, 0], ids=["slice", "ellipsis", "int"]
+)
+@pytest.mark.parametrize("value", ["scalar", "tensor"])
+def test_a_constant_write_cuts_the_gradient(
+    ref: ModuleType, device: str, key: object, value: str
+) -> None:
+    # Copied into the buffer, ``x`` kept the graph of the values the write
+    # replaced: ``w * 2`` assigned 5 sent ``w`` a gradient of 2.
+    def run(lib: ModuleType, dev: str) -> object:
+        w = lib.ones(3, device=dev, requires_grad=True)
+        x = w * 2
+        x[key] = 5.0 if value == "scalar" else lib.tensor(5.0, device=dev)
+        x.sum().backward()
+        return w.grad.tolist()
+
+    assert run(lucid, device) == run(ref, "cpu")
+
+
+def test_a_list_holding_slices_or_none_is_refused(device: str) -> None:
+    x = lucid.zeros(2, 2, device=device)
+    for key in ([0, slice(None)], [None, 0]):
+        with pytest.raises(IndexError, match="tuple"):
+            x[key]  # type: ignore[index]
+
+
+def test_the_cpu_names_the_index_out_of_range() -> None:
+    x = lucid.zeros(2, 4)
+    with pytest.raises(IndexError, match="index 5 .* size 4"):
+        x[lucid.tensor([0]), lucid.tensor([5])]

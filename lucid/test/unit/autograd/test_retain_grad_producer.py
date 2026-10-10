@@ -231,6 +231,36 @@ def test_an_assignment_keeps_the_retain_flag(name: str, device: str) -> None:
     assert y_grad.tolist() == [5.0, 5.0, 5.0]
 
 
+#: The composite in-place index ops still assign ``_impl`` themselves rather
+#: than through ``_tensor/_indexing.py`` ``_take``, so the flag stays behind.
+#: (There is no ``masked_scatter_``; ``masked_scatter`` is out of place.)
+_COMPOSITE_WRITES: dict[str, Callable[[lucid.Tensor, str], object]] = {
+    "index_fill_": lambda y, d: y.index_fill_(0, lucid.tensor([0], device=d), 7.0),
+    "index_put_": lambda y, d: y.index_put_(
+        (lucid.tensor([0], device=d),), lucid.tensor([7.0], device=d)
+    ),
+    "index_add_": lambda y, d: y.index_add_(
+        0, lucid.tensor([0], device=d), lucid.tensor([7.0], device=d)
+    ),
+    "index_copy_": lambda y, d: y.index_copy_(
+        0, lucid.tensor([0], device=d), lucid.tensor([7.0], device=d)
+    ),
+}
+
+
+@pytest.mark.xfail(
+    strict=True, reason="API-05: composite writes not routed through _take"
+)
+@pytest.mark.parametrize("name", list(_COMPOSITE_WRITES))
+def test_a_composite_index_write_keeps_the_retain_flag(name: str, device: str) -> None:
+    x = lucid.ones(3, device=device, requires_grad=True)
+    y = x * 2
+    y.retain_grad()
+    _COMPOSITE_WRITES[name](y, device)
+    (y * 5).sum().backward()
+    assert y.grad is not None
+
+
 def test_the_reported_gaps(device: str) -> None:
     x = lucid.ones(3, device=device, requires_grad=True)
     y = x * 2
