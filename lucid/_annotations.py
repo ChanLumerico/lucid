@@ -381,6 +381,9 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("DataclassInstance", "_typeshed", "DataclassInstance"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
+    "lucid.nn.functional._grid_sampling": (
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+    ),
     "lucid.nn.functional._index_checks": (
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),

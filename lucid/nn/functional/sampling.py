@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional._grid_sampling import (
+    affine_grid_3d,
+    check_options,
+    composite_grid_sample,
+    cubic_coefficients,
+    reflect,
+)
 from lucid.nn.functional._index_checks import (
     _check_offsets,
     _check_table,
@@ -24,37 +31,10 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-_BICUBIC_A = -0.75
-
-
-def _cubic_coefficients(t: float) -> tuple[float, float, float, float]:
-    """Weights of the four taps a bicubic sample reads, at offset ``t``.
-
-    The cubic convolution kernel with :math:`A = -0.75`, which is the
-    coefficient the reference implementations use.  The weights are not
-    normalised — bicubic is allowed to overshoot, and clipping it here
-    would make it a different filter.
-
-    Parameters
-    ----------
-    t : float
-        Fractional distance from the second of the four taps, in ``[0, 1)``.
-
-    Returns
-    -------
-    tuple of four float
-        Weights for taps at ``-1, 0, +1, +2`` relative to ``floor``.
-    """
-    a = _BICUBIC_A
-
-    def near(x: float) -> float:
-        return ((a + 2.0) * x - (a + 3.0)) * x * x + 1.0
-
-    def far(x: float) -> float:
-        return ((a * x - 5.0 * a) * x + 8.0 * a) * x - 4.0 * a
-
-    other = 1.0 - t
-    return far(t + 1.0), near(t), near(other), far(other + 1.0)
+# What the engine kernel implements, in its encoding.  Anything else is
+# sampled by the composite, or rewritten (reflection) before it gets there.
+_KERNEL_MODES = {"bilinear": 0, "nearest": 1}
+_KERNEL_PADDINGS = {"zeros": 0, "border": 1}
 
 
 def _bicubic_axis(x: Tensor, axis: int, out_size: int, align_corners: bool) -> Tensor:
@@ -109,7 +89,7 @@ def _bicubic_axis(x: Tensor, axis: int, out_size: int, align_corners: bool) -> T
             ),
         )
         weight = _lucid.tensor(
-            [_cubic_coefficients(t)[tap] for t in fracs],
+            [cubic_coefficients(t)[tap] for t in fracs],
             dtype=x.dtype,
             device=device,
         ).reshape(tuple(shape))
@@ -267,8 +247,8 @@ def grid_sample(
     r"""Sample an input feature map at flow-field coordinates.
 
     For each output location, looks up a value in ``x`` at the
-    (sub-pixel) location specified by ``grid``, using bilinear (or
-    nearest) interpolation.  Forms the second half of a spatial
+    (sub-pixel) location specified by ``grid``, using bilinear,
+    nearest or bicubic interpolation.  Forms the second half of a spatial
     transformer network (STN) when paired with :func:`affine_grid`.
 
     The grid uses normalised coordinates in :math:`[-1, 1]`:
@@ -287,11 +267,12 @@ def grid_sample(
         or ``(N, D_out, H_out, W_out, 3)`` for 3-D input.  Last axis
         stores ``(x, y)`` (or ``(x, y, z)``) in :math:`[-1, 1]`.
     mode : str, optional
-        Interpolation mode: ``"bilinear"`` (default) or ``"nearest"``.
+        Interpolation mode: ``"bilinear"`` (default; trilinear for 5-D
+        input), ``"nearest"``, or ``"bicubic"`` (4-D input only).
     padding_mode : str, optional
         Behaviour for grid locations outside :math:`[-1, 1]`:
         ``"zeros"`` (default), ``"border"`` (clamp to edge), or
-        ``"reflection"``.
+        ``"reflection"`` (mirror at the image's edges, then clamp).
     align_corners : bool, optional
         Controls whether ``±1`` denotes the centre of the corner pixels
         (``True``) or the outer edge of the image (``False``, default).
@@ -306,7 +287,22 @@ def grid_sample(
     -----
     ``grid_sample`` is differentiable w.r.t. both ``x`` and ``grid``.
     The gradient w.r.t. ``grid`` is what makes STN-style learned warps
-    trainable end-to-end (Jaderberg et al., 2015).
+    trainable end-to-end (Jaderberg et al., 2015).  Under
+    ``"nearest"`` the grid's gradient is zero: the sample does not move
+    with the grid.
+
+    4-D bilinear and nearest sampling run on one engine kernel;
+    reflection padding mirrors the grid first and then samples with
+    border padding.  Bicubic and 5-D sampling are composed from
+    ``gather`` and elementwise ops, so they cost more memory per output
+    point than the kernel.
+
+    Raises
+    ------
+    ValueError
+        Unknown ``mode`` / ``padding_mode``, an input that is not 4-D or
+        5-D, ``"bicubic"`` with a 5-D input, or a grid whose shape does
+        not fit the input.
 
     Examples
     --------
@@ -319,24 +315,23 @@ def grid_sample(
     >>> y.shape
     (1, 3, 32, 32)
     """
-    mode_map = {"bilinear": 0, "nearest": 1}
-    # The engine kernel supports zeros (0) and border (1); it has no true
-    # reflection padding, so reflection falls back to the nearest supported
-    # behaviour (border / clamp-to-edge) rather than silently zero-filling.
-    pad_map = {"zeros": 0, "border": 1, "reflection": 1}
-    if mode not in mode_map:
-        raise ValueError(
-            f"grid_sample: unsupported mode {mode!r}; expected 'bilinear' or 'nearest'"
-        )
-    if padding_mode not in pad_map:
-        raise ValueError(
-            f"grid_sample: unsupported padding_mode {padding_mode!r}; "
-            "expected 'zeros', 'border', or 'reflection'"
-        )
+    check_options(x, mode, padding_mode)
     ac = align_corners if align_corners is not None else False
+    if x.ndim == 5 or mode == "bicubic":
+        return composite_grid_sample(x, grid, mode, padding_mode, ac)
+    if padding_mode == "reflection":
+        # In normalised coordinates both corner conventions mirror at
+        # ±1, so reflecting the grid and then clipping in the kernel
+        # (border) is the reference's reflect-then-clip, on the kernel.
+        grid = reflect(grid if grid.is_floating_point() else grid.float(), -1.0, 2.0)
+        padding_mode = "border"
     return _wrap(
         _C_engine.nn.grid_sample(
-            _unwrap(x), _unwrap(grid), mode_map[mode], pad_map[padding_mode], ac
+            _unwrap(x),
+            _unwrap(grid),
+            _KERNEL_MODES[mode],
+            _KERNEL_PADDINGS[padding_mode],
+            ac,
         )
     )
 
@@ -384,6 +379,12 @@ def affine_grid(
         ``(N, D, H, W, 3)`` for 3-D) in normalised :math:`[-1, 1]`
         coordinates, ready to be fed to :func:`grid_sample`.
 
+    Raises
+    ------
+    ValueError
+        ``size`` has neither 4 nor 5 entries, or ``theta`` is not
+        ``(N, 2, 3)`` / ``(N, 3, 4)`` to match it.
+
     Notes
     -----
     ``affine_grid`` does not look at the source image — only at the
@@ -400,8 +401,15 @@ def affine_grid(
     (1, 4, 4, 2)
     """
     ac = align_corners if align_corners is not None else False
+    sz = [int(s) for s in size]
+    if len(sz) == 5:
+        return affine_grid_3d(theta, sz, ac)
+    if len(sz) != 4:
+        raise ValueError(
+            "affine_grid: size must be (N, C, H, W) or (N, C, D, H, W), "
+            f"got {tuple(sz)}"
+        )
     # Engine signature: (theta, N, H, W, align_corners) — no C dimension.
-    sz = list(size)
     N, H, W = sz[0], sz[2], sz[3]
     return _wrap(_C_engine.nn.affine_grid(_unwrap(theta), N, H, W, ac))
 
