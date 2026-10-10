@@ -1934,7 +1934,6 @@
     "lucid/models/vision/coatnet/_model.py": 1,
     "lucid/nn/module.py": 5,
     "lucid/nn/modules/rnn.py": 3,
-    "lucid/optim/lbfgs.py": 1,
     "lucid/profiler/__init__.py": 2,
     "lucid/serialization/__init__.py": 1,
     "lucid/utils/data/dataloader.py": 1
@@ -1976,7 +1975,6 @@
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
-    "lucid/optim/lbfgs.py": 2,
     "lucid/profiler/__init__.py": 1,
     "lucid/utils/transforms/_autoaugment.py": 1,
     "lucid/utils/transforms/_base.py": 1
