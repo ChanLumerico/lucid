@@ -219,6 +219,11 @@ public:
     // has not seen — a constant made on the spot — is left alone.
     void on_host_read(const TensorImpl* impl);
 
+    // ``impl`` is an argument of the traced call.  Its values are the call's
+    // data before any op has consumed it, so ``on_host_read`` treats a read
+    // of it as a read of a traced value from the start of the trace.
+    void watch(const TensorImplPtr& impl);
+
     // ``target`` now holds what ``value`` holds: an in-place op computed
     // ``value`` out of place and spliced it into ``target``
     // (``TensorImpl::take_storage_from`` / ``write_through``).  Later reads
@@ -343,6 +348,8 @@ private:
     // (tensor from outside the trace, a copy of it from before its first
     // in-place write), in write order — see :meth:`restore_outside_writes`.
     std::vector<std::pair<TensorImplPtr, TensorImplPtr>> outside_originals_;
+    // Owning: the call's arguments (``watch``), keyed by raw pointer.
+    std::unordered_map<TensorImpl*, TensorImplPtr> watched_;
     bool redraw_rng_ = true;
 };
 

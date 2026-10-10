@@ -40,6 +40,7 @@ fallback policy).
 import sys
 import types
 from contextlib import contextmanager
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast, final, override
 
 from lucid._C import engine as _C_engine
@@ -360,7 +361,7 @@ def __getattr__(name: str) -> object:
 
 
 @contextmanager
-def _tracing() -> Iterator[Tracer]:
+def _tracing(watch: Iterable[object] = ()) -> Iterator[Tracer]:
     """Install a fresh :class:`Tracer` for the calling thread.
 
     Every op dispatched inside the ``with`` block enters its
@@ -368,6 +369,16 @@ def _tracing() -> Iterator[Tracer]:
     output meta) into the active tracer.  On exit the tracer is detached
     and its recorded :class:`TraceGraph` becomes a frozen view that can
     still be inspected via ``tracer.graph``.
+
+    Parameters
+    ----------
+    watch : iterable of object, optional
+        The traced call's arguments, tensors nested in lists, tuples and
+        dicts included. A host read of one of them (``.item()``,
+        ``.tolist()``, ``float(t)``…) marks the recording unsupported even
+        before an op has consumed it: the value read is the call's data,
+        and whatever the host computes from it would be baked into every
+        later call.
 
     Yields
     ------
@@ -400,7 +411,11 @@ def _tracing() -> Iterator[Tracer]:
         for node in tracer.graph.ops:
             print(node)
     """
+    from lucid.compile._core.signature import leaf_tensors
+
     tracer = _C_engine.compile.Tracer()
+    for argument in leaf_tensors(watch, {}):
+        tracer.watch(argument._impl)
     _C_engine.compile.set_current_tracer(tracer)
     try:
         yield tracer

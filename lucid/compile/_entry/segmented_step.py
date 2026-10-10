@@ -217,7 +217,7 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
 
     # --- Trace 1: forward only (x -> y) -----------------------------------
     with no_grad():
-        with _tracing() as t_fwd:
+        with _tracing(watch=(x,)) as t_fwd:
             y = seg.forward_fn(x)
     g_fwd = t_fwd.graph
     if not g_fwd.ops:
@@ -265,7 +265,7 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     # upstream cotangent into this slot.
     go = lucid.zeros(y.shape, dtype=y.dtype, device=y.device)
     with no_grad():
-        with _tracing() as t_bwd:
+        with _tracing(watch=(x,)) as t_bwd:
             y2 = seg.forward_fn(x)
             # Records the cotangent-product reduction as the trace's final op;
             # its output id (graph.ops[-1]) is the loss the backward derives.

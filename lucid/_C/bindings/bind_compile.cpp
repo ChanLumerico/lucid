@@ -186,6 +186,9 @@ void register_compile(py::module_& m) {
         .def("restore_outside_writes", &Tracer::restore_outside_writes,
              "Put every tensor from outside the trace that it wrote in place "
              "back to its value from before the trace.")
+        .def("watch", &Tracer::watch, py::arg("impl"),
+             "Declare an argument of the traced call: a host read of it marks the "
+             "recording unsupported even before an op has consumed it.")
         .def("mark_unsupported", &Tracer::mark_unsupported, py::arg("why"),
              "Mark the recording as one no executable can stand for; every "
              "compile entry point then refuses it.")

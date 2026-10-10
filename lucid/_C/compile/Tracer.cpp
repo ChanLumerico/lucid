@@ -251,9 +251,15 @@ std::vector<std::pair<TensorId, TensorImplPtr>> Tracer::outside_writes() const {
 }
 
 void Tracer::on_host_read(const TensorImpl* impl) {
-    if (impl != nullptr && impl_to_id_.count(const_cast<TensorImpl*>(impl)) != 0)
+    auto* key = const_cast<TensorImpl*>(impl);
+    if (impl != nullptr && (impl_to_id_.count(key) != 0 || watched_.count(key) != 0))
         mark_unsupported("a traced value was read on the host (item / tolist / numpy), "
                          "so each call would reuse the first call's value");
+}
+
+void Tracer::watch(const TensorImplPtr& impl) {
+    if (impl)
+        watched_.emplace(impl.get(), impl);
 }
 
 void Tracer::mark_unsupported(std::string why) {

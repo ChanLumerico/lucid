@@ -17,7 +17,7 @@ Two things the trace hands over that the driver has to sort out:
 """
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, NamedTuple, cast, override
+from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn, cast, override
 
 import dataclasses
 import math
@@ -457,8 +457,8 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     ------
     ValueError
         An input never reached an op, the model replaced an input's
-        tensor instead of writing into it, or an output is not in the
-        trace.
+        tensor instead of writing into it, read a traced value on the
+        host, or an output is not in the trace.
     TypeError
         The return value carries no tensor, or lacks the named field.
     StatefulModel
@@ -482,7 +482,7 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     try:
         with _observers_paused(model):
             before = _buffer_marks(model)
-            with _compile._tracing() as tracer:
+            with _compile._tracing(watch=[t for _n, t in examples]) as tracer:
                 # Draws stay ops in the recording: export lifts each one into
                 # a model input, where the compile path would turn it into a
                 # feed.
@@ -528,23 +528,10 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     if moved:
         raise StatefulModel(moved)
     if replaced:
-        # Refused rather than followed: the replacement is a Python-level
-        # rebinding the recording cannot see, so the program would read the
-        # example's values as a constant and the input would go unread.
-        name, grad = replaced[0]
-        why = (
-            " — an example that requires grad is replaced rather than written "
-            "into, so passing it detached (`x.detach()`) is enough"
-            if grad
-            else ""
-        )
-        raise ValueError(
-            f"lucid.coreml: forward writes into input {name!r} by replacing its "
-            "tensor rather than writing into it, so the program would read the "
-            "example's values as a constant instead of the input. Clone it "
-            "first (`x = x.clone()` at the top of forward) and write into the "
-            f"copy{why}"
-        )
+        _refuse_replaced(*replaced[0])
+    if tracer.graph.unsupported:
+        # Even with every output in the graph: ``x * 0 + c``, ``c`` read off ``x``.
+        raise ValueError(f"lucid.coreml: {tracer.graph.unsupported}. {_HOST_READS}")
 
     feeds = tracer.external_feeds
     feed_of = {id(impl): int(tid) for tid, impl in feeds.items()}
@@ -573,24 +560,42 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         if value_id is None:
             raise ValueError(
                 f"lucid.coreml: output {name!r} did not come out of the traced "
-                "graph — no operation recorded it as a result. A model that "
-                "reads tensor values while it runs computes that part on the "
-                "host, where an exported graph cannot follow: ``.item()``, a "
-                "Python ``if`` on a comparison, or an index computed from the "
-                "data. ``lucid.histogram`` is one such composite. Whatever "
-                "reads values has to become tensor operations before this "
-                "model can be exported."
+                f"graph — no operation recorded it as a result. {_HOST_READS}"
             )
         outputs.append((name, value_id, answered.get(name, tensor)))
     return tracer.graph, feeds, inputs, outputs, tracer.retained_values
 
 
-def _flatten[T](tensor: Tensor, convert: Callable[[object], T]) -> list[T]:
-    """Every element of ``tensor`` in row-major order, through ``convert``.
+def _refuse_replaced(name: str, grad: bool) -> NoReturn:
+    """Refused rather than followed: the replacement is a Python-level
+    rebinding the recording cannot see, so the program would read the
+    example's values as a constant and the input would go unread."""
+    why = (
+        " — an example that requires grad is replaced rather than written "
+        "into, so passing it detached (`x.detach()`) is enough"
+        if grad
+        else ""
+    )
+    raise ValueError(
+        f"lucid.coreml: forward writes into input {name!r} by replacing its "
+        "tensor rather than writing into it, so the program would read the "
+        "example's values as a constant instead of the input. Clone it "
+        "first (`x = x.clone()` at the top of forward) and write into the "
+        f"copy{why}"
+    )
 
-    ``tolist`` is numpy-free, so reading a constant's values here keeps an
-    external import out of this package (H4).
-    """
+
+_HOST_READS = (
+    "A model that reads tensor values while it runs computes that part on the "
+    "host, where an exported graph cannot follow: ``.item()``, ``.tolist()``, "
+    "``float(t)``, a Python ``if`` on a comparison, or an index computed from "
+    "the data. Whatever reads values has to become tensor operations before "
+    "this model can be exported."
+)
+
+
+def _flatten[T](tensor: Tensor, convert: Callable[[object], T]) -> list[T]:
+    """Each element of ``tensor``, row-major, through ``convert`` (numpy-free, H4)."""
     flat: list[T] = []
 
     def walk(value: object) -> None:
@@ -611,10 +616,6 @@ def _flatten[T](tensor: Tensor, convert: Callable[[object], T]) -> list[T]:
 _QUANTIZE_MIN_ELEMENTS = 2048
 
 
-#: MIL's spelling of each element type, for the ``cast`` operation's
-#: string parameter. Only the types a promotion can land on: casting a
-#: bool or a string is a different question, and an emitter that reaches
-#: one leaves the operand alone rather than inventing an answer.
 def _settle_target(
     wanted: _spec.DeploymentTarget | None,
     *,
@@ -821,6 +822,10 @@ def _refuse_if_empty(tensor: Tensor) -> None:
     )
 
 
+#: MIL's spelling of each element type, for the ``cast`` operation's
+#: string parameter. Only the types a promotion can land on: casting a
+#: bool or a string is a different question, and an emitter that reaches
+#: one leaves the operand alone rather than inventing an answer.
 _MIL_CAST_NAMES = {
     _C_engine.coreml.DTYPE_FLOAT16: "fp16",
     _C_engine.coreml.DTYPE_FLOAT32: "fp32",
@@ -1750,15 +1755,8 @@ class Builder:
         return name
 
     def _result_dtype(self, operands: list[tuple[str, list[str]]]) -> int:
-        """The element type of an intermediate whose emitter named none.
-
-        MIL does not promote: an operation on an int32 ``x`` — a reshape
-        or tile of an index, a ``maximum`` holding one to a bound —
-        produces int32, and declaring the body's float type instead is
-        refused when the package is parsed. Integer and boolean ``x``
-        decide the type; a float ``x`` follows the body, whose precision
-        an fp16 program lowers it to.
-        """
+        """An unnamed result type: MIL does not promote, so an int32 or bool
+        ``x`` (a reshaped index) keeps its type; a float one follows the body."""
         for param, values in operands:
             if param == "x" and len(values) == 1:
                 kind = self.dtypes.get(values[0])

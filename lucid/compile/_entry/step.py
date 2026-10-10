@@ -252,7 +252,7 @@ def make_step(
         """
         t0 = time.perf_counter()
         with no_grad():
-            with _tracing() as tracer:
+            with _tracing(watch=x_args) as tracer:
                 x_out = model(*x_args[:1])
                 loss_t = loss_fn(x_out, *x_args[1:])
 

@@ -1043,7 +1043,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # autograd-on path, minus the (unused) backward wiring.
         t_compile_start = time.perf_counter()
         with no_grad():
-            with _tracing() as tracer:
+            with _tracing(watch=(args, kwargs)) as tracer:
                 # Module.__call__ wants Tensor positionals; the runtime
                 # may receive non-Tensor extras (CompileModule preserves
                 # whatever the user passed).  Cast each at the boundary.

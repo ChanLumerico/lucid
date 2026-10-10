@@ -183,7 +183,7 @@ def diagnose(fn: Callable[..., object], *example_inputs: Tensor) -> DiagnosisRep
     from lucid.compile import _tracing
 
     with no_grad():
-        with _tracing() as tracer:
+        with _tracing(watch=example_inputs) as tracer:
             fn(*example_inputs)
 
     op_counts: Counter[str] = Counter()

@@ -156,7 +156,7 @@ def compiled_decode_step(
         _tls.tracing = True
         try:
             with no_grad():
-                with _tracing() as tracer:
+                with _tracing(watch=(input_ids, cache_position)) as tracer:
                     out = forward_fn(input_ids, cache_position)
         finally:
             _tls.tracing = False
