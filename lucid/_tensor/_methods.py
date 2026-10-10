@@ -19,6 +19,21 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _bind_operands(
+    e: OpEntry, args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[tuple[object, ...], dict[str, object]]:
+    """``args`` / ``kwargs`` with the tensor operands named by keyword in position.
+
+    ``self`` fills the first advertised operand, so the method binds the
+    rest — ``x.add(other=y)``.  Imported here because ``lucid._ops``
+    imports this package.
+    """
+    from lucid._ops import _bind_leading, _leading_tensor_names
+
+    name = e.method_name or e.name
+    return _bind_leading(name, _leading_tensor_names(e)[1:], args, kwargs)
+
+
 def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
     # The generated methods are annotated ``self: Tensor`` and
@@ -70,6 +85,8 @@ def _inject_methods(tensor_cls: type) -> None:
                 op, and either wraps the result as a Tensor or returns the
                 raw value depending on ``e.returns_tensor``.
                 """
+                if kwargs:
+                    args, kwargs = _bind_operands(e, args, kwargs)
                 # Unwrap any Tensor in extra tensor arg positions
                 proc_args: list[object] = []
                 for i, a in enumerate(args):

@@ -62,6 +62,7 @@ else:
 # to the wrappers (with TensorImpl-only signatures) instead of the builtins.
 _b_min = builtins.min
 _b_max = builtins.max
+_b_any = builtins.any
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -254,6 +255,59 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
     return _rename_leading_tensor_params(sig, entry.n_tensor_args)
 
 
+# ── Keyword binding of the leading tensors ───────────────────────────────────
+
+_LEADING_NAMES: dict[str, tuple[str, ...]] = {}
+
+
+def _leading_tensor_names(entry: OpEntry) -> tuple[str, ...]:
+    """The names ``entry``'s signature advertises for its tensor operands.
+
+    The signature renames the callee's leading parameters (``a`` / ``b`` /
+    ``a_impl``) to ``input`` / ``other``, which neither a pybind11 callee
+    nor most adapters accept by keyword — so ``lucid.exp(input=x)`` and
+    ``x.matmul(other=y)`` raised ``TypeError`` though both spellings are the
+    ones advertised.  :func:`_bind_leading` puts them back in position.
+    """
+    names = _LEADING_NAMES.get(entry.name)
+    if names is None:
+        leading = list(_signature_for_entry(entry).parameters.values())
+        taken: list[str] = []
+        for param in leading[: _b_max(entry.n_tensor_args, 0)]:
+            if param.kind is not inspect.Parameter.POSITIONAL_OR_KEYWORD:
+                break
+            taken.append(param.name)
+        names = _LEADING_NAMES[entry.name] = tuple(taken)
+    return names
+
+
+def _bind_leading(
+    op: str,
+    names: tuple[str, ...],
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> tuple[tuple[object, ...], dict[str, object]]:
+    """``args`` / ``kwargs`` with the operands named in ``names`` moved to position.
+
+    ``names`` are the parameters ``args`` would fill from its first slot
+    on.  An operand given both ways, or one given by keyword after a gap
+    in the positions before it, is refused as an ordinary call would be.
+    """
+    if not _b_any(name in kwargs for name in names):
+        return args, kwargs
+    rest = dict(kwargs)
+    filled = list(args)
+    for slot, name in enumerate(names):
+        if name not in rest:
+            continue
+        if slot < len(filled):
+            raise TypeError(f"{op}() got multiple values for argument {name!r}")
+        if slot > len(filled):
+            raise TypeError(f"{op}() missing required argument {names[len(filled)]!r}")
+        filled.append(rest.pop(name))
+    return tuple(filled), rest
+
+
 # ── Wrapper factories ────────────────────────────────────────────────────────
 
 
@@ -286,8 +340,11 @@ def _make_free_fn(name: str) -> object:
         _fn_list.__signature__ = _signature_for_entry(e)  # type: ignore[attr-defined]
         return _fn_list
 
-    def _fn(*args: object, **kwargs: object) -> object:
+    leading = _leading_tensor_names(e)
 
+    def _fn(*args: object, **kwargs: object) -> object:
+        if kwargs:
+            args, kwargs = _bind_leading(fn_name, leading, args, kwargs)
         proc: list[object] = []
         for i, a in enumerate(args):
             if i < e.n_tensor_args and hasattr(a, "_impl"):
