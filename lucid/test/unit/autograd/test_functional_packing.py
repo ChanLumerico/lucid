@@ -258,7 +258,7 @@ def test_hessian_products_seed_a_single_element_input(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "LCD-409 follow-up (engine): a gradient taken with create_graph=True "
+        "LCD-422: a gradient taken with create_graph=True "
         "reports requires_grad=True even when it is a constant, so strict "
         "cannot tell a linear function from a curved one"
     ),
