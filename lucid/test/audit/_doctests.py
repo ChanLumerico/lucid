@@ -23,9 +23,11 @@ adds it.
 import contextlib
 import doctest
 import importlib
+import inspect
 import io
 import json
 import pkgutil
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +46,16 @@ _SKIP = ("lucid.models", "lucid.test", "lucid._C", "lucid.benchmarks")
 #: ``ELLIPSIS`` because several docstrings already use ``...`` for a
 #: shape or an address.
 _OPTIONS = doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS
+
+
+#: Modules whose standing failures belong to an open issue, written beside
+#: their counts so the floor says why it holds them.  The Tensor dunders and
+#: ``.to`` / ``.cpu`` / ``.metal`` / ``.bool`` were never run before
+#: :func:`_installed_methods`; their examples print the wrong repr.
+KNOWN_FAILING: dict[str, str] = {
+    "lucid._tensor._dunders": "LCD-316",
+    "lucid._tensor._to": "LCD-316",
+}
 
 
 class DoctestResult:
@@ -81,11 +93,56 @@ def _modules() -> Iterator[Any]:
             continue
 
 
+def _installed_methods(modules: list[Any]) -> Iterator[tuple[str, Any]]:
+    """Functions built inside another function and set on a class.
+
+    ``doctest`` finds a method by walking its class from the class's module,
+    and keeps only functions whose globals are that module's.  A method made
+    in a local scope and installed from elsewhere — every ``Tensor`` dunder,
+    which ``_inject_dunders`` creates in ``lucid._tensor._dunders`` — is
+    therefore seen by no module, and its examples never ran (LCD-316).  These
+    are yielded as ``(qualified name, function)``, each once.
+    """
+    seen: set[int] = set()
+    for module in modules:
+        for cls in vars(module).values():
+            if not isinstance(cls, type) or cls.__module__ != module.__name__:
+                continue
+            for name, fn in vars(cls).items():
+                local = "<locals>" in getattr(fn, "__qualname__", "")
+                if not (inspect.isfunction(fn) and local) or id(fn) in seen:
+                    continue
+                seen.add(id(fn))
+                yield f"{cls.__module__}.{cls.__qualname__}.{name}", fn
+
+
+def _run_installed(
+    modules: list[Any], per_module: dict[str, int]
+) -> tuple[int, int]:
+    """Run :func:`_installed_methods`' examples, counted under the defining module."""
+    failed = attempted = 0
+    finder = doctest.DocTestFinder()
+    runner = doctest.DocTestRunner(verbose=False, optionflags=_OPTIONS)
+    for qualname, fn in _installed_methods(modules):
+        home = sys.modules[fn.__module__]
+        globs = {**vars(home), "lucid": lucid}
+        for test in finder.find(fn, qualname, module=home, globs=globs):
+            # A failing example's diff is dropped, as ``run`` drops testmod's.
+            outcome = runner.run(test, out=lambda _text: None)
+            failed += outcome.failed
+            attempted += outcome.attempted
+            if outcome.failed:
+                name = home.__name__
+                per_module[name] = per_module.get(name, 0) + outcome.failed
+    return failed, attempted
+
+
 def run() -> DoctestResult:
     """Every docstring example in the package, once."""
     failed = attempted = 0
     per_module: dict[str, int] = {}
-    for module in _modules():
+    modules = list(_modules())
+    for module in modules:
         buffer = io.StringIO()
         try:
             # Output captured: a failing example prints its own diff, and
@@ -104,7 +161,10 @@ def run() -> DoctestResult:
         attempted += outcome.attempted
         if outcome.failed:
             per_module[module.__name__] = outcome.failed
-    return DoctestResult(failed, attempted, per_module, ran=True)
+    more_failed, more_attempted = _run_installed(modules, per_module)
+    return DoctestResult(
+        failed + more_failed, attempted + more_attempted, per_module, ran=True
+    )
 
 
 def load_floor(path: Path) -> dict[str, int] | None:
@@ -134,6 +194,11 @@ def save_floor(path: Path, result: DoctestResult) -> None:
         "failed": result.failed,
         "attempted": result.attempted,
         "failing": dict(sorted(result.per_module.items())),
+        "known": {
+            name: issue
+            for name, issue in sorted(KNOWN_FAILING.items())
+            if name in result.per_module
+        },
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
@@ -152,6 +217,7 @@ def regressions(
 
 __all__ = [
     "DoctestResult",
+    "KNOWN_FAILING",
     "load_floor",
     "regressions",
     "run",
