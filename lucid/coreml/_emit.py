@@ -24,7 +24,7 @@ fails loudly.
 import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
-from lucid.coreml import _flex, _spec
+from lucid.coreml import _flex, _sized, _spec
 from lucid.coreml._convert import emit_cast, moved, scalar_like, widened
 
 if TYPE_CHECKING:
@@ -738,21 +738,22 @@ def _stack(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("split")
 @_emitter("split_at")
-def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
+def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput | Bound:
     """One MIL ``split`` producing every section the trace recorded.
 
     Lucid records the cut points; MIL wants the section sizes, which the
     output shapes already give — and taking them from the outputs keeps
     the two descriptions from disagreeing.
     """
-    axis = _as_int(op.attrs["axis"])
-    sizes = [int(o.shape[axis]) for o in op.outputs]
+    traced_axis = _as_int(op.attrs["axis"])
+    sizes = [_sized.declared(o.shape)[traced_axis] for o in op.outputs]
     # The operand may be emitted a rank lower than the trace records —
     # see ``_unit_axis_rewrites`` — in which case every axis after the
     # dropped one has moved down by one. The sizes are read from the
     # trace's shapes and do not move.
-    if b.leading_axis_dropped(ins[0]):
-        axis -= 1
+    axis = traced_axis - 1 if b.leading_axis_dropped(ins[0]) else traced_axis
+    if any(size < 0 for size in sizes):
+        return Bound(_sized.split_at_run_time(b, op, ins[0], traced_axis, axis))
     return MultiOutput(
         "split",
         [
@@ -1039,31 +1040,10 @@ def _gelu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 # ── resampling and transposed convolution ────────────────────────────
 
 
-def _scales(op: TracedOp, b: Builder, value: str) -> tuple[float, float]:
-    src = b.shape_of(value)
-    out = b.result_dims(op)
-    return out[-2] / src[-2], out[-1] / src[-1]
-
-
 @_emitter("interpolate_nearest_2d")
-def _interp_nearest(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    h, w = _scales(op, b, ins[0])
-    return "upsample_nearest_neighbor", [
-        ("x", ins[0]),
-        ("scale_factor_height", b.const_float32(h)),
-        ("scale_factor_width", b.const_float32(w)),
-    ]
-
-
 @_emitter("interpolate_bilinear")
-def _interp_bilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    h, w = _scales(op, b, ins[0])
-    return "upsample_bilinear", [
-        ("x", ins[0]),
-        ("scale_factor_height", b.const_float32(h)),
-        ("scale_factor_width", b.const_float32(w)),
-        ("align_corners", b.const_bool(bool(op.attrs.get("align_corners", False)))),
-    ]
+def _resample(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _sized.resample(b, op, ins[0])
 
 
 @_emitter("grid_sample")

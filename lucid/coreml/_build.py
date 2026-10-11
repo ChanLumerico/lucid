@@ -31,7 +31,7 @@ import lucid.nn.functional as _F
 import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.coreml import _flex, _spec, _staging
+from lucid.coreml import _flex, _fold, _spec, _staging
 from lucid.coreml._convert import MIL_CAST_NAMES, emit_cast
 from lucid.coreml._flex import ShapeNotFlexible
 from lucid.coreml._emit import (
@@ -557,7 +557,9 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         if value_id is None:
             raise ValueError(
                 f"lucid.coreml: output {name!r} did not come out of the traced "
-                f"graph — no operation recorded it as a result. {_HOST_READS}"
+                "graph. A constant the trace holds as a buffer (``arange``, a "
+                "tensor from a list) does not depend on the input: return it from "
+                f"outside the model. Otherwise it was computed on the host. {_HOST_READS}"
             )
         outputs.append((name, value_id, answered.get(name, tensor)))
     return tracer.graph, feeds, inputs, outputs, tracer.retained_values
@@ -1407,10 +1409,10 @@ class Builder:
         infer: bool,
     ) -> str:
         where = dict(known or {})
-        traced = [tid for tid, name in self.traced_names.items() if name == operand]
-        if operand is not None and traced:
+        traced = None if operand is None else self.traced_id(operand)
+        if operand is not None and traced is not None:
             mine = (value_id, dims)
-            theirs = (traced[0], self._shapes[operand])
+            theirs = (traced, self._shapes[operand])
             for axis, other in self.flex.carried(mine, theirs).items():
                 where.setdefault(axis, (operand, other))
         pieces: list[str] = []
@@ -1451,6 +1453,12 @@ class Builder:
             ],
             [len(dims)],
             dtype=_C_engine.coreml.DTYPE_INT32,
+        )
+
+    def traced_id(self, name: str) -> int | None:
+        """The traced value a program value stands for, the first if several."""
+        return next(
+            (tid for tid, held in self.traced_names.items() if held == name), None
         )
 
     def run_time_dim(self, name: str, axis: int) -> str:
@@ -1945,18 +1953,6 @@ _UNIT_AXIS_SAFE = frozenset(
 )
 
 
-#: Operations that make a tensor out of nothing. A traced node with no
-#: recorded inputs is one of these, or it is an operation whose inputs
-#: the tracer failed to record — and treating the second kind as a
-#: constant is how a package comes to answer every input with the first
-#: one's result. Only names that genuinely take no tensor are here:
-#: ``tril`` and ``meshgrid`` do take one, whatever a node missing its
-#: edges suggests.
-_TRUE_FACTORIES = frozenset(
-    {"arange", "empty", "eye", "full", "linspace", "logspace", "ones", "zeros"}
-)
-
-
 def _named(names: dict[int, str], tid: int, consumer: str) -> str:
     """The value a graph identifier stands for, or a diagnosis.
 
@@ -2068,68 +2064,6 @@ def _lift_draws(
             )
         lifted.append((f"noise_{len(lifted)}", tid, _wrap(sample), op.name))
     return lifted
-
-
-def _foldable(
-    graph: Any,
-    feeds: dict[int, Any],
-    input_ids: set[int],
-    traced_values: dict[int, Any],
-    varying: set[int],
-) -> tuple[set[int], set[int]]:
-    """Values a package can carry instead of computing, and who makes them.
-
-    A windowed transformer spends a third of its graph on arithmetic that
-    has nothing to do with its input: Swin builds the index into its
-    relative-position table out of ``arange``, and rebuilds it on every
-    prediction. 503 of its 1473 operations are that, and they run on the
-    CPU, between operations that run on the Neural Engine.
-
-    Constant means constant *here*: reachable only from the model's
-    weights and from operations that make a tensor out of nothing.
-    Anything one step from the input is not, and an operation whose
-    inputs the tracer never recorded is treated as unknown rather than
-    as a factory — that mistake is what freezes a model's answer.
-
-    Returns
-    -------
-    tuple[set[int], set[int]]
-        The values to emit as constants — only those something outside
-        the constant region reads, since the rest have no consumer left
-        — and the ids of every operation head inside the region, which
-        the driver skips.
-    """
-    constant: set[int] = {tid for tid in feeds if tid not in input_ids}
-    inside: set[int] = set()
-    for op in graph.ops:
-        if not op.outputs:
-            continue
-        if op.inputs:
-            if not all(i in constant for i in op.inputs):
-                continue
-        elif op.name not in _TRUE_FACTORIES:
-            continue
-        if not all(int(o.id) in traced_values for o in op.outputs):
-            # Nothing to write in its place.
-            continue
-        if any(int(o.id) in varying for o in op.outputs):
-            # ``zeros(x.shape[0], ...)``: made out of nothing, and still
-            # the input's size. The traced value is one size of many.
-            continue
-        inside.add(int(op.outputs[0].id))
-        constant.update(int(o.id) for o in op.outputs)
-
-    if not inside:
-        return set(), set()
-
-    # Only the values something outside the region reads have to be
-    # written; the rest were steps on the way to them.
-    wanted: set[int] = set()
-    for op in graph.ops:
-        if op.outputs and int(op.outputs[0].id) in inside:
-            continue
-        wanted.update(i for i in op.inputs if i in constant and i not in feeds)
-    return wanted, inside
 
 
 def _unit_axis_rewrites(
@@ -2923,8 +2857,9 @@ def build_package(
     # Folding is decided first: it removes operations, and whether the
     # rank-6 component can be emitted a rank lower depends on which
     # operations are left to check.
-    precomputed, folded = _foldable(
-        graph, feeds, set(input_ids), traced_values, set(varying)
+    output_ids = {tid for _n, tid, _t in outputs}
+    precomputed, folded = _fold.foldable(
+        graph, feeds, set(input_ids), traced_values, set(varying), output_ids
     )
     thinned = _unit_axis_rewrites(
         graph, set(rewrites) | set(stuffing) | absorbed, folded
@@ -3013,7 +2948,7 @@ def build_package(
     )
     # A value the graph recomputes on every prediction although nothing
     # about it depends on the input is written down instead. See
-    # ``_foldable``: this is a third of a windowed transformer, and all
+    # ``_fold.foldable``: this is a third of a windowed transformer, and all
     # of it lands on the CPU.
     for tid in precomputed:
         folded_value = _wrap(traced_values[tid])

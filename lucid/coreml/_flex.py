@@ -199,6 +199,31 @@ class Flexibility:
         ]
         return matches[0] if len(matches) == 1 else None
 
+    def ratio(self, value_id: int, operand_id: int, axis: int) -> float | None:
+        """The one ratio of a value's axis to its operand's at every probe.
+
+        Parameters
+        ----------
+        value_id, operand_id : int
+            Traced values; ``axis`` indexes both.
+        axis : int
+            The axis compared.
+
+        Returns
+        -------
+        float or None
+            The ratio, or None when it is not the same at every probe or a
+            probe of either value is missing.
+        """
+        seen = self.probes.get(value_id)
+        given = self.probes.get(operand_id)
+        if not seen or not given or len(seen) != len(given):
+            return None
+        found = {
+            mine[axis] / theirs[axis] for mine, theirs in zip(seen, given, strict=True)
+        }
+        return found.pop() if len(found) == 1 else None
+
     def carried(
         self, value: tuple[int, list[int]], operand: tuple[int, list[int]]
     ) -> dict[int, int]:
@@ -445,6 +470,19 @@ def compare(
     return found
 
 
+#: Attributes that restate the size of an operation's result: the cut
+#: points of a slice (``pos_table[:, :T]``), the output size of a resample.
+#: They change with the input exactly when the result's shape does, and the
+#: emitter reads that shape instead — through :class:`Dims`, which refuses
+#: an open axis the emitter does not handle — so a change in one of them is
+#: not by itself a refusal (LCD-365).
+SIZE_ATTRS: dict[str, frozenset[str]] = {
+    "split_at": frozenset({"indices"}),
+    "interpolate_nearest_2d": frozenset({"H_out", "W_out"}),
+    "interpolate_bilinear": frozenset({"H_out", "W_out"}),
+}
+
+
 def _agree(base: Record, other: Record, skip_attrs: frozenset[str]) -> None:
     """Refuse unless two probes traced the same graph with the same settings."""
     if [n for n, _a, _s in other.ops] != [n for n, _a, _s in base.ops]:
@@ -477,10 +515,12 @@ def _agree(base: Record, other: Record, skip_attrs: frozenset[str]) -> None:
             key
             for key in set(attrs) | set(other_attrs)
             if attrs.get(key) != other_attrs.get(key)
+            and key not in SIZE_ATTRS.get(name, ())
         )
-        raise ShapeNotFlexible(
-            name, f"its {', '.join(changed)} changed with the input size"
-        )
+        if changed:
+            raise ShapeNotFlexible(
+                name, f"its {', '.join(changed)} changed with the input size"
+            )
 
 
 class _Value(NamedTuple):
