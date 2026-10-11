@@ -59,16 +59,15 @@ using utils_detail::numel;
 TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     Validator::input(a, "flatten.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
+    const int s = wrap_dim(start_axis, ndim, "flatten");
+    const int e = wrap_dim(end_axis, ndim, "flatten");
     // 0-D scalar input flattens to a 1-D length-1 tensor — matches the
     // reference framework's ``tensor(5.0).flatten() == tensor([5.])``
-    // contract.  Without this short-circuit the default ``end_axis=-1``
-    // would resolve to ``-1`` and trip the ``s > e`` guard below.
+    // contract.
     if (ndim == 0)
         return reshape_op(a, std::vector<std::int64_t>{1});
-    int s = start_axis < 0 ? start_axis + ndim : start_axis;
-    int e = end_axis < 0 ? end_axis + ndim : end_axis;
-    if (s < 0 || e >= ndim || s > e)
-        ErrorBuilder("flatten").invalid_argument("invalid axis range");
+    if (s > e)
+        ErrorBuilder("flatten").invalid_argument("start_dim cannot come after end_dim");
 
     std::vector<std::int64_t> new_shape;
     for (int d = 0; d < s; ++d)

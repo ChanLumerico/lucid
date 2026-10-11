@@ -22,7 +22,7 @@ def test_an_axis_the_input_lacks_is_refused(device, axis):
 @pytest.mark.parametrize("device", ["cpu", "metal"])
 def test_a_repeated_axis_is_refused(device):
     x = lucid.tensor([[3.0, 4.0]], device=device)
-    with pytest.raises(RuntimeError, match="repeated"):
+    with pytest.raises(RuntimeError, match="appears multiple times"):
         _C_engine.linalg.norm(x._impl, 2.0, [1, -1], False)
 
 

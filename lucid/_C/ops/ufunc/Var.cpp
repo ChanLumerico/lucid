@@ -128,7 +128,7 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
     const TensorImplPtr x = promote_for_schema(VarBackward::schema_v1, a);
     const Dtype dt = x->dtype();
     const Device device = x->device();
-    const auto axes = normalize_axes(axes_user, static_cast<int>(x->shape().size()));
+    const auto axes = normalize_axes(axes_user, static_cast<int>(x->shape().size()), "var");
     const Shape out_shape = reduce_output_shape(x->shape(), axes, keepdims);
     OpScopeFull scope{"var", device, dt, out_shape};
     {

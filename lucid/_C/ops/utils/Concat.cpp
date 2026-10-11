@@ -447,10 +447,7 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     const Device device = xs[0]->device();
     OpScopeFull scope{"stack", device, dt, Shape{}};
     const auto ndim = xs[0]->shape().size();
-    int ax = axis < 0 ? axis + static_cast<int>(ndim) + 1 : axis;
-    if (ax < 0 || ax > static_cast<int>(ndim)) {
-        ErrorBuilder("stack").index_error("axis out of range");
-    }
+    const int ax = wrap_dim(axis, static_cast<int>(ndim) + 1, "stack");
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     for (const auto& t : xs) {
         if (t->shape() != xs[0]->shape()) {

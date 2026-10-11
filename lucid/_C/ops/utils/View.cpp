@@ -212,13 +212,10 @@ TensorImplPtr view_op(const TensorImplPtr& a, const std::vector<std::int64_t>& n
 TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "squeeze.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
-    if (ndim == 0) {
-        ErrorBuilder("squeeze").index_error("axis out of range for 0-d tensor");
-    }
-    const int wrapped = dim < 0 ? dim + ndim : dim;
-    if (wrapped < 0 || wrapped >= ndim) {
-        ErrorBuilder("squeeze").index_error("axis out of range");
-    }
+    const int wrapped = wrap_dim(dim, ndim, "squeeze");
+    // A 0-d tensor's notional axis has size 1: squeezing it is the identity.
+    if (ndim == 0)
+        return build_view_output(a, Shape{}, "squeeze");
     if (a->shape()[static_cast<std::size_t>(wrapped)] != 1) {
         ErrorBuilder("squeeze").fail("target dim must be size 1");
     }
@@ -253,10 +250,8 @@ TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
     Validator::input(a, "unsqueeze.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
 
-    const int wrapped = dim < 0 ? dim + ndim + 1 : dim;
-    if (wrapped < 0 || wrapped > ndim) {
-        ErrorBuilder("unsqueeze").index_error("axis out of range");
-    }
+    // The output has one more axis, so ``dim`` names a slot of rank ndim + 1.
+    const int wrapped = wrap_dim(dim, ndim + 1, "unsqueeze");
     Shape new_shape;
     new_shape.reserve(static_cast<std::size_t>(ndim) + 1);
     for (int i = 0; i <= ndim; ++i) {

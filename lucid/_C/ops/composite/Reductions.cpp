@@ -36,7 +36,7 @@ TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes,
     // signed axes and squeezing in that order dropped a wrapped negative
     // axis after a larger positive one (``dim=(-3, 2)`` on 3-D: "squeeze:
     // axis out of range").
-    const auto norm = normalize_axes(axes, static_cast<int>(a->shape().size()));
+    const auto norm = normalize_axes(axes, static_cast<int>(a->shape().size()), "logsumexp");
     bool empty_axis = false;
     for (int ax : norm)
         empty_axis = empty_axis || a->shape()[static_cast<std::size_t>(ax)] == 0;

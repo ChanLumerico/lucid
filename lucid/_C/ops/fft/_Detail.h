@@ -25,6 +25,7 @@
 #include <mlx/fft.h>
 #include <mlx/ops.h>
 
+#include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Dtype.h"
 #include "../../core/Error.h"
@@ -110,7 +111,8 @@ inline Dtype dtype_for_irfft(Dtype in) {
     return Dtype::F32;
 }
 
-// Normalise a possibly-negative axis list to non-negative form, in-place.
+// Normalise a possibly-negative axis list to non-negative form, in-place,
+// through the one dim rule (:func:`distinct_dims`).
 //
 // Parameters
 // ----------
@@ -124,17 +126,13 @@ inline Dtype dtype_for_irfft(Dtype in) {
 //
 // Raises
 // ------
+// IndexError
+//     If any axis falls outside $[-r, r)$.
 // LucidError
-//     If any normalised axis falls outside $[0, r)$.
+//     If two axes name the same dimension.  MLX would refuse it with its
+//     own ``ValueError``.
 inline void normalise_axes(std::vector<int>& axes, int rank, const char* op) {
-    for (auto& ax : axes) {
-        int orig = ax;
-        if (ax < 0)
-            ax += rank;
-        if (ax < 0 || ax >= rank)
-            ErrorBuilder(op).fail("axis " + std::to_string(orig) + " out of range for rank " +
-                                  std::to_string(rank));
-    }
+    axes = distinct_dims(axes, rank, op);
 }
 
 // Populate ``axes`` with ``[0, 1, ..., rank-1]`` when empty.

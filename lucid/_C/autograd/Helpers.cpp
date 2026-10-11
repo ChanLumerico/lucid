@@ -454,29 +454,21 @@ int wrap_dim(int dim, int ndim, const char* op) {
     return wrapped;
 }
 
-// Resolve axis indices to a sorted, deduplicated list of non-negative values.
-// Negative indices are wrapped by adding ndim.  An empty input axes list is
-// interpreted as "all axes".
-std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
-    std::vector<int> out;
+// Resolve axis indices to a sorted list of non-negative values.  An empty
+// input axes list is interpreted as "all axes".
+std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim, const char* op) {
     if (axes.empty()) {
+        std::vector<int> out;
         out.reserve(ndim);
         for (int i = 0; i < ndim; ++i)
             out.push_back(i);
         return out;
     }
-    std::vector<bool> seen(std::max(ndim, 1), false);
-    for (int a : axes) {
-        const int wrapped = wrap_dim(a, ndim, "normalize_axes");
-        // A 0-d tensor's one axis is notional: reducing over it is the
-        // identity, which is the empty axis list of rank 0.
-        if (ndim == 0)
-            continue;
-        if (!seen[wrapped]) {
-            seen[wrapped] = true;
-            out.push_back(wrapped);
-        }
-    }
+    std::vector<int> out = distinct_dims(axes, ndim, op);
+    // A 0-d tensor's one axis is notional: reducing over it is the
+    // identity, which is the empty axis list of rank 0.
+    if (ndim == 0)
+        return {};
     std::sort(out.begin(), out.end());
     return out;
 }

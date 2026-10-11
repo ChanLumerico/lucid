@@ -365,9 +365,11 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     // A strided CPU input needs no copy here — see UnaryKernel.
     const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
 
-    // normalize_axes converts negative indices and deduplicates; the
-    // result is a sorted, non-negative axis list suitable for the kernels.
-    const auto axes = normalize_axes(axes_user, static_cast<int>(a_ptr->shape().size()));
+    // normalize_axes wraps negative indices and refuses a repeated axis;
+    // the result is a sorted, non-negative axis list for the kernels.
+    const std::string op_name(Derived::schema_v1.name);
+    const auto axes =
+        normalize_axes(axes_user, static_cast<int>(a_ptr->shape().size()), op_name.c_str());
     Shape out_shape = reduce_output_shape(a_ptr->shape(), axes, keepdims);
 
     // max and min have no identity element, so an empty reduced axis has no

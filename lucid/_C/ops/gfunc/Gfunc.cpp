@@ -628,7 +628,7 @@ TensorImplPtr scatter_set_op(const TensorImplPtr& base,
     const Shape& is = indices->shape();
     const Shape& ss = src->shape();
     const int ndim = static_cast<int>(bs.size());
-    const int d = dim < 0 ? dim + ndim : dim;
+    const int d = wrap_dim(dim, ndim, "scatter_set");
 
     // ``index_copy`` writes whole slices: index and src have one shape, equal
     // to base's on every axis but ``dim``.  ``scatter`` alone would take a
@@ -975,15 +975,17 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
 
     const Shape& in_shape = a->shape();
     const int ndim = static_cast<int>(in_shape.size());
-    int d = dim < 0 ? dim + ndim : dim;
     // Bounds first.  ``in_shape[d]`` was read before ``d`` had been
     // checked, so an out-of-range dimension returned whatever sat past the
     // shape — and then *that* decided the call: garbage below ``size``
     // tripped the guard below and looked like a clean refusal, garbage
     // above it sailed through and became the output shape.  Same call,
     // two different answers on two runs.
-    if (d < 0 || d >= ndim)
-        ErrorBuilder("unfold_dim").index_error("dim is out of range for the operand's rank");
+    const int d = wrap_dim(dim, ndim, "unfold_dim");
+    // A 0-d tensor is one element along its notional axis; the reference
+    // gives its windows back as shape ``(size,)``, with no window axis.
+    if (ndim == 0)
+        return reshape_op(unfold_dim_op(reshape_op(a, {1}), 0, size, step), {size});
     const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(d)]);
     if (size > dim_size)
         ErrorBuilder("unfold_dim").fail("size > dimension size");

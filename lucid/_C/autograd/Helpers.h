@@ -956,29 +956,32 @@ int wrap_dim(int dim, int ndim, const char* op);
 
 // Canonicalise a list of axis indices for an ``ndim``-rank tensor.
 //
-// Wraps each axis through :func:`wrap_dim`, deduplicates the result, sorts
-// ascending, and returns the canonical list.  When ``axes`` is empty the
-// function treats the call as "reduce over everything" and returns
-// ``[0, ndim)``.  A 0-d tensor has no axis to reduce, so any accepted axis
-// list comes back empty.
+// Checks the list through :func:`distinct_dims`, then sorts it ascending.
+// When ``axes`` is empty the function treats the call as "reduce over
+// everything" and returns ``[0, ndim)``.  A 0-d tensor has no axis to
+// reduce, so any accepted axis list comes back empty.
 //
 // Parameters
 // ----------
 // axes : const std::vector<int>&
-//     Raw axis list; may contain negatives and duplicates.
+//     Raw axis list; may contain negatives.
 // ndim : int
 //     Rank of the tensor the axes refer to.
+// op : const char*
+//     Op name the errors carry.
 //
 // Returns
 // -------
 // std::vector<int>
-//     Sorted, deduplicated, all-positive axis list.
+//     Sorted, all-positive axis list.
 //
 // Raises
 // ------
 // IndexError
 //     Some entry of ``axes`` is refused by :func:`wrap_dim`.
-std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
+// LucidError
+//     Two entries name the same axis.
+std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim, const char* op);
 
 // Wrap each entry of ``dims`` through :func:`wrap_dim`, keeping the order,
 // and refuse a list that names one axis twice, as the reference does.  An

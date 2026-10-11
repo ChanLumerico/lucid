@@ -76,9 +76,10 @@ TensorImplPtr unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes) 
     if (!a)
         ErrorBuilder("unflatten").fail("null input");
     const int ndim = static_cast<int>(a->shape().size());
-    int d = dim < 0 ? dim + ndim : dim;
-    if (d < 0 || d >= ndim)
-        ErrorBuilder("unflatten").index_error("dim out of range");
+    if (ndim == 0)
+        ErrorBuilder("unflatten")
+            .index_error("dim out of range: the op needs a tensor of rank >= 1");
+    const int d = wrap_dim(dim, ndim, "unflatten");
 
     std::int64_t product = 1;
     for (auto s : sizes)
