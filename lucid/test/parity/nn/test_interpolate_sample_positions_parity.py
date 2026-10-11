@@ -169,3 +169,63 @@ class TestLinearValues:
         np.testing.assert_allclose(
             _host(lx.grad), _host(rx.grad), atol=8 * atol, rtol=0
         )
+
+
+# A scale factor that does not divide the axis maps by ``1 / scale``, which
+# the Python composite computes; it has to use the same accumulation type
+# as the kernels (double for float64), or a float64 resize reads float32
+# positions — and ``x1.1`` on 4521 samples read sample 4511 for 4510.  No
+# 2-D axis here keeps its size or doubles it: the reference pins those
+# only on some of its paths.
+_SCALED = [
+    ("nearest", (1, 1, 4521), {"scale_factor": 1.1}),
+    ("nearest", (1, 1, 2155), {"scale_factor": 2.5}),
+    ("nearest", (1, 1, 3, 997, 1501), {"scale_factor": (1.5, 0.37, 1.7)}),
+    ("nearest-exact", (1, 1, 56, 100), {"size": (56, 115)}),
+    ("nearest-exact", (1, 1, 4521), {"scale_factor": 1.1}),
+    ("linear", (1, 1, 2835), {"scale_factor": 0.379}),
+    ("linear", (1, 1, 4521), {"scale_factor": 1.1}),
+    ("bilinear", (1, 2, 37, 2155), {"scale_factor": (1.7, 2.3)}),
+    ("bicubic", (1, 2, 37, 1999), {"scale_factor": (1.7, 0.43)}),
+    ("trilinear", (1, 1, 3, 41, 1503), {"scale_factor": (1.5, 0.61, 1.3)}),
+]
+
+
+def _scaled_cases() -> list[Any]:
+    cases = []
+    for mode, shape, kw in _SCALED:
+        interpolating = "linear" in mode or mode == "bicubic"
+        for corners in (False, True) if interpolating else (None,):
+            tag = {None: "-", False: "edges", True: "corners"}[corners]
+            cases.append(
+                pytest.param(
+                    mode,
+                    shape,
+                    {**kw, "align_corners": corners},
+                    id=f"{mode}-{shape[-1]}-{tag}",
+                )
+            )
+    return cases
+
+
+@pytest.mark.parity
+class TestScaleFactorPositions:
+    @pytest.mark.parametrize("dtype", ["float32", "float64"])
+    @pytest.mark.parametrize(("mode", "shape", "kw"), _scaled_cases())
+    def test_values_match_the_reference(
+        self,
+        ref: Any,
+        device: str,
+        dtype: str,
+        mode: str,
+        shape: tuple[int, ...],
+        kw: dict[str, Any],
+    ) -> None:
+        _skip_unsupported(device, dtype)
+        data = np.random.default_rng(sum(shape)).standard_normal(shape)
+        x = lucid.tensor(data, dtype=getattr(lucid, dtype), device=device)
+        got = F.interpolate(x, mode=mode, **kw)
+        want = ref.nn.functional.interpolate(
+            ref.tensor(data, dtype=getattr(ref, dtype)), mode=mode, **kw
+        )
+        np.testing.assert_allclose(_host(got), _host(want), atol=_ATOL[dtype], rtol=0)

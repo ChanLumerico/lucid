@@ -92,26 +92,32 @@ class TestCoordinateMapping:
 class TestEngineStandIn:
     """The size-only kernels step by ``in / out``, by the reference's rule
     for a size on both devices (LCD-403): allowed only when a scale factor
-    puts every sample where that does."""
+    puts every sample where that does, in the tensor's accumulation type
+    (``wide`` for float64)."""
 
     @pytest.mark.parametrize(
-        ("mode", "spatial", "sizes", "scales", "corners", "expected"),
+        ("mode", "spatial", "sizes", "scales", "corners", "wide", "expected"),
         [
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False),
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, True),
-            ("bilinear", [5, 7], [8, 11], [None, None], False, True),
-            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, True),
-            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False),
-            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, True),
-            ("nearest", [5], [8], [None], False, True),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, False, True),
+            ("bilinear", [5, 7], [8, 11], [None, None], False, False, True),
+            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, False, True),
+            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
+            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, False, True),
+            ("nearest", [5], [8], [None], False, False, True),
             # float32 in/out lands sample 5382 on 2153; the reference's
-            # float32 1/2.5 lands it on 2152.
-            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, False),
-            # With a size the reference also steps by float32 in/out, which
-            # the kernels now do on both devices.
-            ("nearest", [1, 2111], [1, 5277], [None, None], False, True),
+            # float32 1/2.5 lands it on 2152.  In double both land on 2152.
+            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, False, False),
+            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, True, True),
+            # With a size the reference also steps by in/out, which the
+            # kernels now do on both devices.
+            ("nearest", [1, 2111], [1, 5277], [None, None], False, False, True),
+            # x1.1 on 4521 samples: in float32 the two steps agree, in
+            # double sample 4962 reads 4511 by in/out and 4510 by 1/1.1.
+            ("nearest", [4521], [4973], [1.1], False, False, True),
+            ("nearest", [4521], [4973], [1.1], False, True, False),
             # 1-D: no same-size shortcut in the reference, so x1.1 resamples.
-            ("nearest", [4], [4], [1.1], False, False),
+            ("nearest", [4], [4], [1.1], False, False, False),
         ],
     )
     def test_when_the_kernel_may_run(
@@ -121,9 +127,12 @@ class TestEngineStandIn:
         sizes: list[int],
         scales: list[float | None],
         corners: bool,
+        wide: bool,
         expected: bool,
     ) -> None:
-        got = _interpolate._engine_maps_like(mode, spatial, sizes, scales, corners)
+        got = _interpolate._engine_maps_like(
+            mode, spatial, sizes, scales, corners, wide
+        )
         assert got is expected
 
     @pytest.mark.parametrize(
@@ -141,7 +150,7 @@ class TestEngineStandIn:
         x = lucid.arange(n, dtype=lucid.float32, device=device).reshape(*shape)
         out = F.interpolate(x, mode="nearest", **kw).reshape(-1).to("cpu").tolist()
         scale = kw["scale_factor"][1] if "scale_factor" in kw else None
-        expected = _interpolate._nearest_indices(n, len(out), scale, False, rank=2)
+        expected = _interpolate._nearest_indices(n, len(out), scale, False, 2, False)
         assert out == [float(i) for i in expected]
 
 

@@ -16,6 +16,9 @@ pinned together; otherwise the step is ``1 / scale_factor`` whenever a
 scale factor was given (and not recomputed), and ``in / out`` only when
 the size was.  The two differ whenever ``in * scale_factor`` is not a
 whole number, and that difference is the whole of what used to be wrong.
+Positions are computed in the tensor's accumulation type — double for
+float64, float otherwise — and floored in float, as the engine kernels
+compute them (``lucid/_C/backend/SamplePositions.h``).
 
 The engine kernels take sizes only and step by ``in / out``.  They run
 when that is the same mapping — a size, a recomputed or whole-number
@@ -64,24 +67,46 @@ type _FrozenTaps = tuple[tuple[tuple[int, ...], tuple[float, ...] | None], ...]
 
 
 def _f32(value: float) -> float:
-    """``value`` rounded to single precision, as the reference's nearest
-    kernel computes its source index in ``float``."""
+    """``value`` rounded to single precision."""
     rounded: float = struct.unpack("f", struct.pack("f", value))[0]
     return rounded
 
 
+# Where a sample lands follows ``lucid/_C/backend/SamplePositions.h``, the
+# rule the engine kernels use, which is the reference's: positions are
+# computed in its accumulation type — double for a float64 tensor (``wide``),
+# float for every other dtype — and floored in float whatever that type is.
+# A half-pixel centre is one fused multiply-add.  The functions below are
+# that header, line for line, extended by the scale factor the kernels
+# never see.
+
+
+def _opmath(value: float, wide: bool) -> float:
+    """``value`` rounded to the accumulation type."""
+    return value if wide else _f32(value)
+
+
+def _floor_index(position: float) -> int:
+    """The sample at or left of ``position``, floored in single precision."""
+    return math.floor(_f32(position))
+
+
 def _coordinate_scale(
-    in_size: int, out_size: int, align_corners: bool, scale: float | None
+    in_size: int, out_size: int, align_corners: bool, scale: float | None, wide: bool
 ) -> float:
     """Distance in input samples between two neighbouring output samples."""
     if align_corners:
-        return (in_size - 1) / (out_size - 1) if out_size > 1 else 0.0
-    if scale is not None and scale > 0:
-        return 1.0 / scale
-    return in_size / out_size
+        ratio = (in_size - 1) / (out_size - 1) if out_size > 1 else 0.0
+    elif scale is not None and scale > 0:
+        ratio = 1.0 / scale
+    else:
+        ratio = in_size / out_size
+    return _opmath(ratio, wide)
 
 
-def _source_index(ratio: float, dst: int, align_corners: bool, cubic: bool) -> float:
+def _source_index(
+    ratio: float, dst: int, align_corners: bool, cubic: bool, wide: bool
+) -> float:
     """Input coordinate output sample ``dst`` is centred on.
 
     Half-pixel centres unless the corners are aligned.  Linear filters
@@ -89,19 +114,27 @@ def _source_index(ratio: float, dst: int, align_corners: bool, cubic: bool) -> f
     filter keeps it, because its taps clamp instead.
     """
     if align_corners:
-        return ratio * dst
-    source = ratio * (dst + 0.5) - 0.5
+        return _opmath(ratio * dst, wide)
+    source = _opmath(math.fma(ratio, dst + 0.5, -0.5), wide)
     return source if cubic or source >= 0 else 0.0
 
 
 def _nearest_indices(
-    in_size: int, out_size: int, scale: float | None, exact: bool, rank: int
+    in_size: int,
+    out_size: int,
+    scale: float | None,
+    exact: bool,
+    rank: int,
+    wide: bool,
 ) -> list[int]:
     """Input index each output sample copies, for ``nearest[-exact]``."""
     last = in_size - 1
+    ratio = _coordinate_scale(in_size, out_size, False, scale, wide)
     if exact:
-        ratio = _f32(_coordinate_scale(in_size, out_size, False, scale))
-        return [min(math.floor(_f32((d + 0.5) * ratio)), last) for d in range(out_size)]
+        return [
+            min(_floor_index(_opmath((d + 0.5) * ratio, wide)), last)
+            for d in range(out_size)
+        ]
     # Plain nearest on a 2-D input pins these two cases whatever the scale
     # factor said; the reference keeps them for compatibility (and only in
     # its 2-D kernel), so they are the contract there and nowhere else.
@@ -109,43 +142,42 @@ def _nearest_indices(
         return list(range(out_size))
     if rank == 2 and out_size == 2 * in_size:
         return [d >> 1 for d in range(out_size)]
-    ratio = _f32(_coordinate_scale(in_size, out_size, False, scale))
-    return [min(math.floor(_f32(d * ratio)), last) for d in range(out_size)]
+    return [min(_floor_index(_opmath(d * ratio, wide)), last) for d in range(out_size)]
 
 
-def _floor_and_fraction(source: float, in_size: int) -> tuple[int, float]:
+def _floor_and_fraction(source: float, in_size: int, wide: bool) -> tuple[int, float]:
     """The sample left of ``source`` (never past the last) and the distance to it."""
-    base = min(math.floor(source), in_size - 1)
-    return base, min(max(source - base, 0.0), 1.0)
+    base = min(_floor_index(source), in_size - 1)
+    return base, min(max(_opmath(source - base, wide), 0.0), 1.0)
 
 
 def _linear_taps(
-    in_size: int, out_size: int, align_corners: bool, scale: float | None
+    in_size: int, out_size: int, align_corners: bool, scale: float | None, wide: bool
 ) -> _Taps:
     if out_size == in_size:
         return [(list(range(out_size)), None)]
-    ratio = _coordinate_scale(in_size, out_size, align_corners, scale)
+    ratio = _coordinate_scale(in_size, out_size, align_corners, scale, wide)
     low: list[int] = []
     high: list[int] = []
     upper: list[float] = []
     for d in range(out_size):
         base, frac = _floor_and_fraction(
-            _source_index(ratio, d, align_corners, cubic=False), in_size
+            _source_index(ratio, d, align_corners, False, wide), in_size, wide
         )
         low.append(base)
         high.append(base + 1 if base < in_size - 1 else base)
         upper.append(frac)
-    return [(low, [1.0 - f for f in upper]), (high, upper)]
+    return [(low, [_opmath(1.0 - f, wide) for f in upper]), (high, upper)]
 
 
 def _cubic_taps(
-    in_size: int, out_size: int, align_corners: bool, scale: float | None
+    in_size: int, out_size: int, align_corners: bool, scale: float | None, wide: bool
 ) -> _Taps:
-    ratio = _coordinate_scale(in_size, out_size, align_corners, scale)
+    ratio = _coordinate_scale(in_size, out_size, align_corners, scale, wide)
     taps: _Taps = [([], []) for _ in range(4)]
     for d in range(out_size):
         base, frac = _floor_and_fraction(
-            _source_index(ratio, d, align_corners, cubic=True), in_size
+            _source_index(ratio, d, align_corners, True, wide), in_size, wide
         )
         for tap, weight in enumerate(cubic_coefficients(frac)):
             indices, weights = taps[tap]
@@ -191,7 +223,8 @@ def _antialias_taps(
         return [(list(range(out_size)), None)]
     width = 4 if cubic else 2
     kernel: Callable[[float], float] = _keys_cubic if cubic else _triangle
-    ratio = _coordinate_scale(in_size, out_size, align_corners, scale)
+    # The stretched filter is built in double for every dtype.
+    ratio = _coordinate_scale(in_size, out_size, align_corners, scale, wide=True)
     support = width * 0.5 * ratio if ratio >= 1.0 else width * 0.5
     inverse = 1.0 / ratio if ratio >= 1.0 else 1.0
     count = math.ceil(support) * 2 + 1
@@ -415,34 +448,45 @@ def _engine_maps_like(
     sizes: list[int],
     scales: list[float | None],
     align_corners: bool,
+    wide: bool,
 ) -> bool:
     """Whether the size-only engine kernel lands every sample where the
     reference does.  The kernels step by ``in / out`` (or pin corners), on
-    either device, by the reference's own rule for a size."""
+    either device, by the same rule as these helpers for a size — so the
+    question is only whether the scale factor maps like the size, in the
+    tensor's accumulation type (``wide`` for float64)."""
     rank = len(spatial)
     for n, m, s in zip(spatial, sizes, scales, strict=True):
+        if s is None:
+            continue
         if mode == "nearest":
-            if s is None:
-                continue
-            reference = _nearest_indices(n, m, s, exact=False, rank=rank)
-            if _nearest_indices(n, m, None, exact=False, rank=rank) != reference:
+            indices = _nearest_indices(n, m, s, False, rank, wide)
+            if _nearest_indices(n, m, None, False, rank, wide) != indices:
                 return False
-        elif not (align_corners or m == n or s is None):
-            ratio = _coordinate_scale(n, m, False, s)
-            if not math.isclose(ratio, n / m, rel_tol=1e-12):
+        elif not (align_corners or m == n):
+            step = _coordinate_scale(n, m, False, s, wide)
+            if _coordinate_scale(n, m, False, None, wide) != step:
                 return False
     return True
 
 
+@dataclasses.dataclass(frozen=True)
+class _Filter:
+    """What resamples every axis of one call: the plan cache's key."""
+
+    mode: str
+    align_corners: bool
+    antialias: bool
+    # Only plain nearest depends on the rank (0 for the other modes, so
+    # every rank shares their plans).
+    rank: int
+    # float64: positions in double.
+    wide: bool
+
+
 @functools.lru_cache(maxsize=256)
 def _axis_plan(
-    mode: str,
-    in_size: int,
-    out_size: int,
-    align_corners: bool,
-    scale: float | None,
-    antialias: bool,
-    rank: int,
+    rule: _Filter, in_size: int, out_size: int, scale: float | None
 ) -> _AxisPlan:
     """How to resample one axis, frozen so the cache can hand it out again.
 
@@ -451,17 +495,19 @@ def _axis_plan(
     which a data pipeline resizing every image to the same size would
     otherwise repeat per call.
     """
-    if antialias:
+    mode, corners, wide = rule.mode, rule.align_corners, rule.wide
+    if rule.antialias:
         taps = _antialias_taps(
-            in_size, out_size, align_corners, scale, cubic=mode == "bicubic"
+            in_size, out_size, corners, scale, cubic=mode == "bicubic"
         )
     elif mode in ("nearest", "nearest-exact"):
         exact = mode == "nearest-exact"
-        taps = [(_nearest_indices(in_size, out_size, scale, exact, rank), None)]
+        indices = _nearest_indices(in_size, out_size, scale, exact, rule.rank, wide)
+        taps = [(indices, None)]
     elif mode == "bicubic":
-        taps = _cubic_taps(in_size, out_size, align_corners, scale)
+        taps = _cubic_taps(in_size, out_size, corners, scale, wide)
     else:
-        taps = _linear_taps(in_size, out_size, align_corners, scale)
+        taps = _linear_taps(in_size, out_size, corners, scale, wide)
     weighted = taps[0][1] is not None
     dense = weighted and in_size <= _DENSE_PER_TAP * len(taps)
     return _AxisPlan(
@@ -516,6 +562,7 @@ def resample(
     sizes, scales = _resolve(x, size, scale_factor, recompute_scale_factor)
     spatial = [int(s) for s in x.shape[2:]]
     corners = bool(align_corners)
+    wide = x.dtype == _lucid.float64
 
     if mode == "area":
         # The reference's area mode is adaptive average pooling, scale or not.
@@ -528,19 +575,18 @@ def resample(
     if (
         kernel
         and x.is_floating_point()
-        and _engine_maps_like(mode, spatial, sizes, scales, corners)
+        and _engine_maps_like(mode, spatial, sizes, scales, corners, wide)
     ):
         return _engine_resample(x, mode, sizes, corners)
 
     out = x
     # Last axis first: it multiplies without a copy, and a shrinking image
     # makes every later product smaller.
+    rank = len(spatial) if mode == "nearest" else 0
+    rule = _Filter(mode, corners, antialias, rank, wide)
     for axis in reversed(range(2, x.ndim)):
         n, m, s = spatial[axis - 2], sizes[axis - 2], scales[axis - 2]
-        # Only plain nearest depends on the rank; leaving it out of the
-        # other modes' key lets every rank share their plans.
-        rank = len(spatial) if mode == "nearest" else 0
-        plan = _axis_plan(mode, n, m, corners, s, antialias, rank)
+        plan = _axis_plan(rule, n, m, s)
         if plan.identity:
             continue
         if plan.dense is not None:
