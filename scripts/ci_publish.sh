@@ -65,7 +65,9 @@ assert _C_engine.mlx_runtime_version() == pin, (_C_engine.mlx_runtime_version(),
 
 x = lucid.arange(0, 24).reshape(2, 3, 4).permute(2, 0, 1)
 assert x.shape == (4, 2, 3)
-assert lucid.metal.is_available(), "no Metal device: the smoke cannot run the GPU path"
+# The engine's own GPU allocation, as lucid.test._fixtures.devices probes it:
+# if Metal is unusable here, the error says why rather than a bare False.
+_C_engine.zeros([1], _C_engine.F32, _C_engine.GPU)
 a = lucid.arange(6, dtype=lucid.float32).reshape(2, 3).to("metal")
 assert (a @ a.mT).tolist() == [[5.0, 14.0], [14.0, 50.0]]
 

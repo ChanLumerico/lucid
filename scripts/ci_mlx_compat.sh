@@ -3,7 +3,7 @@
 # extra admits, and the newest on PyPI.  One fresh venv per case, the same
 # wheel in each, then the interop and Metal tests against the installed copy.
 #
-#   ./scripts/ci_mlx_compat.sh <wheel> [none|floor|latest|<version>]...
+#   ./scripts/ci_mlx_compat.sh <wheel | dist dir> [none|floor|latest|<version>]...
 #
 # The engine never loads the `mlx` package's libmlx (LCD-292): it ships its
 # own pinned build, renamed so the two coexist.  Every case checks that the
@@ -21,16 +21,32 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-if [ $# -lt 1 ] || [ ! -f "$1" ]; then
-    echo "usage: $0 <wheel> [none|floor|latest|<version>]..." >&2
+usage() {
+    echo "usage: $0 <wheel | directory of wheels> [none|floor|latest|<mlx version>]..." >&2
     exit 2
+}
+[ $# -ge 1 ] || usage
+if [ -d "$1" ]; then
+    # The newest Lucid wheel there, chosen as scripts/ci_publish.sh does.
+    WHEEL=$(ls "$1"/lucid*.whl 2>/dev/null | sort -V | tail -1 || true)
+    [ -n "$WHEEL" ] || { echo "$0: no lucid wheel in $1" >&2; exit 2; }
+else
+    WHEEL=$1
 fi
-WHEEL="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+[ -f "$WHEEL" ] || usage
+WHEEL="$(cd "$(dirname "$WHEEL")" && pwd)/$(basename "$WHEEL")"
 shift
 CASES=("$@")
 if [ "${#CASES[@]}" -eq 0 ]; then
     CASES=(none floor latest)
 fi
+# A glob that matched two wheels would pass the second as an mlx version.
+for case in "${CASES[@]}"; do
+    case "$case" in
+        none | floor | latest | [0-9]*[0-9]) ;;
+        *) echo "$0: '$case' is not none, floor, latest or an mlx version" >&2; usage ;;
+    esac
+done
 
 PIN=$("$PYTHON_BIN" tools/fetch_mlx.py --print-version)
 # The oldest `mlx` the [mlx] extra admits ("mlx>=0.32; ..." -> 0.32).

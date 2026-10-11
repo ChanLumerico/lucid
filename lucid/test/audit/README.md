@@ -86,15 +86,19 @@ From the **repository root** (the directory holding `pyproject.toml`):
 ```bash
 cd /path/to/lucid
 
-# 1. Build the engine and install the package.
+# 1. Build the engine and install the package.  The engine links the MLX
+#    build pinned in pyproject.toml [tool.lucid.mlx], which the build
+#    fetches and stages under ~/Library/Caches/lucid/mlx-metal; the target
+#    is that build's macOS floor.
 #    ⚠️ `uv pip`, never plain `pip` — .venv has no pip, so `pip` leaks to
-#    the system pip3 and bakes that interpreter's absolute rpath into the
-#    .so. See [[debug-build-wrong-venv-rpath]].
-VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=26.0 \
+#    the system pip3 and installs into that interpreter instead.
+#    See [[debug-build-wrong-venv-rpath]].
+VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=$(python3 tools/fetch_mlx.py --print-macos) \
     uv pip install -e ".[audit]" --no-build-isolation
 
-# 2. Confirm the engine linked against *this* venv.
-otool -l lucid/_C/engine.cpython-314-darwin.so | grep -A2 LC_RPATH | grep path
+# 2. Confirm the engine links the pinned MLX (liblucid_mlx, every symbol
+#    present, built for the floor).
+.venv/bin/python tools/check_engine_link.py
 
 # 3. Confirm the tool is on PATH and the surface enumerates.
 lucid-audit --coverage
