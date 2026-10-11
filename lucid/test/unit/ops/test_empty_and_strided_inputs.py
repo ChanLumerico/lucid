@@ -54,8 +54,11 @@ EMPTY_DIVERGES = {
 }
 
 
-#: Cases that cannot copy: a layout they cannot read in place is refused.
-STRICT_VIEWS = frozenset({"view"})
+#: Cases that cannot copy, and the layouts whose strides cannot step through
+#: the case's shape: ``view`` refuses those, as the reference does, and reads
+#: the rest in place.  ``view(2, 12)`` regroups a transpose's rows; every
+#: other element of a wider buffer is one chunk of strides (LCD-390).
+STRICT_VIEWS = {"view": frozenset({"transposed"})}
 
 
 def _cases() -> list[str]:
@@ -100,7 +103,7 @@ def test_a_strided_input_answers_as_a_dense_one(name: str, device: str) -> None:
             x = M.make_input(case.kind, dtype, case.shape, 1).to(device)
             want = case.fn(x)
             for tag, view in _layouts(x):
-                if name in STRICT_VIEWS and not view._impl.is_dense():
+                if tag in STRICT_VIEWS.get(name, ()) and not view._impl.is_dense():
                     # ``view`` reads its input in place or refuses, as the
                     # reference does; ``reshape`` is the copying spelling.
                     with pytest.raises(RuntimeError, match="use .reshape"):

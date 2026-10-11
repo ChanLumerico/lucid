@@ -3,13 +3,15 @@
 // Implements reshape, view, squeeze, and unsqueeze.  A dense input is
 // reshaped by relabelling: the result is a view over the same buffer — on
 // Metal, over its family's root — in the input's ViewFamily.  So is a strided
-// CPU view whose new shape only drops or inserts size-1 axes.  Anything else
-// is copied by the backend dispatcher's reshape, which ``view`` refuses.
+// view whose strides can step through the new shape, by the reference's
+// chunk rule.  Anything else is copied by the backend dispatcher's reshape,
+// which ``view`` refuses.
 // Either way the central helper build_view_output wires the ViewBackward
 // autograd node so that gradients flow back through the changed shape.
 
 #include "View.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <variant>
@@ -116,22 +118,93 @@ bool squeezes_only(const TensorImpl& a, const Shape& out, Stride& stride) {
     return true;
 }
 
+// The strides that read ``a``'s elements in place as ``out`` — the
+// reference's rule for view and reshape — or false when none do.
+//
+// ``a``'s axes fall into chunks: runs over which each axis's stride is the
+// next one's times that axis's length, so the run steps through its elements
+// in order by its innermost stride.  A size-1 axis moves no element, so its
+// stride never ends a chunk.  ``out`` is viewable when its axes, innermost
+// first, multiply out to exactly the chunks; each axis then steps through
+// its chunk, and a size-1 axis takes the extent of the axes inside it.  A
+// tensor with no elements is viewable as any shape: it keeps its strides if
+// the shape does not change, and is packed otherwise.
+bool chunk_strides(const TensorImpl& a, const Shape& out, Stride& stride) {
+    const Shape& in = a.shape();
+    const Stride& in_stride = a.stride();
+    const std::size_t elem = dtype_size(a.dtype());
+    if (in.empty()) {
+        stride.assign(out.size(), static_cast<std::int64_t>(elem));
+        return true;
+    }
+    if (shape_numel(in) == 0) {
+        if (in == out) {
+            stride = in_stride;
+            return true;
+        }
+        // Packed, but a zero-length axis counts as one so that no stride is
+        // zero: an empty tensor repeats no element.
+        stride.assign(out.size(), 0);
+        auto next = static_cast<std::int64_t>(elem);
+        for (std::size_t d = out.size(); d-- > 0;) {
+            stride[d] = next;
+            next *= std::max<std::int64_t>(out[d], 1);
+        }
+        return true;
+    }
+    stride.assign(out.size(), 0);
+    auto view_d = static_cast<std::ptrdiff_t>(out.size()) - 1;
+    std::int64_t chunk_stride = in_stride.back();
+    std::int64_t in_numel = 1;
+    std::int64_t view_numel = 1;
+    for (auto d = static_cast<std::ptrdiff_t>(in.size()) - 1; d >= 0; --d) {
+        const auto k = static_cast<std::size_t>(d);
+        in_numel *= in[k];
+        if (k > 0 && (in[k - 1] == 1 || in_stride[k - 1] == in_numel * chunk_stride))
+            continue;
+        // The chunk ends at ``k``.  The view's axes that make up its
+        // elements, and the size-1 axes just outside them, step through it.
+        while (view_d >= 0 &&
+               (view_numel < in_numel || out[static_cast<std::size_t>(view_d)] == 1)) {
+            stride[static_cast<std::size_t>(view_d)] = view_numel * chunk_stride;
+            view_numel *= out[static_cast<std::size_t>(view_d)];
+            --view_d;
+        }
+        if (view_numel != in_numel)
+            return false;
+        if (k > 0) {
+            chunk_stride = in_stride[k - 1];
+            in_numel = 1;
+            view_numel = 1;
+        }
+    }
+    return view_d == -1;
+}
+
+// Which strides a view's size-1 axes take.  They move no element, so both
+// read the same elements, but ``stride()`` shows them: squeeze and unsqueeze
+// give an inserted axis the extent of its inner neighbour (one element when
+// innermost), view and reshape the extent of the axes inside it in its chunk.
+enum class UnitAxes { kChunk, kSqueeze };
+
 // The strides under which ``a``'s elements, read as ``out_shape``, are a view
 // of its buffer — or false when reading them so takes a copy.
 //
 // A dense tensor holds its elements in row-major order from the first byte
 // of its buffer (on Metal, of its family's root), which is what any shape
-// with the same element count reads there.  A strided view whose new shape
-// only drops or inserts size-1 axes keeps every element where it was —
-// ``x[:, 1]`` is a column slice with its axis squeezed out — on the CPU and
-// for a Metal family member, which reads its root through its geometry.
-bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride) {
+// with the same element count reads there.  A strided CPU view, or a Metal
+// family member, which reads its root through its geometry, is a view as any
+// shape its strides can step through: a squeeze or unsqueeze always, a merge
+// or split of its axes when chunk_strides finds strides for it.
+bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride, UnitAxes unit) {
     if (a.is_dense()) {
         stride = contiguous_stride(out_shape, dtype_size(a.dtype()));
         return true;
     }
-    return (storage_is_cpu(a.raw_storage()) || a.family_key() != nullptr) &&
-           squeezes_only(a, out_shape, stride);
+    if (!storage_is_cpu(a.raw_storage()) && a.family_key() == nullptr)
+        return false;
+    return unit == UnitAxes::kSqueeze ? squeezes_only(a, out_shape, stride)
+                                      : chunk_strides(a, out_shape, stride);
 }
 
 // Shared implementation used by reshape_op, view_op, squeeze_op,
@@ -140,12 +213,15 @@ bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride) {
 // write to either reaches the other, on Metal too; anything else is copied.
 // Either way ViewBackward is attached so that autograd can reshape gradients
 // back to the input's shape.
-TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const char* op_name) {
+TensorImplPtr build_view_output(const TensorImplPtr& a,
+                                Shape out_shape,
+                                const char* op_name,
+                                UnitAxes unit = UnitAxes::kChunk) {
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
     TensorImplPtr out;
-    if (Stride stride; view_strides(*a, out_shape, stride)) {
+    if (Stride stride; view_strides(*a, out_shape, stride, unit)) {
         out = TensorImpl::make_view(a, out_shape, std::move(stride));
     } else {
         // Any other reshape — of a view at an offset, or not contiguous —
@@ -198,7 +274,7 @@ TensorImplPtr reshape_op(const TensorImplPtr& a, const std::vector<std::int64_t>
 TensorImplPtr view_op(const TensorImplPtr& a, const std::vector<std::int64_t>& new_shape) {
     Validator::input(a, "view.a").non_null();
     Shape resolved = resolve_reshape_shape(a->shape(), new_shape);
-    if (Stride unused; !view_strides(*a, resolved, unused))
+    if (Stride unused; !view_strides(*a, resolved, unused, UnitAxes::kChunk))
         ErrorBuilder("view").fail(
             "view size is not compatible with input tensor's size and stride (at least one "
             "dimension spans across two contiguous subspaces) — use .reshape(...) instead");
@@ -215,7 +291,7 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
     const int wrapped = wrap_dim(dim, ndim, "squeeze");
     // A 0-d tensor's notional axis has size 1: squeezing it is the identity.
     if (ndim == 0)
-        return build_view_output(a, Shape{}, "squeeze");
+        return build_view_output(a, Shape{}, "squeeze", UnitAxes::kSqueeze);
     if (a->shape()[static_cast<std::size_t>(wrapped)] != 1) {
         ErrorBuilder("squeeze").fail("target dim must be size 1");
     }
@@ -225,7 +301,7 @@ TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim) {
         if (i != wrapped)
             new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
     }
-    return build_view_output(a, std::move(new_shape), "squeeze");
+    return build_view_output(a, std::move(new_shape), "squeeze", UnitAxes::kSqueeze);
 }
 
 // Remove every size-1 dimension from `a`, preserving all dimensions whose
@@ -238,7 +314,7 @@ TensorImplPtr squeeze_all_op(const TensorImplPtr& a) {
         if (d != 1)
             new_shape.push_back(d);
     }
-    return build_view_output(a, std::move(new_shape), "squeeze");
+    return build_view_output(a, std::move(new_shape), "squeeze", UnitAxes::kSqueeze);
 }
 
 // Insert a new size-1 axis at the position given by `wrapped` (already
@@ -262,7 +338,7 @@ TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim) {
             new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
         }
     }
-    return build_view_output(a, std::move(new_shape), "unsqueeze");
+    return build_view_output(a, std::move(new_shape), "unsqueeze", UnitAxes::kSqueeze);
 }
 
 // ── as_strided ───────────────────────────────────────────────────────────────
