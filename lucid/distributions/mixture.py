@@ -278,3 +278,41 @@ class MixtureSameFamily(Distribution):
         )
         log_pk: Tensor = self.component_distribution.log_prob(v_unsq)
         return lucid.logsumexp(log_pi + log_pk, dim=-1)
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the mixture.
+
+        .. math::
+
+            F(x) = \sum_k \pi_k F_k(x)
+
+        Parameters
+        ----------
+        value : Tensor
+            Point(s) of shape ``(*batch_shape,)`` — the components must be
+            univariate, as for the reference framework's.
+
+        Returns
+        -------
+        Tensor
+            Probabilities in :math:`[0, 1]`, shape ``(*batch_shape,)``.
+
+        Raises
+        ------
+        NotImplementedError
+            If the component family has no ``cdf``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import Categorical, MixtureSameFamily, Normal
+        >>> mix = MixtureSameFamily(
+        ...     Categorical(probs=lucid.tensor([0.5, 0.5])),
+        ...     Normal(lucid.tensor([-1.0, 1.0]), lucid.tensor([1.0, 1.0])),
+        ... )
+        >>> mix.cdf(lucid.tensor(0.0))  # symmetric about 0
+        tensor(0.5)
+        """
+        cdf_k: Tensor = self.component_distribution.cdf(value.unsqueeze(-1))
+        return (cdf_k * self.mixture_distribution._probs).sum(dim=-1)

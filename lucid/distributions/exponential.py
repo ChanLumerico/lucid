@@ -322,8 +322,14 @@ class Exponential(ExponentialFamily):
         --------
         >>> Exponential(rate=1.0).icdf(lucid.tensor(0.5))  # log(2) ≈ 0.693
         tensor(0.6931)
+
+        Notes
+        -----
+        ``-log1p(-u)`` rather than ``-log(1 - u)``: for a small ``u`` the
+        subtraction rounds ``1 - u`` to 1 and the quantile to 0 — every
+        ``u`` below 6e-8 in float32 — where the reference answers ``u``.
         """
-        return -(1.0 - value).log() / self.rate
+        return -(-value).log1p() / self.rate
 
     @override
     def entropy(self) -> Tensor:
@@ -603,6 +609,25 @@ class Laplace(Distribution):
         return 0.5 + 0.5 * z.sign() * (1.0 - (-z.abs()).exp())
 
     @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Laplace distribution.
+
+        .. math::
+
+            Q(p) = \mu - b \operatorname{sgn}(p - \tfrac12)
+                   \ln\!\left(1 - 2\left|p - \tfrac12\right|\right)
+
+        Returns quantiles; :math:`\mp\infty` at :math:`p = 0` and :math:`1`.
+
+        Examples
+        --------
+        >>> Laplace(loc=0.0, scale=1.0).icdf(lucid.tensor(0.75))  # ln 2
+        tensor(0.6931)
+        """
+        term = value - 0.5
+        return self.loc - self.scale * term.sign() * (-2.0 * term.abs()).log1p()
+
+    @override
     def entropy(self) -> Tensor:
         r"""Shannon entropy of the Laplace distribution (in nats).
 
@@ -817,6 +842,25 @@ class Cauchy(Distribution):
         """
         z = (value - self.loc) / self.scale
         return 0.5 + z.arctan() / math.pi
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Cauchy distribution.
+
+        .. math::
+
+            Q(p) = x_0 + \gamma \tan\!\left(\pi\left(p - \tfrac12\right)\right)
+
+        Returns quantiles.  At :math:`p = 0` and :math:`1` the tangent of
+        :math:`\mp\pi/2` is evaluated, which is a large finite number rather
+        than an infinity, as in the reference framework.
+
+        Examples
+        --------
+        >>> Cauchy(loc=0.0, scale=1.0).icdf(lucid.tensor(0.75))
+        tensor(1.)
+        """
+        return (math.pi * (value - 0.5)).tan() * self.scale + self.loc
 
     @override
     def entropy(self) -> Tensor:

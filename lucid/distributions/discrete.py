@@ -555,26 +555,62 @@ class Binomial(Distribution):
         #
         # Guarded on the *operand*, not on the product.  Replacing a NaN
         # afterwards leaves it in the gradient, where the mask multiplies
-        # it straight back in.
-        zero_k, zero_n = lucid.zeros_like(k), lucid.zeros_like(n - k)
+        # it straight back in.  And only where the operand is infinite: a
+        # finite one stays, so ``(n - k) * softplus(l)`` keeps its
+        # derivative ``softplus(l)`` in ``n`` at ``k = n`` — zeroed there,
+        # it put the entropy's gradient in ``total_count`` 4% off.
+        #
         # ``softplus`` rather than ``log(1 + exp(l))``, which reaches inf by
-        # l ≈ 89 in float32 and takes the answer with it.
-        lower = lucid.where(k == zero_k, zero_k, _softplus(-l))
-        upper = lucid.where(n - k == zero_n, zero_n, _softplus(l))
+        # l ≈ 89 in float32 and takes the answer with it.  The engine's own,
+        # whose derivative at 0 is 1/2: the ``max(x, 0) + log1p(exp(-|x|))``
+        # spelled out here before took the derivative of ``max`` at its tie,
+        # 1, and doubled the gradient at ``p = 1/2``.
+        sp_neg, sp_pos = (-l).softplus(), l.softplus()
+        lower = lucid.where((k == 0.0) & lucid.isinf(sp_neg), 0.0, sp_neg)
+        upper = lucid.where((n - k == 0.0) & lucid.isinf(sp_pos), 0.0, sp_pos)
         return log_comb - k * lower - (n - k) * upper
 
+    @override
+    def entropy(self) -> Tensor:
+        r"""Shannon entropy of the Binomial distribution (in nats).
 
-def _softplus(x: Tensor) -> Tensor:
-    """``log(1 + exp(x))``, evaluated so the exponential cannot overflow.
+        .. math::
 
-    ``exp`` reaches infinity by x ≈ 89 in float32, and the naive form then
-    answers inf for a quantity that is only about 89.  The standard
-    rearrangement takes the exponential of the *negative* magnitude, which
-    is always in (0, 1], and adds back the linear part:
+            H = -\sum_{k=0}^{n} P(X = k) \log P(X = k)
 
-        softplus(x) = max(x, 0) + log1p(exp(-|x|))
-    """
-    return lucid.maximum(x, lucid.zeros_like(x)) + lucid.log1p((-lucid.abs(x)).exp())
+        summed over the whole support, as the reference framework sums it.
+
+        Returns
+        -------
+        Tensor
+            Entropy in nats, shape ``batch_shape``.
+
+        Raises
+        ------
+        NotImplementedError
+            If ``total_count`` differs across the batch: the support is
+            enumerated once, for one :math:`n`, as in the reference.
+
+        Examples
+        --------
+        >>> Binomial(total_count=2, probs=0.5).entropy()  # 1.5 ln 2
+        tensor(1.04)
+        """
+        n_max = float(self.total_count.max().item())
+        if n_max != float(self.total_count.min().item()):
+            raise NotImplementedError(
+                "Binomial.entropy: total_count differs across the batch "
+                "(inhomogeneous total count is not supported)"
+            )
+        p: Tensor = self._probs
+        k = lucid.arange(0, int(n_max) + 1, 1, dtype=p.dtype, device=p.device)
+        log_p = self.log_prob(k.reshape([-1] + [1] * len(self._batch_shape)))
+        # p log p is 0 where p is: an outcome a degenerate probability rules
+        # out scores -inf, and exp(-inf) * -inf is NaN.
+        finite = lucid.isfinite(log_p)
+        safe = lucid.where(finite, log_p, 0.0)
+        return -lucid.where(finite, safe.exp() * safe, 0.0).sum(dim=0)
+
 
 
 class NegativeBinomial(Distribution):

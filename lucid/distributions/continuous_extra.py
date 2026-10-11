@@ -13,6 +13,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
+from lucid.distributions._util import _image_cdf, _image_icdf
 from lucid.distributions.constraints import (
     Constraint,
     greater_than_eq,
@@ -111,9 +112,13 @@ class Pareto(Distribution):
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
         """
+        from lucid.distributions.exponential import Exponential
+
         self.scale = _as_tensor(scale)
         self.alpha = _as_tensor(alpha)
         self.scale, self.alpha = _broadcast_pair(self.scale, self.alpha)
+        # X = scale * exp(E) with E ~ Exponential(alpha): what cdf/icdf read.
+        self._base = Exponential(self.alpha, validate_args=False)
         super().__init__(
             batch_shape=tuple(self.scale.shape),
             event_shape=(),
@@ -245,6 +250,45 @@ class Pareto(Distribution):
         """
         return (self.scale / self.alpha).log() + 1.0 / self.alpha + 1.0
 
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Pareto distribution.
+
+        .. math::
+
+            F(x) = 1 - \left(\frac{x_m}{x}\right)^{\alpha}, \quad x \geq x_m
+
+        The ``Exponential(alpha)`` CDF at :math:`\ln(x / x_m)`; 0 below
+        :math:`x_m`.
+
+        Returns probabilities in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> Pareto(scale=1.0, alpha=2.0).cdf(lucid.tensor(2.0))  # 1 - 1/4
+        tensor(0.75)
+        """
+        # Clamped first, so a negative value scores 0 rather than NaN when
+        # validation is off.
+        return _image_cdf(self._base, (value.clamp(min=0.0) / self.scale).log())
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Pareto distribution.
+
+        .. math::
+
+            Q(p) = x_m (1 - p)^{-1/\alpha}
+
+        Returns quantiles in :math:`[x_m, \infty]`.
+
+        Examples
+        --------
+        >>> Pareto(scale=1.0, alpha=2.0).icdf(lucid.tensor(0.75))
+        tensor(2.)
+        """
+        return self.scale * _image_icdf(self._base, value).exp()
+
 
 class Weibull(Distribution):
     r"""Weibull distribution — a flexible family for lifetime and survival analysis.
@@ -342,9 +386,13 @@ class Weibull(Distribution):
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
         """
+        from lucid.distributions.exponential import Exponential
+
         self.scale = _as_tensor(scale)
         self.concentration = _as_tensor(concentration)
         self.scale, self.concentration = _broadcast_pair(self.scale, self.concentration)
+        # X = scale * E^(1/k) with E ~ Exponential(1): what cdf/icdf read.
+        self._base = Exponential(lucid.ones_like(self.scale), validate_args=False)
         super().__init__(
             batch_shape=tuple(self.scale.shape),
             event_shape=(),
@@ -482,6 +530,44 @@ class Weibull(Distribution):
             + (self.scale / self.concentration).log()
             + 1.0
         )
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Weibull distribution.
+
+        .. math::
+
+            F(x) = 1 - e^{-(x/\lambda)^k}, \quad x \geq 0
+
+        The ``Exponential(1)`` CDF at :math:`(x/\lambda)^k`; 0 below 0.
+
+        Returns probabilities in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> Weibull(scale=1.0, concentration=1.0).cdf(lucid.tensor(1.0))
+        tensor(0.6321)
+        """
+        # Clamped first: a fractional power of a negative value is NaN.
+        z = (value.clamp(min=0.0) / self.scale) ** self.concentration
+        return _image_cdf(self._base, z)
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Weibull distribution.
+
+        .. math::
+
+            Q(p) = \lambda \left(-\ln(1 - p)\right)^{1/k}
+
+        Returns quantiles in :math:`[0, \infty]`.
+
+        Examples
+        --------
+        >>> Weibull(scale=2.0, concentration=1.0).icdf(lucid.tensor(0.5))
+        tensor(1.386)
+        """
+        return self.scale * _image_icdf(self._base, value) ** (1.0 / self.concentration)
 
 
 class HalfNormal(Distribution):
@@ -670,6 +756,42 @@ class HalfNormal(Distribution):
         # H = 0.5·log(π·e·σ²/2).
         return 0.5 * (math.pi * math.e / 2.0 * self.scale * self.scale).log()
 
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the half-Normal distribution.
+
+        .. math::
+
+            F(x) = 2\Phi(x/\sigma) - 1
+                 = \operatorname{erf}\!\left(\frac{x}{\sigma\sqrt 2}\right),
+            \quad x \geq 0
+
+        Returns probabilities in :math:`[0, 1]`; 0 below 0.
+
+        Examples
+        --------
+        >>> HalfNormal(scale=1.0).cdf(lucid.tensor(1.0))
+        tensor(0.6827)
+        """
+        return _image_cdf(self._base, value, fold=True)
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the half-Normal distribution.
+
+        .. math::
+
+            Q(p) = \sigma \Phi^{-1}\!\left(\frac{1 + p}{2}\right)
+
+        Returns quantiles in :math:`[0, \infty]`.
+
+        Examples
+        --------
+        >>> HalfNormal(scale=1.0).icdf(lucid.tensor(0.5))
+        tensor(0.6745)
+        """
+        return _image_icdf(self._base, value, fold=True)
+
 
 class HalfCauchy(Distribution):
     r"""Half-Cauchy distribution — the absolute value of a zero-location Cauchy.
@@ -801,6 +923,64 @@ class HalfCauchy(Distribution):
         """
         log_p = math.log(2.0) + self._base.log_prob(value)
         return lucid.where(value >= 0.0, log_p, -math.inf)
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the half-Cauchy distribution.
+
+        .. math::
+
+            F(x) = \frac{2}{\pi} \arctan\!\left(\frac{x}{s}\right),
+            \quad x \geq 0
+
+        Returns probabilities in :math:`[0, 1]`; 0 below 0.
+
+        Examples
+        --------
+        >>> HalfCauchy(scale=1.0).cdf(lucid.tensor(1.0))  # the median is s
+        tensor(0.5)
+        """
+        return _image_cdf(self._base, value, fold=True)
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the half-Cauchy distribution.
+
+        .. math::
+
+            Q(p) = s \tan\!\left(\frac{\pi p}{2}\right)
+
+        Returns quantiles in :math:`[0, \infty]`.
+
+        Examples
+        --------
+        >>> HalfCauchy(scale=1.0).icdf(lucid.tensor(0.5))
+        tensor(1.)
+        """
+        return _image_icdf(self._base, value, fold=True)
+
+    @override
+    def entropy(self) -> Tensor:
+        r"""Entropy of the half-Cauchy distribution.
+
+        .. math::
+
+            H[X] = \ln(2\pi s)
+
+        The full Cauchy's :math:`\ln(4\pi s)` less :math:`\ln 2`: folding
+        halves the support and doubles the density on it.
+
+        Returns
+        -------
+        Tensor
+            Entropy values of shape ``batch_shape`` (nats).
+
+        Examples
+        --------
+        >>> HalfCauchy(scale=1.0).entropy()  # ln(2 pi)
+        tensor(1.838)
+        """
+        return self._base.entropy() - math.log(2.0)
 
     # A moment that does not exist is still an answer, and the shape of the
     # answer matters: the reference returns NaN or infinity rather than

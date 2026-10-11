@@ -27,6 +27,15 @@ offered to both libraries and the two verdicts must agree.
   the other, and equal.
 * ``test_own_samples_pass_validation`` scores a distribution's own draws with
   validation on, which must not refuse them.
+* ``test_method_presence`` holds the family × {cdf, icdf, entropy} matrix:
+  each is implemented exactly where the reference implements it — neither
+  missing (``NotImplementedError`` where the reference answers) nor invented.
+* ``test_method_values`` compares those three on a grid — every support value
+  the reference admits for ``cdf``, probabilities from 0 to 1 for ``icdf`` —
+  in float32 and float64 on CPU and float32 on Metal.
+* ``test_method_gradients`` takes the gradient of each with respect to each
+  parameter in turn: equal to the reference's, or refused by both (the
+  reference's incomplete gamma is not differentiable in its shape).
 
 The value and mode tests run on CPU and on Metal.
 
@@ -153,14 +162,21 @@ _Builder = Callable[..., Any]
 
 class _Case:
     """How to build one distribution, what to offer each parameter, and
-    which values to offer its support."""
+    which values to offer its support.  ``nominal`` holds the parameters a
+    plain build uses, where they are scalars or vectors a gradient can be
+    taken with respect to."""
 
     def __init__(
-        self, build: _Builder, params: dict[str, list[Any]], values: list[Any]
+        self,
+        build: _Builder,
+        params: dict[str, list[Any]],
+        values: list[Any],
+        nominal: dict[str, Any] | None = None,
     ) -> None:
         self.build = build
         self.params = params
         self.values = values
+        self.nominal = nominal or {}
 
 
 def _plain(
@@ -172,7 +188,9 @@ def _plain(
         kw = {k: t(o.get(k, v)) for k, v in nominal.items()}
         return getattr(M, name)(**kw, validate_args=va)
 
-    return _Case(build, {k: _SCALARS for k in nominal}, values or _SCALAR_VALUES)
+    return _Case(
+        build, {k: _SCALARS for k in nominal}, values or _SCALAR_VALUES, nominal
+    )
 
 
 def _dual(
@@ -195,7 +213,8 @@ def _dual(
             kw["probs"] = t(o.get("probs", nominal))
         return getattr(M, name)(**kw, validate_args=va)
 
-    return _Case(build, params, values)
+    plain = {k: v for k, v in extra.items() if not isinstance(v, int)}
+    return _Case(build, params, values, {"probs": nominal} | plain)
 
 
 def _binary(name: str, extra: dict[str, Any] | None = None) -> _Case:
@@ -336,6 +355,22 @@ _EXCEPTIONS: dict[tuple[str, str], str] = {
     ("TransformedDistribution", "support"): "Lucid transforms declare no "
     "codomain, so there is no support to report",
     ("TransformedDistribution", "table"): "the support is None",
+    # The reference builds these families as transforms of a base and, in
+    # ``cdf``, validates the value carried back to the base against the
+    # *base's* support rather than its own.  Lucid checks a cdf's value
+    # against the family's support, as both libraries check log_prob's.
+    ("Gumbel", "validates:cdf"): "the reference's base is a uniform on "
+    "[tiny, 1 - eps], which ±inf map outside; ±inf are in Gumbel's real "
+    "support and Lucid scores them 0 and 1",
+    ("InverseGamma", "validates:cdf"): "the reference admits -inf and 0, whose "
+    "reciprocals -0 and inf are in its base Gamma's support; neither is in "
+    "the positive support",
+    ("Kumaraswamy", "validates:cdf"): "the reference admits -1 and -0.5: with "
+    "concentration1 = 2 their power x^a lands in the base's support",
+    ("LogNormal", "validates:cdf"): "the reference admits 0, whose log -inf "
+    "is in its base Normal's support; 0 is not in the positive support",
+    ("Weibull", "validates:cdf"): "the reference admits -inf and 0 through its "
+    "base Exponential; neither is in the positive support",
 }
 
 
@@ -400,11 +435,14 @@ def test_every_exception_names_a_case() -> None:
             "validates",
             "values",
             "mode",
+            "grad",
         ), aspect
         if kind == "param":
             assert param in CASES[name].params, aspect
-        if kind in ("validates", "values"):
+        if kind == "validates":
             assert param in _SCORERS, aspect
+        if kind in ("values", "grad"):
+            assert param in _SCORERS + _METHODS, aspect
 
 
 _PARAMS = [(n, p) for n in sorted(CASES) for p in CASES[n].params]
@@ -640,3 +678,230 @@ def test_sub_rank_parameter(
         )
     )
     assert ours == theirs
+
+
+# ── cdf / icdf / entropy: where each exists, its values, its gradients ────────
+
+_METHODS = ("cdf", "icdf", "entropy")
+
+# Where the reference answers and Lucid does not yet: each is pinned so that
+# implementing it shows up as an XPASS and the entry has to go.
+_PENDING: dict[tuple[str, str], str] = {
+    ("TransformedDistribution", "cdf"): "LCD-397: transforms declare no "
+    "sign/codomain to monotonize the base cdf with",
+    ("TransformedDistribution", "icdf"): "LCD-397: as cdf",
+    ("Wishart", "entropy"): "Wishart entropy (matrix.py, held by LCD-410)",
+}
+
+_PROBABILITIES: list[float] = [0.0, 1e-6, 0.1, 0.3, 0.5, 0.7, 0.9, 0.999, 1.0]
+
+# (device, dtype) pairs a value is compared on; Metal has no float64.
+_PLACES = [("cpu", np.float32), ("cpu", np.float64), ("metal", np.float32)]
+_PLACE_IDS = ["cpu-f32", "cpu-f64", "metal-f32"]
+
+
+def _lucid_at(device: str, dtype: Any) -> Callable[[Any], lucid.Tensor]:
+    return lambda v: lucid.tensor(np.asarray(v, dtype=dtype)).to(device)
+
+
+def _ref_at(ref: Any, dtype: Any) -> Callable[[Any], Any]:
+    return lambda v: ref.tensor(np.asarray(v, dtype=dtype))
+
+
+def _close(ours: tuple[str, Any], theirs: tuple[str, Any], dtype: Any) -> bool:
+    if ours[0] != theirs[0]:
+        return False
+    if ours[0] != "ok":
+        return True
+    a, b = ours[1], theirs[1]
+    # float64 is held to 1e-7, not to its own rounding: the reference's
+    # Multinomial entropy is 2e-8 off the exact value, its Temme expansion
+    # of the incomplete gamma takes pi in single precision (1e-9), and
+    # Lucid's agree with the exact values in both.
+    rtol, atol = (1e-7, 1e-10) if dtype == np.float64 else (1e-4, 1e-5)
+    return a.shape == b.shape and bool(
+        np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True)
+    )
+
+
+def _admitted(case: _Case, ref: Any) -> list[Any]:
+    """The values offered to ``case``'s support that the reference admits."""
+    rt = _ref_tensor(ref)
+    support = case.build(ref.distributions, rt, True).support
+    return [v for v in case.values if _admits(support, rt(v))]
+
+
+def _call(dist: Any, method: str, t: Callable[[Any], Any], v: Any) -> Any:
+    return dist.entropy() if method == "entropy" else getattr(dist, method)(t(v))
+
+
+def _probe_point(case: _Case, method: str, ref: Any) -> Any:
+    """One argument each method can be asked about: a support point for
+    ``cdf``, the median for ``icdf``."""
+    if method == "icdf":
+        return 0.5
+    admitted = _admitted(case, ref)
+    return admitted[0] if admitted else case.values[0]
+
+
+def _matrix_params() -> list[Any]:
+    params = []
+    for name in sorted(CASES):
+        for method in _METHODS:
+            reason = _PENDING.get((name, method))
+            marks = [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
+            params.append(
+                pytest.param(name, method, marks=marks, id=f"{name}.{method}")
+            )
+    return params
+
+
+@pytest.mark.parametrize("name,method", _matrix_params())
+def test_method_presence(name: str, method: str, ref: Any) -> None:
+    case = CASES[name]
+    v = _probe_point(case, method, ref)
+    rt = _ref_tensor(ref)
+    ours_dist = case.build(D, _lucid_tensor, False)
+    theirs_dist = case.build(ref.distributions, rt, False)
+    ours = _outcome(lambda: _call(ours_dist, method, _lucid_tensor, v))
+    theirs = _outcome(lambda: _call(theirs_dist, method, rt, v))
+    assert (ours[0] == "absent") == (
+        theirs[0] == "absent"
+    ), f"{name}.{method}: Lucid {ours[0]}, the reference {theirs[0]}"
+
+
+def _value_grid(case: _Case, method: str, ref: Any) -> list[Any]:
+    if method == "entropy":
+        return [None]
+    if method == "icdf":
+        return _PROBABILITIES
+    return _admitted(case, ref)
+
+
+@pytest.mark.parametrize("place", _PLACES, ids=_PLACE_IDS)
+@pytest.mark.parametrize("method", _METHODS)
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_method_values(name: str, method: str, place: Any, ref: Any) -> None:
+    device, dtype = place
+    case = CASES[name]
+    lt, rt = _lucid_at(device, dtype), _ref_at(ref, dtype)
+    ours_dist = case.build(D, lt, False)
+    theirs_dist = case.build(ref.distributions, rt, False)
+    differences = []
+    # In float32 the reference's own answer in float64 is accepted too: its
+    # float32 tails lose digits a careful evaluation keeps (the Gumbel and
+    # Kumaraswamy quantiles at 1e-6 are 4e-4 and 4e-2 off), while its
+    # float32 edges are float32's (the Gumbel quantile at 0 is set by
+    # float32's smallest normal).
+    rt64 = _ref_at(ref, np.float64)
+    wide_dist = case.build(ref.distributions, rt64, False)
+    for v in _value_grid(case, method, ref):
+        ours = _outcome(lambda: _call(ours_dist, method, lt, v))
+        theirs = _outcome(lambda: _call(theirs_dist, method, rt, v))
+        if "absent" in (ours[0], theirs[0]):
+            continue  # presence is test_method_presence's question
+        if _close(ours, theirs, dtype):
+            continue
+        if dtype == np.float32:
+            wide = _outcome(lambda: _call(wide_dist, method, rt64, v))
+            if _close(ours, wide, dtype):
+                continue
+        differences.append((v, ours, theirs))
+    _judge(name, f"values:{method}", differences)
+
+
+class _Leaf:
+    """A nominal parameter to be built as a leaf that requires a gradient."""
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+
+def _grad_outcome(
+    build: Callable[[Callable[[Any], Any]], Any],
+    make: Callable[[Any], Any],
+    method: str,
+    points: list[Any],
+) -> tuple[str, Any]:
+    """``("ok", gradient)`` of the summed method over ``points`` with respect
+    to the one ``_Leaf`` parameter, ``("absent", None)`` if the method is not
+    implemented, ``("refused", None)`` if its backward raises
+    ``NotImplementedError``."""
+    leaves: list[Any] = []
+
+    def t(v: Any) -> Any:
+        if isinstance(v, _Leaf):
+            leaf = make(v.value)
+            leaf.requires_grad_(True)
+            leaves.append(leaf)
+            return leaf
+        return make(v)
+
+    dist = build(t)
+    try:
+        outs = [_call(dist, method, make, p) for p in points]
+    except NotImplementedError:
+        return "absent", None
+    total = outs[0].sum()
+    for o in outs[1:]:
+        total = total + o.sum()
+    shape = np.shape(np.asarray(leaves[0].detach().numpy()))
+    if not total.requires_grad:
+        return "ok", np.zeros(shape)  # the parameter does not enter it
+    try:
+        total.backward()
+    except NotImplementedError:
+        return "refused", None
+    grad = leaves[0].grad
+    if grad is None:
+        return "ok", np.zeros(shape)
+    return "ok", np.asarray(grad.detach().numpy(), dtype=np.float64)
+
+
+def _grad_points(case: _Case, method: str, ref: Any) -> list[Any]:
+    if method == "entropy":
+        return [None]
+    if method == "icdf":
+        return [0.1, 0.5, 0.9]
+    # Inside the support, away from its edges, where a derivative exists.
+    return [
+        v
+        for v in _admitted(case, ref)
+        if np.all(np.isfinite(v)) and v not in (0.0, 1.0)
+    ]
+
+
+_GRAD_PARAMS = [
+    (n, m, p) for n in sorted(CASES) for m in _METHODS for p in CASES[n].nominal
+]
+_GRAD_IDS = [f"{n}.{m}.{p}" for n, m, p in _GRAD_PARAMS]
+
+
+@pytest.mark.parametrize("device", _DEVICES)
+@pytest.mark.parametrize("name,method,param", _GRAD_PARAMS, ids=_GRAD_IDS)
+def test_method_gradients(
+    name: str, method: str, param: str, device: str, ref: Any
+) -> None:
+    case = CASES[name]
+    dtype = np.float64 if device == "cpu" else np.float32
+    points = _grad_points(case, method, ref)
+    if not points:
+        pytest.skip(f"{name} offers no interior support point")
+    leaf = {param: _Leaf(case.nominal[param])}
+    ours = _grad_outcome(
+        lambda t: case.build(D, t, False, **leaf),
+        _lucid_at(device, dtype),
+        method,
+        points,
+    )
+    theirs = _grad_outcome(
+        lambda t: case.build(ref.distributions, t, False, **leaf),
+        _ref_at(ref, dtype),
+        method,
+        points,
+    )
+    if "absent" in (ours[0], theirs[0]):
+        return  # presence is test_method_presence's question
+    differences = [] if _close(ours, theirs, dtype) else [(param, ours, theirs)]
+    _judge(name, f"grad:{method}", differences)
+

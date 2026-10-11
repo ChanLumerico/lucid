@@ -18,6 +18,8 @@ _LOG_SQRT_2PI = 0.5 * math.log(2.0 * math.pi)
 from lucid.distributions._util import (
     _as_tensor,
     _broadcast_pair,
+    _image_cdf,
+    _image_icdf,
 )
 
 
@@ -530,6 +532,45 @@ class LogNormal(Distribution):
         """
         log_v = value.log()
         return self._base.log_prob(log_v) - log_v
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Log-Normal distribution.
+
+        .. math::
+
+            F(x) = \Phi\!\left(\frac{\ln x - \mu}{\sigma}\right),
+            \quad x > 0
+
+        The latent Normal's CDF at :math:`\ln x`; 0 at and below 0.
+
+        Returns probabilities in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> LogNormal(0.0, 1.0).cdf(lucid.tensor(1.0))  # the median is e^mu
+        tensor(0.5)
+        """
+        # ``log`` of a clamped value: a negative one scores ``log 0 = -inf``
+        # and so 0, rather than NaN, when validation is off.
+        return _image_cdf(self._base, value.clamp(min=0.0).log())
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Log-Normal distribution.
+
+        .. math::
+
+            Q(p) = \exp\!\left(\mu + \sigma \Phi^{-1}(p)\right)
+
+        Returns quantiles in :math:`[0, \infty]`.
+
+        Examples
+        --------
+        >>> LogNormal(0.0, 1.0).icdf(lucid.tensor(0.5))
+        tensor(1.)
+        """
+        return _image_icdf(self._base, value).exp()
 
     @override
     def entropy(self) -> Tensor:

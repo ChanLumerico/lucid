@@ -1,6 +1,6 @@
 """Tiny helpers shared across the distribution implementations."""
 
-from typing import Any, Callable, Self, overload, override
+from typing import Any, Callable, Protocol, Self, overload, override
 
 import lucid
 from lucid._dtype import finfo
@@ -123,6 +123,44 @@ def _align_device(t: Tensor, ref: Tensor) -> Tensor:
     if t.ndim == 0 and t.device != ref.device:
         return t.to(ref.device.type)
     return t
+
+
+class _ImageScorer(Protocol):
+    """The base a pushed-forward family scores through."""
+
+    def cdf(self, value: Tensor) -> Tensor: ...
+
+    def icdf(self, value: Tensor) -> Tensor: ...
+
+
+def _image_cdf(base: _ImageScorer, preimage: Tensor, *, fold: bool = False) -> Tensor:
+    """The CDF of :math:`Y = g(X)` at ``y``, from ``preimage`` = :math:`g^{-1}(y)`.
+
+    One rule for every family defined as a transform of a base
+    distribution :math:`X`.  For an increasing ``g`` — ``LogNormal`` is
+    ``exp`` of a ``Normal``, ``Pareto`` and ``Weibull`` maps of an
+    ``Exponential`` — :math:`F_Y(y) = F_X(g^{-1}(y))`.  With ``fold``,
+    :math:`Y = |X|` for an :math:`X` symmetric about 0 (``HalfNormal``,
+    ``HalfCauchy``): :math:`F_Y(y) = F_X(y) - F_X(-y) = 2F_X(y) - 1`,
+    held at 0 below the support, where the difference would go negative.
+
+    The base must not validate: a value is checked once, against the
+    family's own support, by the family's ``cdf``.
+    """
+    u = base.cdf(preimage)
+    if not fold:
+        return u
+    return (2.0 * u - 1.0).clamp(min=0.0)
+
+
+def _image_icdf(base: _ImageScorer, value: Tensor, *, fold: bool = False) -> Tensor:
+    """The base quantile matching probability ``value`` under :func:`_image_cdf`.
+
+    The caller maps it through ``g`` itself; for ``fold`` that map is the
+    identity, since the quantile of :math:`|X|` at :math:`p` is
+    :math:`X`'s at :math:`(1 + p)/2`.
+    """
+    return base.icdf((1.0 + value) / 2.0 if fold else value)
 
 
 def _clamp_probs(probs: Tensor) -> Tensor:

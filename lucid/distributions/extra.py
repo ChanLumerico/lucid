@@ -10,6 +10,7 @@ import math
 from typing import override
 
 import lucid
+from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _align_device, _as_tensor
 from lucid.distributions._util import _broadcast_pair
@@ -29,7 +30,7 @@ from lucid.distributions.constraints import (
     unit_interval,
 )
 from lucid.distributions.distribution import Distribution
-from lucid.special import xlog1py
+from lucid.special import gammaincc, xlog1py
 
 # ── Euler–Mascheroni constant ─────────────────────────────────────────────────
 _EULER_GAMMA: float = 0.5772156649015329
@@ -197,6 +198,53 @@ class Gumbel(Distribution):
         """``log(s) + γ + 1``."""
         return self.scale.log() + _EULER_GAMMA + 1.0
 
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Gumbel distribution.
+
+        .. math::
+
+            F(x) = \exp\!\left(-e^{-(x - \mu)/s}\right)
+
+        Returns probabilities in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> Gumbel(loc=0.0, scale=1.0).cdf(lucid.tensor(0.0))  # 1/e
+        tensor(0.3679)
+        """
+        return (-(-(value - self.loc) / self.scale).exp()).exp()
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Gumbel distribution.
+
+        .. math::
+
+            Q(p) = \mu - s \ln(-\ln u), \qquad
+            u = \epsilon_{\text{tiny}} + p\,(1 - \epsilon - \epsilon_{\text{tiny}})
+
+        The reference framework builds the Gumbel from a uniform on
+        :math:`[\epsilon_{\text{tiny}}, 1 - \epsilon]` (the dtype's
+        smallest normal number and machine epsilon) so that no draw is
+        infinite, and its quantile function maps :math:`[0, 1]` onto that
+        interval first.  This does the same: the quantiles at 0 and 1 are
+        finite — :math:`\mu - 4.47 s` and :math:`\mu + 15.9 s` in float32
+        — and every other one differs from the exact
+        :math:`\mu - s\ln(-\ln p)` by a relative :math:`\epsilon`.
+
+        Returns quantiles.
+
+        Examples
+        --------
+        >>> Gumbel(loc=0.0, scale=1.0).icdf(lucid.tensor(0.5))  # -ln(ln 2)
+        tensor(0.3665)
+        """
+        info = finfo(self.loc.dtype)
+        tiny, eps = float(info.tiny), float(info.eps)
+        u = tiny + value * (1.0 - eps - tiny)
+        return self.loc - self.scale * (-u.log()).log()
+
 
 # ── InverseGamma ──────────────────────────────────────────────────────────────
 
@@ -355,6 +403,37 @@ class InverseGamma(Distribution):
         """``α + log β + log Γ(α) − (1 + α) · ψ(α)``."""
         c, r = self.concentration, self.rate
         return c + r.log() + lucid.lgamma(c) - (c + 1.0) * lucid.digamma(c)
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the inverse-Gamma distribution.
+
+        .. math::
+
+            F(x; \alpha, \beta) = Q(\alpha, \beta / x), \quad x > 0
+
+        the regularized upper incomplete gamma
+        (:func:`lucid.special.gammaincc`) — :math:`1/X` is
+        ``Gamma(alpha, beta)``, and :math:`X \leq x` is
+        :math:`1/X \geq 1/x`.  Evaluated as :math:`Q` itself, not as
+        :math:`1 - P`, so the small left tail keeps its relative precision.
+
+        Returns probabilities in :math:`[0, 1]`; 0 at and below 0.
+
+        Raises
+        ------
+        NotImplementedError
+            From ``backward``, when ``concentration`` requires a gradient,
+            as in the reference framework.
+
+        Examples
+        --------
+        >>> InverseGamma(concentration=1.0, rate=1.0).cdf(lucid.tensor(1.0))  # 1/e
+        tensor(0.3679)
+        """
+        # beta / 0 = inf, where Q is 0: the clamp makes a negative value
+        # score 0 as well, rather than NaN.
+        return gammaincc(self.concentration, self.rate / value.clamp(min=0.0))
 
 
 # ── Kumaraswamy ───────────────────────────────────────────────────────────────
@@ -567,6 +646,46 @@ class Kumaraswamy(Distribution):
         harmonic: Tensor = _EULER_GAMMA + lucid.digamma(b + 1.0)
         return (1.0 - 1.0 / a) * harmonic + (1.0 - 1.0 / b) - a.log() - b.log()
 
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Kumaraswamy distribution.
+
+        .. math::
+
+            F(x; a, b) = 1 - (1 - x^a)^b, \quad x \in [0, 1]
+
+        Evaluated as :math:`-\operatorname{expm1}(b \log(1 - x^a))`, which
+        keeps the left tail's relative precision.
+
+        Returns probabilities in :math:`[0, 1]`; 0 below the support and 1 above
+        it.
+
+        Examples
+        --------
+        >>> Kumaraswamy(1.0, 1.0).cdf(lucid.tensor(0.25))  # Uniform(0, 1)
+        tensor(0.25)
+        """
+        x = value.clamp(min=0.0, max=1.0)
+        return -lucid.expm1(self.concentration0 * (-(x**self.concentration1)).log1p())
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Kumaraswamy distribution.
+
+        .. math::
+
+            Q(p; a, b) = \left(1 - (1 - p)^{1/b}\right)^{1/a}
+
+        Returns quantiles in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> Kumaraswamy(1.0, 1.0).icdf(lucid.tensor(0.25))
+        tensor(0.25)
+        """
+        a, b = self.concentration1, self.concentration0
+        return (-lucid.expm1((-value).log1p() / b)) ** (1.0 / a)
+
 
 # ── Multinomial ───────────────────────────────────────────────────────────────
 
@@ -764,6 +883,50 @@ class Multinomial(Distribution):
         """``n · p · (1 − p)`` (element-wise)."""
         p: Tensor = self._probs
         return self.total_count * p * (1.0 - p)
+
+    @override
+    def entropy(self) -> Tensor:
+        r"""Shannon entropy of the Multinomial distribution (in nats).
+
+        .. math::
+
+            H = n H(\mathbf p) - \ln n!
+                + \sum_{i=1}^{K} \sum_{j=1}^{n}
+                  \binom{n}{j} p_i^j (1 - p_i)^{n-j} \ln j!
+
+        where :math:`H(\mathbf p)` is the entropy of one categorical draw.
+        From :math:`-\mathbb E[\ln P(\mathbf K)]` with
+        :math:`\ln P = \ln n! - \sum_i \ln K_i! + \sum_i K_i \ln p_i`:
+        each count :math:`K_i` is ``Binomial(n, p_i)``, so the expectation of
+        :math:`\ln K_i!` is a sum over its :math:`n + 1` values — the
+        reference framework's formula.
+
+        Returns
+        -------
+        Tensor
+            Entropy in nats, shape ``batch_shape``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import Multinomial
+        >>> Multinomial(2, probs=lucid.tensor([0.5, 0.5])).entropy()  # ln 4 - ln 2/2
+        tensor(1.04)
+        """
+        from lucid.distributions.discrete import Binomial
+
+        n = int(self.total_count.item())
+        p: Tensor = self._probs
+        term1 = n * self._cat.entropy() - math.lgamma(n + 1.0)
+        if n == 0:
+            return term1
+        # Counts 1..n down a leading axis, against every batch member and
+        # category; a count of 0 has ln 0! = 0 and is left out.
+        counts = lucid.arange(1, n + 1, 1, dtype=p.dtype, device=p.device)
+        counts = counts.reshape([n] + [1] * p.ndim)
+        marginal = Binomial(self.total_count, probs=p, validate_args=False)
+        weights = marginal.log_prob(counts).exp() * lucid.lgamma(counts + 1.0)
+        return term1 + weights.sum(dim=0).sum(dim=-1)
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
@@ -1117,3 +1280,108 @@ class ContinuousBernoulli(Distribution):
         """
         l: Tensor = self._logits
         return value * l - l.softplus() + self._log_normalizer()
+
+    def _flipped(self) -> tuple[Tensor, Tensor, Tensor]:
+        r"""``(m, flip, zero)``: :math:`m = -|\ell|`, where :math:`\ell > 0`,
+        and where :math:`\ell = 0` — with :math:`m` there replaced by -1.
+
+        :math:`X \mapsto 1 - X` takes :math:`\lambda` to :math:`1 - \lambda`
+        and :math:`\ell` to :math:`-\ell`, so :meth:`cdf` and :meth:`icdf`
+        evaluate only a non-positive logit, where :math:`e^{\ell x}` cannot
+        overflow, and reflect the answer for a positive one.  At
+        :math:`\ell = 0` the distribution is uniform and the closed forms
+        are 0/0; the stand-in keeps that NaN out of the gradient.
+        """
+        l: Tensor = self._logits
+        zero = l == 0.0
+        m = lucid.where(zero, -1.0, -l.abs())
+        return m, l > 0.0, zero
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Continuous Bernoulli.
+
+        .. math::
+
+            F(x) = \frac{\lambda^x (1 - \lambda)^{1 - x} + \lambda - 1}
+                        {2\lambda - 1}
+                 = \frac{\operatorname{expm1}(\ell x)}{\operatorname{expm1}(\ell)}
+
+        with :math:`\ell = \operatorname{logit}\lambda`, and :math:`x` at
+        :math:`\lambda = \tfrac12`.  The second form has no cancellation as
+        :math:`\lambda \to \tfrac12`, where the reference framework
+        replaces the first with :math:`x` inside
+        :math:`|\lambda - \tfrac12| < 10^{-3}`; there the two differ by up
+        to :math:`|\ell|/8`, and this is the exact value.
+
+        Returns probabilities in :math:`[0, 1]`; 0 at and below 0, 1 at and
+        above 1.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import ContinuousBernoulli
+        >>> ContinuousBernoulli(probs=0.7).cdf(lucid.tensor(0.5))
+        tensor(0.3956)
+        """
+        m, flip, zero = self._flipped()
+        x = lucid.where(flip, 1.0 - value, value)
+        r = lucid.expm1(x * m) / lucid.expm1(m)
+        inner = lucid.where(zero, value, lucid.where(flip, 1.0 - r, r))
+        inner = lucid.where(value <= 0.0, 0.0, inner)
+        return lucid.where(value >= 1.0, 1.0, inner)
+
+    @override
+    def icdf(self, value: Tensor) -> Tensor:
+        r"""Quantile function of the Continuous Bernoulli.
+
+        .. math::
+
+            Q(p) = \frac{\operatorname{log1p}\!\left(p \operatorname{expm1}(\ell)\right)}{\ell}
+
+        for :math:`\ell < 0`, reflected through :math:`Q_\ell(p) =
+        1 - Q_{-\ell}(1 - p)` for :math:`\ell > 0`, and :math:`p` at
+        :math:`\ell = 0`.
+
+        Returns quantiles in :math:`[0, 1]`.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import ContinuousBernoulli
+        >>> ContinuousBernoulli(probs=0.7).icdf(lucid.tensor(0.3956))
+        tensor(0.5)
+        """
+        m, flip, zero = self._flipped()
+        p = lucid.where(flip, 1.0 - value, value)
+        r = (p * lucid.expm1(m)).log1p() / m
+        return lucid.where(zero, value, lucid.where(flip, 1.0 - r, r))
+
+    @override
+    def entropy(self) -> Tensor:
+        r"""Shannon entropy of the Continuous Bernoulli (in nats).
+
+        .. math::
+
+            H = \operatorname{softplus}(\ell) - \ell\,\mathbb E[X] - \ln C(\lambda)
+
+        :math:`-\mathbb E[\log p(X)]` with
+        :math:`\log p(x) = x\ell - \operatorname{softplus}(\ell) + \ln C`,
+        so it reuses :attr:`mean` and the normaliser, each already evaluated
+        by its series near :math:`\lambda = \tfrac12`.
+
+        Returns
+        -------
+        Tensor
+            Entropy in nats, shape ``batch_shape``; 0 at
+            :math:`\lambda = \tfrac12`, where the distribution is uniform.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.distributions import ContinuousBernoulli
+        >>> ContinuousBernoulli(probs=0.5).entropy()
+        tensor(0.)
+        """
+        l: Tensor = self._logits
+        return l.softplus() - l * self.mean - self._log_normalizer()

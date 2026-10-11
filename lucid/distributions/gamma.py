@@ -27,7 +27,7 @@ from lucid.distributions._util import (
     _as_tensor,
     _broadcast_pair,
 )
-from lucid.special import xlog1py
+from lucid.special import gammainc, xlog1py
 
 
 def _sample_standard_gamma(
@@ -347,6 +347,35 @@ class Gamma(ExponentialFamily):
             - self.rate * value
             - lucid.lgamma(self.concentration)
         )
+
+    @override
+    def cdf(self, value: Tensor) -> Tensor:
+        r"""Cumulative distribution function of the Gamma distribution.
+
+        .. math::
+
+            F(x; \alpha, \beta) = P(\alpha, \beta x), \quad x \geq 0
+
+        the regularized lower incomplete gamma
+        (:func:`lucid.special.gammainc`).  ``Chi2`` inherits it.
+
+        Returns probabilities in :math:`[0, 1]`; 0 below 0.
+
+        Raises
+        ------
+        NotImplementedError
+            From ``backward``, when ``concentration`` requires a gradient —
+            :math:`P` is differentiable in its upper limit only, as in the
+            reference framework.  ``rate`` and ``value`` are differentiable.
+
+        Examples
+        --------
+        >>> Gamma(concentration=1.0, rate=1.0).cdf(lucid.tensor(1.0))  # 1 - 1/e
+        tensor(0.6321)
+        """
+        # Clamped: P is NaN for a negative limit, and a CDF is 0 left of
+        # its support.
+        return gammainc(self.concentration, self.rate * value.clamp(min=0.0))
 
     @override
     def entropy(self) -> Tensor:
