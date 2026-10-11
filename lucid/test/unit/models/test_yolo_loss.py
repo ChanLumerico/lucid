@@ -362,32 +362,48 @@ def test_detection_result_owns_the_label_dtype() -> None:
 
 
 def _hand_built_results(source: str) -> list[int]:
-    """Lines inside a ``*postprocess*`` function that build a result dict
-    with a ``"labels"`` key by hand instead of through ``detection_result``."""
+    """Lines that build a detection result dict — one with both a
+    ``"scores"`` and a ``"labels"`` key — by hand.
+
+    Any dict literal, in any function: the empty-result helpers this batch
+    deleted (``_empty_det``, ``_no_detections``) were not named
+    ``postprocess`` and built exactly such dicts.  Targets carry ``boxes``
+    and ``labels`` but no ``scores``, so they are not caught.
+    """
     hits: list[int] = []
-    for fn in ast.walk(ast.parse(source)):
-        if not isinstance(fn, ast.FunctionDef) or "postprocess" not in fn.name:
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Dict):
             continue
-        for node in ast.walk(fn):
-            if isinstance(node, ast.Dict) and any(
-                isinstance(k, ast.Constant) and k.value == "labels" for k in node.keys
-            ):
-                hits.append(node.lineno)
+        keys = {k.value for k in node.keys if isinstance(k, ast.Constant)}
+        if {"scores", "labels"} <= keys:
+            hits.append(node.lineno)
     return hits
+
+
+_RESULT_OWNER = _MODELS / "_utils" / "_detection_results.py"
 
 
 def test_detectors_build_results_through_the_helper() -> None:
     offenders = {
         str(p.relative_to(_MODELS)): hits
-        for p in sorted((_MODELS / "vision").rglob("*.py"))
-        if (hits := _hand_built_results(p.read_text()))
+        for p in sorted(_MODELS.rglob("*.py"))
+        if p != _RESULT_OWNER and (hits := _hand_built_results(p.read_text()))
     }
     assert not offenders, (
-        f"postprocess builds result dicts by hand at {offenders}; use "
-        "lucid.models._utils._detection.detection_result so labels stay int64"
+        f"detection result dicts built by hand at {offenders}; use "
+        "lucid.models._utils._detection_results.detection_result (or "
+        "empty_detection_result) so labels stay int64"
     )
 
 
 def test_the_helper_check_can_fail() -> None:
-    src = 'def postprocess(x):\n    return {"boxes": x, "labels": x}\n'
-    assert _hand_built_results(src) == [2]
+    src = (
+        "def postprocess(x):\n"
+        '    return {"boxes": x, "scores": x, "labels": x}\n'
+        "def _empty_det(dev):\n"
+        '    return {"boxes": z, "scores": z, "labels": z}\n'
+        "def target(x):\n"
+        '    return {"boxes": x, "labels": x}\n'
+    )
+    assert _hand_built_results(src) == [2, 4]
+    assert _hand_built_results(_RESULT_OWNER.read_text())  # the owner does build one
