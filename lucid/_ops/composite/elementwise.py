@@ -1586,72 +1586,6 @@ def log_softmax(input: Tensor, dim: int | None = None) -> Tensor:
     return _wrap(_C_engine.log(sm))
 
 
-def diag_embed(
-    input: Tensor,
-    offset: int = 0,
-    dim1: int = -2,
-    dim2: int = -1,
-) -> Tensor:
-    """Embed the last dimension of ``input`` as the diagonal of a new matrix.
-
-    Inverse of :func:`lucid.diagonal`.  For a 1-D input of length ``n``
-    the result is shape ``(n+|offset|, n+|offset|)``.  For batch
-    inputs the last axis is treated as the diagonal vector and
-    ``dim1`` / ``dim2`` pick which two axes of the *output* carry the
-    matrix.
-
-    Parameters
-    ----------
-    input : Tensor
-        Diagonal values.  Any shape; the last axis becomes the
-        diagonal of each output matrix.
-    offset : int, optional
-        Diagonal offset.  ``0`` (default) = main diagonal,
-        positive = above main, negative = below main.  Output size
-        grows by ``|offset|`` along each matrix dimension.
-    dim1 : int, optional
-        First axis of the output matrix dimensions.  Default ``-2``.
-    dim2 : int, optional
-        Second axis of the output matrix dimensions.  Default ``-1``.
-
-    Returns
-    -------
-    Tensor
-        Shape ``(*x.shape[:-1], n+|offset|, n+|offset|)`` (modulo the
-        ``dim1`` / ``dim2`` rotation).  Non-diagonal positions are zero.
-    """
-    n = int(input.shape[-1])
-    size = n + abs(offset)
-    batch_shape = list(input.shape[:-1])
-    row_off = max(0, -offset)
-    col_off = max(0, offset)
-
-    # Build (size, size) diagonal mask by padding eye(n) with zero rows/cols.
-    zeros = input.new_zeros
-    eye_n = lucid.eye(n, dtype=input.dtype, device=input.device)
-    if col_off > 0:
-        eye_n = lucid.cat([zeros(n, col_off), eye_n], dim=1)
-    right = size - n - col_off
-    if right > 0:
-        eye_n = lucid.cat([eye_n, zeros(n, right)], dim=1)
-    if row_off > 0:
-        eye_n = lucid.cat([zeros(row_off, size), eye_n], dim=0)
-    bot = size - n - row_off
-    if bot > 0:
-        eye_n = lucid.cat([eye_n, zeros(bot, size)], dim=0)
-    # eye_n is now (size, size) with the diagonal at (row_off+i, col_off+i).
-
-    # Broadcast input (..., n) against the mask (size, size); for a nonzero
-    # offset, pad it to (..., size) with zeros first.
-    diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
-    if offset == 0:
-        return input.reshape(batch_shape + [n, 1]) * diag_view
-    pad_before = zeros(*batch_shape, row_off)
-    pad_after = zeros(*batch_shape, size - n - row_off)
-    x_pad = lucid.cat([pad_before, input, pad_after], dim=-1)  # (..., size)
-    return x_pad.reshape(batch_shape + [size, 1]) * diag_view
-
-
 __all__ = [
     "absolute",
     "negative",
@@ -1688,7 +1622,6 @@ __all__ = [
     "i0",
     "softmax",
     "log_softmax",
-    "diag_embed",
 ]
 
 

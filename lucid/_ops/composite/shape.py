@@ -1111,7 +1111,93 @@ def rot90(input: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     return _swap_dims(lucid.flip(input, [d0]), d0, d1)
 
 
+def diag_embed(
+    input: Tensor,
+    offset: int = 0,
+    dim1: int = -2,
+    dim2: int = -1,
+) -> Tensor:
+    """Embed the last dimension of ``input`` as the diagonal of a new matrix.
+
+    Inverse of :func:`lucid.diagonal`.  For a 1-D input of length ``n``
+    the result is shape ``(n+|offset|, n+|offset|)``.  For batch
+    inputs the last axis is treated as the diagonal vector and
+    ``dim1`` / ``dim2`` pick which two axes of the *output* carry the
+    matrix.
+
+    Parameters
+    ----------
+    input : Tensor
+        Diagonal values.  Any shape; the last axis becomes the
+        diagonal of each output matrix.
+    offset : int, optional
+        Diagonal offset.  ``0`` (default) = main diagonal,
+        positive = above main, negative = below main.  Output size
+        grows by ``|offset|`` along each matrix dimension.
+    dim1 : int, optional
+        First axis of the output matrix dimensions.  Default ``-2``.
+    dim2 : int, optional
+        Second axis of the output matrix dimensions.  Default ``-1``.
+
+    Returns
+    -------
+    Tensor
+        ``input.ndim + 1`` dims: ``input``'s leading dims in order, and two
+        of size ``n + |offset|`` at ``dim1`` (rows) and ``dim2`` (columns).
+        Off-diagonal positions are zero.
+
+    Raises
+    ------
+    IndexError
+        ``dim1`` or ``dim2`` outside ``[-(input.ndim + 1), input.ndim]``.
+    ValueError
+        ``dim1`` and ``dim2`` name the same dim.
+    """
+    out_ndim = input.ndim + 1
+    rows = _wrap_dim(dim1, out_ndim, "diag_embed")
+    cols = _wrap_dim(dim2, out_ndim, "diag_embed")
+    if rows == cols:
+        raise ValueError(
+            f"diag_embed: dim1 and dim2 name the same dim ({dim1}, {dim2})"
+        )
+    n = int(input.shape[-1])
+    size = n + abs(offset)
+    batch_shape = list(input.shape[:-1])
+    row_off = max(0, -offset)
+    col_off = max(0, offset)
+
+    # Build (size, size) diagonal mask by padding eye(n) with zero rows/cols.
+    zeros = input.new_zeros
+    eye_n = lucid.eye(n, dtype=input.dtype, device=input.device)
+    if col_off > 0:
+        eye_n = lucid.cat([zeros(n, col_off), eye_n], dim=1)
+    right = size - n - col_off
+    if right > 0:
+        eye_n = lucid.cat([eye_n, zeros(n, right)], dim=1)
+    if row_off > 0:
+        eye_n = lucid.cat([zeros(row_off, size), eye_n], dim=0)
+    bot = size - n - row_off
+    if bot > 0:
+        eye_n = lucid.cat([eye_n, zeros(bot, size)], dim=0)
+    # eye_n is now (size, size) with the diagonal at (row_off+i, col_off+i).
+
+    # Broadcast input (..., n) against the mask (size, size); for a nonzero
+    # offset, pad it to (..., size) with zeros first.
+    diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
+    if offset == 0:
+        out = input.reshape(batch_shape + [n, 1]) * diag_view
+    else:
+        pad_before = zeros(*batch_shape, row_off)
+        pad_after = zeros(*batch_shape, size - n - row_off)
+        x_pad = lucid.cat([pad_before, input, pad_after], dim=-1)  # (..., size)
+        out = x_pad.reshape(batch_shape + [size, 1]) * diag_view
+    # The matrix sits in the last two dims; ``dim1`` / ``dim2`` place it.
+    last = (out_ndim - 2, out_ndim - 1)
+    return out if (rows, cols) == last else lucid.movedim(out, last, (rows, cols))
+
+
 __all__ = [
+    "diag_embed",
     "swapaxes",
     "swapdims",
     "moveaxis",

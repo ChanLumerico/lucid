@@ -193,7 +193,7 @@
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 10759,
     "lucid/_C/backend/gpu/GpuBackend.h": 4604,
-    "lucid/_ops/composite/elementwise.py": 201,
+    "lucid/_ops/composite/elementwise.py": 134,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2796,
     "lucid/compile/_optim/compiler.py": 752,
@@ -1157,7 +1157,6 @@
   "ruff": {
    "ARG001": {
     "lucid/__init__.py": 1,
-    "lucid/_ops/composite/elementwise.py": 2,
     "lucid/_ops/composite/predicates.py": 3,
     "lucid/autograd/_backward.py": 1,
     "lucid/autograd/_functional.py": 2,
@@ -1361,7 +1360,6 @@
    "ERA001": {
     "lucid/_ops/__init__.py": 1,
     "lucid/_ops/_registry.py": 2,
-    "lucid/_tensor/tensor.py": 1,
     "lucid/benchmarks/bench_ops.py": 1,
     "lucid/distributions/__init__.py": 2,
     "lucid/distributions/kl.py": 3,
@@ -1506,7 +1504,7 @@
    "PLR0915": {
     "lucid/_tensor/_dunders.py": 1,
     "lucid/_tensor/_indexing.py": 1,
-    "lucid/_tensor/_to.py": 2,
+    "lucid/_tensor/_to.py": 1,
     "lucid/autograd/gradcheck.py": 1,
     "lucid/benchmarks/bench_ops.py": 1,
     "lucid/compile/_entry/decode_step.py": 2,
