@@ -14,6 +14,7 @@ the attentive probe the paper evaluates with.
 """
 
 import math
+import random
 from dataclasses import dataclass
 from typing import ClassVar, cast, override
 
@@ -24,6 +25,7 @@ from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
+from lucid.models._utils._common import host_random
 from lucid.models._output import ImageClassificationOutput, ModelOutput
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models.vision._common._transformers import (
@@ -295,7 +297,11 @@ class _AttentivePooler(nn.Module):
 
 
 def _tube_shape(
-    scale: tuple[float, float], aspect: tuple[float, float], rows: int, cols: int
+    scale: tuple[float, float],
+    aspect: tuple[float, float],
+    rows: int,
+    cols: int,
+    rng: random.Random,
 ) -> tuple[int, int]:
     """Height and width, in tokens, of one block of a mask collection.
 
@@ -306,8 +312,8 @@ def _tube_shape(
     """
     patches = rows * cols
     for _ in range(20):
-        area = patches * float(lucid.rand(1).item() * (scale[1] - scale[0]) + scale[0])
-        ratio = float(lucid.rand(1).item() * (aspect[1] - aspect[0]) + aspect[0])
+        area = patches * (rng.random() * (scale[1] - scale[0]) + scale[0])
+        ratio = rng.random() * (aspect[1] - aspect[0]) + aspect[0]
         height = max(1, min(rows, int(round(math.sqrt(area * ratio)))))
         width = max(1, min(cols, int(round(math.sqrt(area / ratio)))))
         if height * width < patches:
@@ -315,7 +321,9 @@ def _tube_shape(
     return max(1, min(rows, height)), max(1, min(cols, width))
 
 
-def _tube_indices(grid: tuple[int, int, int], height: int, width: int) -> set[int]:
+def _tube_indices(
+    grid: tuple[int, int, int], height: int, width: int, rng: random.Random
+) -> set[int]:
     """Token indices of one block, running the whole clip in time.
 
     Section 3.2 extends every block through the temporal axis: a mask
@@ -323,8 +331,8 @@ def _tube_indices(grid: tuple[int, int, int], height: int, width: int) -> set[in
     because the answer is next door.
     """
     duration, rows, cols = grid
-    top = int(lucid.randint(0, rows - height + 1, (1,)).item())
-    left = int(lucid.randint(0, cols - width + 1, (1,)).item())
+    top = rng.randrange(rows - height + 1)
+    left = rng.randrange(cols - width + 1)
     return {
         (t * rows + top + r) * cols + left + c
         for t in range(duration)
@@ -345,18 +353,20 @@ def _sample_collection(
     The blocks are unioned, the union is what the predictor answers for,
     and what is left over is what the encoder reads.  Both are truncated
     to the batch's shortest so they collate — the released code does the
-    same, and it does mean a few targets are dropped.
+    same, and it does mean a few targets are dropped.  Every draw comes
+    from one host stream, seeded from Lucid's generator.
     """
+    rng = host_random()
     duration, rows, cols = config.token_grid
     total = duration * rows * cols
-    height, width = _tube_shape(scale, config.aspect_ratio, rows, cols)
+    height, width = _tube_shape(scale, config.aspect_ratio, rows, cols, rng)
 
     targets: list[list[int]] = []
     contexts: list[list[int]] = []
     for _ in range(batch):
         hidden: set[int] = set()
         for _ in range(blocks):
-            hidden |= _tube_indices(config.token_grid, height, width)
+            hidden |= _tube_indices(config.token_grid, height, width, rng)
         visible = [index for index in range(total) if index not in hidden]
         if not visible:
             # Every token was hidden.  Hand one back rather than run the

@@ -71,6 +71,7 @@ from lucid.models._utils._detection_results import (
     empty_detection_result,
 )
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
+from lucid.models._utils._common import host_floats, host_rows
 
 
 def _level_strides(image_height: int, features: list[Tensor]) -> list[int]:
@@ -386,8 +387,8 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
             if cfg.rpn_score_thresh > 0.0:
                 mask = [
                     i
-                    for i in range(int(scores_b.shape[0]))
-                    if float(scores_b[i].item()) >= cfg.rpn_score_thresh
+                    for i, score in enumerate(host_floats(scores_b))
+                    if score >= cfg.rpn_score_thresh
                 ]
                 if not mask:
                     proposals.append(lucid.zeros((0, 4), device=dev))
@@ -720,22 +721,22 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
                 continue
 
             scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
+            host_scores = host_rows(scores_i)
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
             for c in range(1, cfg.num_classes):  # skip background slot 0
-                sc_c_all = scores_i[:, c]
                 bx_class = bx_i[:, c, :]  # (N_i, 4)
                 mask = [
                     i
-                    for i in range(N_i)
-                    if float(sc_c_all[i].item()) > cfg.score_thresh
+                    for i, row in enumerate(host_scores)
+                    if row[c] > cfg.score_thresh
                 ]
                 if not mask:
                     continue
                 mask_t = lucid.tensor(mask, device=dev).long()
-                sc_c = sc_c_all[mask_t]
+                sc_c = scores_i[:, c][mask_t]
                 bx_c = bx_class[mask_t]
                 # The reference drops degenerate boxes before NMS
                 # (``remove_small_boxes(min_size=1e-2)``).  A zero-area box

@@ -28,6 +28,7 @@ from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ddpm._model import _DDPMUNet
 from lucid.models.generative.score_sde._config import ScoreSDEConfig
 from lucid.models.generative.score_sde._sde import SDE, VESDE, make_sde
+from lucid.models._utils._common import host_floats
 
 __all__ = ["ScoreSDEModel", "ScoreSDEForImageGeneration", "ScoreSDEOutput"]
 
@@ -447,10 +448,10 @@ class ScoreSDEForImageGeneration(ImageGenerationModel):
                     samples=self._solve_ode(shape, resolved, count, guidance)
                 )
             x = self.sde.prior_sampling(shape, resolved)
-            times = self._timesteps(count, resolved)
+            times = host_floats(self._timesteps(count, resolved))
             dt = (1.0 - self.sde.t_min) / max(count - 1, 1)
-            for i in range(count):
-                t = lucid.ones((n_samples,), device=resolved) * float(times[i].item())
+            for time in times:
+                t = lucid.ones((n_samples,), device=resolved) * time
                 if method == "pc":
                     x = self._corrector(x, t, guidance)
                 x = self._predictor(x, t, dt, guidance)
@@ -573,10 +574,11 @@ class ScoreSDEForImageGeneration(ImageGenerationModel):
         divergence = lucid.zeros((count,), device=x.device)
         current = x
         times = lucid.linspace(self.sde.t_min, 1.0, steps + 1, device=x.device)
+        bounds = host_floats(times)
 
         for i in range(steps):
-            start = float(times[i].item())
-            step = float(times[i + 1].item()) - start
+            start = bounds[i]
+            step = bounds[i + 1] - start
             t = lucid.ones((count,), device=x.device) * start
             state = current.detach()
             state.requires_grad = True

@@ -47,6 +47,7 @@ from lucid.models._utils._detection import (
 )
 from lucid.models._utils._detection_results import merge_class_detections
 from lucid.models.vision.rcnn._config import RCNNConfig
+from lucid.models._utils._common import host_rows
 
 # ---------------------------------------------------------------------------
 # CNN backbone (AlexNet-style, applied per RoI crop)
@@ -305,11 +306,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
         ctx = pad / (S - 2 * pad) if pad > 0 and S > 2 * pad else 0.0
         crops: list[Tensor] = []
 
-        for n in range(int(proposals.shape[0])):
-            bx1 = float(proposals[n, 0].item())
-            by1 = float(proposals[n, 1].item())
-            bx2 = float(proposals[n, 2].item())
-            by2 = float(proposals[n, 3].item())
+        for bx1, by1, bx2, by2 in host_rows(proposals[:, :4]):
             if ctx > 0.0:
                 dw, dh = (bx2 - bx1) * ctx, (by2 - by1) * ctx
                 bx1, bx2 = bx1 - dw, bx2 + dw
@@ -603,6 +600,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
+            host_scores = host_rows(scores_i)
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
@@ -615,8 +613,8 @@ class RCNNForObjectDetection(ObjectDetectionModel):
                 # Score threshold
                 mask: list[int] = [
                     i
-                    for i in range(N_i)
-                    if float(cls_scores[i].item()) >= self._score_thresh
+                    for i, row in enumerate(host_scores)
+                    if row[c] >= self._score_thresh
                 ]
                 if not mask:
                     continue

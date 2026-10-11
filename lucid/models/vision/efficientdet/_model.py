@@ -54,7 +54,12 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._utils._common import make_divisible
+from lucid.models._utils._common import (
+    host_floats,
+    host_ints,
+    host_rows,
+    make_divisible,
+)
 from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
@@ -831,8 +836,9 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
             # Vectorised per-anchor reductions.
             best_m_t = lucid.argmax(iou_mat, dim=1)
             best_v_t = iou_mat.max(dim=1)
-            best_v_list: list[float] = [float(best_v_t[a].item()) for a in range(A)]
-            best_m_list: list[int] = [int(best_m_t[a].item()) for a in range(A)]
+            best_v_list = host_floats(best_v_t)
+            best_m_list = host_ints(best_m_t)
+            labels_list = host_ints(gt_labels)
 
             fg_thr = self._cfg.iou_fg_thresh
             bg_thr = self._cfg.iou_bg_thresh
@@ -841,7 +847,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
                 best_v = best_v_list[a]
                 best_m = best_m_list[a]
                 if best_v >= fg_thr:
-                    c = int(gt_labels[best_m].item()) - 1  # 0-indexed
+                    c = labels_list[best_m] - 1  # 0-indexed
                     if 0 <= c < K:
                         tgt_cls_data[a][c] = 1.0
                     pos_idx.append(a)
@@ -860,12 +866,12 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
             # alone leaves an object with no positive at all whenever its best
             # overlap falls under the foreground threshold — common for small
             # or oddly-shaped boxes — so it contributes only background loss.
-            best_a_per_gt = lucid.argmax(iou_mat, dim=0)
+            best_a_per_gt = host_ints(lucid.argmax(iou_mat, dim=0))
             for m_i in range(M):
-                a_forced = int(best_a_per_gt[m_i].item())
+                a_forced = best_a_per_gt[m_i]
                 if a_forced in pos_idx:
                     continue
-                c_f = int(gt_labels[m_i].item()) - 1
+                c_f = labels_list[m_i] - 1
                 if 0 <= c_f < K:
                     tgt_cls_data[a_forced][c_f] = 1.0
                 cls_mask_data[a_forced] = [1.0] * K
@@ -892,13 +898,8 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
 
             if pos_idx:
                 pos_t = lucid.tensor(pos_idx, device=dev).long()
-                gt_boxes_pos = lucid.tensor(
-                    [
-                        [float(gt_boxes[pos_gt[i], d].item()) for d in range(4)]
-                        for i in range(len(pos_idx))
-                    ],
-                    device=dev,
-                )
+                gt_rows = host_rows(gt_boxes[:, :4])
+                gt_boxes_pos = lucid.tensor([gt_rows[m] for m in pos_gt], device=dev)
                 anc_pos = all_anchors[pos_t]  # (P, 4)
                 tgt_d = encode_boxes(gt_boxes_pos, anc_pos)
                 pred_d = all_deltas[b][pos_t]  # (P, 4)

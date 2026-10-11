@@ -14,6 +14,7 @@ freezes its target encoder by design.
 """
 
 import math
+import random
 
 import pytest
 
@@ -194,7 +195,7 @@ class TestTubeMasking:
         # Section 3.2.  A mask that leaves a tubelet visible in the next
         # frame asks nothing: the answer is next door.
         grid = (4, 6, 6)
-        indices = _tube_indices(grid, 2, 3)
+        indices = _tube_indices(grid, 2, 3, random.Random(0))
         duration, rows, cols = grid
         spatial = {index % (rows * cols) for index in indices}
         assert len(spatial) == 6

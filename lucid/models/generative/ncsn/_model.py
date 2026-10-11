@@ -29,6 +29,7 @@ from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ncsn._refinenet import RefineNetScoreNet
 from lucid.models.generative.ddpm._model import _DDPMUNet
 from lucid.models.generative.ncsn._config import NCSNConfig
+from lucid.models._utils._common import host_floats
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -399,8 +400,7 @@ class NCSNForImageGeneration(ImageGenerationModel):
 
         intermediates: list[Tensor] = []
         sigma_min_sq = self._sigma_min**2
-        for i in range(self._num_levels):
-            sigma_i = float(self.sigmas[i].item())
+        for i, sigma_i in enumerate(host_floats(self.sigmas)):
             alpha_i = self._langevin_eps * (sigma_i**2) / sigma_min_sq
             sigma_idx = lucid.tensor([i] * n_samples, device=device).long()
             sqrt_alpha = math.sqrt(alpha_i)

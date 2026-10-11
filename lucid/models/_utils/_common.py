@@ -4,6 +4,7 @@ These helpers are task-agnostic and may be imported by any model
 regardless of its output task (classification, detection, segmentation …).
 """
 
+import random
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import TYPE_CHECKING, cast
@@ -374,6 +375,99 @@ def reject_unavailable_pretrained(factory_name: str, *, alternative: str = "") -
         f"No pretrained weights are published for ``{factory_name}``; "
         f"``{factory_name}(pretrained=True)`` cannot be honoured.{hint}"
     )
+
+
+# ── host reads ───────────────────────────────────────────────────────────────
+#
+# A model loop that decides something on the host (a score threshold, a
+# timestep, a pyramid level) reads the tensor back *once* through these, never
+# one element at a time: on Metal every ``t[i].item()`` is a device sync.
+
+
+def _host_numbers(values: Tensor) -> list[int | float]:
+    """Every element of ``values``, flattened, in one host transfer."""
+    flat = values.reshape(-1).tolist()
+    out: list[int | float] = []
+    for value in flat if isinstance(flat, list) else [flat]:
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"a {type(value).__name__} element is not a number")
+        out.append(value)
+    return out
+
+
+def host_floats(values: Tensor) -> list[float]:
+    """Every element of ``values``, flattened, in one host transfer.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import host_floats
+    >>> host_floats(lucid.tensor([[0.5, 1.0], [2.0, 4.0]]))
+    [0.5, 1.0, 2.0, 4.0]
+
+    The values are the tensor's own, widened to Python floats exactly as
+    ``float(t[i].item())`` would widen them.
+    """
+    return [float(value) for value in _host_numbers(values)]
+
+
+def host_ints(values: Tensor) -> list[int]:
+    """Every element of ``values``, flattened, as Python ints in one transfer.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import host_ints
+    >>> host_ints(lucid.tensor([999, 499, 0]))
+    [999, 499, 0]
+
+    An integer tensor keeps every bit; a float one truncates toward zero, as
+    ``int(t[i].item())`` does.
+    """
+    return [int(value) for value in _host_numbers(values)]
+
+
+def host_rows(matrix: Tensor) -> list[list[float]]:
+    """The rows of a 2-D ``matrix`` as Python floats, in one host transfer.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import host_rows
+    >>> host_rows(lucid.tensor([[0.25, 0.75], [1.0, 0.0]]))
+    [[0.25, 0.75], [1.0, 0.0]]
+
+    Detection heads threshold every class column of the same score matrix;
+    reading the rows once serves all of them.
+    """
+    if matrix.ndim != 2:
+        raise ValueError(f"host_rows: expected a 2-D matrix, got {matrix.ndim}-D")
+    count, width = int(matrix.shape[0]), int(matrix.shape[1])
+    flat = host_floats(matrix)
+    return [flat[row * width : (row + 1) * width] for row in range(count)]
+
+
+def host_random() -> random.Random:
+    """A host-side random stream seeded by one draw from Lucid's generator.
+
+    Mask samplers make many small scalar draws, and how many depends on the
+    draws themselves.  Drawing each from Lucid reads a tensor back per
+    scalar — a sync when the default device is Metal.  One 63-bit draw on
+    the CPU seeds a :class:`random.Random` instead, so
+    :func:`lucid.manual_seed` still fixes every mask.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import host_random
+    >>> lucid.manual_seed(0)
+    >>> first = host_random().random()
+    >>> lucid.manual_seed(0)
+    >>> host_random().random() == first
+    True
+    """
+    seed = lucid.randint(0, (1 << 63) - 1, (1,), device="cpu")
+    return random.Random(int(seed.item()))
 
 
 def truncated_svd_linear(layer: nn.Linear, rank: int) -> nn.Sequential:

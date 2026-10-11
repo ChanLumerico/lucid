@@ -49,6 +49,7 @@ from lucid.models._utils._generative import (
 )
 from lucid.models.generative._common._schedulers import DDPMScheduler
 from lucid.models.generative.ddpm._config import DDPMConfig
+from lucid.models._utils._common import host_floats
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Building blocks
@@ -653,12 +654,11 @@ def _x0_recovery_constants(betas: Tensor) -> tuple[Tensor, Tensor]:
     reaches ~4e-5 at ``t = T``, and its reciprocal square root magnifies
     whatever error it carries.
     """
-    T = int(betas.shape[0])
     recip: list[float] = []
     recipm1: list[float] = []
     acc = 1.0
-    for i in range(T):
-        acc *= 1.0 - float(betas[i].item())
+    for beta in host_floats(betas):
+        acc *= 1.0 - beta
         recip.append(math.sqrt(1.0 / acc))
         recipm1.append(math.sqrt(1.0 / acc - 1.0))
     dev = betas.device.type

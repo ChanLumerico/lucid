@@ -14,6 +14,7 @@ target encoder by design.
 """
 
 import math
+import random
 
 import pytest
 
@@ -172,9 +173,10 @@ class TestMasking:
         # Section 3: 0.15 to 0.2 of the image, aspect 0.75 to 1.5.
         config = IJEPAConfig(image_size=224, patch_size=16)
         grid = config.grid_size
+        rng = random.Random(0)
         for _ in range(20):
             height, width = _block_shape(
-                config.target_scale, config.target_aspect, grid, config.min_keep
+                config.target_scale, config.target_aspect, grid, config.min_keep, rng
             )
             fraction = height * width / float(grid * grid)
             assert 0.10 <= fraction <= 0.26, (height, width, fraction)
@@ -186,9 +188,10 @@ class TestMasking:
         # code hard-codes it while leaving the config's range for targets.
         config = IJEPAConfig(image_size=224, patch_size=16)
         grid = config.grid_size
+        rng = random.Random(0)
         for _ in range(20):
             height, width = _block_shape(
-                config.context_scale, (1.0, 1.0), grid, config.min_keep
+                config.context_scale, (1.0, 1.0), grid, config.min_keep, rng
             )
             assert height == width
             assert 0.80 <= height * width / float(grid * grid) <= 1.0

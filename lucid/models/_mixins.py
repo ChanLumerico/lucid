@@ -758,6 +758,7 @@ class DiffusionMixin:
         (4, 3, 32, 32)
         """
         from lucid.models._output import GenerationOutput
+        from lucid.models._utils._common import host_ints
         from lucid.models._utils._generative import resolve_generation_device
 
         # A hard "cpu" default drew the noise off-device for any model that
@@ -791,10 +792,9 @@ class DiffusionMixin:
         sample = lucid.randn(full_shape, device=device)
 
         intermediates: list[Tensor] = []
-        ts = scheduler.timesteps
-        T_inf = int(ts.shape[0])
-        for i in range(T_inf):
-            t_int = int(ts[i].item())
+        # Schedulers keep their timesteps on the sampling device; read them
+        # back once rather than syncing on every step.
+        for t_int in host_ints(scheduler.timesteps):
             t_batch = lucid.tensor([t_int] * n_samples, device=device).long()
             output = cast(nn.Module, self)(sample, t_batch)
             model_pred = output.sample if hasattr(output, "sample") else output

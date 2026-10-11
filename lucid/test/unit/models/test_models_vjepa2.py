@@ -8,7 +8,6 @@ whether an action at one step can reach a prediction before it.
 """
 
 import math
-import sys
 from collections.abc import Callable
 
 import pytest
@@ -193,30 +192,6 @@ class TestPositionTable:
         assert float(difference.item()) > 0.0
 
 
-def _model_code_host_reads(
-    monkeypatch: pytest.MonkeyPatch, run: Callable[[], object]
-) -> list[str]:
-    """``file:line`` of every ``.item()`` / ``.tolist()`` / ``.numpy()`` that
-    model code under ``lucid/models`` makes while ``run`` executes.
-
-    Reads made by the framework's own index guards are not the model's and
-    are not counted.
-    """
-    seen: list[str] = []
-    for name in ("item", "tolist", "numpy"):
-        original = getattr(lucid.Tensor, name)
-
-        def spy(t: lucid.Tensor, *a: object, _f=original, **k: object) -> object:
-            caller = sys._getframe(1)
-            if "lucid/models/" in caller.f_code.co_filename:
-                seen.append(f"{caller.f_code.co_filename}:{caller.f_lineno}")
-            return _f(t, *a, **k)
-
-        monkeypatch.setattr(lucid.Tensor, name, spy)
-    run()
-    return seen
-
-
 class TestPredictorStaysOnDevice:
     """LCD-373: the predictor read its token indices back to the host to size
     the time axis, a sync no compile trace can follow.  The depth now comes
@@ -224,13 +199,13 @@ class TestPredictorStaysOnDevice:
 
     @pytest.mark.parametrize("use_rope", [True, False])
     def test_forward_reads_nothing_to_the_host(
-        self, use_rope: bool, monkeypatch: pytest.MonkeyPatch
+        self, use_rope: bool, host_reads: Callable[[Callable[[], object]], list[str]]
     ) -> None:
         model = VJEPA2Model(_vjepa_config(use_rope=use_rope))
         video = lucid.randn(1, 4, 3, 16, 16)
         ctx = lucid.arange(6, dtype=lucid.int32).reshape(1, 6)
         tgt = lucid.arange(6, 8, dtype=lucid.int32).reshape(1, 2)
-        reads = _model_code_host_reads(monkeypatch, lambda: model(video, ctx, tgt))
+        reads = host_reads(lambda: model(video, ctx, tgt))
         assert reads == []
 
     def test_a_target_in_a_partial_last_frame_is_positioned(self) -> None:

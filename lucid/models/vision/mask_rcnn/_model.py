@@ -84,6 +84,7 @@ from lucid.models.vision.faster_rcnn._model import (
     FasterRCNNForObjectDetection as _FasterRCNNForObjectDetection,
 )
 from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
+from lucid.models._utils._common import host_rows
 
 # ---------------------------------------------------------------------------
 # Mask branch building blocks
@@ -721,23 +722,23 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
                 continue
 
             scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
+            host_scores = host_rows(scores_i)
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
             keep_masks: list[Tensor] = []
 
             for c in range(1, cfg.num_classes):  # skip background slot 0
-                sc_c_all = scores_i[:, c]
                 bx_class = bx_i[:, c, :]  # (N_i, 4)
                 mask = [
                     i
-                    for i in range(N_i)
-                    if float(sc_c_all[i].item()) > cfg.score_thresh
+                    for i, row in enumerate(host_scores)
+                    if row[c] > cfg.score_thresh
                 ]
                 if not mask:
                     continue
                 mask_t = lucid.tensor(mask, device=dev).long()
-                sc_c = sc_c_all[mask_t]
+                sc_c = scores_i[:, c][mask_t]
                 bx_c = bx_class[mask_t]
                 # Mask channel for class c (sigmoid → probability).
                 mk_c = F.sigmoid(mk_i[mask_t][:, c, :, :])  # (k, 28, 28)
@@ -810,11 +811,9 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
                     canonical_level=cfg.canonical_level,
                 )
                 m_logits = self.roi_heads.predict_masks(m_feats)  # (D, K, mh, mw)
-                rows = [
-                    F.sigmoid(m_logits[i : i + 1, int(det_l[i].item()), :, :])
-                    for i in range(int(det_b.shape[0]))
-                ]
-                det_m = lucid.cat(rows, dim=0).unsqueeze(1)  # (D, 1, mh, mw)
+                # Each detection's own class channel, gathered on device.
+                rows = lucid.arange(int(det_b.shape[0]), device=dev).long()
+                det_m = F.sigmoid(m_logits[rows, det_l]).unsqueeze(1)  # (D, 1, mh, mw)
 
             # Paste onto the boxes and binarise.  A raw mh x mw probability
             # grid is in RoI coordinates, so it says nothing about where in

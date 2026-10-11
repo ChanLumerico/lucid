@@ -699,17 +699,10 @@ class PlaNetForWorldModeling(WorldModelingModel):
             returns = returns.reshape(candidates, b)
 
             order = lucid.argsort(returns, dim=0)
-            keep = order[candidates - elites :]
-            chosen = lucid.stack(
-                [
-                    lucid.stack(
-                        [samples[int(keep[k, i].item()), i] for k in range(elites)],
-                        dim=0,
-                    )
-                    for i in range(b)
-                ],
-                dim=1,
-            )
+            keep = order[candidates - elites :].long()  # (elites, b)
+            # Each batch item's elites, gathered on device.
+            items = lucid.arange(b, device=device).long().reshape(1, b)
+            chosen = samples[keep, items]  # (elites, b, horizon, action_dim)
             mean = chosen.mean(dim=0)
             std = ((chosen - mean) ** 2).mean(dim=0) ** 0.5 + 1e-6
 

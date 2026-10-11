@@ -48,6 +48,7 @@ from lucid.models._utils._detection import (
 )
 from lucid.models._utils._detection_results import merge_class_detections
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
+from lucid.models._utils._common import host_floats, host_ints, host_rows
 
 # ---------------------------------------------------------------------------
 # VGG16 convolutional backbone  (pool5 removed — replaced by RoI Pool)
@@ -447,9 +448,8 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
         bbox_weights = lucid.cat(all_bbox_weights, dim=0)  # (Σ N_i,)
 
         # --- Classification loss (cross-entropy, skip ignored=-1) ---
-        valid_mask: list[int] = [
-            n for n in range(int(cls_labels.shape[0])) if int(cls_labels[n].item()) >= 0
-        ]
+        labels_list = host_ints(cls_labels)
+        valid_mask = [n for n, label in enumerate(labels_list) if label >= 0]
         if not valid_mask:
             cls_loss: Tensor = lucid.zeros((1,), device=dev)
         else:
@@ -468,11 +468,11 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
         pred_deltas = all_deltas.reshape(N_total, K, 4)
 
         reg_loss_parts: list[Tensor] = []
+        weights_list = host_floats(bbox_weights)
         for n in range(N_total):
-            w = float(bbox_weights[n].item())
-            if w == 0.0:
+            if weights_list[n] == 0.0:
                 continue
-            cls_n = max(0, int(cls_labels[n].item()) - 1)
+            cls_n = max(0, labels_list[n] - 1)
             cls_n = min(cls_n, K - 1)
             pred_d = pred_deltas[n, cls_n]  # (4,)
             tgt_d = bbox_targets[n]  # (4,)
@@ -622,6 +622,7 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
+            host_scores = host_rows(scores_i)
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
@@ -635,8 +636,8 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
 
                 mask: list[int] = [
                     i
-                    for i in range(N_i)
-                    if float(cls_scores[i].item()) >= self._score_thresh
+                    for i, row in enumerate(host_scores)
+                    if row[c] >= self._score_thresh
                 ]
                 if not mask:
                     continue

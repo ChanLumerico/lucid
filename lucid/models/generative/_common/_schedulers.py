@@ -20,6 +20,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike
 from lucid.models._utils._generative import extract_into_tensor, make_beta_schedule
+from lucid.models._utils._common import host_floats
 
 __all__ = ["DiffusionScheduler", "DDPMScheduler"]
 
@@ -219,7 +220,7 @@ class DDPMScheduler(DiffusionScheduler):
         self.alphas = 1.0 - self.betas
         # ᾱ_t = ∏_{s≤t} α_s — implemented as a Python prefix product because
         # cumulative-product over a 1-D 1000-entry tensor is one-shot cheap.
-        a_list = [float(self.alphas[i].item()) for i in range(num_train_timesteps)]
+        a_list = host_floats(self.alphas)
         cum: list[float] = []
         acc = 1.0
         for a in a_list:

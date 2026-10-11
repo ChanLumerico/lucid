@@ -1391,19 +1391,16 @@ def _m2f_stage_loss(
             cls_i, msk_i, gt_labels, gt_masks, match_coords, cfg
         )
 
-        label_data = [bg_index] * n
-        for p_i, g_i in zip(pred_idx, gt_idx):
-            label_data[p_i] = int(gt_labels[g_i].item())
-        cls_parts.append(
-            F.cross_entropy(
-                cls_i, lucid.tensor(label_data, device=dev).long(), weight=weight_t
-            )
-        )
+        pred_t = lucid.tensor(pred_idx, device=dev).long()
+        gt_t = lucid.tensor(gt_idx, device=dev).long()
+        # Matched queries take their target's class, on device.
+        targets_i = lucid.full((n,), float(bg_index), device=dev).long()
+        if pred_idx:
+            targets_i[pred_t] = gt_labels.long()[gt_t]
+        cls_parts.append(F.cross_entropy(cls_i, targets_i, weight=weight_t))
 
         if not pred_idx:
             continue
-        pred_t = lucid.tensor(pred_idx, device=dev).long()
-        gt_t = lucid.tensor(gt_idx, device=dev).long()
         src = msk_i[pred_t]  # (P, h, w)
         tgt = gt_masks[gt_t].float()  # (P, H, W)
 

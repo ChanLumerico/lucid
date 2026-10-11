@@ -25,6 +25,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid._types import Reduction
+from lucid.models._utils._common import host_floats
 
 __all__ = [
     "make_beta_schedule",
@@ -365,8 +366,8 @@ def diffusion_posterior_constants(
     function of the betas alone, and a sampler reads them thousands of
     times.
     """
-    T = int(betas.shape[0])
-    beta_l = [float(betas[i].item()) for i in range(T)]
+    beta_l = host_floats(betas)
+    T = len(beta_l)
 
     ab_l: list[float] = []
     acc = 1.0

@@ -16,6 +16,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import host_floats, host_ints, host_rows
 
 # ---------------------------------------------------------------------------
 # §1  Box operations
@@ -287,12 +288,10 @@ def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
     Indices of what survives, not the boxes themselves, so the caller can
     take the same rows out of the scores and labels beside them.
     """
-    ws = boxes[:, 2] - boxes[:, 0]
-    hs = boxes[:, 3] - boxes[:, 1]
+    # One host read for every box's (w, h), not two per box.
+    sizes = host_rows(boxes[:, 2:4] - boxes[:, 0:2])
     keep: list[int] = [
-        i
-        for i in range(int(boxes.shape[0]))
-        if float(ws[i].item()) >= min_size and float(hs[i].item()) >= min_size
+        i for i, (w, h) in enumerate(sizes) if w >= min_size and h >= min_size
     ]
     if not keep:
         return lucid.zeros((0,), device=boxes.device.type).long()
@@ -744,16 +743,10 @@ def roi_align(
 
         feat_flat: Tensor = input[b_idx].reshape(C, feat_H * feat_W)  # (C, H*W)
 
-        x1 = roi_boxes[:, 0] * spatial_scale - offset
-        y1 = roi_boxes[:, 1] * spatial_scale - offset
-        x2 = roi_boxes[:, 2] * spatial_scale - offset
-        y2 = roi_boxes[:, 3] * spatial_scale - offset
+        # Sample positions are host data: every box's corners in one read.
+        corners = host_rows(roi_boxes[:, :4] * spatial_scale - offset)
 
-        for n in range(N):
-            rx1 = float(x1[n].item())
-            rx2 = float(x2[n].item())
-            ry1 = float(y1[n].item())
-            ry2 = float(y2[n].item())
+        for rx1, ry1, rx2, ry2 in corners:
             roi_w = rx2 - rx1
             roi_h = ry2 - ry1
             if not aligned:
@@ -905,11 +898,9 @@ def paste_masks_in_image(
         return lucid.zeros((0, 1, H, W), device=masks.device.type)
 
     planes: list[Tensor] = []
-    for i in range(D):
-        x1 = int(math.floor(float(boxes[i, 0].item())))
-        y1 = int(math.floor(float(boxes[i, 1].item())))
-        x2 = int(math.ceil(float(boxes[i, 2].item())))
-        y2 = int(math.ceil(float(boxes[i, 3].item())))
+    for i, (bx1, by1, bx2, by2) in enumerate(host_rows(boxes[:, :4])):
+        x1, y1 = int(math.floor(bx1)), int(math.floor(by1))
+        x2, y2 = int(math.ceil(bx2)), int(math.ceil(by2))
         # Clamp to the canvas; the reference keeps a minimum extent of 1.
         x1, y1 = max(0, min(x1, W - 1)), max(0, min(y1, H - 1))
         x2, y2 = max(x1 + 1, min(x2, W)), max(y1 + 1, min(y2, H))
@@ -981,11 +972,11 @@ def roi_pool(
             continue
         feat: Tensor = input[b_idx]  # (C, H, W)
 
-        for n in range(N):
-            x1 = int(round(float(roi_boxes[n, 0].item()) * spatial_scale))
-            y1 = int(round(float(roi_boxes[n, 1].item()) * spatial_scale))
-            x2 = int(round(float(roi_boxes[n, 2].item()) * spatial_scale))
-            y2 = int(round(float(roi_boxes[n, 3].item()) * spatial_scale))
+        for bx1, by1, bx2, by2 in host_rows(roi_boxes[:, :4]):
+            x1 = int(round(bx1 * spatial_scale))
+            y1 = int(round(by1 * spatial_scale))
+            x2 = int(round(bx2 * spatial_scale))
+            y2 = int(round(by2 * spatial_scale))
 
             # Both the Caffe original and reference_vision treat the rounded end
             # coordinate as *inclusive*:
@@ -1324,8 +1315,8 @@ class RPN(nn.Module):
 
                 score_mask: list[int] = [
                     i
-                    for i in range(int(props.shape[0]))
-                    if float(topk_sc[i].item()) >= self.score_thresh
+                    for i, score in enumerate(host_floats(topk_sc))
+                    if score >= self.score_thresh
                 ]
                 if not score_mask:
                     continue
@@ -2697,7 +2688,7 @@ def multiscale_roi_align(
     levels = _fpn_level_for_boxes(
         all_boxes, lvl_min, lvl_max, canonical_scale, canonical_level
     )  # (R,) 0-based
-    lvl_list: list[int] = [int(levels[i].item()) for i in range(R)]
+    lvl_list = host_ints(levels)
 
     n_img = len(boxes)
     out_rows: list[Tensor | None] = [None] * R

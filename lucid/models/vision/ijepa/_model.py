@@ -18,6 +18,7 @@ model by prefix alone.
 """
 
 import math
+import random
 from dataclasses import dataclass
 from typing import ClassVar, cast, override
 
@@ -29,6 +30,7 @@ from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
+from lucid.models._utils._common import host_random
 from lucid.models._output import ImageClassificationOutput, ModelOutput
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models.vision._common._transformers import (
@@ -211,7 +213,11 @@ class _Predictor(nn.Module):
 
 
 def _block_shape(
-    scale: tuple[float, float], aspect: tuple[float, float], grid: int, min_keep: int
+    scale: tuple[float, float],
+    aspect: tuple[float, float],
+    grid: int,
+    min_keep: int,
+    rng: random.Random,
 ) -> tuple[int, int]:
     """Height and width, in patches, of one sampled block.
 
@@ -223,8 +229,8 @@ def _block_shape(
     """
     patches = grid * grid
     for _ in range(20):
-        area = patches * float(lucid.rand(1).item() * (scale[1] - scale[0]) + scale[0])
-        ratio = float(lucid.rand(1).item() * (aspect[1] - aspect[0]) + aspect[0])
+        area = patches * (rng.random() * (scale[1] - scale[0]) + scale[0])
+        ratio = rng.random() * (aspect[1] - aspect[0]) + aspect[0]
         height = max(1, min(grid, int(round(math.sqrt(area * ratio)))))
         width = max(1, min(grid, int(round(math.sqrt(area / ratio)))))
         if height * width > min_keep:
@@ -232,14 +238,14 @@ def _block_shape(
     return max(1, min(grid, height)), max(1, min(grid, width))
 
 
-def _block_indices(grid: int, height: int, width: int) -> list[int]:
+def _block_indices(grid: int, height: int, width: int, rng: random.Random) -> list[int]:
     """Patch indices of one block placed uniformly at random.
 
     The last row and column are reachable.  The released code's ``randint``
     excludes them, which two of its open pull requests set out to fix.
     """
-    top = int(lucid.randint(0, grid - height + 1, (1,)).item())
-    left = int(lucid.randint(0, grid - width + 1, (1,)).item())
+    top = rng.randrange(grid - height + 1)
+    left = rng.randrange(grid - width + 1)
     return [(top + r) * grid + (left + c) for r in range(height) for c in range(width)]
 
 
@@ -252,24 +258,26 @@ def _sample_masks(
     Every image in the batch gets blocks of the same *size* but its own
     *position*, and the context keeps a common number of patches: the
     shortest after target removal, truncated as the released code does.
+    Every draw comes from one host stream, seeded from Lucid's generator.
     """
+    rng = host_random()
     grid = config.grid_size
     target_h, target_w = _block_shape(
-        config.target_scale, config.target_aspect, grid, config.min_keep
+        config.target_scale, config.target_aspect, grid, config.min_keep, rng
     )
     context_h, context_w = _block_shape(
-        config.context_scale, (1.0, 1.0), grid, config.min_keep
+        config.context_scale, (1.0, 1.0), grid, config.min_keep, rng
     )
 
     targets: list[list[list[int]]] = []
     contexts: list[list[int]] = []
     for _ in range(batch):
         blocks = [
-            _block_indices(grid, target_h, target_w)
+            _block_indices(grid, target_h, target_w, rng)
             for _ in range(config.num_target_blocks)
         ]
         targets.append(blocks)
-        context = _block_indices(grid, context_h, context_w)
+        context = _block_indices(grid, context_h, context_w, rng)
         if not config.allow_overlap:
             taken = {index for block in blocks for index in block}
             context = [index for index in context if index not in taken]
