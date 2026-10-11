@@ -10,11 +10,13 @@ the factorisations they wrap.
 """
 
 from collections.abc import Callable
+from typing import final, override
 
 import lucid
 from lucid._deprecation import warn_deprecated
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
+from lucid.autograd.function import Function, FunctionCtx
 from lucid.linalg import (
     LinAlgError,
     _la,
@@ -22,6 +24,7 @@ from lucid.linalg import (
     cholesky,
     inv,
     solve,
+    solve_triangular,
 )
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
@@ -535,6 +538,12 @@ def ldl_factor(
     upper one as it found it — the input's own entries.  Those are
     cleared here, so ``LD`` holds the factorization and nothing else.
 
+    ``LD`` is differentiable in ``A``, to any order, wherever the pivots
+    do not change — an addition over the reference framework, which
+    defines no derivative for this factorization and raises on backward.
+    The gradient lands on ``A``'s lower triangle, the part ``sytrf``
+    reads, as :func:`cholesky`'s does.
+
     Raises
     ------
     LinAlgError
@@ -606,6 +615,13 @@ def ldl_factor_ex(
     info : Tensor
         One ``int32`` code per matrix — a scalar for a single matrix.
 
+    Notes
+    -----
+    ``LD`` differentiates as :func:`ldl_factor`'s does — the reference
+    framework does not differentiate it.  A matrix whose ``info`` is
+    non-zero receives no gradient, as a failed matrix of the other
+    ``*_ex`` variants does.
+
     Examples
     --------
     >>> import lucid
@@ -629,4 +645,103 @@ def _ldl_factor_ex(
     LD, pivots, info = lucid.tril(_wrap(ld_impl)), _wrap(piv_impl), _wrap(info_impl)
     if check_errors:
         _raise_ex_failure(op, info, _zero_block_reason)
+    if A.requires_grad and lucid.is_grad_enabled():
+        tracked = _LDLFactorGrad.apply(A, LD, pivots, info)
+        assert isinstance(tracked, Tensor)
+        LD = tracked
     return LD, pivots, info
+
+
+# ── The derivative of the packed LDLᵀ factor ───────────────────────────────
+#
+# ``sytrf`` stores ``A = P₁L₁ ⋯ PₘLₘ D Lₘᵀ ⋯``: step ``j`` swaps one pair of
+# rows of the trailing matrix, then eliminates a 1×1 or 2×2 block, and its
+# multipliers are stored in the row order of that moment — the later swaps
+# are not applied to them.  Applying them gives one unit block-lower ``L̂``
+# with ``Π A Πᵀ = L̂ D L̂ᵀ``.  Between two changes of pivot the pivots are
+# constant and the factors smooth, so with ``X = L̂⁻¹ dÂ L̂⁻ᵀ``
+#
+#     dD = blockdiag(X),    dL̂ = L̂ · strictly_block_lower(X) · D⁻¹,
+#
+# whose adjoint is the backward below.  The reference framework defines no
+# derivative here and raises on backward; a detached factor would instead
+# train nothing without a word, so this one is given.
+
+
+def _ldl_steps(piv: list[int]) -> tuple[list[int], list[list[int]], list[int]]:
+    """Unpack one matrix's ``sytrf`` pivots.
+
+    Returns each row's block (the block's first row), the row of ``LD``
+    each entry of ``L̂`` is read from — ``L̂[i][c] = LD[order[i][c]][c]`` —
+    and ``Π`` as the row of ``A`` that becomes each row of ``Π A Πᵀ``.
+    """
+    n = len(piv)
+    first = list(range(n))
+    order = [[i] * n for i in range(n)]
+    perm = list(range(n))
+    k = 0
+    while k < n:
+        size = 1 if piv[k] > 0 else 2
+        last, p = k + size - 1, abs(piv[k]) - 1
+        first[last] = k
+        # This step's swap reaches the multipliers of the earlier columns.
+        order[last][:k], order[p][:k] = order[p][:k], order[last][:k]
+        perm[last], perm[p] = perm[p], perm[last]
+        k += size
+    return first, order, perm
+
+
+@final
+class _LDLFactorGrad(Function):
+    """The packed factor of ``ldl_factor``, differentiable in ``A``.
+
+    ``sytrf`` reads ``A``'s lower triangle, so that is where the gradient
+    goes, as :func:`cholesky`'s does.  A matrix whose ``D`` is singular
+    (``info != 0``) receives none, as a failed matrix of the other ``*_ex``
+    variants does.  ``L̂`` and ``D`` are read from this Function's own
+    output, so the result differentiates again.
+    """
+
+    @override
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx, A: Tensor, LD: Tensor, pivots: Tensor, info: Tensor
+    ) -> Tensor:
+        out = LD.detach()
+        ctx.save_for_backward(out, pivots, info)
+        return out
+
+    @override
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> tuple[Tensor, None, None, None]:
+        LD, pivots, info = ctx.saved_tensors
+        if LD.numel() == 0:
+            return lucid.zeros_like(grad_out), None, None, None
+        n, batch = int(LD.shape[-1]), tuple(LD.shape[:-2])
+        steps = [
+            _ldl_steps([int(p.item()) for p in row])
+            for row in pivots.to("cpu").reshape(-1, n)
+        ]
+        dev = LD.device
+        first = lucid.tensor([s[0] for s in steps], device=dev).reshape(*batch, n)
+        order = lucid.tensor([s[1] for s in steps], dtype=lucid.int64, device=dev)
+        perm = lucid.tensor([s[2] for s in steps], dtype=lucid.int64, device=dev)
+        eye = lucid.eye(n, dtype=LD.dtype, device=dev)
+        P = eye[perm.reshape(*batch, n)]
+        # Below each block, and D's lower triangle.
+        below = (first[..., :, None] > first[..., None, :]).to(LD.dtype)
+        block = lucid.tril((first[..., :, None] == first[..., None, :]).to(LD.dtype))
+        order = order.reshape(*batch, n, n)
+
+        L = lucid.gather(LD * below, -2, order) + eye
+        D_low = LD * block
+        failed = (info != 0).reshape(*batch, 1, 1)
+        D = lucid.where(failed, eye, D_low + lucid.tril(D_low, -1).mT)
+
+        gL = lucid.gather(grad_out * below, -2, order)
+        X = below * lucid.matmul(lucid.matmul(L.mT, gL), inv(D)) + grad_out * block
+        Y = solve_triangular(L.mT, X, upper=True, unitriangular=True)
+        Z = solve_triangular(L, Y, upper=False, left=False, unitriangular=True)
+        G = lucid.matmul(lucid.matmul(P.mT, 0.5 * (Z + Z.mT)), P)
+        grad = 2.0 * lucid.tril(G) - lucid.diag_embed(G.diagonal(dim1=-2, dim2=-1))
+        return lucid.where(failed, lucid.zeros_like(grad), grad), None, None, None
