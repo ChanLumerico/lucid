@@ -334,6 +334,14 @@ def run_kernel(
         Output tensor on CPU (backed by shared Metal memory — zero-copy
         readable).  Call ``.to(device='metal')`` if you need an MLX tensor.
 
+    Notes
+    -----
+    The kernel is opaque MSL, so nothing can lower it to another program.
+    A traced call records it, and the result follows its inputs, but
+    :func:`lucid.compile.compile` runs a call that contains it eagerly, with a
+    fallback warning, and :func:`lucid.coreml.export` refuses it with
+    :class:`lucid.coreml.UnsupportedOp`.
+
     Examples
     --------
     >>> MSL = '''

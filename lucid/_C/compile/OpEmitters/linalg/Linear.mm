@@ -1,21 +1,30 @@
 // lucid/_C/compile/OpEmitters/Linear.mm
 //
-// MPSGraph emitter for ``nn.Linear`` forward:
+// MPSGraph emitters for ``nn.Linear`` forward and the fused inference
+// kernels behind ``nn.FusedLinear``:
 //
-//     y = matmul(x, W^T) + b
+//     linear              y = matmul(x, W^T) + b
+//     _fused_linear_relu  y = relu(matmul(x, W^T) + b)
+//     _fused_linear_gelu  y = gelu_tanh(matmul(x, W^T) + b)
 //
-// Inputs (in :func:`NaryKernel<LinearBackward,3>::wire_autograd` order):
+// Inputs (in :func:`NaryKernel<LinearBackward,3>::wire_autograd` order, which
+// the fused bindings record too):
 //
 //   - ``inputs[0]`` — x   (..., in_features)
 //   - ``inputs[1]`` — W   (out_features, in_features)
-//   - ``inputs[2]`` — b   (out_features,)  — optional (``-1`` when bias=False)
+//   - ``inputs[2]`` — b   (out_features,)  — optional for ``linear``
+//                                              (``-1`` when bias=False)
 //
 // Output:
 //
 //   - (..., out_features)
 //
-// The emitter is registered at process startup via a file-scope
-// initialiser; :class:`MpsBuilder` finds it by op name ``"linear"``.
+// The fused ops have no VJP: their bindings never produce a tensor that
+// requires grad (the Python wrappers take linear + activation whenever an
+// operand does), so no backward pass reaches them.
+//
+// The emitters are registered at process startup via a file-scope
+// initialiser; :class:`MpsBuilder` finds them by op name.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -24,63 +33,95 @@
 #include <string_view>
 
 #include "../OpEmitter.h"
+#include "../_GeluTanh.h"
 
 namespace lucid::compile {
 
 namespace {
+
+// The graph tensor for operand ``id``, or nil for an external feed (``-1``)
+// or an id no earlier op bound.
+MPSGraphTensor* operand(const BuilderContext& ctx, TensorId id) {
+    return id < 0 ? nil : (__bridge MPSGraphTensor*)ctx.resolve(id);
+}
+
+// ``matmul(x, W^T) + b`` for ``node``'s operands, or nil when one is missing.
+MPSGraphTensor* linear_graph(BuilderContext& ctx, const OpNode& node, bool bias_required) {
+    const std::size_t n = node.inputs.size();
+    const bool arity_ok = bias_required ? n == 3 : (n == 2 || n == 3);
+    if (!arity_ok || node.outputs.empty())
+        return nil;
+    MPSGraphTensor* x_t = operand(ctx, node.inputs[0]);
+    MPSGraphTensor* W_t = operand(ctx, node.inputs[1]);
+    MPSGraphTensor* b_t = n == 3 ? operand(ctx, node.inputs[2]) : nil;
+    if (x_t == nil || W_t == nil || (bias_required && b_t == nil))
+        return nil;
+    MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+
+    // W has shape (out, in); transpose to (in, out) for matmul.
+    MPSGraphTensor* W_T = [graph transposeTensor:W_t permutation:@[@1, @0] name:@"linear_W_T"];
+
+    // matmul(x, W^T) — MPSGraph supports batched 2-D and N-D.
+    MPSGraphTensor* xW = [graph matrixMultiplicationWithPrimaryTensor:x_t
+                                                      secondaryTensor:W_T
+                                                                 name:@"linear_xWt"];
+
+    // Optional bias add (broadcasts over leading batch dims).
+    return (b_t != nil)
+               ? [graph additionWithPrimaryTensor:xW secondaryTensor:b_t name:@"linear_out"]
+               : xW;
+}
 
 class LinearEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "linear"; }
 
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.inputs.size() > 3 || node.outputs.empty())
+        MPSGraphTensor* y = linear_graph(ctx, node, false);
+        if (y == nil)
             return false;
-        TensorId x_id = node.inputs[0];
-        TensorId W_id = node.inputs[1];
-        TensorId b_id = node.inputs.size() == 3
-            ? node.inputs[2]
-            : TraceId::external_feed();
-        if (x_id < 0 || W_id < 0)
-            return false;
-
-        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        MPSGraphTensor* W_t = (__bridge MPSGraphTensor*)ctx.resolve(W_id);
-        if (x_t == nil || W_t == nil)
-            return false;
-        MPSGraphTensor* b_t = nil;
-        if (b_id >= 0)
-            b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-
-        // W has shape (out, in); transpose to (in, out) for matmul.
-        MPSGraphTensor* W_T = [graph transposeTensor:W_t
-                                         permutation:@[@1, @0]
-                                                name:@"linear_W_T"];
-
-        // matmul(x, W^T) — MPSGraph supports batched 2-D and N-D.
-        MPSGraphTensor* xW = [graph matrixMultiplicationWithPrimaryTensor:x_t
-                                                          secondaryTensor:W_T
-                                                                     name:@"linear_xWt"];
-
-        // Optional bias add (broadcasts over leading batch dims).
-        MPSGraphTensor* y = (b_t != nil)
-            ? [graph additionWithPrimaryTensor:xW
-                              secondaryTensor:b_t
-                                         name:@"linear_out"]
-            : xW;
-
         ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 };
 
-// File-scope registrar — runs once at .so load before any user code,
-// so the emitter is available the first time :class:`MpsBuilder` looks
-// up an op named "linear".
+class FusedLinearReluEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "_fused_linear_relu"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        MPSGraphTensor* pre = linear_graph(ctx, node, true);
+        if (pre == nil)
+            return false;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* y = [graph reLUWithTensor:pre name:@"fused_linear_relu"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
+    }
+};
+
+class FusedLinearGeluEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "_fused_linear_gelu"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        MPSGraphTensor* pre = linear_graph(ctx, node, true);
+        if (pre == nil)
+            return false;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* y = gelu_tanh_graph(graph, pre, @"fused_linear_gelu");
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
+    }
+};
+
+// File-scope registrar — runs once at .so load before any user code, so the
+// emitters are available the first time :class:`MpsBuilder` looks them up.
 struct LinearEmitterRegistrar {
     LinearEmitterRegistrar() {
         register_emitter(std::make_unique<LinearEmitter>());
+        register_emitter(std::make_unique<FusedLinearReluEmitter>());
+        register_emitter(std::make_unique<FusedLinearGeluEmitter>());
     }
 };
 
