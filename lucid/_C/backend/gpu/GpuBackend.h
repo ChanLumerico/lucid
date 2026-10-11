@@ -93,6 +93,7 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "AxisIndex.h"
+#include "Conversion.h"
 #include "HalfAccumulation.h"
 #include "Interpolate.h"
 #include "LinalgStatus.h"
@@ -906,11 +907,13 @@ public:
     // ── Reductions / boolean predicates ───────────────────────────────────
     // Logical-any over all elements; returns a 0-D bool tensor.
     Storage any(const Storage& a, const Shape&, Dtype dt) override {
-        return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::any(x); });
+        return mlx_unary(a, {}, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::any(truth_operand(x)); });
     }
 
     Storage all(const Storage& a, const Shape&, Dtype dt) override {
-        return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::all(x); });
+        return mlx_unary(a, {}, Dtype::Bool,
+                         [](auto& x) { return ::mlx::core::all(truth_operand(x)); });
     }
 
     // MLX's ``isinf`` and ``isfinite`` judge a complex number as a whole —
@@ -3342,29 +3345,11 @@ public:
         return static_cast<std::int64_t>(std::get<GpuStorage>(offsets).arr->shape(0));
     }
 
-    // ── astype ────────────────────────────────────────────────────────────────
-    // ── Type / casts / misc ───────────────────────────────────────────────
-    // ``x`` converted to ``dst_dt``, with a float cast to int64 done the way
-    // the CPU does it: NaN is 0 and anything out of range saturates at the
-    // type's limits.  Metal's own conversion gave 0 for ±inf and wrapped past
-    // the range, so one tensor read different numbers on the two devices;
-    // its int32 conversion already saturates.
-    static ::mlx::core::array saturating_astype(const ::mlx::core::array& x, Dtype dst_dt) {
-        namespace mx = ::mlx::core;
-        auto y = mx::astype(x, gpu::to_mlx_dtype(dst_dt));
-        if (dst_dt != Dtype::I64 || !mx::issubdtype(x.dtype(), mx::floating))
-            return y;
-        const auto hi = mx::array(9.223372036854775808e18f, x.dtype());  // 2^63
-        const auto lo = mx::array(-9.223372036854775808e18f, x.dtype());
-        y = mx::where(mx::greater_equal(x, hi), mx::array(std::int64_t{INT64_MAX}, mx::int64), y);
-        y = mx::where(mx::less(x, lo), mx::array(std::int64_t{INT64_MIN}, mx::int64), y);
-        return mx::where(mx::isnan(x), mx::array(std::int64_t{0}, mx::int64), y);
-    }
-
+    // ── astype — the conversion rules live in ``gpu/Conversion.h`` ───────────
     // Convert ``a`` to ``dst_dt``.  Identical to :meth:`cast` on this backend.
     Storage astype(const Storage& a, const Shape& shape, Dtype /*src_dt*/, Dtype dst_dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto result = saturating_astype(*ga.arr, dst_dt);
+        auto result = gpu_convert(*ga.arr, dst_dt);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
     }
 
@@ -3563,7 +3548,7 @@ public:
 
     Storage cast(const Storage& a, const Shape&, Dtype, Dtype dst_dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = saturating_astype(*gs.arr, dst_dt);
+        auto result = gpu_convert(*gs.arr, dst_dt);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
     }
 
