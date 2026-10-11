@@ -1211,6 +1211,24 @@ def _autograd_grad(domain: str) -> Iterator[Call]:
     )
 
 
+def _autograd_jvp(domain: str) -> Iterator[Call]:
+    """``autograd.jvp(func, inputs, v)`` with a tangent the shape of ``inputs``.
+
+    The signature tier fills only parameters without a default, and since
+    ``v`` became optional (``None``, as in the reference) it handed
+    ``jvp`` no tangent for a ``(2, 3)`` input — which ``jvp`` refuses, as
+    the reference does, so the smoke cell went unanswered.  ``v`` follows
+    a resized ``inputs`` through ``same_shape``.
+    """
+    yield Call(
+        [lambda t: (t * t).sum(), _f((2, 3), domain), _f((2, 3), domain)],
+        {},
+        1,
+        "jvp(func, inputs, v) of (x * x).sum()",
+        same_shape=(2,),
+    )
+
+
 def _retain_grad(domain: str) -> Iterator[Call]:
     """``retain_grad()`` on an interior node of a graph.
 
@@ -1229,6 +1247,7 @@ def _retain_grad(domain: str) -> Iterator[Call]:
 #: sent four of these to the wrong builder.
 _QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
     "lucid.autograd.grad": _autograd_grad,
+    "lucid.autograd.jvp": _autograd_jvp,
     "Tensor.retain_grad": _retain_grad,
     "lucid.einops.repeat": lambda d: iter(
         [

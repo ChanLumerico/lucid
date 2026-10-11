@@ -137,7 +137,8 @@ def test_view_is_probed_with_a_shape_a_strided_slice_can_express(
 
 
 @pytest.mark.parametrize(
-    "qualname", ["lucid.autograd.grad", "lucid.autograd.vjp", "Tensor.retain_grad"]
+    "qualname",
+    ["lucid.autograd.grad", "lucid.autograd.vjp", "lucid.autograd.jvp", "Tensor.retain_grad"],
 )
 def test_graph_taking_callables_have_an_invocation_that_runs(qualname: str) -> None:
     _first_call(qualname)

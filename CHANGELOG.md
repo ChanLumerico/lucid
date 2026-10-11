@@ -498,6 +498,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - edge axis resizes ctc_loss's operands together (LCD-275)
 
+- give autograd.jvp a tangent the shape of its input
+
 ### Changed
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)
