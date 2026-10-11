@@ -333,5 +333,60 @@ inline ::mlx::core::array without_sink_slab(const ::mlx::core::array& padded,
         ::mlx::core::slice(padded, ::mlx::core::Shape(shape.size(), 0), shape));
 }
 
+// MLX's multi-axis scatter (``scatter_add``, ``scatter_max`` and the rest,
+// one index array per axis) checks each update slice against the base's
+// extents before it counts the updates.  A base with an empty axis therefore
+// raised "[scatter] Updates with shape (0,1,1) are too large for array with
+// shape (0,0)" — the backward of diagonal, interpolate and grid_sample over
+// an empty input, and scatter_reduce into an empty base.  With nothing to
+// place, or nowhere to place it, the scatter is the base.  Every multi-axis
+// scatter on the GPU stream goes through one of these.
+inline bool scatter_places_nothing(const ::mlx::core::array& base,
+                                   const ::mlx::core::array& updates) {
+    return base.size() == 0 || updates.size() == 0;
+}
+
+using ScatterIndices = std::vector<::mlx::core::array>;
+
+inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
+                                          const ScatterIndices& idx,
+                                          const ::mlx::core::array& upd,
+                                          const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_add(base, idx, upd, axes);
+}
+
+inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
+                                          const ::mlx::core::array& idx,
+                                          const ::mlx::core::array& upd,
+                                          int axis) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_add(base, idx, upd, axis);
+}
+
+inline ::mlx::core::array gpu_scatter_max(const ::mlx::core::array& base,
+                                          const ScatterIndices& idx,
+                                          const ::mlx::core::array& upd,
+                                          const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_max(base, idx, upd, axes);
+}
+
+inline ::mlx::core::array gpu_scatter_min(const ::mlx::core::array& base,
+                                          const ScatterIndices& idx,
+                                          const ::mlx::core::array& upd,
+                                          const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_min(base, idx, upd, axes);
+}
+
+inline ::mlx::core::array gpu_scatter_prod(const ::mlx::core::array& base,
+                                           const ScatterIndices& idx,
+                                           const ::mlx::core::array& upd,
+                                           const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_prod(base, idx, upd, axes);
+}
+
 }  // namespace backend
 }  // namespace lucid

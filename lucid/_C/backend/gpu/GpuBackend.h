@@ -1339,7 +1339,7 @@ public:
         for (std::size_t d = 0; d < ndim; ++d)
             upd_shape.push_back(1);
         auto updates = ::mlx::core::reshape(*gg.arr, upd_shape);
-        auto result = ::mlx::core::scatter_add(base, indices, updates, axes_v);
+        auto result = gpu_scatter_add(base, indices, updates, axes_v);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
@@ -1788,9 +1788,8 @@ public:
         return axis_scatter_via_multiaxis(
             base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Max,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
-               const ::mlx::core::array& upd, const std::vector<int>& axes) {
-                return ::mlx::core::scatter_max(a, idxs, upd, axes);
-            });
+               const ::mlx::core::array& upd,
+               const std::vector<int>& axes) { return gpu_scatter_max(a, idxs, upd, axes); });
     }
 
     Storage scatter_amin(const Storage& base,
@@ -1803,9 +1802,8 @@ public:
         return axis_scatter_via_multiaxis(
             base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Min,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
-               const ::mlx::core::array& upd, const std::vector<int>& axes) {
-                return ::mlx::core::scatter_min(a, idxs, upd, axes);
-            });
+               const ::mlx::core::array& upd,
+               const std::vector<int>& axes) { return gpu_scatter_min(a, idxs, upd, axes); });
     }
 
     Storage scatter_prod(const Storage& base,
@@ -1818,9 +1816,8 @@ public:
         return axis_scatter_via_multiaxis(
             base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Prod,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
-               const ::mlx::core::array& upd, const std::vector<int>& axes) {
-                return ::mlx::core::scatter_prod(a, idxs, upd, axes);
-            });
+               const ::mlx::core::array& upd,
+               const std::vector<int>& axes) { return gpu_scatter_prod(a, idxs, upd, axes); });
     }
 
     // Sliding-window unfold along ``dim`` producing rank+1 windows of ``size``.
@@ -6661,7 +6658,7 @@ private:
         std::vector<int> axes_v{0, 1, 2, 3};
         std::vector<::mlx::core::array> idxs{n_idx, c_idx, y_b, x_b};
         auto upd = ::mlx::core::reshape(*gg.arr, upd_shape);
-        base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+        base = gpu_scatter_add(base, idxs, upd, axes_v);
         return Storage{gpu::wrap_mlx_array(std::move(base), dt)};
     }
 
@@ -6715,7 +6712,7 @@ private:
         std::vector<int> axes_v{0, 1, 2, 3, 4};
         std::vector<::mlx::core::array> idxs{n_idx, c_idx, d_b, h_b, w_b};
         auto upd = ::mlx::core::reshape(*gg.arr, upd_shape);
-        base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+        base = gpu_scatter_add(base, idxs, upd, axes_v);
         return Storage{gpu::wrap_mlx_array(std::move(base), dt)};
     }
 
@@ -6915,7 +6912,7 @@ private:
                                const ::mlx::core::array& weight) {
             std::vector<::mlx::core::array> idxs{n_idx, c_idx, y_idx, x_idx};
             auto upd = ::mlx::core::reshape(::mlx::core::multiply(*gg.arr, weight), upd_shape);
-            base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+            base = gpu_scatter_add(base, idxs, upd, axes_v);
         };
         scatter_one(y0_b, x0_b, ::mlx::core::multiply(wy0, wx0));
         scatter_one(y0_b, x1_b, ::mlx::core::multiply(wy0, wx1));
@@ -7173,7 +7170,7 @@ private:
                                const ::mlx::core::array& xi, const ::mlx::core::array& weight) {
             std::vector<::mlx::core::array> idxs{n_idx, c_idx, zi, yi, xi};
             auto upd = ::mlx::core::reshape(::mlx::core::multiply(*gg.arr, weight), upd_shape);
-            base = ::mlx::core::scatter_add(base, idxs, upd, axes_v);
+            base = gpu_scatter_add(base, idxs, upd, axes_v);
         };
         scatter_one(z0_b, y0_b, x0_b, ::mlx::core::multiply(wz0, ::mlx::core::multiply(wy0, wx0)));
         scatter_one(z0_b, y0_b, x1_b, ::mlx::core::multiply(wz0, ::mlx::core::multiply(wy0, wx1)));
@@ -7556,7 +7553,7 @@ private:
             }
             auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
             auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
-            dinput_flat = ::mlx::core::scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
+            dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
         } else {
             auto x0 = ::mlx::core::astype(::mlx::core::floor(ix), ::mlx::core::int64);
             auto y0 = ::mlx::core::astype(::mlx::core::floor(iy), ::mlx::core::int64);
@@ -7610,7 +7607,7 @@ private:
                 }
                 auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
                 auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
-                dinput_flat = ::mlx::core::scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
+                dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
             };
             scatter_one_corner(y0c, x0c, wa, in00);
             scatter_one_corner(y1c, x0c, wb, in10);

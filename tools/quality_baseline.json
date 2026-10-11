@@ -189,7 +189,7 @@
    },
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 11414,
-    "lucid/_C/backend/gpu/GpuBackend.h": 5274,
+    "lucid/_C/backend/gpu/GpuBackend.h": 5271,
     "lucid/_ops/composite/elementwise.py": 235,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2797,
