@@ -1355,7 +1355,12 @@ class ContinuousBernoulli(Distribution):
         m, flip, zero = self._flipped()
         p = lucid.where(flip, 1.0 - value, value)
         r = (p * lucid.expm1(m)).log1p() / m
-        return lucid.where(zero, value, lucid.where(flip, 1.0 - r, r))
+        inner = lucid.where(zero, value, lucid.where(flip, 1.0 - r, r))
+        # The ends are named and the rest held in [0, 1]: the closed form
+        # rounds there — icdf(0) was -7.4e-11 at probs = 1 - 1e-7 and
+        # 1.1e-16 at probs = 0.501.
+        inner = lucid.where(value <= 0.0, 0.0, inner.clamp(0.0, 1.0))
+        return lucid.where(value >= 1.0, 1.0, inner)
 
     @override
     def entropy(self) -> Tensor:
