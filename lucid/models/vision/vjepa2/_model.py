@@ -552,6 +552,7 @@ class _RoPEVideoPredictor(nn.Module):
         *,
         image_size: int,
         patch_size: int,
+        grid_depth: int,
         dim: int,
         predictor_dim: int,
         predictor_out_dim: int,
@@ -575,6 +576,10 @@ class _RoPEVideoPredictor(nn.Module):
     ) -> None:
         super().__init__()
         self.grid_size = image_size // patch_size
+        # Tubelet positions along time, fixed by the config as the reference's
+        # ``grid_depth`` is.  Reading it off the largest token index instead
+        # was a host sync inside forward, which no trace can follow (LCD-373).
+        self.grid_depth = grid_depth
         self.predictor_dim = predictor_dim
         self.return_all_tokens = return_all_tokens
         self.uniform_power = uniform_power
@@ -635,14 +640,7 @@ class _RoPEVideoPredictor(nn.Module):
         batch, context_count = int(context.shape[0]), int(context.shape[1])
         target_count = int(target_indices.shape[1])
         tokens = self.predictor_embed(context)
-        temporal = max(
-            1,
-            int(
-                max(int(context_indices.max().item()), int(target_indices.max().item()))
-                + 1
-            )
-            // (self.grid_size * self.grid_size),
-        )
+        temporal = self.grid_depth
         if not self.use_rope:
             positions = _sincos_3d(
                 self.predictor_dim,
@@ -1086,6 +1084,7 @@ class VJEPA2Model(PretrainedModel, BackboneMixin):
         self.predictor = _RoPEVideoPredictor(
             image_size=config.image_size,
             patch_size=config.patch_size,
+            grid_depth=config.token_grid[0],
             dim=config.dim,
             predictor_dim=config.predictor_dim,
             predictor_out_dim=config.predictor_output_dim,
