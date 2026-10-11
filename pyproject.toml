@@ -169,6 +169,14 @@ sha256 = "34ae9b83ad2f0ccdd3e5d48ec35176e7119f57069eef187122916dc941a4ae1f"
 url = "https://files.pythonhosted.org/packages/ee/38/cb985ca86979ca6f954a2a45eb6e3f9b787c5d55227564a04f87953b3d56/mlx_metal-0.32.3-py3-none-macosx_26_0_arm64.whl"
 macos = "26.2"
 
+[tool.setuptools]
+# The wheel's data files are exactly [tool.setuptools.package-data] below.
+# Left on (the pyproject default), every file MANIFEST.in puts in the sdist
+# that sits under a package directory went into the wheel as well: the C++
+# sources, CMakeLists, the gtests and lucid/test's JSON baselines (LCD-447).
+# MANIFEST.in decides what the sdist carries; it never reaches the wheel.
+include-package-data = false
+
 [tool.setuptools.packages.find]
 # Only ship the `lucid` package tree itself — dev tooling (`tools/`,
 # `scripts/`, `web/`, `obsidian/`, `benchmarks/`) and the test tier
@@ -187,8 +195,11 @@ exclude = ["lucid.test*", "lucid.benchmarks*"]
 #           top-level surfaces. Hand-written modules pick up inline
 #           annotations directly; stubs only exist where introspection
 #           can't see signatures (C extensions, registry-injected methods).
-# *.json:   model + weight registry payloads loaded at import time.
-lucid = ["py.typed", "*.pyi", "**/*.pyi", "**/*.json"]
+# Nothing else here is read at runtime.  A glob that reaches below the
+# package also reaches the excluded lucid/test and lucid/benchmarks trees on
+# disk, so a new runtime data file gets its own pattern, scoped to its
+# package; tools/check_wheel.py refuses the test, benchmark and C++ files.
+lucid = ["py.typed", "*.pyi", "**/*.pyi"]
 
 [tool.pytest.ini_options]
 testpaths = ["lucid/test"]

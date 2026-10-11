@@ -201,11 +201,6 @@ _enforce_apple_silicon_only()
 # (PEP 621); the legacy {{VERSION_PLACEHOLDER}} sed scheme was removed
 # alongside the publish.yml rewrite.
 setuptools.setup(
-    package_data={
-        "lucid.weights": ["registry.json", "__init__.pyi"],
-        "lucid.models": ["registry.json"],
-    },
     ext_modules=[CMakeExtension("lucid._C.engine")],
     cmdclass={"build_ext": CMakeBuildExt},
-    include_package_data=True,
 )

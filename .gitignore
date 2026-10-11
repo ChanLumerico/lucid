@@ -60,6 +60,9 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
+# gtest_discover_tests writes its listing into WORKING_DIRECTORY, the source
+# dir (lucid/_C/test/CMakeLists.txt); it holds absolute paths of one machine.
+cmake_test_discovery_*.json
 .ninja_deps
 .ninja_log
 

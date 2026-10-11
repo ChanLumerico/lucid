@@ -4,7 +4,14 @@ include README.md LICENSE CHANGELOG.md THIRD_PARTY_NOTICES.md
 # C++ engine sources need to be in the sdist so source installs can build.
 recursive-include lucid/_C *.h *.hpp *.cpp *.mm *.metal CMakeLists.txt
 recursive-include lucid/_C/cmake *
-recursive-include lucid *.json *.pyi
+recursive-include lucid *.pyi
 
 # setup.py stages the pinned MLX build ([tool.lucid.mlx]) with this script.
 include tools/fetch_mlx.py
+
+# The sdist builds and installs Lucid; it does not test it.  lucid.test* and
+# lucid.benchmarks* are not packages (pyproject packages.find), so their .py
+# files never reach the sdist and their data files must not either: the
+# suites run from a checkout.
+prune lucid/test
+prune lucid/benchmarks
