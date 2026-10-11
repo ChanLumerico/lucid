@@ -3,8 +3,8 @@
 ``_nn_namespace``, ``_linalg_namespace`` and the rest of ``lucid/_C/engine.pyi``'s
 sub-namespace classes are typed out in gen_pyi's template, so regenerating
 cannot correct them and the freshness diff cannot see them drift:
-``_linalg_namespace`` declared a ``foo`` the engine never had and omitted the
-real ``matrix_power``.  ``tools/check_stubs.py`` runs this on every generated
+``_linalg_namespace`` had declared a ``foo`` the engine never had and omitted
+the real ``matrix_power``.  ``tools/check_stubs.py`` runs this on every generated
 stub.  Stdlib only, so the check type-checks on its own.
 """
 
@@ -110,70 +110,3 @@ def namespace_drift(stub: str, engine: object) -> list[str]:
             for attr, sub in _namespace_attrs(cls.body, set(classes)).items()
         ]
     return problems
-
-
-# Drift that existed when the check arrived, pinned so the gate is green while
-# the template fix waits for tools/gen_pyi.py to be free (LCD-402).  Strict
-# both ways: a new mismatch fails, and so does a pin that no longer occurs —
-# the fix commit empties this set.
-KNOWN_DRIFT: frozenset[str] = frozenset(
-    (
-        "einops.einsum: stub (pattern, *tensors), engine (pattern, operands)",
-        "linalg.foo: in the stub, not in the engine",
-        "linalg.householder_product: stub (a, tau), engine (H, tau)",
-        "linalg.lu_solve: stub (b, lu, piv), engine (LU, pivots, b)",
-        "linalg.matrix_power: in the engine, not in the stub",
-        "nn.adaptive_avg_pool1d: stub (x, sz), engine (x, output_l)",
-        "nn.adaptive_avg_pool2d: stub (x, oh, ow), engine (x, output_h, output_w)",
-        "nn.adaptive_avg_pool3d: stub (x, od, oh, ow), engine (x, output_d, output_h, output_w)",
-        "nn.adaptive_max_pool1d: stub (x, sz), engine (x, output_l)",
-        "nn.adaptive_max_pool2d: stub (x, oh, ow), engine (x, output_h, output_w)",
-        "nn.adaptive_max_pool3d: stub (x, od, oh, ow), engine (x, output_d, output_h, output_w)",
-        "nn.alpha_dropout: stub (x, p, training), engine (a, p, training, generator)",
-        "nn.batch_norm_eval: stub (x, rm, rv, w, b, eps), engine (x, mean, var, gamma, beta, eps)",
-        "nn.bce_loss: in the engine, not in the stub",
-        "nn.bce_with_logits: in the engine, not in the stub",
-        "nn.bilinear_layer: stub (x1, x2, w), engine (x1, x2, weight, bias)",
-        "nn.conv_transpose1d: stub (x, w, b, stride, pad, opad, dilation, groups), engine (x, W, b, stride_l, pad_l, opad_l, dilation_l, groups)",
-        "nn.conv_transpose2d: stub (x, w, b, stride_h, stride_w, pad_h, pad_w, opad_h, opad_w, dil_h, dil_w, groups), engine (x, W, b, stride_h, stride_w, pad_h, pad_w, opad_h, opad_w, dilation_h, dilation_w, groups)",
-        "nn.conv_transpose3d: stub (x, w, b, stride_d, stride_h, stride_w, pad_d, pad_h, pad_w, opad_d, opad_h, opad_w, dil_d, dil_h, dil_w, groups), engine (x, W, b, stride_d, stride_h, stride_w, pad_d, pad_h, pad_w, opad_d, opad_h, opad_w, dilation_d, dilation_h, dilation_w, groups)",
-        "nn.conv1d: stub (x, w, b, stride, padding, dilation, groups), engine (x, W, b, stride_l, pad_l, dilation_l, groups)",
-        "nn.conv2d: stub (x, w, b, stride_h, stride_w, pad_h, pad_w, dil_h, dil_w, groups), engine (x, W, b, stride_h, stride_w, pad_h, pad_w, dilation_h, dilation_w, groups)",
-        "nn.conv3d: stub (x, w, b, stride_d, stride_h, stride_w, pad_d, pad_h, pad_w, dil_d, dil_h, dil_w, groups), engine (x, W, b, stride_d, stride_h, stride_w, pad_d, pad_h, pad_w, dilation_d, dilation_h, dilation_w, groups)",
-        "nn.cross_entropy_loss: in the engine, not in the stub",
-        "nn.ctc_loss: stub (input, targets, input_lengths, target_lengths, blank, zero_infinity), engine (log_probs, targets, input_lengths, target_lengths, blank, zero_infinity)",
-        "nn.drop_block: in the engine, not in the stub",
-        "nn.drop_path: in the engine, not in the stub",
-        "nn.dropout: stub (x, p, training), engine (a, p, training, generator)",
-        "nn.dropoutnd: stub (x, p, training), engine (a, p, training, generator)",
-        "nn.embedding_bag: stub (w, x, offsets, mode, padding_idx, include_last_offset), engine (weight, indices, offsets, mode, padding_idx, include_last_offset)",
-        "nn.embedding: stub (w, x, pad), engine (weight, indices, padding_idx)",
-        "nn.global_response_norm: in the engine, not in the stub",
-        "nn.grid_sample: stub (x, grid, mode, padding_mode, align_corners), engine (input, grid, mode, padding_mode, align_corners)",
-        "nn.group_norm: stub (x, w, b, num_groups, eps), engine (x, gamma, beta, num_groups, eps)",
-        "nn.interpolate_bilinear: stub (x, oh, ow, align_corners), engine (input, H_out, W_out, align_corners)",
-        "nn.interpolate_nearest_2d: stub (x, oh, ow), engine (input, H_out, W_out)",
-        "nn.interpolate_nearest_3d: stub (x, od, oh, ow), engine (input, D_out, H_out, W_out)",
-        "nn.interpolate_trilinear: stub (x, od, oh, ow, align_corners), engine (input, D_out, H_out, W_out, align_corners)",
-        "nn.layer_norm: stub (x, w, b, eps), engine (x, gamma, beta, eps)",
-        "nn.linear: stub (x, w, b), engine (x, W, b)",
-        "nn.lstm_forward: stub (x, h0, c0, weights, hidden_size, num_layers, batch_first, bidirectional, training, proj_size), engine (input, h0, c0, weights, hidden_size, num_layers, batch_first, bidirectional, has_bias, proj_size)",
-        "nn.nll_loss: in the engine, not in the stub",
-        "nn.one_hot: stub (x, num_classes), engine (input, num_classes, dtype)",
-        "nn.rms_norm: stub (x, w, eps), engine (x, gamma, eps)",
-        "nn.rotary_pos_embedding: in the engine, not in the stub",
-        "nn.rotate: in the engine, not in the stub",
-        "nn.scaled_dot_product_attention_with_weights: in the engine, not in the stub",
-        "nn.scaled_dot_product_attention: stub (q, k, v, mask, scale, is_causal), engine (query, key, value, attn_mask, scale, is_causal)",
-        "nn.sinusoidal_pos_embedding: in the engine, not in the stub",
-    )
-)
-
-
-def unpinned(problems: list[str]) -> list[str]:
-    """*problems* not in KNOWN_DRIFT, then every pin that no longer occurs."""
-    found = set(problems)
-    return [p for p in problems if p not in KNOWN_DRIFT] + [
-        f"pinned in KNOWN_DRIFT but no longer occurs (remove it): {p}"
-        for p in sorted(KNOWN_DRIFT - found)
-    ]

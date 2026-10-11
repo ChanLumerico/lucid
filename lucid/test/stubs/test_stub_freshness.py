@@ -83,18 +83,3 @@ def test_namespace_check_reports_every_kind_of_drift() -> None:
         "demo.extra: in the engine, not in the stub",
         "demo.renamed: stub (x), engine (input, flag)",
     ]
-
-
-def test_namespace_pins_fail_both_ways() -> None:
-    """The LCD-402 pins hold only the drift that exists: a new mismatch is
-    reported, and a pin whose mismatch is gone is reported too."""
-    from tools.stub_namespaces import KNOWN_DRIFT, unpinned
-
-    pinned = sorted(KNOWN_DRIFT)
-    assert unpinned(pinned) == []
-    assert unpinned([*pinned, "demo.new: in the engine, not in the stub"]) == [
-        "demo.new: in the engine, not in the stub"
-    ]
-    if pinned:
-        gone = unpinned(pinned[1:])
-        assert gone == [f"pinned in KNOWN_DRIFT but no longer occurs (remove it): {pinned[0]}"]

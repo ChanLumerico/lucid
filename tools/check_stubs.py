@@ -39,9 +39,9 @@ def main() -> int:
         return 1
 
     from lucid._C import engine as _C_engine
-    from tools.stub_namespaces import namespace_drift, unpinned
+    from tools.stub_namespaces import namespace_drift
 
-    drift = unpinned(namespace_drift(generated["lucid/_C/engine.pyi"], _C_engine))
+    drift = namespace_drift(generated["lucid/_C/engine.pyi"], _C_engine)
     for line in drift:
         print(f"[check_stubs] NAMESPACE {line}")
     if drift:

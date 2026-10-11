@@ -240,7 +240,7 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
     # are and keep the exact integer path.
     impl_list = _promote_impls([_unwrap(t) for t in operands])
     explicit, impl_list = _einsum.normalise(equation, impl_list)
-    return _wrap(_C_einops.einsum(explicit, impl_list))  # type: ignore[arg-type]
+    return _wrap(_C_einops.einsum(explicit, impl_list))
 
 
 __all__ = ["rearrange", "reduce", "repeat", "einsum"]
