@@ -152,7 +152,7 @@ __all__ = [
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
-    "relu", "sigmoid",
+    "relu", "sigmoid", "selu",
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "floor", "ceil", "round", "trunc", "frac",
     "sin", "cos", "tan", "arcsin", "arccos", "arctan", "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
-    "relu", "sigmoid",
+    "relu", "sigmoid", "selu",
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     "erf", "erfinv",

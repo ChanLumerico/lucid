@@ -17,7 +17,13 @@ same order, of the same kinds (positional-only, either, ``*args``,
 keyword-only, ``**kwargs``), optional exactly where the runtime is.  An
 overloaded stub may split the signature between its overloads, so each
 overload is held to naming only parameters the runtime has, of the same
-kind.  ``nn.functional`` has no stub file: its source is the stub.
+kind.  A stubbed name missing at runtime fails (``dot`` / ``inner`` /
+``outer`` and seven activations were stubbed on ``lucid`` and lived only
+under ``linalg`` / ``nn.functional``); the few left unchecked are listed
+in ``_CONTRACT_ONLY``.  A Tensor method generated from the registry is
+held to its callee's signature — that branch was skipped for 185 of 246
+methods until the review.  ``nn.functional`` has no stub file: its
+source is the stub.
 """
 
 import annotationlib
@@ -82,6 +88,10 @@ def _runtime_params(fn: object, method: bool) -> list[_Param] | None:
         )
     except TypeError, ValueError:
         return None
+    return _signature_params(signature, method)
+
+
+def _signature_params(signature: inspect.Signature, method: bool) -> list[_Param]:
     params = list(signature.parameters.values())
     if method and params and params[0].name == "self":
         params = params[1:]
@@ -142,9 +152,8 @@ def _tensor_runtime(name: str) -> list[_Param] | None:
     entry = _BY_METHOD.get(name)
     if entry is None or entry.n_tensor_args == -1:
         return None
-    params = _runtime_params(ops._signature_for_entry(entry), method=False)
-    params = None if params is None else params[1:]
-    if params is None or _forwards(params):
+    params = _signature_params(ops._signature_for_entry(entry), method=False)[1:]
+    if _forwards(params):
         return None
     # The method body takes ``*args, **kwargs``: every parameter is either.
     return params
@@ -159,20 +168,47 @@ def _cases() -> list[object]:
     return cases
 
 
+#: Stubbed names the runtime does not spell out — the only cases left
+#: unchecked, and listed so the guard cannot go quiet: a name that stops
+#: being one of these fails, as does a new one.  ``var`` / ``std`` and the
+#: pairs read the reference's overloads by type; ``to`` its four shapes;
+#: ``compile`` is a decorator; ``no_grad`` / ``enable_grad`` are classes.
+_CONTRACT_ONLY = frozenset(
+    {
+        "lucid.compile",
+        "lucid.enable_grad",
+        "lucid.no_grad",
+        "lucid.std",
+        "lucid.std_mean",
+        "lucid.var",
+        "lucid.var_mean",
+        "Tensor.std",
+        "Tensor.to",
+        "Tensor.var",
+    }
+)
+
+
+def _runtime(owner: str, name: str) -> tuple[list[_Param] | None, bool]:
+    """``name``'s runtime parameters (``None`` for a forwarder) and whether a method."""
+    if owner == "Tensor":
+        assert hasattr(Tensor, name), f"Tensor.{name} is stubbed, not at runtime"
+        return _tensor_runtime(name), True
+    obj = getattr(lucid, name, None)
+    assert obj is not None, f"lucid.{name} is stubbed, not at runtime"
+    if isinstance(obj, type):
+        return None, False
+    return _runtime_params(obj, method=False), False
+
+
 @pytest.mark.parametrize("owner,name,defs", _cases())
 def test_the_stub_binds_what_the_runtime_binds(
     owner: str, name: str, defs: list[ast.FunctionDef]
 ) -> None:
-    if owner == "Tensor":
-        runtime = _tensor_runtime(name)
-        method = True
-    else:
-        obj = getattr(lucid, name, None)
-        if obj is None or isinstance(obj, type):
-            pytest.skip("no function of this name at runtime")
-        runtime = _runtime_params(obj, method=False)
-        method = False
-    if runtime is None or _forwards(runtime):
-        pytest.skip("the runtime forwards *args, **kwargs; its stub is the contract")
+    runtime, method = _runtime(owner, name)
+    unchecked = runtime is None or _forwards(runtime)
+    assert unchecked == (f"{owner}.{name}" in _CONTRACT_ONLY)
+    if runtime is None or unchecked:
+        return
     stub = [_stub_params(d, method) for d in defs]
     assert _drift(stub, runtime) == []

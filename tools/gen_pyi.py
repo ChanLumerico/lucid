@@ -1181,7 +1181,7 @@ class Tensor:
     def is_complex(self) -> bool: ...
     def share_memory_(self) -> Self: ...
     def fill_(self, value: float) -> Self: ...
-    def copy_(self, other: Self) -> Self: ...
+    def copy_(self, other: Self, non_blocking: bool = False) -> Self: ...
     @overload
     def flip(self, dims: _int | Sequence[_int]) -> Self: ...
     @overload
@@ -1412,7 +1412,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def cummax(self, dim: _int | None = None) -> Tensor: ...",
         "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
-        "    def unsqueeze(self, dim: DimLike = None) -> Tensor: ...",
+        "    def unsqueeze(self, dim: DimLike) -> Tensor: ...",
         "    def gather(self, dim: _int, index: Tensor) -> Tensor: ...",
         "    def sort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
         "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
@@ -2492,9 +2492,9 @@ def gen_init_pyi() -> tuple[str, int]:
             "prod",
             "max",
             "min",
-            # A third positional argument binds by count during the keepdim
-            # deprecation, so the runtime signature is open (*args, **kwargs);
-            # the stub shows the reference order it is moving to.
+            # The reference's overloads bind the second argument by type
+            # (a bool is ``unbiased``), so the runtime signature is open
+            # (*args, **kwargs); the stub shows the merged reference order.
             "var",
             "std",
             "argmax",
@@ -2505,18 +2505,21 @@ def gen_init_pyi() -> tuple[str, int]:
             "split",
             "tensordot",
             "meshgrid",
-            # The adapter binds by type to keep the deprecated order
-            # working, so its runtime signature is open (*args, **kwargs).
             "gather",
         }
     )
+
+    import lucid
 
     seen: set[str] = set()
     lines = []
     count = 0
     for entry in _REGISTRY:
         fn = entry.free_fn_name
-        if fn is None or fn in seen or fn in _OVERRIDE_NAMES:
+        # Only what ``lucid.<name>`` reaches: ``dot`` / ``inner`` / ``outer``
+        # live under ``lucid.linalg`` (H8), the activations under
+        # ``nn.functional``.
+        if fn is None or fn in seen or fn in _OVERRIDE_NAMES or not hasattr(lucid, fn):
             continue
         seen.add(fn)
         lines.append(
