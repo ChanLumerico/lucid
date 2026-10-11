@@ -32,25 +32,6 @@
 
 namespace lucid::compile {
 
-// The graph and the first input of a node that reads a tensor and writes
-// one.  ``ok`` is false — the emitter declines — when the node has no
-// input or output, or either does not resolve.
-struct UnaryInput {
-    MPSGraph* g = nil;
-    MPSGraphTensor* x = nil;
-    bool ok = false;
-};
-
-[[maybe_unused]] inline UnaryInput resolve_unary(BuilderContext& ctx, const OpNode& node) {
-    if (node.inputs.empty() || node.outputs.empty() || node.inputs[0] < 0)
-        return {};
-    MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-    MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
-    if (g == nil || x == nil)
-        return {};
-    return {g, x, true};
-}
-
 // Pull an ``int64_t`` attribute from ``node`` by key, falling back to
 // ``def`` if the key is absent or the stored variant alternative
 // doesn't match.  Used for axis / dim / kernel_size / padding / etc.

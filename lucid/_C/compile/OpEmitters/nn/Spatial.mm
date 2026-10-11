@@ -112,13 +112,16 @@ public:
     explicit InterpolateEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        const UnaryInput u = resolve_unary(ctx, node);
+        if (node.inputs.empty() || node.outputs.empty() || node.inputs[0] < 0)
+            return false;
+        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
         std::vector<std::int64_t> in, out;
-        if (!u.ok || !graph_resample_extents(u.x, node.outputs[0].shape, RANK, in, out))
+        if (g == nil || !graph_resample_extents(x, node.outputs[0].shape, RANK, in, out))
             return false;
         const bool align =
             FILTER == ResampleFilter::Linear && bool_attr(node, "align_corners", false);
-        MPSGraphTensor* y = graph_resample(u.g, u.x, in, out, FILTER, align, false);
+        MPSGraphTensor* y = graph_resample(g, x, in, out, FILTER, align, false);
         if (y == nil)
             return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)y);

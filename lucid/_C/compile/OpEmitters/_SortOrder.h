@@ -29,12 +29,20 @@
 namespace lucid::compile {
 
 // ``x`` as the key the order is taken on: zeros of either sign made +0.0 and
-// bool widened to int32 (false < true, as eager orders it).
+// bool widened to int32 (false < true, as eager orders it).  Half precision
+// is widened to float32 first — exact, so the order is the same — because
+// MPSGraph's compare-to-zero pass rejects a float16 ``equal`` with a warning
+// on every compile ("ConvertBinaryCompareToZero expects the second operand
+// to be zero").
 inline MPSGraphTensor* graph_sort_key(MPSGraph* g, MPSGraphTensor* x) {
-    const MPSDataType dt = x.dataType;
+    MPSDataType dt = x.dataType;
     if (dt == MPSDataTypeBool)
         return [g castTensor:x toType:MPSDataTypeInt32 name:nil];
-    if (dt != MPSDataTypeFloat32 && dt != MPSDataTypeFloat16 && dt != MPSDataTypeBFloat16)
+    if (dt == MPSDataTypeFloat16 || dt == MPSDataTypeBFloat16) {
+        x = [g castTensor:x toType:MPSDataTypeFloat32 name:nil];
+        dt = MPSDataTypeFloat32;
+    }
+    if (dt != MPSDataTypeFloat32)
         return x;
     MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:dt];
     MPSGraphTensor* is_zero = [g equalWithPrimaryTensor:x secondaryTensor:zero name:nil];

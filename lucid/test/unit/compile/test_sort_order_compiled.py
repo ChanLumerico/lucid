@@ -87,6 +87,22 @@ def test_argmax_and_argmin(dtype: str, dim: int, op: str) -> None:
     _same(lambda t: fn(t, dim=dim) * 1, _rows(DTYPES[dtype]))
 
 
+@pytest.mark.parametrize("dtype", list(FLOATS))
+def test_compiling_the_order_prints_no_mps_warning(
+    dtype: str, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """The ±0 key once ran a float16 ``equal`` that MPSGraph's
+    compare-to-zero pass rejected with a warning on every compile."""
+    x = _rows(FLOATS[dtype])
+    capfd.readouterr()
+    _same(lambda t: lucid.argsort(t) * 1, x)
+    _same(lambda t: lucid.sort(t) * 1, x)
+    _same(lambda t: tuple(o * 1 for o in lucid.topk(t, 3)), x)
+    out, err = capfd.readouterr()
+    assert "mps_equal" not in out + err
+    assert "ConvertBinaryCompareToZero" not in out + err
+
+
 def _wide() -> lucid.Tensor:
     base = 1 << 40
     vals = [base + 1, base + 3, base + 2, -base, 1 << 33, base + 3 + (1 << 34), 5, base]

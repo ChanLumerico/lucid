@@ -274,14 +274,14 @@ public:
 
 struct SpatialVjpRegistrar {
     SpatialVjpRegistrar() {
-        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Linear, 2>>(
-            "interpolate_bilinear"));
-        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 2>>(
-            "interpolate_nearest_2d"));
-        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Linear, 3>>(
-            "interpolate_trilinear"));
-        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 3>>(
-            "interpolate_nearest_3d"));
+        register_vjp_emitter(
+            std::make_unique<InterpolateVjp<ResampleFilter::Linear, 2>>("interpolate_bilinear"));
+        register_vjp_emitter(
+            std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 2>>("interpolate_nearest_2d"));
+        register_vjp_emitter(
+            std::make_unique<InterpolateVjp<ResampleFilter::Linear, 3>>("interpolate_trilinear"));
+        register_vjp_emitter(
+            std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 3>>("interpolate_nearest_3d"));
         register_vjp_emitter(std::make_unique<GridSampleVjp>());
     }
 };
