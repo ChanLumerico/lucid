@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "../_AttrHelpers.h"
+#include "../_IndexBounds.h"
 
 namespace lucid::compile {
 
@@ -524,55 +525,23 @@ public:
         // Reading one input pixel per output position: bring the
         // coordinates into range, flatten them to a single index, and let
         // ``gatherAlongAxis`` do the data-dependent part.  Under zero
-        // padding the out-of-range positions are multiplied out after the
-        // gather rather than skipped, which is the same value.
+        // padding the out-of-range positions are replaced by 0 after the
+        // gather — selected, not multiplied, so an infinite pixel read at
+        // the clamped position does not turn into NaN (eager's rule).
         const auto sample = [&](MPSGraphTensor* px, MPSGraphTensor* py) -> MPSGraphTensor* {
-            MPSGraphTensor* inside = nil;
-            if (padding == 0) {
-                MPSGraphTensor* a = [g greaterThanOrEqualToWithPrimaryTensor:px
-                                                             secondaryTensor:x_lo
-                                                                        name:nil];
-                MPSGraphTensor* b = [g lessThanOrEqualToWithPrimaryTensor:px
-                                                          secondaryTensor:x_hi
-                                                                     name:nil];
-                MPSGraphTensor* c = [g greaterThanOrEqualToWithPrimaryTensor:py
-                                                             secondaryTensor:y_lo
-                                                                        name:nil];
-                MPSGraphTensor* d = [g lessThanOrEqualToWithPrimaryTensor:py
-                                                          secondaryTensor:y_hi
-                                                                     name:nil];
-                MPSGraphTensor* ab = [g logicalANDWithPrimaryTensor:a secondaryTensor:b name:nil];
-                MPSGraphTensor* cd = [g logicalANDWithPrimaryTensor:c secondaryTensor:d name:nil];
-                inside = [g logicalANDWithPrimaryTensor:ab secondaryTensor:cd name:nil];
-            }
-            MPSGraphTensor* cx = [g clampWithTensor:px
-                                     minValueTensor:x_lo
-                                     maxValueTensor:x_hi
-                                               name:nil];
-            MPSGraphTensor* cy = [g clampWithTensor:py
-                                     minValueTensor:y_lo
-                                     maxValueTensor:y_hi
-                                               name:nil];
-            // Already whole numbers (floor / rint), so the cast's
-            // truncation has nothing to discard.
-            MPSGraphTensor* xi = [g castTensor:cx toType:MPSDataTypeInt32 name:nil];
-            MPSGraphTensor* yi = [g castTensor:cy toType:MPSDataTypeInt32 name:nil];
-            MPSGraphTensor* stride = [g constantWithScalar:(double)W dataType:MPSDataTypeInt32];
-            MPSGraphTensor* flat =
-                [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:yi
-                                                                secondaryTensor:stride
-                                                                           name:nil]
-                             secondaryTensor:xi
-                                        name:nil];
-            MPSGraphTensor* spread = [g broadcastTensor:flat
+            const GraphPixel pixel = graph_pixel(g, px, py, H, W, padding == 0);
+            MPSGraphTensor* spread = [g broadcastTensor:pixel.flat
                                                 toShape:@[ @(N), @(C), @(L) ]
                                                    name:nil];
             MPSGraphTensor* v = [g gatherAlongAxis:2
                                  withUpdatesTensor:flat_x
                                      indicesTensor:spread
                                               name:nil];
-            if (v != nil && inside != nil)
-                v = mul(v, [g castTensor:inside toType:dt name:nil]);
+            if (v != nil && pixel.inside != nil)
+                v = [g selectWithPredicateTensor:pixel.inside
+                             truePredicateTensor:v
+                            falsePredicateTensor:real(0.0)
+                                            name:nil];
             return v;
         };
 
@@ -588,8 +557,8 @@ public:
                 // blend degenerates there.  Clamping the corners instead
                 // would interpolate against a pixel the engine never
                 // reads.
-                ix = [g clampWithTensor:ix minValueTensor:x_lo maxValueTensor:x_hi name:nil];
-                iy = [g clampWithTensor:iy minValueTensor:y_lo maxValueTensor:y_hi name:nil];
+                ix = graph_clamp_keeping_nan(g, ix, x_lo, x_hi);
+                iy = graph_clamp_keeping_nan(g, iy, y_lo, y_hi);
             }
             MPSGraphTensor* x0 = [g floorWithTensor:ix name:nil];
             MPSGraphTensor* y0 = [g floorWithTensor:iy name:nil];

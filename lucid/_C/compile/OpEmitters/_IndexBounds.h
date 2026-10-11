@@ -195,6 +195,114 @@ inline MPSGraphTensor* graph_scatter_set_dropping(MPSGraph* g,
     return [g sliceTensor:written dimension:axis start:0 length:extent name:@"scatter_cut_sink"];
 }
 
+// A class-index target (``nll_loss``, ``cross_entropy_loss``) checked against
+// ``classes`` classes, one per sample.  Eager raises IndexError for a target
+// that is neither a class nor ``ignore_index``; a compiled graph cannot raise
+// on a value fed after it was built, so that sample's loss is NaN (policy B)
+// and nothing outside the class axis is read.
+struct GraphClassTarget {
+    MPSGraphTensor* safe = nil;     // in [0, classes) everywhere: what to gather at
+    MPSGraphTensor* counts = nil;   // bool: names a class and is not ignored
+    MPSGraphTensor* ignored = nil;  // bool: equals ``ignore_index`` (contributes 0)
+};
+
+inline GraphClassTarget graph_class_target(MPSGraph* g,
+                                           MPSGraphTensor* target,
+                                           std::int64_t classes,
+                                           std::int64_t ignore_index) {
+    const GraphAxisIndex ix = graph_axis_index(g, target, classes, NegativeIndex::OutOfRange);
+    if (ix.safe == nil)
+        return {};
+    MPSGraphTensor* ignored =
+        [g equalWithPrimaryTensor:target
+                  secondaryTensor:[g constantWithScalar:static_cast<double>(ignore_index)
+                                               dataType:target.dataType]
+                             name:@"target_ignored"];
+    MPSGraphTensor* counts = [g logicalANDWithPrimaryTensor:ix.in_range
+                                            secondaryTensor:[g notWithTensor:ignored name:nil]
+                                                       name:@"target_counts"];
+    return {ix.safe, counts, ignored};
+}
+
+// One pixel of an ``H x W`` image named by a whole-numbered floating
+// coordinate pair (``grid_sample``'s corners): its index into the flattened
+// image, and whether it lies inside.
+struct GraphPixel {
+    MPSGraphTensor* flat = nil;    // int32, in [0, H * W) everywhere
+    MPSGraphTensor* inside = nil;  // bool; nil when ``zero_padding`` is false
+};
+
+// The pixel at ``(px, py)``, clamped onto the image for the read.  A NaN
+// coordinate is taken as 0 first: casting NaN to an integer is undefined and
+// comparing it is false everywhere, so it otherwise read an unknown pixel.
+// Eager casts after rounding, and Apple silicon's float-to-int conversion
+// turns NaN into 0 on both devices, so eager reads position 0 there and
+// counts it inside — a NaN nearest sample is that pixel, a NaN bilinear
+// sample NaN through its weights.  ``inside`` is computed only for zero
+// padding, the one mode whose outside reads are replaced.
+inline GraphPixel graph_pixel(MPSGraph* g,
+                              MPSGraphTensor* px,
+                              MPSGraphTensor* py,
+                              long long H,
+                              long long W,
+                              bool zero_padding) {
+    const MPSDataType dt = px.dataType;
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:dt];
+    const auto without_nan = [&](MPSGraphTensor* p) {
+        return [g selectWithPredicateTensor:[g isNaNWithTensor:p name:nil]
+                        truePredicateTensor:zero
+                       falsePredicateTensor:p
+                                       name:@"coordinate_nan_to_zero"];
+    };
+    MPSGraphTensor* x = without_nan(px);
+    MPSGraphTensor* y = without_nan(py);
+    MPSGraphTensor* x_hi = [g constantWithScalar:static_cast<double>(W - 1) dataType:dt];
+    MPSGraphTensor* y_hi = [g constantWithScalar:static_cast<double>(H - 1) dataType:dt];
+    GraphPixel out;
+    if (zero_padding) {
+        const auto within = [&](MPSGraphTensor* p, MPSGraphTensor* hi) {
+            return [g logicalANDWithPrimaryTensor:[g greaterThanOrEqualToWithPrimaryTensor:p
+                                                                           secondaryTensor:zero
+                                                                                      name:nil]
+                                  secondaryTensor:[g lessThanOrEqualToWithPrimaryTensor:p
+                                                                        secondaryTensor:hi
+                                                                                   name:nil]
+                                             name:nil];
+        };
+        out.inside = [g logicalANDWithPrimaryTensor:within(x, x_hi)
+                                    secondaryTensor:within(y, y_hi)
+                                               name:@"pixel_inside"];
+    }
+    // Whole numbers already (floor / rint), so the cast discards nothing.
+    const auto index = [&](MPSGraphTensor* p, MPSGraphTensor* hi) {
+        return [g castTensor:[g clampWithTensor:p minValueTensor:zero maxValueTensor:hi name:nil]
+                      toType:MPSDataTypeInt32
+                        name:nil];
+    };
+    MPSGraphTensor* row =
+        [g multiplicationWithPrimaryTensor:index(y, y_hi)
+                           secondaryTensor:[g constantWithScalar:static_cast<double>(W)
+                                                        dataType:MPSDataTypeInt32]
+                                      name:nil];
+    out.flat = [g additionWithPrimaryTensor:row secondaryTensor:index(x, x_hi) name:@"pixel_flat"];
+    return out;
+}
+
+// ``p`` clamped into [lo, hi] with NaN left NaN, as eager's clamp leaves it
+// (a maximum then a minimum, each of which propagates NaN).  MPSGraph's
+// clamp answers a bound for NaN, which turned a NaN border-padded bilinear
+// sample into a finite one.
+inline MPSGraphTensor*
+graph_clamp_keeping_nan(MPSGraph* g, MPSGraphTensor* p, MPSGraphTensor* lo, MPSGraphTensor* hi) {
+    return [g selectWithPredicateTensor:[g isNaNWithTensor:p name:nil]
+                    truePredicateTensor:p
+                   falsePredicateTensor:[g clampWithTensor:p
+                                            minValueTensor:lo
+                                            maxValueTensor:hi
+                                                      name:nil]
+                                   name:@"clamp_keeping_nan"];
+}
+
 // MPSGraph's along-axis gather and scatter want the index to match the data
 // on every axis but ``skip_axis`` (pass -1 for none).  The reference — and
 // Lucid's eager kernels — allow an index shorter there, and MPSGraph handed

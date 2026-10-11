@@ -24,6 +24,7 @@
 #include <variant>
 
 #include "../../OpEmitters/_AttrHelpers.h"
+#include "../../OpEmitters/_IndexBounds.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -268,57 +269,27 @@ public:
         struct Corner {
             MPSGraphTensor* index;
             MPSGraphTensor* keep;
+            MPSGraphTensor* inside;  // bool; nil under border padding
         };
         const auto corner = [&](MPSGraphTensor* px, MPSGraphTensor* py) -> Corner {
-            MPSGraphTensor* keep = real(1.0);
-            if (padding == 0) {
-                MPSGraphTensor* a = [g greaterThanOrEqualToWithPrimaryTensor:px
-                                                             secondaryTensor:x_lo
-                                                                        name:nil];
-                MPSGraphTensor* b = [g lessThanOrEqualToWithPrimaryTensor:px
-                                                          secondaryTensor:x_hi
-                                                                     name:nil];
-                MPSGraphTensor* cc = [g greaterThanOrEqualToWithPrimaryTensor:py
-                                                              secondaryTensor:y_lo
-                                                                         name:nil];
-                MPSGraphTensor* d = [g lessThanOrEqualToWithPrimaryTensor:py
-                                                          secondaryTensor:y_hi
-                                                                     name:nil];
-                keep = as_real([g logicalANDWithPrimaryTensor:[g logicalANDWithPrimaryTensor:a
-                                                                             secondaryTensor:b
-                                                                                        name:nil]
-                                              secondaryTensor:[g logicalANDWithPrimaryTensor:cc
-                                                                             secondaryTensor:d
-                                                                                        name:nil]
-                                                         name:nil]);
-            }
-            MPSGraphTensor* cx = [g clampWithTensor:px
-                                     minValueTensor:x_lo
-                                     maxValueTensor:x_hi
-                                               name:nil];
-            MPSGraphTensor* cy = [g clampWithTensor:py
-                                     minValueTensor:y_lo
-                                     maxValueTensor:y_hi
-                                               name:nil];
-            MPSGraphTensor* xi = [g castTensor:cx toType:MPSDataTypeInt32 name:nil];
-            MPSGraphTensor* yi = [g castTensor:cy toType:MPSDataTypeInt32 name:nil];
-            MPSGraphTensor* stride = [g constantWithScalar:(double)W dataType:MPSDataTypeInt32];
-            MPSGraphTensor* flat =
-                [g additionWithPrimaryTensor:[g multiplicationWithPrimaryTensor:yi
-                                                                secondaryTensor:stride
-                                                                           name:nil]
-                             secondaryTensor:xi
-                                        name:nil];
-            return {
-                [g broadcastTensor:flat toShape:@[ @(N), @(C), @(L) ] name:nil], keep
-            };
+            const GraphPixel pixel = graph_pixel(g, px, py, H, W, padding == 0);
+            return {[g broadcastTensor:pixel.flat toShape:@[ @(N), @(C), @(L) ] name:nil],
+                    pixel.inside == nil ? real(1.0) : as_real(pixel.inside),
+                    pixel.inside};
         };
+        // Selected, not multiplied, as the forward reads it: an infinite
+        // pixel at the clamped position of an outside corner is 0 there.
         const auto read = [&](const Corner& k) -> MPSGraphTensor* {
             MPSGraphTensor* v = [g gatherAlongAxis:2
                                  withUpdatesTensor:flat_x
                                      indicesTensor:k.index
                                               name:nil];
-            return mul(v, k.keep);
+            if (k.inside == nil)
+                return v;
+            return [g selectWithPredicateTensor:k.inside
+                            truePredicateTensor:v
+                           falsePredicateTensor:real(0.0)
+                                           name:nil];
         };
 
         std::vector<Corner> corners;
@@ -349,8 +320,8 @@ public:
                                                                                 secondaryTensor:y_hi
                                                                                            name:nil]
                                                            name:nil]);
-                ix = [g clampWithTensor:ix minValueTensor:x_lo maxValueTensor:x_hi name:nil];
-                iy = [g clampWithTensor:iy minValueTensor:y_lo maxValueTensor:y_hi name:nil];
+                ix = graph_clamp_keeping_nan(g, ix, x_lo, x_hi);
+                iy = graph_clamp_keeping_nan(g, iy, y_lo, y_hi);
             }
             MPSGraphTensor* x0 = [g floorWithTensor:ix name:nil];
             MPSGraphTensor* y0 = [g floorWithTensor:iy name:nil];

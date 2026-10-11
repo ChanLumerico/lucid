@@ -14,11 +14,13 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cmath>
 #include <memory>
 #include <string_view>
 #include <variant>
 
 #include "../OpEmitter.h"
+#include "../_IndexBounds.h"
 
 namespace lucid::compile {
 
@@ -253,174 +255,124 @@ public:
     }
 };
 
-// nll_loss(log_probs, target, [weight]) — per-sample value is
-// ``-log_probs[target_i]`` (gathered along axis 1).  Optional
-// per-class ``weight`` is gathered along axis 0 then multiplied.
-// Optional ``ignore_index`` masks samples out.  Then ``reduction``.
+// The ``ignore_index`` attr, -100 when the trace did not record one.
+inline std::int64_t ignore_index_of(const OpNode& node) {
+    auto it = node.attrs.find("ignore_index");
+    if (it == node.attrs.end())
+        return -100;
+    const auto* p = std::get_if<std::int64_t>(&it->second);
+    return p ? *p : -100;
+}
+
+// ``-log_p[i, target_i] * weight[target_i]`` per sample, then ``reduction``
+// — the part ``nll_loss`` and ``cross_entropy_loss`` share.  The target goes
+// through ``graph_class_target`` first: an ignored sample is 0, a target
+// outside the classes is NaN (eager raises there), and the gathers only ever
+// see an index inside the class axis.  A weighted mean divides by the
+// weight of the counted samples, as eager does.  nil — decline to eager —
+// for any layout but (B, C) with a (B,) target, or an unknown class count.
+inline MPSGraphTensor* class_target_loss(MPSGraph* g,
+                                         MPSGraphTensor* log_p,
+                                         MPSGraphTensor* tgt,
+                                         MPSGraphTensor* weight,
+                                         std::int64_t ignore_index,
+                                         std::int64_t reduction) {
+    if (log_p.shape.count != 2 || tgt.shape.count != 1)
+        return nil;
+    const GraphClassTarget t = graph_class_target(g, tgt, static_extent(log_p, 1), ignore_index);
+    if (t.safe == nil)
+        return nil;
+    const MPSDataType ft = log_p.dataType;
+    MPSGraphTensor* column = [g reshapeTensor:t.safe withShape:@[ @-1, @1 ] name:nil];
+    MPSGraphTensor* picked =
+        [g reshapeTensor:[g gatherAlongAxis:1 withUpdatesTensor:log_p indicesTensor:column name:nil]
+               withShape:@[ @-1 ]
+                    name:nil];
+    MPSGraphTensor* w_t = [g constantWithScalar:1.0 dataType:ft];
+    if (weight != nil) {
+        if (weight.shape.count != 1)
+            return nil;
+        MPSGraphTensor* w = weight.dataType == ft ? weight : [g castTensor:weight toType:ft name:nil];
+        w_t = [g gatherAlongAxis:0 withUpdatesTensor:w indicesTensor:t.safe name:nil];
+    }
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:ft];
+    MPSGraphTensor* stray = [g selectWithPredicateTensor:t.ignored
+                                     truePredicateTensor:zero
+                                    falsePredicateTensor:[g constantWithScalar:std::nan("")
+                                                                      dataType:ft]
+                                                    name:nil];
+    MPSGraphTensor* per_sample = [g
+        selectWithPredicateTensor:t.counts
+              truePredicateTensor:[g negativeWithTensor:[g multiplicationWithPrimaryTensor:picked
+                                                                           secondaryTensor:w_t
+                                                                                      name:nil]
+                                                   name:nil]
+             falsePredicateTensor:stray
+                             name:@"class_target_loss"];
+    if (reduction == 0)
+        return per_sample;
+    MPSGraphTensor* total = [g reductionSumWithTensor:per_sample axes:@[ @0 ] name:nil];
+    if (reduction == 2)
+        return total;
+    MPSGraphTensor* counted = [g selectWithPredicateTensor:t.counts
+                                       truePredicateTensor:w_t
+                                      falsePredicateTensor:zero
+                                                      name:nil];
+    return [g divisionWithPrimaryTensor:total
+                        secondaryTensor:[g reductionSumWithTensor:counted axes:@[ @0 ] name:nil]
+                                   name:@"class_target_loss_mean"];
+}
+
+// Binds ``nll_loss`` / ``cross_entropy_loss``; ``log_softmax_first`` for the
+// latter, whose input is logits.
+inline bool emit_class_target_loss(BuilderContext& ctx, const OpNode& node, bool log_softmax_first) {
+    if (node.inputs.size() < 2 || node.outputs.empty())
+        return false;
+    const TensorId in_id = node.inputs[0];
+    const TensorId tg_id = node.inputs[1];
+    if (in_id < 0 || tg_id < 0)
+        return false;
+    MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
+    MPSGraphTensor* in = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
+    MPSGraphTensor* tgt = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
+    if (g == nil || in == nil || tgt == nil)
+        return false;
+    MPSGraphTensor* weight = nil;
+    if (node.inputs.size() >= 3 && node.inputs[2] >= 0) {
+        weight = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[2]);
+        if (weight == nil)
+            return false;
+    }
+    MPSGraphTensor* log_p =
+        log_softmax_first
+            ? [g logarithmWithTensor:[g softMaxWithTensor:in axis:1 name:nil] name:nil]
+            : in;
+    MPSGraphTensor* loss =
+        class_target_loss(g, log_p, tgt, weight, ignore_index_of(node), reduction_of(node));
+    if (loss == nil)
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)loss);
+    return true;
+}
+
+// nll_loss(log_probs, target, [weight]).  Today's engine records only the
+// log-probabilities as a trace input, so this declines; it is ready for the
+// target to be wired in.
 class NLLLossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "nll_loss"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty())
-            return false;
-        TensorId in_id = node.inputs[0];
-        TensorId tg_id = node.inputs[1];
-        if (in_id < 0 || tg_id < 0)
-            return false;
-        std::int64_t reduction = reduction_of(node);
-        std::int64_t ignore_index = -100;
-        if (auto it = node.attrs.find("ignore_index"); it != node.attrs.end()) {
-            if (const auto* p = std::get_if<std::int64_t>(&it->second)) ignore_index = *p;
-        }
-
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* log_p = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
-        MPSGraphTensor* tgt = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
-        if (g == nil || log_p == nil || tgt == nil)
-            return false;
-        MPSDataType ft = log_p.dataType;
-
-        // Gather along axis 1: pick log_p[..., target, ...].
-        MPSGraphTensor* gathered =
-            [g gatherAlongAxis:1 withUpdatesTensor:log_p indicesTensor:tgt name:nil];
-        MPSGraphTensor* per_sample = [g negativeWithTensor:gathered name:nil];
-
-        // Optional class weight (input[2]).
-        if (node.inputs.size() >= 3 && node.inputs[2] >= 0) {
-            MPSGraphTensor* w = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[2]);
-            if (w != nil) {
-                MPSGraphTensor* w_gather =
-                    [g gatherAlongAxis:0
-                       withUpdatesTensor:w
-                          indicesTensor:tgt
-                                   name:nil];
-                per_sample = [g multiplicationWithPrimaryTensor:per_sample
-                                                secondaryTensor:w_gather
-                                                           name:nil];
-            }
-        }
-
-        // ignore_index mask — zero out samples whose target == ignore_index.
-        MPSGraphTensor* ig_c =
-            [g constantWithScalar:ignore_index dataType:tgt.dataType];
-        MPSGraphTensor* keep = [g notEqualWithPrimaryTensor:tgt
-                                            secondaryTensor:ig_c
-                                                       name:nil];
-        MPSGraphTensor* keep_f = [g castTensor:keep toType:ft name:nil];
-        per_sample = [g multiplicationWithPrimaryTensor:per_sample
-                                        secondaryTensor:keep_f
-                                                   name:nil];
-
-        if (reduction == 0) {
-            ctx.bind(node.outputs[0].id, (__bridge void*)per_sample);
-            return true;
-        }
-        // sum across all axes — gives 1 scalar.
-        NSArray<NSNumber*>* shape = per_sample.shape;
-        NSMutableArray<NSNumber*>* axes =
-            [NSMutableArray arrayWithCapacity:shape.count];
-        for (NSUInteger d = 0; d < shape.count; ++d)
-            [axes addObject:[NSNumber numberWithLongLong:(long long)d]];
-        MPSGraphTensor* loss_sum =
-            [g reductionSumWithTensor:per_sample axes:axes name:nil];
-        if (reduction == 2) {
-            ctx.bind(node.outputs[0].id, (__bridge void*)loss_sum);
-            return true;
-        }
-        // mean — divide by number of *kept* samples (sum of keep_f).
-        MPSGraphTensor* denom =
-            [g reductionSumWithTensor:keep_f axes:axes name:nil];
-        MPSGraphTensor* loss_mean =
-            [g divisionWithPrimaryTensor:loss_sum
-                          secondaryTensor:denom
-                                     name:@"nll_loss_mean"];
-        ctx.bind(node.outputs[0].id, (__bridge void*)loss_mean);
-        return true;
+        return emit_class_target_loss(ctx, node, false);
     }
 };
 
-// cross_entropy_loss(input, target, [weight]) = nll_loss(log_softmax(
-// input, dim=1), target, ...).  We compose the two stages directly.
+// cross_entropy_loss(input, target, [weight]) = nll_loss(log_softmax(input,
+// dim=1), target, ...).  Declines today for the same reason as nll_loss.
 class CrossEntropyEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cross_entropy_loss"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty())
-            return false;
-        TensorId in_id = node.inputs[0];
-        TensorId tg_id = node.inputs[1];
-        if (in_id < 0 || tg_id < 0)
-            return false;
-        std::int64_t reduction = reduction_of(node);
-        std::int64_t ignore_index = -100;
-        if (auto it = node.attrs.find("ignore_index"); it != node.attrs.end()) {
-            if (const auto* p = std::get_if<std::int64_t>(&it->second)) ignore_index = *p;
-        }
-
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* logits = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
-        MPSGraphTensor* tgt = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
-        if (g == nil || logits == nil || tgt == nil)
-            return false;
-        MPSDataType ft = logits.dataType;
-
-        // log_softmax(logits, dim=1) = log(softmax(...)).
-        MPSGraphTensor* sm =
-            [g softMaxWithTensor:logits axis:1 name:nil];
-        MPSGraphTensor* log_p = [g logarithmWithTensor:sm name:nil];
-
-        // gather along axis 1 + neg.
-        MPSGraphTensor* gathered =
-            [g gatherAlongAxis:1 withUpdatesTensor:log_p indicesTensor:tgt name:nil];
-        MPSGraphTensor* per_sample = [g negativeWithTensor:gathered name:nil];
-
-        if (node.inputs.size() >= 3 && node.inputs[2] >= 0) {
-            MPSGraphTensor* w = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[2]);
-            if (w != nil) {
-                MPSGraphTensor* w_gather =
-                    [g gatherAlongAxis:0
-                       withUpdatesTensor:w
-                          indicesTensor:tgt
-                                   name:nil];
-                per_sample = [g multiplicationWithPrimaryTensor:per_sample
-                                                secondaryTensor:w_gather
-                                                           name:nil];
-            }
-        }
-
-        MPSGraphTensor* ig_c =
-            [g constantWithScalar:ignore_index dataType:tgt.dataType];
-        MPSGraphTensor* keep = [g notEqualWithPrimaryTensor:tgt
-                                            secondaryTensor:ig_c
-                                                       name:nil];
-        MPSGraphTensor* keep_f = [g castTensor:keep toType:ft name:nil];
-        per_sample = [g multiplicationWithPrimaryTensor:per_sample
-                                        secondaryTensor:keep_f
-                                                   name:nil];
-
-        if (reduction == 0) {
-            ctx.bind(node.outputs[0].id, (__bridge void*)per_sample);
-            return true;
-        }
-        NSArray<NSNumber*>* shape = per_sample.shape;
-        NSMutableArray<NSNumber*>* axes =
-            [NSMutableArray arrayWithCapacity:shape.count];
-        for (NSUInteger d = 0; d < shape.count; ++d)
-            [axes addObject:[NSNumber numberWithLongLong:(long long)d]];
-        MPSGraphTensor* loss_sum =
-            [g reductionSumWithTensor:per_sample axes:axes name:nil];
-        if (reduction == 2) {
-            ctx.bind(node.outputs[0].id, (__bridge void*)loss_sum);
-            return true;
-        }
-        MPSGraphTensor* denom =
-            [g reductionSumWithTensor:keep_f axes:axes name:nil];
-        MPSGraphTensor* loss_mean =
-            [g divisionWithPrimaryTensor:loss_sum
-                          secondaryTensor:denom
-                                     name:@"ce_mean"];
-        ctx.bind(node.outputs[0].id, (__bridge void*)loss_mean);
-        return true;
+        return emit_class_target_loss(ctx, node, true);
     }
 };
 

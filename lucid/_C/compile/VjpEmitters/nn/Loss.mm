@@ -21,11 +21,13 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 #include <variant>
 #include <vector>
 
+#include "../../OpEmitters/_IndexBounds.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -104,7 +106,7 @@ public:
 //   per_sample = -log_p[i, target[i]] * keep[i] * w[target[i]]
 //   out = per_sample        if reduction == 0 (None)
 //       = sum(per_sample)   if reduction == 2 (Sum)
-//       = sum(per_sample) / sum(keep)  if reduction == 1 (Mean)
+//       = sum(per_sample) / sum(keep * w[target])  if reduction == 1 (Mean)
 //
 // where ``log_p`` is the input (already log-probs for NLL; the
 // CE emitter applies softMax+log internally so the CE VJP can use the
@@ -124,8 +126,8 @@ namespace {
 //   * grad_out  — incoming grad; shape (B,) for reduction='none',
 //                 scalar for sum/mean.
 //   * w_gather  — w[target[i]] for each i, or nullptr if no weight.
-//   * keep_f    — float mask (1 where target != ignore_index).
-//   * denom     — sum(keep_f) scalar; needed only for reduction='mean'.
+//   * keep_f    — float mask (1 where the target names a class and is not ignored).
+//   * denom     — sum(keep_f * w) scalar; needed only for reduction='mean'.
 //   * reduction — 0=None, 1=Mean, 2=Sum.
 //   * batch_shape — (B,) as int64 vector.
 //   * dt        — dtype for any constants.
@@ -161,7 +163,7 @@ struct LossPieces {
     MPSGraphTensor* target = nil;      // (B,), integer
     MPSGraphTensor* w_gather = nil;    // (B,) or nil
     MPSGraphTensor* keep_f = nil;      // (B,) float mask
-    MPSGraphTensor* denom = nil;       // scalar, sum(keep_f)
+    MPSGraphTensor* denom = nil;       // scalar, sum(keep_f * w)
     MPSGraphTensor* grad_out = nil;
     TensorId input_id = -1;
     std::int64_t reduction = 1;
@@ -204,33 +206,34 @@ inline LossPieces unpack_loss(BackwardContext& bctx, const OpNode& node,
     p.input = cast_if_needed(p.g, p.input, chain_dt);
 
     std::vector<std::int64_t> in_shape = shape_of_mps(p.input);
-    if (in_shape.size() < 2) return p;
+    if (in_shape.size() != 2 || p.target.shape.count != 1)
+        return p;
     p.B = in_shape[0];
     p.C = in_shape[1];
 
+    // The forward's target check (``graph_class_target``): every index the
+    // gather and the scatter below see is a class, and a sample that is
+    // ignored or names no class gets no gradient.
+    const GraphClassTarget t = graph_class_target(p.g, p.target, p.C, ignore_index);
+    if (t.safe == nil)
+        return p;
+    p.target = t.safe;
+
     MPSDataType ft = chain_dt;
+    p.keep_f = [p.g castTensor:t.counts toType:ft name:nil];
     // Optional class weight at inputs[2].
+    MPSGraphTensor* counted = p.keep_f;
     if (node.inputs.size() >= 3 && node.inputs[2] >= 0) {
         MPSGraphTensor* w = as_tensor(bctx.forward(node.inputs[2]));
-        if (w != nil) {
-            w = cast_if_needed(p.g, w, chain_dt);
-            p.w_gather =
-                [p.g gatherAlongAxis:0
-                   withUpdatesTensor:w
-                       indicesTensor:p.target
-                                name:nil];
-        }
+        if (w == nil || w.shape.count != 1)
+            return p;
+        w = cast_if_needed(p.g, w, chain_dt);
+        p.w_gather = [p.g gatherAlongAxis:0 withUpdatesTensor:w indicesTensor:t.safe name:nil];
+        counted = [p.g multiplicationWithPrimaryTensor:p.keep_f secondaryTensor:p.w_gather name:nil];
     }
-    // keep mask.
-    MPSGraphTensor* ig_c =
-        [p.g constantWithScalar:(double)ignore_index dataType:p.target.dataType];
-    MPSGraphTensor* keep_bool =
-        [p.g notEqualWithPrimaryTensor:p.target secondaryTensor:ig_c name:nil];
-    p.keep_f = [p.g castTensor:keep_bool toType:ft name:nil];
-    // denom = sum(keep_f).
-    NSArray<NSNumber*>* axes_all =
-        @[ [NSNumber numberWithLongLong:0] ];
-    p.denom = [p.g reductionSumWithTensor:p.keep_f axes:axes_all name:nil];
+    // A mean divides by the weight of the counted samples (their number
+    // when unweighted), as the forward does.
+    p.denom = [p.g reductionSumWithTensor:counted axes:@[ @0 ] name:nil];
     p.ok = true;
     return p;
 }
