@@ -58,9 +58,9 @@ Storage divmod_storage(
 }
 
 // The checks every op of the family makes before it computes.  A zero
-// integer divisor is refused here, on both streams, because no kernel can
-// answer it: the reference raises, and the Metal division used to return
-// -1 or INT64_MAX instead.  Reading ``b`` back costs Metal a wait on ``b``.
+// integer divisor is refused here on the CPU, as the reference's CPU does.
+// Metal is not asked: it would have to read ``b`` back, a host stall on
+// every integer ``//``; it answers the defined value in backend/DivMod.h.
 void check_operands(const char* op, const TensorImplPtr& a, const TensorImplPtr& b) {
     bfunc_detail::validate_pair(a, b, op);
     const Dtype dt = a->dtype();
@@ -68,13 +68,9 @@ void check_operands(const char* op, const TensorImplPtr& a, const TensorImplPtr&
         ErrorBuilder(op).not_implemented(std::string("dtype ") + std::string(dtype_name(dt)) +
                                          " is not supported; " + op +
                                          " takes integer or real floating-point operands");
-    if (!is_integral(dt))
+    if (!is_integral(dt) || b->device() != Device::CPU)
         return;
-    const bool zero =
-        b->device() == Device::GPU
-            ? backend::gpu_any_zero(*std::get<GpuStorage>(b->storage()).arr)
-            : backend::cpu::any_zero_integer(std::get<CpuStorage>(b->storage()), b->numel(), dt);
-    if (zero)
+    if (backend::cpu::any_zero_integer(std::get<CpuStorage>(b->storage()), b->numel(), dt))
         ErrorBuilder(op).fail("ZeroDivisionError: integer division by zero");
 }
 

@@ -7,9 +7,11 @@
 // which rounded every integer past 2**24 on Metal and 2**53 on the CPU and
 // every float quotient past 2**24.
 //
-// Integer operands refuse a zero divisor anywhere in ``b`` with
-// ``RuntimeError: ZeroDivisionError``, as the reference does; floats
-// follow IEEE.  Bool and complex operands are refused.
+// An integer zero divisor anywhere in ``b`` raises ``RuntimeError:
+// ZeroDivisionError`` on the CPU, as the reference's CPU does.  On Metal it
+// is not checked (no device sync), as on the reference's accelerator: a
+// zero divisor gives ``a // 0 == -1`` and ``a % 0 == fmod(a, 0) == a``, with
+// no error.  Floats follow IEEE.  Bool and complex operands are refused.
 
 #pragma once
 

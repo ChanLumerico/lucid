@@ -9,6 +9,10 @@ left half a million values outside ``[0, 2]``.  An integer divided by zero
 answered -1 or INT64_MAX instead of raising, and the float forms got the
 infinite divisors wrong (``-5 % inf`` was NaN, not inf).
 
+An integer zero divisor now raises on the CPU, as the reference's CPU does.
+Metal does not read the divisor back (no device sync, as on the
+reference's accelerator) and answers a defined value instead.
+
 Integers are held to Python's own integer arithmetic, bit for bit,
 wrapped to the dtype where the quotient overflows (``min // -1``).
 Floats are held to the reference framework, bit for bit, signed zeros
@@ -27,6 +31,7 @@ import pytest
 
 import lucid
 import lucid.nn as nn
+from lucid._C import engine as _C_engine
 from lucid.test._fixtures.devices import device_dtype_params, metal_available
 
 Op = Callable[[lucid.Tensor, lucid.Tensor | float], lucid.Tensor]
@@ -99,13 +104,37 @@ def test_integer_results_are_exact(device: str, dtype: lucid.dtype, op: str) -> 
 
 
 @pytest.mark.parametrize("op", sorted(OPS))
-@pytest.mark.parametrize(("device", "dtype"), device_dtype_params(_INT_DTYPES))
-def test_integer_zero_divisor_raises(device: str, dtype: lucid.dtype, op: str) -> None:
-    a = lucid.tensor([[5, -5, 6]], dtype=dtype, device=device)
+@pytest.mark.parametrize("dtype", _INT_DTYPES)
+def test_integer_zero_divisor_raises_on_the_cpu(dtype: lucid.dtype, op: str) -> None:
+    a = lucid.tensor([[5, -5, 6]], dtype=dtype)
     with pytest.raises(RuntimeError, match="ZeroDivisionError"):
-        OPS[op](a, lucid.tensor([[3], [0]], dtype=dtype, device=device))
+        OPS[op](a, lucid.tensor([[3], [0]], dtype=dtype))
     with pytest.raises(RuntimeError, match="ZeroDivisionError"):
-        OPS[op](a, lucid.tensor(0, dtype=dtype, device=device))
+        OPS[op](a, lucid.tensor(0, dtype=dtype))
+
+
+@pytest.mark.parametrize("op", sorted(OPS))
+@pytest.mark.parametrize("dtype", _INT_DTYPES)
+def test_integer_zero_divisor_on_metal_is_defined_and_unsynced(
+    dtype: lucid.dtype, op: str
+) -> None:
+    """Metal reads nothing back.
+
+    ``a // 0`` is -1; ``a % 0`` and ``fmod(a, 0)`` are ``a``.
+    """
+    if not metal_available():
+        pytest.skip("Metal unavailable")
+    nums = [5, -5, 6, 0, -(2**7)]
+    a = lucid.tensor([nums], dtype=dtype, device="metal")
+    b = lucid.tensor([[3], [0]], dtype=dtype, device="metal")
+    lucid.eval(a, b)
+    before = _C_engine.host_sync_count()
+    out = OPS[op](a, b)
+    lucid.eval(out)
+    assert _C_engine.host_sync_count() == before
+    at_zero = [-1] * len(nums) if _KIND[op] == "floor" else nums
+    at_three = [_int_oracle(_KIND[op], x, 3, _BITS[dtype]) for x in nums]
+    assert out.tolist() == [at_three, at_zero]
 
 
 def test_the_reported_cases(device: str) -> None:

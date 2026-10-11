@@ -2,8 +2,7 @@
 //
 // The Metal kernels of the floor-division family: ``//``, ``%`` and
 // ``fmod`` on equal-shape operands, exactly, in the operands' own dtype.
-// The rule is in ../DivMod.h; these are its steps in MLX ops, fused into
-// one kernel per op.
+// The rule is in ../DivMod.h; these are its steps in MLX ops.
 //
 // What MLX gives, measured on 0.32 (LCD-159):
 //
@@ -23,8 +22,11 @@
 //     below 2**-126 differs from the CPU (``1e-40 % 3e-41`` is NaN).
 //   * A kernel ``mx::compile`` fuses is built for fast math: inside one,
 //     ``remainder(5, inf)`` is NaN where the plain op answers 5.  So the
-//     float path runs op by op, unfused; only the integer path, which fast
-//     math cannot touch, is fused.
+//     float path runs op by op, unfused.
+//   * An int64 division costs most of the integer path: 4M elements of
+//     ``//`` take 8.7 ms against 2.4 ms for int32 (vendored 0.32.3, M1 Pro),
+//     whether the division is fused with its correction or not.  The
+//     integer path is one fused kernel.
 //
 // The integer quotient's ``min / -1`` wraps on Metal (int8 -128 // -1 is
 // -128, as in the reference).  The 16-bit floats are computed in float32
@@ -63,20 +65,30 @@ inline mx::array signs_differ(const mx::array& r, const mx::array& s) {
                            mx::not_equal(mx::less(r, zero), mx::less(s, zero)));
 }
 
-// MLX's quotient, truncated or floored (see above), floored here; the
+// MLX's quotient ``q``, truncated or floored (see above), floored here; the
 // floored remainder has the sign of ``b``, and the truncated one, which
 // ``fmod`` is, the sign of ``a``.
+//
+// A zero divisor is not refused here (no host read; see ../DivMod.h): MLX
+// divides by 1 in its place, and the result there is the documented
+// ``a // 0 == -1``, ``a % 0 == fmod(a, 0) == a``.
 template <DivMod M>
-mx::array integer(const mx::array& a, const mx::array& b) {
+mx::array integer(const mx::array& a, const mx::array& b_in) {
+    const mx::array by_zero = mx::equal(b_in, mx::zeros_like(b_in));
+    const mx::array b = mx::where(by_zero, mx::ones_like(b_in), b_in);
     const mx::array q = mx::floor_divide(a, b);
     const mx::array r = mx::subtract(a, mx::multiply(q, b));
     const mx::array to_floor = signs_differ(r, b);
-    if constexpr (M == DivMod::FloorDiv)
-        return mx::subtract(q, mx::astype(to_floor, q.dtype()));
+    if constexpr (M == DivMod::FloorDiv) {
+        const mx::array floored = mx::subtract(q, mx::astype(to_floor, q.dtype()));
+        return mx::where(by_zero, mx::negative(mx::ones_like(floored)), floored);
+    }
     const mx::array floored = mx::where(to_floor, mx::add(r, b), r);
     if constexpr (M == DivMod::Remainder)
-        return floored;
-    return mx::where(signs_differ(floored, a), mx::subtract(floored, b), floored);
+        return mx::where(by_zero, a, floored);
+    const mx::array truncated =
+        mx::where(signs_differ(floored, a), mx::subtract(floored, b), floored);
+    return mx::where(by_zero, a, truncated);
 }
 
 // ``a`` and ``b`` are float32; the 16-bit floats arrive widened.
@@ -103,24 +115,18 @@ mx::array floating(const mx::array& a, const mx::array& b) {
 }
 
 template <DivMod M>
-struct Steps {
+struct IntegerSteps {
     std::vector<mx::array> operator()(const std::vector<mx::array>& in) const {
-        const mx::Dtype dt = in[0].dtype();
-        if (!mx::issubdtype(dt, mx::floating))
-            return {integer<M>(in[0], in[1])};
-        return {narrow_to(floating<M>(widen_half(in[0]), widen_half(in[1])), dt)};
+        return {integer<M>(in[0], in[1])};
     }
 };
 
-}  // namespace gpu_divmod_detail
-
-namespace gpu_divmod_detail {
-
 template <DivMod M>
 mx::array run(const mx::array& a, const mx::array& b) {
-    if (mx::issubdtype(a.dtype(), mx::floating))
-        return Steps<M>{}({a, b})[0];
-    return mlx_fused({a, b}, Steps<M>{})[0];
+    const mx::Dtype dt = a.dtype();
+    if (mx::issubdtype(dt, mx::floating))
+        return narrow_to(floating<M>(widen_half(a), widen_half(b)), dt);
+    return mlx_fused({a, b}, IntegerSteps<M>{})[0];
 }
 
 }  // namespace gpu_divmod_detail
@@ -144,13 +150,6 @@ gpu_divmod(DivMod mode, const ::mlx::core::array& a, const ::mlx::core::array& b
 inline ::mlx::core::array gpu_floor_divide_float32(const ::mlx::core::array& a,
                                                    const ::mlx::core::array& b) {
     return gpu_divmod_detail::floating<DivMod::FloorDiv>(a, b);
-}
-
-// Whether any element of the integer array ``b`` is zero.  Reads the
-// answer back to the host, so it waits for ``b``.
-inline bool gpu_any_zero(const ::mlx::core::array& b) {
-    namespace mx = ::mlx::core;
-    return mx::any(mx::equal(b, mx::zeros_like(b))).item<bool>();
 }
 
 }  // namespace lucid::backend

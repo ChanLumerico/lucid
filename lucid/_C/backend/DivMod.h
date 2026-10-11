@@ -17,9 +17,15 @@
 // sign differs from the divisor's, and the floored remainder adds the
 // divisor back in the same case.  ``min / -1`` overflows in C++ (undefined
 // behaviour), so a divisor of -1 is answered as negation, which wraps:
-// ``int8 -128 // -1`` is -128, as in the reference.  A zero divisor is
-// refused before any kernel runs (ops/bfunc/Floordiv.cpp); here it answers
-// 0 rather than trap.
+// ``int8 -128 // -1`` is -128, as in the reference.
+//
+// An integer zero divisor has no answer.  The CPU refuses it before any
+// kernel runs (ops/bfunc/Floordiv.cpp), as the reference's CPU does.  Metal
+// does not look: reading ``b`` back would stall every integer ``//`` on the
+// host, and the reference's accelerator does not check either.  There a
+// zero divisor gives ``a // 0 == -1`` and ``a % 0 == fmod(a, 0) == a``,
+// with no error; the pair keeps ``(a // b) * b + a % b == a``.  The scalar
+// rule below answers the same values without dividing by zero.
 //
 // Floats start from the exact ``fmod``.  ``remainder`` adds the divisor
 // back when the signs disagree, so ``-5 % inf`` is inf and ``5 % inf`` is 5.
@@ -43,7 +49,7 @@ template <DivMod M, std::signed_integral T>
 constexpr T divmod_integer(T a, T b) {
     using U = std::make_unsigned_t<T>;
     if (b == 0)
-        return T{0};
+        return M == DivMod::FloorDiv ? T{-1} : a;
     if (b == -1) {
         if constexpr (M == DivMod::FloorDiv)
             return static_cast<T>(static_cast<U>(U{0} - static_cast<U>(a)));

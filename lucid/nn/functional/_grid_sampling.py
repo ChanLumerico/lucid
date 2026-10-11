@@ -111,8 +111,8 @@ def _reflect(position: Tensor, low: float, span: float, volumetric: bool) -> Ten
     (``fmod``) and a count of whole spans, and reads the remainder from the
     far end when the count is odd.  It counts in a 32-bit ``int``: a count
     that does not fit saturates, which makes it odd, and a NaN count is
-    zero.  Its remainder is :func:`lucid.fmod`'s here, so a distance past
-    ``2**24`` spans reflects exactly once that op does (LCD-159).  Both
+    zero.  Its remainder is :func:`lucid.fmod`'s here, which is exact, so a
+    distance past ``2**24`` spans reflects as the reference's does.  Both
     rules agree inside the image; the slope is ``±1`` either way.
 
     Parameters

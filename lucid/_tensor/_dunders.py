@@ -548,10 +548,10 @@ def _inject_dunders(cls: type) -> None:
             \text{out}_i = \left\lfloor \frac{\text{self}_i}{\text{other}_i} \right\rfloor
 
         For integer operands the result is integer; for float operands
-        the result is float but takes integral values.  Floor division by
-        zero follows the engine's convention (typically raises or
-        produces NaN/inf depending on dtype).  Not differentiable at
-        integer-quotient boundaries.
+        the result is float but takes integral values; both are exact.  An
+        integer zero divisor raises ``RuntimeError`` on the CPU and gives -1
+        on Metal (no device sync, as on the reference's accelerator).  Not
+        differentiable at integer-quotient boundaries.
 
         Examples
         --------
