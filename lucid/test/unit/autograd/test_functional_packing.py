@@ -8,7 +8,10 @@ rule — a result per input is packed like ``inputs``, a result per output
 like what ``func`` returned — and ``strict`` refuses what would otherwise
 be filled with zeros.  Every combination of function, input packing,
 ``create_graph`` and ``strict`` is held to the reference, structure and
-values in float64.
+values in float64.  ``jacobian`` and ``hessian`` blocks take the
+reference's shapes too — ``out.shape + x.shape``, one block per output —
+where they were flattened to ``(numel(out), numel(x))`` and several
+outputs' rows were concatenated.
 """
 
 import math
@@ -27,9 +30,8 @@ _TIGHT = 1e-10
 
 _FUNCTIONS = ["vjp", "jvp", "jacobian", "hessian", "hvp", "vhp"]
 _SECOND_ORDER = {"hessian", "hvp", "vhp"}
-#: Taken with one tensor output only: the second-order functions require
-#: it, and ``jacobian`` still concatenates the rows of several outputs.
-_ONE_OUTPUT = _SECOND_ORDER | {"jacobian"}
+#: Taken with one tensor output only: the second-order functions require it.
+_ONE_OUTPUT = _SECOND_ORDER
 #: How ``inputs`` is passed: one bare tensor, a 1-tuple, a pair.
 _PACKINGS = ["tensor", "one_tuple", "pair"]
 
@@ -107,10 +109,11 @@ def _outcome(call: Callable[[], Any]) -> tuple[str, Any]:
         return "raised", None
 
 
-def _structure(r: Any, with_shapes: bool) -> Any:
+def _structure(r: Any) -> Any:
+    """The nesting of ``r`` and each tensor's shape."""
     if isinstance(r, tuple):
-        return tuple(_structure(x, with_shapes) for x in r)
-    return ("tensor", tuple(r.shape)) if with_shapes else "tensor"
+        return tuple(_structure(x) for x in r)
+    return tuple(r.shape)
 
 
 def _flat(r: Any) -> list[float]:
@@ -159,10 +162,7 @@ def test_matches_the_reference(
     assert kind == want_kind
     if kind == "raised":
         return
-    # jacobian and hessian keep Lucid's flattened blocks; only their nesting
-    # is held here.
-    shapes = name not in ("jacobian", "hessian")
-    assert _structure(got, shapes) == _structure(want, shapes)
+    assert _structure(got) == _structure(want)
     g, w = _flat(got), _flat(want)
     assert len(g) == len(w)
     assert all(

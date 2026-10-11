@@ -271,7 +271,7 @@ def jacobian(
     create_graph: bool = False,
     strict: bool = False,
     vectorize: bool = False,
-) -> Tensor | tuple[Tensor, ...]:
+) -> Tensor | tuple[Tensor | tuple[Tensor, ...], ...]:
     r"""Compute the Jacobian matrix of ``func`` with respect to each input.
 
     The Jacobian of a vector-valued function
@@ -314,11 +314,13 @@ def jacobian(
 
     Returns
     -------
-    Tensor or tuple of Tensor
-        For a single input ``x`` the returned tensor has shape
-        ``(numel(out), numel(x))``, the outputs' rows stacked in order
-        when ``func`` returns several. For a tuple of inputs a tuple is
-        returned, one Jacobian block per input.
+    Tensor, tuple of Tensor or tuple of tuple of Tensor
+        One block per output ``out`` and input ``x``, of shape
+        ``out.shape + x.shape``.  Packed over the inputs as ``inputs``
+        was, and over the outputs as ``func`` returned them: a bare
+        tensor for one output and one input, ``J[i]`` when only one of
+        the two is a tuple, ``J[i][j]`` for output ``i`` and input ``j``
+        when both are.
 
     Notes
     -----
@@ -341,21 +343,24 @@ def jacobian(
     inputs_t, one_input = _as_tuple(inputs)
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
-        outputs, _ = _as_tuple(func(*xs))
+        outputs, one_output = _as_tuple(func(*xs))
         _require_tracked(outputs, "outputs", strict)
         per_output = [
-            _jacobian_blocks(o, xs, create_graph, strict, i)
+            _pack(
+                _shaped(_jacobian_blocks(o, xs, create_graph, strict, i), o, xs),
+                one_input,
+            )
             for i, o in enumerate(outputs)
         ]
-    blocks = [
-        (
-            lucid.cat([b[j] for b in per_output], 0)
-            if len(per_output) > 1
-            else per_output[0][j]
-        )
-        for j in range(len(xs))
-    ]
-    return _pack(blocks, one_input)
+    return per_output[0] if one_output else tuple(per_output)
+
+
+def _shaped(
+    blocks: Sequence[Tensor], output: Tensor, xs: Sequence[Tensor]
+) -> list[Tensor]:
+    """Each flat ``(numel(output), numel(x))`` block as ``output.shape +
+    x.shape`` — the shape the reference gives a Jacobian block."""
+    return [b.reshape(*output.shape, *x.shape) for b, x in zip(blocks, xs, strict=True)]
 
 
 def hessian(
@@ -406,9 +411,9 @@ def hessian(
     -------
     Tensor or tuple of tuple of Tensor
         For a single input the returned tensor has shape
-        ``(numel(x), numel(x))``. For multiple inputs a nested
-        tuple of cross-Hessian blocks is returned, with
-        ``H[i][j]`` of shape ``(numel(x_i), numel(x_j))`` containing
+        ``x.shape + x.shape``. For a tuple of inputs a nested tuple of
+        cross-Hessian blocks is returned, with ``H[i][j]`` of shape
+        ``x_i.shape + x_j.shape`` containing
         :math:`\partial^2 f / (\partial x_i \, \partial x_j)`.
 
     Raises
@@ -440,7 +445,7 @@ def hessian(
     with enable_grad():
         _, firsts = _first_gradients(func, xs, strict, "hessian")
         blocks = tuple(
-            tuple(_jacobian_blocks(g, xs, create_graph, strict, i))
+            tuple(_shaped(_jacobian_blocks(g, xs, create_graph, strict, i), g, xs))
             for i, g in enumerate(firsts)
         )
     return blocks[0][0] if one_input else blocks
