@@ -64,7 +64,7 @@ def _inject_to(cls: type) -> None:
         >>> x.to(lucid.float64).dtype
         lucid.float64
         >>> x.to("metal").device
-        device(type='metal')
+        device('metal')
 
         Notes
         -----
@@ -234,7 +234,7 @@ def _inject_to(cls: type) -> None:
         >>> import lucid
         >>> x = lucid.zeros(3)
         >>> x.metal().device
-        device(type='metal')
+        device('metal')
 
         Notes
         -----
@@ -259,7 +259,7 @@ def _inject_to(cls: type) -> None:
         >>> import lucid
         >>> x = lucid.zeros(3).metal()
         >>> x.cpu().device
-        device(type='cpu')
+        device('cpu')
 
         Notes
         -----
@@ -379,7 +379,7 @@ def _inject_to(cls: type) -> None:
         --------
         >>> import lucid
         >>> lucid.tensor([0.0, 1.5, -2.0]).bool()
-        Tensor([False, True, True])
+        tensor([False, True, True], dtype=lucid.bool)
 
         Notes
         -----

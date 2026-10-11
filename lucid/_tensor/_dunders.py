@@ -82,9 +82,9 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> b = lucid.tensor([10.0, 20.0, 30.0])
         >>> a + b
-        Tensor([11., 22., 33.])
+        tensor([11., 22., 33.])
         >>> a + 5
-        Tensor([6., 7., 8.])
+        tensor([6., 7., 8.])
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.add(a, b))
@@ -124,7 +124,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> 5 + a
-        Tensor([6., 7., 8.])
+        tensor([6., 7., 8.])
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.add(a, b))
@@ -166,7 +166,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a += 10
         >>> a
-        Tensor([11., 12., 13.])
+        tensor([11., 12., 13.])
         """
         a, b = _binary_operands(self, other)
         return _adopt_inplace(self, _C_engine.add_(a, b), "+=")
@@ -201,9 +201,9 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([10.0, 20.0, 30.0])
         >>> b = lucid.tensor([1.0, 2.0, 3.0])
         >>> a - b
-        Tensor([9., 18., 27.])
+        tensor([9., 18., 27.])
         >>> a - 1
-        Tensor([9., 19., 29.])
+        tensor([9., 19., 29.])
         """
         a, b = _binary_operands(self, other)
         _refuse_bool_subtraction(a, b)
@@ -241,7 +241,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> 10 - a
-        Tensor([9., 8., 7.])
+        tensor([9., 8., 7.])
         """
         a, b = _binary_operands(other, self)
         _refuse_bool_subtraction(a, b)
@@ -280,7 +280,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([10.0, 20.0, 30.0])
         >>> a -= 5
         >>> a
-        Tensor([5., 15., 25.])
+        tensor([5., 15., 25.])
         """
         a, b = _binary_operands(self, other)
         _refuse_bool_subtraction(a, b)
@@ -319,9 +319,9 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> b = lucid.tensor([4.0, 5.0, 6.0])
         >>> a * b
-        Tensor([4., 10., 18.])
+        tensor([4., 10., 18.])
         >>> a * 2
-        Tensor([2., 4., 6.])
+        tensor([2., 4., 6.])
         """
         a, b = _binary_operands(self, other, opmath=True)
         return _wrap(_C_engine.mul(a, b))
@@ -357,7 +357,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> 3 * a
-        Tensor([3., 6., 9.])
+        tensor([3., 6., 9.])
         """
         a, b = _binary_operands(other, self, opmath=True)
         return _wrap(_C_engine.mul(a, b))
@@ -394,7 +394,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a *= 10
         >>> a
-        Tensor([10., 20., 30.])
+        tensor([10., 20., 30.])
         """
         a, b = _binary_operands(self, other, opmath=True)
         return _adopt_inplace(self, _C_engine.mul_(a, b), "*=")
@@ -439,7 +439,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a / 10
         tensor([1., 2., 3.])
         >>> lucid.tensor([7, 8], dtype=lucid.int64) / 2
-        tensor([3.5000, 4.0000])
+        tensor([3.5, 4.])
         """
         a, b = _binary_operands(self, other, true_div=True, opmath=True)
         return _wrap(_C_engine.div(a, b))
@@ -511,7 +511,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([10.0, 20.0, 30.0])
         >>> a /= 10
         >>> a
-        Tensor([1., 2., 3.])
+        tensor([1., 2., 3.])
         """
         # The quotient is floating, and an integer tensor cannot hold it in
         # place — the reference refuses the same, rather than truncate.
@@ -558,7 +558,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([7.0, 8.0, 9.0])
         >>> a // 2
-        Tensor([3., 4., 4.])
+        tensor([3., 4., 4.])
         """
         a, b = _binary_operands(self, other, opmath=True)
         return _wrap(_C_engine.floordiv(a, b))
@@ -592,7 +592,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([2.0, 3.0, 4.0])
         >>> 10 // a
-        Tensor([5., 3., 2.])
+        tensor([5., 3., 2.])
         """
         a, b = _binary_operands(other, self, opmath=True)
         return _wrap(_C_engine.floordiv(a, b))
@@ -635,9 +635,9 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a ** 2
-        Tensor([1., 4., 9.])
+        tensor([1., 4., 9.])
         >>> a ** lucid.tensor([3.0, 2.0, 1.0])
-        Tensor([1., 4., 3.])
+        tensor([1., 4., 3.])
         """
         scalar = _scalar_power(self._impl, other)
         if scalar is not None:
@@ -675,7 +675,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> 2 ** a
-        Tensor([2., 4., 8.])
+        tensor([2., 4., 8.])
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.pow(a, b))
@@ -712,7 +712,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a **= 2
         >>> a
-        Tensor([1., 4., 9.])
+        tensor([1., 4., 9.])
         """
         a, b = _binary_operands(self, other)
         return _adopt_inplace(self, _C_engine.pow_(a, b), "**=")
@@ -762,7 +762,7 @@ def _inject_dunders(cls: type) -> None:
         >>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
         >>> B = lucid.tensor([[5.0, 6.0], [7.0, 8.0]])
         >>> A @ B
-        Tensor([[19., 22.], [43., 50.]])
+        tensor([[19., 22.], [43., 50.]])
         """
         return _wrap(_C_engine.matmul(self._impl, _unwrap_or_scalar(other, self._impl)))
 
@@ -798,7 +798,7 @@ def _inject_dunders(cls: type) -> None:
         >>> A = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
         >>> B = lucid.tensor([[5.0, 6.0], [7.0, 8.0]])
         >>> B.__rmatmul__(A)
-        Tensor([[19., 22.], [43., 50.]])
+        tensor([[19., 22.], [43., 50.]])
         """
         return _wrap(_C_engine.matmul(_unwrap_or_scalar(other, self._impl), self._impl))
 
@@ -828,7 +828,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, -2.0, 3.0])
         >>> -a
-        Tensor([-1., 2., -3.])
+        tensor([-1., 2., -3.])
         """
         return _wrap(_C_engine.neg(self._impl))
 
@@ -858,7 +858,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([-1.0, 2.0, -3.0])
         >>> abs(a)
-        Tensor([1., 2., 3.])
+        tensor([1., 2., 3.])
         """
         return _wrap(_C_engine.abs(self._impl))
 
@@ -896,7 +896,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([True, False, True])
         >>> ~a
-        Tensor([False, True, False])
+        tensor([False, True, False], dtype=lucid.bool)
         """
         return _wrap(_C_engine.invert(self._impl))
 
@@ -1037,7 +1037,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> lucid.tensor([-7.0, 7.0]) % 3
-        Tensor([2., 1.])
+        tensor([2., 1.])
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.remainder(a, b))
@@ -1059,7 +1059,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> 7 % lucid.tensor([3.0, 4.0])
-        Tensor([1., 3.])
+        tensor([1., 3.])
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.remainder(a, b))
@@ -1083,7 +1083,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> q, r = divmod(lucid.tensor([7.0]), 3)
         >>> q, r
-        (Tensor([2.]), Tensor([1.]))
+        (tensor([2.]), tensor([1.]))
         """
         return self // other, self % other
 
@@ -1104,7 +1104,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> divmod(7, lucid.tensor([3.0]))
-        (Tensor([2.]), Tensor([1.]))
+        (tensor([2.]), tensor([1.]))
         """
         return other // self, other % self
 
@@ -1129,7 +1129,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> True & lucid.tensor([True, False])
-        Tensor([True, False])
+        tensor([True, False], dtype=lucid.bool)
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.bitwise_and(a, b))
@@ -1151,7 +1151,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> False | lucid.tensor([True, False])
-        Tensor([True, False])
+        tensor([True, False], dtype=lucid.bool)
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.bitwise_or(a, b))
@@ -1173,7 +1173,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> True ^ lucid.tensor([True, False])
-        Tensor([False, True])
+        tensor([False, True], dtype=lucid.bool)
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.bitwise_xor(a, b))
@@ -1199,7 +1199,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> lucid.tensor([1, 2, 3]) << 2
-        Tensor([4, 8, 12])
+        tensor([4, 8, 12], dtype=lucid.int64)
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.bitwise_left_shift(a, b))
@@ -1221,7 +1221,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> 1 << lucid.tensor([1, 2, 3])
-        Tensor([2, 4, 8])
+        tensor([2, 4, 8], dtype=lucid.int64)
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.bitwise_left_shift(a, b))
@@ -1246,7 +1246,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> lucid.tensor([4, 8, 12]) >> 2
-        Tensor([1, 2, 3])
+        tensor([1, 2, 3], dtype=lucid.int64)
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.bitwise_right_shift(a, b))
@@ -1268,7 +1268,7 @@ def _inject_dunders(cls: type) -> None:
         --------
         >>> import lucid
         >>> 16 >> lucid.tensor([1, 2, 3])
-        Tensor([8, 4, 2])
+        tensor([8, 4, 2], dtype=lucid.int64)
         """
         a, b = _binary_operands(other, self)
         return _wrap(_C_engine.bitwise_right_shift(a, b))
@@ -1307,7 +1307,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([True, True, False, False])
         >>> b = lucid.tensor([True, False, True, False])
         >>> a & b
-        Tensor([True, False, False, False])
+        tensor([True, False, False, False], dtype=lucid.bool)
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.bitwise_and(a, b))
@@ -1345,7 +1345,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([True, True, False, False])
         >>> b = lucid.tensor([True, False, True, False])
         >>> a | b
-        Tensor([True, True, True, False])
+        tensor([True, True, True, False], dtype=lucid.bool)
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.bitwise_or(a, b))
@@ -1383,7 +1383,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([True, True, False, False])
         >>> b = lucid.tensor([True, False, True, False])
         >>> a ^ b
-        Tensor([False, True, True, False])
+        tensor([False, True, True, False], dtype=lucid.bool)
         """
         a, b = _binary_operands(self, other)
         return _wrap(_C_engine.bitwise_xor(a, b))
@@ -1426,7 +1426,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> b = lucid.tensor([1.0, 5.0, 3.0])
         >>> a == b
-        Tensor([True, False, True])
+        tensor([True, False, True], dtype=lucid.bool)
         """
         return _compare(_C_engine.equal, self, other)
 
@@ -1461,7 +1461,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> b = lucid.tensor([1.0, 5.0, 3.0])
         >>> a != b
-        Tensor([False, True, False])
+        tensor([False, True, False], dtype=lucid.bool)
         """
         return _compare(_C_engine.not_equal, self, other)
 
@@ -1494,7 +1494,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a < 2.5
-        Tensor([True, True, False])
+        tensor([True, True, False], dtype=lucid.bool)
         """
         return _compare(_C_engine.less, self, other)
 
@@ -1527,7 +1527,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a <= 2.0
-        Tensor([True, True, False])
+        tensor([True, True, False], dtype=lucid.bool)
         """
         return _compare(_C_engine.less_equal, self, other)
 
@@ -1560,7 +1560,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a > 1.5
-        Tensor([False, True, True])
+        tensor([False, True, True], dtype=lucid.bool)
         """
         return _compare(_C_engine.greater, self, other)
 
@@ -1593,7 +1593,7 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([1.0, 2.0, 3.0])
         >>> a >= 2.0
-        Tensor([False, True, True])
+        tensor([False, True, True], dtype=lucid.bool)
         """
         return _compare(_C_engine.greater_equal, self, other)
 
@@ -1645,11 +1645,11 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
         >>> a[0]
-        Tensor([1., 2., 3.])
+        tensor([1., 2., 3.])
         >>> a[:, 1]
-        Tensor([2., 5.])
+        tensor([2., 5.])
         >>> a[a > 3]
-        Tensor([4., 5., 6.])
+        tensor([4., 5., 6.])
         """
         return _getitem(self, idx)
 
@@ -1693,7 +1693,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([1.0, 2.0, 3.0, 4.0])
         >>> a[1:3] = 0
         >>> a
-        Tensor([1., 0., 0., 4.])
+        tensor([1., 0., 0., 4.])
         """
         _setitem(self, idx, value)
 

@@ -9,14 +9,8 @@
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 53,
-  "attempted": 6924,
-  "failing": {
-    "lucid._tensor._dunders": 49,
-    "lucid._tensor._to": 4
-  },
-  "known": {
-    "lucid._tensor._dunders": "LCD-316",
-    "lucid._tensor._to": "LCD-316"
-  }
+  "failed": 0,
+  "attempted": 6932,
+  "failing": {},
+  "known": {}
 }
