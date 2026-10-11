@@ -4,27 +4,26 @@
 // counterparts ``interpolate_trilinear`` / ``interpolate_nearest_3d``, and
 // ``grid_sample``.
 //
-// Each is MPSGraph's resize-gradient kernel called with exactly the
-// parameters the forward emitter (``OpEmitters/nn/Spatial.mm``) resizes
-// with — bilinear with ``centerResult`` on and ``align_corners`` passed
-// through, nearest with floor rounding and neither — so the gradient
-// scatters through the same index map the forward gathered by.  Without
-// them, upsampling put every FCN / MaskFormer / YOLO training step on
-// MPSGraph's autodiff, which the train-mode batch norms beside it rule
-// out: the steps ran eager.
+// The interpolate VJPs run the forward emitter's per-axis gathers backwards
+// through the same position tables (``OpEmitters/_Resample.h``), as the
+// eager adjoint does.  Without them, upsampling put every FCN / MaskFormer /
+// YOLO training step on MPSGraph's autodiff, which the train-mode batch
+// norms beside it rule out: the steps ran eager.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
-#include <algorithm>
-#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 #include "../../OpEmitters/_AttrHelpers.h"
 #include "../../OpEmitters/_IndexBounds.h"
+#include "../../OpEmitters/_Resample.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -43,151 +42,38 @@ bool align_corners_of(const OpNode& node) {
     return false;
 }
 
-template <bool IS_BILINEAR>
-class Interpolate2dVjp final : public VjpEmitter {
+// ``interpolate_{bilinear,nearest_2d,trilinear,nearest_3d}`` — the forward's
+// gathers run backwards: each axis scatters the gradient onto the samples it
+// read, with the weights it read them at, in the eager adjoint's order
+// (``_Resample.h``).  The scatter writes a static shape, so a symbolic batch
+// declines.
+template <ResampleFilter FILTER, std::size_t RANK>
+class InterpolateVjp final : public VjpEmitter {
 public:
-    std::string_view op_name() const override {
-        return IS_BILINEAR ? "interpolate_bilinear" : "interpolate_nearest_2d";
-    }
+    explicit InterpolateVjp(std::string name) : name_(std::move(name)) {}
+    std::string_view op_name() const override { return name_; }
     bool
     emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
-        const bool align = align_corners_of(node);
+        const bool align = FILTER == ResampleFilter::Linear && align_corners_of(node);
         return emit_unary_vjp(
             bctx, node, grad_outs,
             [&](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) -> MPSGraphTensor* {
-                if (x.shape.count != 4 || node.outputs.empty() || node.outputs[0].shape.size() != 4)
+                if (node.outputs.empty() || symbolic_batch_at_dim0(x))
                     return nil;
-                for (NSNumber* d in x.shape)
-                    if (d.longLongValue <= 0)
-                        return nil;
-                // Static shapes in and out: the gradient kernel inherits an
-                // unresolved shape otherwise (see the nearest forward).
+                const Shape& recorded = node.outputs[0].shape;
+                std::vector<std::int64_t> in, out;
+                if (!graph_resample_extents(x, recorded, RANK, in, out))
+                    return nil;
                 NSMutableArray<NSNumber*>* out_shape = [NSMutableArray array];
-                for (const auto d : node.outputs[0].shape)
+                for (const auto d : recorded)
                     [out_shape addObject:@(d)];
                 go = [g reshapeTensor:go withShape:out_shape name:nil];
-                MPSGraphTensor* dx = nil;
-                if (IS_BILINEAR)
-                    dx = [g resizeWithGradientTensor:go
-                                               input:x
-                                                mode:MPSGraphResizeBilinear
-                                        centerResult:YES
-                                        alignCorners:align ? YES : NO
-                                              layout:MPSGraphTensorNamedDataLayoutNCHW
-                                                name:@"interp2d_bilinear_vjp"];
-                else
-                    dx = [g resizeNearestWithGradientTensor:go
-                                                      input:x
-                                        nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
-                                               centerResult:NO
-                                               alignCorners:NO
-                                                     layout:MPSGraphTensorNamedDataLayoutNCHW
-                                                       name:@"interp2d_nearest_vjp"];
-                return [g reshapeTensor:dx withShape:x.shape name:nil];
+                return graph_resample(g, go, in, out, FILTER, align, true);
             });
     }
-};
 
-// ``interpolate_trilinear`` / ``interpolate_nearest_3d``.  The forward
-// (``Interpolate3dEmitterT``) resizes every depth plane in 2-D and then
-// blends — or picks — along depth with fixed weights.  Backwards, the depth
-// step is a constant (D × Do) matrix whose column ``i`` holds the weights
-// output plane ``i`` read, so it transposes to one matmul; the plane step
-// is MPSGraph's resize gradient with the forward's parameters, as in the
-// 2-D VJP above.  The weights repeat the forward's arithmetic exactly.
-template <bool IS_LINEAR>
-class Interpolate3dVjp final : public VjpEmitter {
-public:
-    std::string_view op_name() const override {
-        return IS_LINEAR ? "interpolate_trilinear" : "interpolate_nearest_3d";
-    }
-    bool
-    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
-        const bool align = align_corners_of(node);
-        return emit_unary_vjp(
-            bctx, node, grad_outs,
-            [&](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) -> MPSGraphTensor* {
-                if (x.shape.count != 5 || node.outputs.empty() || node.outputs[0].shape.size() != 5)
-                    return nil;
-                const long long B = x.shape[0].longLongValue;
-                const long long C = x.shape[1].longLongValue;
-                const long long D = x.shape[2].longLongValue;
-                const long long H = x.shape[3].longLongValue;
-                const long long W = x.shape[4].longLongValue;
-                const long long Do = node.outputs[0].shape[2];
-                const long long Ho = node.outputs[0].shape[3];
-                const long long Wo = node.outputs[0].shape[4];
-                if (B <= 0 || C <= 0 || D <= 0 || H <= 0 || W <= 0 || Do <= 0 || Ho <= 0 || Wo <= 0)
-                    return nil;
-
-                std::vector<float> depth(static_cast<std::size_t>(D * Do), 0.0f);
-                for (long long i = 0; i < Do; ++i) {
-                    if (IS_LINEAR) {
-                        double p;
-                        if (align)
-                            p = (Do <= 1) ? 0.0
-                                          : static_cast<double>(i) * (D - 1) /
-                                                static_cast<double>(Do - 1);
-                        else
-                            p = (static_cast<double>(i) + 0.5) * D / static_cast<double>(Do) - 0.5;
-                        if (p < 0.0)
-                            p = 0.0;
-                        if (p > static_cast<double>(D - 1))
-                            p = static_cast<double>(D - 1);
-                        const long long lo = std::min((long long)p, D - 1);
-                        const long long hi = std::min(lo + 1, D - 1);
-                        const float w = (float)(p - (double)lo);
-                        depth[(std::size_t)(lo * Do + i)] += 1.0f - w;
-                        depth[(std::size_t)(hi * Do + i)] += w;
-                    } else {
-                        long long src =
-                            (long long)std::floor(static_cast<double>(i) * D / (double)Do);
-                        if (src < 0)
-                            src = 0;
-                        if (src > D - 1)
-                            src = D - 1;
-                        depth[(std::size_t)(src * Do + i)] = 1.0f;
-                    }
-                }
-                NSData* nsd = [NSData dataWithBytes:depth.data()
-                                             length:depth.size() * sizeof(float)];
-                MPSGraphTensor* m = [g constantWithData:nsd
-                                                  shape:@[ @1, @(D), @(Do) ]
-                                               dataType:MPSDataTypeFloat32];
-                m = [g castTensor:m toType:go.dataType name:nil];
-
-                MPSGraphTensor* g3 = [g reshapeTensor:go
-                                            withShape:@[ @(B * C), @(Do), @(Ho * Wo) ]
-                                                 name:nil];
-                MPSGraphTensor* planes = [g matrixMultiplicationWithPrimaryTensor:m
-                                                                  secondaryTensor:g3
-                                                                             name:nil];
-                planes = [g reshapeTensor:planes
-                                withShape:@[ @(B * C), @(D), @(Ho), @(Wo) ]
-                                     name:nil];
-                MPSGraphTensor* folded = [g reshapeTensor:x
-                                                withShape:@[ @(B * C), @(D), @(H), @(W) ]
-                                                     name:nil];
-                MPSGraphTensor* dx = nil;
-                if (IS_LINEAR)
-                    dx = [g resizeWithGradientTensor:planes
-                                               input:folded
-                                                mode:MPSGraphResizeBilinear
-                                        centerResult:YES
-                                        alignCorners:align ? YES : NO
-                                              layout:MPSGraphTensorNamedDataLayoutNCHW
-                                                name:@"interp3d_linear_vjp"];
-                else
-                    dx = [g resizeNearestWithGradientTensor:planes
-                                                      input:folded
-                                        nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
-                                               centerResult:NO
-                                               alignCorners:NO
-                                                     layout:MPSGraphTensorNamedDataLayoutNCHW
-                                                       name:@"interp3d_nearest_vjp"];
-                return dx == nil ? nil : [g reshapeTensor:dx withShape:x.shape name:nil];
-            });
-    }
+private:
+    std::string name_;
 };
 
 // ``grid_sample`` — the forward's four-corner gather run backwards.
@@ -388,10 +274,14 @@ public:
 
 struct SpatialVjpRegistrar {
     SpatialVjpRegistrar() {
-        register_vjp_emitter(std::make_unique<Interpolate2dVjp<true>>());
-        register_vjp_emitter(std::make_unique<Interpolate2dVjp<false>>());
-        register_vjp_emitter(std::make_unique<Interpolate3dVjp<true>>());
-        register_vjp_emitter(std::make_unique<Interpolate3dVjp<false>>());
+        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Linear, 2>>(
+            "interpolate_bilinear"));
+        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 2>>(
+            "interpolate_nearest_2d"));
+        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Linear, 3>>(
+            "interpolate_trilinear"));
+        register_vjp_emitter(std::make_unique<InterpolateVjp<ResampleFilter::Nearest, 3>>(
+            "interpolate_nearest_3d"));
         register_vjp_emitter(std::make_unique<GridSampleVjp>());
     }
 };

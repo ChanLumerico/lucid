@@ -4,11 +4,8 @@
 // other 4-D feature maps:
 //
 //   - ``affine_grid``           — theta @ homogeneous-coord constants
-//   - ``interpolate_nearest_2d`` — MPSGraph ``resizeTensor`` (mode=nearest)
-//   - ``interpolate_bilinear``   — MPSGraph ``resizeTensor`` (mode=bilinear)
-//   - ``interpolate_nearest_3d`` — the plane through ``resizeTensor``,
-//                                  the depth through a gather
-//   - ``interpolate_trilinear``  — the same, with a two-slice blend
+//   - ``interpolate_{nearest_2d,bilinear,nearest_3d,trilinear}`` — per-axis
+//                                  gathers and blends (``_Resample.h``)
 //   - ``unfold_dim``             — sliding window via slice + concat + permute
 //
 //   - ``grid_sample``            — four-corner gather over flattened
@@ -23,8 +20,6 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -33,6 +28,7 @@
 
 #include "../_AttrHelpers.h"
 #include "../_IndexBounds.h"
+#include "../_Resample.h"
 
 namespace lucid::compile {
 
@@ -106,77 +102,26 @@ public:
     }
 };
 
-// ── interpolate_{nearest_2d,bilinear} — MPSGraph resizeTensor.
-template <bool IS_BILINEAR>
-class Interpolate2dEmitterT final : public OpEmitter {
+// ── interpolate_{nearest_2d,bilinear,nearest_3d,trilinear} — the eager
+// Metal kernel's gathers and blends at the shared sample positions
+// (``_Resample.h``).  Only the trailing axes are touched, so a symbolic
+// batch rides through.
+template <ResampleFilter FILTER, std::size_t RANK>
+class InterpolateEmitterT final : public OpEmitter {
 public:
-    explicit Interpolate2dEmitterT(std::string name) : name_(std::move(name)) {}
+    explicit InterpolateEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return false;
-        TensorId x_id = node.inputs[0];
-        if (x_id < 0) return false;
-        std::int64_t H_out = int_attr(node, "H_out", 0);
-        std::int64_t W_out = int_attr(node, "W_out", 0);
-        if (H_out <= 0 || W_out <= 0) return false;
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return false;
-        if (x.shape.count != 4) return false;
-        bool align_corners = bool_attr(node, "align_corners", false);
-        if (IS_BILINEAR) {
-            // Bilinear path: matches the reference framework with
-            // centerResult=YES, alignCorners flag passed through.
-            MPSShape* size_2 = @[[NSNumber numberWithLongLong:H_out],
-                                  [NSNumber numberWithLongLong:W_out]];
-            ctx.bind(node.outputs[0].id, (__bridge void*)([g resizeTensor:x
-                                              size:size_2
-                                              mode:MPSGraphResizeBilinear
-                                      centerResult:YES
-                                      alignCorners:align_corners ? YES : NO
-                                            layout:MPSGraphTensorNamedDataLayoutNCHW
-                                              name:@"interp2d_bilinear"]));
-        return true;
-        }
-        // Nearest path: the reference framework's
-        // ``F.interpolate(mode='nearest')`` uses
-        // floor(dst * src_size / dst_size) → exact kron-style block
-        // upsampling.  MPSGraph's plain ``resizeTensor:mode:nearest`` uses
-        // ``RoundPreferCeil`` and gives a different mapping.  Use the
-        // ``resizeNearestWithTensor:`` overload that lets us pin the
-        // rounding mode to Floor.  size is passed as a 1-D Int32 tensor.
-        std::int32_t size_data[2] = { (std::int32_t)H_out, (std::int32_t)W_out };
-        NSData* size_nsd = [NSData dataWithBytes:size_data length:sizeof(size_data)];
-        MPSGraphTensor* size_t =
-            [g constantWithData:size_nsd shape:@[@2] dataType:MPSDataTypeInt32];
-        MPSGraphTensor* y = [g resizeNearestWithTensor:x
-                                            sizeTensor:size_t
-                                   nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
-                                          centerResult:NO
-                                          alignCorners:NO
-                                                layout:MPSGraphTensorNamedDataLayoutNCHW
-                                                  name:@"interp2d_nearest"];
-        // A size given as a tensor leaves the result's shape unresolved at
-        // build time; pin it to the recorded one.  Left open, the training
-        // graph built on top — the resize gradient, a reshape — aborted
-        // ("'mps.reshape' op the result shape can not be resolved").
-        //
-        // Under a symbolic batch the recorded batch is the trace's, and
-        // pinning it aborted MPSGraph for every other batch size; the batch
-        // is left to MPSGraph (-1) and only the resized extents are pinned.
-        MPSGraphTensor* pinned = nil;
-        if (symbolic_batch_at_dim0(x)) {
-            NSMutableArray<NSNumber*>* shape = [NSMutableArray array];
-            const auto& rec = node.outputs[0].shape;
-            for (std::size_t i = 0; i < rec.size(); ++i)
-                [shape addObject:@(i == 0 ? -1 : rec[i])];
-            pinned = [g reshapeTensor:y withShape:shape name:nil];
-        } else {
-            pinned = reshape_to_recorded(g, y, node);
-        }
-        if (pinned == nil)
+        const UnaryInput u = resolve_unary(ctx, node);
+        std::vector<std::int64_t> in, out;
+        if (!u.ok || !graph_resample_extents(u.x, node.outputs[0].shape, RANK, in, out))
             return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)pinned);
+        const bool align =
+            FILTER == ResampleFilter::Linear && bool_attr(node, "align_corners", false);
+        MPSGraphTensor* y = graph_resample(u.g, u.x, in, out, FILTER, align, false);
+        if (y == nil)
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
 
@@ -239,195 +184,6 @@ public:
                                               name:@"unfold_dim"]));
         return true;
     }
-};
-
-// ── interpolate_{nearest_3d,trilinear} — the plane through
-// ``resizeTensor``, the depth through a gather.
-//
-// MPSGraph's resamplers are two-dimensional.  That is a fact about the
-// rank they accept, not about the operation: resampling is separable, so
-// the depth axis can ride along as channels while height and width are
-// resized, and depth is then its own one-dimensional resample over the
-// result.  Nearest is a gather of one slice per output plane; linear is a
-// gather of two and a blend.  Both index tables are fixed by the input
-// and output extents, so they are constants rather than arithmetic.
-//
-// The fold merges batch and channels, which a symbolic batch cannot
-// express (see ``reshape_dynamic_aware``) — a dynamic-batch compile
-// declines here rather than pinning the trace-time batch into the graph.
-template <bool IS_LINEAR>
-class Interpolate3dEmitterT final : public OpEmitter {
-public:
-    explicit Interpolate3dEmitterT(std::string name) : name_(std::move(name)) {}
-    std::string_view op_name() const override { return name_; }
-
-    bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty())
-            return false;
-        TensorId x_id = node.inputs[0];
-        if (x_id < 0)
-            return false;
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil)
-            return false;
-        if (x.shape.count != 5)
-            return false;
-        if (symbolic_batch_at_dim0(x))
-            return false;
-
-        const Shape& out_shape = node.outputs[0].shape;
-        if (out_shape.size() != 5)
-            return false;
-        const long long B = x.shape[0].longLongValue;
-        const long long C = x.shape[1].longLongValue;
-        const long long D = x.shape[2].longLongValue;
-        const long long H = x.shape[3].longLongValue;
-        const long long W = x.shape[4].longLongValue;
-        const long long Do = out_shape[2];
-        const long long Ho = out_shape[3];
-        const long long Wo = out_shape[4];
-        if (B <= 0 || C <= 0 || D <= 0 || H <= 0 || W <= 0)
-            return false;
-        if (Do <= 0 || Ho <= 0 || Wo <= 0)
-            return false;
-
-        // Depth rides as channels while the plane is resampled.
-        MPSGraphTensor* folded = [g reshapeTensor:x
-                                        withShape:@[ @(B * C), @(D), @(H), @(W) ]
-                                             name:nil];
-        if (folded == nil)
-            return false;
-
-        MPSGraphTensor* plane = nil;
-        const bool align = bool_attr(node, "align_corners", false);
-        if (IS_LINEAR) {
-            // Same settings as ``interpolate_bilinear``, which is what the
-            // depth blend below is derived to compose with.
-            plane = [g resizeTensor:folded
-                               size:@[ @(Ho), @(Wo) ]
-                               mode:MPSGraphResizeBilinear
-                       centerResult:YES
-                       alignCorners:align ? YES : NO
-                             layout:MPSGraphTensorNamedDataLayoutNCHW
-                               name:@"interp3d_plane"];
-        } else {
-            // Floor rounding, matching ``interpolate_nearest_2d`` and the
-            // engine's ``floor(o * in / out)``.
-            std::int32_t size_data[2] = {(std::int32_t)Ho, (std::int32_t)Wo};
-            NSData* size_nsd = [NSData dataWithBytes:size_data length:sizeof(size_data)];
-            MPSGraphTensor* size_t = [g constantWithData:size_nsd
-                                                   shape:@[ @2 ]
-                                                dataType:MPSDataTypeInt32];
-            plane = [g resizeNearestWithTensor:folded
-                                    sizeTensor:size_t
-                           nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
-                                  centerResult:NO
-                                  alignCorners:NO
-                                        layout:MPSGraphTensorNamedDataLayoutNCHW
-                                          name:@"interp3d_plane"];
-        }
-        if (plane == nil)
-            return false;
-
-        MPSGraphTensor* restored = [g reshapeTensor:plane
-                                          withShape:@[ @(B), @(C), @(D), @(Ho), @(Wo) ]
-                                               name:nil];
-        if (restored == nil)
-            return false;
-
-        MPSGraphTensor* y = nil;
-        if (Do == D && !IS_LINEAR) {
-            y = restored;
-        } else if (IS_LINEAR) {
-            // Where output plane ``d`` reads from, in input coordinates —
-            // the engine's own mapping (CpuBackend's ``src_coord_fn``).
-            std::vector<std::int32_t> lower(static_cast<std::size_t>(Do));
-            std::vector<std::int32_t> upper(static_cast<std::size_t>(Do));
-            std::vector<float> blend(static_cast<std::size_t>(Do));
-            for (long long i = 0; i < Do; ++i) {
-                double p;
-                if (align)
-                    p = (Do <= 1) ? 0.0
-                                  : static_cast<double>(i) * (D - 1) / static_cast<double>(Do - 1);
-                else
-                    p = (static_cast<double>(i) + 0.5) * D / static_cast<double>(Do) - 0.5;
-                if (p < 0.0)
-                    p = 0.0;
-                if (p > static_cast<double>(D - 1))
-                    p = static_cast<double>(D - 1);
-                const long long lo = std::min((long long)p, D - 1);
-                lower[(std::size_t)i] = (std::int32_t)lo;
-                upper[(std::size_t)i] = (std::int32_t)std::min(lo + 1, D - 1);
-                blend[(std::size_t)i] = (float)(p - (double)lo);
-            }
-            MPSGraphTensor* lo_t = index_constant(g, lower, Do);
-            MPSGraphTensor* hi_t = index_constant(g, upper, Do);
-            NSData* w_nsd = [NSData dataWithBytes:blend.data() length:blend.size() * sizeof(float)];
-            MPSGraphTensor* w_t = [g constantWithData:w_nsd
-                                                shape:@[ @1, @1, @(Do), @1, @1 ]
-                                             dataType:MPSDataTypeFloat32];
-            if (lo_t == nil || hi_t == nil || w_t == nil)
-                return false;
-            // Autocast can put the chain in half; the weights are written
-            // as float32 either way.
-            w_t = [g castTensor:w_t toType:restored.dataType name:nil];
-
-            MPSGraphTensor* low = [g gatherWithUpdatesTensor:restored
-                                               indicesTensor:lo_t
-                                                        axis:2
-                                             batchDimensions:0
-                                                        name:nil];
-            MPSGraphTensor* high = [g gatherWithUpdatesTensor:restored
-                                                indicesTensor:hi_t
-                                                         axis:2
-                                              batchDimensions:0
-                                                         name:nil];
-            if (low == nil || high == nil)
-                return false;
-            MPSGraphTensor* diff = [g subtractionWithPrimaryTensor:high
-                                                   secondaryTensor:low
-                                                              name:nil];
-            MPSGraphTensor* scaled = [g multiplicationWithPrimaryTensor:diff
-                                                        secondaryTensor:w_t
-                                                                   name:nil];
-            y = [g additionWithPrimaryTensor:low secondaryTensor:scaled name:@"interp3d_depth"];
-        } else {
-            // Nearest depth: one source plane per output plane.  A gather
-            // rather than a tile, so a non-integer ratio — downsampling
-            // included — is the same code path.
-            std::vector<std::int32_t> pick(static_cast<std::size_t>(Do));
-            for (long long i = 0; i < Do; ++i) {
-                long long s = (long long)std::floor(static_cast<double>(i) * D / (double)Do);
-                if (s < 0)
-                    s = 0;
-                if (s > D - 1)
-                    s = D - 1;
-                pick[(std::size_t)i] = (std::int32_t)s;
-            }
-            MPSGraphTensor* idx = index_constant(g, pick, Do);
-            if (idx == nil)
-                return false;
-            y = [g gatherWithUpdatesTensor:restored
-                             indicesTensor:idx
-                                      axis:2
-                           batchDimensions:0
-                                      name:@"interp3d_depth"];
-        }
-        if (y == nil)
-            return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
-        return true;
-    }
-
-private:
-    static MPSGraphTensor*
-    index_constant(MPSGraph* g, const std::vector<std::int32_t>& v, long long n) {
-        NSData* nsd = [NSData dataWithBytes:v.data() length:v.size() * sizeof(std::int32_t)];
-        return [g constantWithData:nsd shape:@[ @(n) ] dataType:MPSDataTypeInt32];
-    }
-
-    std::string name_;
 };
 
 // ── grid_sample — the four-corner gather MPSGraph has no single op for.
@@ -591,10 +347,14 @@ public:
 struct SpatialRegistrar {
     SpatialRegistrar() {
         register_emitter(std::make_unique<AffineGridEmitter>());
-        register_emitter(std::make_unique<Interpolate2dEmitterT<true>>("interpolate_bilinear"));
-        register_emitter(std::make_unique<Interpolate2dEmitterT<false>>("interpolate_nearest_2d"));
-        register_emitter(std::make_unique<Interpolate3dEmitterT<true>>("interpolate_trilinear"));
-        register_emitter(std::make_unique<Interpolate3dEmitterT<false>>("interpolate_nearest_3d"));
+        register_emitter(std::make_unique<InterpolateEmitterT<ResampleFilter::Linear, 2>>(
+            "interpolate_bilinear"));
+        register_emitter(std::make_unique<InterpolateEmitterT<ResampleFilter::Nearest, 2>>(
+            "interpolate_nearest_2d"));
+        register_emitter(std::make_unique<InterpolateEmitterT<ResampleFilter::Linear, 3>>(
+            "interpolate_trilinear"));
+        register_emitter(std::make_unique<InterpolateEmitterT<ResampleFilter::Nearest, 3>>(
+            "interpolate_nearest_3d"));
         register_emitter(std::make_unique<UnfoldDimEmitter>());
         register_emitter(std::make_unique<GridSampleEmitter>());
     }

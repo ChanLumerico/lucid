@@ -10,9 +10,10 @@
 //   - ``all``     — boolean AND-reduce across every axis
 //   - ``any``     — boolean OR-reduce across every axis
 //
-// All five route 1:1 to MPSGraph builders.  ``topk`` is a separate
-// multi-output op (lives in :file:`../misc/Stubs.mm` since the
-// :class:`OpNode` IR currently models only a single output).
+// ``sort``, ``argsort``, ``argmax`` and ``argmin`` take their order from
+// ``_SortOrder.h`` (the order eager takes: ties first index first, NaN
+// as the extreme); ``all`` / ``any`` route 1:1 to MPSGraph builders.  ``topk``
+// is a multi-output op in :file:`../shape/Split.mm`.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -21,6 +22,7 @@
 #include <string_view>
 
 #include "../_AttrHelpers.h"
+#include "../_SortOrder.h"
 
 namespace lucid::compile {
 
@@ -37,7 +39,12 @@ public:
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g sortWithTensor:x axis:(NSInteger)ax name:@"sort"]));
+        // Values gathered by the stable order, not ``sortWithTensor``: the
+        // same order eager takes, -0.0 kept where it was (``_SortOrder.h``).
+        MPSGraphTensor* order = graph_sort_order(g, x, (NSInteger)ax, false);
+        MPSGraphTensor* sorted = graph_gather_sorted(g, x, order, (NSInteger)ax);
+        if (sorted == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)sorted);
         return true;
     }
 };
@@ -53,7 +60,7 @@ public:
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g argSortWithTensor:x axis:(NSInteger)ax name:@"argsort"]));
+        ctx.bind(node.outputs[0].id, (__bridge void*)graph_sort_order(g, x, (NSInteger)ax, false));
         return true;
     }
 };
@@ -72,9 +79,8 @@ public:
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
-        MPSGraphTensor* r = IS_MAX
-            ? [g reductionArgMaximumWithTensor:x axis:(NSInteger)ax name:@"argmax"]
-            : [g reductionArgMinimumWithTensor:x axis:(NSInteger)ax name:@"argmin"];
+        MPSGraphTensor* r = graph_arg_extreme(g, x, (NSInteger)ax, IS_MAX);
+        if (r == nil) return false;
         if (!bool_attr(node, "keepdim", false)) {
             NSArray<NSNumber*>* sh = r.shape;
             NSMutableArray<NSNumber*>* new_shape =

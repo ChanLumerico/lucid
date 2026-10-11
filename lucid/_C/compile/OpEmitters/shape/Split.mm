@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../_AttrHelpers.h"
+#include "../_SortOrder.h"
 
 namespace lucid::compile {
 
@@ -226,8 +227,8 @@ public:
     }
 };
 
-// ── topk — multi-output (values + indices).  Uses MPSGraph's
-// ``topKWithSourceTensor:axis:k:name:`` (macOS 14+).
+// ── topk — multi-output (values + indices), ordered as eager orders them
+// (``_SortOrder.h``: largest first, ties lowest index first, NaN first).
 class TopKEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "topk"; }
@@ -250,21 +251,11 @@ public:
         if (g == nil || x == nil)
             return false;
 
-        // MPSGraph's topK on a bool source returns all-false values; rank an
-        // int32 copy (false < true, as in eager) and cast the values back.
-        const bool is_bool = x.dataType == MPSDataTypeBool;
-        MPSGraphTensor* src = is_bool ? [g castTensor:x toType:MPSDataTypeInt32 name:nil] : x;
-        NSArray<MPSGraphTensor*>* res =
-            [g topKWithSourceTensor:src
-                               axis:(NSInteger)axis
-                                  k:(NSUInteger)k
-                               name:@"topk"];
-        if (res == nil || res.count != 2)
+        const GraphTopK top = graph_topk(g, x, (NSInteger)axis, (NSInteger)k);
+        if (top.values == nil || top.indices == nil)
             return false;
-
-        MPSGraphTensor* values =
-            is_bool ? [g castTensor:res[0] toType:MPSDataTypeBool name:nil] : res[0];
-        MPSGraphTensor* indices = res[1];
+        MPSGraphTensor* values = top.values;
+        MPSGraphTensor* indices = top.indices;
 
         // Lucid types topk indices int64; MPSGraph returns int32.  The
         // builder casts each bound value to its traced dtype at

@@ -19,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include "../../OpEmitters/_SortOrder.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -344,10 +345,7 @@ public:
             auto k_it = node.attrs.find("k");
             const auto* kp = k_it == node.attrs.end() ? nullptr : std::get_if<std::int64_t>(&k_it->second);
             if (kp == nullptr || *kp <= 0) return false;
-            NSArray<MPSGraphTensor*>* res =
-                [g topKWithSourceTensor:x axis:axis k:(NSUInteger)*kp name:nil];
-            if (res == nil || res.count != 2) return false;
-            indices = res[1];
+            indices = graph_topk(g, x, axis, (NSInteger)*kp).indices;
         }
         if (g == nil || x == nil || v_grad == nil || indices == nil) return false;
 

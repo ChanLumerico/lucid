@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "../../OpEmitters/_IndexBounds.h"
+#include "../../OpEmitters/_SortOrder.h"
 #include "../VjpEmitter.h"
 #include "../_VjpHelpers.h"
 
@@ -118,7 +119,7 @@ public:
                 NSInteger axis = 0;
                 if (!known(x) || !norm_axis(a, x.shape.count, axis))
                     return nil;
-                MPSGraphTensor* perm = [g argSortWithTensor:x axis:axis name:nil];
+                MPSGraphTensor* perm = graph_sort_order(g, x, axis, false);
                 perm = [g castTensor:perm toType:MPSDataTypeInt32 name:nil];
                 MPSGraphTensor* zeros = [g constantWithScalar:0.0 shape:x.shape dataType:go.dataType];
                 return [g scatterAlongAxis:axis

@@ -1,16 +1,17 @@
-"""Three-dimensional resampling, with depth taken out of the resize.
+"""Three-dimensional resampling compiles.
 
-MPSGraph's resamplers are two-dimensional, and the stub reason filed
-against these two said the depth axis could not be folded away "because
-resize would blend across the folded channels". A 2-D resize does not
-touch the channel axis, so it does not — and resampling is separable, so
-depth can ride along as channels while height and width are resized and
-then be its own one-dimensional resample over the result.
+MPSGraph's resamplers are two-dimensional, and these two were stubs.
+Resampling is separable, so each axis is its own one-dimensional resample:
+a gather for nearest, a gather of two taps and a blend for linear, at the
+engine's shared sample positions (``OpEmitters/_Resample.h``; the exact
+agreement with eager on Metal is held in
+``test_resize_sample_positions_compiled.py``).  Here the reference is the
+CPU stream.
 
-Depth goes through a gather rather than a repeat, which is what lets the
-same path serve a fractional ratio and a downsample. ``align_corners``
-changes which source plane each output plane reads, so both settings are
-covered: agreeing on the default would say nothing about the flag.
+A gather lets the same path serve a fractional ratio and a downsample.
+``align_corners`` changes which source plane each output plane reads, so
+both settings are covered: agreeing on the default would say nothing about
+the flag.
 """
 
 import pytest
@@ -111,13 +112,9 @@ class TestTheyAreNoLongerStubs:
         for name in ("interpolate_nearest_3d", "interpolate_trilinear"):
             assert _C_engine.compile.emitter_registered(name), name
 
-    def test_a_dynamic_batch_declines_rather_than_pinning_one(self):
-        """Folding depth into channels merges the batch axis away.
-
-        A symbolic batch cannot survive that view, so the emitter has to
-        step aside instead of baking the trace-time batch into the graph
-        and answering confidently at every other size.
-        """
+    def test_a_dynamic_batch_answers_at_every_size(self):
+        """Only the trailing axes are gathered, so the batch stays symbolic:
+        the trace-time batch is never baked into the graph."""
         model = _Resample((6, 8, 8), "nearest", False).eval().to("metal")
         _C_engine.compile.session_cache_clear()
         compiled = lucid.compile(model, dynamic=True)

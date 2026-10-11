@@ -69,12 +69,9 @@ def test_integer_topk_values_follow_the_input() -> None:
     _replays(lambda x: lucid.topk(x, 2, dim=-1)[0] + 1, _ints(1), _ints(2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-425: compiled TopK names ties highest-first (eager topk names "
-    "them lowest first, as the reference does; these rows have ties)",
-)
 def test_integer_topk_indices_follow_the_input() -> None:
+    """These rows have ties: the compiled topk names them lowest first, as
+    eager does (LCD-425)."""
     _replays(lambda x: lucid.topk(x, 2, dim=-1)[1] + 1, _ints(1), _ints(2))
 
 
