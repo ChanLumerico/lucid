@@ -10,13 +10,8 @@ requires = [
     "pybind11>=3.0,<3.1",
     "cmake>=3.24",
     "ninja>=1.11",
-    # setup.py imports mlx at build time to detect Metal sources, so it
-    # must be available in the isolated build environment.
-    # Every mlx-metal release from 0.31 on ships macOS 14, 15 and 26 builds
-    # with one ABI (same headers, same exported symbols).  The engine targets
-    # 26.0 (setup.py), so one macosx_26_0_arm64 wheel links against the macOS
-    # 26 build pip picks for the machine.
-    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # No mlx here: the engine links the MLX build pinned in [tool.lucid.mlx],
+    # which tools/fetch_mlx.py downloads and stages; see that table.
 ]
 build-backend = "setuptools.build_meta"
 
@@ -25,7 +20,7 @@ name = "lucid-dl"
 version = "3.15.5"
 description = "Apple Silicon ML framework"
 readme = "README.md"
-license = "MIT AND BSD-3-Clause"
+license = "MIT AND BSD-3-Clause AND Apache-2.0"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "ChanLumerico", email = "greensox284@gmail.com" }]
 # Lucid relies on PEP 649 lazy annotations (Python 3.14) to make
@@ -56,12 +51,11 @@ classifiers = [
 # array ingest.  (safetensors stays optional — it gates only the
 # ``.safetensors`` format + pretrained-weight download; see [models] below.)
 #
-# MLX *is* a hard runtime dep — engine.so links against libmlx.dylib and the
-# CMake RPATH is baked in at build time. Mirror it in [build-system].requires
-# and use `pip install --no-build-isolation` so the build-env path matches
-# the runtime path.
+# MLX is not a dependency: the engine ships its own pinned MLX build
+# ([tool.lucid.mlx]) renamed so it loads beside any `mlx` the user has.  The
+# Python `mlx` package is needed only for zero-copy interop with it (the
+# [mlx] extra below).
 dependencies = [
-    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "numpy>=1.24",
     # Every pretrained weight in the zoo is a safetensors blob, so
     # `pretrained=True` is not an optional path — it is the advertised
@@ -92,6 +86,11 @@ numpy = ["numpy>=1.24"]
 # Everything needed to load pretrained weights / the ``.safetensors`` format
 # (numpy is already in the base deps).  ``pip install lucid-dl[models]``.
 models = ["safetensors>=0.4"]
+# Zero-copy DLPack exchange with the `mlx` Python package
+# (``mx.array(lucid_tensor)`` / ``lucid.from_dlpack(mx_array)``).  0.32 is the
+# first release whose ``mx.from_dlpack`` takes Metal capsules.  Any later
+# version works: Lucid's engine never loads this package's libmlx.
+mlx = ["mlx>=0.32; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 dev = [
     "pytest>=7",
     "ruff>=0.4",
@@ -155,6 +154,20 @@ quality = [
     "hypothesis>=6.100",
     "diff-cover>=9",
 ]
+
+# The MLX build the engine links and ships (LCD-292).  MLX's C++ ABI breaks
+# between patch releases, so the engine never links a user's `mlx`: setup.py
+# stages this exact wheel with tools/fetch_mlx.py (sha256-checked, renamed to
+# liblucid_mlx / liblucid_jaccl) and copies it into the Lucid wheel.  `macos`
+# is the binary's LC_BUILD_VERSION minos and the engine's deployment target
+# floor.  Change it only with `python3 tools/fetch_mlx.py --bump <version>`:
+# it is an engine ABI change (orchestrator).
+[tool.lucid.mlx]
+version = "0.32.3"
+wheel = "mlx_metal-0.32.3-py3-none-macosx_26_0_arm64.whl"
+sha256 = "34ae9b83ad2f0ccdd3e5d48ec35176e7119f57069eef187122916dc941a4ae1f"
+url = "https://files.pythonhosted.org/packages/ee/38/cb985ca86979ca6f954a2a45eb6e3f9b787c5d55227564a04f87953b3d56/mlx_metal-0.32.3-py3-none-macosx_26_0_arm64.whl"
+macos = "26.2"
 
 [tool.setuptools.packages.find]
 # Only ship the `lucid` package tree itself — dev tooling (`tools/`,

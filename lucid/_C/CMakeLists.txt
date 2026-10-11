@@ -30,13 +30,15 @@ set(LUCID_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 # — e.g. an IDE (VS Code CMake Tools with cmake.sourceDirectory = lucid/_C) —
 # they are absent, which previously aborted with FATAL_ERROR and left the
 # editor's CMake integration red.  Derive them from the active Python instead
-# (mirrors setup.py's _mlx_paths()), so a standalone/IDE configure just works.
+# (MLX through tools/fetch_mlx.py, as setup.py does), so a standalone/IDE
+# configure just works.
 set(_lucid_need_derive FALSE)
 foreach(required_var
         LUCID_PYTHON_INCLUDE_DIR
         LUCID_PYBIND11_INCLUDE_DIR
         LUCID_MLX_INCLUDE_DIR
         LUCID_MLX_LIBRARY_DIR
+        LUCID_MLX_PIN
         LUCID_PYTHON_EXTENSION_SUFFIX
         LUCID_EXTENSION_OUTPUT_DIR)
     if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
@@ -46,7 +48,7 @@ endforeach()
 
 if(_lucid_need_derive)
     # Try candidate interpreters in priority order and keep the first that can
-    # actually import pybind11 + mlx: an explicit ``-DPython3_EXECUTABLE=`` /
+    # actually import pybind11: an explicit ``-DPython3_EXECUTABLE=`` /
     # ``-DLUCID_PYTHON=`` (an IDE may inject the selected interpreter), then the
     # first ``python3`` on PATH.  CMake's ``find_package(Python3)`` heuristic is
     # avoided (it picks a bare system Python without the build packages), and a
@@ -71,13 +73,10 @@ if(_lucid_need_derive)
     foreach(_cand IN LISTS _lucid_candidates)
         execute_process(
             COMMAND "${_cand}" -c [==[
-import sysconfig, os
-import pybind11, mlx.core
-mp = os.path.dirname(mlx.core.__file__)
+import sysconfig
+import pybind11
 print(sysconfig.get_paths()['include'])
 print(pybind11.get_include())
-print(os.path.join(mp, 'include'))
-print(os.path.join(mp, 'lib'))
 print(sysconfig.get_config_var('EXT_SUFFIX'))
 ]==]
             OUTPUT_VARIABLE _lucid_py_out
@@ -91,12 +90,28 @@ print(sysconfig.get_config_var('EXT_SUFFIX'))
     endforeach()
 
     if(_lucid_py_res EQUAL 0)
+        # The pinned MLX, staged (downloaded on first use) into the per-machine
+        # cache; never the `mlx` Python package, whose libmlx has another ABI.
+        foreach(_lucid_what dir version)
+            execute_process(
+                COMMAND "${_lucid_py}" "${LUCID_REPO_ROOT}/tools/fetch_mlx.py" --print-${_lucid_what}
+                OUTPUT_VARIABLE _lucid_mlx_${_lucid_what}
+                RESULT_VARIABLE _lucid_py_res
+                ERROR_VARIABLE _lucid_py_err
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if(NOT _lucid_py_res EQUAL 0)
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if(_lucid_py_res EQUAL 0)
         string(REPLACE "\n" ";" _lucid_paths "${_lucid_py_out}")
         list(GET _lucid_paths 0 _lucid_py_inc)
         list(GET _lucid_paths 1 _lucid_pybind_inc)
-        list(GET _lucid_paths 2 _lucid_mlx_inc)
-        list(GET _lucid_paths 3 _lucid_mlx_lib)
-        list(GET _lucid_paths 4 _lucid_ext_suffix)
+        list(GET _lucid_paths 2 _lucid_ext_suffix)
+        set(_lucid_mlx_inc "${_lucid_mlx_dir}/include")
+        set(_lucid_mlx_lib "${_lucid_mlx_dir}/lib")
         if(NOT LUCID_PYTHON_INCLUDE_DIR)
             set(LUCID_PYTHON_INCLUDE_DIR "${_lucid_py_inc}")
         endif()
@@ -108,6 +123,9 @@ print(sysconfig.get_config_var('EXT_SUFFIX'))
         endif()
         if(NOT LUCID_MLX_LIBRARY_DIR)
             set(LUCID_MLX_LIBRARY_DIR "${_lucid_mlx_lib}")
+        endif()
+        if(NOT LUCID_MLX_PIN)
+            set(LUCID_MLX_PIN "${_lucid_mlx_version}")
         endif()
         if(NOT LUCID_PYTHON_EXTENSION_SUFFIX)
             set(LUCID_PYTHON_EXTENSION_SUFFIX "${_lucid_ext_suffix}")
@@ -121,12 +139,20 @@ print(sysconfig.get_config_var('EXT_SUFFIX'))
     else()
         message(FATAL_ERROR
             "Lucid build paths were not provided by setup.py and could not be "
-            "auto-derived from Python (need an interpreter with pybind11 + mlx "
-            "installed). Build the engine with `pip install -e .`.\n${_lucid_py_err}")
+            "auto-derived from Python (need an interpreter with pybind11, and "
+            "tools/fetch_mlx.py must be able to stage the pinned MLX). Build the "
+            "engine with `pip install -e .`.\n${_lucid_py_err}")
     endif()
 endif()
 
-find_library(LUCID_MLX_LIBRARY NAMES mlx PATHS "${LUCID_MLX_LIBRARY_DIR}" NO_DEFAULT_PATH REQUIRED)
+# liblucid_mlx is the pinned MLX build renamed by tools/fetch_mlx.py, so dyld
+# never confuses it with the @rpath/libmlx.dylib a Python `mlx` loads.  A plain
+# variable, not find_library: a cached result would keep linking the previous
+# pin's library after a bump changes LUCID_MLX_LIBRARY_DIR.
+set(LUCID_MLX_LIBRARY "${LUCID_MLX_LIBRARY_DIR}/liblucid_mlx.dylib")
+if(NOT EXISTS "${LUCID_MLX_LIBRARY}")
+    message(FATAL_ERROR "${LUCID_MLX_LIBRARY} not found; stage it with tools/fetch_mlx.py")
+endif()
 
 add_library(lucid_compile_options INTERFACE)
 target_compile_features(lucid_compile_options INTERFACE cxx_std_20)
@@ -534,6 +560,18 @@ lucid_object_library(
     bindings/bind_coreml.cpp         # Core ML package writer
     bindings/bind_tokenizer.cpp      # 3.5+ tokenizer surface (utils.tokenizer)
     bindings/bind.cpp)
+# Only module init compares the loaded MLX against the pin, so only it sees the
+# pin: a bump does not invalidate every other object through a definition.
+set_source_files_properties(
+    bindings/bind.cpp
+    PROPERTIES COMPILE_DEFINITIONS "LUCID_MLX_PIN=\"${LUCID_MLX_PIN}\"")
+
+option(LUCID_MLX_BUNDLED "The MLX runtime is copied next to the engine (wheel build)" OFF)
+if(LUCID_MLX_BUNDLED)
+    set(LUCID_ENGINE_RPATH "@loader_path")
+else()
+    set(LUCID_ENGINE_RPATH "@loader_path;${LUCID_MLX_LIBRARY_DIR}")
+endif()
 
 add_library(
     lucid_engine MODULE
@@ -572,32 +610,19 @@ set_target_properties(
         OUTPUT_NAME "engine"
         SUFFIX "${LUCID_PYTHON_EXTENSION_SUFFIX}"
         LIBRARY_OUTPUT_DIRECTORY "${LUCID_EXTENSION_OUTPUT_DIR}"
-        # BUILD_RPATH = absolute path to the build-env's MLX install so
-        # `import lucid` works directly out of the build tree during
-        # `pip install -e .` (no install step copies the .so anywhere).
-        BUILD_RPATH "${LUCID_MLX_LIBRARY_DIR}"
-        # INSTALL_RPATH = the path list dyld searches for ``@rpath/``
-        # references at runtime.  Two entries, tried in order:
+        # The path list dyld searches for the ``@rpath/liblucid_mlx.dylib``
+        # load command, in order:
         #
-        #   1. ``@loader_path/../../mlx/lib`` — the canonical wheel layout:
-        #         site-packages/lucid/_C/engine.cpython-*.so   ← @loader_path
-        #         site-packages/mlx/lib/libmlx.dylib           ← target
-        #      Two ``..`` levels reach site-packages, then ``mlx/lib/``.
-        #      Resolves correctly inside any venv or system Python that
-        #      has MLX installed via pip.
+        #   1. ``@loader_path`` — a wheel: setup.py copies liblucid_mlx,
+        #      liblucid_jaccl and mlx.metallib next to engine*.so.
+        #   2. ``${LUCID_MLX_LIBRARY_DIR}`` — an editable / in-place build,
+        #      which copies nothing: the staged entry in the per-machine
+        #      cache (tools/fetch_mlx.py).  Left out of a wheel
+        #      (LUCID_MLX_BUNDLED), which must not name a build-machine path.
         #
-        #   2. ``${LUCID_MLX_LIBRARY_DIR}`` — the build-env's absolute MLX
-        #      path.  Used by editable installs (``pip install -e .``),
-        #      where the .so lives in the source tree and entry 1 falls
-        #      through (no site-packages mlx alongside the source tree).
-        #
-        # 3.0.0 had only entry 2, so dyld followed the absolute build-
-        # machine path verbatim on every user machine — ignoring the
-        # user's venv mlx and hitting ABI mismatches when the build path
-        # happened to coincide with a different MLX version.  Listing
-        # entry 1 FIRST means wheels resolve correctly on any machine,
-        # while entry 2 remains a safety net for in-tree development.
-        INSTALL_RPATH "@loader_path/../../mlx/lib;${LUCID_MLX_LIBRARY_DIR}"
+        # Neither entry can reach a Python `mlx` package's libmlx.dylib: the
+        # file name differs, so whichever MLX the user has loads beside it.
+        INSTALL_RPATH "${LUCID_ENGINE_RPATH}"
         # Use INSTALL_RPATH at link time too, so the build artifact has
         # both entries (no separate install relink step).
         BUILD_WITH_INSTALL_RPATH ON
@@ -610,4 +635,8 @@ option(BUILD_TESTING "Build C++ unit tests using Google Test" OFF)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(test)
+    if(TARGET lucid_test)
+        # Same resolution as the engine's editable build: the staged MLX.
+        set_target_properties(lucid_test PROPERTIES BUILD_RPATH "${LUCID_MLX_LIBRARY_DIR}")
+    endif()
 endif()

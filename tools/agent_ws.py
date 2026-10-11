@@ -989,7 +989,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             "`build` is for worktrees, where an editable install would hijack the shared venv"
         )
     env = dict(os.environ)
-    env.setdefault("MACOSX_DEPLOYMENT_TARGET", "26.0")
+    env.setdefault("MACOSX_DEPLOYMENT_TARGET", "26.2")  # [tool.lucid.mlx] macos
     if XCODE_SDK.exists():  # MacBook: the CLT 27 SDK breaks Xcode 26's ld
         env.setdefault("SDKROOT", str(XCODE_SDK))
     env.setdefault("CCACHE_BASEDIR", str(main_root))

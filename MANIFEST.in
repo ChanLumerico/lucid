@@ -5,3 +5,6 @@ include README.md LICENSE CHANGELOG.md THIRD_PARTY_NOTICES.md
 recursive-include lucid/_C *.h *.hpp *.cpp *.mm *.metal CMakeLists.txt
 recursive-include lucid/_C/cmake *
 recursive-include lucid *.json *.pyi
+
+# setup.py stages the pinned MLX build ([tool.lucid.mlx]) with this script.
+include tools/fetch_mlx.py

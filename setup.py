@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import platform
 import shutil
@@ -62,16 +63,38 @@ def _macos_sdkroot() -> str:
     return subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
 
 
-def _mlx_paths() -> tuple[Path, Path]:
-    try:
-        import mlx.core as mlx_core
-    except ImportError as e:
-        raise RuntimeError(
-            "MLX is required to build lucid._C.engine on Apple Silicon. "
-            "Install it first: pip install mlx"
-        ) from e
-    mlx_pkg = Path(mlx_core.__file__).resolve().parent
-    return mlx_pkg / "include", mlx_pkg / "lib"
+def _load_fetch_mlx():
+    """Import tools/fetch_mlx.py by path: tools/ is not a package in an sdist."""
+    path = Path(__file__).resolve().parent / "tools" / "fetch_mlx.py"
+    spec = importlib.util.spec_from_file_location("_lucid_fetch_mlx", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve their module by name
+    spec.loader.exec_module(module)
+    return module
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def _deployment_target(floor: str) -> str:
+    """The requested target, raised to the pinned MLX binary's minos if lower."""
+    requested = os.environ.get("MACOSX_DEPLOYMENT_TARGET", floor)
+    if _version_tuple(requested) >= _version_tuple(floor):
+        return requested
+    print(
+        f"lucid: MACOSX_DEPLOYMENT_TARGET={requested} is below {floor}, the "
+        f"minimum of the pinned MLX build ([tool.lucid.mlx] macos); using {floor}",
+        file=sys.stderr,
+    )
+    return floor
+
+
+# Copied next to engine*.so in a wheel build; the engine's first rpath entry
+# is @loader_path, and MLX finds mlx.metallib beside liblucid_mlx.dylib.
+_MLX_RUNTIME_FILES = ("liblucid_mlx.dylib", "liblucid_jaccl.dylib", "mlx.metallib")
 
 
 class CMakeExtension(Extension):
@@ -89,7 +112,8 @@ class CMakeExtension(Extension):
 # (`_enforce_apple_silicon_only()` aborts on anything else), so the
 # universal2 tag is actively wrong.
 #
-# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-26.0-arm64`
+# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-26.2-arm64`
+# (26.2 = [tool.lucid.mlx] macos, the floor of the MLX build the wheel ships)
 # in the build environment before invoking `python -m build`. This is
 # what cibuildwheel and modern release tooling do; the CI workflows
 # (`publish.yml`, `release-testpypi.yml`) and `scripts/ci_publish.sh`
@@ -99,6 +123,16 @@ class CMakeExtension(Extension):
 
 
 class CMakeBuildExt(build_ext):
+    _lucid_in_tree = False
+
+    def run(self) -> None:
+        # build_ext.run() clears ``inplace`` while extensions build and copies
+        # them into the tree afterwards, so record the caller's intent here.
+        # Editable / in-place builds rely on the absolute rpath into the staged
+        # MLX (shared per machine) instead of copying ~210 MB into the tree.
+        self._lucid_in_tree = bool(self.inplace or self.editable_mode)
+        super().run()
+
     def build_extension(self, ext: Extension) -> None:
         if not isinstance(ext, CMakeExtension):
             super().build_extension(ext)
@@ -107,7 +141,10 @@ class CMakeBuildExt(build_ext):
         _enforce_apple_silicon_only()
 
         cmake = _cmake_executable()
-        mlx_include_dir, mlx_library_dir = _mlx_paths()
+        fetch_mlx = _load_fetch_mlx()
+        mlx_pin = fetch_mlx.read_pin()
+        mlx_dir = fetch_mlx.stage(mlx_pin)
+        mlx_include_dir, mlx_library_dir = mlx_dir / "include", mlx_dir / "lib"
         ext_path = Path(self.get_ext_fullpath(ext.name)).resolve()
         ext_dir = ext_path.parent
         build_temp = Path(self.build_temp).resolve() / ext.name.replace(".", "_")
@@ -115,9 +152,8 @@ class CMakeBuildExt(build_ext):
         ext_dir.mkdir(parents=True, exist_ok=True)
 
         build_mode = os.environ.get("LUCID_BUILD_MODE", "release").lower()
-        # 26.0 is the floor Lucid supports: one wheel for macOS 26 and later.
-        # 3.15.0 was the last release for macOS 15.
-        deployment_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "26.0")
+        # The floor is the pinned MLX binary's: one wheel for that macOS and later.
+        deployment_target = _deployment_target(mlx_pin.macos)
         cmake_args = [
             "-S",
             ext.source_dir,
@@ -135,6 +171,8 @@ class CMakeBuildExt(build_ext):
             f"-DLUCID_PYBIND11_INCLUDE_DIR={pybind11.get_include()}",
             f"-DLUCID_MLX_INCLUDE_DIR={mlx_include_dir}",
             f"-DLUCID_MLX_LIBRARY_DIR={mlx_library_dir}",
+            f"-DLUCID_MLX_PIN={mlx_pin.version}",
+            f"-DLUCID_MLX_BUNDLED={'OFF' if self._lucid_in_tree else 'ON'}",
             f"-DLUCID_PYTHON_EXTENSION_SUFFIX={sysconfig.get_config_var('EXT_SUFFIX')}",
             f"-DLUCID_EXTENSION_OUTPUT_DIR={ext_dir}",
         ]
@@ -144,6 +182,9 @@ class CMakeBuildExt(build_ext):
         subprocess.check_call(
             [cmake, "--build", str(build_temp), "--parallel", _build_jobs()]
         )
+        if not self._lucid_in_tree:
+            for name in _MLX_RUNTIME_FILES:
+                shutil.copyfile(mlx_library_dir / name, ext_dir / name)
 
 
 _enforce_apple_silicon_only()
