@@ -4,9 +4,14 @@ Shared by the compile and Core ML tests of LCD-337: each entry reads a
 value the result depends on — computed from the input, the input itself,
 or the model's own parameter or buffer — and builds the result from it,
 so a trace that kept the value it read would answer every later call
-with the first one's result.
+with the first one's result. LCD-345 added the reads that go through a
+copy made outside the op dispatcher (a device move, a shared buffer) and
+through bytes, pickle, ``lucid.save`` and DLPack.
 """
 
+import copy
+import io
+import pickle
 from collections.abc import Callable
 
 import pytest
@@ -40,6 +45,38 @@ def _numpy_total(t: lucid.Tensor) -> float:
     return float(t.numpy().sum())
 
 
+def _elsewhere(x: lucid.Tensor) -> str:
+    """The device ``x`` is not on: a move there makes a copy."""
+    return "cpu" if x.is_metal else "metal"
+
+
+def _byte_total(blob: bytes) -> float:
+    return float(sum(blob))
+
+
+def _reloaded(x: lucid.Tensor) -> lucid.Tensor:
+    # Read back rather than summed as bytes: the file also names the device.
+    buffer = io.BytesIO()
+    lucid.save(x, buffer)
+    buffer.seek(0)
+    loaded = lucid.load(buffer)
+    assert isinstance(loaded, lucid.Tensor)
+    return loaded
+
+
+def _dlpack_total(x: lucid.Tensor) -> float:
+    # The host dialect goes through NumPy; the Metal one needs nothing.
+    if not x.is_metal:
+        pytest.importorskip("numpy")
+    return _list_total(lucid.from_dlpack(x))
+
+
+def _list_total(t: lucid.Tensor) -> float:
+    values = t.tolist()
+    assert isinstance(values, list)
+    return float(sum(v for v in values if isinstance(v, float)))
+
+
 HOST_READS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "item": lambda m, x: x * 0 + lucid.full_like(x, x.sum().item()),
     "tolist": lambda m, x: x * 0 + x.sum().tolist(),
@@ -56,6 +93,28 @@ HOST_READS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     # path, which feeds them on every run, must not keep the value read.
     "parameter-item": lambda m, x: x * m.scale.item(),
     "buffer-item": lambda m, x: x + m.get_buffer("offset").item(),
+    # A copy made outside the op dispatcher, then read (LCD-345): the trace
+    # has to know the copy holds its value, or the read goes unnoticed.
+    "moved-tolist": lambda m, x: x * 0 + _list_total(x.to(_elsewhere(x))),
+    "moved-numpy": lambda m, x: x * 0 + _numpy_total(x.to(_elsewhere(x))),
+    "detached-moved-tolist": lambda m, x: x * 0 + _list_total(x.detach().to(_elsewhere(x))),
+    "shared-tolist": lambda m, x: x * 0 + _list_total(lucid.metal.to_shared(x)),
+    "deepcopy": lambda m, x: x * 0 + _list_total(copy.deepcopy(x)),
+    # The values handed out as bytes or a DLPack capsule.
+    "to-bytes": lambda m, x: x * 0 + _byte_total(x._impl.to_bytes()),
+    "pickle": lambda m, x: x * 0 + _list_total(pickle.loads(pickle.dumps(x))),
+    "save": lambda m, x: x * 0 + _list_total(_reloaded(x)),
+    "dlpack": lambda m, x: x * 0 + _dlpack_total(x),
+}
+
+#: A copy made outside the op dispatcher that reaches the result through an
+#: op, not a host read. Unrecorded, the copy was a feed pinned at its
+#: trace-time value. A compiled call holding one runs eagerly: no executable
+#: spans two devices or hands out a shared buffer.
+DERIVED_VALUES: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
+    "moved-result": lambda m, x: (x * 3).to(_elsewhere(x)),
+    "moved-twice": lambda m, x: x.to(_elsewhere(x)).to(x.device) * 3,
+    "shared-operand": lambda m, x: lucid.metal.to_shared(x * 3) * 2,
 }
 
 #: Entries whose read is of the model's weights rather than of its input.

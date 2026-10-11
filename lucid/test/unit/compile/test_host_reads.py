@@ -17,17 +17,21 @@ and the compiled second answer has to be eager's.
 """
 
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import pytest
 
 import lucid
+import lucid.nn as nn
 from lucid._C import engine as _C_engine
+from lucid.compile import CompiledModule
 from lucid.compile._core import fallback
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 from lucid.test.unit.compile._host_reads import (
     CONSTANT_READS,
+    DERIVED_VALUES,
     HOST_READS,
+    STATE_READS,
     Apply,
     inputs,
 )
@@ -71,13 +75,9 @@ def test_a_host_read_runs_eagerly_and_follows_the_input(name: str) -> None:
         got_second = compiled(second.to(COMPILE_DEVICE)).to("cpu")
 
     for got, want in ((got_first, want_first), (got_second, want_second)):
-        assert float((got - want).abs().max().item()) <= 1e-4 * float(
-            want.abs().max().item()
-        )
+        assert float((got - want).abs().max().item()) <= 1e-4 * float(want.abs().max().item())
     said = [
-        str(w.message)
-        for w in caught
-        if issubclass(w.category, fallback.CompileFallbackWarning)
+        str(w.message) for w in caught if issubclass(w.category, fallback.CompileFallbackWarning)
     ]
     assert said and "host" in said[0], said
     assert compiled.cache_info()["eager_only"]
@@ -94,3 +94,152 @@ def test_a_read_that_feeds_nothing_stays_compiled(name: str) -> None:
         got = compiled(second.to(COMPILE_DEVICE)).to("cpu")
     assert float((got - second * 3).abs().max().item()) <= 1e-5
     assert not compiled.cache_info()["eager_only"]
+
+
+def _follows_the_input(
+    fn: Callable[[Apply, lucid.Tensor], lucid.Tensor], device: str
+) -> tuple[list[str], CompiledModule]:
+    """Compile ``fn`` on ``device``, call it twice, compare with eager.
+
+    Returns the fallback warnings raised and the compiled module.
+    """
+    first, second = inputs()
+    reference = Apply(fn).eval()
+    want = [reference(first).to("cpu"), reference(second).to("cpu")]
+    assert float((want[0] - want[1]).abs().max().item()) > 1e-3
+
+    compiled = lucid.compile.compile(Apply(fn).eval().to(device))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        got = [compiled(t.to(device)).to("cpu") for t in (first, second)]
+    for g, w in zip(got, want, strict=True):
+        assert float((g - w).abs().max().item()) <= 1e-4 * float(w.abs().max().item())
+    said = [
+        str(w.message) for w in caught if issubclass(w.category, fallback.CompileFallbackWarning)
+    ]
+    return said, compiled
+
+
+@pytest.mark.parametrize("name", sorted(set(HOST_READS) - STATE_READS))
+def test_a_host_read_of_the_input_on_the_cpu_follows_the_input(name: str) -> None:
+    """On the CPU every compiled call runs eagerly; the moves go to Metal."""
+    _said, compiled = _follows_the_input(HOST_READS[name], "cpu")
+    assert compiled.cache_info()["eager_only"]
+
+
+@pytest.mark.parametrize("device", ["metal", "cpu"])
+@pytest.mark.parametrize("name", sorted(DERIVED_VALUES))
+def test_a_copy_made_outside_the_ops_follows_the_input(name: str, device: str) -> None:
+    """``(x * 3).to("cpu")`` returned the first call's answer (LCD-345)."""
+    said, compiled = _follows_the_input(DERIVED_VALUES[name], device)
+    assert compiled.cache_info()["eager_only"]
+    if device == "metal":
+        assert said, "the fallback was silent"
+
+
+def _ordinary(x: lucid.Tensor) -> lucid.Tensor:
+    # Moves and casts that copy nothing, and a constant made on x's device:
+    # none of them is a traced value copied outside the ops.
+    same = x.to(x.device).to(lucid.float32).float()
+    bias = lucid.tensor([0.5], device=x.device)
+    return (same * 3 + bias).relu()
+
+
+def test_a_function_without_a_copy_records_no_extra_op() -> None:
+    x = lucid.randn(16).to(COMPILE_DEVICE)
+    with lucid.compile._tracing(watch=((x,), {})) as tracer:
+        _ordinary(x)
+    names = [op.name for op in tracer.graph.ops]
+    assert not {"to_device", "detach", "to_shared_storage"} & set(names), names
+    assert not tracer.graph.unsupported
+
+    compiled = lucid.compile.compile(_ordinary)
+    second = lucid.randn(16).to(COMPILE_DEVICE)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", fallback.CompileFallbackWarning)
+        compiled(x)
+        got = compiled(second)
+    assert float((got - _ordinary(second)).abs().max().item()) <= 1e-6
+    assert not compiled.cache_info()["eager_only"]
+
+
+def test_a_copy_of_a_constant_records_nothing() -> None:
+    """``Tracer::on_derived`` leaves a tensor the trace has not seen alone."""
+    x = lucid.randn(4).to(COMPILE_DEVICE)
+    with lucid.compile._tracing(watch=((x,), {})) as tracer:
+        # Built from Python numbers and consumed by no op, so the trace has
+        # not seen it. (An op reading it would make it a feed, and a read of
+        # a feed is a read of a traced value.)
+        constant = lucid.tensor([1.0, 2.0, 3.0, 4.0])
+        impl = constant._impl
+        _C_engine.to_device(impl, _C_engine.Device.GPU).tolist()
+        impl.transfer_to_device(_C_engine.Device.GPU, False).tolist()
+        impl.clone_with_grad(True).tolist()
+        constant.data.tolist()
+        lucid.metal.to_shared(constant).tolist()
+    assert [op.name for op in tracer.graph.ops] == []
+    assert not tracer.graph.unsupported
+
+
+class _Linear(nn.Module):
+    def __init__(self, move: Callable[[lucid.Tensor], lucid.Tensor]) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 3)
+        self.move = move
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.move(self.lin(x))
+
+
+def _step_twice(
+    move: Callable[[lucid.Tensor], lucid.Tensor],
+    loss_fn: Callable[[lucid.Tensor], lucid.Tensor],
+) -> bool:
+    """A compiled training step against eager, on two inputs.
+
+    Returns whether the step ran eagerly.
+    """
+    lucid.manual_seed(0)
+    model = _Linear(move).to(COMPILE_DEVICE)
+    step = lucid.compile.make_step(model, loss_fn)
+    for seed in (1, 2):
+        lucid.manual_seed(seed)
+        x = (lucid.randn(2, 4) * seed).to(COMPILE_DEVICE)
+        model.zero_grad()
+        got = step(x)
+        got.backward()
+        got_grads = [_grad(p) for p in model.parameters()]
+        model.zero_grad()
+        want = loss_fn(model(x))
+        want.backward()
+        scale = abs(float(want.item()))
+        assert abs(float(got.item()) - float(want.item())) <= 1e-4 * scale
+        for g, p in zip(got_grads, model.parameters(), strict=True):
+            assert float((g - _grad(p)).abs().max().item()) <= 1e-4
+    return bool(step.eager_only)
+
+
+def _grad(p: lucid.Tensor) -> lucid.Tensor:
+    assert p.grad is not None
+    return p.grad.to("cpu")
+
+
+def test_a_step_reading_a_moved_value_follows_the_input() -> None:
+    """``.to()`` under grad goes through the ``to_device`` op (LCD-345)."""
+
+    def loss_fn(out: lucid.Tensor) -> lucid.Tensor:
+        rows = out.to("cpu").tolist()
+        assert isinstance(rows, list)
+        total = sum(v for row in rows if isinstance(row, list) for v in row)
+        assert isinstance(total, float)
+        return (out * total).sum()
+
+    with pytest.warns(fallback.CompileFallbackWarning, match="host"):
+        assert _step_twice(lambda y: y, loss_fn)
+
+
+def test_a_step_with_a_move_that_copies_nothing_stays_compiled() -> None:
+    def loss_fn(out: lucid.Tensor) -> lucid.Tensor:
+        return out.square().sum()
+
+    assert not _step_twice(lambda y: y.to(y.device).float(), loss_fn)
