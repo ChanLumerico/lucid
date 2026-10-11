@@ -66,6 +66,10 @@ from lucid.models._utils._detection import (
     rpn_loss,
     select_training_samples,
 )
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
+)
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 
 
@@ -712,7 +716,7 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
             offset += N_i
 
             if N_i == 0:
-                results.append(self._empty_det(dev))
+                results.append(empty_detection_result(dev))
                 continue
 
             scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
@@ -746,11 +750,11 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                    lucid.full((int(keep.shape[0]),), c, dtype=lucid.int64, device=dev)
                 )
 
             if not keep_boxes:
-                results.append(self._empty_det(dev))
+                results.append(empty_detection_result(dev))
                 continue
 
             all_b = lucid.cat(keep_boxes, dim=0)
@@ -760,19 +764,5 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
             kept_boxes = all_b[order]
             if image_sizes is not None and _img_idx < len(image_sizes):
                 kept_boxes = clip_boxes_to_image(kept_boxes, image_sizes[_img_idx])
-            results.append(
-                {
-                    "boxes": kept_boxes,
-                    "scores": all_s[order],
-                    "labels": all_l[order].long(),
-                }
-            )
+            results.append(detection_result(kept_boxes, all_s[order], all_l[order]))
         return results
-
-    @staticmethod
-    def _empty_det(dev: str) -> dict[str, Tensor]:
-        return {
-            "boxes": lucid.zeros((0, 4), device=dev),
-            "scores": lucid.zeros((0,), device=dev),
-            "labels": lucid.zeros((0,), device=dev).long(),
-        }

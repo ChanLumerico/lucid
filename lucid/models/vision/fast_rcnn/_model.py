@@ -46,6 +46,7 @@ from lucid.models._utils._detection import (
     encode_boxes,
     roi_pool,
 )
+from lucid.models._utils._detection_results import merge_class_detections
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
 
 # ---------------------------------------------------------------------------
@@ -658,28 +659,13 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                    lucid.full((int(keep.shape[0]),), c, dtype=lucid.int64, device=dev)
                 )
 
-            if keep_boxes:
-                all_b = lucid.cat(keep_boxes, dim=0)
-                all_s = lucid.cat(keep_scores, dim=0)
-                all_l = lucid.cat(keep_labels, dim=0)
-                order = lucid.argsort(-all_s)[: self._max_det]
-                results.append(
-                    {
-                        "boxes": all_b[order],
-                        "scores": all_s[order],
-                        "labels": all_l[order],
-                    }
+            results.append(
+                merge_class_detections(
+                    keep_boxes, keep_scores, keep_labels, dev, self._max_det
                 )
-            else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+            )
 
         return results

@@ -51,15 +51,19 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid._types import DeviceLike
 from lucid.models._base import ModelConfig
-from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._utils._detection import (
     batched_nms,
     clip_boxes_to_image,
+    box_iou,
+)
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
 )
 from lucid.models.vision.yolo._weights import YOLOV3TinyWeights, YOLOV3Weights
 from lucid.models._utils._common import apply_overrides
@@ -528,60 +532,51 @@ def _decode_predictions(
 _IGNORE_IOU_THRESH = 0.5
 
 
-def _ignore_mask(
-    pred_b: Tensor,
-    anchors_wh: list[tuple[float, float]],
-    stride: int,
-    gt_boxes: Tensor,
-    fH: int,
-    fW: int,
-    nA: int,
-    thresh: float,
-) -> Tensor:
-    """1.0 where a non-assigned anchor overlaps some GT by more than ``thresh``.
+def _ignore_mask(pred_boxes: Tensor, gt_boxes: Tensor, thresh: float) -> Tensor:
+    """1.0 where a predicted box overlaps some GT by more than ``thresh``.
 
-    Built from decoded *predicted* boxes, as the paper specifies.  This is a
-    selection mask, so reading values out with ``.item()`` is correct — it
-    carries no gradient by construction.
+    ``pred_boxes`` are one image's ``(N, 4)`` decoded *predicted* boxes, as
+    the paper specifies, decoded without gradient — the mask is a selection,
+    not a target.  ``gt_boxes`` are ``(M, 4)`` xyxy pixels.  One pairwise
+    IoU on the device replaces a per-anchor scan that read four values back
+    to the host for each of the ~10k anchors at 416 px.
     """
-    dev = pred_b.device.type
-    M = int(gt_boxes.shape[0])
-    out = [[[0.0] * fW for _ in range(fH)] for _ in range(nA)]
-    if M == 0:
-        return lucid.tensor(out, device=dev)
+    n_pred = int(pred_boxes.shape[0])
+    if int(gt_boxes.shape[0]) == 0:
+        return lucid.zeros((n_pred,), device=pred_boxes.device)
+    gt = gt_boxes.to(pred_boxes.device).float()
+    return (box_iou(pred_boxes, gt).max(dim=1) > thresh).float()
 
-    gts = [
-        (
-            float(gt_boxes[m, 0].item()),
-            float(gt_boxes[m, 1].item()),
-            float(gt_boxes[m, 2].item()),
-            float(gt_boxes[m, 3].item()),
+
+def _gt_rows(
+    target: dict[str, Tensor],
+) -> list[tuple[tuple[float, float, float, float], int]]:
+    """One image's GT ``(x1, y1, x2, y2)`` boxes and labels, read in one go.
+
+    Target assignment indexes Python-side arrays, so the values are needed
+    on the host; reading each coordinate with ``.item()`` cost five device
+    round-trips per object.  Raises ``ValueError`` when the box and label
+    counts disagree, rather than pairing them up short.
+    """
+    flat = target["boxes"].float().reshape(-1).tolist()
+    ids = target["labels"].long().reshape(-1).tolist()
+    coords = (
+        [float(v) for v in flat if isinstance(v, float)]
+        if isinstance(flat, list)
+        else []
+    )
+    labels = (
+        [int(v) for v in ids if isinstance(v, int)] if isinstance(ids, list) else []
+    )
+    if len(coords) != 4 * len(labels):
+        raise ValueError(
+            f"target has {len(coords) / 4:g} boxes but {len(labels)} labels; "
+            "each box needs exactly one label"
         )
-        for m in range(M)
+    return [
+        ((coords[4 * i], coords[4 * i + 1], coords[4 * i + 2], coords[4 * i + 3]), c)
+        for i, c in enumerate(labels)
     ]
-    for a in range(nA):
-        aw, ah = anchors_wh[a]
-        for r in range(fH):
-            for c in range(fW):
-                tx = float(pred_b[a, r, c, 0].item())
-                ty = float(pred_b[a, r, c, 1].item())
-                tw = float(pred_b[a, r, c, 2].item())
-                th = float(pred_b[a, r, c, 3].item())
-                bx = (1.0 / (1.0 + math.exp(-tx)) + c) * stride
-                by = (1.0 / (1.0 + math.exp(-ty)) + r) * stride
-                bw = math.exp(min(tw, 20.0)) * aw
-                bh = math.exp(min(th, 20.0)) * ah
-                px1, py1 = bx - bw / 2.0, by - bh / 2.0
-                px2, py2 = bx + bw / 2.0, by + bh / 2.0
-                for gx1, gy1, gx2, gy2 in gts:
-                    iw = max(min(px2, gx2) - max(px1, gx1), 0.0)
-                    ih = max(min(py2, gy2) - max(py1, gy1), 0.0)
-                    inter = iw * ih
-                    union = bw * bh + (gx2 - gx1) * (gy2 - gy1) - inter
-                    if inter / (union + 1e-9) > thresh:
-                        out[a][r][c] = 1.0
-                        break
-    return lucid.tensor(out, device=dev)
 
 
 def _yolov3_loss(
@@ -626,10 +621,14 @@ def _yolov3_loss(
         # Reshape raw → (B, nA, 5+C, fH, fW) → (B, nA, fH, fW, 5+C)
         raw_r = raw.reshape(B, nA, 5 + C, fH, fW).permute(0, 1, 3, 4, 2)
 
+        # The ignore mask compares *decoded* predictions with the GTs; it is
+        # a selection, so the boxes carry no gradient.
+        _, pred_boxes, _ = _decode_predictions(raw.detach(), anchors_wh, stride)
+
         for b in range(B):
             gt_boxes = targets[b]["boxes"]  # (M, 4) xyxy pixels
-            gt_labels = targets[b]["labels"]  # (M,)
             M = int(gt_boxes.shape[0])
+            positives: set[tuple[int, int, int]] = set()
 
             # Build target tensors (floats) for this image and scale
             _dev = raw.device.type
@@ -671,16 +670,11 @@ def _yolov3_loss(
                     [[1.0] * fW for _ in range(fH)] for _ in range(nA)
                 ]
 
-                for m in range(M):
-                    x1g = float(gt_boxes[m, 0].item())
-                    y1g = float(gt_boxes[m, 1].item())
-                    x2g = float(gt_boxes[m, 2].item())
-                    y2g = float(gt_boxes[m, 3].item())
+                for (x1g, y1g, x2g, y2g), cls_id in _gt_rows(targets[b]):
                     wg = x2g - x1g
                     hg = y2g - y1g
                     cxg = (x1g + x2g) / 2.0
                     cyg = (y1g + y2g) / 2.0
-                    cls_id = int(gt_labels[m].item())
 
                     col_idx = max(0, min(int(cxg / stride), fW - 1))
                     row_idx = max(0, min(int(cyg / stride), fH - 1))
@@ -719,6 +713,7 @@ def _yolov3_loss(
                     th_arr[best_a][row_idx][col_idx] = math.log(max(hg / ah_best, 1e-9))
                     obj_arr[best_a][row_idx][col_idx] = 1.0
                     mask_arr[best_a][row_idx][col_idx] = 1.0
+                    positives.add((best_a, row_idx, col_idx))
                     # darknet scales the coordinate delta by
                     # ``2 - w_gt*h_gt/(W*H)`` so a small box is not
                     # out-weighted by a large one sharing the loss.
@@ -764,8 +759,8 @@ def _yolov3_loss(
             # ignore the prediction ... We use the threshold of .5."  Without
             # this, a near-perfect box that merely lost the argmax is punished
             # as background, and with ~10k anchors that term dominates.
-            ignore = _ignore_mask(
-                pred_b, anchors_wh, stride, gt_boxes, fH, fW, nA, _IGNORE_IOU_THRESH
+            ignore = _ignore_mask(pred_boxes[b], gt_boxes, _IGNORE_IOU_THRESH).reshape(
+                nA, fH, fW
             )
             noobj_mask = (1.0 - obj_mask) * (1.0 - ignore)
             # v3 drops v1's lambda weighting — "we use sum of squared error
@@ -786,7 +781,7 @@ def _yolov3_loss(
             # 416 crop and a 608 one.
             localisation.append((box_loss + cls_loss).reshape(1))
             objectness.append(obj_loss.reshape(1))
-            n_pos += float(obj_mask.sum().item())
+            n_pos += float(len(positives))
             n_cells += float(B * nA * fH * fW)
 
     if not localisation:
@@ -799,15 +794,6 @@ def _yolov3_loss(
 # ---------------------------------------------------------------------------
 # Postprocess helper (shared by YOLOv3, YOLOv3-Tiny and YOLOv4)
 # ---------------------------------------------------------------------------
-
-
-def _no_detections(device: DeviceLike) -> dict[str, Tensor]:
-    """An image's empty result, on the model's device."""
-    return {
-        "boxes": lucid.zeros((0, 4), device=device),
-        "scores": lucid.zeros((0,), device=device),
-        "labels": lucid.zeros((0,), device=device),
-    }
 
 
 def _postprocess_detections(
@@ -848,16 +834,16 @@ def _postprocess_detections(
         flat = cast(list[float], cls_probs.reshape(-1).tolist())
         anchor_ids: list[int] = []
         scores: list[float] = []
-        labels: list[float] = []
+        labels: list[int] = []
         for idx, sc in enumerate(flat):
             if sc >= score_thresh:
                 a, c = divmod(idx, C)
                 anchor_ids.append(a)
                 scores.append(sc)
-                labels.append(float(c))
+                labels.append(c)
 
         if not anchor_ids:
-            results.append(_no_detections(dev))
+            results.append(empty_detection_result(dev))
             continue
 
         # One gather rather than a (1, 4) slice and two scalar tensors per
@@ -865,21 +851,19 @@ def _postprocess_detections(
         # allocations followed by a concatenation.
         det_boxes = boxes[lucid.tensor(anchor_ids, device=dev).long()]  # (K, 4)
         det_scores = lucid.tensor(scores, device=dev)
-        det_labels = lucid.tensor(labels, device=dev)
+        det_labels = lucid.tensor(labels, dtype=lucid.int64, device=dev)
 
         det_boxes = clip_boxes_to_image(det_boxes, (iH, iW))
 
         keep_idx = batched_nms(det_boxes, det_scores, det_labels, nms_thresh)
         if int(keep_idx.shape[0]) == 0:
-            results.append(_no_detections(dev))
+            results.append(empty_detection_result(dev))
             continue
 
         results.append(
-            {
-                "boxes": det_boxes[keep_idx],
-                "scores": det_scores[keep_idx],
-                "labels": det_labels[keep_idx],
-            }
+            detection_result(
+                det_boxes[keep_idx], det_scores[keep_idx], det_labels[keep_idx]
+            )
         )
 
     return results

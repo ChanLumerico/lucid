@@ -66,7 +66,11 @@ import lucid.weights as weights_mod
 # v4 reuses v3's anchor-ignore rule verbatim; only the threshold differs
 # (yolov4.cfg says .7, yolov3's paper text says .5).  Its detection scoring
 # and NMS are v3's too.
-from lucid.models.vision.yolo._v3 import _ignore_mask, _postprocess_detections
+from lucid.models.vision.yolo._v3 import (
+    _gt_rows,
+    _ignore_mask,
+    _postprocess_detections,
+)
 from lucid.models._utils._common import apply_overrides
 
 _IGNORE_IOU_THRESH = 0.7
@@ -746,10 +750,12 @@ def _yolov4_loss(
         anchors_wh = [anchors_all[i] for i in anchor_idx_triple]
 
         raw_r = raw.reshape(B, nA, 5 + C, fH, fW).permute(0, 1, 3, 4, 2)
+        # The ignore mask compares the boxes this head actually predicts —
+        # scale_x_y included — with the GTs; a selection, so no gradient.
+        _, pred_boxes, _ = _decode_predictions(raw.detach(), anchors_wh, stride)
 
         for b in range(B):
             gt_boxes = targets[b]["boxes"]
-            gt_labels = targets[b]["labels"]
             M = int(gt_boxes.shape[0])
 
             # Build target arrays
@@ -774,16 +780,11 @@ def _yolov4_loss(
             pred_b = raw_r[b]  # (nA, fH, fW, 5+C)
 
             if M > 0:
-                for m in range(M):
-                    x1g = float(gt_boxes[m, 0].item())
-                    y1g = float(gt_boxes[m, 1].item())
-                    x2g = float(gt_boxes[m, 2].item())
-                    y2g = float(gt_boxes[m, 3].item())
+                for (x1g, y1g, x2g, y2g), cls_id in _gt_rows(targets[b]):
                     wg = x2g - x1g
                     hg = y2g - y1g
                     cxg = (x1g + x2g) / 2.0
                     cyg = (y1g + y2g) / 2.0
-                    cls_id = int(gt_labels[m].item())
 
                     col_idx = max(0, min(int(cxg / stride), fW - 1))
                     row_idx = max(0, min(int(cyg / stride), fH - 1))
@@ -826,8 +827,8 @@ def _yolov4_loss(
             # yolov4.cfg sets ``ignore_thresh = .7`` on every [yolo] layer:
             # a non-assigned anchor that already overlaps a GT well is excluded
             # from the background term rather than pushed toward zero.
-            ignore = _ignore_mask(
-                pred_b, anchors_wh, stride, gt_boxes, fH, fW, nA, _IGNORE_IOU_THRESH
+            ignore = _ignore_mask(pred_boxes[b], gt_boxes, _IGNORE_IOU_THRESH).reshape(
+                nA, fH, fW
             )
             noobj_mask = (1.0 - obj_mask) * (1.0 - ignore)
             obj_loss = (

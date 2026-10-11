@@ -64,6 +64,7 @@ from lucid.models._utils._detection import (
     decode_boxes,
     encode_boxes,
 )
+from lucid.models._utils._detection_results import merge_class_detections
 from lucid.models.vision.efficientdet._config import EfficientDetConfig
 
 # ---------------------------------------------------------------------------
@@ -975,27 +976,14 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c + 1), device=dev)
+                    lucid.full(
+                        (int(keep.shape[0]),), c + 1, dtype=lucid.int64, device=dev
+                    )
                 )
 
-            if keep_boxes:
-                all_b = lucid.cat(keep_boxes, dim=0)
-                all_s = lucid.cat(keep_scores, dim=0)
-                all_l = lucid.cat(keep_labels, dim=0)
-                order = lucid.argsort(-all_s)[: self._cfg.max_detections]
-                results.append(
-                    {
-                        "boxes": all_b[order],
-                        "scores": all_s[order],
-                        "labels": all_l[order],
-                    }
+            results.append(
+                merge_class_detections(
+                    keep_boxes, keep_scores, keep_labels, dev, self._cfg.max_detections
                 )
-            else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+            )
         return results

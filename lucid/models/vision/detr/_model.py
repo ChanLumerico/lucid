@@ -67,6 +67,10 @@ from lucid.models._utils._detection import (
     generalized_box_iou,
     solve_assignment,
 )
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
+)
 from lucid.models.vision.detr._config import DETRConfig
 
 # The reference DETR backbone freezes its BatchNorm with eps = 1e-5, where
@@ -985,22 +989,18 @@ class DETRForObjectDetection(ObjectDetectionModel):
                 ]
                 keep_boxes.append(lucid.tensor(box_data, device=dev))
                 keep_scores.append(lucid.tensor([[best_sc]], device=dev))
-                keep_labels.append(lucid.tensor([[float(best_cls)]], device=dev))
+                keep_labels.append(
+                    lucid.tensor([[best_cls]], dtype=lucid.int64, device=dev)
+                )
 
             if keep_boxes:
                 results.append(
-                    {
-                        "boxes": lucid.cat(keep_boxes, dim=0).squeeze(1),
-                        "scores": lucid.cat(keep_scores, dim=0).squeeze(1),
-                        "labels": lucid.cat(keep_labels, dim=0).squeeze(1),
-                    }
+                    detection_result(
+                        lucid.cat(keep_boxes, dim=0).squeeze(1),
+                        lucid.cat(keep_scores, dim=0).squeeze(1),
+                        lucid.cat(keep_labels, dim=0).squeeze(1),
+                    )
                 )
             else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+                results.append(empty_detection_result(dev))
         return results

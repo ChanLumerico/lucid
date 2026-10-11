@@ -62,7 +62,6 @@ Requires ``targets`` — list of B dicts with:
 where the responsible anchor is the one with highest IoU vs GT.
 """
 
-import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, cast, final, override
 
@@ -75,7 +74,11 @@ from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
-from lucid.models._utils._detection import batched_nms
+from lucid.models._utils._detection import batched_nms, box_iou
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
+)
 from lucid.models.vision.yolo._v1 import _threshold_by_class
 from lucid.models.vision.yolo._weights import YOLOV2Weights
 from lucid.models._utils._common import apply_overrides
@@ -491,6 +494,40 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         feat = self.det3(feat)  # (B, 1024, H/32, W/32)
         return self.pred(feat)  # (B, A*(5+C), H/32, W/32)
 
+    def _decode_boxes(self, raw_r: Tensor, image_size: tuple[int, int]) -> Tensor:
+        """Unclipped xyxy pixel boxes for every predictor.
+
+        Args:
+            raw_r:      (B, fH, fW, A, 5+C) predictions.
+            image_size: (H, W) of the input image in pixels.
+
+        Returns:
+            (B, fH, fW, A, 4) boxes.  Postprocess clips them to the image;
+            the loss matches against them as decoded, as darknet does.
+        """
+        anchors = self.config.anchors
+        H, W = image_size
+        fH = int(raw_r.shape[1])
+        fW = int(raw_r.shape[2])
+        A = int(raw_r.shape[3])
+        device = raw_r.device
+        stride_h = H / fH
+        stride_w = W / fW
+
+        col_offsets = lucid.arange(fW, device=device).float().reshape(1, 1, fW, 1)
+        row_offsets = lucid.arange(fH, device=device).float().reshape(1, fH, 1, 1)
+        aw_t = lucid.tensor([a[0] for a in anchors], device=device).reshape(1, 1, 1, A)
+        ah_t = lucid.tensor([a[1] for a in anchors], device=device).reshape(1, 1, 1, A)
+
+        # bx = (sigmoid(tx) + col) * stride_w;  bw = anchor_w * exp(tw) * stride_w
+        bx = (F.sigmoid(raw_r[..., 0]) + col_offsets) * stride_w
+        by = (F.sigmoid(raw_r[..., 1]) + row_offsets) * stride_h
+        bw = aw_t * lucid.exp(raw_r[..., 2].clamp(min=-10.0, max=10.0)) * stride_w
+        bh = ah_t * lucid.exp(raw_r[..., 3].clamp(min=-10.0, max=10.0)) * stride_h
+        return lucid.stack(
+            [bx - bw / 2.0, by - bh / 2.0, bx + bw / 2.0, by + bh / 2.0], dim=-1
+        )
+
     def _decode_predictions(
         self,
         raw: Tensor,
@@ -510,75 +547,32 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         A = cfg.num_anchors
         C = cfg.num_classes
-        anchors = cfg.anchors
         H, W = image_size
 
         B_batch = int(raw.shape[0])
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
-        device = raw.device
-
-        # Stride of this feature map
-        stride_h = H / fH
-        stride_w = W / fW
 
         # (B, A*(5+C), fH, fW) → (B, A, 5+C, fH, fW) → (B, fH, fW, A, 5+C)
         raw = raw.reshape(B_batch, A, 5 + C, fH, fW)
         raw = raw.permute(0, 3, 4, 1, 2)  # (B, fH, fW, A, 5+C)
 
-        # tx, ty → sigmoid; tw, th → raw; conf → sigmoid; cls → raw
-        tx = F.sigmoid(raw[..., 0])  # (B, fH, fW, A)
-        ty = F.sigmoid(raw[..., 1])  # (B, fH, fW, A)
-        tw = raw[..., 2]  # (B, fH, fW, A)
-        th = raw[..., 3]  # (B, fH, fW, A)
-        raw_cls = raw[..., 5:]  # (B, fH, fW, A, C)
-
-        # Build cell offset grids
-        # col_offsets: (1, 1, fW, 1) — broadcast over B, fH, A
-        col_data: list[float] = [float(c) for c in range(fW)]
-        row_data: list[float] = [float(r) for r in range(fH)]
-
-        col_offsets = lucid.tensor(col_data, device=device).reshape(1, 1, fW, 1)
-        row_offsets = lucid.tensor(row_data, device=device).reshape(1, fH, 1, 1)
-
-        # Decode box centres in pixels
-        # bx = (sigmoid(tx) + col) * stride_w
-        # by = (sigmoid(ty) + row) * stride_h
-        bx = (tx + col_offsets) * stride_w  # (B, fH, fW, A)
-        by = (ty + row_offsets) * stride_h  # (B, fH, fW, A)
-
-        # Decode box sizes in pixels
-        # bw = anchor_w * exp(tw) * stride_w
-        # bh = anchor_h * exp(th) * stride_h
-        anchor_w_data = [anchors[a][0] for a in range(A)]
-        anchor_h_data = [anchors[a][1] for a in range(A)]
-
-        aw_t = lucid.tensor(anchor_w_data, device=device).reshape(1, 1, 1, A)
-        ah_t = lucid.tensor(anchor_h_data, device=device).reshape(1, 1, 1, A)
-
-        bw = aw_t * lucid.exp(tw.clamp(min=-10.0, max=10.0)) * stride_w
-        bh = ah_t * lucid.exp(th.clamp(min=-10.0, max=10.0)) * stride_h
-
-        # Convert cxcywh → xyxy
-        x1 = bx - bw / 2.0
-        y1 = by - bh / 2.0
-        x2 = bx + bw / 2.0
-        y2 = by + bh / 2.0
-
-        # Clamp to image
-        x1 = x1.clamp(min=0.0, max=float(W))
-        y1 = y1.clamp(min=0.0, max=float(H))
-        x2 = x2.clamp(min=0.0, max=float(W))
-        y2 = y2.clamp(min=0.0, max=float(H))
-
-        # Stack boxes: (B, fH, fW, A, 4)
-        boxes = lucid.stack([x1, y1, x2, y2], dim=-1)
+        boxes = self._decode_boxes(raw, image_size)
+        boxes = lucid.stack(
+            [
+                boxes[..., 0].clamp(min=0.0, max=float(W)),
+                boxes[..., 1].clamp(min=0.0, max=float(H)),
+                boxes[..., 2].clamp(min=0.0, max=float(W)),
+                boxes[..., 3].clamp(min=0.0, max=float(H)),
+            ],
+            dim=-1,
+        )
 
         # Flatten spatial and anchor dims: (B, fH*fW*A, 4)
         pred_boxes = boxes.reshape(B_batch, fH * fW * A, 4)
 
         # Class logits: (B, fH, fW, A, C) → (B, fH*fW*A, C)
-        logits = raw_cls.reshape(B_batch, fH * fW * A, C)
+        logits = raw[..., 5:].reshape(B_batch, fH * fW * A, C)
 
         # Objectness σ(t_o) — Pr(object)·IOU.  darknet's region layer scores a
         # detection as σ(t_o)·softmax(class); dropping it lets every empty-cell
@@ -607,232 +601,137 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         A = cfg.num_anchors
         C = cfg.num_classes
-        anchors = cfg.anchors
-        lc = cfg.lambda_coord
-        ln = cfg.lambda_noobj
-        H, W = image_size
-
         B_batch = int(raw.shape[0])
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
-        # Targets are built from Python floats; they must share the
-        # prediction's device or the first subtraction raises on Metal.
-        dev = raw.device
 
+        # (B, fH, fW, A, 5+C), flattened so predictor p = (row*fW + col)*A + a.
+        raw_r = raw.reshape(B_batch, A, 5 + C, fH, fW).permute(0, 3, 4, 1, 2)
+        n_pred = fH * fW * A
+        flat = raw_r.reshape(B_batch, n_pred, 5 + C)
+        # The matching IoU is a target, so it is decoded without gradient.
+        boxes = self._decode_boxes(raw_r.detach(), image_size)
+        boxes = boxes.reshape(B_batch, n_pred, 4)
+
+        loss_parts = [
+            self._image_loss(flat[bi], boxes[bi], targets[bi], image_size, (fH, fW))
+            for bi in range(B_batch)
+        ]
+        return lucid.cat(loss_parts).mean()
+
+    def _image_loss(
+        self,
+        pred: Tensor,
+        pred_boxes: Tensor,
+        target: dict[str, Tensor],
+        image_size: tuple[int, int],
+        grid: tuple[int, int],
+    ) -> Tensor:
+        """One image's loss over every predictor at once.
+
+        ``pred`` is ``(P, 5+C)`` and ``pred_boxes`` its ``(P, 4)`` decoded
+        boxes, both in ``(row, col, anchor)`` order.  Assignment, IoU
+        targets and masks are tensor ops, so nothing is read to the host.
+        """
+        cfg = self.config
+        C = cfg.num_classes
+        A = cfg.num_anchors
+        H, W = image_size
+        fH, fW = grid
         stride_h = H / fH
         stride_w = W / fW
+        dev = pred.device
+        n_pred = int(pred.shape[0])
 
-        # Reshape raw: (B, fH, fW, A, 5+C)
-        raw_r = raw.reshape(B_batch, A, 5 + C, fH, fW)
-        raw_r = raw_r.permute(0, 3, 4, 1, 2)
+        scale = lucid.tensor([float(W), float(H), float(W), float(H)], device=dev)
+        gt_xyxy = target["boxes"].to(dev).float() * scale
+        M = int(gt_xyxy.shape[0])
 
-        loss_parts: list[Tensor] = []
+        # Per-predictor best IoU against every GT in this image.  darknet's
+        # region layer needs it twice: the objectness target is the IoU
+        # itself (cfg ``rescore=1``), and an unmatched predictor whose IoU
+        # already exceeds ``thresh`` is *skipped* rather than pushed to zero
+        # — otherwise a near-duplicate good box is trained as background.
+        sig_conf = F.sigmoid(pred[:, 4])
+        if M == 0:
+            background_loss = (sig_conf**2).sum()
+            return (cfg.lambda_noobj * background_loss / float(n_pred)).reshape(1)
+        best_iou = box_iou(pred_boxes, gt_xyxy).max(dim=1)  # (P,)
 
-        for bi in range(B_batch):
-            gt_boxes_norm = targets[bi]["boxes"]  # (M, 4) xyxy in [0,1]
-            gt_labels = targets[bi]["labels"]  # (M,)
-            M = int(gt_boxes_norm.shape[0])
+        gt_cx = (gt_xyxy[:, 0] + gt_xyxy[:, 2]) / 2.0
+        gt_cy = (gt_xyxy[:, 1] + gt_xyxy[:, 3]) / 2.0
+        gt_w = gt_xyxy[:, 2] - gt_xyxy[:, 0]
+        gt_h = gt_xyxy[:, 3] - gt_xyxy[:, 1]
 
-            # Convert GT boxes to pixel space
-            gt_x1 = gt_boxes_norm[:, 0] * float(W)
-            gt_y1 = gt_boxes_norm[:, 1] * float(H)
-            gt_x2 = gt_boxes_norm[:, 2] * float(W)
-            gt_y2 = gt_boxes_norm[:, 3] * float(H)
-            gt_cx = (gt_x1 + gt_x2) / 2.0
-            gt_cy = (gt_y1 + gt_y2) / 2.0
-            gt_w = gt_x2 - gt_x1
-            gt_h = gt_y2 - gt_y1
+        # Responsible cell holds the centre; responsible anchor is the one
+        # whose shape best matches the GT's (IoU of centred boxes).
+        col = (gt_cx / stride_w).floor().clamp(0.0, float(fW - 1))
+        row = (gt_cy / stride_h).floor().clamp(0.0, float(fH - 1))
+        aw = lucid.tensor([a[0] * stride_w for a in cfg.anchors], device=dev)
+        ah = lucid.tensor([a[1] * stride_h for a in cfg.anchors], device=dev)
+        inter = lucid.minimum(gt_w[:, None], aw[None, :]) * lucid.minimum(
+            gt_h[:, None], ah[None, :]
+        )
+        union = (gt_w * gt_h)[:, None] + (aw * ah)[None, :] - inter
+        best_a = (inter / union.clamp(min=1e-6)).argmax(dim=1)  # (M,)
+        idx = ((row * float(fW) + col) * float(A)).long() + best_a  # (M,)
 
-            # Assign each GT to best-matching anchor (by wh IoU, ignoring position)
-            # Responsible cell: floor(cx/stride_w), floor(cy/stride_h)
-            # responsible anchor: highest IoU between GT wh and anchor wh (both centred)
+        # Every object that claims a predictor contributes; a dict keyed by
+        # (row, col, anchor) once erased all but the last claimant, and
+        # darknet accumulates deltas for all of them.
+        sel = pred[idx]  # (M, 5+C)
 
-            # A dict keyed by (row, col, anchor) silently dropped an earlier
-            # object whenever a second one landed on the same predictor — and
-            # the loser's slot was not even excluded from the no-object
-            # penalty.  Keep every claimant; darknet accumulates deltas for
-            # all of them.
-            assigned: dict[
-                tuple[int, int, int], list[tuple[float, float, float, float, int]]
-            ] = {}
+        # tx, ty targets: fractional cell offset (sigmoid space)
+        tgt_tx = (gt_cx / stride_w - col).clamp(1e-6, 1.0 - 1e-6)
+        tgt_ty = (gt_cy / stride_h - row).clamp(1e-6, 1.0 - 1e-6)
+        loss_xy = (
+            (F.sigmoid(sel[:, 0]) - tgt_tx) ** 2 + (F.sigmoid(sel[:, 1]) - tgt_ty) ** 2
+        ).sum()
 
-            for m in range(M):
-                cx_m = float(gt_cx[m].item())
-                cy_m = float(gt_cy[m].item())
-                w_m = float(gt_w[m].item())
-                h_m = float(gt_h[m].item())
-                cls_m = int(gt_labels[m].item())
+        # tw, th targets: log(gt / anchor)
+        tgt_tw = lucid.log(gt_w.clamp(min=1e-6) / aw[best_a].clamp(min=1e-6))
+        tgt_th = lucid.log(gt_h.clamp(min=1e-6) / ah[best_a].clamp(min=1e-6))
+        loss_wh = ((sel[:, 2] - tgt_tw) ** 2 + (sel[:, 3] - tgt_th) ** 2).sum()
 
-                col = min(int(cx_m / stride_w), fW - 1)
-                row = min(int(cy_m / stride_h), fH - 1)
+        # Objectness regresses Pr(object) x IoU, which is what the paper
+        # defines sigma(t_o) to be and what ``rescore=1`` selects in darknet.
+        # A constant 1.0 target makes confidence uninformative for ranking.
+        loss_conf_o = ((sig_conf[idx] - best_iou[idx]) ** 2).sum()
 
-                # Find best anchor by wh IoU (anchors in pixel units via stride)
-                best_a = 0
-                best_iou = -1.0
-                for a in range(A):
-                    aw = anchors[a][0] * stride_w
-                    ah = anchors[a][1] * stride_h
+        # Class loss: MSE vs one-hot on the SOFTMAX probabilities — the same
+        # quantity postprocess thresholds.  Training the raw logits instead
+        # drives them to a one-hot *logit* row, whose softmax peak is only
+        # 1/(C-1+e) ≈ 0.03 for C=80, so a perfectly fitted model would emit
+        # no detections at all.  Darknet's region layer likewise takes the
+        # delta against the softmax.
+        one_hot = F.one_hot(target["labels"].to(dev).long(), C).float()
+        loss_cls = ((F.softmax(sel[:, 5:], dim=-1) - one_hot) ** 2).sum()
 
-                    inter_w = min(w_m, aw)
-                    inter_h = min(h_m, ah)
-                    inter = inter_w * inter_h
-                    union = w_m * h_m + aw * ah - inter
-                    wh_iou = inter / max(union, 1e-6)
-                    if wh_iou > best_iou:
-                        best_iou = wh_iou
-                        best_a = a
+        # cfg [region] thresh = .6 — an unmatched predictor that already
+        # overlaps a GT well is left alone.
+        assigned = F.one_hot(idx, n_pred).float().sum(dim=0).clamp(0.0, 1.0)
+        background = (1.0 - assigned) * (best_iou <= _NOOBJ_IOU_THRESH).float()
+        loss_conf_n = (sig_conf**2 * background).sum()
 
-                assigned.setdefault((row, col, best_a), []).append(
-                    (cx_m, cy_m, w_m, h_m, cls_m)
-                )
-
-            # Per-predictor best IoU against every GT in this image.  darknet's
-            # region layer needs it twice: the objectness target is the IoU
-            # itself (cfg ``rescore=1``), and an unmatched predictor whose IoU
-            # already exceeds ``thresh`` is *skipped* rather than pushed to
-            # zero — otherwise a near-duplicate good box is trained as
-            # background.
-            gt_boxes_px = [
-                (
-                    float(gt_cx[m].item()),
-                    float(gt_cy[m].item()),
-                    float(gt_w[m].item()),
-                    float(gt_h[m].item()),
-                )
-                for m in range(M)
-            ]
-
-            xy_terms: list[Tensor] = []
-            wh_terms: list[Tensor] = []
-            conf_obj: list[Tensor] = []
-            conf_noobj: list[Tensor] = []
-            cls_terms: list[Tensor] = []
-
-            for row in range(fH):
-                for col in range(fW):
-                    for a in range(A):
-                        raw_cell = raw_r[bi, row, col, a, :]  # (5+C,)
-
-                        raw_tx = raw_cell[0]
-                        raw_ty = raw_cell[1]
-                        raw_tw = raw_cell[2]
-                        raw_th = raw_cell[3]
-                        raw_conf = raw_cell[4]
-                        raw_cls = raw_cell[5:]  # (C,)
-
-                        if (row, col, a) in assigned:
-                            # Every object that claimed this predictor
-                            # contributes; a collision used to erase all but
-                            # the last.
-                            for cx_m, cy_m, w_m, h_m, cls_m in assigned[(row, col, a)]:
-
-                                # tx, ty targets: inverse sigmoid of fractional cell offset
-                                tgt_tx_rel = cx_m / stride_w - float(col)
-                                tgt_ty_rel = cy_m / stride_h - float(row)
-                                tgt_tx_rel = max(1e-6, min(1.0 - 1e-6, tgt_tx_rel))
-                                tgt_ty_rel = max(1e-6, min(1.0 - 1e-6, tgt_ty_rel))
-
-                                sig_tx = F.sigmoid(raw_tx)
-                                sig_ty = F.sigmoid(raw_ty)
-                                tgt_txy_t = lucid.tensor(
-                                    [tgt_tx_rel, tgt_ty_rel], device=dev
-                                )
-                                xy_terms.append((sig_tx - tgt_txy_t[0]) ** 2)
-                                xy_terms.append((sig_ty - tgt_txy_t[1]) ** 2)
-
-                                # tw, th targets: log(gt / anchor)
-                                aw = anchors[a][0] * stride_w
-                                ah = anchors[a][1] * stride_h
-                                tgt_tw = math.log(max(w_m, 1e-6) / max(aw, 1e-6))
-                                tgt_th = math.log(max(h_m, 1e-6) / max(ah, 1e-6))
-                                tgt_twh_t = lucid.tensor([tgt_tw, tgt_th], device=dev)
-                                wh_terms.append((raw_tw - tgt_twh_t[0]) ** 2)
-                                wh_terms.append((raw_th - tgt_twh_t[1]) ** 2)
-
-                                # Objectness regresses Pr(object) x IoU, which is
-                                # what the paper defines sigma(t_o) to be and what
-                                # ``rescore=1`` selects in darknet.  A constant 1.0
-                                # target makes confidence uninformative for ranking.
-                                sig_conf = F.sigmoid(raw_conf)
-                                tgt_conf = _best_gt_iou(
-                                    raw_r[bi, row, col, a, :],
-                                    (row, col),
-                                    anchors[a],
-                                    (stride_h, stride_w),
-                                    gt_boxes_px,
-                                )
-                                tgt_conf_t = lucid.tensor([tgt_conf], device=dev)
-                                conf_obj.append((sig_conf - tgt_conf_t[0]) ** 2)
-
-                                # Class loss: MSE vs one-hot on the SOFTMAX
-                                # probabilities — the same quantity postprocess
-                                # thresholds.  Training the raw logits instead
-                                # drives them to a one-hot *logit* row, whose
-                                # softmax peak is only 1/(C-1+e) ≈ 0.03 for C=80,
-                                # so a perfectly fitted model would emit no
-                                # detections at all.  Darknet's region layer
-                                # likewise takes the delta against the softmax.
-                                tgt_cls_list = [0.0] * C
-                                tgt_cls_list[cls_m] = 1.0
-                                tgt_cls_t = lucid.tensor(tgt_cls_list, device=dev)
-                                cls_prob = F.softmax(raw_cls, dim=-1)
-                                cls_terms.append(((cls_prob - tgt_cls_t) ** 2).sum())
-
-                        else:
-                            # cfg [region] thresh = .6 — an unmatched predictor
-                            # that already overlaps a GT well is left alone.
-                            if (
-                                _best_gt_iou(
-                                    raw_r[bi, row, col, a, :],
-                                    (row, col),
-                                    anchors[a],
-                                    (stride_h, stride_w),
-                                    gt_boxes_px,
-                                )
-                                > _NOOBJ_IOU_THRESH
-                            ):
-                                continue
-                            sig_conf = F.sigmoid(raw_conf)
-                            conf_noobj.append(sig_conf**2)
-
-            def _mean_or_zero(parts: list[Tensor]) -> Tensor:
-                # darknet's region layer is a SUM of squared errors over all cells and
-                # predictors, not a per-group mean.  Averaging each group
-                # separately renormalises the ~S²·B background confidence
-                # terms against the handful of object terms, which is exactly
-                # what lambda_noobj exists to control — so the mean form
-                # silently cancels it and makes the balance drift with grid
-                # size and object count.
-                if not parts:
-                    return lucid.zeros((1,), device=dev)
-                return lucid.cat([t.reshape(1) for t in parts]).sum()
-
-            loss_xy = lc * _mean_or_zero(xy_terms)
-            loss_wh = lc * _mean_or_zero(wh_terms)
-            loss_conf_o = _mean_or_zero(conf_obj)
-            loss_conf_n = ln * _mean_or_zero(conf_noobj)
-            loss_cls = _mean_or_zero(cls_terms)
-
-            # Two denominators, not five.  The comment above rules out giving
-            # each group its own divisor, because ``conf_noobj``'s would be
-            # ~S²·A while ``conf_obj``'s would be the object count, and the
-            # ratio between those two is precisely what ``lambda_noobj``
-            # exists to set.  Dividing the pair by the *same* count leaves
-            # that ratio alone — as it does for ``lambda_coord`` across the
-            # localisation terms — while removing the grid size from the
-            # total.  Without this the loss tracks the cell count almost
-            # exactly (69.9 at 320², 239.3 at 608² on a fixed batch), so no
-            # single learning rate serves the multi-scale schedule the paper
-            # trains with.  This is what YOLOv3 does; v2 predates it.
-            n_pos = max(1.0, float(len(xy_terms) // 2))
-            n_cells = float(fH * fW * A)
-
-            img_loss: Tensor = (loss_xy + loss_wh + loss_cls) / n_pos + (
-                loss_conf_o + loss_conf_n
-            ) / n_cells
-            loss_parts.append(img_loss.reshape(1))
-
-        return lucid.cat(loss_parts).mean()
+        # darknet's region layer is a SUM of squared errors over all cells and
+        # predictors, not a per-group mean: averaging each group separately
+        # renormalises the ~S²·B background terms against the handful of
+        # object terms, which is exactly what lambda_noobj exists to control.
+        #
+        # Two denominators, not five.  Giving each group its own divisor would
+        # set ``conf_noobj``'s to ~S²·A and ``conf_obj``'s to the object
+        # count, and the ratio between those two is precisely what
+        # ``lambda_noobj`` exists to set.  Dividing the pair by the *same*
+        # count leaves that ratio alone — as it does for ``lambda_coord``
+        # across the localisation terms — while removing the grid size from
+        # the total.  Without this the loss tracks the cell count almost
+        # exactly (69.9 at 320², 239.3 at 608² on a fixed batch), so no single
+        # learning rate serves the multi-scale schedule the paper trains with.
+        # This is what YOLOv3 does; v2 predates it.
+        localisation = cfg.lambda_coord * (loss_xy + loss_wh) + loss_cls
+        objectness = loss_conf_o + cfg.lambda_noobj * loss_conf_n
+        img_loss: Tensor = localisation / float(M) + objectness / float(n_pred)
+        return img_loss.reshape(1)
 
     @override
     def forward(
@@ -942,25 +841,19 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                    lucid.full((int(keep.shape[0]),), c, dtype=lucid.int64, device=dev)
                 )
 
             if keep_boxes:
                 results.append(
-                    {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
-                    }
+                    detection_result(
+                        lucid.cat(keep_boxes, dim=0),
+                        lucid.cat(keep_scores, dim=0),
+                        lucid.cat(keep_labels, dim=0),
+                    )
                 )
             else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+                results.append(empty_detection_result(dev))
 
         return results
 
@@ -979,40 +872,6 @@ _CFG_V2 = YOLOV2Config(
     lambda_coord=5.0,
     lambda_noobj=0.5,
 )
-
-
-def _best_gt_iou(
-    cell: Tensor,
-    cell_pos: tuple[int, int],
-    anchor: tuple[float, float],
-    stride: tuple[float, float],
-    gt_boxes_px: list[tuple[float, float, float, float]],
-) -> float:
-    """Best IoU of one predictor's decoded box against every GT box.
-
-    ``cell`` is the predictor's raw ``(t_x, t_y, t_w, t_h, ...)`` row at grid
-    position ``cell_pos = (row, col)``; ``stride`` is ``(stride_h, stride_w)``
-    and ``gt_boxes_px`` holds pixel-space ``(cx, cy, w, h)`` boxes.
-    """
-    if not gt_boxes_px:
-        return 0.0
-    row, col = cell_pos
-    stride_h, stride_w = stride
-    bx = (1.0 / (1.0 + math.exp(-float(cell[0].item()))) + col) * stride_w
-    by = (1.0 / (1.0 + math.exp(-float(cell[1].item()))) + row) * stride_h
-    bw = anchor[0] * stride_w * math.exp(float(cell[2].item()))
-    bh = anchor[1] * stride_h * math.exp(float(cell[3].item()))
-    px1, py1, px2, py2 = bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2
-    best = 0.0
-    for gcx, gcy, gw, gh in gt_boxes_px:
-        gx1, gy1 = gcx - gw / 2, gcy - gh / 2
-        gx2, gy2 = gcx + gw / 2, gcy + gh / 2
-        iw = max(0.0, min(px2, gx2) - max(px1, gx1))
-        ih = max(0.0, min(py2, gy2) - max(py1, gy1))
-        inter = iw * ih
-        union = bw * bh + gw * gh - inter
-        best = max(best, inter / max(union, 1e-6))
-    return best
 
 
 @register_model(

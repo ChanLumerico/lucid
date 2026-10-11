@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - run the polygamma and zeta series once per element
 
+- YOLO losses match on device; detectors return int64 labels
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

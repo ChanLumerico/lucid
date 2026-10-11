@@ -69,6 +69,10 @@ from lucid.models._utils._detection import (
     rpn_loss,
     select_training_samples,
 )
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
+)
 from lucid.models.vision.faster_rcnn._model import (
     _BackboneWithFPN,
     _FastRCNNPredictor,
@@ -713,7 +717,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             mask_hw = size_i if size_i is not None else roi_hw
 
             if N_i == 0:
-                results.append(self._empty_det(dev, mask_hw))
+                results.append(empty_detection_result(dev, mask_hw))
                 continue
 
             scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
@@ -750,12 +754,12 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                    lucid.full((int(keep.shape[0]),), c, dtype=lucid.int64, device=dev)
                 )
                 keep_masks.append(mk_c[keep].unsqueeze(1))  # (k, 1, 28, 28)
 
             if not keep_boxes:
-                results.append(self._empty_det(dev, mask_hw))
+                results.append(empty_detection_result(dev, mask_hw))
                 continue
 
             all_b = lucid.cat(keep_boxes, dim=0)
@@ -825,23 +829,5 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
                     threshold=cfg.mask_thresh,
                 )
 
-            results.append(
-                {
-                    "boxes": det_b,
-                    "scores": det_s,
-                    "labels": det_l,
-                    "masks": det_m,
-                }
-            )
+            results.append(detection_result(det_b, det_s, det_l, det_m))
         return results
-
-    @staticmethod
-    def _empty_det(dev: str, mask_hw: tuple[int, int]) -> dict[str, Tensor]:
-        """No detections, with ``masks`` shaped as a non-empty result is."""
-        h, w = mask_hw
-        return {
-            "boxes": lucid.zeros((0, 4), device=dev),
-            "scores": lucid.zeros((0,), device=dev),
-            "labels": lucid.zeros((0,), device=dev).long(),
-            "masks": lucid.zeros((0, 1, h, w), device=dev),
-        }

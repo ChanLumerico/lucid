@@ -32,19 +32,23 @@ Multi-part MSE loss matching the paper §2.2:
     +  λ_noobj · L_conf_noobj  +  L_cls
 """
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig
 from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
-from lucid.models._utils._detection import batched_nms
+from lucid.models._utils._detection import batched_nms, box_iou
+from lucid.models._utils._detection_results import (
+    detection_result,
+    empty_detection_result,
+)
 from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 if TYPE_CHECKING:
@@ -394,6 +398,41 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         feat = self.fc2(feat)  # (N, S*S*(B*5+C))
         return feat.reshape(batch, S, S, B_boxes * 5 + C)
 
+    def _decode_boxes(self, box_preds: Tensor, image_size: tuple[int, int]) -> Tensor:
+        """Unclipped xyxy pixel boxes for every predictor.
+
+        Args:
+            box_preds:  (batch, S, S, num_boxes, 5) per-box predictions.
+            image_size: (H, W) of the input in pixels.
+
+        Returns:
+            (batch, S, S, num_boxes, 4) boxes.  Postprocess clips them to
+            the image; the loss matches against them as decoded.
+        """
+        S = self.config.split_size
+        H, W = image_size
+        device = box_preds.device
+        cols = lucid.arange(S, device=device).float().reshape(1, 1, S, 1)
+        rows = lucid.arange(S, device=device).float().reshape(1, S, 1, 1)
+
+        # ``yolov1.cfg`` ends with ``[connected] activation=linear`` and
+        # ``[detection] sqrt=1``: x/y are *raw* cell-relative offsets and the
+        # w/h channels are literally sqrt(w), sqrt(h), which
+        # ``detection_layer.c`` squares at decode.  The paper only requires the
+        # values to land in [0, 1] and prescribes no squashing function; a
+        # sigmoid is YOLOv2's anchor parameterisation, and it also makes w = 0
+        # and w = 1 unreachable except in the limit.  The sqrt
+        # parameterisation is the whole point of §2.2's "we predict the square
+        # root of the bounding box width and height", which equalises the
+        # loss's sensitivity across box scales.
+        cx = (box_preds[..., 0] + cols) * (W / S)
+        cy = (box_preds[..., 1] + rows) * (H / S)
+        w = (box_preds[..., 2] ** 2) * float(W)
+        h = (box_preds[..., 3] ** 2) * float(H)
+        return lucid.stack(
+            [cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0], dim=-1
+        )
+
     def _decode_predictions(
         self,
         raw: Tensor,
@@ -413,87 +452,39 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         S = cfg.split_size
         B_boxes = cfg.num_boxes
+        C = cfg.num_classes
         H, W = image_size
         batch = int(raw.shape[0])
-        cell_h = H / S
-        cell_w = W / S
+        n_pred = S * S * B_boxes
 
-        # raw: (batch, S, S, B*5+C)
-        # split into per-box predictions and class scores
-        # layout: [box0_cx, box0_cy, box0_w, box0_h, box0_conf, box1_..., ..., cls0, cls1, ...]
-        box_preds = raw[..., : B_boxes * 5]  # (batch, S, S, B*5)
+        # layout: [box0_cx, box0_cy, box0_w, box0_h, box0_conf, box1_..., cls...]
+        box_preds = raw[..., : B_boxes * 5].reshape(batch, S, S, B_boxes, 5)
         cls_preds = raw[..., B_boxes * 5 :]  # (batch, S, S, C)
 
-        # Reshape box preds: (batch, S, S, B, 5)
-        box_preds = box_preds.reshape(batch, S, S, B_boxes, 5)
+        boxes = self._decode_boxes(box_preds, image_size)
+        pred_boxes = lucid.stack(
+            [
+                boxes[..., 0].clamp(min=0.0, max=float(W)),
+                boxes[..., 1].clamp(min=0.0, max=float(H)),
+                boxes[..., 2].clamp(min=0.0, max=float(W)),
+                boxes[..., 3].clamp(min=0.0, max=float(H)),
+            ],
+            dim=-1,
+        ).reshape(batch, n_pred, 4)
 
-        all_boxes_list: list[Tensor] = []
-        all_logits_list: list[Tensor] = []
-        all_conf_list: list[Tensor] = []
+        # Every box of a cell shares the cell's class scores.
+        logits = cls_preds.unsqueeze(3).expand(batch, S, S, B_boxes, C)
+        logits = logits.reshape(batch, n_pred, C)
 
-        for r in range(S):
-            for c in range(S):
-                # box_cell: (batch, B, 5)
-                box_cell = box_preds[:, r, c, :, :]
-                # cls_cell: (batch, C)
-                cls_cell = cls_preds[:, r, c, :]
-
-                # Decode each box in this cell
-                for b in range(B_boxes):
-                    raw_cx = box_cell[:, b, 0]  # (batch,)
-                    raw_cy = box_cell[:, b, 1]
-                    raw_w = box_cell[:, b, 2]
-                    raw_h = box_cell[:, b, 3]
-
-                    # ``yolov1.cfg`` ends with ``[connected] activation=linear``
-                    # and ``[detection] sqrt=1``: x/y are *raw* cell-relative
-                    # offsets and the w/h channels are literally sqrt(w),
-                    # sqrt(h), which ``detection_layer.c`` squares at decode.
-                    # The paper only requires the values to land in [0, 1] and
-                    # prescribes no squashing function; a sigmoid is YOLOv2's
-                    # anchor parameterisation, and it also makes w = 0 and
-                    # w = 1 unreachable except in the limit.  The sqrt
-                    # parameterisation is the whole point of §2.2's "we predict
-                    # the square root of the bounding box width and height",
-                    # which equalises the loss's sensitivity across box scales.
-                    x_pixel = (raw_cx + float(c)) * cell_w
-                    y_pixel = (raw_cy + float(r)) * cell_h
-                    w_pixel = (raw_w**2) * float(W)
-                    h_pixel = (raw_h**2) * float(H)
-
-                    # Convert cxcywh → xyxy
-                    x1 = x_pixel - w_pixel / 2.0
-                    y1 = y_pixel - h_pixel / 2.0
-                    x2 = x_pixel + w_pixel / 2.0
-                    y2 = y_pixel + h_pixel / 2.0
-
-                    # Clamp to image boundaries
-                    x1 = x1.clamp(min=0.0, max=float(W))
-                    y1 = y1.clamp(min=0.0, max=float(H))
-                    x2 = x2.clamp(min=0.0, max=float(W))
-                    y2 = y2.clamp(min=0.0, max=float(H))
-
-                    # box: (batch, 4)
-                    box = lucid.stack([x1, y1, x2, y2], dim=1)
-                    all_boxes_list.append(box.unsqueeze(1))  # (batch, 1, 4)
-                    all_logits_list.append(cls_cell.unsqueeze(1))  # (batch, 1, C)
-                    # Paper §2.1 Eq. 2: the class-specific confidence score is
-                    # Pr(class|object)·Pr(object)·IOU, so the per-box confidence
-                    # channel must multiply the shared per-cell class term.
-                    # Without it the two boxes of a cell are indistinguishable
-                    # and background cells are never suppressed.
-                    # Confidence is a linear output too; clamping to [0, 1]
-                    # keeps the score-threshold and NMS comparisons meaningful
-                    # without imposing a squashing function the network was
-                    # never trained through.
-                    all_conf_list.append(
-                        box_cell[:, b, 4].clamp(min=0.0, max=1.0).unsqueeze(1)
-                    )
-
-        # Stack: (batch, S*S*B, 4) and (batch, S*S*B, C)
-        pred_boxes = lucid.cat(all_boxes_list, dim=1)  # (batch, S*S*B, 4)
-        logits = lucid.cat(all_logits_list, dim=1)  # (batch, S*S*B, C)
-        conf = lucid.cat(all_conf_list, dim=1)  # (batch, S*S*B)
+        # Paper §2.1 Eq. 2: the class-specific confidence score is
+        # Pr(class|object)·Pr(object)·IOU, so the per-box confidence channel
+        # must multiply the shared per-cell class term.  Without it the two
+        # boxes of a cell are indistinguishable and background cells are
+        # never suppressed.  Confidence is a linear output too; clamping to
+        # [0, 1] keeps the score-threshold and NMS comparisons meaningful
+        # without imposing a squashing function the network was never
+        # trained through.
+        conf = box_preds[..., 4].clamp(min=0.0, max=1.0).reshape(batch, n_pred)
 
         return logits, pred_boxes, conf
 
@@ -517,191 +508,119 @@ class YOLOForObjectDetection(ObjectDetectionModel):
         cfg = self.config
         S = cfg.split_size
         B_boxes = cfg.num_boxes
-        C = cfg.num_classes
-        lc = cfg.lambda_coord
-        ln = cfg.lambda_noobj
-        H, W = image_size
         batch_size = int(raw.shape[0])
-        # Every target below is built from Python floats; without the
-        # prediction's device they land on the CPU and the first subtraction
-        # against a Metal prediction raises.
-        dev = raw.device
 
-        # raw layout: (batch, S, S, B*5 + C)
         box_preds = raw[..., : B_boxes * 5].reshape(batch_size, S, S, B_boxes, 5)
-        cls_preds = raw[..., B_boxes * 5 :]  # (batch, S, S, C)
+        # Matching IoUs are targets, so the boxes are decoded without gradient
+        # — and with the same parameterisation the decoder and the loss use.
+        boxes = self._decode_boxes(box_preds.detach(), image_size)
 
-        loss_parts: list[Tensor] = []
-
-        for bi in range(batch_size):
-            gt_boxes_norm = targets[bi]["boxes"]  # (M, 4) xyxy in [0,1]
-            gt_labels = targets[bi]["labels"]  # (M,)
-            M = int(gt_boxes_norm.shape[0])
-
-            # Convert GT boxes from [0,1] xyxy → pixel cxcywh
-            gt_x1 = gt_boxes_norm[:, 0] * float(W)
-            gt_y1 = gt_boxes_norm[:, 1] * float(H)
-            gt_x2 = gt_boxes_norm[:, 2] * float(W)
-            gt_y2 = gt_boxes_norm[:, 3] * float(H)
-            gt_cx = (gt_x1 + gt_x2) / 2.0
-            gt_cy = (gt_y1 + gt_y2) / 2.0
-            gt_w = gt_x2 - gt_x1
-            gt_h = gt_y2 - gt_y1
-
-            # For each GT object, determine responsible cell and box
-            # cell assignment: floor(cx / cell_w), floor(cy / cell_h)
-            cell_w_px = W / S
-            cell_h_px = H / S
-
-            # Track which (r, c, b) slots are assigned
-            # Value: (cx_pixel, cy_pixel, w_pixel, h_pixel, iou, class_idx)
-            assigned: dict[
-                tuple[int, int, int], tuple[float, float, float, float, float, int]
-            ] = {}
-
-            for m in range(M):
-                cx_m = float(gt_cx[m].item())
-                cy_m = float(gt_cy[m].item())
-                w_m = float(gt_w[m].item())
-                h_m = float(gt_h[m].item())
-                cls_m = int(gt_labels[m].item())
-
-                col = min(int(cx_m / cell_w_px), S - 1)
-                row = min(int(cy_m / cell_h_px), S - 1)
-
-                # Convert GT to xyxy pixel for IoU computation
-                gx1 = cx_m - w_m / 2.0
-                gy1 = cy_m - h_m / 2.0
-                gx2 = cx_m + w_m / 2.0
-                gy2 = cy_m + h_m / 2.0
-
-                # Find the predicted box with highest IoU in this cell
-                best_b = 0
-                best_iou = -1.0
-                for b in range(B_boxes):
-                    raw_cx_b = float(box_preds[bi, row, col, b, 0].item())
-                    raw_cy_b = float(box_preds[bi, row, col, b, 1].item())
-                    raw_w_b = float(box_preds[bi, row, col, b, 2].item())
-                    raw_h_b = float(box_preds[bi, row, col, b, 3].item())
-
-                    px = (1.0 / (1.0 + math.exp(-raw_cx_b)) + col) * cell_w_px
-                    py = (1.0 / (1.0 + math.exp(-raw_cy_b)) + row) * cell_h_px
-                    pw = (1.0 / (1.0 + math.exp(-raw_w_b))) * W
-                    ph = (1.0 / (1.0 + math.exp(-raw_h_b))) * H
-
-                    px1 = px - pw / 2.0
-                    py1 = py - ph / 2.0
-                    px2 = px + pw / 2.0
-                    py2 = py + ph / 2.0
-
-                    # Simple scalar IoU
-                    ix1 = max(px1, gx1)
-                    iy1 = max(py1, gy1)
-                    ix2 = min(px2, gx2)
-                    iy2 = min(py2, gy2)
-                    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
-                    union = (px2 - px1) * (py2 - py1) + w_m * h_m - inter
-                    iou_val = inter / max(union, 1e-6)
-
-                    if iou_val > best_iou:
-                        best_iou = iou_val
-                        best_b = b
-
-                assigned[(row, col, best_b)] = (
-                    cx_m,
-                    cy_m,
-                    w_m,
-                    h_m,
-                    float(best_iou),
-                    cls_m,
-                )
-
-            # Now compute loss contributions
-            xy_terms: list[Tensor] = []
-            wh_terms: list[Tensor] = []
-            conf_obj: list[Tensor] = []
-            conf_noobj: list[Tensor] = []
-            cls_terms: list[Tensor] = []
-
-            for row in range(S):
-                for col in range(S):
-                    for b in range(B_boxes):
-                        pred_cx = box_preds[bi, row, col, b, 0]
-                        pred_cy = box_preds[bi, row, col, b, 1]
-                        pred_w = box_preds[bi, row, col, b, 2]
-                        pred_h = box_preds[bi, row, col, b, 3]
-                        pred_conf = box_preds[bi, row, col, b, 4]
-
-                        if (row, col, b) in assigned:
-                            cx_m, cy_m, w_m, h_m, iou_val, cls_m = assigned[
-                                (row, col, b)
-                            ]
-
-                            # The head is linear, so the loss compares raw
-                            # outputs against cell-relative targets — the same
-                            # parameterisation the decoder above inverts.
-                            # Squashing here and squaring there would train the
-                            # network for one convention and read it in another.
-                            tgt_cx_rel = cx_m / cell_w_px - float(col)
-                            tgt_cy_rel = cy_m / cell_h_px - float(row)
-                            tgt_cx_t = lucid.tensor([tgt_cx_rel], device=dev)
-                            tgt_cy_t = lucid.tensor([tgt_cy_rel], device=dev)
-
-                            xy_terms.append((pred_cx - tgt_cx_t[0]) ** 2)
-                            xy_terms.append((pred_cy - tgt_cy_t[0]) ** 2)
-
-                            # Paper Eq.3 is MSE on sqrt(w), sqrt(h) — and with
-                            # ``[detection] sqrt=1`` the network output *is*
-                            # sqrt(w), so the prediction enters the term
-                            # directly rather than being rooted first.
-                            tgt_w_norm = max(0.0, min(1.0, w_m / float(W)))
-                            tgt_h_norm = max(0.0, min(1.0, h_m / float(H)))
-                            tgt_sqrt_w_t = lucid.tensor(
-                                [math.sqrt(tgt_w_norm)], device=dev
-                            )
-                            tgt_sqrt_h_t = lucid.tensor(
-                                [math.sqrt(tgt_h_norm)], device=dev
-                            )
-                            wh_terms.append((pred_w - tgt_sqrt_w_t[0]) ** 2)
-                            wh_terms.append((pred_h - tgt_sqrt_h_t[0]) ** 2)
-
-                            # Confidence loss (obj): MSE vs iou_val, linear.
-                            tgt_iou_t = lucid.tensor([iou_val], device=dev)
-                            conf_obj.append((pred_conf - tgt_iou_t[0]) ** 2)
-
-                            # Class loss: MSE on class scores vs one-hot
-                            pred_cls = cls_preds[bi, row, col, :]  # (C,)
-                            tgt_cls_list = [0.0] * C
-                            tgt_cls_list[cls_m] = 1.0
-                            tgt_cls_t = lucid.tensor(tgt_cls_list, device=dev)
-                            cls_terms.append(((pred_cls - tgt_cls_t) ** 2).sum())
-
-                        else:
-                            # No-object: confidence should be 0
-                            conf_noobj.append(pred_conf**2)
-
-            def _mean_or_zero(parts: list[Tensor]) -> Tensor:
-                # YOLOv1 Eq. 3 is a SUM of squared errors over all cells and
-                # predictors, not a per-group mean.  Averaging each group
-                # separately renormalises the ~S²·B background confidence
-                # terms against the handful of object terms, which is exactly
-                # what lambda_noobj exists to control — so the mean form
-                # silently cancels it and makes the balance drift with grid
-                # size and object count.
-                if not parts:
-                    return lucid.zeros((1,), device=dev)
-                return lucid.cat([t.reshape(1) for t in parts]).sum()
-
-            loss_xy = lc * _mean_or_zero(xy_terms)
-            loss_wh = lc * _mean_or_zero(wh_terms)
-            loss_conf_o = _mean_or_zero(conf_obj)
-            loss_conf_n = ln * _mean_or_zero(conf_noobj)
-            loss_cls = _mean_or_zero(cls_terms)
-
-            img_loss: Tensor = loss_xy + loss_wh + loss_conf_o + loss_conf_n + loss_cls
-            loss_parts.append(img_loss.reshape(1))
-
+        loss_parts = [
+            self._image_loss(raw[bi], boxes[bi], targets[bi], image_size)
+            for bi in range(batch_size)
+        ]
         return lucid.cat(loss_parts).mean()
+
+    def _image_loss(
+        self,
+        raw: Tensor,
+        boxes: Tensor,
+        target: dict[str, Tensor],
+        image_size: tuple[int, int],
+    ) -> Tensor:
+        """One image's loss over every predictor at once.
+
+        ``raw`` is the image's ``(S, S, B*5+C)`` output and ``boxes`` its
+        ``(S, S, B, 4)`` decoded boxes.  Assignment, IoU targets and masks
+        are tensor ops, so nothing is read to the host.
+        """
+        cfg = self.config
+        S = cfg.split_size
+        B_boxes = cfg.num_boxes
+        C = cfg.num_classes
+        H, W = image_size
+        dev = raw.device
+        cell_w = W / S
+        cell_h = H / S
+
+        box_preds = raw[..., : B_boxes * 5].reshape(S * S * B_boxes, 5)
+        cls_preds = raw[..., B_boxes * 5 :].reshape(S * S, C)
+        pred_conf = box_preds[:, 4]
+
+        scale = lucid.tensor([float(W), float(H), float(W), float(H)], device=dev)
+        gt_xyxy = target["boxes"].to(dev).float() * scale
+        M = int(gt_xyxy.shape[0])
+        if M == 0:
+            return (cfg.lambda_noobj * (pred_conf**2).sum()).reshape(1)
+
+        gt_cx = (gt_xyxy[:, 0] + gt_xyxy[:, 2]) / 2.0
+        gt_cy = (gt_xyxy[:, 1] + gt_xyxy[:, 3]) / 2.0
+        gt_w = gt_xyxy[:, 2] - gt_xyxy[:, 0]
+        gt_h = gt_xyxy[:, 3] - gt_xyxy[:, 1]
+
+        # Responsible cell holds the centre; within it, the predictor whose
+        # current box overlaps the GT most is responsible (paper §2.2).
+        col = (gt_cx / cell_w).floor().clamp(0.0, float(S - 1))
+        row = (gt_cy / cell_h).floor().clamp(0.0, float(S - 1))
+        cell = (row * float(S) + col).long()  # (M,)
+        cell_boxes = boxes.reshape(S * S, B_boxes, 4)[cell]  # (M, B, 4)
+        ious = lucid.stack(
+            [box_iou(cell_boxes[:, b], gt_xyxy).diagonal() for b in range(B_boxes)],
+            dim=1,
+        )  # (M, B)
+        best_b = ious.argmax(dim=1)
+        best_iou = ious.max(dim=1)
+        idx = cell * B_boxes + best_b  # (M,) predictor index
+
+        # One object per predictor: when two GTs claim the same one, the later
+        # wins — the slot is overwritten, as darknet's truth grid is.
+        same = (idx[:, None] == idx[None, :]).float()
+        later = lucid.triu(lucid.ones((M, M), device=dev), 1)
+        won = ((same * later).sum(dim=1) == 0.0).float()  # (M,)
+
+        sel = box_preds[idx]  # (M, 5)
+
+        # The head is linear, so the loss compares raw outputs against
+        # cell-relative targets — the same parameterisation the decoder
+        # inverts.  Squashing here and squaring there would train the network
+        # for one convention and read it in another.
+        tgt_cx = gt_cx / cell_w - col
+        tgt_cy = gt_cy / cell_h - row
+        loss_xy = (((sel[:, 0] - tgt_cx) ** 2 + (sel[:, 1] - tgt_cy) ** 2) * won).sum()
+
+        # Paper Eq.3 is MSE on sqrt(w), sqrt(h) — and with ``[detection]
+        # sqrt=1`` the network output *is* sqrt(w), so the prediction enters
+        # the term directly rather than being rooted first.
+        tgt_sw = (gt_w / float(W)).clamp(0.0, 1.0).sqrt()
+        tgt_sh = (gt_h / float(H)).clamp(0.0, 1.0).sqrt()
+        loss_wh = (((sel[:, 2] - tgt_sw) ** 2 + (sel[:, 3] - tgt_sh) ** 2) * won).sum()
+
+        # Confidence loss (obj): MSE vs the matched IoU, linear.
+        loss_conf_o = (((sel[:, 4] - best_iou) ** 2) * won).sum()
+
+        # Class loss: MSE on class scores vs one-hot
+        one_hot = F.one_hot(target["labels"].to(dev).long(), C).float()
+        cls_err = ((cls_preds[cell] - one_hot) ** 2).sum(dim=1)
+        loss_cls = (cls_err * won).sum()
+
+        # No-object: confidence should be 0 everywhere nothing is assigned.
+        n_pred = S * S * B_boxes
+        assigned = F.one_hot(idx, n_pred).float().sum(dim=0).clamp(0.0, 1.0)
+        loss_conf_n = ((pred_conf**2) * (1.0 - assigned)).sum()
+
+        # YOLOv1 Eq. 3 is a SUM of squared errors over all cells and
+        # predictors, not a per-group mean.  Averaging each group separately
+        # renormalises the ~S²·B background confidence terms against the
+        # handful of object terms, which is exactly what lambda_noobj exists
+        # to control — so the mean form silently cancels it and makes the
+        # balance drift with grid size and object count.
+        img_loss: Tensor = (
+            cfg.lambda_coord * (loss_xy + loss_wh)
+            + loss_conf_o
+            + cfg.lambda_noobj * loss_conf_n
+            + loss_cls
+        )
+        return img_loss.reshape(1)
 
     @override
     def forward(
@@ -800,25 +719,19 @@ class YOLOForObjectDetection(ObjectDetectionModel):
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
                 keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                    lucid.full((int(keep.shape[0]),), c, dtype=lucid.int64, device=dev)
                 )
 
             if keep_boxes:
                 results.append(
-                    {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
-                    }
+                    detection_result(
+                        lucid.cat(keep_boxes, dim=0),
+                        lucid.cat(keep_scores, dim=0),
+                        lucid.cat(keep_labels, dim=0),
+                    )
                 )
             else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+                results.append(empty_detection_result(dev))
 
         return results
 
