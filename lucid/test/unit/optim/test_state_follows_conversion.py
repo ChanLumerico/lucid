@@ -74,9 +74,7 @@ def _case_marks(name: str, move: str) -> list[pytest.MarkDecorator]:
 
 
 _CASES = [
-    pytest.param(
-        name, kwargs, move, marks=_case_marks(name, move), id=f"{name}-{move}"
-    )
+    pytest.param(name, kwargs, move, marks=_case_marks(name, move), id=f"{name}-{move}")
     for name, kwargs in _OPTIMIZERS
     for move in _MOVES
 ]

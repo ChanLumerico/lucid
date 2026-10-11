@@ -65,7 +65,6 @@ def _real(x: Tensor) -> Tensor:
     return x.to(lucid.float32)
 
 
-
 # ── Error-function family ──────────────────────────────────────────────────
 
 

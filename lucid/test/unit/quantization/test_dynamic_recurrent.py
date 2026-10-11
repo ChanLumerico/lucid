@@ -146,7 +146,9 @@ def test_named_type_without_a_dynamic_form_warns(named: type) -> None:
     assert [type(m) for m in qmodel] == [nn.Conv2d, nn.RNN, nn.Linear]
 
 
-@pytest.mark.parametrize("case", ["LSTM", "GRU-2layer-bidir", "LSTMCell", "RNNCell-relu"])
+@pytest.mark.parametrize(
+    "case", ["LSTM", "GRU-2layer-bidir", "LSTMCell", "RNNCell-relu"]
+)
 def test_from_float_leaves_the_float_module_alone(case: str) -> None:
     make, inp, qtype = _CASES[case]
     lucid.manual_seed(3)

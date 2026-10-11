@@ -112,7 +112,9 @@ def _above(ax: Tensor, edge: float) -> Tensor:
 
 def _on_half_line(x: Tensor, value: Tensor, at_zero: float) -> Tensor:
     """``value`` where ``x > 0``, ``at_zero`` at 0 and NaN below."""
-    edge = lucid.where(x == 0.0, lucid.full_like(x, at_zero), lucid.full_like(x, math.nan))
+    edge = lucid.where(
+        x == 0.0, lucid.full_like(x, at_zero), lucid.full_like(x, math.nan)
+    )
     return lucid.where(x > 0.0, value, edge)
 
 
@@ -202,7 +204,9 @@ def _j0(x: Tensor) -> Tensor:
 def _j1(x: Tensor) -> Tensor:
     """``J1(x)``; odd in ``x``."""
     ax = lucid.abs(x)
-    large = lucid.sign(x) * _hankel(_above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False)
+    large = lucid.sign(x) * _hankel(
+        _above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False
+    )
     return lucid.where(ax <= 5.0, _j1_small(lucid.clip(x, -5.0, 5.0)), large)
 
 
@@ -210,7 +214,9 @@ def _y0(x: Tensor) -> Tensor:
     """``Y0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
     s = _positive(x, 5.0)
     z = s * s
-    small = _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(s)
+    small = _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(
+        s
+    )
     large = _hankel(_above(x, 5.0), _PIO4, _J0_HANKEL, second_kind=True)
     return _on_half_line(x, lucid.where(x <= 5.0, small, large), -math.inf)
 
@@ -246,7 +252,9 @@ def _k0e(x: Tensor) -> Tensor:
     """``exp(x) K0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
     s = _positive(x, 2.0)
     large = _k_large_scaled(_above(x, 2.0), _K0_B)
-    return _on_half_line(x, lucid.where(x <= 2.0, _k0_small(s) * lucid.exp(s), large), math.inf)
+    return _on_half_line(
+        x, lucid.where(x <= 2.0, _k0_small(s) * lucid.exp(s), large), math.inf
+    )
 
 
 def _k0(x: Tensor) -> Tensor:
@@ -261,7 +269,9 @@ def _k1e(x: Tensor) -> Tensor:
     """``exp(x) K1(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
     s = _positive(x, 2.0)
     large = _k_large_scaled(_above(x, 2.0), _K1_B)
-    return _on_half_line(x, lucid.where(x <= 2.0, _k1_small(s) * lucid.exp(s), large), math.inf)
+    return _on_half_line(
+        x, lucid.where(x <= 2.0, _k1_small(s) * lucid.exp(s), large), math.inf
+    )
 
 
 def _k1(x: Tensor) -> Tensor:
