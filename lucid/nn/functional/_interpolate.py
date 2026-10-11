@@ -126,6 +126,9 @@ def _source_index(
 # for a larger output steps by ``1 / scale_factor`` like every other rank.
 # It also takes the first for a channels-last input of more than three
 # channels, a layout Lucid tensors never have.  1-D and 3-D never pin.
+# The reference's backward pins at every size, so above the limit it is not
+# the adjoint of its own forward; Lucid's gradient is the adjoint of its
+# forward on both sides (a deliberate departure, LCD-429).
 _PINNING_OUTPUT_LIMIT = 128
 
 
