@@ -8,6 +8,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
+from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops.composite._shared import _swap_dims
 from lucid._tensor._indexing import _broadcast_shape
 
@@ -568,8 +569,9 @@ def _split_along(
     dim: int,
 ) -> list[Tensor]:
     """Convert NumPy-style splits to lucid's size-list form."""
+    dim = _wrap_dim(dim, x.ndim, "split")
     if isinstance(indices_or_sections, int):
-        n = x.shape[dim]
+        n = _dim_size(x.shape, dim)
         k = indices_or_sections
         base, extra = divmod(n, k)
         sizes = [base + 1] * extra + [base] * (k - extra)
@@ -580,7 +582,7 @@ def _split_along(
     for idx in indices:
         split_sizes.append(idx - prev)
         prev = idx
-    split_sizes.append(x.shape[dim] - prev)
+    split_sizes.append(_dim_size(x.shape, dim) - prev)
     split_sizes = [s for s in split_sizes if s >= 0]
     return lucid.split(x, split_sizes, dim)
 
@@ -853,9 +855,9 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int | None = None) -> Tensor
             f"take_along_dim: input and indices should have the same number of "
             f"dims, got {x.ndim} and {indices.ndim}"
         )
+    dim = _wrap_dim(dim, x.ndim, "take_along_dim")
     if x.ndim == 0:
         return lucid.gather(x.reshape(1), 0, indices.reshape(1)).reshape(())
-    dim = dim + x.ndim if dim < 0 else dim
     x_shape = list(x.shape)
     i_shape = list(indices.shape)
     x_shape[dim] = i_shape[dim] = 1

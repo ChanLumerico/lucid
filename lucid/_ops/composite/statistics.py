@@ -8,6 +8,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._types import DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
+from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import (
     _corrected_variance,
     _p_norm,
@@ -197,6 +198,11 @@ def quantile(
         results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
         nans = lucid.isnan(flat).sum()
     else:
+        dim = _wrap_dim(dim, input.ndim, "quantile")
+        if input.ndim == 0:
+            # A 0-d tensor's notional axis is the whole of it, with or
+            # without ``keepdim``: the quantile of its one-element view.
+            return quantile(input.reshape(1), q, 0, False, interpolation)
         sorted_x = lucid.sort(input, dim)
         n = input.shape[dim]
         results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)

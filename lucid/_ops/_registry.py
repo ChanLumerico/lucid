@@ -267,7 +267,7 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dims"]),
     OpEntry("fliplr",     A._fliplr_adapter, 1, method_name="fliplr", free_fn_name="fliplr"),
     OpEntry("flipud",     A._flipud_adapter, 1, method_name="flipud", free_fn_name="flipud"),
-    OpEntry("roll",       _R.roll,       1, method_name="roll",       free_fn_name="roll",
+    OpEntry("roll",       A._roll_adapter, 1, method_name="roll",     free_fn_name="roll",
             extra_kwargs=["shifts", "dims"]),
     OpEntry("tril",       A._tril_adapter, 1, method_name="tril",     free_fn_name="tril",
             extra_kwargs=["k", "diagonal"]),

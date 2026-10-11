@@ -37,7 +37,7 @@
  "counts": {
   "counters": {
    "cast": {
-    "lucid/_ops/_adapters.py": 7,
+    "lucid/_ops/_adapters.py": 6,
     "lucid/_ops/composite/elementwise.py": 8,
     "lucid/_tensor/_indexing.py": 10,
     "lucid/_tensor/_methods.py": 2,
@@ -201,7 +201,7 @@
     "lucid/models/generative/diamond/_model.py": 741,
     "lucid/models/generative/rectified_flow/_model.py": 289,
     "lucid/models/vision/mask2former/_model.py": 83,
-    "lucid/nn/functional/activations.py": 487,
+    "lucid/nn/functional/activations.py": 444,
     "lucid/nn/functional/loss.py": 854,
     "lucid/nn/functional/pooling.py": 61,
     "lucid/nn/modules/activation.py": 727,

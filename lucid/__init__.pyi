@@ -1887,21 +1887,24 @@ def flipud(input: Tensor) -> Tensor:
             [1, 2]])
     """
     ...
-def roll(input: Tensor, shifts: _int | Sequence[_int], dims: Sequence[_int]) -> Tensor:
+def roll(input: Tensor, shifts: _int | Sequence[_int], dims: _int | Sequence[_int] | None = ...) -> Tensor:
     r"""    Cyclically shift the elements of ``input`` along ``dims``.
     
     Elements that would shift past the boundary wrap around to the other
     side.  Multiple axes may be rolled simultaneously by passing a list
-    of shifts and a matching list of dims.
+    of shifts and a matching list of dims.  Without ``dims`` the elements
+    roll in their flattened order and the shape is put back.
     
     Parameters
     ----------
     input : Tensor
         Source tensor.
     shifts : int or sequence of int
-        Number of positions to shift (positive = forward).
-    dims : sequence of int
-        Axes along which to roll.
+        Number of positions to shift (positive = forward).  A single int
+        when ``dims`` is ``None``; otherwise one per entry of ``dims``.
+    dims : int, sequence of int, or None, optional
+        Axes along which to roll.  ``None`` (default) rolls the flattened
+        tensor.
     
     Returns
     -------
@@ -1917,8 +1920,10 @@ def roll(input: Tensor, shifts: _int | Sequence[_int], dims: Sequence[_int]) -> 
     --------
     >>> import lucid
     >>> x = lucid.arange(5)
-    >>> lucid.roll(x, shifts=2, dims=[0])
-    Tensor([3, 4, 0, 1, 2])
+    >>> lucid.roll(x, shifts=2, dims=0)
+    tensor([3, 4, 0, 1, 2], dtype=lucid.int64)
+    >>> lucid.roll(lucid.arange(6).reshape(2, 3), 1)
+    tensor([[5, 0, 1], [2, 3, 4]], dtype=lucid.int64)
     """
     ...
 def tril(input: Tensor, k: _int | None = ..., *, diagonal: _int | None = ...) -> Tensor:

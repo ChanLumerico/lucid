@@ -21,46 +21,18 @@ The four variance functions also read their arguments in one place,
 """
 
 import math
-import operator
 import warnings
 from collections.abc import Sequence
-from typing import SupportsIndex
 
 from lucid._C import engine as _C_engine
 from lucid._deprecation import _PACKAGE_DIR, warn_deprecated
 from lucid._dtype import _ENGINE_TO_DTYPE
+from lucid._ops._dims import _to_axes, _wrap_dims
 
 _Impl = _C_engine.TensorImpl
 
 
 # ── Axes ─────────────────────────────────────────────────────────────────────
-
-
-def _to_axes(dim: object, name: str) -> list[int]:
-    """``dim`` — ``None``, an index or a sequence of them — as engine axes."""
-    if dim is None:
-        return []
-    if type(dim) is int:
-        return [dim]
-    # Plain ints in a tuple or list skip the protocol checks below, which
-    # cost more than the reduction they guard.
-    if type(dim) is tuple or type(dim) is list:
-        axes = list(dim)
-        for axis in axes:
-            if type(axis) is not int:
-                break
-        else:
-            return axes
-    try:
-        if isinstance(dim, SupportsIndex):
-            return [operator.index(dim)]
-        if isinstance(dim, Sequence) and not isinstance(dim, str):
-            return [operator.index(d) for d in dim]
-    except TypeError:
-        pass  # an element that is not an index; refused below with the whole dim
-    raise TypeError(
-        f"{name}(): dim must be an int, a sequence of ints or None, got {dim!r}"
-    )
 
 
 def _reduction_axes(x_impl: _Impl, dim: object, name: str) -> list[int]:
@@ -69,29 +41,20 @@ def _reduction_axes(x_impl: _Impl, dim: object, name: str) -> list[int]:
     The engine reduces a repeated axis once, so ``sum`` gave the right
     number and ``var`` the wrong one — its element count multiplied the
     axis in twice.  The reference refuses the call; so does this, in the
-    name of the public op that was called.  A float used to truncate
-    (``int(1.5)``) or fail as "not iterable".  An axis out of range is left
-    for the engine to report.  A 0-d tensor's ``dim`` 0 or -1, which the
-    reference accepts, is every axis it has (``[]``): ``var`` read
-    ``shape[0]`` of it for its divisor and raised ``IndexError``.
+    name of the public op that was called, by the engine's own dim rule
+    (:func:`lucid._ops._dims._wrap_dims` — a 0-d tensor's 0 and -1 are one
+    axis).  A float used to truncate (``int(1.5)``) or fail as "not
+    iterable".  A 0-d tensor's notional axis is every axis it has (``[]``):
+    ``var`` read ``shape[0]`` of it for its divisor and raised
+    ``IndexError``.
     """
     axes = _to_axes(dim, name)
     ndim = len(x_impl.shape)
-    if len(axes) > 1:
-        # A 0-d tensor's one axis answers to both 0 and -1, as a rank-1 one's.
-        rank = max(ndim, 1)
-        canonical = [axis + rank if axis < 0 else axis for axis in axes]
-        if len(set(canonical)) != len(axes):
-            repeated = next(a for a in canonical if canonical.count(a) > 1)
-            raise ValueError(
-                f"{name}(): dim {repeated} appears multiple times in the "
-                f"list of dims {tuple(axes)}"
-            )
-    if ndim == 0 and all(axis in (0, -1) for axis in axes):
-        # That one axis is the whole tensor: the engine's empty list, whose
-        # element count the variance divisor reads as 1, not as shape[0].
-        return []
-    return axes
+    if len(axes) > 1 or ndim == 0:
+        axes = _wrap_dims(axes, ndim, name)
+    # That one axis is the whole tensor: the engine's empty list, whose
+    # element count the variance divisor reads as 1, not as shape[0].
+    return [] if ndim == 0 else axes
 
 
 # ── Roots and divisors ───────────────────────────────────────────────────────

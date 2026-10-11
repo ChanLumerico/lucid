@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, final, override
 import lucid
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import iinfo
+from lucid._ops._dims import _wrap_dim
 import lucid._C.engine as _C_engine
 from lucid._tensor._indexing import (
     _broadcast_shape,
@@ -104,23 +105,6 @@ def _along(index: Tensor, dim: int, shape: list[int]) -> _C_engine.TensorImpl:
     along[dim] = shape[dim]
     flat = _C_engine.reshape(_unwrap(index), [-1])
     return _C_engine.broadcast_to(_C_engine.reshape(flat, along), shape)
-
-
-def _dim_of(dim: int, ndim: int) -> int:
-    """``dim`` counted from the front.
-
-    Raises
-    ------
-    IndexError
-        ``dim`` outside ``[-ndim, ndim)`` (a 0-d tensor has one dim, 0).
-    """
-    rank = max(ndim, 1)
-    if not -rank <= dim < rank:
-        raise IndexError(
-            f"dimension out of range (expected to be in range of "
-            f"[{-rank}, {rank - 1}], but got {dim})"
-        )
-    return dim + rank if dim < 0 else dim
 
 
 def _write_inplace[T: Tensor](
@@ -228,7 +212,7 @@ def index_fill(
     shape = list(input.shape)
     if not shape:
         shape = [1]
-    dim = _dim_of(dim, input.ndim)
+    dim = _wrap_dim(dim, input.ndim, "index_fill")
     n = shape[dim]
     device = input._impl.device
     positions = _C_engine.reshape(_unwrap(index), [-1])
@@ -292,7 +276,7 @@ def index_add(
         ``dim``; Metal drops such a write.
     """
     _require_input_dtype("index_add", input, source, "source")
-    dim = _dim_of(dim, input.ndim)
+    dim = _wrap_dim(dim, input.ndim, "index_add")
     index_t = _wrap(_along(index, dim, list(source.shape)))
     scaled = source * alpha if alpha != 1 else source
     return _scatter_add(input, dim, index_t, scaled)
@@ -341,7 +325,7 @@ def index_copy(
         ``dim``; Metal drops such a write.
     """
     _require_input_dtype("index_copy", input, source, "source")
-    dim = _dim_of(dim, input.ndim)
+    dim = _wrap_dim(dim, input.ndim, "index_copy")
     index_impl = _along(index, dim, list(source.shape))
     return _wrap(
         _C_engine.scatter_set(_unwrap(input), index_impl, _unwrap(source), dim)

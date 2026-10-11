@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._reduce import _require_normable
+from lucid._types import DimLike
+from lucid.linalg import vector_norm
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -627,3 +630,56 @@ def local_response_norm(
         _C_engine.add(k_t, _C_engine.mul(alpha_t, window_sum_rs)), beta
     )
     return _wrap(_C_engine.div(xi, scale))
+
+
+def normalize(x: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12) -> Tensor:
+    r"""Normalize a tensor to unit :math:`L_p` norm along a dimension.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    p : float, optional
+        Exponent of the norm (default: 2.0 for Euclidean norm).
+    dim : int, sequence of int, or None, optional
+        Dimension(s) along which to normalize (default: 1).  A sequence
+        takes the norm over all of them together; ``None`` over every
+        element.
+    eps : float, optional
+        Lower bound on the denominator, for numerical stability.
+
+    Returns
+    -------
+    Tensor
+        Normalized tensor with unit :math:`L_p` norm along ``dim``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> x = lucid.tensor([[3.0, 4.0]])
+    >>> F.normalize(x, p=2, dim=1)
+    tensor([[0.6, 0.8]])
+    >>> F.normalize(lucid.tensor([[3.0], [4.0]]), dim=None)
+    tensor([[0.6], [0.8]])
+
+    Notes
+    -----
+    .. math::
+
+        \hat{x}_i = \frac{x_i}{\max\!\big(\|x\|_p,\, \epsilon\big)},
+        \qquad \|x\|_p = \Big(\sum_i |x_i|^p\Big)^{1/p}
+
+    along the chosen dimension.  The ``eps`` clamp avoids division by
+    zero when the slice is all zeros.  Use ``p=2`` for cosine-similarity
+    style embeddings, ``p=1`` for probability-simplex projection-like
+    behaviour, and ``p=inf`` for max-norm clipping.  An integer or bool
+    ``x`` is refused with a ``DtypeMismatch``, as the reference refuses it.
+    """
+    xi = _require_normable(_unwrap(x), "normalize")
+    if isinstance(dim, int):
+        return _wrap(_C_engine.nn.lp_normalize(xi, p, dim, eps))
+    # Several dims, or all of them, have no kernel: the norm over them,
+    # kept for broadcasting, divides as the kernel's does.
+    denom = vector_norm(x, ord=p, dim=dim, keepdim=True)
+    return x / denom.clamp(min=eps)

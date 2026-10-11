@@ -15,8 +15,9 @@ each dim spelling, with and without ``keepdim``, value, dtype and shape,
 and the gradient where the op has one.  A spelling the reference refuses
 by signature (a tuple where it takes an int) is not compared.  A dim past
 the notional axis must be refused by the engine's rule, not by a wrapper
-that happens to index past a shape.  Cells a Python wrapper still gets
-wrong are pinned in ``_PYTHON_SIDE``.
+that happens to index past a shape: the Python wrappers resolve a dim by
+the engine's rule too (``lucid._ops._dims``), so they are held to the same
+matrix.
 """
 
 import numpy as np
@@ -101,26 +102,7 @@ _OPS = {
     "normalize": (lambda lib, t, d, k: lib.nn.functional.normalize(t, dim=d), True),
 }
 
-# A 0-d input the engine now answers, refused by a Python wrapper above it.
-_PYTHON_SIDE = {
-    "quantile": "LCD-406: _reduce 0-d axes (var/std/quantile)",
-    "argsort_descending": "LCD-406: _adapters 0-d branch",
-    "topk_smallest": "LCD-406: _adapters 0-d branch",
-    "swapaxes": "LCD-406: _shared._swap_dims 0-d branch",
-}
-
 _DIMS = [0, -1, (0,), None]
-
-
-def _pin(request, op, dim):
-    """Mark the cells a wrapper outside the engine still gets wrong."""
-    if op == "normalize" and not isinstance(dim, int):
-        # Not a 0-d gap: the binding takes one int dim on every rank.
-        request.applymarker(
-            pytest.mark.xfail(strict=True, reason="F.normalize takes only an int dim on any rank")
-        )
-    elif dim is not None and op in _PYTHON_SIDE:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=_PYTHON_SIDE[op]))
 
 
 def _signature_refuses(ref, call, d, k):
@@ -134,11 +116,10 @@ def _signature_refuses(ref, call, d, k):
 @pytest.mark.parametrize("keepdim", [False, True])
 @pytest.mark.parametrize("dim", _DIMS, ids=str)
 @pytest.mark.parametrize("op", list(_OPS))
-def test_matches_reference(ref, device, op, dim, keepdim, request):
+def test_matches_reference(ref, device, op, dim, keepdim):
     call, differentiable = _OPS[op]
     if _signature_refuses(ref, call, dim, keepdim):
         pytest.skip("the reference's signature does not take this dim spelling")
-    _pin(request, op, dim)
     x = lucid.tensor(1.5, device=device, requires_grad=differentiable)
     xr = ref.tensor(1.5, requires_grad=differentiable)
     got = call(lucid, x, dim, keepdim)
@@ -155,13 +136,11 @@ def test_matches_reference(ref, device, op, dim, keepdim, request):
 
 @pytest.mark.parametrize("dim", [1, -2])
 @pytest.mark.parametrize("op", list(_OPS))
-def test_an_axis_past_the_notional_one_is_refused(ref, device, op, dim, request):
+def test_an_axis_past_the_notional_one_is_refused(ref, device, op, dim):
     """Refused by the engine's axis rule, not by a wrapper tripping over it."""
     call, _ = _OPS[op]
     with pytest.raises(IndexError):
         call(ref, ref.tensor(1.5), dim, False)
-    if op == "swapaxes":
-        request.applymarker(pytest.mark.xfail(strict=True, reason=_PYTHON_SIDE[op]))
     with pytest.raises(IndexError, match=r"axis out of range: got -?\d"):
         call(lucid, lucid.tensor(1.5, device=device), dim, False)
 

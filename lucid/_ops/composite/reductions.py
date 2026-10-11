@@ -3,6 +3,7 @@
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import _reduction_axes
 
 if TYPE_CHECKING:
@@ -211,20 +212,9 @@ def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor
     a tensor, so nothing leaves the device and no slice borrows another's
     count.
     """
+    d = _wrap_dim(dim, x.ndim, "nanmedian")
     if x.ndim == 0:
-        if dim not in (0, -1):
-            raise IndexError(
-                f"nanmedian: dim {dim} is out of range for a 0-d tensor "
-                "(expected 0 or -1)"
-            )
-        values, indices = _nanmedian_along(x.reshape(1), 0, False)
-        return values, indices
-    if not -x.ndim <= dim < x.ndim:
-        raise IndexError(
-            f"nanmedian: dim {dim} is out of range for a {x.ndim}-d tensor "
-            f"(expected [{-x.ndim}, {x.ndim - 1}])"
-        )
-    d = dim % x.ndim
+        return _nanmedian_along(x.reshape(1), 0, False)
     n = x.shape[d]
     if n == 0:
         raise IndexError(
@@ -233,7 +223,7 @@ def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor
         )
     # The engine's sort puts NaN after every number, ``+inf`` included,
     # and keeps tied entries in their input order.
-    order = lucid.argsort(x, d).to(lucid.int64)
+    order = lucid.argsort(x, d)
     if lucid.is_floating_point(x):
         count = lucid.sum(~lucid.isnan(x), d, True)
         pos = lucid.clamp((count - 1) // 2, min=0)

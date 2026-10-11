@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._ops._reduce import _require_normable
 from lucid._tensor._metal_views import _check as _metal_check
 from lucid._tensor._metal_views import write_back as _metal_write_back
 from lucid._types import GeluApproximate
 from lucid.nn.functional._inplace import _in_place
+from lucid.nn.functional.normalization import normalize
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -1070,49 +1070,6 @@ def tanhshrink(x: Tensor) -> Tensor:
     """
     xi = _unwrap(x)
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
-
-
-def normalize(x: Tensor, p: float = 2.0, dim: int = 1, eps: float = 1e-12) -> Tensor:
-    r"""Normalize a tensor to unit :math:`L_p` norm along a dimension.
-
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor.
-    p : float, optional
-        Exponent of the norm (default: 2.0 for Euclidean norm).
-    dim : int, optional
-        Dimension along which to normalize (default: 1).
-    eps : float, optional
-        Small value added to the denominator for numerical stability.
-
-    Returns
-    -------
-    Tensor
-        Normalized tensor with unit :math:`L_p` norm along ``dim``.
-
-    Examples
-    --------
-    >>> import lucid.nn.functional as F
-    >>> x = lucid.tensor([[3.0, 4.0]])
-    >>> F.normalize(x, p=2, dim=1)
-    tensor([[0.6, 0.8]])
-
-    Notes
-    -----
-    .. math::
-
-        \hat{x}_i = \frac{x_i}{\max\!\big(\|x\|_p,\, \epsilon\big)},
-        \qquad \|x\|_p = \Big(\sum_i |x_i|^p\Big)^{1/p}
-
-    along the chosen dimension.  The ``eps`` clamp avoids division by
-    zero when the slice is all zeros.  Use ``p=2`` for cosine-similarity
-    style embeddings, ``p=1`` for probability-simplex projection-like
-    behaviour, and ``p=inf`` for max-norm clipping.  An integer or bool
-    ``x`` is refused with a ``DtypeMismatch``, as the reference refuses it.
-    """
-    xi = _require_normable(_unwrap(x), "normalize")
-    return _wrap(_C_engine.nn.lp_normalize(xi, p, dim, eps))
 
 
 def cosine_similarity(

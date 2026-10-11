@@ -39,6 +39,7 @@ from lucid._dispatch import (
     _unwrap_or_scalar,
 )
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
+from lucid._ops._dims import _dim_size, _to_axes, _wrap_dim, _wrap_dims
 from lucid._ops._reduce import _reduction_axes
 from lucid._types import Scalar, TensorOrScalar
 
@@ -461,11 +462,12 @@ def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> 
     to index ``n - 1 - p``, and reverse.  Reversing the ascending indices
     instead would put ties last-first.
     """
-    d = int(dim)
+    d = _wrap_dim(int(dim), len(a_impl.shape), "argsort")
     if not descending:
         return _C_engine.argsort(a_impl, d)
     reversed_order = _C_engine.argsort(_C_engine.flip(a_impl, [d]), d)
-    last = _C_engine.full_like(reversed_order, float(a_impl.shape[d] - 1))
+    n = _dim_size(a_impl.shape, d)
+    last = _C_engine.full_like(reversed_order, float(n - 1))
     return _C_engine.flip(_C_engine.sub(last, reversed_order), [d])
 
 
@@ -478,8 +480,10 @@ def _topk_adapter(
     keys keep their input order and NaN, which sorts last, is taken only
     when fewer than ``k`` numbers remain.
     """
-    d = int(dim)
-    if largest:
+    d = _wrap_dim(int(dim), len(a_impl.shape), "topk")
+    # A 0-d tensor's one element is both its largest and its smallest, and
+    # ``narrow`` below has no real axis to cut.
+    if largest or not a_impl.shape:
         values, indices = _C_engine.topk(a_impl, int(k), d)
         return values, indices
     order = _C_engine.narrow(_C_engine.argsort(a_impl, d), d, 0, int(k))
@@ -493,11 +497,11 @@ def _chunk_adapter(a_impl: _Impl, chunks: int, dim: int = 0) -> list[_Impl]:
     so fewer than ``chunks`` pieces come back when that size leaves nothing
     for the tail (7 split into 4 is 2, 2, 2, 1; 6 split into 4 is 2, 2, 2).
     """
-    d = int(dim)
     count = int(chunks)
     if count <= 0:
         raise ValueError(f"chunk: chunks must be positive, got {count}")
-    size = int(a_impl.shape[d])
+    d = _wrap_dim(int(dim), len(a_impl.shape), "chunk")
+    size = _dim_size(a_impl.shape, d)
     if size % count == 0:
         return _C_engine.chunk(a_impl, count, d)
     step = (size + count - 1) // count
@@ -640,6 +644,36 @@ def _flip_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
     return _C_engine.flip(x_impl, dims_list)
 
 
+def _roll_adapter(
+    a_impl: _Impl,
+    shifts: int | Sequence[int],
+    dims: int | Sequence[int] | None = None,
+) -> _Impl:
+    """roll(input, shifts, dims=None) — no ``dims`` rolls the flat order.
+
+    The engine takes per-axis shifts only, so a call without ``dims`` — or
+    with one int for either — reached the binding and failed on its
+    signature.  As in the reference, no ``dims`` rolls the elements in
+    their flattened order and puts the shape back, a 0-d tensor included.
+    """
+    steps = [shifts] if isinstance(shifts, int) else [int(s) for s in shifts]
+    if dims is None:
+        if len(steps) != 1:
+            raise ValueError(
+                f"roll: without dims, shifts must be a single int, got {shifts!r}"
+            )
+        flat = _C_engine.reshape(a_impl, [a_impl.numel()])
+        rolled = _C_engine.roll(flat, steps, [0])
+        return _C_engine.reshape(rolled, list(a_impl.shape))
+    axes = _to_axes(dims, "roll")
+    if len(steps) != len(axes):
+        raise ValueError(
+            f"roll: shifts and dims must align, got {len(steps)} shift(s) "
+            f"and {len(axes)} dim(s)"
+        )
+    return _C_engine.roll(a_impl, steps, axes)
+
+
 def _fliplr_adapter(x_impl: _Impl) -> _Impl:
     """fliplr(x) — flip along axis 1.  ``x`` must be at least 2-D."""
     if len(x_impl.shape) < 2:
@@ -753,23 +787,15 @@ def _squeeze_adapter(
     """
     if dim is None:
         return _own_impl(_C_engine.squeeze_all(x_impl), x_impl)
-    if isinstance(dim, (list, tuple)):
-        ndim = len(x_impl.shape)
-        result = x_impl
-        # Sort descending so each ``squeeze`` keeps the remaining indices valid.
-        for d in sorted([int(d) for d in dim], reverse=True):
-            nd = d if d >= 0 else ndim + d
-            if 0 <= nd < ndim and int(x_impl.shape[nd]) == 1:
-                result = _C_engine.squeeze(result, nd)
-                ndim -= 1
-        return _own_impl(result, x_impl)
-    ndim = len(x_impl.shape)
-    d = int(cast(int, dim))
-    nd = d if d >= 0 else ndim + d
-    # Silently no-op on non-unit dim (matches reference behaviour).
-    if nd < 0 or nd >= ndim or int(x_impl.shape[nd]) != 1:
-        return _own_impl(x_impl, x_impl)
-    return _C_engine.squeeze(x_impl, nd)
+    shape = x_impl.shape
+    result = x_impl
+    # Descending, so each ``squeeze`` leaves the indices still to come valid.
+    # A 0-d tensor's notional axis has nothing to drop.
+    dims = _wrap_dims(_to_axes(dim, "squeeze"), len(shape), "squeeze")
+    for d in sorted(dims, reverse=True):
+        if shape and int(shape[d]) == 1:
+            result = _C_engine.squeeze(result, d)
+    return _own_impl(result, x_impl)
 
 
 # ── Reduction adapters (dim/keepdim/correction kwargs) ───────────────────────
@@ -976,7 +1002,8 @@ def _split_adapter(
 ) -> list[_Impl]:
     """split(x, sections, dim=0) — int → pieces of that size, the last one
     shorter when it does not divide; list → explicit sizes."""
-    axis_size = int(x_impl.shape[dim])
+    dim = _wrap_dim(int(dim), len(x_impl.shape), "split")
+    axis_size = _dim_size(x_impl.shape, dim)
     if isinstance(split_size_or_sections, int):
         size = split_size_or_sections
         if size <= 0:
@@ -1346,15 +1373,13 @@ def _lexicographic_order(rows: _Impl) -> _Impl:
     """The ``int64`` permutation that sorts ``rows`` lexicographically, stably."""
     n, width = int(rows.shape[0]), int(rows.shape[1])
     if width == 1:
-        step = _C_engine.argsort(_C_engine.reshape(rows, [n]), 0)
-        return _C_engine.astype(step, _C_engine.I64)
+        return _C_engine.argsort(_C_engine.reshape(rows, [n]), 0)
     order = _C_engine.arange(0, n, 1, _C_engine.I64, rows.device)
     for col in range(width - 1, -1, -1):
         key = _C_engine.index_select(
             _C_engine.reshape(_C_engine.narrow(rows, 1, col, 1), [n]), 0, order
         )
-        step = _C_engine.astype(_C_engine.argsort(key, 0), _C_engine.I64)
-        order = _C_engine.index_select(order, 0, step)
+        order = _C_engine.index_select(order, 0, _C_engine.argsort(key, 0))
     return order
 
 

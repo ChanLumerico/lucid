@@ -11,8 +11,8 @@ Conventions used by every composite:
 * the free-function forms in ``lucid`` (``lucid.add``, ``lucid.sub``, ...)
   are thin engine wrappers and reject Python scalars — only use them
   when both operands are already tensors;
-* for axis swaps, build a ``permute`` permutation — the engine's
-  ``transpose`` reverses *all* dims, not just two.
+* for axis swaps, use :func:`_swap_dims` — the engine's ``transpose``
+  with no dims reverses *all* of them, not just two.
 """
 
 from typing import TypeGuard
@@ -30,11 +30,11 @@ def _is_tensor(x: object) -> TypeGuard[Tensor]:
 
 
 def _swap_dims(t: Tensor, d0: int, d1: int) -> Tensor:
-    """Swap exactly two dims by building a permute permutation.
+    """Swap exactly two dims, through the same op as ``Tensor.swapaxes``.
 
-    The engine's ``transpose`` reverses every dim — we don't want that.
+    A permutation built here from the raw rank had no slot for a 0-d
+    tensor's notional axis (``list index out of range``), and let the free
+    function and the method answer differently.  The engine's ``swapaxes``
+    resolves both dims by its ``wrap_dim`` rule.
     """
-    n = t.ndim
-    perm = list(range(n))
-    perm[d0], perm[d1] = perm[d1], perm[d0]
-    return t.permute(*perm)
+    return t.swapaxes(d0, d1)

@@ -39,7 +39,6 @@ from lucid.nn.functional.activations import (
     hardshrink,
     tanhshrink,
     softshrink,
-    normalize,
     cosine_similarity,
     pairwise_distance,
     hardtanh,
@@ -76,6 +75,7 @@ from lucid.nn.functional.conv import (
     conv_transpose3d,
 )
 from lucid.nn.functional.normalization import (
+    normalize,
     batch_norm,
     layer_norm,
     group_norm,
