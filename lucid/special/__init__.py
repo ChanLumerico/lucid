@@ -10,8 +10,7 @@ extra entries below stay accessible only via ``lucid.special.<name>``.
 Implemented (all pure-Python composites over engine ops — no C++ work):
 
 * ``erfcx``                 — scaled complementary error: ``exp(x²) · erfc(x)``
-* ``i0e``                   — exponentially-scaled modified Bessel I₀:
-                              ``exp(-|x|) · i0(x)``
+* ``i0e``                   — exponentially-scaled Bessel I₀: ``exp(-|x|) · i0(x)``
 * ``i1``                    — modified Bessel of order 1
 * ``i1e``                   — exponentially-scaled ``i1``
 * ``ndtr``                  — normal CDF ``Φ(x) = ½·(1 + erf(x/√2))``
@@ -27,10 +26,9 @@ Implemented (all pure-Python composites over engine ops — no C++ work):
 Also: the order-0/1 Bessel family (``bessel_j0``/``j1``/``y0``/``y1``,
 ``modified_bessel_k0``/``k1`` and their scaled forms — float32 by
 Abramowitz & Stegun polynomials, float64 by the Cephes double-precision
-series), the Hurwitz ``zeta`` and the orthogonal polynomials.
-
-Deferred (would need arbitrary-order Bessel machinery): ``iv``, ``ive``,
-and the Jacobi polynomials.
+series), the Hurwitz ``zeta``, the regularized incomplete gamma
+``gammainc`` / ``gammaincc`` and the orthogonal polynomials.  Deferred
+(would need arbitrary-order Bessel machinery): ``iv``, ``ive``, Jacobi.
 """
 
 import math
@@ -39,7 +37,7 @@ from typing import TYPE_CHECKING, Callable
 import lucid
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._bessel import _half_line_split
-from lucid._ops.composite._gamma import _polygamma
+from lucid._ops.composite._gamma import _polygamma, gammainc, gammaincc
 from lucid._ops.composite.elementwise import _x_times_log
 
 if TYPE_CHECKING:
@@ -2568,8 +2566,10 @@ __all__ = [
     "modified_bessel_k1",
     "scaled_modified_bessel_k0",
     "scaled_modified_bessel_k1",
-    # Hurwitz zeta (1)
+    # Hurwitz zeta, regularized incomplete gamma (3)
     "zeta",
+    "gammainc",
+    "gammaincc",
     # Name aliases
     "gammaln",
     "psi",
