@@ -18,6 +18,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid.autograd import grad
 from lucid.nn.functional import _interpolate
+from lucid.test._helpers.resample_paths import PATHS, forced_path
 
 
 def _ramp(length: int) -> lucid.Tensor:
@@ -208,18 +209,49 @@ class TestRefusals:
             F.interpolate(x, size=2, mode="bilinear")
 
 
-@pytest.mark.parametrize("mode", ["bilinear", "bicubic", "nearest-exact"])
-def test_the_gathered_path_differentiates_twice(mode: str) -> None:
-    # A fractional scale runs the gathers rather than a kernel; a gradient
-    # penalty through it must still see a second derivative.
+@pytest.mark.parametrize(
+    ("mode", "scale", "antialias", "path"),
+    [
+        *[
+            (mode, scale, antialias, path)
+            for mode, scale, antialias in (
+                ("bilinear", 1.7, False),
+                ("bicubic", 1.7, False),
+                ("bicubic", 0.6, True),
+            )
+            for path in PATHS
+        ],
+        ("nearest-exact", 1.7, False, None),
+    ],
+)
+def test_the_composite_differentiates_twice(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    scale: float,
+    antialias: bool,
+    path: str | None,
+) -> None:
+    # A fractional scale runs the composite rather than a kernel — as a
+    # matrix product or as gathers, depending on the axis length, so each
+    # weighted mode runs on both.  A gradient penalty through it must still
+    # see a second derivative.
+    if path is None:
+        _second_derivative_matches(mode, scale, antialias)
+        return
+    with forced_path(monkeypatch, path):
+        _second_derivative_matches(mode, scale, antialias)
+
+
+def _second_derivative_matches(mode: str, scale: float, antialias: bool) -> None:
     rng = np.random.default_rng(0)
     x0 = rng.standard_normal((1, 2, 5, 7))
-    r0 = lucid.tensor(rng.standard_normal((1, 2, 8, 11)))
+    out = F.interpolate(lucid.tensor(x0), scale_factor=scale, mode=mode)
+    r0 = lucid.tensor(rng.standard_normal(tuple(out.shape)))
     u = rng.standard_normal(x0.shape)
     e = rng.standard_normal(x0.shape)
 
     def loss(x: lucid.Tensor) -> lucid.Tensor:
-        y = F.interpolate(x, scale_factor=1.7, mode=mode)
+        y = F.interpolate(x, scale_factor=scale, mode=mode, antialias=antialias)
         return (r0 * y * y).sum()
 
     def projected_gradient(values: np.ndarray) -> float:

@@ -22,6 +22,7 @@ import pytest
 import lucid
 import lucid.nn.functional as F
 from lucid.test._helpers.compare import assert_close
+from lucid.test._helpers.resample_paths import PATHS, forced_path
 
 _SHAPES = {1: (2, 3, 7), 2: (2, 3, 5, 7), 3: (1, 2, 4, 5, 6)}
 _RANKS = {
@@ -222,3 +223,53 @@ class TestUpsampleModules:
         l_out = getattr(lucid.nn, module)(**kw)(lucid.tensor(x, device=device))
         r_out = getattr(ref.nn, module)(**kw)(ref.tensor(x))
         assert_close(l_out, r_out, atol=1e-5)
+
+
+# The matrix's inputs are short enough that every weighted axis takes the
+# dense product; long axes in real use take the gathers.  This subset runs
+# on each path with the other one forbidden.
+# Only rows that reach the composite: a fractional scale with half-pixel
+# centres (with corners pinned, or a recomputed scale, the linear modes
+# run the engine kernel).
+_PATH_TAGS = ("-x1.7-edges", "-x0.6-edges", "-tuple-edges")
+_PATH_CASES = [
+    case
+    for case in _cases()
+    if case.values[0] in _INTERPOLATING and str(case.id).endswith(_PATH_TAGS)
+]
+# Every antialias row but the one whose axes all keep their size.
+_PATH_ANTIALIAS = [case for case in _ANTIALIAS if "-same-size-" not in str(case.id)]
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("path", PATHS)
+class TestBothCompositePaths:
+    @pytest.mark.parametrize(("mode", "rank", "kw"), _PATH_CASES)
+    def test_matrix_subset(
+        self,
+        ref: Any,
+        device: str,
+        monkeypatch: pytest.MonkeyPatch,
+        path: str,
+        mode: str,
+        rank: int,
+        kw: dict[str, Any],
+    ) -> None:
+        with forced_path(monkeypatch, path):
+            _compare(ref, device, _SHAPES[rank], {**kw, "mode": mode}, seed=rank)
+
+    @pytest.mark.parametrize(("mode", "shape", "kw", "align_corners"), _PATH_ANTIALIAS)
+    def test_antialias(
+        self,
+        ref: Any,
+        device: str,
+        monkeypatch: pytest.MonkeyPatch,
+        path: str,
+        mode: str,
+        shape: tuple[int, ...],
+        kw: dict[str, Any],
+        align_corners: bool,
+    ) -> None:
+        kw = {**kw, "mode": mode, "align_corners": align_corners, "antialias": True}
+        with forced_path(monkeypatch, path):
+            _compare(ref, device, shape, kw, seed=7)

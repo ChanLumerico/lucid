@@ -51,6 +51,25 @@ def test_growing_an_image_is_unchanged_by_the_flag() -> None:
     assert float((filtered - sampled).abs().max().item()) < 1e-6
 
 
+@pytest.mark.parametrize("antialias", [True, False])
+def test_an_integer_image_keeps_its_dtype_and_clamps_overshoot(
+    antialias: bool,
+) -> None:
+    # Bicubic rings past a hard edge; brought back to int8 the ringing must
+    # clamp at 127 rather than wrap round to a negative value.
+    rows = [[-128.0] * 6 + [127.0] * 6 for _ in range(12)]
+    img = lucid.tensor(rows).reshape(1, 12, 12).to(lucid.int8)
+    out = F.resize(img, (12, 30), interpolation="bicubic", antialias=antialias)
+    assert out.dtype == lucid.int8
+    filtered = F.resize(
+        img.to(lucid.float32), (12, 30), interpolation="bicubic", antialias=antialias
+    )
+    assert float(filtered.max().item()) > 127.5  # it does overshoot
+    assert float(filtered.min().item()) < -128.5
+    expected = filtered.round().clamp(-128, 127).reshape(-1).tolist()
+    assert out.reshape(-1).tolist() == [int(v) for v in expected]
+
+
 def test_the_stretching_segmentation_preset_filters_too() -> None:
     # stretch=True reproduces processors that resize through PIL, which
     # always filters; the Albumentations Resize it used to reuse does not.
