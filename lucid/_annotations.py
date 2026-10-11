@@ -221,6 +221,7 @@ def install() -> None:
 NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid._audit_cli": (("Sequence", "collections.abc", "Sequence"),),
     "lucid._dispatch": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid._factories._generator": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._factories.converters": (
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
         ("np", "numpy", None),
