@@ -745,6 +745,16 @@ def _value_for(
         # ``np.ascontiguousarray``, which turns a 0-d array into shape
         # ``(1,)``, and ``vjp`` refuses a seed of another shape (LCD-367).
         return True, lucid.tensor(1.0, dtype=lucid.float64), False
+    if name == "v" and re.fullmatch(r"jvp|hvp|vhp", op_name):
+        # ``jvp`` / ``hvp`` / ``vhp`` take ``v`` in the *input* space: a
+        # tensor shaped like each of ``inputs``, a different draw from it.
+        if not isinstance(reference, list | tuple):
+            return True, _tensor(shape, domain, variant + 1), True
+        tangents = [
+            _tensor(tuple(t.shape), domain, variant + i + 1)
+            for i, t in enumerate(reference)
+        ]
+        return True, tangents, True
     if name == "name" and re.search(r"weight|param", op_name):
         return True, "weight", False
     if name == "lengths":
@@ -780,11 +790,6 @@ def _value_for(
         return True, operands, True
     if name == "parameters" or re.search(r"Iterable\[Parameter\]", text):
         return True, list(lucid.nn.Linear(_COUT, _COUT).parameters()), False
-    if re.search(r"\bCallable\b", text) and re.search(r"odeint|solve_ivp", op_name):
-        # A right-hand side, not a loss: ``dy/dt`` has to have ``y``'s
-        # shape, and the scalar probe below made every solver report
-        # "func returned shape () but y0 has shape (2,)".
-        return True, (lambda _t, y: y * 0.5), False
     if re.search(r"\bCallable\b", text) and re.search(r"odeint|solve_ivp", op_name):
         # A right-hand side, not a loss: ``dy/dt`` has to have ``y``'s
         # shape, and the scalar probe below made every solver report

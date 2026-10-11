@@ -743,8 +743,9 @@ class _ConvTransposeNd(Module):
         """Initialise ``weight`` and ``bias`` as the reference does."""
         _init_conv_weights(self.weight, self.bias)
 
-    def _describe(self) -> str:
-        """The ``extra_repr`` of every rank."""
+    @override
+    def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self.padding}"
@@ -930,11 +931,6 @@ class ConvTranspose1d(_ConvTransposeNd):
         """
         return self._transpose(x, output_size)
 
-    @override
-    def extra_repr(self) -> str:
-        """Return a string representation of the layer's configuration."""
-        return self._describe()
-
 
 class ConvTranspose2d(_ConvTransposeNd):
     r"""Applies a 2D transposed convolution (fractionally-strided convolution).
@@ -1093,11 +1089,6 @@ class ConvTranspose2d(_ConvTransposeNd):
         """
         return self._transpose(x, output_size)
 
-    @override
-    def extra_repr(self) -> str:
-        """Return a string representation of the layer's configuration."""
-        return self._describe()
-
 
 class ConvTranspose3d(_ConvTransposeNd):
     r"""Applies a 3D transposed convolution (fractionally-strided convolution).
@@ -1252,11 +1243,6 @@ class ConvTranspose3d(_ConvTransposeNd):
         optionally after its batch and channel sizes.
         """
         return self._transpose(x, output_size)
-
-    @override
-    def extra_repr(self) -> str:
-        """Return a string representation of the layer's configuration."""
-        return self._describe()
 
 
 # ── Lazy convolutions ─────────────────────────────────────────────────────────

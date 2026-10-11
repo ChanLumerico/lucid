@@ -27,7 +27,7 @@ import annotationlib
 import inspect
 import json
 import sys
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -78,39 +78,79 @@ def _entry(obj: object) -> dict[str, Any]:
     return entry
 
 
-def _members(qualname: str, cls: type, out: Surface) -> None:
-    """A class's own public methods — ``forward``, ``step``, ``state_dict``."""
-    for name, member in sorted(vars(cls).items()):
+def _owner(cls: type, name: str) -> type | None:
+    """The class in ``cls``'s MRO that defines ``name`` — what lookup finds."""
+    for klass in cls.__mro__:
+        if name in vars(klass):
+            return klass
+    return None
+
+
+def _members(
+    qualname: str, cls: type, out: Surface, held: Collection[type] = ()
+) -> None:
+    """The public methods a caller reaches on ``cls`` — ``forward``, ``step``.
+
+    A caller can call what attribute lookup resolves, wherever in the MRO
+    it is defined: moving ``extra_repr`` from ``ConvTranspose2d`` to a
+    private base changes nothing a user sees, and deleting it does.  Lookup
+    leaves out what classes outside Lucid define (``object``, ``str``,
+    ``Exception``), which no Lucid release promised, and what the classes
+    in ``held`` other than ``cls`` define — those are held under their own
+    name, ``nn.Module.state_dict`` rather than ``nn.Linear.state_dict``.
+    """
+    # Not ``dir(cls)``: an ``Enum``'s lists its members and hides its methods.
+    for name in sorted({name for klass in cls.__mro__ for name in vars(klass)}):
         if name.startswith("_"):
             continue
+        owner = _owner(cls, name)
+        if (
+            owner is None
+            or not owner.__module__.startswith("lucid.")
+            or (owner is not cls and owner in held)
+        ):
+            continue
+        member = vars(owner)[name]
         if inspect.isfunction(member) or isinstance(
             member, staticmethod | classmethod | property
         ):
             out[f"{qualname}.{name}"] = _entry(member)
 
 
-def _add(qualname: str, obj: object, out: Surface) -> None:
-    out[qualname] = _entry(obj)
-    # ``Tensor``'s methods are enumerated by the audit itself, as ``Tensor.*``.
-    if (
-        inspect.isclass(obj)
-        and obj.__module__.startswith("lucid.")
-        and obj is not lucid.Tensor
-    ):
-        _members(qualname, obj, out)
-
-
-def collect() -> Surface:
-    """Every public name and what a caller could pass it, today."""
-    out: Surface = {}
-    for symbol in _surface.enumerate_surface():
-        _add(symbol.qualname, symbol.obj, out)
-    # The zoo is outside the audit's surface but not outside the promise:
-    # its factory names are what user code spells most often.
+def _symbols() -> list[tuple[str, object]]:
     import lucid.models as models
 
-    for name in sorted(models.__all__):
-        _add(f"lucid.models.{name}", getattr(models, name), out)
+    found = [(symbol.qualname, symbol.obj) for symbol in _surface.enumerate_surface()]
+    # The zoo is outside the audit's surface but not outside the promise:
+    # its factory names are what user code spells most often.
+    found += [
+        (f"lucid.models.{name}", getattr(models, name)) for name in models.__all__
+    ]
+    return found
+
+
+def collect(*, inherited: bool = True) -> Surface:
+    """Every public name and what a caller could pass it, today.
+
+    ``inherited`` also lists, under each class, the members it inherits
+    from another public class — ``nn.Linear.state_dict`` beside
+    ``nn.Module.state_dict``.  The check reads them, so that pulling a
+    method up into a public base is not a removal; the snapshot leaves them
+    out and holds each such method once, under the class that defines it.
+    """
+    symbols = _symbols()
+    classes = {
+        obj
+        for _, obj in symbols
+        if isinstance(obj, type) and obj.__module__.startswith("lucid.")
+    }
+    held: set[type] = set() if inherited else {*classes, lucid.Tensor}
+    out: Surface = {}
+    for qualname, obj in symbols:
+        out[qualname] = _entry(obj)
+        # ``Tensor``'s methods are enumerated by the audit itself, as ``Tensor.*``.
+        if isinstance(obj, type) and obj in classes and obj is not lucid.Tensor:
+            _members(qualname, obj, out, held)
     return dict(sorted(out.items()))
 
 
@@ -220,14 +260,14 @@ def main(argv: list[str]) -> int:
     if argv != ["--update"]:
         print("usage: python -m lucid.test.audit._released --update", file=sys.stderr)
         return 2
-    current = collect()
     if SNAPSHOT.exists():
-        problems = breaks(load()["symbols"], current, lucid.__version__)
+        problems = breaks(load()["symbols"], collect(), lucid.__version__)
         if problems:
             print(f"{len(problems)} released call(s) would break:", file=sys.stderr)
             for problem in problems:
                 print(f"  {problem}", file=sys.stderr)
             return 1
+    current = collect(inherited=False)
     _write(lucid.__version__, current)
     print(f"{SNAPSHOT.name}: {len(current)} names at {lucid.__version__}")
     return 0

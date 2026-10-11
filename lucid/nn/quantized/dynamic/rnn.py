@@ -96,12 +96,11 @@ class _DynamicRecurrent[F: nn.Module](nn.Module):
         )
 
     @classmethod
-    def _quantize_float(cls, mod: nn.Module, dtype: QDtype) -> Self:
-        """Quantize a float recurrent module's weights (no calibration).
+    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
+        """Quantize a float recurrent module's weights to int8 (no calibration).
 
-        Each public layer's ``from_float`` calls this; it is defined there
-        rather than inherited so the released-surface audit, which reads a
-        class's own methods, tracks it per layer.
+        ``mod`` must be the float type the layer runs — an ``nn.LSTM`` for
+        :class:`LSTM`, an ``nn.GRUCell`` for :class:`GRUCell`.
         """
         from lucid.quantization.observer import PerChannelMinMaxObserver
 
@@ -165,11 +164,6 @@ class LSTM(_DynamicRecurrent[nn.LSTM]):
 
     _FLOAT = nn.LSTM
 
-    @classmethod
-    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
-        """Quantize a float :class:`~lucid.nn.LSTM`'s recurrent weights to int8."""
-        return cls._quantize_float(mod, dtype)
-
     @override
     def forward(
         self,
@@ -201,11 +195,6 @@ class GRU(_DynamicRecurrent[nn.GRU]):
 
     _FLOAT = nn.GRU
 
-    @classmethod
-    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
-        """Quantize a float :class:`~lucid.nn.GRU`'s recurrent weights to int8."""
-        return cls._quantize_float(mod, dtype)
-
     @override
     def forward(
         self, x: Tensor | PackedSequence, hx: Tensor | None = None
@@ -230,11 +219,6 @@ class LSTMCell(_DynamicRecurrent[nn.LSTMCell]):
 
     _FLOAT = nn.LSTMCell
 
-    @classmethod
-    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
-        """Quantize a float :class:`~lucid.nn.LSTMCell`'s weights to int8."""
-        return cls._quantize_float(mod, dtype)
-
     @override
     def forward(
         self, x: Tensor, hx: tuple[Tensor, Tensor] | None = None
@@ -257,11 +241,6 @@ class GRUCell(_DynamicRecurrent[nn.GRUCell]):
 
     _FLOAT = nn.GRUCell
 
-    @classmethod
-    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
-        """Quantize a float :class:`~lucid.nn.GRUCell`'s weights to int8."""
-        return cls._quantize_float(mod, dtype)
-
     @override
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
         """Inject dequantized weights into the shell and run one step."""
@@ -282,11 +261,6 @@ class RNNCell(_DynamicRecurrent[nn.RNNCell]):
     """
 
     _FLOAT = nn.RNNCell
-
-    @classmethod
-    def from_float(cls, mod: nn.Module, dtype: QDtype = qint8) -> Self:
-        """Quantize a float :class:`~lucid.nn.RNNCell`'s weights to int8."""
-        return cls._quantize_float(mod, dtype)
 
     @override
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:

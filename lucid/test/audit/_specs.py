@@ -1211,22 +1211,28 @@ def _autograd_grad(domain: str) -> Iterator[Call]:
     )
 
 
-def _autograd_jvp(domain: str) -> Iterator[Call]:
-    """``autograd.jvp(func, inputs, v)`` with a tangent the shape of ``inputs``.
+def _input_tangent(op: str) -> Callable[[str], Iterator[Call]]:
+    """``autograd.<op>(func, inputs, v)`` with ``v`` the shape of ``inputs``.
 
-    The signature tier fills only parameters without a default, and since
-    ``v`` became optional (``None``, as in the reference) it handed
-    ``jvp`` no tangent for a ``(2, 3)`` input — which ``jvp`` refuses, as
-    the reference does, so the smoke cell went unanswered.  ``v`` follows
-    a resized ``inputs`` through ``same_shape``.
+    ``jvp``, ``hvp`` and ``vhp`` take a vector in the input space, unlike
+    ``vjp``'s, which is shaped like the output.  The signature tier fills
+    only parameters without a default, and with ``v`` optional (``None``,
+    as in the reference) it handed ``jvp`` no tangent for a ``(2, 3)``
+    input — which ``jvp`` refuses, as the reference does, so the smoke
+    cell went unanswered.  ``v`` follows a resized ``inputs`` through
+    ``same_shape``; the scalar ``func`` is what ``hvp`` and ``vhp`` need.
     """
-    yield Call(
-        [lambda t: (t * t).sum(), _f((2, 3), domain), _f((2, 3), domain)],
-        {},
-        1,
-        "jvp(func, inputs, v) of (x * x).sum()",
-        same_shape=(2,),
-    )
+
+    def build(domain: str) -> Iterator[Call]:
+        yield Call(
+            [lambda t: (t * t).sum(), _f((2, 3), domain), _f((2, 3), domain)],
+            {},
+            1,
+            f"{op}(func, inputs, v) of (x * x).sum()",
+            same_shape=(2,),
+        )
+
+    return build
 
 
 def _retain_grad(domain: str) -> Iterator[Call]:
@@ -1247,7 +1253,8 @@ def _retain_grad(domain: str) -> Iterator[Call]:
 #: sent four of these to the wrong builder.
 _QUALIFIED: dict[str, Callable[[str], Iterator[Call]]] = {
     "lucid.autograd.grad": _autograd_grad,
-    "lucid.autograd.jvp": _autograd_jvp,
+    # A name not on the surface yet costs nothing: lookup is by qualname.
+    **{f"lucid.autograd.{op}": _input_tangent(op) for op in ("jvp", "hvp", "vhp")},
     "Tensor.retain_grad": _retain_grad,
     "lucid.einops.repeat": lambda d: iter(
         [

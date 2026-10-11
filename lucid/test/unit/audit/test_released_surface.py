@@ -110,3 +110,71 @@ def test_a_name_removed_without_warning_is_a_break() -> None:
     assert _released.breaks(released, {}, "4.0.0") == [
         "lucid.models.mobilenet_v1: removed without a deprecation"
     ]
+
+
+# A class's surface is what lookup resolves on it, not what it defines
+# itself.  ``__module__`` puts these fixtures inside Lucid: the collector
+# follows the MRO only through Lucid's own classes.
+class _PrivateBase:
+    __module__ = "lucid.fixture"
+
+    def extra_repr(self) -> str:
+        return ""
+
+
+class _OwnMethod:
+    __module__ = "lucid.fixture"
+
+    def extra_repr(self) -> str:
+        return ""
+
+
+class _MovedToPrivateBase(_PrivateBase):
+    __module__ = "lucid.fixture"
+
+
+class _Deleted:
+    __module__ = "lucid.fixture"
+
+
+class _OnlyStr(str):
+    __module__ = "lucid.fixture"
+
+
+def _members_of(cls: type, held: tuple[type, ...] = ()) -> _released.Surface:
+    out: _released.Surface = {}
+    _released._members("lucid.fixture.Layer", cls, out, held)
+    return out
+
+
+def test_a_method_moved_to_a_private_base_is_not_a_removal() -> None:
+    released = _members_of(_OwnMethod)
+    assert released == {"lucid.fixture.Layer.extra_repr": {"params": ["a:self"]}}
+    assert _released.breaks(released, _members_of(_MovedToPrivateBase), "3.99.0") == []
+
+
+def test_a_deleted_method_is_still_a_removal() -> None:
+    released = _members_of(_OwnMethod)
+    assert _released.breaks(released, _members_of(_Deleted), "3.99.0") == [
+        "lucid.fixture.Layer.extra_repr: removed without a deprecation"
+    ]
+
+
+def test_a_method_inherited_from_a_held_class_is_recorded_once() -> None:
+    # The check reads it on the subclass; the snapshot holds it on the base.
+    assert "lucid.fixture.Layer.extra_repr" in _members_of(_MovedToPrivateBase)
+    assert _members_of(_MovedToPrivateBase, held=(_PrivateBase,)) == {}
+
+
+def test_methods_defined_outside_lucid_are_not_surface() -> None:
+    assert _members_of(_OnlyStr) == {}
+
+
+def test_the_collected_surface_follows_the_mro() -> None:
+    current = _released.collect()
+    assert "nn.ConvTranspose2d.extra_repr" in current
+    assert "lucid.nn.quantized.dynamic.LSTM.from_float" in current
+    assert "nn.Linear.state_dict" in current
+    compact = _released.collect(inherited=False)
+    assert "nn.Module.state_dict" in compact
+    assert "nn.Linear.state_dict" not in compact

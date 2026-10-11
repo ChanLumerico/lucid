@@ -48,16 +48,6 @@ _SKIP = ("lucid.models", "lucid.test", "lucid._C", "lucid.benchmarks")
 _OPTIONS = doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS
 
 
-#: Modules whose standing failures belong to an open issue, written beside
-#: their counts so the floor says why it holds them.  The Tensor dunders and
-#: ``.to`` / ``.cpu`` / ``.metal`` / ``.bool`` were never run before
-#: :func:`_installed_methods`; their examples print the wrong repr.
-KNOWN_FAILING: dict[str, str] = {
-    "lucid._tensor._dunders": "LCD-316",
-    "lucid._tensor._to": "LCD-316",
-}
-
-
 class DoctestResult:
     """What the documentation run found."""
 
@@ -116,9 +106,7 @@ def _installed_methods(modules: list[Any]) -> Iterator[tuple[str, Any]]:
                 yield f"{cls.__module__}.{cls.__qualname__}.{name}", fn
 
 
-def _run_installed(
-    modules: list[Any], per_module: dict[str, int]
-) -> tuple[int, int]:
+def _run_installed(modules: list[Any], per_module: dict[str, int]) -> tuple[int, int]:
     """Run :func:`_installed_methods`' examples, counted under the defining module."""
     failed = attempted = 0
     finder = doctest.DocTestFinder()
@@ -194,11 +182,6 @@ def save_floor(path: Path, result: DoctestResult) -> None:
         "failed": result.failed,
         "attempted": result.attempted,
         "failing": dict(sorted(result.per_module.items())),
-        "known": {
-            name: issue
-            for name, issue in sorted(KNOWN_FAILING.items())
-            if name in result.per_module
-        },
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
@@ -217,7 +200,6 @@ def regressions(
 
 __all__ = [
     "DoctestResult",
-    "KNOWN_FAILING",
     "load_floor",
     "regressions",
     "run",
