@@ -244,7 +244,21 @@ void Tracer::on_inplace_write(const TensorImplPtr& target, const TensorImplPtr& 
     if (outside && first)
         outside_originals_.emplace_back(target, snapshot(target));
     feed_id(target);
-    impl_to_id_[target.get()] = feed_id(value);
+    impl_to_id_[target.get()] = written_id(value);
+}
+
+TensorId Tracer::written_id(const TensorImplPtr& value) {
+    // A constant the trace made is about to lose its buffer to the target
+    // (``take_storage_from``); the feed keeps a copy of what it held.
+    if (made_here(value.get()) && !sees(value.get())) {
+        const TensorImplPtr copy = snapshot(value);
+        const TensorId fresh = graph_.next_id++;
+        impl_to_id_[value.get()] = fresh;
+        external_feeds_[fresh] = copy;
+        live_refs_.push_back(copy);
+        return fresh;
+    }
+    return feed_id(value);
 }
 
 TensorId Tracer::feed_id(const TensorImplPtr& impl) {
@@ -276,7 +290,7 @@ void Tracer::write_made(const TensorImplPtr& target, const TensorImplPtr& value)
         if (feed != external_feeds_.end() && feed->second.get() == target.get())
             feed->second = snapshot(target);
     }
-    impl_to_id_[target.get()] = feed_id(value);
+    impl_to_id_[target.get()] = written_id(value);
 }
 
 void Tracer::restore_outside_writes() {
@@ -343,7 +357,10 @@ void Tracer::on_op_attr(std::string_view key, AttributeValue value) {
 }
 
 void Tracer::on_factory(const TensorImplPtr& out) {
-    if (!fold_constants_ || !out)
+    // On Metal the compiled graph makes the factory itself, as a constant
+    // MPSGraph can fold into its neighbours; held out, it would be one more
+    // feed bound on every run.  Anywhere else the graph can only receive it.
+    if (!fold_constants_ || !out || out->device() == Device::GPU)
         return;
     if (!held_ && !graph_.ops.empty()) {
         held_ = std::move(graph_.ops.back());

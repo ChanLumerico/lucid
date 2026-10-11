@@ -267,6 +267,35 @@ def test_a_constant_written_in_place_is_right_on_every_call(
     assert not compiled.cache_info()["eager_only"]
 
 
+def test_an_outside_tensor_written_with_a_constant_is_carried_back() -> None:
+    """The written value is folded; the write into ``tally`` still happens
+    once per call, and the value's buffer moving into ``tally`` leaves the
+    executable's feed a copy of its own."""
+    tally = lucid.zeros((), device=COMPILE_DEVICE)
+
+    def fn(x: lucid.Tensor) -> lucid.Tensor:
+        with lucid.no_grad():
+            tally.add_(lucid.tensor(2.0).to(x.device))
+        return x * 3
+
+    compiled = lucid.compile.compile(fn)
+    for seed in (1, 2, 3):
+        x = _x(seed)
+        assert _close(compiled(x), x * 3)
+    assert float(tally.item()) == 6.0
+    assert not compiled.cache_info()["eager_only"]
+
+
+def test_a_metal_factory_stays_an_op() -> None:
+    """The compiled graph makes it itself — a graph constant, not a feed."""
+    x = _x(0)
+    with _tracing(watch=((x,), {}), fold_constants=True) as tracer:
+        x * 2.0 + lucid.ones(4, device=x.device)
+    names = [op.name for op in tracer.graph.ops]
+    assert "full" in names and "ones" in names
+    assert len(tracer.external_feeds) == 1  # x alone
+
+
 def test_a_constant_written_in_place_is_no_outside_write() -> None:
     x = _x(0)
     with _tracing(watch=((x,), {}), fold_constants=True) as tracer:

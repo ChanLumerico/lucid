@@ -228,7 +228,8 @@ public:
 
     // ``out`` was made from nothing by the op now recording — a factory
     // (``zeros`` / ``arange`` / ``eye`` …), never a random draw.  With
-    // folding on, the op is left out and ``out`` is a constant; otherwise
+    // folding on and ``out`` off Metal, the op is left out and ``out`` is a
+    // constant; on Metal the compiled graph makes it itself, and otherwise
     // nothing changes.
     void on_factory(const TensorImplPtr& out);
 
@@ -385,6 +386,8 @@ private:
     void write_made(const TensorImplPtr& target, const TensorImplPtr& value);
     // ``impl``'s id, minting a feed for it when the trace has not seen it.
     TensorId feed_id(const TensorImplPtr& impl);
+    // The id an in-place write's ``value`` goes by from now on.
+    TensorId written_id(const TensorImplPtr& value);
 
     TraceGraph graph_;
     // Maps the raw :class:`TensorImpl` pointer of every traced tensor

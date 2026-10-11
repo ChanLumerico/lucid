@@ -9,9 +9,10 @@ graph bakes the batch dimension into a constant shape MPSGraph cannot infer:
   is ``2*B``, which the dim-0 symbolic machinery can't represent;
 * a **batch-shaped constant** — anything the call builds out of nothing that
   is sized like the input (``zeros_like(x)``, an RNN's zero hidden init,
-  ``arange(x.shape[0])``).  The trace folds such a constant into one feed
-  (``Tracer.fold_constants``) holding the trace-time value, so the gate is
-  given the feeds' shapes rather than the ops that built them;
+  ``arange(x.shape[0])``).  A Metal factory stays an op in the trace, sized
+  by its output; a constant built elsewhere is folded into one feed
+  (``Tracer.fold_constants``) holding the trace-time value, and the gate is
+  given those feeds' shapes;
 * a **permutation that moves the batch axis** off dim 0 (``x.T``,
   ``permute(1, 0)``) — the symbolic machinery assumes the batch stays at
   dim 0, and the executable answered a traced-batch-shaped result for every
@@ -42,6 +43,10 @@ from collections.abc import Iterable, Sequence
 _BROADCAST_OPS: frozenset[str] = frozenset({"broadcast_to", "expand", "repeat", "tile"})
 # Concatenate / stack: unsafe only when the join axis IS the batch axis (dim 0).
 _JOIN_OPS: frozenset[str] = frozenset({"concatenate", "concat", "cat", "stack"})
+# Factory ops: unsafe only when the produced shape's leading dim is the batch.
+_FACTORY_OPS: frozenset[str] = frozenset(
+    {"zeros", "ones", "full", "arange", "eye", "linspace"}
+)
 
 # Ops whose answer depends on the length of the axis they act along, so the
 # batch axis may not be that axis.  (``embedding`` is its own op, and a table
@@ -137,6 +142,10 @@ def graph_symbolic_safe(
                     return False
             else:
                 return False  # unknown axis → conservatively unsafe
+        if name in _FACTORY_OPS:
+            shape = _out_shape(op)
+            if shape and shape[0] == trace_batch:
+                return False
         inputs = list(getattr(op, "inputs", []))
         fed = carrying is None or any(i in carrying for i in inputs)
         if carrying is not None and fed:
