@@ -165,8 +165,8 @@ class MaxPool1d(Module):
             self.stride,
             self.padding,
             self.dilation,
-            self.return_indices,
             self.ceil_mode,
+            self.return_indices,
         )
 
     @override
@@ -304,8 +304,8 @@ class MaxPool2d(Module):
             self.stride,
             self.padding,
             self.dilation,
-            self.return_indices,
             self.ceil_mode,
+            self.return_indices,
         )
 
     @override
@@ -976,8 +976,8 @@ class MaxPool3d(Module):
             self.stride,
             self.padding,
             self.dilation,
-            self.return_indices,
             self.ceil_mode,
+            self.return_indices,
         )
 
     @override

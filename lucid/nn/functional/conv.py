@@ -193,7 +193,7 @@ def _check_output_padding(
 
 
 def conv1d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, ...] = 1,
@@ -211,7 +211,7 @@ def conv1d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, L)``, or ``(C_in, L)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_out, C_in/groups, kL)``.
@@ -246,7 +246,7 @@ def conv1d(
 
         y_{i,\,c_o,\,l} = b_{c_o} + \sum_{c_i, m} w_{c_o,\,c_i,\,m} \cdot x_{i,\,c_i,\,s l + d m}
 
-    Backward is registered automatically; gradients flow to ``x``,
+    Backward is registered automatically; gradients flow to ``input``,
     ``weight``, and ``bias``.  Set ``groups == C_in`` and ``C_out == C_in``
     for a depthwise convolution.  Using ``dilation > 1`` enlarges the
     receptive field without increasing parameter count — common in
@@ -262,11 +262,11 @@ def conv1d(
     >>> y.shape
     (2, 8, 50)
     """
-    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 1)
+    return _convnd(input, weight, bias, _ConvArgs(stride, padding, dilation, groups), 1)
 
 
 def conv2d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int] = 1,
@@ -285,7 +285,7 @@ def conv2d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, H, W)``, or ``(C_in, H, W)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_out, C_in/groups, kH, kW)``.
@@ -321,7 +321,7 @@ def conv2d(
 
         y_{i,\,c_o,\,h,\,w} = b_{c_o} + \sum_{c_i, m, n} w_{c_o,\,c_i,\,m,\,n} \cdot x_{i,\,c_i,\,s_H h + d_H m,\,s_W w + d_W n}
 
-    Backward is well-known; gradients w.r.t. ``x``, ``weight``, and
+    Backward is well-known; gradients w.r.t. ``input``, ``weight``, and
     ``bias`` flow through automatically.  ``groups > 1`` yields grouped
     convolution (channel-blocks computed independently); ``groups ==
     C_in`` plus ``C_out == C_in`` is depthwise convolution.  Dilation
@@ -337,11 +337,11 @@ def conv2d(
     >>> y.shape
     (1, 8, 32, 32)
     """
-    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 2)
+    return _convnd(input, weight, bias, _ConvArgs(stride, padding, dilation, groups), 2)
 
 
 def conv3d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int, int] = 1,
@@ -359,7 +359,7 @@ def conv3d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, D, H, W)``, or ``(C_in, D, H, W)``
         unbatched.
     weight : Tensor
@@ -410,11 +410,11 @@ def conv3d(
     >>> y.shape
     (1, 4, 16, 32, 32)
     """
-    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 3)
+    return _convnd(input, weight, bias, _ConvArgs(stride, padding, dilation, groups), 3)
 
 
 def conv_transpose1d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, ...] = 1,
@@ -434,7 +434,7 @@ def conv_transpose1d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, L_in)``, or ``(C_in, L_in)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_in, C_out/groups, kL)``.
@@ -487,11 +487,11 @@ def conv_transpose1d(
     (1, 2, 21)
     """
     args = _ConvArgs(stride, padding, dilation, groups)
-    return _conv_transposend(x, weight, bias, args, output_padding, 1)
+    return _conv_transposend(input, weight, bias, args, output_padding, 1)
 
 
 def conv_transpose2d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int] = 1,
@@ -511,7 +511,7 @@ def conv_transpose2d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, H_in, W_in)``, or unbatched
         ``(C_in, H_in, W_in)``.
     weight : Tensor
@@ -564,11 +564,11 @@ def conv_transpose2d(
     (1, 8, 14, 14)
     """
     args = _ConvArgs(stride, padding, dilation, groups)
-    return _conv_transposend(x, weight, bias, args, output_padding, 2)
+    return _conv_transposend(input, weight, bias, args, output_padding, 2)
 
 
 def conv_transpose3d(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int, int] = 1,
@@ -587,7 +587,7 @@ def conv_transpose3d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C_in, D_in, H_in, W_in)``, or unbatched
         without ``N``.
     weight : Tensor
@@ -638,4 +638,4 @@ def conv_transpose3d(
     (1, 4, 8, 16, 16)
     """
     args = _ConvArgs(stride, padding, dilation, groups)
-    return _conv_transposend(x, weight, bias, args, output_padding, 3)
+    return _conv_transposend(input, weight, bias, args, output_padding, 3)
