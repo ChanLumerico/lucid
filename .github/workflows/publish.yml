@@ -103,74 +103,47 @@ jobs:
         with:
           python-version: "3.14"
 
+      - uses: ./.github/actions/pinned-mlx
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          # MLX must be installed in the *host* env (not just the build
-          # isolation env) so the .so RPATH baked at build time matches
-          # the libmlx.dylib path the runtime resolver will see.
+          # No `mlx`: the engine links the MLX build pinned in
+          # [tool.lucid.mlx] (tools/fetch_mlx.py stages it) and the wheel
+          # ships it beside the engine.
           #
           # pybind11 carries the same pin as [build-system].requires in
           # pyproject.toml, and must: `build --no-isolation` checks the
           # host env against that list, so an unpinned install resolves
           # to whatever is newest and the build aborts with "Missing
           # dependencies: pybind11<3.1,>=3.0" the day a 3.1 appears.
-          # ci.yml pins it in all three of its install steps; this one
-          # did not, which is how the release path broke while CI stayed
-          # green.
           python -m pip install setuptools wheel cmake ninja \
-              "pybind11>=3.0,<3.1" "mlx>=0.31" build
+              "pybind11>=3.0,<3.1" build
 
       - name: Build wheel + sdist
         env:
-          # Match the default in setup.py — keep them in sync.  26.0 is the
-          # floor: the one wheel installs on macOS 26 and every later release.
-          MACOSX_DEPLOYMENT_TARGET: "26.0"
-          # python.org's Python 3.14 is a universal2 build, so without
-          # this override sysconfig.get_platform() returns
-          # `macosx-10.15-universal2` and the wheel ships with a
-          # `universal2` plat tag — incorrectly advertising x86_64
-          # compatibility for an arm64-only engine. Forcing the host
-          # platform fixes the tag without affecting compilation.
+          # MACOSX_DEPLOYMENT_TARGET comes from the pinned-mlx step: the
+          # pinned MLX build's minos, the floor lucid._C enforces at import.
+          #
+          # The platform tag is separate.  python.org's Python 3.14 is a
+          # universal2 build, so without this override the wheel ships a
+          # `universal2` tag, advertising x86_64 compatibility for an
+          # arm64-only engine.  It says 26.0, not the 26.2 floor, because
+          # pip spells every macOS 11+ release X_0: no tag can say 26.2.
           _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
           ARCHFLAGS: "-arch arm64"
         run: |
-          # `python -m build --no-isolation` builds both wheel and sdist
-          # using the host env's mlx (preserves RPATH), unlike legacy
-          # `python setup.py sdist bdist_wheel` which uses build isolation
-          # and breaks the dylib resolution chain.
+          # The sdist first, then the wheel built from it: what a source
+          # install does, including staging the pinned MLX from the sdist's
+          # tools/fetch_mlx.py.  --no-isolation reuses the toolchain above.
           python -m build --no-isolation
           ls -lh dist/
 
-      - name: Strip host MLX (catch RPATH absolute-path regressions)
-        # The 3.0.0 release shipped a wheel with an absolute LC_RPATH
-        # baked at build time — the runner-side smoke passed only because
-        # libmlx.dylib coincidentally lived at the baked path on the
-        # runner. The clean-machine simulation is: remove the .dylib
-        # from every site-packages root, then run smoke. The wheel must
-        # resolve libmlx purely via its own @loader_path RPATH inside
-        # the temp venv.
-        run: |
-          python -m pip uninstall -y mlx mlx-metal || true
-          # dyld follows dylib files, not Python module imports.
-          # Scan for libmlx.dylib presence directly — namespace-package
-          # shells without code still import OK, so import-based checks
-          # produce false negatives.
-          python -c "
-          import site, pathlib
-          roots = list(site.getsitepackages()) + [site.getusersitepackages()]
-          roots.append('/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages')
-          dylibs = []
-          for r in roots:
-              p = pathlib.Path(r)
-              if p.exists():
-                  dylibs.extend(str(x) for x in p.rglob('libmlx.dylib'))
-          if dylibs:
-              raise SystemExit(f'libmlx.dylib still on host:\n  ' + '\n  '.join(dylibs))
-          print('libmlx.dylib stripped from all host site-packages')
-          "
-
-      - name: Verify wheel installs + imports (truly clean env)
+      # Contents (the bundled MLX, no stray libmlx), tag, size against
+      # PyPI's limit, then a fresh venv with no `mlx`: import, a Metal
+      # matmul on the pinned MLX, the engine's MLX loaded from inside the
+      # wheel, and the installed engine's link (tools/check_engine_link.py).
+      - name: Verify the wheel in a clean venv
         run: ./scripts/ci_publish.sh
 
       - uses: actions/upload-artifact@v4
@@ -180,18 +153,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # ── The wheel on the oldest macOS it claims ─────────────────────────
-  # The wheel targets macOS 26.0, the floor since 3.15.2 (3.15.1 was the
-  # last release for macOS 15).  Installing it into a fresh environment on
-  # macos-26 — where pip resolves MLX's macOS 26 build — is what makes the
-  # macosx_26_0 tag true: a missing symbol or a difference in that MLX
-  # build stops the release here rather than on a user's machine.
+  # ── The wheel on a fresh runner ─────────────────────────────────────
+  # The build job smokes the wheel on the machine that built it, where the
+  # staged MLX cache exists.  A runner that never built anything is the
+  # user's view: only what the wheel carries.  Its macOS floor is 26.2 (the
+  # pinned MLX build's minos), enforced at import since the tag cannot say it.
   verify-macos-26:
-    name: Verify wheel on macOS 26
+    name: Verify wheel on a fresh macOS 26 runner
     needs: build
     runs-on: macos-26
 
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -203,28 +177,8 @@ jobs:
 
       - name: Install the wheel and smoke it
         run: |
-          set -euo pipefail
           sw_vers -productVersion
-          WHEEL=$(ls dist/lucid*.whl | sort -V | tail -1)
-          TMP=$(mktemp -d)
-          python -m venv "$TMP/venv"
-          "$TMP/venv/bin/pip" install "$WHEEL" -q
-          ( cd "$TMP" && "$TMP/venv/bin/python" - <<'PY'
-          import importlib.metadata as md
-          import platform
-
-          import lucid
-
-          x = lucid.arange(0, 24).reshape(2, 3, 4).permute(2, 0, 1)
-          assert x.shape == (4, 2, 3)
-          y = lucid.randn(8, 8) @ lucid.randn(8, 8)
-          assert y.shape == (8, 8)
-          if lucid.metal.is_available():
-              z = lucid.ones(4, device="metal") * 2.0
-              assert float(z.sum().item()) == 8.0
-          print(f"✅ macOS {platform.mac_ver()[0]}, mlx-metal {md.version('mlx-metal')}: {lucid.__file__}")
-          PY
-          )
+          ./scripts/ci_publish.sh
 
   # ── Publish to PyPI (Trusted Publishing / OIDC) ─────────────────────
   publish:

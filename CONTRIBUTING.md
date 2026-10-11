@@ -74,9 +74,9 @@ when changing engine code.
 
 ### Requirements
 
-- macOS 26 Tahoe (arm64) or later, M1 or later
+- macOS 26.2 Tahoe (arm64) or later, M1 or later — the minos of the MLX build
+  the engine links (`[tool.lucid.mlx]`), which the build fetches itself
 - Python 3.14 only (PEP 649 lazy annotations — H1/H7 require it)
-- MLX ≥ 0.31 (`mlx-metal`'s macOS 26 build; the engine targets 26.0)
 - CMake ≥ 3.24
 - Ninja ≥ 1.11
 - Xcode Command Line Tools
@@ -87,7 +87,7 @@ when changing engine code.
 git clone https://github.com/ChanLumerico/lucid.git
 cd lucid
 uv venv --python 3.14
-uv pip install --python .venv/bin/python setuptools wheel cmake ninja "pybind11>=3.0,<3.1" "mlx>=0.31"
+uv pip install --python .venv/bin/python setuptools wheel cmake ninja "pybind11>=3.0,<3.1"
 uv pip install --python .venv/bin/python -e ".[dev]" --no-build-isolation
 .venv/bin/python -m tools.doctor
 ```
@@ -115,9 +115,13 @@ uv pip install --python .venv/bin/python -e . --no-build-isolation
 
 The build backend is setuptools; `setup.py` drives CMake. Pin the interpreter
 explicitly: a uv environment need not contain pip, and invoking another pip
-can link the engine against another environment's MLX. Rebuild after source
-updates when the import guard reports an ABI mismatch. `tools.doctor --json`
-reports interpreter, dependencies, source ABI agreement and an isolated native
+installs into another environment. The engine links the MLX build pinned in
+`pyproject.toml` `[tool.lucid.mlx]`, which the build downloads, verifies and
+stages under `~/Library/Caches/lucid/mlx-metal` (`tools/fetch_mlx.py`); the
+`mlx` package is needed only for interop (the `[mlx]` extra). Rebuild after
+source updates when the import guard reports an ABI mismatch. `tools.doctor
+--json` reports interpreter, dependencies, source ABI agreement, the pinned
+MLX's cache entry and the engine's link to it, and an isolated native
 import/CPU smoke check, even when `import lucid` itself fails.
 
 ### Published checkpoint checks
