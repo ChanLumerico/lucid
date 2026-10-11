@@ -9,16 +9,12 @@
 #include "ExecutableCache.h"
 
 #include <algorithm>
+#include <bit>
+#include <cstdint>
 #include <cstdlib>
 #include <utility>
 
 namespace lucid::compile {
-
-bool CacheKey::operator==(const CacheKey& other) const noexcept {
-    return device == other.device && op_names == other.op_names && op_inputs == other.op_inputs &&
-           output_shapes == other.output_shapes && output_dtypes == other.output_dtypes &&
-           op_attrs == other.op_attrs && feeds == other.feeds && outputs == other.outputs;
-}
 
 namespace {
 // Boost-style hash combiner — small enough to inline here and used
@@ -40,14 +36,41 @@ inline std::size_t hash_attribute_value(const AttributeValue& v) noexcept {
         return h;
     }
     if (const auto* p = std::get_if<double>(&v))
-        return std::hash<double>{}(*p);
+        return std::hash<std::uint64_t>{}(std::bit_cast<std::uint64_t>(*p));
     if (const auto* p = std::get_if<bool>(&v))
         return std::hash<bool>{}(*p);
     if (const auto* p = std::get_if<std::string>(&v))
         return std::hash<std::string>{}(*p);
     return 0;
 }
+
+// A double attribute is a constant baked into the executable, so two keys
+// match only when its bits do.  ``==`` calls 0.0 and -0.0 equal — handing
+// ``t + (-0.0)`` the executable compiled for ``t + 0.0`` — and NaN unequal to
+// itself, so a NaN attribute never hit (LCD-446).
+inline bool same_attribute_value(const AttributeValue& a, const AttributeValue& b) noexcept {
+    const auto* da = std::get_if<double>(&a);
+    const auto* db = std::get_if<double>(&b);
+    if (da != nullptr && db != nullptr)
+        return std::bit_cast<std::uint64_t>(*da) == std::bit_cast<std::uint64_t>(*db);
+    return a == b;
+}
+
+inline bool same_op_attrs(const std::vector<std::pair<std::string, AttributeValue>>& a,
+                          const std::vector<std::pair<std::string, AttributeValue>>& b) noexcept {
+    return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const auto& x, const auto& y) {
+        return x.first == y.first && same_attribute_value(x.second, y.second);
+    });
+}
 }  // namespace
+
+bool CacheKey::operator==(const CacheKey& other) const noexcept {
+    return device == other.device && op_names == other.op_names && op_inputs == other.op_inputs &&
+           output_shapes == other.output_shapes && output_dtypes == other.output_dtypes &&
+           std::equal(op_attrs.begin(), op_attrs.end(), other.op_attrs.begin(),
+                      other.op_attrs.end(), same_op_attrs) &&
+           feeds == other.feeds && outputs == other.outputs;
+}
 
 std::size_t CacheKeyHash::operator()(const CacheKey& key) const noexcept {
     std::size_t h = std::hash<std::uint8_t>{}(static_cast<std::uint8_t>(key.device));
