@@ -1,15 +1,22 @@
-"""Engine sub-namespace stubs vs the loaded engine (LCD-402).
+"""Hand-written stub classes vs the runtime objects they describe.
 
 ``_nn_namespace``, ``_linalg_namespace`` and the rest of ``lucid/_C/engine.pyi``'s
 sub-namespace classes are typed out in gen_pyi's template, so regenerating
 cannot correct them and the freshness diff cannot see them drift:
 ``_linalg_namespace`` had declared a ``foo`` the engine never had and omitted
-the real ``matrix_power``.  ``tools/check_stubs.py`` runs this on every generated
-stub.  Stdlib only, so the check type-checks on its own.
+the real ``matrix_power`` (LCD-402, :func:`namespace_drift`).  ``tensor.pyi``'s
+``Tensor`` had the same blind spot: gen_pyi skipped thirteen registry methods
+as "already in the header" when nothing there defined them, and the header
+omitted another thirteen methods (LCD-357, :func:`class_drift`).
+``tools/check_stubs.py`` runs both on every generated stub.  Stdlib only, so
+the check type-checks on its own.
 """
 
+import annotationlib
 import ast
+import inspect
 import re
+from collections.abc import Callable
 
 
 def _split_top(params: str) -> list[str]:
@@ -109,4 +116,89 @@ def namespace_drift(stub: str, engine: object) -> list[str]:
             (f"{path}.{attr}", sub, runtime)
             for attr, sub in _namespace_attrs(cls.body, set(classes)).items()
         ]
+    return problems
+
+
+def _signature_params(fn: object) -> list[str] | None:
+    """``fn``'s parameters after ``self``, spelled as :func:`_stub_params` spells them.
+
+    ``Format.STRING`` leaves annotations unevaluated: inside ``Tensor`` an
+    annotation's ``int`` resolves to the ``Tensor.int`` method, so
+    evaluating ``stride``'s ``int | None`` raises.
+    """
+    if not callable(fn):
+        return None
+    try:
+        signature = inspect.signature(fn, annotation_format=annotationlib.Format.STRING)
+    except TypeError, ValueError:
+        return None
+    names = []
+    for p in signature.parameters.values():
+        prefix = {p.VAR_POSITIONAL: "*", p.VAR_KEYWORD: "**"}.get(p.kind, "")
+        names.append(prefix + p.name)
+    return names[1:]
+
+
+def _stub_methods(cls: ast.ClassDef) -> dict[str, list[ast.FunctionDef]]:
+    """Each method's definitions, several for an overload; properties left out."""
+    methods: dict[str, list[ast.FunctionDef]] = {}
+    for node in cls.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        decorators = [ast.unparse(d) for d in node.decorator_list]
+        if any(d == "property" or d.endswith((".setter", ".deleter")) for d in decorators):
+            continue
+        methods.setdefault(node.name, []).append(node)
+    return methods
+
+
+def _method_drift(
+    qualname: str, defs: list[ast.FunctionDef], want: list[str]
+) -> list[str]:
+    """A lone definition names exactly ``want``; each overload, a subset of it."""
+    if len(defs) == 1:
+        got = _stub_params(defs[0])[1:]
+        if got == want:
+            return []
+        return [f"{qualname}: stub ({', '.join(got)}), runtime ({', '.join(want)})"]
+    bare = {p.lstrip("*") for p in want}
+    problems = []
+    for overload in defs:
+        unknown = [p for p in _stub_params(overload)[1:] if p.lstrip("*") not in bare]
+        if unknown:
+            problems.append(
+                f"{qualname}: overload names ({', '.join(unknown)}), "
+                f"runtime ({', '.join(want)})"
+            )
+    return problems
+
+
+def class_drift(
+    stub: str, runtime: type, forwarded: Callable[[str], list[str] | None]
+) -> list[str]:
+    """Every disagreement between the stub's class ``runtime.__name__`` and *runtime*.
+
+    Each public name on the class needs a stub, and each stubbed method
+    names the parameters it takes.  A method that takes ``*args, **kwargs``
+    and passes them on is held to what ``forwarded(name)`` says it binds;
+    ``None`` from either skips the comparison, not the name.
+    """
+    name = runtime.__name__
+    cls = next(
+        n
+        for n in ast.parse(stub).body
+        if isinstance(n, ast.ClassDef) and n.name == name
+    )
+    have = {n for n in dir(runtime) if not n.startswith("_")}
+    stubbed = {n for n in _stub_members(cls) if not n.startswith("_")}
+    problems = [f"{name}.{n}: in the stub, not at runtime" for n in sorted(stubbed - have)]
+    problems += [f"{name}.{n}: at runtime, not in the stub" for n in sorted(have - stubbed)]
+    for method, defs in sorted(_stub_methods(cls).items()):
+        if method.startswith("_") or method not in have:
+            continue
+        want = _signature_params(getattr(runtime, method))
+        if want is not None and any(p.startswith("**") for p in want):
+            want = forwarded(method)
+        if want is not None:
+            problems += _method_drift(f"{name}.{method}", defs, want)
     return problems

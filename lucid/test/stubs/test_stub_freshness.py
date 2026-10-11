@@ -83,3 +83,58 @@ def test_namespace_check_reports_every_kind_of_drift() -> None:
         "demo.extra: in the engine, not in the stub",
         "demo.renamed: stub (x), engine (input, flag)",
     ]
+
+
+_CLASS_STUB = """
+class Demo:
+    def kept(self, a: int, b: int = ...) -> int: ...
+    def renamed(self, x: int) -> int: ...
+    def forwarded(self, value: int) -> int: ...
+    def gone(self) -> None: ...
+    @overload
+    def size(self, dim: int) -> int: ...
+    @overload
+    def size(self, axis: None = ...) -> tuple[int, ...]: ...
+    @property
+    def width(self) -> int: ...
+"""
+
+
+class Demo:
+    def kept(self, a: int, b: int = 1) -> int:
+        return a + b
+
+    def renamed(self, input: int) -> int:
+        return input
+
+    def forwarded(self, *args: object, **kwargs: object) -> int:
+        return 0
+
+    def size(self, dim: int | None = None) -> int:
+        return 0
+
+    @property
+    def width(self) -> int:
+        return 0
+
+    def missing(self) -> None:
+        return None
+
+
+def test_class_check_reports_every_kind_of_drift() -> None:
+    """LCD-357: a stub class is held to its runtime class — a stub-only
+    name, a runtime-only name, a renamed parameter, a forwarding method
+    whose callee binds other names, and an overload naming a parameter the
+    runtime lacks each fail; matching members and properties pass."""
+    from tools.stub_namespaces import class_drift
+
+    problems = class_drift(
+        _CLASS_STUB, Demo, lambda name: ["mask", "value"] if name == "forwarded" else None
+    )
+    assert problems == [
+        "Demo.gone: in the stub, not at runtime",
+        "Demo.missing: at runtime, not in the stub",
+        "Demo.forwarded: stub (value), runtime (mask, value)",
+        "Demo.renamed: stub (x), runtime (input)",
+        "Demo.size: overload names (axis), runtime (dim)",
+    ]

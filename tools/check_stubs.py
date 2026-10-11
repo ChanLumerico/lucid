@@ -39,7 +39,23 @@ def main() -> int:
         return 1
 
     from lucid._C import engine as _C_engine
-    from tools.stub_namespaces import namespace_drift
+    from lucid._tensor.tensor import Tensor
+    from tools.gen_pyi import tensor_method_params
+    from tools.stub_namespaces import class_drift, namespace_drift
+
+    tensor_drift = class_drift(
+        generated["lucid/_tensor/tensor.pyi"], Tensor, tensor_method_params
+    )
+    for line in tensor_drift:
+        print(f"[check_stubs] TENSOR {line}")
+    if tensor_drift:
+        print(
+            f"\n[check_stubs] {len(tensor_drift)} Tensor stub(s) disagree with the"
+            " runtime class.\n  Fix _TENSOR_HEADER / python_only in tools/gen_pyi.py,"
+            " then regenerate.",
+            file=sys.stderr,
+        )
+        return 1
 
     drift = namespace_drift(generated["lucid/_C/engine.pyi"], _C_engine)
     for line in drift:

@@ -10,6 +10,8 @@ Output:
 """
 
 import ast
+import inspect
+import re
 import sys
 from pathlib import Path
 
@@ -1023,13 +1025,14 @@ _TENSOR_HEADER = """\
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from typing import Iterator, Self, Sequence, overload, override
+from typing import Callable, Iterator, Self, Sequence, overload, override
 import builtins
 
 import numpy as np
 from numpy.typing import DTypeLike as NpDTypeLike
 
 from lucid._C import engine as _C_engine
+from lucid.autograd._hooks import RemovableHandle as _RemovableHandle
 from lucid._dtype import dtype as _dtype_cls
 from lucid._device import device as _device_cls
 from lucid._types import DeviceLike, DTypeLike, DimLike, ShapeLike, Scalar, TensorOrScalar, _IndexType  # noqa: F401
@@ -1199,8 +1202,37 @@ class Tensor:
     def addmm(
         self, mat1: Self, mat2: Self, beta: float = 1.0, alpha: float = 1.0
     ) -> Self: ...
-    def bmm(self, mat2: Self) -> Tensor: ...
+    def bmm(self, other: Self) -> Tensor: ...
     def zero_(self) -> Self: ...
+    def register_hook(
+        self, hook: Callable[[Tensor], Tensor | None]
+    ) -> _RemovableHandle: ...
+    @property
+    def itemsize(self) -> int: ...
+    @overload
+    def stride(self, dim: int) -> int: ...
+    @overload
+    def stride(self, dim: None = ...) -> tuple[int, ...]: ...
+    def data_ptr(self) -> int: ...
+    def storage_offset(self) -> int: ...
+    @property
+    def H(self) -> Tensor: ...
+    @overload
+    def type(self, dtype: None = ...) -> str: ...
+    @overload
+    def type(self, dtype: str) -> Tensor: ...
+    def get_device(self) -> int: ...
+    def pin_memory(self, device: object = None) -> Tensor: ...
+    def is_pinned(self, device: object = None) -> bool: ...
+    def reshape_as(self, other: Tensor) -> Tensor: ...
+    class _UntypedStorage:
+        def __init__(self, tensor: Tensor) -> None: ...
+        def data_ptr(self) -> int: ...
+        def size(self) -> int: ...
+        def nbytes(self) -> int: ...
+        def __len__(self) -> int: ...
+    def untyped_storage(self) -> _UntypedStorage: ...
+    def eval(self) -> Tensor: ...
 
     # ── injected dunders (_dunders.py) ──────────────────────────────────
     def __add__(self, other: TensorOrScalar) -> Tensor: ...
@@ -1269,6 +1301,50 @@ class Tensor:
 """
 
 
+#: Builtins a ``Tensor`` method of the same name shadows inside the class body.
+_SHADOWED_BUILTINS = re.compile(r"\b(int|float|bool)\b")
+
+
+def _method_param(param: inspect.Parameter, operand: bool) -> str:
+    if operand:
+        ptype = "Tensor | _float" if param.name == "other" else "Tensor"
+    else:
+        ptype = _SHADOWED_BUILTINS.sub(
+            r"_\1", _PARAM_TYPE_MAP.get(param.name, "object")
+        )
+    default = "" if param.default is param.empty else " = ..."
+    return f"{param.name}: {ptype}{default}"
+
+
+def _registry_method_params(entry) -> list[inspect.Parameter] | None:
+    """The parameters after ``self`` a registry method binds, from its callee.
+
+    The method passes its arguments on to the op's callee, so the callee's
+    signature — leading operands renamed ``input`` / ``other`` as the
+    method binds them — is what it accepts.  ``None`` when that signature
+    is a catch-all an adapter reads itself.
+    """
+    from lucid._ops import _signature_for_entry
+
+    params = list(_signature_for_entry(entry).parameters.values())[1:]
+    if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params):
+        return None
+    return params
+
+
+def tensor_method_params(name: str) -> list[str] | None:
+    """What registry method ``Tensor.<name>`` binds after ``self``, for the
+    stub check; ``None`` when it is not a registry method or its callee
+    reads a catch-all."""
+    from lucid._ops._registry import _REGISTRY
+
+    entry = next((e for e in _REGISTRY if e.method_name == name), None)
+    if entry is None or entry.n_tensor_args == -1:
+        return None
+    params = _registry_method_params(entry)
+    return None if params is None else [p.name for p in params]
+
+
 def _tensor_method_sig(entry) -> str:
     """Generate a method signature line for a registry entry."""
     name = entry.method_name
@@ -1276,6 +1352,17 @@ def _tensor_method_sig(entry) -> str:
 
     if n == -1:
         return f"    def {name}(self, tensors: list[Tensor]) -> Tensor: ..."
+
+    params = _registry_method_params(entry)
+    if params is not None:
+        parts, star = [], False
+        for i, param in enumerate(params):
+            if param.kind is param.KEYWORD_ONLY and not star:
+                parts.append("*")
+                star = True
+            parts.append(_method_param(param, operand=i < n - 1))
+        args_str = "".join(f", {part}" for part in parts)
+        return f"    def {name}(self{args_str}) -> Tensor: ..."
 
     extra = entry.extra_kwargs
 
@@ -1301,129 +1388,10 @@ def _tensor_method_sig(entry) -> str:
 def gen_tensor_pyi() -> tuple[str, int]:
     from lucid._ops._registry import _REGISTRY
 
-    # Methods that have explicit, hand-crafted signatures in ``python_only``
-    # below — skip the simplified registry stubs to avoid duplicate definitions.
-    _PYTHON_ONLY_METHODS: frozenset[str] = frozenset(
-        {
-            # Reduction / statistical ops (hand-crafted with DimLike)
-            "sum",
-            "mean",
-            "prod",
-            "max",
-            "min",
-            "var",
-            "std",
-            "argmax",
-            "argmin",
-            "cumsum",
-            "cumprod",
-            "cummax",
-            "cummin",
-            # Shape / layout ops
-            "squeeze",
-            "unsqueeze",
-            "gather",
-            "sort",
-            "argsort",
-            "topk",
-            "softmax",
-            "log_softmax",
-            "clip",
-            "clamp",
-            "repeat",
-            "repeat_interleave",
-            "split",
-            "any",
-            "all",
-            "t",
-            "view",
-            "narrow",
-            "scatter",
-            "kthvalue",
-            "movedim",
-            "unflatten",
-            "histc",
-            "take",
-            # Comparison / bitwise (hand-crafted to use _float)
-            "eq",
-            "ne",
-            "lt",
-            "le",
-            "gt",
-            "ge",
-            "bitwise_and",
-            "bitwise_or",
-            "bitwise_xor",
-            "bitwise_left_shift",
-            "bitwise_right_shift",
-            "isclose",
-            "scatter_add",
-            # Methods already in _TENSOR_HEADER — must not be re-emitted by
-            # the registry loop or they would produce [no-redef] duplicates.
-            "bmm",
-            "broadcast_to",
-            "chunk",
-            "contiguous",
-            "detach",
-            "diagonal",
-            "as_strided",
-            "erf",
-            "erfinv",
-            "expand",
-            "expand_dims",
-            "flatten",
-            "flip",
-            "fliplr",
-            "flipud",
-            "index_select",
-            "isfinite",
-            "isinf",
-            "isnan",
-            "masked_fill",
-            "masked_select",
-            "nan_to_num",
-            "nonzero",
-            "pad",
-            "permute",
-            "ravel",
-            "reshape",
-            "roll",
-            "rsqrt",
-            "squeeze_all",
-            "swapaxes",
-            "tile",
-            "trace",
-            "transpose",
-            "tril",
-            "triu",
-            "unbind",
-            "chunk",
-            # Additional TENSOR_HEADER methods that registry also has
-            "clone",
-            "detach",
-            "lerp",
-            "where",
-            "diff",
-            "bmm",
-            "zero_",
-            "fill_",
-            "copy_",
-        }
-    )
-
-    lines = []
-    count = 0
-    for entry in _REGISTRY:
-        mn = entry.method_name
-        if mn is None or mn.startswith("__"):
-            continue
-        if mn in _PYTHON_ONLY_METHODS:
-            continue
-        lines.append(_tensor_method_sig(entry))
-        count += 1
-
-    # Also add the Python-only methods that override registry (from _methods.py).
-    # Uses _int / _bool / DimLike aliases — defined in the stub header above.
+    # Registry methods whose callee signature is an adapter's catch-all, or
+    # reads better with DimLike / overload-free spellings, written out by
+    # hand.  Uses the _int / _bool / DimLike aliases of the header above;
+    # ``tools/stub_namespaces.tensor_drift`` holds every name to the runtime.
     python_only = [
         "    def sum(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def mean(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
@@ -1484,9 +1452,6 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def bitwise_right_shift(self, other: Tensor | _float) -> Tensor: ...",
         "    def isclose(self, other: Tensor | _float, rtol: _float = 1e-5, atol: _float = 1e-8, equal_nan: _bool = False) -> Tensor: ...",
         "    def scatter_add(self, dim: _int, index: Tensor, src: Tensor) -> Tensor: ...",
-        # Methods in _TENSOR_HEADER that also need explicit registry-quality sigs
-        # (added to _PYTHON_ONLY_METHODS to stop the registry loop re-emitting them,
-        # so we provide them here with proper _int/_float aliases).
         "    def reshape(self, *shape: _int | Sequence[_int]) -> Tensor: ...",
         "    def permute(self, *dims: _int | Sequence[_int]) -> Tensor: ...",
         "    def expand(self, *sizes: _int | Sequence[_int]) -> Tensor: ...",
@@ -1498,6 +1463,21 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def unbind(self, dim: _int = 0) -> list[Tensor]: ...",
         "    def rsqrt(self) -> Tensor: ...",
     ]
+
+    # A registry method with a stub already written out — in the header or
+    # ``python_only`` — is not emitted again: derived from what is written,
+    # so a name cannot be skipped as "hand-written" when nothing is.
+    written = set(
+        re.findall(r"^    def (\w+)\(", _TENSOR_HEADER + "\n".join(python_only), re.M)
+    )
+    lines = []
+    count = 0
+    for entry in _REGISTRY:
+        mn = entry.method_name
+        if mn is None or mn.startswith("__") or mn in written:
+            continue
+        lines.append(_tensor_method_sig(entry))
+        count += 1
 
     content = _TENSOR_HEADER + "\n".join(lines) + "\n\n"
     content += "    # ── Python-level overrides (_methods.py) ───────────────────────\n"
