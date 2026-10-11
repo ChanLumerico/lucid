@@ -14,6 +14,7 @@ reference's, within that dtype's rounding.  Sizes go through the engine
 kernels (a size is the mapping they compute).
 """
 
+import math
 import random
 from typing import Any
 
@@ -176,7 +177,8 @@ class TestLinearValues:
 # as the kernels (double for float64), or a float64 resize reads float32
 # positions — and ``x1.1`` on 4521 samples read sample 4511 for 4510.  No
 # 2-D axis here keeps its size or doubles it: the reference pins those
-# only on some of its paths.
+# below an output-size line, which ``TestNearestCompatibilityShortcuts``
+# sweeps.
 _SCALED = [
     ("nearest", (1, 1, 4521), {"scale_factor": 1.1}),
     ("nearest", (1, 1, 2155), {"scale_factor": 2.5}),
@@ -229,3 +231,72 @@ class TestScaleFactorPositions:
             ref.tensor(data, dtype=getattr(ref, dtype)), mode=mode, **kw
         )
         np.testing.assert_allclose(_host(got), _host(want), atol=_ATOL[dtype], rtol=0)
+
+
+# Plain nearest on a 2-D input copies an axis that keeps its length and
+# halves the index of one that doubles it, whatever the scale factor said —
+# but the reference does so only on the kernel it takes for a small output
+# (height plus width at most 128); a larger output steps by 1 / scale_factor
+# (LCD-429).  Each row sweeps the output height across that line: below it
+# the kept or doubled axis is pinned, above it resampled.
+_SHORTCUT_ROWS = [
+    # (width, width scale, height scale): a kept or doubled width.
+    pytest.param(32, 1.031, 1.694, id="keep-32"),
+    pytest.param(8, 1.031, 1.694, id="keep-8"),
+    pytest.param(10, 2.01, 1.694, id="double-10"),
+    pytest.param(32, 1.031, 2.01, id="keep-32-tall"),
+]
+_SHORTCUT_LIMIT = 128
+
+
+def _heights_across(width_out: int, height_scale: float) -> list[int]:
+    """Input heights whose output height lands on either side of the line."""
+    line = _SHORTCUT_LIMIT - width_out
+    heights = [
+        h for h in range(2, 200) if abs(math.floor(h * height_scale) - line) <= 6
+    ]
+    assert any(math.floor(h * height_scale) <= line for h in heights)
+    assert any(math.floor(h * height_scale) > line for h in heights)
+    return heights
+
+
+@pytest.mark.parity
+class TestNearestCompatibilityShortcuts:
+    @pytest.mark.parametrize(("width", "width_scale", "height_scale"), _SHORTCUT_ROWS)
+    def test_values_follow_the_reference_across_the_line(
+        self,
+        ref: Any,
+        device: str,
+        width: int,
+        width_scale: float,
+        height_scale: float,
+    ) -> None:
+        width_out = math.floor(width * width_scale)
+        kw = {"scale_factor": (height_scale, width_scale), "mode": "nearest"}
+        for height in _heights_across(width_out, height_scale):
+            data = np.arange(height * width, dtype=np.float32).reshape(
+                1, 1, height, width
+            )
+            got = F.interpolate(lucid.tensor(data, device=device), **kw)
+            want = ref.nn.functional.interpolate(ref.tensor(data), **kw)
+            np.testing.assert_array_equal(_host(got), _host(want), err_msg=f"{height}")
+
+    @pytest.mark.parametrize(("width", "width_scale", "height_scale"), _SHORTCUT_ROWS)
+    def test_gradient_is_the_adjoint_of_the_forward(
+        self, device: str, width: int, width_scale: float, height_scale: float
+    ) -> None:
+        # The reference's backward pins at every size, so above the line it
+        # is not the adjoint of its own forward and is no oracle: each input
+        # sample gathers the gradient of every output that copied it.
+        width_out = math.floor(width * width_scale)
+        kw = {"scale_factor": (height_scale, width_scale), "mode": "nearest"}
+        for height in _heights_across(width_out, height_scale):
+            x = lucid.zeros(1, 1, height, width, device=device, requires_grad=True)
+            F.interpolate(x, **kw).sum().backward()
+            index = lucid.arange(float(height * width)).reshape(1, 1, height, width)
+            copied = _host(F.interpolate(index.to(device), **kw))
+            counts = np.bincount(
+                copied.astype(np.int64).ravel(), minlength=height * width
+            )
+            assert x.grad is not None
+            assert _host(x.grad).ravel().tolist() == counts.tolist(), f"{height}"

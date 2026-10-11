@@ -119,15 +119,34 @@ def _source_index(
     return source if cubic or source >= 0 else 0.0
 
 
+# The reference's plain-nearest 2-D resize has two kernels.  The one it
+# takes for a small output — height plus width at most this — copies an axis
+# that keeps its length and halves the index of one that doubles it,
+# whatever the scale factor said (kept for compatibility).  The one it takes
+# for a larger output steps by ``1 / scale_factor`` like every other rank.
+# It also takes the first for a channels-last input of more than three
+# channels, a layout Lucid tensors never have.  1-D and 3-D never pin.
+_PINNING_OUTPUT_LIMIT = 128
+
+
+def _pins_shortcuts(mode: str, sizes: Sequence[int]) -> bool:
+    """Whether plain nearest copies or halves an axis whatever its scale."""
+    return mode == "nearest" and len(sizes) == 2 and sum(sizes) <= _PINNING_OUTPUT_LIMIT
+
+
 def _nearest_indices(
     in_size: int,
     out_size: int,
     scale: float | None,
     exact: bool,
-    rank: int,
+    pins: bool,
     wide: bool,
 ) -> list[int]:
-    """Input index each output sample copies, for ``nearest[-exact]``."""
+    """Input index each output sample copies, for ``nearest[-exact]``.
+
+    ``pins``: the call is one :func:`_pins_shortcuts` says takes the
+    reference's compatibility shortcuts.
+    """
     last = in_size - 1
     ratio = _coordinate_scale(in_size, out_size, False, scale, wide)
     if exact:
@@ -135,12 +154,9 @@ def _nearest_indices(
             min(_floor_index(_opmath((d + 0.5) * ratio, wide)), last)
             for d in range(out_size)
         ]
-    # Plain nearest on a 2-D input pins these two cases whatever the scale
-    # factor said; the reference keeps them for compatibility (and only in
-    # its 2-D kernel), so they are the contract there and nowhere else.
-    if rank == 2 and out_size == in_size:
+    if pins and out_size == in_size:
         return list(range(out_size))
-    if rank == 2 and out_size == 2 * in_size:
+    if pins and out_size == 2 * in_size:
         return [d >> 1 for d in range(out_size)]
     return [min(_floor_index(_opmath(d * ratio, wide)), last) for d in range(out_size)]
 
@@ -455,13 +471,13 @@ def _engine_maps_like(
     either device, by the same rule as these helpers for a size — so the
     question is only whether the scale factor maps like the size, in the
     tensor's accumulation type (``wide`` for float64)."""
-    rank = len(spatial)
+    pins = _pins_shortcuts(mode, sizes)
     for n, m, s in zip(spatial, sizes, scales, strict=True):
         if s is None:
             continue
         if mode == "nearest":
-            indices = _nearest_indices(n, m, s, False, rank, wide)
-            if _nearest_indices(n, m, None, False, rank, wide) != indices:
+            indices = _nearest_indices(n, m, s, False, pins, wide)
+            if _nearest_indices(n, m, None, False, pins, wide) != indices:
                 return False
         elif not (align_corners or m == n):
             step = _coordinate_scale(n, m, False, s, wide)
@@ -477,9 +493,9 @@ class _Filter:
     mode: str
     align_corners: bool
     antialias: bool
-    # Only plain nearest depends on the rank (0 for the other modes, so
-    # every rank shares their plans).
-    rank: int
+    # Plain nearest takes the reference's copy / halve shortcuts
+    # (:func:`_pins_shortcuts`); ``False`` for every other mode.
+    pins: bool
     # float64: positions in double.
     wide: bool
 
@@ -502,7 +518,7 @@ def _axis_plan(
         )
     elif mode in ("nearest", "nearest-exact"):
         exact = mode == "nearest-exact"
-        indices = _nearest_indices(in_size, out_size, scale, exact, rule.rank, wide)
+        indices = _nearest_indices(in_size, out_size, scale, exact, rule.pins, wide)
         taps = [(indices, None)]
     elif mode == "bicubic":
         taps = _cubic_taps(in_size, out_size, corners, scale, wide)
@@ -582,8 +598,7 @@ def resample(
     out = x
     # Last axis first: it multiplies without a copy, and a shrinking image
     # makes every later product smaller.
-    rank = len(spatial) if mode == "nearest" else 0
-    rule = _Filter(mode, corners, antialias, rank, wide)
+    rule = _Filter(mode, corners, antialias, _pins_shortcuts(mode, sizes), wide)
     for axis in reversed(range(2, x.ndim)):
         n, m, s = spatial[axis - 2], sizes[axis - 2], scales[axis - 2]
         plan = _axis_plan(rule, n, m, s)
