@@ -282,8 +282,16 @@ TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool 
         });
     const int d = wrap_axis_of(a, dim, "kthvalue");
     const std::int64_t size = a->shape()[static_cast<std::size_t>(d)];
+    // An empty axis has no k-th value whatever k is: an index error, as for
+    // argmax and the reference, not a bad k.
+    if (size == 0)
+        ErrorBuilder("kthvalue")
+            .index_error("Expected reduction dim " + std::to_string(d) + " to have non-zero size.");
     if (k < 1 || k > size)
-        ErrorBuilder("kthvalue").invalid_argument("k out of range");
+        ErrorBuilder("kthvalue")
+            .invalid_argument("selected number k out of range: k must be in "
+                              "[1, " +
+                              std::to_string(size) + "], got " + std::to_string(k));
 
     auto sorted = sort_op(a, d);
 

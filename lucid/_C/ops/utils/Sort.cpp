@@ -362,8 +362,12 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     }
     OpScopeFull scope{"topk", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
-    if (k <= 0 || k > a->shape()[static_cast<std::size_t>(ax)])
-        ErrorBuilder("topk").fail("k must be in (0, axis_size]");
+    // k = 0 is an empty selection, not an error: the values still carry a
+    // grad_fn, whose backward is a zero gradient.
+    const std::int64_t size = a->shape()[static_cast<std::size_t>(ax)];
+    if (k < 0 || k > size)
+        ErrorBuilder("topk").fail("selected index k out of range: k must be in [0, " +
+                                  std::to_string(size) + "], got " + std::to_string(k));
     // Carry axis + k into the trace for the compile-path TopKEmitter.
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("k", k);
