@@ -1605,8 +1605,8 @@ def _bessel_j0_small(x: Tensor) -> Tensor:
 
 
 def _bessel_j0_large(x: Tensor) -> Tensor:
-    # Abramowitz & Stegun 9.4.3 — asymptotic on |x| > 3.
-    ax = lucid.abs(x)
+    # A&S 9.4.3 on |x| > 3; clamped, as ``_split`` runs it at 0 too (3/0: NaN grad).
+    ax = lucid.maximum(lucid.abs(x), lucid.full_like(x, 3.0))
     z = 3.0 / ax
     f0 = (
         0.79788456
@@ -1696,7 +1696,7 @@ def _bessel_j1_small(x: Tensor) -> Tensor:
 
 
 def _bessel_j1_large(x: Tensor) -> Tensor:
-    ax = lucid.abs(x)
+    ax = lucid.maximum(lucid.abs(x), lucid.full_like(x, 3.0))  # see _bessel_j0_large
     z = 3.0 / ax
     f1 = (
         0.79788456

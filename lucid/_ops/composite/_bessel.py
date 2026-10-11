@@ -139,13 +139,17 @@ def _i0(x: Tensor) -> Tensor:
 
 
 def _i1e(x: Tensor) -> Tensor:
-    """``exp(-|x|) I1(x)``; odd in ``x``."""
+    """``exp(-|x|) I1(x)``; odd in ``x``.
+
+    The small branch is odd through ``x`` itself, so its slope at 0 is the
+    true ``1/2``: written ``sign(x) · g(|x|)`` it would have a zero
+    derivative there, as ``sign`` and ``|x|`` both do.
+    """
     ax = lucid.abs(x)
-    s = _below(ax, 8.0)
-    small = _chbevl(s * 0.5 - 2.0, _I1E_A) * s
+    small = _chbevl(_below(ax, 8.0) * 0.5 - 2.0, _I1E_A) * lucid.clip(x, -8.0, 8.0)
     big = _above(ax, 8.0)
-    large = _chbevl(32.0 / big - 2.0, _I1E_B) / lucid.sqrt(big)
-    return lucid.sign(x) * lucid.where(ax <= 8.0, small, large)
+    large = lucid.sign(x) * _chbevl(32.0 / big - 2.0, _I1E_B) / lucid.sqrt(big)
+    return lucid.where(ax <= 8.0, small, large)
 
 
 def _i1(x: Tensor) -> Tensor:
@@ -181,10 +185,11 @@ def _j0_small(s: Tensor) -> Tensor:
     return (z - _J0_DR1) * (z - _J0_DR2) * _polevl(z, _J0_RP) / _p1evl(z, _J0_RQ)
 
 
-def _j1_small(s: Tensor) -> Tensor:
-    z = s * s
+def _j1_small(x: Tensor) -> Tensor:
+    """``J1`` on ``[-5, 5]``, odd through ``x`` itself (slope ``1/2`` at 0)."""
+    z = x * x
     ratio = _polevl(z, _J1_RP) / _p1evl(z, _J1_RQ)
-    return ratio * s * (z - _J1_Z1) * (z - _J1_Z2)
+    return ratio * x * (z - _J1_Z1) * (z - _J1_Z2)
 
 
 def _j0(x: Tensor) -> Tensor:
@@ -197,8 +202,8 @@ def _j0(x: Tensor) -> Tensor:
 def _j1(x: Tensor) -> Tensor:
     """``J1(x)``; odd in ``x``."""
     ax = lucid.abs(x)
-    large = _hankel(_above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False)
-    return lucid.sign(x) * lucid.where(ax <= 5.0, _j1_small(_below(ax, 5.0)), large)
+    large = lucid.sign(x) * _hankel(_above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False)
+    return lucid.where(ax <= 5.0, _j1_small(lucid.clip(x, -5.0, 5.0)), large)
 
 
 def _y0(x: Tensor) -> Tensor:

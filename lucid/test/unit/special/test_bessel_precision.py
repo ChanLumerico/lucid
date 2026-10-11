@@ -347,15 +347,44 @@ def test_float32_path_is_float32_grade(name: str, device: str) -> None:
 
 # name -> (derivative by identity, grid)
 _POS = [1e-3, 0.7, 1.9, 2.0, 2.1, 4.9, 5.0, 5.1, 7.9, 8.0, 8.1, 20.0]
-_ALL = _POS + [0.0, -3.0, -9.0]
+_ALL = _POS + [0.0, -1e-3, -0.7, -3.0, -5.1, -9.0]
+
+
+def _over_x(fn: UnaryFn) -> UnaryFn:
+    """``fn(x) / x`` for ``I1``, ``J1`` or ``i1e``, whose limit at 0 is 1/2."""
+
+    def out(v: lucid.Tensor) -> lucid.Tensor:
+        safe = lucid.where(v == 0.0, lucid.ones_like(v), v)
+        return lucid.where(v == 0.0, lucid.full_like(v, 0.5), fn(v) / safe)
+
+    return out
+
+
 _DERIVATIVES: dict[str, tuple[UnaryFn, list[float]]] = {
     "i0": (S.i1, _ALL),
     "i0e": (lambda v: S.i1e(v) - lucid.sign(v) * S.i0e(v), _ALL),
+    # I1' = I0 - I1/x: 1/2 at 0, which an odd form sign(x)·g(|x|) flattens to 0.
+    "i1": (lambda v: lucid.i0(v) - _over_x(S.i1)(v), _ALL),
+    "i1e": (
+        lambda v: S.i0e(v) - _over_x(S.i1e)(v) - lucid.sign(v) * S.i1e(v),
+        _ALL,
+    ),
     "j0": (lambda v: -S.bessel_j1(v), _ALL),
+    "j1": (lambda v: S.bessel_j0(v) - _over_x(S.bessel_j1)(v), _ALL),
     "y0": (lambda v: -S.bessel_y1(v), _POS),
+    "y1": (lambda v: S.bessel_y0(v) - S.bessel_y1(v) / v, _POS),
     "k0": (lambda v: -S.modified_bessel_k1(v), _POS),
+    "k1": (lambda v: -S.modified_bessel_k0(v) - S.modified_bessel_k1(v) / v, _POS),
     "k0e": (
         lambda v: S.scaled_modified_bessel_k0(v) - S.scaled_modified_bessel_k1(v),
+        _POS,
+    ),
+    "k1e": (
+        lambda v: (
+            S.scaled_modified_bessel_k1(v)
+            - S.scaled_modified_bessel_k0(v)
+            - S.scaled_modified_bessel_k1(v) / v
+        ),
         _POS,
     ),
 }
@@ -371,11 +400,25 @@ def test_float64_gradient_matches_the_identity(name: str) -> None:
     np.testing.assert_allclose(x.grad.numpy(), want, rtol=1e-12, atol=1e-14)
 
 
-@pytest.mark.parametrize("beta", [0.5, 5.0, 8.6, 14.0])
+@pytest.mark.parametrize("device", _devices())
+def test_float32_gradient_at_zero(device: str) -> None:
+    """``J0'(0) = I0'(0) = 0`` and ``J1'(0) = I1'(0) = i1e'(0) = 1/2``.  The
+    float32 ``J`` used to answer NaN there: its unused large-argument branch
+    divided by ``|x|``."""
+    slopes = {"j0": 0.0, "j1": 0.5, "i0": 0.0, "i1": 0.5, "i1e": 0.5}
+    for name, slope in slopes.items():
+        x = lucid.tensor([0.0, -0.0], device=device, requires_grad=True)
+        _FUNCS[name][0](x).sum().backward()
+        np.testing.assert_allclose(x.grad.to("cpu").numpy(), [slope, slope], atol=1e-6)
+
+
+@pytest.mark.parametrize("beta", [0.5, 3.0, 5.0, 8.6, 14.0])
 def test_kaiser_float64_peak_and_shape(beta: float) -> None:
     w = kaiser(9, beta, dtype=lucid.float64)
     assert w.dtype == lucid.float64
-    assert w.numpy()[4] == 1.0
+    # 1 to rounding, not exactly: the peak's numerator and the denominator are
+    # the same ``i0(beta)`` evaluated in different-length tensors.
+    assert abs(w.numpy()[4] - 1.0) <= 2.0**-52
     n = np.arange(9.0)
     want = [
         float(_mp_i0(beta * math.sqrt(1.0 - (2.0 * k / 8.0 - 1.0) ** 2)) / _mp_i0(beta)) for k in n
