@@ -541,6 +541,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `transformer_base_cls` / `transformer_base_token_cls` drop the unused decoder LayerNorm (2 state-dict keys).
     - YOLO v1 matches with its decoder's boxes, so its loss values change.
     - Detectors return int64 labels (LCD-203, LCD-204, LCD-211).
+  - `quantization.quantize_dynamic` also quantizes GRU, LSTMCell, GRUCell and RNNCell by default, as the reference does; a type named in `qconfig_spec` with no dynamic form stays float with a UserWarning (the reference is silent) (LCD-190).
+  - Distributions with event-shaped parameters (Dirichlet, Categorical, OneHotCategorical, RelaxedOneHotCategorical, Multinomial, MultivariateNormal, Wishart) refuse a parameter with too few axes with ValueError at construction, even with `validate_args=False` (LCD-414). `signal.windows.kaiser` float32 values can move by about 1 ulp; the peak is now 1.0 instead of 1.0000002 (LCD-110).
   - Engine `Validator::ndim` failures and the group_norm / dropoutnd / fold geometry errors raise ShapeMismatch / InvalidArgument (still LucidError subclasses); they used to raise a bare LucidError (LCD-396).
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)
