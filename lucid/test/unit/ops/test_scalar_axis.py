@@ -16,7 +16,7 @@ and the gradient where the op has one.  A spelling the reference refuses
 by signature (a tuple where it takes an int) is not compared.  A dim past
 the notional axis must be refused by the engine's rule, not by a wrapper
 that happens to index past a shape.  Cells a Python wrapper still gets
-wrong are pinned in ``_PYTHON_SIDE`` / ``_PENDING``.
+wrong are pinned in ``_PYTHON_SIDE``.
 """
 
 import numpy as np
@@ -108,11 +108,6 @@ _PYTHON_SIDE = {
     "topk_smallest": "LCD-406: _adapters 0-d branch",
     "swapaxes": "LCD-406: _shared._swap_dims 0-d branch",
 }
-# Fixed on the API batch-F branch, in review; strict once it lands.
-_PENDING = {
-    "var": "fixed by batch-F _reduction_axes; unpin after it lands",
-    "std": "fixed by batch-F _reduction_axes; unpin after it lands",
-}
 
 _DIMS = [0, -1, (0,), None]
 
@@ -126,8 +121,6 @@ def _pin(request, op, dim):
         )
     elif dim is not None and op in _PYTHON_SIDE:
         request.applymarker(pytest.mark.xfail(strict=True, reason=_PYTHON_SIDE[op]))
-    elif dim is not None and op in _PENDING:
-        request.applymarker(pytest.mark.xfail(strict=False, reason=_PENDING[op]))
 
 
 def _signature_refuses(ref, call, d, k):
