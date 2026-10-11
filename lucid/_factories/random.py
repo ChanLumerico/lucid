@@ -6,20 +6,22 @@ import os
 from typing import TYPE_CHECKING
 from lucid._ctx import check_random_allowed as _check_random
 
-import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap
 from lucid._factories._build import _leaf
+from lucid._factories._generator import (
+    Generator as Generator,
+    _key,
+    _seed_value,
+    _set_counter,
+    _state_tensor,
+    _unpack_state,
+)
 from lucid._dtype import int64
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-
-# Re-export the engine class so users can write ``lucid.Generator(seed)``
-# without reaching into ``lucid._C``.
-Generator = _C_engine.Generator
 
 
 _default_generator: _C_engine.Generator | None = None
@@ -89,7 +91,8 @@ def manual_seed(seed: int) -> None:
     0.0
     """
     global _default_generator
-    g = _C_engine.Generator(seed)
+    seed = _seed_value(seed, "manual_seed")
+    g = Generator(seed)
     # Registered before it replaces the old one, which the engine may
     # otherwise be left pointing at once it is freed.
     _C_engine._set_default_override(g)
@@ -190,7 +193,7 @@ def initial_seed() -> int:
     >>> lucid.initial_seed()
     1337
     """
-    return int(_active_default_gen().seed)
+    return _key(_active_default_gen())
 
 
 def get_rng_state() -> Tensor:
@@ -237,8 +240,7 @@ def get_rng_state() -> Tensor:
     >>> (a - b).abs().max().item()
     0.0
     """
-    g = _active_default_gen()
-    return _lucid.tensor([int(g.seed), int(g.counter)], dtype=int64)
+    return _state_tensor(_active_default_gen())
 
 
 def set_rng_state(state: Tensor) -> None:
@@ -301,24 +303,17 @@ def set_rng_state(state: Tensor) -> None:
     0.0
     """
     global _default_generator
-    if int(state.numel()) != 2:
-        raise ValueError(
-            f"set_rng_state: expected a length-2 state tensor, "
-            f"got shape={tuple(state.shape)}"
-        )
-    flat = state.reshape(-1)
-    s_seed = int(flat[0].item())
-    s_counter = int(flat[1].item())
+    s_seed, s_counter = _unpack_state(state, "set_rng_state")
     # Build a fresh generator at the captured (seed, counter) pair — Philox is
     # counter-based so this exactly recovers the prior sampling stream.
-    g = _C_engine.Generator(s_seed)
-    g.counter = s_counter  # type: ignore[misc]
+    g = Generator(s_seed)
+    _set_counter(g, s_counter)
     _C_engine._set_default_override(g)
     _default_generator = g
     # Mirror to the C++ singleton.
     cg = _C_engine.default_generator()
     cg.set_seed(s_seed)
-    cg.counter = s_counter  # type: ignore[misc]
+    _set_counter(cg, s_counter)
 
 
 def _get_gen(

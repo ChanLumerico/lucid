@@ -66,7 +66,7 @@ class TestRngState:
 class TestGenerator:
     def test_construct(self) -> None:
         g = lucid.Generator(seed=10)
-        assert g.seed == 10
+        assert g.initial_seed() == 10
         assert g.counter == 0
 
     def test_set_seed_resets_counter(self) -> None:
@@ -74,7 +74,7 @@ class TestGenerator:
         # Manually push the counter, then reseeding should reset it.
         g.counter = 5
         g.set_seed(20)
-        assert g.seed == 20
+        assert g.initial_seed() == 20
         assert g.counter == 0
 
     def test_isolated_streams(self) -> None:
