@@ -584,6 +584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - activation NaN gradients follow the reference's vector path
 
+- pooling, conv and grid_sample keep the zero derivative
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

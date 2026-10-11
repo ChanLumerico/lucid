@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "../autograd/Engine.h"
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
 #include "../compile/Tracer.h"
@@ -334,7 +335,10 @@ std::vector<TensorImplPtr> ConvNdBackward<N>::apply_for_graph(const TensorImplPt
     for (int i = 0; i < N; ++i)
         not_channel.push_back(2 + i);
     auto db = sum_op(grad_out, not_channel, /*keepdims=*/false);
-    return {dx, dW, db};
+    // ``dx`` reads the weights and the gradient only; with constant weights
+    // it is kept in the graph through the input with derivative zero, as the
+    // reference's convolution backward is an op of the input.
+    return {zero_derivative_through(dx, this->next_edges()[0]), dW, db};
 }
 
 template class ConvNdBackward<1>;

@@ -374,7 +374,10 @@ std::vector<TensorImplPtr> AvgPoolNdBackward<N>::apply_for_graph(const TensorImp
     auto spread = broadcast_to_op(reshape_op(grad_out, split), Shape(blown.begin(), blown.end()));
     std::vector<std::int64_t> in_shape(xs.begin(), xs.end());
     auto dx = reshape_op(spread, in_shape);
-    return {div_op(dx, full_like_op(dx, static_cast<double>(window)))};
+    // Kept in the graph with derivative zero, as max pooling's is: the
+    // reference's pooling backward is an op of the input.
+    return {zero_derivative_through(div_op(dx, full_like_op(dx, static_cast<double>(window))),
+                                    this->next_edges()[0])};
 }
 
 template class AvgPoolNdBackward<1>;

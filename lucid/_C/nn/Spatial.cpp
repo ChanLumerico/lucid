@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
+#include "../autograd/Engine.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
@@ -308,7 +309,8 @@ std::vector<TensorImplPtr> GridSampleBackward::apply_for_graph(const TensorImplP
         auto idx = corner(round_op(ix), round_op(iy), valid);
         auto src = valid ? mul_op(g_flat, spread(valid)) : g_flat;
         dinput = scatter_add_op(dinput, idx, src, 2);
-        return {reshape_op(dinput, {n, ch, h, w}), zeros_like_op(grid)};
+        return {zero_derivative_through(reshape_op(dinput, {n, ch, h, w}), next_edges()[0]),
+                zeros_like_op(grid)};
     }
 
     auto x0 = floor_op(ix);
@@ -353,7 +355,9 @@ std::vector<TensorImplPtr> GridSampleBackward::apply_for_graph(const TensorImplP
     auto dgx = mul_op(dix, constant(dix, sx));
     auto dgy = mul_op(diy, constant(diy, sy));
     auto dgrid = reshape_op(stack_op({dgx, dgy}, 2), {n, grid_shape_[1], grid_shape_[2], 2});
-    return {reshape_op(dinput, {n, ch, h, w}), dgrid};
+    // With a constant grid the input gradient reads no tensor that requires
+    // grad; it stays in the graph through the input with derivative zero.
+    return {zero_derivative_through(reshape_op(dinput, {n, ch, h, w}), next_edges()[0]), dgrid};
 }
 
 TensorImplPtr grid_sample_op(const TensorImplPtr& input,
