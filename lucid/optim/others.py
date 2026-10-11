@@ -8,7 +8,7 @@ from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
 from lucid.nn.parameter import Parameter
-from lucid.optim.optimizer import Optimizer
+from lucid.optim.optimizer import Optimizer, _state_like
 
 
 def _scale(
@@ -1007,8 +1007,8 @@ class SparseAdam(Optimizer):
         super().__init__(params, defaults)
         # Per-parameter moment state (TensorImpl, None before first step)
         self._step: list[int] = [0] * self._n_params()
-        self._exp_avg: list[object] = [None] * self._n_params()
-        self._exp_avg_sq: list[object] = [None] * self._n_params()
+        self._exp_avg: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
+        self._exp_avg_sq: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
 
     def _n_params(self) -> int:
         return sum(len(g["params"]) for g in self.param_groups)  # type: ignore[arg-type, misc]
@@ -1030,6 +1030,29 @@ class SparseAdam(Optimizer):
             raise _C_engine.InvalidArgument("SparseAdam: betas[0] must be in [0, 1)")
         if not 0.0 <= beta2 < 1.0:
             raise _C_engine.InvalidArgument("SparseAdam: betas[1] must be in [0, 1)")
+
+    def _moments(
+        self, idx: int, param: _C_engine.TensorImpl
+    ) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+        """Parameter ``idx``'s moment buffers, ready for its impl ``param``.
+
+        They follow the parameter through a conversion (``module.to()``,
+        ``.double()``, ``.half()``) by the rule every optimizer's state
+        follows (:func:`~lucid.optim.optimizer._state_like`).  A parameter
+        with no buffers yet, or whose shape no longer matches them, starts
+        from zero moments and a zero step count.
+        """
+        m = self._exp_avg[idx]
+        v = self._exp_avg_sq[idx]
+        if m is not None and v is not None:
+            m = _state_like(m, param)
+            v = _state_like(v, param)
+        if m is None or v is None:
+            sh = list(param.shape)
+            m = _C_engine.zeros(sh, param.dtype, param.device)
+            v = _C_engine.zeros(sh, param.dtype, param.device)
+            self._step[idx] = 0
+        return m, v
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -1090,27 +1113,15 @@ class SparseAdam(Optimizer):
                 dt = pi.dtype
                 sh = list(pi.shape)
 
-                # Initialise moment buffers
-                if self._exp_avg[flat_idx] is None:
-                    self._exp_avg[flat_idx] = _C_engine.zeros(sh, dt, dv)
-                    self._exp_avg_sq[flat_idx] = _C_engine.zeros(sh, dt, dv)
-
+                m, v = self._moments(flat_idx, pi)
                 self._step[flat_idx] += 1
                 t = self._step[flat_idx]
-                m = self._exp_avg[flat_idx]
-                v = self._exp_avg_sq[flat_idx]
 
                 # m = b1 * m + (1 - b1) * g
-                m = _C_engine.add(
-                    _scale(cast(_C_engine.TensorImpl, m), b1, pi),
-                    _scale(cast(_C_engine.TensorImpl, gi), 1.0 - b1, pi),
-                )
+                m = _C_engine.add(_scale(m, b1, pi), _scale(gi, 1.0 - b1, pi))
                 # v = b2 * v + (1 - b2) * g^2
                 g_sq = _C_engine.mul(gi, gi)
-                v = _C_engine.add(
-                    _scale(cast(_C_engine.TensorImpl, v), b2, pi),
-                    _scale(g_sq, 1.0 - b2, pi),
-                )
+                v = _C_engine.add(_scale(v, b2, pi), _scale(g_sq, 1.0 - b2, pi))
 
                 self._exp_avg[flat_idx] = m
                 self._exp_avg_sq[flat_idx] = v

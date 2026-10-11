@@ -80,30 +80,43 @@ def _hyperparam_reader(
     return operator.itemgetter(*keys)
 
 
-def _state_like(state: object, param: object) -> object | None:
-    """Return optimizer state entry ``state`` ready for ``param``'s new impl.
+def _follow(
+    src: _C_engine.TensorImpl, like: _C_engine.TensorImpl
+) -> _C_engine.TensorImpl:
+    """``src`` in ``like``'s dtype and on its device; ``src`` itself when it already is.
 
-    Both are engine ``TensorImpl`` objects.  A buffer shaped like the
-    parameter (``exp_avg``, ``momentum_buffer`` ...) is cast to the
-    parameter's dtype and moved to its device.  A per-parameter scalar — a
+    The one rule by which optimizer state follows its parameter through a
+    conversion (``module.to()``, ``.double()``, ``.half()``).  Engine
+    optimizers apply it when their engine is rebuilt (:func:`_state_like`);
+    optimizers that keep their state in Python apply it before they read
+    that state in ``step``.
+    """
+    out = src
+    if out.dtype != like.dtype:
+        out = _C_engine.astype(out, like.dtype)
+    if out.device != like.device:
+        out = out.transfer_to_device(like.device, False)
+    return out
+
+
+def _state_like(
+    src: _C_engine.TensorImpl, dst: _C_engine.TensorImpl
+) -> _C_engine.TensorImpl | None:
+    """Return optimizer state entry ``src`` ready for parameter impl ``dst``.
+
+    A buffer shaped like the parameter (``exp_avg``, ``momentum_buffer``
+    ...) follows it (:func:`_follow`).  A per-parameter scalar — a
     0-d entry of a parameter that is not 0-d, such as ``step`` or NAdam's
     ``mu_product`` — and any integer entry (a count) pass unchanged: the
     engine reads them as numbers wherever they live, and ``step`` stays an
     integer.  ``None`` when a buffer's shape no longer matches: it belonged
     to a differently shaped parameter and cannot be reused.
     """
-    src = cast(_C_engine.TensorImpl, state)
-    dst = cast(_C_engine.TensorImpl, param)
     if src.dtype in _INTEGER_DTYPES or (not src.shape and dst.shape):
         return src
     if list(src.shape) != list(dst.shape):
         return None
-    out: _C_engine.TensorImpl = src
-    if out.dtype != dst.dtype:
-        out = _C_engine.astype(out, dst.dtype)
-    if out.device != dst.device:
-        out = out.transfer_to_device(dst.device, False)
-    return out
+    return _follow(src, dst)
 
 
 class Optimizer:
@@ -533,7 +546,8 @@ class Optimizer:
         if old is None or fresh is None:
             return
 
-        buffers: list[tuple[str, list[object | None]]] = old.state_buffers()  # type: ignore[attr-defined]
+        buffers: list[tuple[str, list[_C_engine.TensorImpl | None]]]
+        buffers = old.state_buffers()  # type: ignore[attr-defined]
         if not buffers:
             # Nothing exported: no state yet, or an engine that keeps state
             # it cannot hand over — which only this optimizer can tell.

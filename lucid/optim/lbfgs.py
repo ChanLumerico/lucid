@@ -13,7 +13,8 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid.nn.parameter import Parameter
-from lucid.optim.optimizer import Optimizer
+from lucid._dispatch import _wrap
+from lucid.optim.optimizer import Optimizer, _follow
 
 from lucid._C import engine as _C_engine
 
@@ -283,6 +284,18 @@ class _LBFGSState:
                 out[f.name] = v
         return out
 
+    def follow(self, like: Tensor) -> None:
+        """Bring every stored tensor to ``like``'s dtype and device.
+
+        The parameters may have been converted since the last step
+        (``module.to()``, ``.double()``, ``.half()``); the curvature pairs,
+        direction and scalars then follow them by the rule every optimizer's
+        state follows (:func:`~lucid.optim.optimizer._follow`), so the next
+        iteration does not mix the old dtype or device with the new.
+        """
+        for name, v in self.snapshot(partial(_follow_tensor, like=like)).items():
+            setattr(self, name, v)
+
     @classmethod
     def restore(
         cls, snap: dict[str, object], to_tensor: Callable[[object], Tensor | None]
@@ -327,6 +340,12 @@ class _LBFGSState:
             prev_flat_grad=optional_tensor("prev_flat_grad"),
             prev_loss=None if prev_loss is None else _number(prev_loss, "prev_loss"),
         )
+
+
+def _follow_tensor(v: Tensor, like: Tensor) -> Tensor:
+    if v.dtype == like.dtype and v.device == like.device:
+        return v
+    return _wrap(_follow(v._impl, like._impl))
 
 
 def _number(v: object, key: str) -> float:
@@ -737,6 +756,7 @@ class LBFGS(Optimizer):
                 orig_loss = closure()
             self._lbfgs_state.func_evals += 1
             flat_grad = _flat_grad(params)
+            self._lbfgs_state.follow(flat_grad)
             if not flat_grad.abs().max() <= cfg.tolerance_grad:
                 self._iterate(closure, params, cfg, float(orig_loss), flat_grad)
         return orig_loss
