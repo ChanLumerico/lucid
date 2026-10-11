@@ -100,18 +100,10 @@ class TestEinsumSubscripts:
         assert lucid.einops.einsum("ii->", m).item() == 5.0
         assert lucid.einops.einsum("ii", m).item() == 5.0
 
-    def test_empty_diagonal(self, device: str, request: pytest.FixtureRequest) -> None:
+    def test_empty_diagonal(self, device: str) -> None:
         x = lucid.zeros(0, 0, device=device, requires_grad=True)
         out = lucid.einops.einsum("ii->i", x)
         assert out.shape == (0,)
-        if device == "metal":
-            request.applymarker(
-                pytest.mark.xfail(
-                    strict=True,
-                    reason="engine: diagonal backward on an empty Metal tensor "
-                    "fails in the MLX scatter (found under LCD-186)",
-                )
-            )
         out.sum().backward()
         assert x.grad is not None and x.grad.shape == (0, 0)
 
