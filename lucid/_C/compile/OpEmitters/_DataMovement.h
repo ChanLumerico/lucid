@@ -11,7 +11,8 @@
 // uint32 / uint64 through float32 and writes bool as false.  Moving the same
 // bytes as int16 or int8 is exact in every mode, as are float32, bfloat16 and
 // every reshape, concat, slice, select, transpose, broadcast, pad and tile
-// (macOS 26 / 27, measured on M1 Pro; table in [[engine-mpsgraph-sort-and-resize]]).
+// (measured on macOS 27, M1 Pro; ``test_wide_integer_data_movement_compiled.py``
+// holds the compiled ops to eager bit for bit).
 // float16 gathers keep every value but answer one canonical NaN for every
 // NaN payload, which no Lucid op observes.
 //
