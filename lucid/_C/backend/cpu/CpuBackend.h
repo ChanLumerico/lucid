@@ -10782,8 +10782,8 @@ public:
                         for (int x = 0; x < W; ++x) {
                             const double xsd = cosv * (x - cx) - sinv * (y - cy) + cx;
                             const double ysd = sinv * (x - cx) + cosv * (y - cy) + cy;
-                            int xs2 = static_cast<int>(std::floor(xsd + 0.5));
-                            int ys2 = static_cast<int>(std::floor(ysd + 0.5));
+                            const auto xs2 = resample::index_of(std::floor(xsd + 0.5));
+                            const auto ys2 = resample::index_of(std::floor(ysd + 0.5));
                             if (xs2 < 0 || xs2 >= W || ys2 < 0 || ys2 >= H)
                                 obase[y * W + x] = T{0};
                             else
