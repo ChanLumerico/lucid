@@ -67,8 +67,11 @@ def manual_seed(seed: int) -> None:
     Parameters
     ----------
     seed : int
-        Non-negative 64-bit integer seed.  The same seed always produces
-        the same sequence of random values on the same hardware.
+        A 64-bit integer seed, in :math:`[-2^{63}, 2^{64})`; a negative one
+        is read modulo :math:`2^{64}`.  Anything ``int()`` takes is read
+        through it first — ``True``, ``2.0`` — as the reference reads it;
+        :meth:`Generator.manual_seed` is strict.  The same seed always
+        produces the same sequence of random values on the same hardware.
 
     Notes
     -----
@@ -91,7 +94,7 @@ def manual_seed(seed: int) -> None:
     0.0
     """
     global _default_generator
-    seed = _seed_value(seed, "manual_seed")
+    seed = _seed_value(int(seed), "manual_seed")
     g = Generator(seed)
     # Registered before it replaces the old one, which the engine may
     # otherwise be left pointing at once it is freed.
