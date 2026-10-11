@@ -14,7 +14,9 @@ Staging takes the official ``mlx-metal`` wheel and produces::
         lib/liblucid_mlx.dylib      libmlx.dylib, install name @rpath/liblucid_mlx.dylib
         lib/liblucid_jaccl.dylib    libjaccl.dylib, loaded by liblucid_mlx via @loader_path
         lib/mlx.metallib            unchanged; MLX finds it next to its dylib (dladdr)
-        LICENSE                     MLX's license, from the wheel's dist-info
+        LICENSE                     MLX's license from the wheel's dist-info, if present
+                                    (reference only: the Lucid wheel's notice is
+                                    THIRD_PARTY_NOTICES.md, kept identical by a test)
         .lucid-staged               written last; its presence marks a complete entry
 
 The libraries are renamed only so dyld does not mistake them for the
@@ -45,6 +47,7 @@ Usage
 ``python3 tools/fetch_mlx.py``                 stage and describe the entry
 ``python3 tools/fetch_mlx.py --print-dir``     stage, print only the entry path
 ``python3 tools/fetch_mlx.py --print-version`` print only the pinned version
+``python3 tools/fetch_mlx.py --print-macos``   print only the pinned macOS floor
 ``python3 tools/fetch_mlx.py --bump 0.33.0``   re-pin to another release
                                                (orchestrator only: it is an
                                                engine ABI change)
@@ -54,6 +57,7 @@ Standard library only: an sdist build runs this before anything else exists.
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -72,6 +76,7 @@ from typing import BinaryIO
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+NOTICES = REPO_ROOT / "THIRD_PARTY_NOTICES.md"
 STAMP = ".lucid-staged"
 MLX_LIB = "liblucid_mlx.dylib"
 JACCL_LIB = "liblucid_jaccl.dylib"
@@ -107,9 +112,12 @@ def read_pin(pyproject: Path = PYPROJECT) -> Pin:
 
 def cache_root() -> Path:
     override = os.environ.get("LUCID_MLX_CACHE")
-    root = Path(override) if override else Path.home() / "Library/Caches/lucid/mlx-metal"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return Path(override) if override else Path.home() / "Library/Caches/lucid/mlx-metal"
+
+
+def pinned_entry(pin: Pin) -> Path:
+    """Where *pin*'s staged entry lives when staged from the pinned wheel."""
+    return cache_root() / f"mlx-{pin.version}-{pin.sha256[:12]}"
 
 
 def _log(message: str) -> None:
@@ -137,7 +145,7 @@ def _run(*command: str) -> str:
     return proc.stdout
 
 
-def _offline_hint(url: str, exc: OSError) -> FetchError:
+def _offline_hint(url: str, exc: Exception) -> FetchError:
     return FetchError(
         f"could not download {url}: {exc}\n"
         "Offline? Point LUCID_MLX_DIST_DIR at an unpacked copy of that wheel."
@@ -148,7 +156,8 @@ def _download(url: str, out: BinaryIO) -> None:
     try:
         with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
             shutil.copyfileobj(response, out, 1 << 20)
-    except OSError as exc:  # URLError, timeouts and resets are all OSError
+    # URLError, timeouts and resets are OSError; a truncated body is IncompleteRead.
+    except (OSError, http.client.HTTPException) as exc:
         raise _offline_hint(url, exc) from exc
 
 
@@ -158,7 +167,7 @@ def _pypi_wheels(version: str) -> list[tuple[str, str, str]]:
     try:
         with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
             payload = json.load(response)
-    except OSError as exc:
+    except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
         raise _offline_hint(url, exc) from exc
     try:
         return [
@@ -234,16 +243,15 @@ def _locate_dist(src: Path) -> Path:
     )
 
 
-def _dist_license(root: Path) -> Path:
-    """MLX's LICENSE for an unpacked dist; a wheel must not ship without it."""
+def _dist_license(root: Path) -> Path | None:
+    """MLX's LICENSE beside an unpacked dist, if it came with one.
+
+    Optional, as for a wheel: the staged copy is a reference only.  What the
+    Lucid wheel ships is THIRD_PARTY_NOTICES.md, which a test keeps identical
+    to the pinned wheel's LICENSE.
+    """
     candidates = [root / "LICENSE", *sorted(root.parent.glob("*.dist-info/licenses/LICENSE"))]
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise FetchError(
-        f"LUCID_MLX_DIST_DIR: MLX's LICENSE not found (looked for {root / 'LICENSE'} and "
-        f"{root.parent}/*.dist-info/licenses/LICENSE); Lucid's wheel must carry it"
-    )
+    return next((c for c in candidates if c.is_file()), None)
 
 
 def _copy_dist(root: Path, stage: Path) -> None:
@@ -253,7 +261,9 @@ def _copy_dist(root: Path, stage: Path) -> None:
     shutil.copyfile(root / "lib/libmlx.dylib", stage / "lib" / MLX_LIB)
     shutil.copyfile(root / "lib/libjaccl.dylib", stage / "lib" / JACCL_LIB)
     shutil.copyfile(root / "lib" / METALLIB, stage / "lib" / METALLIB)
-    shutil.copyfile(_dist_license(root), stage / "LICENSE")
+    license_file = _dist_license(root)
+    if license_file is not None:
+        shutil.copyfile(license_file, stage / "LICENSE")
 
 
 def _relink(lib: Path) -> None:
@@ -293,6 +303,7 @@ def stage(pin: Pin | None = None) -> Path:
     """Return the staged entry for *pin* (default: the repository's pin)."""
     pin = pin or read_pin()
     cache = cache_root()
+    cache.mkdir(parents=True, exist_ok=True)
     dist_dir = os.environ.get("LUCID_MLX_DIST_DIR")
     populate: Callable[[Path], None]
     if dist_dir:
@@ -304,7 +315,7 @@ def stage(pin: Pin | None = None) -> Path:
         key = pin.sha256[:12]
         origin = f"{pin.version} from {pin.wheel} sha256={pin.sha256}"
         populate = partial(_extract_pinned, pin, cache)
-    entry = cache / f"mlx-{pin.version}-{key}"
+    entry = cache / f"mlx-{pin.version}-{key}"  # pinned_entry(pin) for a wheel
     if (entry / STAMP).is_file():
         return entry
     if entry.exists():
@@ -368,9 +379,40 @@ def _rewrite_pin(pyproject: Path, pin: Pin) -> None:
     pyproject.write_text(text[:header] + section + text[end:])
 
 
+def _rewrite_notices(notices: Path, old: Pin, new: Pin) -> None:
+    """Re-point the MLX section of THIRD_PARTY_NOTICES.md from *old* to *new*.
+
+    Only the identifying lines change.  The license texts below them, and the
+    list of code MLX compiles in, have to be re-checked by hand against the
+    new release; the reminder says so.
+    """
+    text = notices.read_text()
+    start = text.find("\n## MLX\n")
+    end = text.find("\n### ", start + 1)
+    if start < 0 or end < 0:
+        raise FetchError(f"{notices}: no '## MLX' section to update")
+    section = text[start:end]
+    for before, after in (
+        (old.wheel, new.wheel),
+        (old.sha256, new.sha256),
+        (f"mlx_metal-{old.version}.dist-info", f"mlx_metal-{new.version}.dist-info"),
+        (f"v{old.version}", f"v{new.version}"),
+    ):
+        section = section.replace(before, after)
+    notices.write_text(text[:start] + section + text[end:])
+    _log(
+        f"updated {notices.name}'s MLX section to {new.version}. Before committing:\n"
+        f"  1. copy the new wheel's dist-info/licenses/LICENSE into its text block "
+        f"byte for byte (test_third_party_notices checks it);\n"
+        f"  2. re-read MLX v{new.version}'s CMakeLists.txt and mlx/io/CMakeLists.txt "
+        f"FetchContent entries and update the compiled-in list and their licenses."
+    )
+
+
 def bump(version: str) -> Pin:
     """Re-pin to *version*, stage it, and record the macOS floor of its binary."""
-    resolved = _resolve(version, read_pin().macos)
+    previous = read_pin()
+    resolved = _resolve(version, previous.macos)
     entry = stage(resolved)
     pin = Pin(
         resolved.version,
@@ -380,6 +422,7 @@ def bump(version: str) -> Pin:
         _minos(entry / "lib" / MLX_LIB),
     )
     _rewrite_pin(PYPROJECT, pin)
+    _rewrite_notices(NOTICES, previous, pin)
     return pin
 
 
@@ -388,11 +431,14 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--print-dir", action="store_true", help="print the staged entry path")
     group.add_argument("--print-version", action="store_true", help="print the pinned version")
+    group.add_argument("--print-macos", action="store_true", help="print the pinned macOS floor")
     group.add_argument("--bump", metavar="VERSION", help="re-pin to another mlx-metal release")
     args = parser.parse_args(argv)
     try:
         if args.print_version:
             print(read_pin().version)
+        elif args.print_macos:
+            print(read_pin().macos)
         elif args.print_dir:
             print(stage())
         elif args.bump:

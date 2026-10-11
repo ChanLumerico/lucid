@@ -12,7 +12,7 @@ LUCID_BUILD_MODE="${LUCID_BUILD_MODE:-release}"
 # Match the canonical build target (setup.py: [tool.lucid.mlx] macos, the
 # minos of the bundled MLX) so the generated compile_commands.json — and thus
 # clang-tidy / IDE diagnostics — reflect the same SDK the real build uses.
-MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.2}"
+MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-$("$PYTHON_BIN" tools/fetch_mlx.py --print-macos)}"
 SDKROOT="$(xcrun --show-sdk-path)"
 
 find_cmake() {

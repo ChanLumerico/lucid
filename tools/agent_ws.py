@@ -56,6 +56,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -980,6 +981,20 @@ def cmd_heavy(args: argparse.Namespace) -> int:
         return subprocess.call(command)
 
 
+def mlx_macos_floor(root: Path) -> str | None:
+    """The deployment floor of the tree being built: its pinned MLX's minos.
+
+    Read from that tree's own pyproject, so a branch that predates the pin
+    keeps its setup.py default.
+    """
+    try:
+        with (root / "pyproject.toml").open("rb") as fh:
+            floor = tomllib.load(fh).get("tool", {}).get("lucid", {}).get("mlx", {}).get("macos")
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    return floor if isinstance(floor, str) else None
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     root, trees = here()
     main_root = main_root_of(trees)
@@ -989,7 +1004,9 @@ def cmd_build(args: argparse.Namespace) -> int:
             "`build` is for worktrees, where an editable install would hijack the shared venv"
         )
     env = dict(os.environ)
-    env.setdefault("MACOSX_DEPLOYMENT_TARGET", "26.2")  # [tool.lucid.mlx] macos
+    floor = mlx_macos_floor(root)
+    if floor is not None:
+        env.setdefault("MACOSX_DEPLOYMENT_TARGET", floor)
     if XCODE_SDK.exists():  # MacBook: the CLT 27 SDK breaks Xcode 26's ld
         env.setdefault("SDKROOT", str(XCODE_SDK))
     env.setdefault("CCACHE_BASEDIR", str(main_root))
