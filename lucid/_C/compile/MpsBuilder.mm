@@ -23,6 +23,7 @@
 #include "MpsBuilder.h"
 #include "MpsDtype.h"
 #include "OpEmitters/OpEmitter.h"
+#include "OpEmitters/_SignedZero.h"
 #include "VjpEmitters/VjpEmitter.h"
 
 namespace lucid::compile {
@@ -53,6 +54,7 @@ std::string emit_node(OpEmitter& emitter, BuilderContext& ctx, const OpNode& nod
         if (held != bound)
             ctx.bind(meta.id, (__bridge void*)held);
     }
+    propagate_zero_splat(ctx, node);
     return {};
 }
 
@@ -851,7 +853,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         return fail("compile_trace_with_backward: only Device::GPU traces are supported");
 
     if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
-        return fail("compile_trace_with_backward: zero-size tensor at " + empty + " — MPSGraph aborts on one");
+        return fail("compile_trace_with_backward: zero-size tensor at " + empty +
+                    " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_trace_with_backward: mixed-device trace");
@@ -1180,9 +1183,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         grad_output_ids.reserve(param_ids.size() + extra_output_ids.size());
         TensorId next_grad_id = graph.next_id + 1;
         for (std::size_t i = 0; i < param_ids.size(); ++i)
-            grad_output_ids.push_back(absent_grads[i]
-                                          ? TensorId{-1}
-                                          : TensorId{next_grad_id + static_cast<TensorId>(i)});
+            grad_output_ids.push_back(
+                absent_grads[i] ? TensorId{-1} : TensorId{next_grad_id + static_cast<TensorId>(i)});
         // 3.5: explicit extra outputs reuse their trace ids and trail the grads
         // in the runtime's target order ([loss, *grads, *extra]).
         for (TensorId tid : extra_output_ids)
@@ -1419,7 +1421,8 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
         return fail("compile_fused_training_step: only Device::GPU traces "
                     "are supported");
     if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
-        return fail("compile_fused_training_step: zero-size tensor at " + empty + " — MPSGraph aborts on one");
+        return fail("compile_fused_training_step: zero-size tensor at " + empty +
+                    " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_fused_training_step: mixed-device trace");
@@ -1758,7 +1761,8 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
     if (device != Device::GPU)
         return fail("compile_generic_fused_step: only Device::GPU traces supported");
     if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
-        return fail("compile_generic_fused_step: zero-size tensor at " + empty + " — MPSGraph aborts on one");
+        return fail("compile_generic_fused_step: zero-size tensor at " + empty +
+                    " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_generic_fused_step: mixed-device trace");
@@ -2144,7 +2148,8 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
     if (device != Device::GPU)
         return fail("compile_generic_fused_step_with_vars: only GPU supported");
     if (const std::string empty = first_empty_tensor(graph, external_feeds); !empty.empty())
-        return fail("compile_generic_fused_step_with_vars: zero-size tensor at " + empty + " — MPSGraph aborts on one");
+        return fail("compile_generic_fused_step_with_vars: zero-size tensor at " + empty +
+                    " — MPSGraph aborts on one");
     for (const auto& op : graph.ops) {
         if (op.outputs.empty() || op.outputs[0].device != device)
             return fail("compile_generic_fused_step_with_vars: mixed-device trace");

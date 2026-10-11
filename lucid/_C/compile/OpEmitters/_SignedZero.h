@@ -13,16 +13,21 @@
 // A trace's zero constants come from the ``full`` / ``zeros`` factories (a
 // Python scalar operand is materialised by ``full``).  Those emitters mark a
 // floating ±0 fill in the builder's saved-state table, keyed by their output
-// id under slot names no VJP uses; the add and sub emitters look the mark up
-// and, when the operand is the zero that is not the identity, spell the sum as
-// ``x + min(|x|, +0)``.  The second term is +0 for every non-NaN ``x`` but is
-// not a constant, so MPSGraph has nothing to fold and the hardware addition
-// gives IEEE's answer.  A select on ``x == 0`` would be one op cheaper, but
-// MPSGraph's autodiff — the fallback when a manual VJP is missing — returns a
-// wrong gradient through it.
+// id under slot names no VJP uses, and ``emit_node`` (MpsBuilder.mm) carries
+// the mark across an op that only moves or widens values — a reshape of a
+// zero splat is still one, and MPSGraph folds it just the same.  The add and
+// sub emitters look the mark up and, when the operand is the zero that is not
+// the identity, spell the sum as ``x + floor(min(|x|, +0))``.  The second term
+// is +0 for every non-NaN ``x`` but is not a constant, so MPSGraph has nothing
+// to fold and the hardware addition gives IEEE's answer.
 //
-// A zero that reaches the add through another traced op (an ``astype``, a
-// ``reshape``) carries no mark and still folds.
+// The term must also be invisible to MPSGraph's autodiff, the fallback when a
+// manual VJP is missing.  Its true derivative is 0, but ``min``'s gradient
+// multiplies the incoming one by a 0/1 mask, so an infinite gradient became
+// NaN.  MPSGraph has no public stop-gradient; ``floor``'s gradient is built as
+// zeros, not as a product, so it cuts the path and ``x`` receives the incoming
+// gradient untouched, as the manual add VJP gives it.  A select on ``x == 0``
+// would be cheaper still, but autodiff returns a wrong gradient through it.
 //
 // Objective-C++ only.
 
@@ -31,6 +36,8 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <cmath>
+#include <string_view>
+#include <unordered_set>
 
 #include "../../core/Dtype.h"
 #include "../TraceIR.h"
@@ -38,8 +45,8 @@
 
 namespace lucid::compile {
 
-inline constexpr const char* kPosZeroSplatSlot = "ieee_pos_zero_splat";
-inline constexpr const char* kNegZeroSplatSlot = "ieee_neg_zero_splat";
+inline constexpr const char* kPosZeroSplatSlot = "signed_zero:pos_splat";
+inline constexpr const char* kNegZeroSplatSlot = "signed_zero:neg_splat";
 
 // Record that ``out_id`` is a splat of ``fill``, if that is a floating zero.
 inline void mark_zero_splat(
@@ -64,7 +71,34 @@ inline MPSGraphTensor* add_pos_zero(MPSGraph* g, MPSGraphTensor* x, MPSGraphTens
     MPSGraphTensor* zero_unless_nan = [g minimumWithPrimaryTensor:[g absoluteWithTensor:x name:nil]
                                                   secondaryTensor:pos_zero
                                                              name:nil];
-    return [g additionWithPrimaryTensor:x secondaryTensor:zero_unless_nan name:@"add_pos_zero"];
+    return [g additionWithPrimaryTensor:x
+                        secondaryTensor:[g floorWithTensor:zero_unless_nan name:nil]
+                                   name:@"add_pos_zero"];
+}
+
+// Ops whose output holds only values of their first input: a splat in is a
+// splat out.  ``astype`` qualifies only into a floating dtype, which keeps a
+// zero's sign; a marked input is already floating.
+inline bool moves_values_only(const OpNode& node) {
+    static const std::unordered_set<std::string_view> kMoves{
+        "broadcast_to", "contiguous", "detach",  "flatten", "flip",      "permute", "repeat",
+        "reshape",      "roll",       "squeeze", "tile",    "unsqueeze", "view"};
+    if (node.name == "astype")
+        return !node.outputs.empty() && is_floating_point(node.outputs[0].dtype);
+    return kMoves.count(node.name) != 0;
+}
+
+// Carry a ±0 splat mark from ``node``'s input to its output.  ``emit_node``
+// calls it after every op, so the rule lives in one place.
+inline void propagate_zero_splat(BuilderContext& ctx, const OpNode& node) {
+    if (node.inputs.empty() || node.outputs.size() != 1 || !moves_values_only(node))
+        return;
+    void* out = ctx.resolve(node.outputs[0].id);
+    if (out == nullptr)
+        return;
+    for (const char* slot : {kPosZeroSplatSlot, kNegZeroSplatSlot})
+        if (ctx.resolve_saved(node.inputs[0], slot) != nullptr)
+            ctx.stash_saved(node.outputs[0].id, slot, out);
 }
 
 }  // namespace lucid::compile

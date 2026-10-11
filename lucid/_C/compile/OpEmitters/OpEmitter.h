@@ -130,6 +130,11 @@ public:
     // op-defined slot name ("mask", "y", "rstd", …).  ``nullptr``
     // return signals "no slot found" — VJP must handle that fallback
     // (typically by recomputing or returning false).
+    //
+    // Forward emitters may also record compile-time facts about a value
+    // for later forward emitters to read (e.g. the ±0 splat marks in
+    // _SignedZero.h); a slot name is shared by every op on that id, so a
+    // non-VJP slot carries its owner's prefix.
     void stash_saved(TensorId out_id, const std::string& name, void* tensor) {
         saved_[out_id][name] = tensor;
     }

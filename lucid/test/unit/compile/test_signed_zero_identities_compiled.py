@@ -4,13 +4,17 @@
 identity. MPSGraph rewrites ``x + c`` and ``x - c`` to ``x`` whenever ``c``
 is a constant zero of either sign, so ``compile(lambda t: t + 0)`` handed
 back the ``-0.0`` it was given while eager gave ``+0.0``. Python's builtin
-``sum`` starts at ``0``, so ``sum(losses)`` takes the same path. The add and
+``sum`` starts at ``0``, so ``sum(losses)`` takes the same path, and so does
+a zero that only passes through a reshape, expand or float cast. The add and
 sub emitters now spell the sum so MPSGraph has no constant to fold
-(``OpEmitters/_SignedZero.h``).
+(``OpEmitters/_SignedZero.h``), in a form MPSGraph's autodiff passes an
+infinite gradient through unchanged.
 
-The executable cache also compared a constant's value with ``==``, under
-which ``0.0`` and ``-0.0`` are the same key: ``t + (-0.0)`` ran the
-executable compiled for ``t + 0.0``.
+Both executable caches also compared a constant's value with ``==``, under
+which ``0.0`` and ``-0.0`` are the same key — ``t + (-0.0)`` ran the
+executable compiled for ``t + 0.0`` — and the Python one let ``1``, ``1.0``
+and ``True`` share an entry although each promotes an integer tensor
+differently.
 
 Each case asserts that it really compiled, because an eager fallback would
 match eager trivially.
@@ -111,6 +115,80 @@ def test_integer_add_of_zero_is_unchanged() -> None:
     assert out.numpy().tolist() == [-3, 0, 7]
 
 
+def _zeros(t: lucid.Tensor, *shape: int, dtype: lucid.dtype | None = None) -> lucid.Tensor:
+    return lucid.zeros(*shape, dtype=dtype or t.dtype, device=t.device)
+
+
+def _other_float(dtype: lucid.dtype) -> lucid.dtype:
+    return lucid.float16 if dtype == lucid.float32 else lucid.float32
+
+
+#: A zero that reaches the add only through ops that move or widen values —
+#: each traces to the op in the name, and MPSGraph folds the result alike.
+_N = len(_VALUES)
+_ROUTED: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "reshape": lambda t: t + _zeros(t, _N, 1).reshape(_N),
+    "view": lambda t: t + _zeros(t, _N, 1).view(_N),
+    "flatten": lambda t: t + _zeros(t, _N, 1).flatten(),
+    "squeeze": lambda t: t + _zeros(t, _N, 1).squeeze(1),
+    "unsqueeze": lambda t: t.unsqueeze(0) + _zeros(t, _N).unsqueeze(0),
+    "expand": lambda t: t + _zeros(t, 1).expand(_N),
+    "broadcast_to": lambda t: t + lucid.broadcast_to(_zeros(t, 1), (_N,)),
+    "permute": lambda t: t + _zeros(t, 1, _N).permute(1, 0).reshape(_N),
+    "contiguous": lambda t: t + _zeros(t, 1, _N).permute(1, 0).contiguous().reshape(_N),
+    "detach": lambda t: t + _zeros(t, _N).detach(),
+    "tile": lambda t: t + lucid.tile(_zeros(t, 1), (_N,)),
+    "flip": lambda t: t + lucid.flip(_zeros(t, _N), (0,)),
+    "roll": lambda t: t + lucid.roll(_zeros(t, _N), 1),
+    "astype": lambda t: t + _zeros(t, _N, dtype=_other_float(t.dtype)).to(t.dtype),
+    "sub_neg_zero_reshape": lambda t: (
+        t - lucid.full((_N, 1), -0.0, dtype=t.dtype, device=t.device).reshape(_N)
+    ),
+}
+
+
+@pytest.mark.parametrize("dtype", _FLOAT_DTYPES, ids=str)
+@pytest.mark.parametrize("name", list(_ROUTED))
+def test_zero_routed_through_a_shape_op_matches_eager(name: str, dtype: lucid.dtype) -> None:
+    fn = _ROUTED[name]
+    x = lucid.tensor(_VALUES, dtype=dtype).to(COMPILE_DEVICE)
+    _assert_same_bits(fn(x), _run_compiled(fn, x), f"{name} {dtype}")
+
+
+def _add_argument(t: lucid.Tensor, c: object) -> lucid.Tensor:
+    return t + c
+
+
+@pytest.mark.parametrize("order", [(0.0, -0.0), (-0.0, 0.0)], ids=["pos-first", "neg-first"])
+def test_python_cache_keeps_zero_arguments_apart(order: tuple[float, float]) -> None:
+    x = lucid.tensor([-0.0, 1.0]).to(COMPILE_DEVICE)
+    f = lucid.compile(_add_argument)
+    for c in order:
+        _assert_same_bits(x + c, f(x, c), f"t + {c!r}")
+    assert f.cache_info()["entries"] == 2
+
+
+def test_python_cache_keeps_int_float_and_bool_apart() -> None:
+    x = lucid.tensor([1, 2], dtype=lucid.int32).to(COMPILE_DEVICE)
+    f = lucid.compile(_add_argument)
+    for c in (1, 1.0, True):
+        got, want = f(x, c), x + c
+        assert got.dtype == want.dtype, f"t + {c!r}"
+        assert got.numpy().tolist() == want.numpy().tolist(), f"t + {c!r}"
+    assert f.cache_info()["entries"] == 3
+
+
+def test_python_cache_reuses_a_nan_argument() -> None:
+    """A fresh NaN each call is one entry, not a recompile per call."""
+    x = lucid.tensor([1.0, 2.0]).to(COMPILE_DEVICE)
+    f = lucid.compile(_add_argument)
+    _C_engine.compile.session_cache_clear()
+    for _ in range(3):
+        _assert_same_bits(x + float("nan"), f(x, float("nan")), "t + nan")
+    assert f.cache_info()["entries"] == 1
+    assert _C_engine.compile.session_cache_size() == 1
+
+
 def test_zeros_of_either_sign_get_their_own_executable() -> None:
     x = lucid.tensor([-0.0, 1.0]).to(COMPILE_DEVICE)
     _C_engine.compile.session_cache_clear()
@@ -174,3 +252,43 @@ def test_fused_step_with_zero_adds_matches_eager(
 
     for pe, pc in zip(eager_model.parameters(), comp_model.parameters(), strict=True):
         assert float((pe - pc).abs().max().item()) < 1e-5
+
+
+class _Scaled(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.w = nn.Parameter(lucid.tensor([100.0, 0.5]))
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.w * x + 0
+
+
+def _exp_sum(out: lucid.Tensor) -> lucid.Tensor:
+    return out.exp().sum()
+
+
+@pytest.mark.parametrize("manual_vjp", ["1", "0"], ids=["manual-vjp", "autodiff"])
+def test_infinite_gradient_passes_the_zero_add(
+    manual_vjp: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``exp(1000)`` overflows, so ``w[0]``'s gradient is +inf and SGD sends it to -inf.
+
+    The ``+ 0`` adds a term whose derivative is 0; its gradient must not
+    multiply that inf by 0 into NaN.
+    """
+    monkeypatch.setenv("LUCID_MANUAL_VJP", manual_vjp)
+    monkeypatch.setenv("LUCID_MANUAL_VJP_REQUIRE", manual_vjp)
+    x = lucid.tensor([10.0, 1.0]).to(COMPILE_DEVICE)
+    eager_model = _Scaled().to(COMPILE_DEVICE)
+    opt = optim.SGD(list(eager_model.parameters()), lr=1.0)
+    opt.zero_grad()
+    _exp_sum(eager_model(x)).backward()
+    opt.step()
+
+    comp_model = _Scaled().to(COMPILE_DEVICE)
+    fused_step(comp_model, _exp_sum, optim.SGD(list(comp_model.parameters()), lr=1.0))(x)
+
+    want = eager_model.w.numpy()
+    got = comp_model.w.numpy()
+    assert got[0] == want[0] == -math.inf, f"eager {want}, compiled {got}"
+    assert abs(float(got[1]) - float(want[1])) < 1e-5
