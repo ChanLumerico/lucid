@@ -12,6 +12,7 @@ from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d, PaddingMode
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid.nn.modules._conv_common import (
+    _single,
     _conv_parameters,
     _LazyConvMixin,
     _pair,
@@ -250,10 +251,10 @@ class Conv1d(_ConvNd):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int,
-        stride: int = 1,
-        padding: int | str = 0,
-        dilation: int = 1,
+        kernel_size: int | tuple[int],
+        stride: int | tuple[int] = 1,
+        padding: int | tuple[int] | str = 0,
+        dilation: int | tuple[int] = 1,
         groups: int = 1,
         bias: bool = True,
         padding_mode: PaddingMode = "zeros",
@@ -264,17 +265,19 @@ class Conv1d(_ConvNd):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size: int = kernel_size
-        self.stride: int = stride
-        self.dilation: int = dilation
+        self.kernel_size: int = _single(kernel_size, "kernel_size")
+        self.stride: int = _single(stride, "stride")
+        self.dilation: int = _single(dilation, "dilation")
         self.groups = groups
         self.padding_mode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None = _string_padding(
-            padding, stride, type(self).__name__
+            padding, self.stride, type(self).__name__
         )
-        self.padding: int = 0 if isinstance(padding, str) else padding
+        self.padding: int = (
+            0 if isinstance(padding, str) else _single(padding, "padding")
+        )
         self.weight, self.bias = _conv_parameters(
-            (out_channels, in_channels // groups, kernel_size),
+            (out_channels, in_channels // groups, self.kernel_size),
             out_channels,
             bias,
             device,
@@ -746,10 +749,10 @@ class LazyConv1d(_LazyConvMixin, Conv1d):
     def __init__(
         self,
         out_channels: int,
-        kernel_size: int,
-        stride: int = 1,
-        padding: int | str = 0,
-        dilation: int = 1,
+        kernel_size: int | tuple[int],
+        stride: int | tuple[int] = 1,
+        padding: int | tuple[int] | str = 0,
+        dilation: int | tuple[int] = 1,
         groups: int = 1,
         bias: bool = True,
         padding_mode: PaddingMode = "zeros",
@@ -759,14 +762,16 @@ class LazyConv1d(_LazyConvMixin, Conv1d):
         """Initialise the LazyConv1d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.out_channels: int = out_channels
-        self.kernel_size: int = kernel_size
-        self.stride: int = stride
-        self.dilation: int = dilation
+        self.kernel_size: int = _single(kernel_size, "kernel_size")
+        self.stride: int = _single(stride, "stride")
+        self.dilation: int = _single(dilation, "dilation")
         self.groups: int = groups
         self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
-        self._padding_str = _string_padding(padding, stride, type(self).__name__)
-        self.padding: int = 0 if isinstance(padding, str) else padding
+        self._padding_str = _string_padding(padding, self.stride, type(self).__name__)
+        self.padding: int = (
+            0 if isinstance(padding, str) else _single(padding, "padding")
+        )
         self._defer(bias, device, dtype)
 
     @override

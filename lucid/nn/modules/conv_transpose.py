@@ -8,6 +8,7 @@ from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid.nn.modules._conv_common import (
+    _single,
     _conv_parameters,
     _LazyConvMixin,
     _pair,
@@ -200,13 +201,13 @@ class ConvTranspose1d(_ConvTransposeNd):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: int,
-        stride: int = 1,
-        padding: int = 0,
-        output_padding: int = 0,
+        kernel_size: int | tuple[int],
+        stride: int | tuple[int] = 1,
+        padding: int | tuple[int] = 0,
+        output_padding: int | tuple[int] = 0,
         groups: int = 1,
         bias: bool = True,
-        dilation: int = 1,
+        dilation: int | tuple[int] = 1,
         padding_mode: str = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
@@ -216,14 +217,14 @@ class ConvTranspose1d(_ConvTransposeNd):
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-        self.output_padding = output_padding
+        self.kernel_size: int = _single(kernel_size, "kernel_size")
+        self.stride: int = _single(stride, "stride")
+        self.padding: int = _single(padding, "padding")
+        self.output_padding: int = _single(output_padding, "output_padding")
         self.groups = groups
-        self.dilation = dilation
+        self.dilation: int = _single(dilation, "dilation")
         self.weight, self.bias = _conv_parameters(
-            (in_channels, out_channels // groups, kernel_size),
+            (in_channels, out_channels // groups, self.kernel_size),
             out_channels,
             bias,
             device,
@@ -650,13 +651,13 @@ class LazyConvTranspose1d(_LazyConvMixin, ConvTranspose1d):
     def __init__(
         self,
         out_channels: int,
-        kernel_size: int,
-        stride: int = 1,
-        padding: int = 0,
-        output_padding: int = 0,
+        kernel_size: int | tuple[int],
+        stride: int | tuple[int] = 1,
+        padding: int | tuple[int] = 0,
+        output_padding: int | tuple[int] = 0,
         groups: int = 1,
         bias: bool = True,
-        dilation: int = 1,
+        dilation: int | tuple[int] = 1,
         padding_mode: str = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
@@ -665,12 +666,12 @@ class LazyConvTranspose1d(_LazyConvMixin, ConvTranspose1d):
         Module.__init__(self)
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
         self.out_channels: int = out_channels
-        self.kernel_size: int = kernel_size
-        self.stride: int = stride
-        self.padding: int = padding
-        self.output_padding: int = output_padding
+        self.kernel_size: int = _single(kernel_size, "kernel_size")
+        self.stride: int = _single(stride, "stride")
+        self.padding: int = _single(padding, "padding")
+        self.output_padding: int = _single(output_padding, "output_padding")
         self.groups: int = groups
-        self.dilation: int = dilation
+        self.dilation: int = _single(dilation, "dilation")
         self._defer(bias, device, dtype)
 
     @override

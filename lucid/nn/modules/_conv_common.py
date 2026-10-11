@@ -14,13 +14,31 @@ from lucid.nn.parameter import Parameter, UninitializedParameter
 
 
 def _ntuple(v: int | Sequence[int], n: int, name: str) -> tuple[int, ...]:
-    """``v`` as ``n`` ints: one int is repeated, a sequence must have ``n``."""
+    """``v`` as ``n`` ints, as the reference reads a convolution's sizes.
+
+    One int, or a sequence of one, is repeated; otherwise the sequence must
+    have ``n``.  ``kernel_size`` is the exception: the reference spreads no
+    one-element kernel across a 2-D or 3-D window, so it must have ``n``.
+    """
     if isinstance(v, int):
         return (v,) * n
     values = tuple(v)
+    if len(values) == 1 and name != "kernel_size":
+        return values * n
     if len(values) != n:
-        raise ValueError(f"{name} must be an int or {n} ints, got {values!r}")
+        if n == 1:
+            expected = "a sequence of one"
+        elif name == "kernel_size":
+            expected = f"{n} ints"
+        else:
+            expected = f"1 or {n} ints"
+        raise ValueError(f"{name} must be an int or {expected}, got {values!r}")
     return values
+
+
+def _single(v: int | Sequence[int], name: str) -> int:
+    (a,) = _ntuple(v, 1, name)
+    return a
 
 
 def _pair(v: _Size2d, name: str) -> tuple[int, int]:
