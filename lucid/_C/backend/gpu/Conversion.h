@@ -12,11 +12,14 @@
 //     nonzero, and every real target keeps the real part.
 //
 // ``any`` and ``all`` judge a complex element's truth by the same rule
-// (``truth_operand``).
+// (``truth_operand``), and a float sample position becomes an index by the
+// int64 conversion (``gpu_index_of``), the rule ``resample::index_of``
+// states for the CPU.
 
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 #include <mlx/array.h>
 #include <mlx/ops.h>
@@ -58,6 +61,20 @@ inline ::mlx::core::array gpu_convert(const ::mlx::core::array& x, Dtype dst_dt)
     y = mx::where(mx::greater_equal(x, hi), mx::array(std::int64_t{INT64_MAX}, mx::int64), y);
     y = mx::where(mx::less(x, lo), mx::array(std::int64_t{INT64_MIN}, mx::int64), y);
     return mx::where(mx::isnan(x), mx::array(std::int64_t{0}, mx::int64), y);
+}
+
+// A whole-numbered float position as an int64 index: NaN is 0 and a
+// position past the int64 range saturates, so an infinite grid coordinate
+// stays out of range (Metal's own conversion read +-inf as 0, in range).
+inline ::mlx::core::array gpu_index_of(const ::mlx::core::array& position) {
+    return gpu_convert(position, Dtype::I64);
+}
+
+// The index after each of ``i``, saturating at the top of the range.
+inline ::mlx::core::array gpu_next_index(const ::mlx::core::array& i) {
+    namespace mx = ::mlx::core;
+    const auto top = mx::array(std::numeric_limits<std::int64_t>::max() - 1, mx::int64);
+    return mx::add(mx::minimum(i, top), mx::array(std::int64_t{1}, mx::int64));
 }
 
 }  // namespace backend

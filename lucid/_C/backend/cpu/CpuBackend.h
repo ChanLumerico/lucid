@@ -83,6 +83,7 @@
 #include "Blas.h"
 #include "ErfPoly.h"
 #include "GeluGrad.h"
+#include "GridSample.h"
 #include "Im2Col.h"
 #include "IndexBounds.h"
 #include "Interpolate.h"
@@ -10482,93 +10483,13 @@ public:
                 grid_sample_forward(detail::as_f32(input), detail::as_f32(grid), in_shape,
                                     grid_shape, mode, padding_mode, align_corners, Dtype::F32),
                 dt);
-        const int N = static_cast<int>(in_shape[0]);
-        const int C = static_cast<int>(in_shape[1]);
-        const int H_in = static_cast<int>(in_shape[2]);
-        const int W_in = static_cast<int>(in_shape[3]);
-        const int H_out = static_cast<int>(grid_shape[1]);
-        const int W_out = static_cast<int>(grid_shape[2]);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& gs = std::get<CpuStorage>(grid);
-        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H_out * W_out, dt);
-
-        auto denorm_fn = [](auto g, int dim, bool align) {
-            using T = decltype(g);
-            if (align)
-                return (g + T{1}) * static_cast<T>(dim - 1) / T{2};
-            return (g + T{1}) * static_cast<T>(dim) / T{2} - static_cast<T>(0.5);
-        };
-
+        const auto g = cpu::grid::geometry(in_shape, grid_shape, mode, padding_mode, align_corners);
+        auto out = alloc_cpu(static_cast<std::size_t>(g.N * g.C) * g.out_plane(), dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
-            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
-            for (int n = 0; n < N; ++n) {
-                for (int h = 0; h < H_out; ++h) {
-                    for (int w = 0; w < W_out; ++w) {
-                        const std::size_t gidx =
-                            ((static_cast<std::size_t>(n) * H_out + h) * W_out + w) * 2;
-                        T ix = denorm_fn(gp[gidx + 0], W_in, align_corners);
-                        T iy = denorm_fn(gp[gidx + 1], H_in, align_corners);
-                        if (mode == 1) {
-                            int ixr = static_cast<int>(std::nearbyint(static_cast<double>(ix)));
-                            int iyr = static_cast<int>(std::nearbyint(static_cast<double>(iy)));
-                            bool oob = false;
-                            if (padding_mode == 1) {
-                                ixr = std::clamp(ixr, 0, W_in - 1);
-                                iyr = std::clamp(iyr, 0, H_in - 1);
-                            } else {
-                                if (ixr < 0 || ixr > W_in - 1 || iyr < 0 || iyr > H_in - 1)
-                                    oob = true;
-                                ixr = std::clamp(ixr, 0, W_in - 1);
-                                iyr = std::clamp(iyr, 0, H_in - 1);
-                            }
-                            for (int c = 0; c < C; ++c) {
-                                T v = oob ? T{0}
-                                          : xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
-                                               iyr * W_in + ixr];
-                                op[((static_cast<std::size_t>(n) * C + c) * out_chan) + h * W_out +
-                                   w] = v;
-                            }
-                        } else {
-                            if (padding_mode == 1) {
-                                ix = std::clamp<T>(ix, T{0}, static_cast<T>(W_in - 1));
-                                iy = std::clamp<T>(iy, T{0}, static_cast<T>(H_in - 1));
-                            }
-                            const T x0f = std::floor(ix);
-                            const T y0f = std::floor(iy);
-                            const int x0 = static_cast<int>(x0f);
-                            const int y0 = static_cast<int>(y0f);
-                            const int x1 = x0 + 1, y1 = y0 + 1;
-                            const T wa = (static_cast<T>(x1) - ix) * (static_cast<T>(y1) - iy);
-                            const T wb = (static_cast<T>(x1) - ix) * (iy - static_cast<T>(y0));
-                            const T wc = (ix - static_cast<T>(x0)) * (static_cast<T>(y1) - iy);
-                            const T wd = (ix - static_cast<T>(x0)) * (iy - static_cast<T>(y0));
-                            auto fetch = [&](int yi, int xi, int c) -> T {
-                                const bool oob =
-                                    (xi < 0 || xi > W_in - 1 || yi < 0 || yi > H_in - 1);
-                                if (oob && padding_mode == 0)
-                                    return T{0};
-                                const int ycl = std::clamp(yi, 0, H_in - 1);
-                                const int xcl = std::clamp(xi, 0, W_in - 1);
-                                return xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
-                                          ycl * W_in + xcl];
-                            };
-                            for (int c = 0; c < C; ++c) {
-                                const T Ia = fetch(y0, x0, c);
-                                const T Ib = fetch(y1, x0, c);
-                                const T Ic = fetch(y0, x1, c);
-                                const T Id = fetch(y1, x1, c);
-                                op[((static_cast<std::size_t>(n) * C + c) * out_chan) + h * W_out +
-                                   w] = Ia * wa + Ib * wb + Ic * wc + Id * wd;
-                            }
-                        }
-                    }
-                }
-            }
+            cpu::grid::forward(reinterpret_cast<const T*>(std::get<CpuStorage>(input).ptr.get()),
+                               reinterpret_cast<const T*>(std::get<CpuStorage>(grid).ptr.get()),
+                               reinterpret_cast<T*>(out.ptr.get()), g);
         };
         if (dt == Dtype::F32)
             run(float{});
@@ -10576,7 +10497,7 @@ public:
             run(double{});
         else
             ErrorBuilder("cpu::grid_sample_forward").not_implemented("dtype must be F32/F64");
-        return Storage{std::move(out_cpu)};
+        return Storage{std::move(out)};
     }
 
     std::vector<Storage> grid_sample_backward(const Storage& grad_out,
@@ -10594,152 +10515,17 @@ public:
                                      detail::as_f32(grid), in_shape, grid_shape, mode, padding_mode,
                                      align_corners, Dtype::F32),
                 dt);
-        const int N = static_cast<int>(in_shape[0]);
-        const int C = static_cast<int>(in_shape[1]);
-        const int H_in = static_cast<int>(in_shape[2]);
-        const int W_in = static_cast<int>(in_shape[3]);
-        const int H_out = static_cast<int>(grid_shape[1]);
-        const int W_out = static_cast<int>(grid_shape[2]);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& gs = std::get<CpuStorage>(grid);
-        const auto& gout = std::get<CpuStorage>(grad_out);
-        auto dx = alloc_cpu(static_cast<std::size_t>(N) * C * H_in * W_in, dt);
-        auto dg = alloc_cpu(static_cast<std::size_t>(N) * H_out * W_out * 2, dt);
-        std::memset(dx.ptr.get(), 0, dx.nbytes);
-        std::memset(dg.ptr.get(), 0, dg.nbytes);
-
-        auto denorm_fn = [](auto g, int dim, bool align) {
-            using T = decltype(g);
-            if (align)
-                return (g + T{1}) * static_cast<T>(dim - 1) / T{2};
-            return (g + T{1}) * static_cast<T>(dim) / T{2} - static_cast<T>(0.5);
-        };
-        auto denorm_grad_factor_fn = [](int dim, bool align, auto T_tag) {
-            using T = decltype(T_tag);
-            return align ? static_cast<T>(dim - 1) / T{2} : static_cast<T>(dim) / T{2};
-        };
-
+        const auto g = cpu::grid::geometry(in_shape, grid_shape, mode, padding_mode, align_corners);
+        auto dx = alloc_cpu(static_cast<std::size_t>(g.N * g.C) * g.in_plane(), dt);
+        auto dg = alloc_cpu(static_cast<std::size_t>(g.N) * g.out_plane() * 2, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* op = reinterpret_cast<const T*>(gout.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
-            const std::size_t in_chan = static_cast<std::size_t>(H_in) * W_in;
-            const std::size_t out_chan = static_cast<std::size_t>(H_out) * W_out;
-            const T sx = denorm_grad_factor_fn(W_in, align_corners, T{});
-            const T sy = denorm_grad_factor_fn(H_in, align_corners, T{});
-            for (int n = 0; n < N; ++n) {
-                for (int h = 0; h < H_out; ++h) {
-                    for (int w = 0; w < W_out; ++w) {
-                        const std::size_t gidx =
-                            ((static_cast<std::size_t>(n) * H_out + h) * W_out + w) * 2;
-                        const T gx_norm = gp[gidx + 0];
-                        const T gy_norm = gp[gidx + 1];
-                        T ix = denorm_fn(gx_norm, W_in, align_corners);
-                        T iy = denorm_fn(gy_norm, H_in, align_corners);
-                        bool clipped_x = false, clipped_y = false;
-                        if (mode == 0 && padding_mode == 1) {
-                            if (ix < T{0}) {
-                                ix = T{0};
-                                clipped_x = true;
-                            }
-                            if (ix > static_cast<T>(W_in - 1)) {
-                                ix = static_cast<T>(W_in - 1);
-                                clipped_x = true;
-                            }
-                            if (iy < T{0}) {
-                                iy = T{0};
-                                clipped_y = true;
-                            }
-                            if (iy > static_cast<T>(H_in - 1)) {
-                                iy = static_cast<T>(H_in - 1);
-                                clipped_y = true;
-                            }
-                        }
-                        if (mode == 1) {
-                            int ixr = static_cast<int>(std::nearbyint(static_cast<double>(ix)));
-                            int iyr = static_cast<int>(std::nearbyint(static_cast<double>(iy)));
-                            bool oob = false;
-                            if (padding_mode == 1) {
-                                ixr = std::clamp(ixr, 0, W_in - 1);
-                                iyr = std::clamp(iyr, 0, H_in - 1);
-                            } else {
-                                if (ixr < 0 || ixr > W_in - 1 || iyr < 0 || iyr > H_in - 1)
-                                    oob = true;
-                                ixr = std::clamp(ixr, 0, W_in - 1);
-                                iyr = std::clamp(iyr, 0, H_in - 1);
-                            }
-                            if (!oob) {
-                                for (int c = 0; c < C; ++c) {
-                                    const T go =
-                                        op[((static_cast<std::size_t>(n) * C + c) * out_chan) +
-                                           h * W_out + w];
-                                    dxp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
-                                        iyr * W_in + ixr] += go;
-                                }
-                            }
-                            continue;
-                        }
-                        const T x0f = std::floor(ix);
-                        const T y0f = std::floor(iy);
-                        const int x0 = static_cast<int>(x0f);
-                        const int y0 = static_cast<int>(y0f);
-                        const int x1 = x0 + 1, y1 = y0 + 1;
-                        const T wa = (static_cast<T>(x1) - ix) * (static_cast<T>(y1) - iy);
-                        const T wb = (static_cast<T>(x1) - ix) * (iy - static_cast<T>(y0));
-                        const T wc = (ix - static_cast<T>(x0)) * (static_cast<T>(y1) - iy);
-                        const T wd = (ix - static_cast<T>(x0)) * (iy - static_cast<T>(y0));
-                        auto in_bounds = [&](int yi, int xi) -> bool {
-                            return xi >= 0 && xi <= W_in - 1 && yi >= 0 && yi <= H_in - 1;
-                        };
-                        auto fetch_for_dgrid = [&](int yi, int xi, int c) -> T {
-                            const bool oob = !in_bounds(yi, xi);
-                            if (oob && padding_mode == 0)
-                                return T{0};
-                            const int ycl = std::clamp(yi, 0, H_in - 1);
-                            const int xcl = std::clamp(xi, 0, W_in - 1);
-                            return xp[((static_cast<std::size_t>(n) * C + c) * in_chan) +
-                                      ycl * W_in + xcl];
-                        };
-                        auto scatter_dx = [&](int yi, int xi, int c, T contrib) {
-                            const bool oob = !in_bounds(yi, xi);
-                            if (oob && padding_mode == 0)
-                                return;
-                            const int ycl = std::clamp(yi, 0, H_in - 1);
-                            const int xcl = std::clamp(xi, 0, W_in - 1);
-                            dxp[((static_cast<std::size_t>(n) * C + c) * in_chan) + ycl * W_in +
-                                xcl] += contrib;
-                        };
-                        T dix_acc = T{0}, diy_acc = T{0};
-                        for (int c = 0; c < C; ++c) {
-                            const T go = op[((static_cast<std::size_t>(n) * C + c) * out_chan) +
-                                            h * W_out + w];
-                            scatter_dx(y0, x0, c, go * wa);
-                            scatter_dx(y1, x0, c, go * wb);
-                            scatter_dx(y0, x1, c, go * wc);
-                            scatter_dx(y1, x1, c, go * wd);
-                            const T Ia = fetch_for_dgrid(y0, x0, c);
-                            const T Ib = fetch_for_dgrid(y1, x0, c);
-                            const T Ic = fetch_for_dgrid(y0, x1, c);
-                            const T Id = fetch_for_dgrid(y1, x1, c);
-                            const T dy_t1 = static_cast<T>(y1) - iy;
-                            const T dy_t2 = iy - static_cast<T>(y0);
-                            const T dx_t1 = static_cast<T>(x1) - ix;
-                            const T dx_t2 = ix - static_cast<T>(x0);
-                            dix_acc += go * ((Ic - Ia) * dy_t1 + (Id - Ib) * dy_t2);
-                            diy_acc += go * ((Ib - Ia) * dx_t1 + (Id - Ic) * dx_t2);
-                        }
-                        if (clipped_x)
-                            dix_acc = T{0};
-                        if (clipped_y)
-                            diy_acc = T{0};
-                        dgp[gidx + 0] = dix_acc * sx;
-                        dgp[gidx + 1] = diy_acc * sy;
-                    }
-                }
-            }
+            auto in = [](const Storage& s) {
+                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
+            };
+            cpu::grid::backward(in(grad_out), in(input), in(grid),
+                                reinterpret_cast<T*>(dx.ptr.get()),
+                                reinterpret_cast<T*>(dg.ptr.get()), g);
         };
         if (dt == Dtype::F32)
             run(float{});

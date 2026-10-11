@@ -186,8 +186,8 @@
     "lucid/utils/transforms/_presets.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 10980,
-    "lucid/_C/backend/gpu/GpuBackend.h": 4626,
+    "lucid/_C/backend/cpu/CpuBackend.h": 10766,
+    "lucid/_C/backend/gpu/GpuBackend.h": 4613,
     "lucid/_ops/composite/elementwise.py": 215,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2797,
@@ -835,7 +835,7 @@
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/Engine.cpp": 2,
     "lucid/_C/autograd/FusionPass.cpp": 1,
-    "lucid/_C/backend/cpu/CpuBackend.h": 40,
+    "lucid/_C/backend/cpu/CpuBackend.h": 38,
     "lucid/_C/backend/cpu/Pool.cpp": 3,
     "lucid/_C/backend/gpu/AxisIndex.h": 1,
     "lucid/_C/backend/gpu/GpuBackend.h": 4,
@@ -959,7 +959,7 @@
    "function-length": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/Engine.cpp": 2,
-    "lucid/_C/backend/cpu/CpuBackend.h": 18,
+    "lucid/_C/backend/cpu/CpuBackend.h": 16,
     "lucid/_C/backend/gpu/GpuBackend.h": 8,
     "lucid/_C/bindings/bind.cpp": 1,
     "lucid/_C/bindings/bind_autograd.cpp": 1,

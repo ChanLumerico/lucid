@@ -6714,11 +6714,13 @@ private:
             return vals;
         };
 
+        // Positions become indices, and step to a neighbour, by the
+        // saturating rule in ``gpu/Conversion.h`` (LCD-420).
         auto round_int = [&](const ::mlx::core::array& a) {
-            return ::mlx::core::astype(::mlx::core::round(a, 0), ::mlx::core::int64);
+            return gpu_index_of(::mlx::core::round(a, 0));
         };
         auto floor_int = [&](const ::mlx::core::array& a) {
-            return ::mlx::core::astype(::mlx::core::floor(a), ::mlx::core::int64);
+            return gpu_index_of(::mlx::core::floor(a));
         };
 
         ::mlx::core::array y_out{0};
@@ -6755,9 +6757,8 @@ private:
             }
             auto x0 = floor_int(ix_use);
             auto y0 = floor_int(iy_use);
-            auto one_i = ::mlx::core::astype(::mlx::core::array(1), ::mlx::core::int64);
-            auto x1 = ::mlx::core::add(x0, one_i);
-            auto y1 = ::mlx::core::add(y0, one_i);
+            auto x1 = gpu_next_index(x0);
+            auto y1 = gpu_next_index(y0);
             auto x0_f = ::mlx::core::astype(x0, mlx_dt);
             auto y0_f = ::mlx::core::astype(y0, mlx_dt);
             auto x1_f = ::mlx::core::astype(x1, mlx_dt);
@@ -6836,12 +6837,11 @@ private:
         clipped_x = ::mlx::core::broadcast_to(clipped_x, gx_n.shape());
         clipped_y = ::mlx::core::broadcast_to(clipped_y, gy_n.shape());
         if (mode == 0 && padding_mode == 1) {
-            auto cx_lo = ::mlx::core::less(ix, zero);
-            auto cx_hi = ::mlx::core::greater(ix, Wm1f);
-            clipped_x = ::mlx::core::logical_or(cx_lo, cx_hi);
-            auto cy_lo = ::mlx::core::less(iy, zero);
-            auto cy_hi = ::mlx::core::greater(iy, Hm1f);
-            clipped_y = ::mlx::core::logical_or(cy_lo, cy_hi);
+            // A position on the edge counts as clipped, as in the reference.
+            clipped_x = ::mlx::core::logical_or(::mlx::core::less_equal(ix, zero),
+                                                ::mlx::core::greater_equal(ix, Wm1f));
+            clipped_y = ::mlx::core::logical_or(::mlx::core::less_equal(iy, zero),
+                                                ::mlx::core::greater_equal(iy, Hm1f));
             ix = ::mlx::core::clip(ix, std::optional<::mlx::core::array>(zero),
                                    std::optional<::mlx::core::array>(Wm1f));
             iy = ::mlx::core::clip(iy, std::optional<::mlx::core::array>(zero),
@@ -6888,8 +6888,8 @@ private:
         if (mode == 1) {
             auto ixr_f = ::mlx::core::round(ix, 0);
             auto iyr_f = ::mlx::core::round(iy, 0);
-            auto ixr = ::mlx::core::astype(ixr_f, ::mlx::core::int64);
-            auto iyr = ::mlx::core::astype(iyr_f, ::mlx::core::int64);
+            auto ixr = gpu_index_of(ixr_f);
+            auto iyr = gpu_index_of(iyr_f);
             auto in_bounds = build_in_bounds_mask(iyr, ixr);
             auto zero_i = ::mlx::core::astype(::mlx::core::array(0), ::mlx::core::int64);
             auto Hm1_i = ::mlx::core::astype(::mlx::core::array(H_in - 1), ::mlx::core::int64);
@@ -6900,21 +6900,17 @@ private:
                                     std::optional<::mlx::core::array>(Hm1_i));
             auto flat_idx = build_flat_idx(iyr, ixr);
             auto contrib = *go_arr.arr;
-            if (padding_mode == 0) {
-                auto mask = ::mlx::core::astype(
-                    ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), mlx_dt);
-                auto mask_b = ::mlx::core::broadcast_to(mask, {N, C, H_out, W_out});
-                contrib = ::mlx::core::multiply(contrib, mask_b);
-            }
+            if (padding_mode == 0)
+                contrib = ::mlx::core::where(::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}),
+                                             contrib, zero);
             auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
             auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
             dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
         } else {
-            auto x0 = ::mlx::core::astype(::mlx::core::floor(ix), ::mlx::core::int64);
-            auto y0 = ::mlx::core::astype(::mlx::core::floor(iy), ::mlx::core::int64);
-            auto one_i = ::mlx::core::astype(::mlx::core::array(1), ::mlx::core::int64);
-            auto x1 = ::mlx::core::add(x0, one_i);
-            auto y1 = ::mlx::core::add(y0, one_i);
+            auto x0 = gpu_index_of(::mlx::core::floor(ix));
+            auto y0 = gpu_index_of(::mlx::core::floor(iy));
+            auto x1 = gpu_next_index(x0);
+            auto y1 = gpu_next_index(y0);
 
             auto x0_f = ::mlx::core::astype(x0, mlx_dt);
             auto y0_f = ::mlx::core::astype(y0, mlx_dt);
@@ -6954,12 +6950,10 @@ private:
                 auto w_b = ::mlx::core::broadcast_to(::mlx::core::reshape(w, {N, 1, H_out, W_out}),
                                                      {N, C, H_out, W_out});
                 ::mlx::core::array contrib = ::mlx::core::multiply(*go_arr.arr, w_b);
-                if (padding_mode == 0) {
-                    auto mask = ::mlx::core::astype(
-                        ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), mlx_dt);
-                    auto mask_b = ::mlx::core::broadcast_to(mask, {N, C, H_out, W_out});
-                    contrib = ::mlx::core::multiply(contrib, mask_b);
-                }
+                // Select, not multiply: a NaN weight times a 0 mask is NaN.
+                if (padding_mode == 0)
+                    contrib = ::mlx::core::where(
+                        ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), contrib, zero);
                 auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
                 auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
                 dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
@@ -6973,12 +6967,9 @@ private:
                                     const ::mlx::core::array& in_bounds) {
                 auto flat_idx = build_flat_idx(yi, xi);
                 auto vals = ::mlx::core::take(in_flat, flat_idx);
-                if (padding_mode == 0) {
-                    auto mask = ::mlx::core::astype(
-                        ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), mlx_dt);
-                    auto mask_b = ::mlx::core::broadcast_to(mask, {N, C, H_out, W_out});
-                    vals = ::mlx::core::multiply(vals, mask_b);
-                }
+                if (padding_mode == 0)
+                    vals = ::mlx::core::where(::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}),
+                                              vals, zero);
                 return vals;
             };
             auto Ia = fetch_corner(y0c, x0c, in00);
@@ -7016,12 +7007,8 @@ private:
             dgrid_x = ::mlx::core::multiply(dix_sum, sx);
             dgrid_y = ::mlx::core::multiply(diy_sum, sy_arr);
             if (padding_mode == 1) {
-                auto inv_x = ::mlx::core::logical_not(clipped_x);
-                auto inv_y = ::mlx::core::logical_not(clipped_y);
-                auto mx = ::mlx::core::astype(inv_x, mlx_dt);
-                auto my = ::mlx::core::astype(inv_y, mlx_dt);
-                dgrid_x = ::mlx::core::multiply(dgrid_x, mx);
-                dgrid_y = ::mlx::core::multiply(dgrid_y, my);
+                dgrid_x = ::mlx::core::where(clipped_x, zero, dgrid_x);
+                dgrid_y = ::mlx::core::where(clipped_y, zero, dgrid_y);
             }
         }
 
