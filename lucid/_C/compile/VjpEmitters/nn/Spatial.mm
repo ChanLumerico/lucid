@@ -273,9 +273,10 @@ public:
         };
         const auto corner = [&](MPSGraphTensor* px, MPSGraphTensor* py) -> Corner {
             const GraphPixel pixel = graph_pixel(g, px, py, H, W, padding == 0);
-            return {[g broadcastTensor:pixel.flat toShape:@[ @(N), @(C), @(L) ] name:nil],
-                    pixel.inside == nil ? real(1.0) : as_real(pixel.inside),
-                    pixel.inside};
+            return {
+                [g broadcastTensor:pixel.flat toShape:@[ @(N), @(C), @(L) ] name:nil],
+                    pixel.inside == nil ? real(1.0) : as_real(pixel.inside), pixel.inside
+            };
         };
         // Selected, not multiplied, as the forward reads it: an infinite
         // pixel at the clamped position of an outside corner is 0 there.
