@@ -905,7 +905,7 @@ def histogramdd(
 
 def histogram(
     input: Tensor,
-    bins: int | Sequence[float] | Tensor = 10,
+    bins: int | Sequence[float] | Tensor = 100,
     *,
     range: tuple[float, float] | None = None,
     weight: Tensor | None = None,
@@ -924,7 +924,7 @@ def histogram(
     input : Tensor
         Values to bin.  Flattened internally — shape doesn't matter.
     bins : int, sequence of float or Tensor, optional
-        When an int, the number of equal-width bins (default ``10``).
+        When an int, the number of equal-width bins (default ``100``).
         Otherwise the increasing bin edges (length ``bins_n + 1``).
     range : tuple[float, float], optional
         ``(lo, hi)``.  Values outside the range are dropped.  Ignored

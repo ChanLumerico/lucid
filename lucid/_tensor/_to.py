@@ -29,34 +29,74 @@ _STR_TO_DEVICE_ENUM: dict[str, _C_engine.Device] = {
 }
 
 
-def _split_to_args(
-    args: tuple[object, ...],
-) -> tuple[tuple[object, ...], tuple[bool, ...]]:
-    """``(targets, flags)`` of a positional ``.to(...)`` call, as the reference reads it.
+_TO_KEYWORDS = frozenset({"device", "dtype", "non_blocking", "copy"})
+_DEVICE_LIKE = (str, _C_engine.Device, _device_cls, type(None))
+_DTYPE_LIKE = (_dtype_cls, _C_engine.Dtype)
 
-    The targets — a device, a dtype, both, or a tensor — come first, then at
-    most ``(non_blocking, copy)``.  A flag with no target before it
-    (``x.to(True)``), a third flag, or a target after a flag is refused: a
-    ``bool`` used to be ignored wherever it stood, so ``x.to(True)`` was a
-    silent no-op.
+
+def _to_operands(
+    args: tuple[object, ...], kwargs: dict[str, object], tensor_cls: type
+) -> tuple[object, object, object, bool]:
+    """``(other, device, dtype, copy)`` of a ``.to(...)`` call, read as the reference reads it.
+
+    The reference takes three shapes — ``(device=None, dtype=None,
+    non_blocking=False, copy=False)``, ``(dtype, non_blocking=False,
+    copy=False)`` and ``(other, non_blocking=False, copy=False)`` — and
+    refuses everything else with ``TypeError``: an unknown keyword, an
+    argument of no shape (``object()``, a list), a dtype before a device,
+    a second dtype, a keyword for an argument already given by position.
+    A leading ``True`` / ``False`` is read as the dtype ``bool``, as the
+    reference reads it.  ``None`` is "keep" for a device or dtype.
+    A device index (``x.to(3)``) is refused: Lucid has one device of each
+    kind.  A transfer is synchronous, so ``non_blocking`` is read and
+    dropped.
     """
-    first_flag = next(
-        (i for i, a in enumerate(args) if isinstance(a, _builtin_bool)), len(args)
-    )
-    targets, flags = args[:first_flag], args[first_flag:]
-    if flags and not targets:
+    unknown = sorted(set(kwargs) - _TO_KEYWORDS)
+    if unknown:
+        raise TypeError(f"to() got an unexpected keyword argument {unknown[0]!r}")
+    rest = list(args)
+    other, device, dtype, taken = _to_target(rest, tensor_cls)
+    if len(rest) > 2 or not all(isinstance(f, _builtin_bool) for f in rest):
         raise TypeError(
-            "to() takes a device, dtype or tensor before non_blocking and copy"
+            "to() takes at most non_blocking and copy after the device / dtype / "
+            f"tensor, got {tuple(rest)!r}"
         )
-    if len(targets) > 2 or len(flags) > 2:
+    taken.update(("non_blocking", "copy")[: len(rest)])
+    clash = sorted(taken & set(kwargs))
+    if clash:
+        raise TypeError(f"to() got multiple values for argument {clash[0]!r}")
+    device = kwargs.get("device", device)
+    dtype = kwargs.get("dtype", dtype)
+    copy = rest[1] if len(rest) > 1 else kwargs.get("copy", False)
+    return other, device, dtype, _builtin_bool(copy)
+
+
+def _to_target(
+    rest: list[object], tensor_cls: type
+) -> tuple[object, object, object, set[str]]:
+    """Pop ``.to``'s leading tensor, dtype, or device and dtype off ``rest``.
+
+    Returns ``(other, device, dtype, taken)``, ``taken`` the parameters the
+    positions filled, which a keyword may not name again.
+    """
+    if not rest:
+        return None, None, None, set()
+    first = rest[0]
+    if isinstance(first, tensor_cls):  # the other tensor's device and dtype
+        return rest.pop(0), None, None, {"device", "dtype"}
+    if isinstance(first, (_builtin_bool, *_DTYPE_LIKE)):
+        dtype = bool_ if isinstance(rest.pop(0), _builtin_bool) else first
+        return None, None, dtype, {"device", "dtype"}
+    if not isinstance(first, _DEVICE_LIKE):
         raise TypeError(
-            "to() takes at most a device, a dtype, non_blocking and copy "
-            f"positionally, got {len(args)} arguments"
+            f"to() takes a device, a dtype or a tensor first, got {type(first).__name__}"
         )
-    bools = tuple(f for f in flags if isinstance(f, _builtin_bool))
-    if len(bools) != len(flags):
-        raise TypeError("to(): non_blocking and copy follow the device and dtype")
-    return targets, bools
+    device = rest.pop(0)
+    if not rest:
+        return None, device, None, {"device"}
+    if not (rest[0] is None or isinstance(rest[0], _DTYPE_LIKE)):
+        raise TypeError(f"to() takes a dtype after the device, got {rest[0]!r}")
+    return None, device, rest.pop(0), {"device", "dtype"}
 
 
 def _inject_to(cls: type) -> None:
@@ -132,37 +172,21 @@ def _inject_to(cls: type) -> None:
 
         target_device = self._impl.device
         target_dtype = self._impl.dtype
-        targets, flags = _split_to_args(args)
-        # A transfer here is synchronous, so only ``copy`` is read.
-        copy = _builtin_bool(kwargs.get("copy", flags[1] if len(flags) > 1 else False))
-
-        for a in targets:
-            if isinstance(a, cls):
-                # See the note in composite/elementwise.float_power:
-                # ``Tensor`` is TYPE_CHECKING-only here, so the bare name
-                # made ``x.to(other_tensor)`` raise NameError.
-                t = cast("Tensor", a)
-                target_device = t._impl.device
-                target_dtype = t._impl.dtype
-            elif isinstance(a, _C_engine.Device):
-                target_device = a
-            elif isinstance(a, _dtype_cls):
-                target_dtype = a._engine
-            elif isinstance(a, _device_cls):
-                target_device = a._engine
-            elif isinstance(a, str):
-                target_device = _parse_device(a)
-
-        if "device" in kwargs:
+        other, device, dtype, copy = _to_operands(args, kwargs, cls)
+        if other is not None:
+            # See the note in composite/elementwise.float_power: ``Tensor``
+            # is TYPE_CHECKING-only here, so the bare name made
+            # ``x.to(other_tensor)`` raise NameError.
+            t = cast("Tensor", other)
+            target_device = t._impl.device
+            target_dtype = t._impl.dtype
+        if device is not None:
             target_device = _parse_device(
-                cast(_device_cls | _C_engine.Device | str, kwargs["device"])
+                cast(_device_cls | _C_engine.Device | str, device)
             )
-        if "dtype" in kwargs:
+        if dtype is not None:
             target_dtype = to_engine_dtype(
-                cast(
-                    _dtype_cls | type[_dtype_cls] | _C_engine.Dtype | str | None,
-                    kwargs["dtype"],
-                )
+                cast(_dtype_cls | type[_dtype_cls] | _C_engine.Dtype | str, dtype)
             )
 
         same = target_device == self._impl.device and target_dtype == self._impl.dtype

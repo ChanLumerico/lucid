@@ -1277,13 +1277,9 @@ class Tensor:
         >>> x.grad                          # 3*x^2 + 3*x^2 = 2 * 12 = 24
         tensor([24.])
         """
-        # NOTE: a pre-backward ``self._impl.eval()`` was here historically
-        # ("evaluate forward graph before backward → ~2× faster").  Profiling
-        # on M4 Max (May 2026) showed the opposite: forcing a sync point
-        # between forward and backward shatters the MLX pipeline and costs
-        # 5-10% of step time in eager training loops.  MLX's backward kernel
-        # itself triggers the necessary evaluation when it needs concrete
-        # forward values.
+        # No ``self._impl.eval()`` first: a sync point between the passes cost
+        # 5-10% of an eager step on M4 Max (May 2026), and MLX's backward
+        # evaluates what it needs.
         from lucid.autograd._backward import backward as _backward
 
         _backward(self, gradient, retain_graph, create_graph, inputs)
@@ -3172,7 +3168,7 @@ class Tensor:
             self._impl.assign_from(filled, "fill_")
         return self
 
-    def copy_(self, other: Self) -> Self:
+    def copy_(self, other: Self, non_blocking: bool = False) -> Self:
         r"""Copy data from ``other`` into ``self`` in-place.
 
         Overwrites ``self``'s storage with ``other``'s values. Broadcasting
@@ -3185,6 +3181,9 @@ class Tensor:
         other : Tensor
             Source tensor. Made contiguous before the copy to guarantee
             a stride-compatible memory layout.
+        non_blocking : bool, optional
+            Accepted for the reference's signature; a copy here is
+            synchronous.  Default ``False``.
 
         Returns
         -------
@@ -3216,6 +3215,7 @@ class Tensor:
         >>> a.tolist()
         [1.0, 2.0, 3.0]
         """
+        del non_blocking  # a copy is synchronous; the reference's flag is read
         src = _C_engine.contiguous(other._impl)
         # The gradient belongs to ``other`` after this, not to whatever
         # produced ``self`` — which is the whole point of copying a

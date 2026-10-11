@@ -234,38 +234,125 @@ def test_conv_transpose_takes_only_zeros_padding_mode() -> None:
         nn.ConvTranspose2d(2, 2, 3, padding_mode="reflect")
 
 
-def test_to_reads_non_blocking_then_copy_by_position() -> None:
-    x = lucid.zeros(3)
-    assert x.to("cpu", lucid.float32, False, False) is x
-    assert x.to("cpu", lucid.float32, False, True) is not x
+#: ``.to`` calls, each run on Lucid and on the reference with ``(m, x)``:
+#: ``m`` the module, ``x`` a float32 CPU tensor of three zeros.
+_TO_CALLS: dict[str, Callable[[ModuleType, object], object]] = {
+    # the reference's shapes
+    "no-args": lambda m, x: x.to(),
+    "device": lambda m, x: x.to("cpu"),
+    "device-dtype": lambda m, x: x.to("cpu", m.float64),
+    "device-dtype-flags": lambda m, x: x.to("cpu", m.float64, False, True),
+    "device-dtype-flag": lambda m, x: x.to("cpu", m.float64, False),
+    "device-none-dtype": lambda m, x: x.to(None, m.float64),
+    "none": lambda m, x: x.to(None),
+    "dtype": lambda m, x: x.to(m.float64),
+    "dtype-flags": lambda m, x: x.to(m.float64, False, True),
+    "dtype-flag-copy-kw": lambda m, x: x.to(m.float64, False, copy=True),
+    "dtype-copy-kw": lambda m, x: x.to(m.float32, copy=True),
+    "same-dtype": lambda m, x: x.to(m.float32),
+    "tensor": lambda m, x: x.to(x),
+    "tensor-flags": lambda m, x: x.to(x, False, True),
+    "keywords": lambda m, x: x.to(device="cpu", dtype=m.float64),
+    "device-dtype-kw": lambda m, x: x.to("cpu", dtype=m.float64),
+    "device-kw-none": lambda m, x: x.to(device=None),
+    "dtype-kw-none": lambda m, x: x.to(dtype=None),
+    "non-blocking-kw": lambda m, x: x.to("cpu", non_blocking=True),
+    "bool-as-dtype": lambda m, x: x.to(True),
+    "false-as-dtype": lambda m, x: x.to(False),
+    "bool-dtype-flags": lambda m, x: x.to(True, False, True),
+    # refused by both
+    "unknown-keyword": lambda m, x: x.to(dtyp=m.float64),
+    "object": lambda m, x: x.to(object()),
+    "list": lambda m, x: x.to([1]),
+    "dtype-then-device": lambda m, x: x.to(m.float64, "cpu"),
+    "tensor-then-dtype": lambda m, x: x.to(x, m.float64),
+    "two-dtypes": lambda m, x: x.to(m.float64, m.float64),
+    "device-twice": lambda m, x: x.to("cpu", device="cpu"),
+    "copy-twice": lambda m, x: x.to(m.float64, False, True, copy=True),
+    "non-blocking-twice": lambda m, x: x.to(m.float64, False, non_blocking=True),
+    "flag-in-dtype-slot": lambda m, x: x.to("cpu", True),
+    "third-flag": lambda m, x: x.to("cpu", m.float64, False, True, False),
+    "dtype-then-device-kw": lambda m, x: x.to(m.float64, device="cpu"),
+    "tensor-then-dtype-kw": lambda m, x: x.to(x, dtype=m.float64),
+}
 
 
-@pytest.mark.parametrize(
-    "call",
-    [
-        lambda x: x.to(True),
-        lambda x: x.to("cpu", lucid.float32, False, True, False),
-        lambda x: x.to("cpu", False, lucid.float32),
-        lambda x: x.to("cpu", lucid.float32, lucid.float64),
-    ],
-    ids=["flag-alone", "third-flag", "target-after-flag", "third-target"],
-)
-def test_to_refuses_positionals_the_reference_refuses(
-    call: Callable[[lucid.Tensor], object],
-) -> None:
-    # A ``bool`` used to be ignored wherever it stood.
+@pytest.mark.parametrize("name", list(_TO_CALLS))
+def test_to_binds_as_the_reference_binds(ref: ModuleType, name: str) -> None:
+    call = _TO_CALLS[name]
+
+    def run(m: ModuleType) -> tuple[str, bool] | None:
+        x = m.zeros(3)
+        try:
+            out = call(m, x)
+        except TypeError:
+            return None
+        return str(out.dtype).rsplit(".", 1)[-1].rstrip("_"), out is x
+
+    assert run(lucid) == run(ref)
+
+
+def test_to_refuses_a_device_index() -> None:
+    # The reference reads ``x.to(3)`` as device index 3; Lucid has one
+    # device of each kind, so an index is refused rather than guessed at.
     with pytest.raises(TypeError):
-        call(lucid.zeros(3))
+        lucid.zeros(3).to(3)
 
 
-def test_conv_sizes_of_the_wrong_length_are_refused() -> None:
-    import lucid.nn as nn
+_CONV_CLASSES = [
+    f"{lazy}Conv{kind}{rank}d"
+    for lazy in ("", "Lazy")
+    for kind in ("", "Transpose")
+    for rank in (1, 2, 3)
+]
 
-    # A 3-tuple kernel for a 2-D convolution used to lose its third entry.
-    with pytest.raises(ValueError, match="kernel_size"):
-        nn.Conv2d(2, 2, (3, 3, 3))
-    with pytest.raises(ValueError, match="stride"):
-        nn.ConvTranspose3d(2, 2, 3, stride=(1, 2))
+
+def _size_cases() -> list[object]:
+    cases = []
+    for name in _CONV_CLASSES:
+        rank = int(name[-2])
+        args = ["kernel_size", "stride", "padding", "dilation"]
+        if "Transpose" in name:
+            args.append("output_padding")
+        for arg in args:
+            value = 2 if arg == "dilation" else 1
+            for form, given in (
+                ("int", value),
+                ("one", (value,)),
+                ("rank", (value,) * rank),
+                ("wrong", (value,) * (rank + 1)),
+            ):
+                cases.append(pytest.param(name, arg, given, id=f"{name}-{arg}-{form}"))
+    return cases
+
+
+def _build(m: ModuleType, name: str, arg: str, given: object) -> object:
+    kwargs: dict[str, object] = {"kernel_size": 3, arg: given}
+    if arg == "output_padding":
+        kwargs["stride"] = 2
+    cls = getattr(m.nn, name)
+    return cls(2, **kwargs) if name.startswith("Lazy") else cls(2, 2, **kwargs)
+
+
+@pytest.mark.parametrize("name,arg,given", _size_cases())
+def test_conv_sizes_read_as_the_reference_reads_them(
+    ref: ModuleType, name: str, arg: str, given: object
+) -> None:
+    # One int, or a one-element sequence, stands for every spatial dim —
+    # except a kernel_size of one element on a 2-D / 3-D window, and a
+    # sequence of the wrong length, which the reference refuses (at the
+    # forward; Lucid at construction).  A 1-D layer takes ``(3,)`` too.
+    rank = int(name[-2])
+    shape = (1, 2) + (9,) * rank
+    try:
+        want = tuple(_build(ref, name, arg, given)(ref.zeros(shape)).shape)
+    except RuntimeError:
+        want = None
+    if want is None:
+        with pytest.raises(ValueError, match=arg):
+            _build(lucid, name, arg, given)(lucid.zeros(shape))
+        return
+    assert _build(lucid, name, arg, given)(lucid.zeros(shape)).shape == want
 
 
 def test_a_lazy_transposed_conv_pickled_without_padding_mode_still_reprs() -> None:
