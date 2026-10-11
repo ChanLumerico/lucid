@@ -193,7 +193,7 @@
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 10759,
     "lucid/_C/backend/gpu/GpuBackend.h": 4604,
-    "lucid/_ops/composite/elementwise.py": 215,
+    "lucid/_ops/composite/elementwise.py": 201,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2796,
     "lucid/compile/_optim/compiler.py": 752,
@@ -1574,7 +1574,6 @@
     "lucid/utils/transforms/functional.py": 1
    },
    "RET505": {
-    "lucid/_ops/composite/elementwise.py": 1,
     "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/nn/functional/normalization.py": 1
@@ -1843,7 +1842,7 @@
     "lucid/utils/tokenizer/_unigram.py": 1
    },
    "unused-method": {
-    "lucid/_tensor/tensor.py": 8,
+    "lucid/_tensor/tensor.py": 7,
     "lucid/autograd/function.py": 1,
     "lucid/compile/_entry/fused_step.py": 1,
     "lucid/metal/__init__.py": 1,

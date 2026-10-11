@@ -3335,7 +3335,7 @@ class Tensor:
         """
         from lucid._ops.composite.indexing import index_add as _index_add
 
-        return _index_add(self, dim, index, source, alpha)
+        return _index_add(self, dim, index, source, alpha=alpha)
 
     def index_add_(
         self, dim: int, index: Tensor, source: Tensor, *, alpha: float = 1.0
@@ -3395,7 +3395,7 @@ class Tensor:
         return _write_inplace(
             self,
             "index_add_",
-            lambda base: index_add(base, dim, index, source, alpha),
+            lambda base: index_add(base, dim, index, source, alpha=alpha),
             source,
         )
 

@@ -549,8 +549,8 @@ def resolve_neg(input: Tensor) -> Tensor:
 
 
 def allclose(
-    a: Tensor,
-    b: Tensor,
+    input: Tensor,
+    other: Tensor,
     rtol: float = 1e-5,
     atol: float = 1e-8,
     equal_nan: bool = False,
@@ -561,20 +561,21 @@ def allclose(
 
     .. math::
 
-        |a_i - b_i| \le \text{atol} + \text{rtol} \cdot |b_i|.
+        |\text{input}_i - \text{other}_i| \le \text{atol}
+            + \text{rtol} \cdot |\text{other}_i|.
 
-    Note the asymmetry — the relative term uses ``|b|``, so swapping
+    Note the asymmetry — the relative term uses ``|other|``, so swapping
     arguments can change the answer for marginal cases.  This matches
     the NumPy / reference-framework convention.
 
     Parameters
     ----------
-    a, b : Tensor
+    input, other : Tensor
         Inputs to compare.  Must be broadcastable.
     rtol : float, optional
         Relative tolerance.  Default ``1e-5``.
     atol : float, optional
-        Absolute tolerance — dominates the bound when ``|b|`` is small
+        Absolute tolerance — dominates the bound when ``|other|`` is small
         (think of comparisons near zero).  Default ``1e-8``.
     equal_nan : bool, optional
         When ``True``, ``NaN`` positions are treated as equal to other
@@ -591,11 +592,11 @@ def allclose(
     --------
     isclose : element-wise variant that returns a Tensor of bools.
     """
-    diff = lucid.abs(a - b)
-    tol = atol + rtol * lucid.abs(b)
+    diff = lucid.abs(input - other)
+    tol = atol + rtol * lucid.abs(other)
     close = diff <= tol
     if equal_nan:
-        both_nan = lucid.isnan(a) & lucid.isnan(b)
+        both_nan = lucid.isnan(input) & lucid.isnan(other)
         close = close | both_nan
     return bool(close.all().item())
 

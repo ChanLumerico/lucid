@@ -264,14 +264,14 @@ def _nanmedian_all(x: Tensor) -> Tensor:
 
 
 def count_nonzero(
-    x: Tensor,
+    input: Tensor,
     dim: int | Sequence[int] | None = None,
 ) -> Tensor:
     """Count non-zero elements along ``dim`` (or whole tensor when ``None``).
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input.  Non-zero is determined by element-wise comparison to
         zero (NaN counts as non-zero).
     dim : int, sequence of int, or None, optional
@@ -291,17 +291,17 @@ def count_nonzero(
     float sum back — three full-size temporaries and ten times a plain
     reduction, from a time the CPU could not sum a bool.
     """
-    mask = x != 0
-    _dim2 = None if dim is None else _reduction_axes(x._impl, dim, "count_nonzero")
+    mask = input != 0
+    _dim2 = None if dim is None else _reduction_axes(input._impl, dim, "count_nonzero")
     return lucid.sum(mask) if _dim2 is None else lucid.sum(mask, _dim2, False)
 
 
 def amax(
-    x: Tensor,
+    input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
-    """Reduce ``x`` to per-slice maxima along ``dim`` — values only.
+    """Reduce ``input`` to per-slice maxima along ``dim`` — values only.
 
     Multi-axis sibling of :func:`lucid.max` that returns *only* the
     reduced values (never the indices) and accepts a tuple of axes
@@ -310,7 +310,7 @@ def amax(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) reduces over every
@@ -330,17 +330,17 @@ def amax(
     lucid.max : returns ``(values, indices)`` for a single axis.
     """
     if dim is None:
-        return lucid.max(x)
-    _dim = _reduction_axes(x._impl, dim, "amax")
-    return lucid.max(x, _dim, keepdim)
+        return lucid.max(input)
+    _dim = _reduction_axes(input._impl, dim, "amax")
+    return lucid.max(input, _dim, keepdim)
 
 
 def amin(
-    x: Tensor,
+    input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
-    """Reduce ``x`` to per-slice minima along ``dim`` — values only.
+    """Reduce ``input`` to per-slice minima along ``dim`` — values only.
 
     Mirror image of :func:`amax`.  Accepts a tuple of axes for a fused
     multi-axis reduction; returns just the minimum values (never the
@@ -348,7 +348,7 @@ def amin(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) reduces over every
@@ -368,9 +368,9 @@ def amin(
     lucid.min : returns ``(values, indices)`` for a single axis.
     """
     if dim is None:
-        return lucid.min(x)
-    _dim = _reduction_axes(x._impl, dim, "amin")
-    return lucid.min(x, _dim, keepdim)
+        return lucid.min(input)
+    _dim = _reduction_axes(input._impl, dim, "amin")
+    return lucid.min(input, _dim, keepdim)
 
 
 __all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero", "amax", "amin"]

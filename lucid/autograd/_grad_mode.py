@@ -173,7 +173,7 @@ class enable_grad:
         return wrapper  # type: ignore[return-value]
 
 
-def set_grad_enabled(flag: bool) -> None:
+def set_grad_enabled(mode: bool) -> None:
     r"""Globally set the autograd gradient-tracking flag.
 
     Imperative counterpart of :class:`no_grad` and
@@ -184,7 +184,7 @@ def set_grad_enabled(flag: bool) -> None:
 
     Parameters
     ----------
-    flag : bool
+    mode : bool
         ``True`` to enable gradient tracking on subsequent ops,
         ``False`` to disable it. The change persists until
         another call to ``set_grad_enabled`` or until a
@@ -210,7 +210,7 @@ def set_grad_enabled(flag: bool) -> None:
     False
     >>> set_grad_enabled(True)
     """
-    _C_engine.set_grad_enabled(flag)
+    _C_engine.set_grad_enabled(mode)
 
 
 def is_grad_enabled() -> bool:

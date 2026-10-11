@@ -19,9 +19,8 @@ had the same ``nan`` at coincident points.
 Alongside: every reduction refuses a dim named twice, or a dim that is not
 an integer, in its own name; and the four variance functions share one
 reading of their arguments — a positional bool means what it means to the
-reference (``var(x, False)`` is ``unbiased=False``), while ``var(x, dim,
-keepdim)`` still reads ``keepdim`` but warns, until 3.18.0 makes it
-``unbiased``.
+reference (``var(x, False)`` is ``unbiased=False``, and ``var(x, dim, b)``
+reads ``b`` as ``unbiased``; it was ``keepdim`` until LCD-410).
 
 The parity tests compare values and gradients against the reference on
 both devices.  A value or a gradient the reference gives as finite must be
@@ -447,7 +446,7 @@ def test_the_pairs_keep_their_released_positional_correction(
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         got = getattr(lucid, fn)(x, 1, 2, True)
-        by_name = getattr(lucid, fn)(x=x, dim=1, correction=2, keepdim=True)
+        by_name = getattr(lucid, fn)(input=x, dim=1, correction=2, keepdim=True)
     for g, b in zip(got, by_name, strict=True):
         assert g.shape == (2, 1)
         np.testing.assert_allclose(_lucid_np(g), _lucid_np(b))

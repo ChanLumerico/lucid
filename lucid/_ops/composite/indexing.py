@@ -235,6 +235,7 @@ def index_add(
     dim: int,
     index: Tensor,
     source: Tensor,
+    *,
     alpha: float = 1.0,
 ) -> Tensor:
     """Return ``input`` with ``alpha * source`` accumulated at ``index`` positions along ``dim``.
@@ -400,6 +401,7 @@ def scatter_reduce(
     index: Tensor,
     src: Tensor,
     reduce: str = "sum",
+    *,
     include_self: bool = True,
 ) -> Tensor:
     """Reduce ``src`` into ``input`` along ``dim`` at positions given by ``index``.
@@ -745,8 +747,8 @@ def index_put_(
     )
 
 
-def argwhere(x: Tensor) -> Tensor:
-    """Return the coordinates of every non-zero element in ``x``.
+def argwhere(input: Tensor) -> Tensor:
+    """Return the coordinates of every non-zero element in ``input``.
 
     Thin alias for :func:`lucid.nonzero` named to match the NumPy /
     reference-framework convention.  The output is a synchronisation
@@ -755,7 +757,7 @@ def argwhere(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape and dtype; zero is determined by the
         usual truthiness rules (``0`` for numeric dtypes, ``False`` for
         bool).
@@ -771,7 +773,7 @@ def argwhere(x: Tensor) -> Tensor:
     --------
     lucid.nonzero : the underlying engine call.
     """
-    return lucid.nonzero(x)
+    return lucid.nonzero(input)
 
 
 __all__ = [

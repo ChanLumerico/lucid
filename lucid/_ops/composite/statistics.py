@@ -149,6 +149,7 @@ def quantile(
     q: float | Sequence[float] | Tensor,
     dim: int | None = None,
     keepdim: bool = False,
+    *,
     interpolation: str = "linear",
 ) -> Tensor:
     """Compute the *q*-th quantile of ``input``.
@@ -202,7 +203,7 @@ def quantile(
         if input.ndim == 0:
             # A 0-d tensor's notional axis is the whole of it, with or
             # without ``keepdim``: the quantile of its one-element view.
-            return quantile(input.reshape(1), q, 0, False, interpolation)
+            return quantile(input.reshape(1), q, 0, False, interpolation=interpolation)
         sorted_x = lucid.sort(input, dim)
         n = input.shape[dim]
         results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
@@ -224,6 +225,7 @@ def nanquantile(
     q: float | Sequence[float] | Tensor,
     dim: int | None = None,
     keepdim: bool = False,
+    *,
     interpolation: str = "linear",
 ) -> Tensor:
     """NaN-aware quantile — same interface as :func:`quantile`, but
@@ -262,7 +264,7 @@ def nanquantile(
     """
     if not lucid.is_floating_point(input):
         # No NaN to skip: the plain quantile is the answer.
-        return quantile(input, q, dim, keepdim, interpolation)
+        return quantile(input, q, dim, keepdim, interpolation=interpolation)
     q_list, scalar_q = _parse_q(q)
     # The whole tensor is the one slice of its flattening, so it takes the
     # per-slice path: the count stays a tensor on the device, and an all-NaN
@@ -288,7 +290,7 @@ def nanquantile(
 # ── covariance & correlation ──────────────────────────────────────────────────
 
 
-def cov(input: Tensor, correction: int = 1) -> Tensor:
+def cov(input: Tensor, *, correction: int = 1) -> Tensor:
     r"""Covariance matrix of ``input``.
 
     Parameters
@@ -649,7 +651,6 @@ def multinomial(
 
 def poisson(
     input: Tensor,
-    *,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     r"""Sample element-wise from :math:`\mathrm{Poisson}(\text{rate} = \text{input}[i])`.
@@ -905,9 +906,10 @@ def histogramdd(
 def histogram(
     input: Tensor,
     bins: int | Sequence[float] | Tensor = 10,
+    *,
     range: tuple[float, float] | None = None,
-    density: bool = False,
     weight: Tensor | None = None,
+    density: bool = False,
 ) -> tuple[Tensor, Tensor]:
     """Compute a 1-D histogram of ``input`` values.
 
@@ -1070,17 +1072,17 @@ def _uniform_bucket(values: Tensor, edges: Tensor, bins: int) -> Tensor:
     return bucket - below.to(lucid.int64) + above.to(lucid.int64)
 
 
-def std_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
+def std_mean(input: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
     """Return ``(std, mean)`` along ``dim`` in a single call.
 
     Fused convenience over :func:`lucid.std` + :func:`lucid.mean` — the
-    engine reduction still scans ``x`` twice, but the call site is
+    engine reduction still scans ``input`` twice, but the call site is
     shorter and the two outputs share an explicit ``correction`` /
     ``keepdim`` contract.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) reduces over every
@@ -1120,10 +1122,10 @@ def std_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor
     >>> lucid.std_mean(lucid.tensor([1.0, 2.0, 3.0, 4.0]), correction=0)
     (tensor(1.118), tensor(2.5))
     """
-    return _moments("std_mean", x, args, kwargs)
+    return _moments("std_mean", input, args, kwargs)
 
 
-def var_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
+def var_mean(input: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor]:
     """Return ``(var, mean)`` along ``dim`` in a single call.
 
     Variance counterpart to :func:`std_mean`.  Useful inside
@@ -1133,7 +1135,7 @@ def var_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input.
     dim : int, sequence of int, or None, optional
         Axis or axes to reduce.  ``None`` (default) → full-tensor
@@ -1170,7 +1172,7 @@ def var_mean(x: Tensor, *args: object, **kwargs: object) -> tuple[Tensor, Tensor
     >>> lucid.var_mean(lucid.tensor([[1.0, 3.0], [2.0, 6.0]]), 1)
     (tensor([2., 8.]), tensor([2., 4.]))
     """
-    return _moments("var_mean", x, args, kwargs)
+    return _moments("var_mean", input, args, kwargs)
 
 
 def _moments(

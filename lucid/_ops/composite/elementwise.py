@@ -1205,7 +1205,7 @@ def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
 # ── Special math functions ─────────────────────────────────────────────────
 
 
-def erfc(x: Tensor) -> Tensor:
+def erfc(input: Tensor) -> Tensor:
     r"""Complementary error function :math:`\text{erfc}(x) = 1 - \text{erf}(x)`.
 
     Computed directly, not as ``1 - erf(x)``: past ``x ≈ 4`` that
@@ -1213,18 +1213,18 @@ def erfc(x: Tensor) -> Tensor:
     ``erfc(4)`` came back 0 where the answer is 1.54e-8 — and every tail
     probability built on it inherited the zero.  The form used is the
     Chebyshev fit from Numerical Recipes (``erfcc``), whose relative error
-    stays below 1.2e-7 for every ``x``, carried to negative ``x`` by
+    stays below 1.2e-7 for every ``input``, carried to negative ``input`` by
     :math:`\text{erfc}(-x) = 2 - \text{erfc}(x)`.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Real-valued input.
 
     Returns
     -------
     Tensor
-        Same shape as ``x``, values in :math:`[0, 2]`.
+        Same shape as ``input``, values in :math:`[0, 2]`.
 
     Examples
     --------
@@ -1232,11 +1232,11 @@ def erfc(x: Tensor) -> Tensor:
     >>> abs(lucid.erfc(lucid.tensor(4.0)).item() - 1.5417e-08) < 1e-12
     True
     """
-    if x.dtype == lucid.float64:
-        return _erfc_double(x)
+    if input.dtype == lucid.float64:
+        return _erfc_double(input)
     # ``where`` rather than ``abs``: the gradient of ``abs`` at 0 is 0,
     # which would zero erfc's slope (-2/√π) at exactly the origin.
-    z = lucid.where(x >= 0.0, x, -x)
+    z = lucid.where(input >= 0.0, input, -input)
     t = 1.0 / (1.0 + 0.5 * z)
     poly = lucid.full_like(t, 0.17087277)
     for c in (
@@ -1252,7 +1252,7 @@ def erfc(x: Tensor) -> Tensor:
     ):
         poly = c + t * poly
     tail = t * lucid.exp(poly - z * z)
-    return lucid.where(x >= 0.0, tail, 2.0 - tail)
+    return lucid.where(input >= 0.0, tail, 2.0 - tail)
 
 
 def _erfc_double(x: Tensor) -> Tensor:
@@ -1275,29 +1275,29 @@ def _erfc_double(x: Tensor) -> Tensor:
     return lucid.where(x >= 0.0, value, 2.0 - value)
 
 
-def copysign(x: Tensor, y: Tensor) -> Tensor:
-    """Element-wise sign transplant: magnitudes from ``x``, signs from ``y``.
+def copysign(input: Tensor, other: Tensor) -> Tensor:
+    """Element-wise sign transplant: magnitudes from ``input``, signs from ``other``.
 
     Useful for sign-preserving operations that need to preserve a sign
     bit independent of an arbitrary magnitude computation.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Magnitude source; result has ``|x|`` element-wise.
-    y : Tensor
+    other : Tensor
         Sign source; result is positive where ``y >= 0``, negative
-        where ``y < 0`` (broadcastable to the shape of ``x``).
+        where ``y < 0`` (broadcastable to the shape of ``input``).
 
     Returns
     -------
     Tensor
-        Broadcast shape of ``x`` and ``y``.
+        Broadcast shape of ``input`` and ``other``.
     """
-    return lucid.where(y < 0.0, -lucid.abs(x), lucid.abs(x))
+    return lucid.where(other < 0.0, -lucid.abs(input), lucid.abs(input))
 
 
-def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
+def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise :math:`\text{input} \cdot 2^{\text{exponent}}`.
 
     Differentiable through both arguments (uses ``exp * log(2)``
@@ -1308,22 +1308,22 @@ def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
     ----------
     input : Tensor
         Mantissa.
-    exponent : Tensor or Scalar
+    other : Tensor or Scalar
         Power-of-two exponent; broadcastable to the shape of ``input``.
 
     Returns
     -------
     Tensor
-        Broadcast shape of ``input`` and ``exponent``.
+        Broadcast shape of ``input`` and ``other``.
 
     See Also
     --------
     frexp : inverse decomposition into mantissa / exponent.
     """
     exp_t: Tensor = (
-        exponent
-        if _is_tensor(exponent)
-        else lucid.tensor(cast(float, exponent), dtype=input.dtype, device=input.device)
+        other
+        if _is_tensor(other)
+        else lucid.tensor(cast(float, other), dtype=input.dtype, device=input.device)
     )
     return input * lucid.exp(exp_t * math.log(2.0))
 
@@ -1360,7 +1360,16 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
 # ── Integer math (non-differentiable) ────────────────────────────────────
 
 
-def gcd(x: Tensor, y: Tensor) -> Tensor:
+def _per_element(fn: Callable[[int, int], int], input: Tensor, other: Tensor) -> Tensor:
+    """``fn`` of each pair of same-shape integer elements, through Python."""
+    a, b = input.reshape(-1), other.reshape(-1)
+    result = [fn(int(a[i].item()), int(b[i].item())) for i in range(int(a.shape[0]))]
+    return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(
+        input.shape
+    )
+
+
+def gcd(input: Tensor, other: Tensor) -> Tensor:
     """Element-wise greatest common divisor for integer tensors.
 
     Falls through to Python's ``math.gcd`` per element — the engine
@@ -1369,23 +1378,19 @@ def gcd(x: Tensor, y: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x, y : Tensor
+    input, other : Tensor
         Same-shape integer tensors.
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.  Each element is
-        ``math.gcd(x_i, y_i)``.
+        Same shape and dtype as ``input``.  Each element is
+        ``math.gcd(input_i, other_i)``.
     """
-    flat_x = x.reshape(-1)
-    flat_y = y.reshape(-1)
-    n = int(flat_x.shape[0])
-    result = [_math.gcd(int(flat_x[i].item()), int(flat_y[i].item())) for i in range(n)]
-    return lucid.tensor(result, dtype=x.dtype, device=x.device).reshape(x.shape)
+    return _per_element(_math.gcd, input, other)
 
 
-def lcm(x: Tensor, y: Tensor) -> Tensor:
+def lcm(input: Tensor, other: Tensor) -> Tensor:
     """Element-wise least common multiple for integer tensors.
 
     Same implementation strategy as :func:`gcd` — pure-Python per
@@ -1394,20 +1399,16 @@ def lcm(x: Tensor, y: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x, y : Tensor
+    input, other : Tensor
         Same-shape integer tensors.
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.  Each element is
-        ``math.lcm(x_i, y_i)``.
+        Same shape and dtype as ``input``.  Each element is
+        ``math.lcm(input_i, other_i)``.
     """
-    flat_x = x.reshape(-1)
-    flat_y = y.reshape(-1)
-    n = int(flat_x.shape[0])
-    result = [_math.lcm(int(flat_x[i].item()), int(flat_y[i].item())) for i in range(n)]
-    return lucid.tensor(result, dtype=x.dtype, device=x.device).reshape(x.shape)
+    return _per_element(_math.lcm, input, other)
 
 
 # ── Log-gamma and Digamma ─────────────────────────────────────────────────
@@ -1416,7 +1417,7 @@ def lcm(x: Tensor, y: Tensor) -> Tensor:
 # autograd flows through them automatically.
 
 
-def lgamma(x: Tensor) -> Tensor:
+def lgamma(input: Tensor) -> Tensor:
     r"""Natural log of the gamma function :math:`\ln \Gamma(x)`.
 
     Implemented as a pure composite over engine primitives — uses the
@@ -1428,22 +1429,22 @@ def lgamma(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Real input.  The non-positive integers and ``±inf`` give ``+inf``.
 
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     See Also
     --------
     digamma : derivative :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
     """
-    return _lgamma(x)
+    return _lgamma(input)
 
 
-def digamma(x: Tensor) -> Tensor:
+def digamma(input: Tensor) -> Tensor:
     r"""Digamma function :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
 
     Implemented as a composite of engine primitives so autograd flows
@@ -1456,26 +1457,26 @@ def digamma(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Real input.  The negative integers and ``-inf`` are poles and give
         NaN; ``psi(+0)`` is ``-inf`` and ``psi(-0)`` is ``+inf``.
 
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     See Also
     --------
     lgamma : :math:`\ln \Gamma(x)` itself.
     """
-    return _polygamma(0, x)
+    return _polygamma(0, input)
 
 
 # ── Modified Bessel function I₀ ───────────────────────────────────────────
 
 
-def i0(x: Tensor) -> Tensor:
+def i0(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the first kind, order 0: :math:`I_0(x)`.
 
     Composite implementation via the Abramowitz & Stegun polynomial
@@ -1485,14 +1486,14 @@ def i0(x: Tensor) -> Tensor:
     * ``|x| >  3.75`` — polynomial series in :math:`3.75 / |x|`, multiplied
       by :math:`e^{|x|} / \sqrt{|x|}` to recover the exponential growth.
 
-    Each branch runs on ``x`` clamped into its own interval, so the one
+    Each branch runs on ``input`` clamped into its own interval, so the one
     ``where`` does not pick contributes no ``nan`` to the gradient.
 
     A ``float64`` input takes the Cephes double-precision series instead.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Real input.
 
     Returns
@@ -1500,23 +1501,23 @@ def i0(x: Tensor) -> Tensor:
     Tensor
         :math:`I_0(x)` element-wise; always positive.
     """
-    if x.dtype == lucid.float64:
-        return _bessel._i0(x)
-    ax = lucid.abs(x)
+    if input.dtype == lucid.float64:
+        return _bessel._i0(input)
+    ax = lucid.abs(input)
     ax_safe = lucid.maximum(ax, lucid.full_like(ax, 3.75))
 
     # Small-argument branch: polynomial in t = (x / 3.75)²
-    t_small = (lucid.clip(x, -3.75, 3.75) * (1.0 / 3.75)) ** 2
-    val_small = lucid.full_like(x, _bessel._AS_I0_SMALL[0])
-    t_pow = lucid.ones_like(x)
+    t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
+    val_small = lucid.full_like(input, _bessel._AS_I0_SMALL[0])
+    t_pow = lucid.ones_like(input)
     for c in _bessel._AS_I0_SMALL[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
 
     # Large-argument branch: polynomial in y = 3.75 / |x|
     y_large = 3.75 / ax_safe
-    val_large = lucid.full_like(x, _bessel._AS_I0_LARGE[0])
-    y_pow = lucid.ones_like(x)
+    val_large = lucid.full_like(input, _bessel._AS_I0_LARGE[0])
+    y_pow = lucid.ones_like(input)
     for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
@@ -1525,7 +1526,7 @@ def i0(x: Tensor) -> Tensor:
     return lucid.where(ax <= 3.75, val_small, val_large)
 
 
-def softmax(x: Tensor, dim: int | None = None) -> Tensor:
+def softmax(input: Tensor, dim: int | None = None) -> Tensor:
     r"""Softmax along ``dim`` — :math:`\sigma(x)_i = e^{x_i} / \sum_j e^{x_j}`.
 
     Dispatches to the engine's numerically stable softmax kernel
@@ -1536,7 +1537,7 @@ def softmax(x: Tensor, dim: int | None = None) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input logits of any shape.
     dim : int, optional
         Axis along which the softmax is normalised.  Default ``-1``
@@ -1545,7 +1546,7 @@ def softmax(x: Tensor, dim: int | None = None) -> Tensor:
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.  Each slice along ``dim`` sums to 1.
+        Same shape and dtype as ``input``.  Each slice along ``dim`` sums to 1.
 
     See Also
     --------
@@ -1553,10 +1554,10 @@ def softmax(x: Tensor, dim: int | None = None) -> Tensor:
         ``NLLLoss`` / cross-entropy downstream.
     """
     axis = dim if dim is not None else -1
-    return _wrap(_C_engine.softmax(_unwrap(x), axis))
+    return _wrap(_C_engine.softmax(_unwrap(input), axis))
 
 
-def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
+def log_softmax(input: Tensor, dim: int | None = None) -> Tensor:
     r"""Logarithm of softmax along ``dim``: :math:`\log \sigma(x)`.
 
     Computed as ``log(softmax(x))`` — Lucid's softmax kernel is
@@ -1566,7 +1567,7 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input logits of any shape.
     dim : int, optional
         Axis along which the softmax is normalised.  Default ``-1``.
@@ -1574,24 +1575,24 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     See Also
     --------
     softmax : the un-logged form.
     """
     axis = dim if dim is not None else -1
-    sm = _C_engine.softmax(_unwrap(x), axis)
+    sm = _C_engine.softmax(_unwrap(input), axis)
     return _wrap(_C_engine.log(sm))
 
 
 def diag_embed(
-    x: Tensor,
+    input: Tensor,
     offset: int = 0,
     dim1: int = -2,
     dim2: int = -1,
 ) -> Tensor:
-    """Embed the last dimension of ``x`` as the diagonal of a new matrix.
+    """Embed the last dimension of ``input`` as the diagonal of a new matrix.
 
     Inverse of :func:`lucid.diagonal`.  For a 1-D input of length ``n``
     the result is shape ``(n+|offset|, n+|offset|)``.  For batch
@@ -1601,7 +1602,7 @@ def diag_embed(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Diagonal values.  Any shape; the last axis becomes the
         diagonal of each output matrix.
     offset : int, optional
@@ -1619,51 +1620,36 @@ def diag_embed(
         Shape ``(*x.shape[:-1], n+|offset|, n+|offset|)`` (modulo the
         ``dim1`` / ``dim2`` rotation).  Non-diagonal positions are zero.
     """
-    n = int(x.shape[-1])
+    n = int(input.shape[-1])
     size = n + abs(offset)
-    batch_shape = list(x.shape[:-1])
+    batch_shape = list(input.shape[:-1])
     row_off = max(0, -offset)
     col_off = max(0, offset)
 
     # Build (size, size) diagonal mask by padding eye(n) with zero rows/cols.
-    eye_n = lucid.eye(n, dtype=x.dtype, device=x.device)
+    zeros = input.new_zeros
+    eye_n = lucid.eye(n, dtype=input.dtype, device=input.device)
     if col_off > 0:
-        eye_n = lucid.cat(
-            [lucid.zeros((n, col_off), dtype=x.dtype, device=x.device), eye_n], dim=1
-        )
+        eye_n = lucid.cat([zeros(n, col_off), eye_n], dim=1)
     right = size - n - col_off
     if right > 0:
-        eye_n = lucid.cat(
-            [eye_n, lucid.zeros((n, right), dtype=x.dtype, device=x.device)], dim=1
-        )
+        eye_n = lucid.cat([eye_n, zeros(n, right)], dim=1)
     if row_off > 0:
-        eye_n = lucid.cat(
-            [lucid.zeros((row_off, size), dtype=x.dtype, device=x.device), eye_n], dim=0
-        )
+        eye_n = lucid.cat([zeros(row_off, size), eye_n], dim=0)
     bot = size - n - row_off
     if bot > 0:
-        eye_n = lucid.cat(
-            [eye_n, lucid.zeros((bot, size), dtype=x.dtype, device=x.device)], dim=0
-        )
+        eye_n = lucid.cat([eye_n, zeros(bot, size)], dim=0)
     # eye_n is now (size, size) with the diagonal at (row_off+i, col_off+i).
 
-    # Broadcast x (..., n) against diagonal mask (size, size).
-    # For offset==0: n==size, so x.reshape(..., n, 1) * eye_n.reshape(1,...,n,n).
-    # For offset!=0: pad x to (..., size) by prepending/appending zeros.
+    # Broadcast input (..., n) against the mask (size, size); for a nonzero
+    # offset, pad it to (..., size) with zeros first.
+    diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
     if offset == 0:
-        diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
-        return x.reshape(batch_shape + [n, 1]) * diag_view
-    else:
-        # Expand x to (..., size) with zeros at padded positions.
-        pad_before = lucid.zeros(
-            tuple(batch_shape + [row_off]), dtype=x.dtype, device=x.device
-        )
-        pad_after = lucid.zeros(
-            tuple(batch_shape + [size - n - row_off]), dtype=x.dtype, device=x.device
-        )
-        x_pad = lucid.cat([pad_before, x, pad_after], dim=-1)  # (..., size)
-        diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
-        return x_pad.reshape(batch_shape + [size, 1]) * diag_view
+        return input.reshape(batch_shape + [n, 1]) * diag_view
+    pad_before = zeros(*batch_shape, row_off)
+    pad_after = zeros(*batch_shape, size - n - row_off)
+    x_pad = lucid.cat([pad_before, input, pad_after], dim=-1)  # (..., size)
+    return x_pad.reshape(batch_shape + [size, 1]) * diag_view
 
 
 __all__ = [

@@ -283,7 +283,12 @@ def _reference_overloads(
     out = []
     for schema in schemas:
         args = schema.arguments
-        written = any(a.alias_info is not None and a.alias_info.is_write for a in args)
+        # An ``out=`` variant writes to an argument other than ``self``; an
+        # in-place one (``add_``) writes ``self`` and is the method's own.
+        written = any(
+            a.alias_info is not None and a.alias_info.is_write and a.name != "self"
+            for a in args
+        )
         if written or any("Dimname" in str(a.type) for a in args):
             continue  # an ``out=`` variant, or a named-dims one
         params = []
@@ -363,13 +368,27 @@ def _mismatches(ours: list[_Param], theirs: list[_Param], method: bool) -> list[
     return problems
 
 
-def _public(module: ModuleType) -> list[str]:
-    return [
-        n
-        for n in getattr(module, "__all__", [])
-        if callable(getattr(module, n, None))
-        and not isinstance(getattr(module, n), type)
-    ]
+def _public(module: ModuleType, stub: Path | None = None) -> list[str]:
+    """Every Lucid function reachable as ``module.<name>``.
+
+    ``__all__`` is not the whole surface: 42 functions reachable as
+    ``lucid.<name>`` and declared in its stub — ``amax``, ``softmax``,
+    ``allclose``, ``erfc`` ... — were outside it and kept their ``x``.  The
+    package's own public attributes are read, and for ``lucid`` the names
+    its stub declares too, which covers the lazily loaded ones.
+    """
+    names = set(getattr(module, "__all__", [])) | set(dir(module))
+    if stub is not None:
+        tree = ast.parse(stub.read_text(encoding="utf-8"))
+        names |= {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    out = []
+    for n in sorted(names):
+        obj = getattr(module, n, None) if not n.startswith("_") else None
+        if obj is None or isinstance(obj, (type, ModuleType)) or not callable(obj):
+            continue
+        if str(getattr(obj, "__module__", "")).startswith("lucid"):
+            out.append(n)
+    return out
 
 
 def _tensor_methods() -> list[str]:
@@ -387,7 +406,7 @@ def _tensor_methods() -> list[str]:
 
 #: ``(namespace, Lucid names, the reference's module path, aten prefix)``.
 _NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
-    ("lucid", _public(lucid), "", ""),
+    ("lucid", _public(lucid, Path(lucid.__file__).with_name("__init__.pyi")), "", ""),
     ("Tensor", _tensor_methods(), "Tensor", ""),
     ("nn.functional", _public(lucid.nn.functional), "nn.functional", ""),
     (
@@ -410,11 +429,13 @@ _EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-41
 #: its case to XPASS and the entry leaves with it.
 _SIGNATURE_GAPS: dict[str, str] = {
     "Tensor.add": _LCD_412,
+    "Tensor.add_": _LCD_412,
     "Tensor.diff": _LCD_412,
     "Tensor.expand": _LCD_412,
     "Tensor.gather": _LCD_412,
     "Tensor.repeat_interleave": _LCD_412,
     "Tensor.sub": _LCD_412,
+    "Tensor.sub_": _LCD_412,
     "Tensor.topk": _LCD_412,
     "linalg.cholesky": _LCD_431,
     "linalg.cholesky_ex": _LCD_431,
@@ -449,10 +470,13 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "linalg.vector_norm": _LCD_431,
     "lucid.add": _LCD_412,
     "lucid.bucketize": _LCD_412,
+    "lucid.cdist": _LCD_412,
     "lucid.compile": _EXPORT,
+    "lucid.cov": _LCD_412,
     "lucid.diff": _LCD_412,
     "lucid.from_dlpack": _LCD_412,
     "lucid.gather": _LCD_412,
+    "lucid.histogramdd": _LCD_412,
     "lucid.isin": _LCD_412,
     "lucid.repeat_interleave": _LCD_412,
     "lucid.save": _EXPORT,
@@ -500,6 +524,7 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.dropout2d": _LCD_430,
     "nn.functional.dropout3d": _LCD_430,
     "nn.functional.elu": _LCD_430,
+    "nn.functional.elu_": _LCD_430,
     "nn.functional.embedding": _LCD_430,
     "nn.functional.embedding_bag": _LCD_430,
     "nn.functional.feature_alpha_dropout": _LCD_430,
@@ -514,6 +539,7 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.hardsigmoid": _LCD_430,
     "nn.functional.hardswish": _LCD_430,
     "nn.functional.hardtanh": _LCD_430,
+    "nn.functional.hardtanh_": _LCD_430,
     "nn.functional.hinge_embedding_loss": _LCD_430,
     "nn.functional.huber_loss": _LCD_430,
     "nn.functional.instance_norm": _LCD_430,
@@ -522,6 +548,7 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.l1_loss": _LCD_430,
     "nn.functional.layer_norm": _LCD_430,
     "nn.functional.leaky_relu": _LCD_430,
+    "nn.functional.leaky_relu_": _LCD_430,
     "nn.functional.linear": _LCD_430,
     "nn.functional.local_response_norm": _LCD_430,
     "nn.functional.log_softmax": _LCD_430,
@@ -541,10 +568,13 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.prelu": _LCD_430,
     "nn.functional.relu": _LCD_430,
     "nn.functional.relu6": _LCD_430,
+    "nn.functional.relu_": _LCD_430,
     "nn.functional.rms_norm": _LCD_430,
     "nn.functional.rrelu": _LCD_430,
+    "nn.functional.rrelu_": _LCD_430,
     "nn.functional.scaled_dot_product_attention": _LCD_430,
     "nn.functional.selu": _LCD_430,
+    "nn.functional.selu_": _LCD_430,
     "nn.functional.sigmoid": _LCD_430,
     "nn.functional.silu": _LCD_430,
     "nn.functional.smooth_l1_loss": _LCD_430,
@@ -556,6 +586,7 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.tanh": _LCD_430,
     "nn.functional.tanhshrink": _LCD_430,
     "nn.functional.threshold": _LCD_430,
+    "nn.functional.threshold_": _LCD_430,
     "nn.functional.triplet_margin_with_distance_loss": _LCD_430,
     "nn.functional.unfold": _LCD_430,
     "special.bessel_j0": _LCD_431,

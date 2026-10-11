@@ -63,7 +63,7 @@ def get_default_dtype() -> dtype:
     return _default_dtype
 
 
-def set_default_device(d: _dev | str) -> None:
+def set_default_device(device: _dev | str) -> None:
     """Set the device used by factory functions when none is supplied.
 
     Same scope as :func:`set_default_dtype` but for placement.
@@ -75,14 +75,14 @@ def set_default_device(d: _dev | str) -> None:
 
     Parameters
     ----------
-    d : lucid.device or str
+    device : lucid.device or str
         New default placement.  Either a :class:`~lucid._device.device`
         instance or a string like ``"cpu"`` / ``"metal"``.
 
     Raises
     ------
     TypeError
-        If ``d`` is neither a device nor a string.
+        If ``device`` is neither a device nor a string.
     ValueError
         If the string does not name a device.
 
@@ -95,12 +95,12 @@ def set_default_device(d: _dev | str) -> None:
     subsequent factory call failed with an unparseable device and no
     trace of where the value came from.
     """
-    if isinstance(d, _dev):
-        resolved = d.type
-    elif isinstance(d, str):
-        resolved = _dev(d).type  # raises ValueError on an unknown name
+    if isinstance(device, _dev):
+        resolved = device.type
+    elif isinstance(device, str):
+        resolved = _dev(device).type  # raises ValueError on an unknown name
     else:
-        raise TypeError(f"Default device must be a lucid.device or str, got {d!r}")
+        raise TypeError(f"Default device must be a lucid.device or str, got {device!r}")
     global _default_device_str
     with _lock:
         _default_device_str = resolved

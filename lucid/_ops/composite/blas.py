@@ -604,13 +604,13 @@ def block_diag(*tensors: Tensor) -> Tensor:
     return lucid.cat(rows, 0)
 
 
-def logdet(x: Tensor) -> Tensor:
+def logdet(input: Tensor) -> Tensor:
     """Log-determinant of a square matrix (or batch).
 
     Returns ``log(det(A))``.  Defined only for matrices with ``det > 0``;
     returns NaN otherwise.  Uses ``linalg.slogdet`` internally.
     """
-    sign, logabsdet = _la.slogdet(x)
+    sign, logabsdet = _la.slogdet(input)
     zero = lucid.zeros_like(sign)
     nan = lucid.full_like(logabsdet, float("nan"))
     return lucid.where(sign > zero, logabsdet, nan)
