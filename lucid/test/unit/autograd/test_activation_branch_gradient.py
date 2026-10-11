@@ -78,11 +78,6 @@ _KNOWN_WRONG = {
     "hardtanh": lambda v: v in (-1.0, 1.0),
     "celu": lambda v: v == 0.0 or v == float("inf"),
 }
-_TIE_RULE = (
-    "LCD-428 follow-up (engine): maximum/minimum send a tie's gradient to the "
-    "first operand and none to a NaN; the reference splits a tie in half and "
-    "gives a NaN the whole gradient"
-)
 
 
 def _ids(v):
@@ -148,10 +143,8 @@ def test_activation_gradient_matches_reference(ref, device, name, value, dtype_n
 @pytest.mark.parametrize("dtype_name", ["float32", "float64"])
 @pytest.mark.parametrize("value", _VALUES, ids=_ids)
 @pytest.mark.parametrize("name", list(_TENSOR_OPS))
-def test_tensor_op_gradient_matches_reference(ref, device, name, value, dtype_name, request):
+def test_tensor_op_gradient_matches_reference(ref, device, name, value, dtype_name):
     call = _TENSOR_OPS[name]
-    if name in ("maximum", "minimum") and (math.isnan(value) or value == 0.0):
-        _pin(request, _TIE_RULE)
     _check(
         ref,
         device,

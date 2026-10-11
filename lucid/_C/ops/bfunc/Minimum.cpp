@@ -6,65 +6,34 @@
 
 #include <mlx/ops.h>
 
-#include "../../autograd/Helpers.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
-#include "../gfunc/Gfunc.h"
-#include "../utils/Select.h"
-#include "Compare.h"
+#include "_Extremum.h"
 
 namespace lucid {
 
 const OpSchema MinimumBackward::schema_v1{"minimum", 1, AmpPolicy::Promote, true};
 
-// Gradient of element-wise minimum.
+// The reference's split (see _Extremum.h): the smaller operand takes the
+// gradient, a tie halves it, a NaN on either side gives it to both.  ``a``
+// loses minimum where ``b < a``, so the pair goes into the shared helper
+// as ``(b, a)``; the gradients still come back as ``{da, db}``.
 //
-// The mask arguments are intentionally swapped relative to MaximumBackward:
-// to detect which input is the minimum we test (b >= a) and (b < a) rather
-// than (a >= b) and (a < b).
-//
-//   mask_a[i] = ge_mask(b, a)[i] = (b[i] >= a[i]) ? 1 : 0
-//               → 1 when a is the minimum (or tied), 0 otherwise
-//   mask_b[i] = lt_mask(b, a)[i] = (b[i] <  a[i]) ? 1 : 0
-//               → 1 when b strictly wins, 0 otherwise
-//
-// This correctly partitions the gradient: exactly one mask element is 1 at
-// every position, so the sum of gradients reaching both inputs equals
-// grad_out.
+// Both operands are compared at the output's shape.  Read at their own
+// shapes with n = numel(out), an operand broadcast from one element —
+// ``clamp`` against a 0-d bound, ``minimum(x, bins[-1])`` — was read past
+// its buffer on the CPU.
 std::pair<Storage, Storage> MinimumBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
-
-    // Arguments to ge/lt are (b, a), not (a, b) — this is the key difference
-    // from MaximumBackward which uses (a, b).
-    // Both operands at the output's shape.  They were read at their own
-    // shapes with n = numel(out), so an operand broadcast from one element
-    // — ``clamp`` against a 0-d bound, ``minimum(x, bins[-1])`` — was read
-    // past its buffer on the CPU and the gradient masked against garbage.
     const Storage a_b = saved_input_broadcasted(0);
     const Storage b_b = saved_input_broadcasted(1);
-    Storage mask_a = ge_mask_storage(b_b, a_b, n, dtype_, device_);
-    Storage mask_b = lt_mask_storage(b_b, a_b, n, dtype_, device_);
-    Storage dx = multiply_storages(grad_out, mask_a, n, dtype_, device_);
-    Storage dy = multiply_storages(grad_out, mask_b, n, dtype_, device_);
-    return {std::move(dx), std::move(dy)};
+    return bfunc_detail::extremum_grads(grad_out, b_b, a_b, n, dtype_, device_);
 }
 
-// Graph-mode derivative.
-//
-// This had an eager ``grad_formula`` and no ``grad_formula_impl``, so
-// ``grad(create_graph=True)`` refused it — and with it every composite
-// written on top: ``clamp``, ``clip``, ``hypot``, ``logaddexp``,
-// ``celu``, ``prelu``.
-//
-// The gradient goes entirely to the operand that won.  Ties go to the
-// first, matching the forward, so the two branches sum to exactly the
-// incoming gradient and nothing is created or lost.
 std::pair<TensorImplPtr, TensorImplPtr> MinimumBackward::grad_formula_impl(
     const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
-    auto a_wins = less_equal_op(a, b);
-    auto zero = zeros_like_op(grad_out);
-    return {where_op(a_wins, grad_out, zero), where_op(a_wins, zero, grad_out)};
+    return bfunc_detail::extremum_grads_graph(grad_out, b, a);
 }
 
 TensorImplPtr minimum_op(const TensorImplPtr& a, const TensorImplPtr& b) {

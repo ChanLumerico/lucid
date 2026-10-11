@@ -21,9 +21,8 @@ namespace lucid {
 //
 // Saves both inputs ``a`` and ``b`` (``kSavesInputs = true`` inherited from
 // :class:`BinaryKernel`) so the backward pass can reconstruct the indicator
-// masks for the comparison.  Gradient flows only through whichever operand
-// "won" the elementwise comparison; ties are broken in favour of ``a``
-// (gradient assigned entirely to ``a`` when $a_i = b_i$).
+// masks for the comparison.  The smaller operand takes the gradient, a tie
+// splits it in half, and a NaN on either side gives it to both operands.
 //
 // Math
 // ----
@@ -31,10 +30,14 @@ namespace lucid {
 //   y_i = \min(a_i, b_i)
 // $$
 // $$
-//   \frac{\partial L}{\partial a_i} = \mathbb{1}\{a_i \leq b_i\} \cdot \frac{\partial L}{\partial y_i}
+//   \frac{\partial L}{\partial a_i} = w(a_i, b_i) \cdot \frac{\partial L}{\partial y_i},
+//   \qquad
+//   w(u, v) = \begin{cases} 1 & u < v \text{ or unordered} \\
+//                           \tfrac12 & u = v \\
+//                           0 & u > v \end{cases}
 // $$
 // $$
-//   \frac{\partial L}{\partial b_i} = \mathbb{1}\{a_i > b_i\} \cdot \frac{\partial L}{\partial y_i}
+//   \frac{\partial L}{\partial b_i} = w(b_i, a_i) \cdot \frac{\partial L}{\partial y_i}
 // $$
 //
 // Shape
@@ -50,12 +53,11 @@ namespace lucid {
 //
 // Notes
 // -----
-// Internally the masks are computed with the operand order **reversed**
-// relative to :class:`MaximumBackward`: ``ge_mask(b, a)`` and ``lt_mask(b, a)``
-// instead of ``ge_mask(a, b)`` / ``lt_mask(a, b)``.  This yields the same tie
-// resolution (all gradient to ``a``) while flipping the comparison direction.
-// The two masks partition the index set, so their sum is exactly $1$ at every
-// position.
+// The rule is the reference's.  Sending a tie wholly to ``a`` instead
+// doubled the gradient of ``hypot`` and the complex ``abs`` at
+// $|a| = |b|$, where both maximum and minimum of the same pair tie.  A
+// caller that wants a clamp's rule (a tie to ``a``) uses ``clip`` or
+// ``where``, not minimum.
 //
 // See Also
 // --------
@@ -97,7 +99,7 @@ public:
 //
 // Notes
 // -----
-// At ties ($a_i = b_i$) the gradient is routed entirely to ``a``.  When
+// At ties ($a_i = b_i$) each operand receives half the gradient.  When
 // grad-tracking is on, registers a :class:`MinimumBackward` node which saves
 // both inputs.
 //
