@@ -6,7 +6,8 @@ not take it as given:
 * MIL's gathers and scatters take no bool data. ``t[0] = True`` inside a
   forward failed when Core ML compiled the package ("Param 'updates' has
   incorrect type for operator 'ios17.scatter_along_axis'"), and so did a
-  ``gather``, ``index_select``, ``unbind`` or ``diagonal`` of a mask.
+  ``gather``, ``index_select``, ``unbind``, ``diagonal`` or ``sort`` of a
+  mask (MIL's ``argsort`` refuses bool too).
 * Core ML folds a ``cast`` to or from bool wrongly when its operand is
   built from constants: ``ones(5, 5).triu(1).bool()`` — a causal mask — was
   all false in a float16 package, and a float32 package lost it once it
@@ -83,6 +84,17 @@ def _diagonal(x: lucid.Tensor) -> lucid.Tensor:
     return x[0].masked_fill((x > 0).diagonal(0, 0, 1), 0.0)
 
 
+def _sort(x: lucid.Tensor) -> lucid.Tensor:
+    return x.masked_fill(lucid.sort(x > 0, dim=1).bool(), 0.0)
+
+
+def _argsort(x: lucid.Tensor) -> lucid.Tensor:
+    # One true and one false per row: no ties, so the order is unique.
+    sign = x[:, 0] > 0
+    pair = lucid.stack([sign, sign.logical_not()], dim=1)
+    return x[:, :2].gather(1, lucid.argsort(pair, dim=1))
+
+
 def _causal_mask(x: lucid.Tensor) -> lucid.Tensor:
     return x.masked_fill(_causal(), 0.0)
 
@@ -107,6 +119,8 @@ CASES: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
     "index_select": _index_select,
     "unbind": _unbind,
     "diagonal": _diagonal,
+    "sort": _sort,
+    "argsort": _argsort,
     "causal_mask": _causal_mask,
     "mask_as_number": _mask_as_number,
     "any_of_constant": _any_of_constant,

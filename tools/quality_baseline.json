@@ -193,7 +193,7 @@
     "lucid/_tensor/tensor.py": 2797,
     "lucid/compile/_optim/compiler.py": 804,
     "lucid/coreml/_build.py": 1726,
-    "lucid/coreml/_emit.py": 1214,
+    "lucid/coreml/_emit.py": 1206,
     "lucid/distributions/transforms.py": 558,
     "lucid/fft/__init__.py": 379,
     "lucid/linalg/__init__.py": 2361,

@@ -1624,36 +1624,28 @@ def _trace(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
 
 
-def _ascending_order(b: Builder, op: TracedOp, x: str) -> tuple[str, int]:
+def _argsort_operands(b: Builder, op: TracedOp, x: str) -> Bindings:
+    """Ascending ``argsort`` along the op's axis. MIL's refuses bool, so a
+    mask is ordered as int32 1 / 0 (:func:`widened`): false first, as eager."""
     axis = _as_int(_attr(op, "axis")) % len(b.shape_of(x))
-    order = b.emit(
-        "argsort",
-        [("x", x), ("axis", b.const_int(axis)), ("ascending", b.const_bool(True))],
-        b.shape_of(x),
-        dtype=_MIL_INT32,
-    )
-    return order, axis
+    up = b.const_bool(True)
+    return [("x", widened(b, x)), ("axis", b.const_int(axis)), ("ascending", up)]
 
 
 @_emitter("argsort")
 def _argsort(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
-    return "argsort", [
-        ("x", ins[0]),
-        ("axis", b.const_int(axis)),
-        ("ascending", b.const_bool(True)),
-    ]
+    return "argsort", _argsort_operands(b, op, ins[0])
 
 
 @_emitter("sort")
 def _sort(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    order, axis = _ascending_order(b, op, ins[0])
-    return "gather_along_axis", [
-        ("x", ins[0]),
-        ("indices", order),
-        ("axis", b.const_int(axis)),
-        ("validate_indices", b.const_bool(False)),
-    ]
+    sorting = _argsort_operands(b, op, ins[0])
+    order = b.emit("argsort", sorting, b.shape_of(ins[0]), dtype=_MIL_INT32)
+    # The values gathered from the (possibly widened) operand; ``moved``
+    # turns an int32 result back into bool.
+    picked = [*sorting[:2], ("indices", order)]
+    picked.append(("validate_indices", b.const_bool(False)))
+    return moved(b, op, "gather_along_axis", picked, ())
 
 
 @_emitter("topk")
