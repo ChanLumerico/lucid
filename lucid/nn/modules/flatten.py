@@ -272,8 +272,9 @@ class Unfold(Module):
 
     Shape
     -----
-    - **Input:** :math:`(N, C, H, W)`.
-    - **Output:** :math:`(N, C \cdot k_H \cdot k_W, L)`.
+    - **Input:** :math:`(N, C, H, W)` or :math:`(C, H, W)`.
+    - **Output:** :math:`(N, C \cdot k_H \cdot k_W, L)` or
+      :math:`(C \cdot k_H \cdot k_W, L)`.
 
     Notes
     -----
@@ -414,8 +415,10 @@ class Fold(Module):
 
     Shape
     -----
-    - **Input:** :math:`(N, C \cdot k_H \cdot k_W, L)`.
-    - **Output:** :math:`(N, C, H_{\text{out}}, W_{\text{out}})`.
+    - **Input:** :math:`(N, C \cdot k_H \cdot k_W, L)` or
+      :math:`(C \cdot k_H \cdot k_W, L)`.
+    - **Output:** :math:`(N, C, H_{\text{out}}, W_{\text{out}})` or
+      :math:`(C, H_{\text{out}}, W_{\text{out}})`.
 
     Notes
     -----

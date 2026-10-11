@@ -1398,27 +1398,28 @@ class LPPool1d(Module):
     r"""Applies 1-D power-average (Lp-norm) pooling over a sequence.
 
     For each window of length ``kernel_size`` the module computes the
-    :math:`\ell^p` norm of the absolute values of the elements:
+    power average of the elements:
 
     .. math::
 
         y[n, c, i] = \left(
-            \sum_{k=0}^{k_s - 1} \left|x[n,\, c,\, i \cdot s + k]\right|^p
+            \sum_{k=0}^{k_s - 1} x[n,\, c,\, i \cdot s + k]^p
         \right)^{1/p}
 
     where :math:`p` = ``norm_type``, :math:`k_s` = ``kernel_size``, and
-    :math:`s` = ``stride``.
+    :math:`s` = ``stride``.  The power keeps the sign of :math:`x`; see
+    :func:`lucid.nn.functional.lp_pool1d`.
 
     Special cases:
 
-    * :math:`p = 1` — sum pooling (L1 norm over the window).
+    * :math:`p = 1` — sum pooling.
     * :math:`p = 2` — square-root of sum of squares (L2 norm).
-    * :math:`p \to \infty` — approaches max pooling.
+    * :math:`p = \infty` — max pooling of :math:`|x|`.
 
     Parameters
     ----------
     norm_type : float
-        The exponent :math:`p`.  Must be positive and finite.
+        The exponent :math:`p`.  Must be positive; ``inf`` is allowed.
     kernel_size : int
         Size of the sliding window.
     stride : int or None, optional
@@ -1447,8 +1448,6 @@ class LPPool1d(Module):
     - Because the operation is differentiable for finite :math:`p`, it can
       be used as a drop-in replacement for max or average pooling in
       gradient-based training.
-    - Implemented via engine primitives ``unfold_dim``, ``abs``,
-      ``pow_scalar``, and ``sum`` — fully GPU-compatible.
 
     Examples
     --------
@@ -1519,21 +1518,17 @@ class LPPool2d(Module):
 
         y[n,c,h,w] = \left(
             \sum_{k_h=0}^{k_H-1} \sum_{k_w=0}^{k_W-1}
-            \left|x\!\left[n,\,c,\,h \cdot s_H + k_h,\,w \cdot s_W + k_w\right]\right|^p
+            x\!\left[n,\,c,\,h \cdot s_H + k_h,\,w \cdot s_W + k_w\right]^p
         \right)^{1/p}
 
-    with :math:`p` = ``norm_type``.
-
-    Special cases (same as :class:`LPPool1d`):
-
-    * :math:`p = 1` — sum pooling.
-    * :math:`p = 2` — Euclidean (energy) pooling.
-    * :math:`p \to \infty` — max pooling.
+    with :math:`p` = ``norm_type``.  The power keeps the sign of :math:`x`,
+    and the special cases :math:`p = 1, 2, \infty` are those of
+    :class:`LPPool1d`.
 
     Parameters
     ----------
     norm_type : float
-        The exponent :math:`p`.
+        The exponent :math:`p`.  Must be positive; ``inf`` is allowed.
     kernel_size : int or tuple[int, int]
         Window size ``(k_H, k_W)``.  A scalar is broadcast.
     stride : int or tuple[int, int] or None, optional
@@ -1566,9 +1561,6 @@ class LPPool2d(Module):
 
     Notes
     -----
-    - Implemented as two sequential ``unfold_dim`` passes (H-axis then
-      W-axis) followed by element-wise power, reduction, and inverse power.
-      Fully GPU-compatible via engine primitives.
     - Lp pooling with :math:`p = 2` appears in energy-based models and
       certain biologically-inspired convolutional architectures.
 
@@ -1650,17 +1642,19 @@ class LPPool3d(Module):
 
         y[n,c,d,h,w] = \left(
             \sum_{k_d}\sum_{k_h}\sum_{k_w}
-            \left|x\!\left[n,c,\,
+            x\!\left[n,c,\,
                 d \cdot s_D + k_d,\,
                 h \cdot s_H + k_h,\,
                 w \cdot s_W + k_w
-            \right]\right|^p
+            \right]^p
         \right)^{1/p}
+
+    The power keeps the sign of :math:`x`, as in :class:`LPPool1d`.
 
     Parameters
     ----------
     norm_type : float
-        The exponent :math:`p`.  Must be positive and finite.
+        The exponent :math:`p`.  Must be positive; ``inf`` is allowed.
     kernel_size : int or tuple[int, int, int]
         Window size ``(k_D, k_H, k_W)``.  A scalar is broadcast.
     stride : int or tuple[int, int, int] or None, optional

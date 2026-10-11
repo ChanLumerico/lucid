@@ -14,6 +14,11 @@ from lucid.nn.functional._grid_sampling import (
     reflect,
 )
 from lucid.nn.functional._interpolate import resample as _resample
+from lucid.nn.functional._spatial_args import (
+    _add_batch_axis,
+    _drop_batch_axis,
+    _ntuple,
+)
 from lucid.nn.functional._index_checks import (
     _check_offsets,
     _check_table,
@@ -325,7 +330,7 @@ def unfold(
     padding: int | tuple[int, int] = 0,
     stride: int | tuple[int, int] = 1,
 ) -> Tensor:
-    r"""Extract sliding local blocks (im2col) from a batched 4-D tensor.
+    r"""Extract sliding local blocks (im2col) from a 4-D or unbatched 3-D tensor.
 
     Slides a ``(kH, kW)`` window across the spatial extent of ``x`` (with
     given stride, padding, and dilation) and flattens each window into a
@@ -347,7 +352,7 @@ def unfold(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     kernel_size : int or (int, int)
         Spatial size of the sliding window.
     dilation : int or (int, int), optional
@@ -360,7 +365,8 @@ def unfold(
     Returns
     -------
     Tensor
-        Tensor of shape ``(N, C·kH·kW, L)``.
+        Tensor of shape ``(N, C·kH·kW, L)``, or ``(C·kH·kW, L)`` for an
+        unbatched input.
 
     Notes
     -----
@@ -379,16 +385,18 @@ def unfold(
     (1, 27, 64)
     """
 
-    def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
-        return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
-
-    kh, kw = _pair(kernel_size)
-    dh, dw = _pair(dilation)
-    ph, pw = _pair(padding)
-    sh, sw = _pair(stride)
-    return _wrap(
-        _C_engine.nn.unfold(_unwrap(x), [kh, kw], [sh, sw], [ph, pw], [dh, dw])
+    xb, unbatched = _add_batch_axis(x, 2)
+    kernel, dilations, pads, strides = (
+        list(_ntuple(v, 2, "unfold", arg))
+        for v, arg in (
+            (kernel_size, "kernel_size"),
+            (dilation, "dilation"),
+            (padding, "padding"),
+            (stride, "stride"),
+        )
     )
+    out = _C_engine.nn.unfold(_unwrap(xb), kernel, strides, pads, dilations)
+    return _drop_batch_axis(_wrap(out), unbatched)
 
 
 def fold(
@@ -410,7 +418,8 @@ def fold(
     Parameters
     ----------
     x : Tensor
-        Block tensor of shape ``(N, C·kH·kW, L)``.
+        Block tensor of shape ``(N, C·kH·kW, L)``, or ``(C·kH·kW, L)``
+        unbatched.
     output_size : (int, int)
         Spatial size ``(outH, outW)`` of the destination canvas.
     kernel_size : int or (int, int)
@@ -427,7 +436,8 @@ def fold(
     Returns
     -------
     Tensor
-        Reconstructed tensor of shape ``(N, C, outH, outW)``.
+        Reconstructed tensor of shape ``(N, C, outH, outW)``, or
+        ``(C, outH, outW)`` for an unbatched input.
 
     Notes
     -----
@@ -448,26 +458,21 @@ def fold(
     (1, 3, 8, 8)
     """
 
-    def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
-        return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
-
-    kh, kw = _pair(kernel_size)
-    dh, dw = _pair(dilation)
-    ph, pw = _pair(padding)
-    sh, sw = _pair(stride)
-    out_h, out_w = output_size
-
-    impl = _C_engine.nn.fold(
-        _unwrap(x),
-        [out_h, out_w],
-        [kh, kw],
-        [sh, sw],
-        [ph, pw],
-        [dh, dw],
+    # The unbatched block tensor is ``(C·kH·kW, L)``: one axis short of
+    # the batched rank, as a 1-spatial-axis input is.
+    xb, unbatched = _add_batch_axis(x, 1)
+    size, kernel, dilations, pads, strides = (
+        list(_ntuple(v, 2, "fold", arg))
+        for v, arg in (
+            (output_size, "output_size"),
+            (kernel_size, "kernel_size"),
+            (dilation, "dilation"),
+            (padding, "padding"),
+            (stride, "stride"),
+        )
     )
-    from lucid._dispatch import _wrap as _w
-
-    return _w(impl)
+    out = _C_engine.nn.fold(_unwrap(xb), size, kernel, strides, pads, dilations)
+    return _drop_batch_axis(_wrap(out), unbatched)
 
 
 def embedding_bag(

@@ -2,7 +2,7 @@
 nn.functional pooling operations.
 """
 
-from typing import Callable, Literal, TYPE_CHECKING, overload
+from typing import Literal, TYPE_CHECKING, overload
 
 import lucid as _lucid
 from lucid.nn.functional._pool_core import (
@@ -10,6 +10,7 @@ from lucid.nn.functional._pool_core import (
     _adaptive_pool,
     _avg_pool,
     _fractional_max_pool,
+    _lp_pool,
     _max_pool,
 )
 from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry
@@ -924,39 +925,6 @@ def avg_pool3d(
 # ── P3 fills: lp_pool / max_unpool ──────────────────────────────────────────
 
 
-def _lp_pool(
-    x: Tensor,
-    norm_type: float,
-    avg_pool_fn: Callable[..., Tensor],
-    *,
-    kernel_size: int | tuple[int, ...],
-    stride: int | tuple[int, ...] | None,
-    ceil_mode: bool,
-    n: int,
-) -> Tensor:
-    """Shared body of ``lp_pool{1,2,3}d`` and of the ``LPPool*d`` modules.
-
-    ``Lp_pool(x) = (avg_pool(|x|^p) · K) ^ (1/p)`` where ``K`` is the
-    pool window size.  We compute ``avg_pool`` on ``|x|^p``, multiply
-    back by ``K`` to undo the averaging (so we get a sum), then take
-    the ``p``-th root.  ``ceil_mode`` goes to the ``avg_pool*`` call: it
-    used to be dropped, so ``ceil_mode=True`` left off the partial last
-    window.
-    """
-    p = float(norm_type)
-    if p <= 0.0:
-        raise ValueError(f"lp_pool: norm_type must be > 0, got {p}")
-    abs_pow = _lucid.abs(x) ** p
-    K = 1
-    for k in _ntuple(kernel_size, n, f"lp_pool{n}d", "kernel_size"):
-        K *= int(k)
-    pooled = avg_pool_fn(
-        abs_pow, kernel_size=kernel_size, stride=stride, ceil_mode=ceil_mode
-    )
-    summed = pooled * float(K)
-    return summed ** (1.0 / p)
-
-
 def lp_pool1d(
     x: Tensor,
     norm_type: float,
@@ -964,21 +932,20 @@ def lp_pool1d(
     stride: int | tuple[int] | None = None,
     ceil_mode: bool = False,
 ) -> Tensor:
-    r"""1-D Lp-norm pooling — :math:`\big(\sum |x|^p\big)^{1/p}`.
+    r"""1-D power-average pooling — :math:`\big(\sum x^p\big)^{1/p}`.
 
     Generalises average and max pooling under a single parameter
     :math:`p = \text{norm\_type}`.  :math:`p = 1` recovers
     sum-pooling (= ``|R|`` × :func:`avg_pool1d`); :math:`p = 2` is
-    energy / RMS-style pooling; :math:`p \to \infty` approaches
-    :func:`max_pool1d`.  Provides a smooth, fully differentiable bridge
-    between the two extremes.
+    energy / RMS-style pooling; :math:`p = \infty` is
+    :func:`max_pool1d` of :math:`|x|`.
 
     Parameters
     ----------
     x : Tensor
         Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     norm_type : float
-        Exponent :math:`p > 0`.
+        Exponent :math:`p > 0`, or ``inf``.
     kernel_size : int or tuple of int
         Size of the pooling window.
     stride : int or tuple of int, optional
@@ -997,10 +964,14 @@ def lp_pool1d(
 
     .. math::
 
-        y_{i,c,l} = \left( \sum_{m \in R} |x_{i,c,m}|^p \right)^{1/p}
+        y_{i,c,l} = \left( \sum_{m \in R} x_{i,c,m}^p \right)^{1/p}
 
-    Implemented as ``(avg_pool1d(|x|^p) · |R|)^(1/p)`` so the entire
-    operator inherits its gradient from the average-pool engine path.
+    The power keeps the sign of :math:`x`, as the reference's does: it is
+    the :math:`\ell^p` norm of the window only for a non-negative input or
+    an even :math:`p`.  A window whose sum is negative, or a negative
+    element under a fractional :math:`p`, gives ``nan``; pool
+    ``lucid.abs(x)`` for the norm.  A window whose sum is zero has a zero
+    gradient.  Computed as ``(avg_pool1d(x^p) · |R|)^(1/p)``.
 
     Examples
     --------
@@ -1011,15 +982,8 @@ def lp_pool1d(
     >>> y.shape
     (2, 4, 6)
     """
-    return _lp_pool(
-        x,
-        norm_type,
-        avg_pool1d,
-        kernel_size=kernel_size,
-        stride=stride,
-        ceil_mode=ceil_mode,
-        n=1,
-    )
+    g = _pool_geometry(kernel_size, stride, 0, 1, 1, "lp_pool1d")
+    return _lp_pool(x, norm_type, g, ceil_mode)
 
 
 def lp_pool2d(
@@ -1029,7 +993,7 @@ def lp_pool2d(
     stride: int | tuple[int, int] | None = None,
     ceil_mode: bool = False,
 ) -> Tensor:
-    r"""2-D Lp-norm pooling — :math:`\big(\sum |x|^p\big)^{1/p}`.
+    r"""2-D power-average pooling — :math:`\big(\sum x^p\big)^{1/p}`.
 
     Two-dimensional version of :func:`lp_pool1d`.  The exponent
     :math:`p` interpolates between sum / average pooling (small
@@ -1041,7 +1005,7 @@ def lp_pool2d(
     x : Tensor
         Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     norm_type : float
-        Exponent :math:`p > 0`.
+        Exponent :math:`p > 0`, or ``inf``.
     kernel_size : int or (int, int)
         Size of the pooling window.
     stride : int or (int, int), optional
@@ -1060,9 +1024,9 @@ def lp_pool2d(
 
     .. math::
 
-        y_{i,c,h,w} = \left( \sum_{(m, n) \in R} |x_{i,c,m,n}|^p \right)^{1/p}
+        y_{i,c,h,w} = \left( \sum_{(m, n) \in R} x_{i,c,m,n}^p \right)^{1/p}
 
-    The operator is fully differentiable for any :math:`p > 0`.
+    The power keeps the sign of :math:`x`; see :func:`lp_pool1d`.
 
     Examples
     --------
@@ -1073,15 +1037,8 @@ def lp_pool2d(
     >>> y.shape
     (1, 8, 8, 8)
     """
-    return _lp_pool(
-        x,
-        norm_type,
-        avg_pool2d,
-        kernel_size=kernel_size,
-        stride=stride,
-        ceil_mode=ceil_mode,
-        n=2,
-    )
+    g = _pool_geometry(kernel_size, stride, 0, 1, 2, "lp_pool2d")
+    return _lp_pool(x, norm_type, g, ceil_mode)
 
 
 def lp_pool3d(
@@ -1091,7 +1048,7 @@ def lp_pool3d(
     stride: int | tuple[int, int, int] | None = None,
     ceil_mode: bool = False,
 ) -> Tensor:
-    r"""3-D Lp-norm pooling — :math:`\big(\sum |x|^p\big)^{1/p}`.
+    r"""3-D power-average pooling — :math:`\big(\sum x^p\big)^{1/p}`.
 
     Volumetric version of :func:`lp_pool2d`.  Interpolates between
     sum / average pooling (small :math:`p`) and max pooling (large
@@ -1102,7 +1059,7 @@ def lp_pool3d(
     x : Tensor
         Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     norm_type : float
-        Exponent :math:`p > 0`.
+        Exponent :math:`p > 0`, or ``inf``.
     kernel_size : int or (int, int, int)
         Size of the pooling window per axis.
     stride : int or (int, int, int), optional
@@ -1121,7 +1078,9 @@ def lp_pool3d(
 
     .. math::
 
-        y_{i,c,d,h,w} = \left( \sum_{(l, m, n) \in R} |x_{i,c,l,m,n}|^p \right)^{1/p}
+        y_{i,c,d,h,w} = \left( \sum_{(l, m, n) \in R} x_{i,c,l,m,n}^p \right)^{1/p}
+
+    The power keeps the sign of :math:`x`; see :func:`lp_pool1d`.
 
     Examples
     --------
@@ -1132,15 +1091,8 @@ def lp_pool3d(
     >>> y.shape
     (1, 2, 4, 4, 4)
     """
-    return _lp_pool(
-        x,
-        norm_type,
-        avg_pool3d,
-        kernel_size=kernel_size,
-        stride=stride,
-        ceil_mode=ceil_mode,
-        n=3,
-    )
+    g = _pool_geometry(kernel_size, stride, 0, 1, 3, "lp_pool3d")
+    return _lp_pool(x, norm_type, g, ceil_mode)
 
 
 def _scatter_unpool(

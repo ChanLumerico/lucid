@@ -30,7 +30,13 @@ TARGET = np.array([1, 0, 2])
 CASES: list[tuple[str, tuple[int, ...], Callable[[lucid.Tensor], lucid.Tensor]]] = [
     ("vector_norm ord 3", (4, 5), lambda x: lucid.linalg.vector_norm(x, ord=3, dim=1)),
     ("vector_norm ord 1.5", (6,), lambda x: lucid.linalg.vector_norm(x, ord=1.5)),
-    ("LPPool2d norm 3", (1, 2, 4, 4), lambda x: nn.LPPool2d(3, kernel_size=2)(x)),
+    # The pool keeps the sign of ``x ** 3``; a window with a negative sum
+    # has no real cube root, so it pools the magnitudes.
+    (
+        "LPPool2d norm 3",
+        (1, 2, 4, 4),
+        lambda x: nn.LPPool2d(3, kernel_size=2)(lucid.abs(x)),
+    ),
     (
         "multi_margin_loss p 2",
         (3, 4),

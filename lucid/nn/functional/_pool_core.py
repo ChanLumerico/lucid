@@ -12,6 +12,7 @@ import itertools
 import math
 import struct
 from collections.abc import Callable, Sequence
+from typing import Literal, overload
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -182,6 +183,18 @@ def _adaptive_pool_python(
     return _lucid.stack(values, dim=-1).reshape(*x.shape[:lead], *output_size)
 
 
+@overload
+def _max_pool(
+    x: Tensor, g: _PoolGeometry, ceil_mode: bool, return_indices: Literal[False]
+) -> Tensor: ...
+
+
+@overload
+def _max_pool(
+    x: Tensor, g: _PoolGeometry, ceil_mode: bool, return_indices: bool
+) -> Tensor | tuple[Tensor, Tensor]: ...
+
+
 def _max_pool(
     x: Tensor, g: _PoolGeometry, ceil_mode: bool, return_indices: bool
 ) -> Tensor | tuple[Tensor, Tensor]:
@@ -270,6 +283,29 @@ def _avg_pool(
                 out = out * count.reshape(*shape)
             out = out / int(divisor_override)
     return _drop_batch_axis(out, unbatched)
+
+
+def _lp_pool(x: Tensor, norm_type: float, g: _PoolGeometry, ceil_mode: bool) -> Tensor:
+    """The one body of ``lp_pool{1,2,3}d`` and the ``LPPool*d`` modules.
+
+    The reference's power average: the window sum of ``x ** p`` (not of
+    ``|x| ** p`` — an odd ``p`` keeps each element's sign), recovered as
+    the average pool times the window size, then its ``p``-th root.  A
+    window whose sum is zero gets no gradient, where the root's own
+    derivative is infinite; the reference does this with
+    ``sign(s) * relu(|s|)``, and a ``where`` does it here, because the
+    engine's ``relu`` gradient also drops a ``nan`` sum's gradient, which
+    the reference passes on.  ``p = inf`` is max pooling of ``|x|``.
+    """
+    p = float(norm_type)
+    n = len(g.kernel)
+    if p == math.inf:
+        return _max_pool(_lucid.abs(x), g, ceil_mode, False)
+    if not p > 0.0:
+        raise ValueError(f"lp_pool{n}d: norm_type must be > 0, got {p}")
+    pooled = _avg_pool(x**p, g, ceil_mode, True, None)
+    summed = _lucid.where(pooled != 0, pooled, _lucid.zeros_like(pooled))
+    return (summed * float(math.prod(g.kernel))) ** (1.0 / p)
 
 
 def _adaptive_size(
