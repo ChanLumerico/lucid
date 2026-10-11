@@ -555,19 +555,25 @@ def local_response_norm(
 
     Notes
     -----
-    Math (the neighbourhood :math:`\mathcal{N}(c)` is the ``size``
-    channels centred at :math:`c`, zero-padded at boundaries):
+    The scale is the *mean* of the squared activations over a window
+    of :math:`n = \text{size}` channels, so :math:`\alpha` is divided
+    by :math:`n`:
 
     .. math::
 
-        y_{i,c,h,w} = \frac{x_{i,c,h,w}}{\left(k + \alpha \sum_{c' \in \mathcal{N}(c)} x_{i,c',h,w}^2 \right)^\beta}
+        y_{i,c,\ldots} = \frac{x_{i,c,\ldots}}{\left(k + \frac{\alpha}{n}
+            \sum_{c'=c-\lfloor n/2 \rfloor}^{c+\lfloor (n-1)/2 \rfloor}
+            x_{i,c',\ldots}^2 \right)^\beta}
 
-    Boundary handling uses asymmetric zero padding when ``size`` is
-    even: ``(size - 1) // 2`` on the left and ``size // 2`` on the
-    right, matching the original AlexNet / cuDNN convention.  LRN
-    predates BatchNorm and provides only lateral inhibition (no learnt
-    affine), which is why modern architectures usually do not include
-    it.
+    Channels outside ``[0, C)`` count as zero and stay in the
+    denominator :math:`n`.  The window reaches ``size // 2`` channels
+    below :math:`c` and ``(size - 1) // 2`` above it, so for an even
+    ``size`` it leans towards the lower channels.  This is the
+    reference framework's definition (an average pool of :math:`x^2`
+    along the channel axis); the AlexNet paper writes the same rule
+    with the :math:`1/n` folded into :math:`\alpha`.  LRN predates
+    BatchNorm and provides only lateral inhibition (no learnt affine),
+    which is why modern architectures usually do not include it.
 
     Examples
     --------
@@ -601,9 +607,10 @@ def local_response_norm(
     ndim = len(xi.shape)
     C = int(xi.shape[1])
     # Pad totals to ``size - 1`` so the post-pad unfold yields exactly C
-    # windows.  Asymmetric for even ``size`` (LAPACK / cuDNN convention).
-    pad_l = (size - 1) // 2
-    pad_r = size // 2
+    # windows.  The window for channel c starts ``size // 2`` below it, so
+    # for an even ``size`` the extra channel sits on the low side.
+    pad_l = size // 2
+    pad_r = (size - 1) // 2
 
     x_sq = _C_engine.mul(xi, xi)
     pad_pairs: list[tuple[int, int]] = (
@@ -625,10 +632,15 @@ def local_response_norm(
     out_shape = list(xi.shape)
     window_sum_rs = _C_engine.reshape(window_sum_t, out_shape)
 
+    # A mean, not a sum: padded zeros stay in the denominator, so every
+    # channel divides by ``size``.  Mean, then ``* alpha``, then ``+ k`` is
+    # the reference's order, which keeps float64 results bit-close.
+    size_t = _C_engine.full(out_shape, float(size), xi.dtype, xi.device)
     k_t = _C_engine.full(out_shape, k, xi.dtype, xi.device)
     alpha_t = _C_engine.full(out_shape, alpha, xi.dtype, xi.device)
+    window_mean = _C_engine.div(window_sum_rs, size_t)
     scale = _C_engine.pow_scalar(
-        _C_engine.add(k_t, _C_engine.mul(alpha_t, window_sum_rs)), beta
+        _C_engine.add(_C_engine.mul(window_mean, alpha_t), k_t), beta
     )
     return _wrap(_C_engine.div(xi, scale))
 

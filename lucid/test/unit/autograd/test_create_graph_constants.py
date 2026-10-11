@@ -225,8 +225,6 @@ _PINS = {
             "nll_loss_2d",
         )
     },
-    "local_response_norm": "LCD-422 follow-up: local_response_norm's second derivative "
-    "differs from the reference (up to 40%), on main too",
 }
 # Lucid's F.hardtanh is clamp, and the reference keeps hardtanh's gradient in
 # the graph, so clamp keeps it too — and the losses built on clamp with it.

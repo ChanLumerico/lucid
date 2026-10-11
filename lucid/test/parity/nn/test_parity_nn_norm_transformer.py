@@ -265,12 +265,12 @@ class TestLocalResponseNormParity:
         ref_lrn = ref.nn.LocalResponseNorm(5)
         lucid_lrn = nn.LocalResponseNorm(5)
 
-        # LRN accumulates float32 rounding across the sliding window;
-        # ~0.1% relative error is expected between implementations.
+        # A 2e-3 tolerance once hid a missing ``/ size`` (LCD-440); the
+        # float32 rounding of a five-channel window is far below 1e-5.
         assert_close(
             lucid_lrn(lucid.tensor(x_np.copy())),
             ref_lrn(ref.tensor(x_np.copy())),
-            atol=2e-3,
+            atol=1e-5,
         )
 
     def test_custom_params(self, ref: Any) -> None:
@@ -280,11 +280,10 @@ class TestLocalResponseNormParity:
         ref_lrn = ref.nn.LocalResponseNorm(3, alpha=1e-3, beta=0.75, k=2.0)
         lucid_lrn = nn.LocalResponseNorm(3, alpha=1e-3, beta=0.75, k=2.0)
 
-        # Larger alpha amplifies the float32 window-sum rounding differences.
         assert_close(
             lucid_lrn(lucid.tensor(x_np.copy())),
             ref_lrn(ref.tensor(x_np.copy())),
-            atol=5e-3,
+            atol=1e-5,
         )
 
 
