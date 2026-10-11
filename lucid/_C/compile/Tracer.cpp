@@ -267,11 +267,17 @@ void Tracer::watch(const TensorImplPtr& impl) {
         watched_.emplace(impl.get(), impl);
 }
 
-void Tracer::on_derived(std::string_view name, const TensorImplPtr& src, const TensorImplPtr& out) {
-    if (!out || src.get() == out.get() || !sees(src.get()))
+void Tracer::on_derived(std::string_view name,
+                        const std::vector<TensorImplPtr>& srcs,
+                        const TensorImplPtr& out) {
+    if (!out)
+        return;
+    const auto is = [&](const TensorImplPtr& src) { return src.get() == out.get(); };
+    const auto seen = [&](const TensorImplPtr& src) { return sees(src.get()); };
+    if (std::any_of(srcs.begin(), srcs.end(), is) || std::none_of(srcs.begin(), srcs.end(), seen))
         return;
     on_op_enter(name, out->device(), out->dtype(), out->shape());
-    on_op_io({src}, out);
+    on_op_io(srcs, out);
 }
 
 void Tracer::mark_unsupported(std::string why) {

@@ -235,8 +235,12 @@ public:
     // data.  ``name`` is an emitter's when ``out`` holds ``src``'s values on
     // ``src``'s device (``"detach"``); any other name has no emitter and
     // sends the call to eager.  A ``src`` the trace has not seen is a
-    // constant to it, and so is ``out``: nothing is recorded.
-    void on_derived(std::string_view name, const TensorImplPtr& src, const TensorImplPtr& out);
+    // constant to it, and so is ``out``: nothing is recorded.  With several
+    // sources (a fused kernel, a custom Metal kernel) the op reads all of
+    // them, and is recorded when the trace sees any one.
+    void on_derived(std::string_view name,
+                    const std::vector<TensorImplPtr>& srcs,
+                    const TensorImplPtr& out);
 
     // ``target`` now holds what ``value`` holds: an in-place op computed
     // ``value`` out of place and spliced it into ``target``
@@ -419,9 +423,16 @@ inline void note_host_read(const TensorImplPtr& impl) {
 }
 
 inline TensorImplPtr
+traced_derive(std::string_view name, const std::vector<TensorImplPtr>& srcs, TensorImplPtr out) {
+    if (auto* trc = current_tracer())
+        trc->on_derived(name, srcs, out);
+    return out;
+}
+
+inline TensorImplPtr
 traced_derive(std::string_view name, const TensorImplPtr& src, TensorImplPtr out) {
     if (auto* trc = current_tracer())
-        trc->on_derived(name, src, out);
+        trc->on_derived(name, {src}, out);
     return out;
 }
 

@@ -24,6 +24,7 @@
 #include <mlx/version.h>
 
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/TensorImpl.h"
 #include "../core/fwd.h"
 #include "../version.h"
@@ -196,8 +197,11 @@ PYBIND11_MODULE(engine, m) {
             auto& be = lucid::backend::Dispatcher::for_device(x->device());
             lucid::Storage out = be.fused_linear_relu_forward(x->storage(), w->storage(),
                                                               b->storage(), out_shape, x->dtype());
-            return std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
-                                                       x->device(), false);
+            // No emitter: a traced call runs eagerly, an export refuses.
+            return lucid::compile::traced_derive(
+                "_fused_linear_relu", std::vector<lucid::TensorImplPtr>{x, w, b},
+                std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
+                                                    x->device(), false));
         },
         py::arg("x"), py::arg("weight"), py::arg("bias"),
         "Fused linear + ReLU: y = max(0, x @ W.T + b).  "
@@ -222,8 +226,10 @@ PYBIND11_MODULE(engine, m) {
             auto& be = lucid::backend::Dispatcher::for_device(x->device());
             lucid::Storage out = be.fused_linear_gelu_forward(x->storage(), w->storage(),
                                                               b->storage(), out_shape, x->dtype());
-            return std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
-                                                       x->device(), false);
+            return lucid::compile::traced_derive(
+                "_fused_linear_gelu", std::vector<lucid::TensorImplPtr>{x, w, b},
+                std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
+                                                    x->device(), false));
         },
         py::arg("x"), py::arg("weight"), py::arg("bias"),
         "Fused linear + GELU: y = GELU(x @ W.T + b).  "
@@ -276,8 +282,10 @@ PYBIND11_MODULE(engine, m) {
             // memory — directly accessible from both the GPU and CPU without a copy.  Labelled
             // Device::CPU, the TensorImpl adopts it as a CPU view (see its constructor), so
             // ordinary ops run on it, and .to(device='metal') relabels it without a copy.
-            return std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, dt,
-                                                       lucid::Device::CPU, false);
+            return lucid::compile::traced_derive(
+                "_run_metal_kernel", inputs,
+                std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, dt,
+                                                    lucid::Device::CPU, false));
         },
         py::arg("kernel_source"), py::arg("function_name"), py::arg("inputs"),
         py::arg("output_shape"), py::arg("dtype") = "f32", py::arg("grid"), py::arg("threads"),
