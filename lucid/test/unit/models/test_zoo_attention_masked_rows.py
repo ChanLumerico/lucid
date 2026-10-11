@@ -77,6 +77,30 @@ def test_bert_head_mask_removes_a_head() -> None:
     assert w is None  # weights only when asked for
 
 
+@pytest.mark.parametrize(
+    "shape", [(B, HEADS, 1, 1), (1, HEADS, 1, 1)], ids=["per-sample", "shared"]
+)
+def test_bert_head_mask_accepts_a_per_head_multiplier(shape: tuple[int, ...]) -> None:
+    attn = _BERTSelfAttention(BERTConfig(**_SMALL)).eval()
+    out, _ = attn(lucid.randn(B, T, HIDDEN), head_mask=lucid.ones(shape))
+    assert tuple(out.shape) == (B, T, HIDDEN)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    # (B, H, T, T) with T == head_dim would broadcast against the context
+    # silently; the others would crash in the multiply.
+    [(B, HEADS, T, T), (HEADS + 1,), (B, HEADS, 1, 2), (3, HEADS, 1, 1)],
+)
+def test_bert_head_mask_refuses_anything_finer_than_per_head(
+    shape: tuple[int, ...],
+) -> None:
+    cfg = BERTConfig(**{**_SMALL, "hidden_size": HEADS * T})
+    attn = _BERTSelfAttention(cfg).eval()
+    with pytest.raises(ValueError, match="one multiplier per head"):
+        attn(lucid.randn(B, T, HEADS * T), head_mask=lucid.ones(shape))
+
+
 def _gpt(cls: type, cfg: type) -> lucid.nn.Module:
     return cls(cfg(**_SMALL, attention_dropout=0.5, max_position_embeddings=8))
 

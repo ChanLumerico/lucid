@@ -156,6 +156,20 @@ class _BERTEmbeddings(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _per_head_mask(head_mask: Tensor, batch: int, heads: int) -> Tensor:
+    """``head_mask`` as ``(1 or B, H, 1, 1)``; a finer mask (``(B, H, T, T)``)
+    would broadcast against the ``(B, H, T, D)`` context, silently at T == D."""
+    shape = tuple(int(d) for d in head_mask.shape)
+    if shape == (heads,):
+        return head_mask.reshape(1, heads, 1, 1)
+    if len(shape) == 4 and shape[0] in (1, batch) and shape[1:] == (heads, 1, 1):
+        return head_mask
+    raise ValueError(
+        f"head_mask must be ({heads},) or (1 or {batch}, {heads}, 1, 1) — one "
+        f"multiplier per head — got shape {shape}"
+    )
+
+
 @final
 class _BERTSelfAttention(nn.Module):
     """Multi-head self-attention with separate Q / K / V projections.
@@ -208,25 +222,16 @@ class _BERTSelfAttention(nn.Module):
             the ones applied to ``v``, so after dropout and the head mask, as
             the reference returns them.
         """
-        # The same masked core the fused path runs through, asked for its
-        # weights: a hand-written softmax here turned a query row whose every
-        # key is ``-inf`` into NaN, where the fused path gives ``0`` (LCD-387).
+        # The fused path's masked core, asked for its weights: a hand-written
+        # softmax here gave NaN for an all ``-inf`` row (LCD-387).
+        drop = self.dropout.p if self.training else 0.0
         ctx, weights = _masked_attention(
-            q,
-            k,
-            v,
-            attention_mask,
-            1.0 / self.scale,
-            dropout_p=self.dropout.p if self.training else 0.0,
-            need_weights=True,
+            q, k, v, attention_mask, 1.0 / self.scale, dropout_p=drop, need_weights=True
         )
         assert weights is not None  # need_weights=True always returns them
         if head_mask is not None:
-            # A per-head scalar, so scaling the weights and the context they
-            # produced is the same as scaling the weights before ``@ v``.
-            shaped = (
-                head_mask.reshape(1, -1, 1, 1) if head_mask.ndim == 1 else head_mask
-            )
+            # Per-head scalar: scaling after ``@ v`` equals scaling before.
+            shaped = _per_head_mask(head_mask, int(q.shape[0]), self.num_heads)
             ctx = ctx * shaped
             weights = weights * shaped
         return ctx, weights
