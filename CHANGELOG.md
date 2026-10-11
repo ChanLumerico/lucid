@@ -546,6 +546,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - one typed owner merges factory overrides (LCD-353)
 - declare view_op in View.h beside reshape_op (MV-ENG-1)
 - loss and RNN validators take object, as boundaries do
+- drop the state_dict recursion and key-list hooks
 
 ---
 
