@@ -524,6 +524,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - order-1 Bessel slope at 0 is 1/2, not 0 or NaN (LCD-110)
 
+- from_float keeps the float module intact (LCD-190)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

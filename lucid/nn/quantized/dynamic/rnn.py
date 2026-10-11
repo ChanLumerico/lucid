@@ -12,6 +12,7 @@ kernel is reached through :class:`~lucid.nn.quantized.QuantizedLinearMLX`
 rather than from this module.
 """
 
+import copy
 from typing import TYPE_CHECKING, ClassVar, Self, override
 
 import lucid
@@ -109,8 +110,11 @@ class _DynamicRecurrent[F: nn.Module](nn.Module):
                 f"dynamic {cls.__name__}.from_float expects an "
                 f"nn.{cls._FLOAT.__name__}, got {type(mod).__name__}"
             )
-        qmod = cls(mod)
-        for name, param in mod.named_parameters():
+        # The shell is overwritten with dequantized weights on every forward;
+        # a copy of it, so the caller's float module is left as it was given.
+        shell = copy.deepcopy(mod)
+        qmod = cls(shell)
+        for name, param in shell.named_parameters():
             key = _buffer_key(name)
             if _is_weight(name):
                 obs = PerChannelMinMaxObserver(

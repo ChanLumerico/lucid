@@ -146,6 +146,19 @@ def test_named_type_without_a_dynamic_form_warns(named: type) -> None:
     assert [type(m) for m in qmodel] == [nn.Conv2d, nn.RNN, nn.Linear]
 
 
+@pytest.mark.parametrize("case", ["LSTM", "GRU-2layer-bidir", "LSTMCell", "RNNCell-relu"])
+def test_from_float_leaves_the_float_module_alone(case: str) -> None:
+    make, inp, qtype = _CASES[case]
+    lucid.manual_seed(3)
+    model = make(lucid)
+    before = {k: v.numpy().copy() for k, v in model.state_dict().items()}
+    qmod = qtype.from_float(model)
+    qmod(inp(lucid))
+    after = model.state_dict()
+    assert all(np.array_equal(before[k], after[k].numpy()) for k in before)
+    assert all(p.requires_grad for p in model.parameters())
+
+
 def test_from_float_rejects_another_type() -> None:
     with pytest.raises(TypeError, match="expects an nn.GRUCell"):
         nnqd.GRUCell.from_float(nn.LSTMCell(2, 2))
