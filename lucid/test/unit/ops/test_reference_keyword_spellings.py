@@ -87,9 +87,7 @@ def _dtypes(m: ModuleType, name: str) -> object:
 
 @pytest.mark.parametrize("op", ["any", "all"])
 @pytest.mark.parametrize("dtype", sorted(_LOGICAL_DATA))
-@pytest.mark.parametrize(
-    "dim", [None, 0, 1, -1, (0, 1)], ids=lambda d: f"dim={d}"
-)
+@pytest.mark.parametrize("dim", [None, 0, 1, -1, (0, 1)], ids=lambda d: f"dim={d}")
 @pytest.mark.parametrize("keepdim", [False, True], ids=["drop", "keep"])
 def test_any_all_reduce_over_dim(
     ref: ModuleType, device: str, op: str, dtype: str, dim: object, keepdim: bool
@@ -98,7 +96,11 @@ def test_any_all_reduce_over_dim(
     x = lucid.tensor(data, dtype=_dtypes(lucid, dtype), device=device)
     r = ref.tensor(data, dtype=_dtypes(ref, dtype))
     if dim is None:
-        want = getattr(ref, op)(r, dim=None, keepdim=keepdim) if keepdim else getattr(ref, op)(r)
+        want = (
+            getattr(ref, op)(r, dim=None, keepdim=keepdim)
+            if keepdim
+            else getattr(ref, op)(r)
+        )
     else:
         want = getattr(ref, op)(r, dim=dim, keepdim=keepdim)
     calls = [

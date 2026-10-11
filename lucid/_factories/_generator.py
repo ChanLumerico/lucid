@@ -53,7 +53,9 @@ def _seed_value(seed: int, op: str) -> int:
     try:
         value = operator.index(seed)
     except TypeError:
-        raise TypeError(f"{op}: seed must be an int, got {type(seed).__name__}") from None
+        raise TypeError(
+            f"{op}: seed must be an int, got {type(seed).__name__}"
+        ) from None
     if not -_SIGNED_64 <= value < _UNSIGNED_64:
         raise ValueError(f"{op}: seed must lie in [-2**63, 2**64), got {value}")
     return value % _UNSIGNED_64
@@ -74,13 +76,17 @@ def _set_counter(g: _C_engine.Generator, counter: int) -> None:
 def _state_tensor(g: _C_engine.Generator) -> Tensor:
     """``[key, counter]`` as an ``int64`` tensor, each in two's complement."""
     words = [_key(g), int(g.counter)]
-    return tensor([w - _UNSIGNED_64 if w >= _SIGNED_64 else w for w in words], dtype=int64)
+    return tensor(
+        [w - _UNSIGNED_64 if w >= _SIGNED_64 else w for w in words], dtype=int64
+    )
 
 
 def _unpack_state(state: Tensor, op: str) -> tuple[int, int]:
     """``(key, counter)`` from a state tensor :func:`_state_tensor` made."""
     if int(state.numel()) != 2:
-        raise ValueError(f"{op}: expected a length-2 state tensor, got shape={tuple(state.shape)}")
+        raise ValueError(
+            f"{op}: expected a length-2 state tensor, got shape={tuple(state.shape)}"
+        )
     flat = state.reshape(-1)
     return int(flat[0].item()) % _UNSIGNED_64, int(flat[1].item()) % _UNSIGNED_64
 

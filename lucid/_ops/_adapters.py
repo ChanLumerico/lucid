@@ -707,7 +707,9 @@ def _flatten_adapter(
     end_dim: int | None = None,
 ) -> _Impl:
     """flatten(input, start_axis=0, end_axis=-1, *, start_dim, end_dim)."""
-    start = _either_spelling("flatten", "start_axis", start_axis, "start_dim", start_dim)
+    start = _either_spelling(
+        "flatten", "start_axis", start_axis, "start_dim", start_dim
+    )
     end = _either_spelling("flatten", "end_axis", end_axis, "end_dim", end_dim)
     return _C_engine.flatten(
         a_impl, 0 if start is None else start, -1 if end is None else end
