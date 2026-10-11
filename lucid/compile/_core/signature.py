@@ -23,11 +23,12 @@ The key intentionally does NOT capture:
     matters to the captured graph.
 
 Non-tensor positional / keyword arguments must be hashable themselves;
-the key embeds them verbatim so a Python ``int`` / ``bool`` / ``str``
-distinguishes signatures (useful for ``forward(self, x, training=True)``
-style guard arguments).
+the key embeds each with its type (and a float by its bits) so a Python
+``int`` / ``bool`` / ``float`` / ``str`` distinguishes signatures (useful
+for ``forward(self, x, training=True)`` style guard arguments).
 """
 
+import struct
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -129,7 +130,7 @@ class CacheKey:
     Attributes
     ----------
     args : tuple
-        Per-argument signature (``TensorSig`` for tensors, atom value
+        Per-argument signature (``TensorSig`` for tensors, typed atom
         for primitives, nested tuple for containers).  Position-
         sensitive.
     kwargs : tuple of (str, object)
@@ -252,7 +253,7 @@ def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:
 
     Tensors become :class:`TensorSig`; lists / tuples / dicts are
     recursively normalised; primitives (int / float / bool / str /
-    None) pass through.  Anything still unhashable at the end forces
+    None) are keyed by :func:`_atom_sig`.  Anything still unhashable forces
     the caller to fall back to eager (the cache lookup raises and
     :class:`CompiledModule.__call__` catches it).
     """
@@ -274,11 +275,23 @@ def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:
                 for k, v in value.items()
             )
         )
-    # Atoms: int / float / bool / str / None are hashable.  Anything
-    # else (e.g. numpy arrays — should not be on this hot path) falls
-    # through and will raise on hash if unhashable, which is the
-    # signal that this call must take the eager path.
-    return value
+    return _atom_sig(value)
+
+
+def _atom_sig(value: object) -> object:
+    """Key a non-tensor argument by its type and, for a float, its bits.
+
+    The trace bakes the value in, so two calls share an executable only
+    when they would trace the same graph.  Plain ``==`` is too coarse:
+    ``1 == 1.0 == True`` although each promotes an integer tensor
+    differently, ``0.0 == -0.0`` although they add differently, and a NaN
+    never equals another NaN, so it recompiled on every call (LCD-446).
+    Anything unhashable still raises on hash, which sends the call eager.
+    """
+    kind = f"{type(value).__module__}.{type(value).__qualname__}"
+    if isinstance(value, float):
+        return (kind, struct.pack("<d", value))
+    return (kind, value)
 
 
 def _param_fingerprint(model: Module) -> tuple[tuple[str, str], ...]:
@@ -328,7 +341,7 @@ def signature_of(
         when their input signatures coincide.
     args : iterable
         Positional call arguments.  Each is summarised via
-        :func:`_arg_sig` (tensor → shape/dtype/device, scalar → value).
+        :func:`_arg_sig` (tensor → shape/dtype/device, scalar → typed value).
     kwargs : dict
         Keyword call arguments; summarised the same way as ``args`` and
         sorted by key so insertion order doesn't affect the cache key.
