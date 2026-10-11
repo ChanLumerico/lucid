@@ -716,21 +716,28 @@ def _flatten_adapter(
     )
 
 
+def _counts(value: int | Sequence[int] | None) -> list[int] | None:
+    """``value`` as per-axis counts: one int is one count."""
+    if value is None:
+        return None
+    return [value] if isinstance(value, int) else [int(r) for r in value]
+
+
 def _tile_adapter(
     a_impl: _Impl,
-    reps: Sequence[int] | None = None,
+    reps: int | Sequence[int] | None = None,
     *,
-    dims: Sequence[int] | None = None,
+    dims: int | Sequence[int] | None = None,
 ) -> _Impl:
     """tile(input, reps, *, dims) — ``dims`` is the reference's ``reps``.
 
+    A single int is one count, as ``x.tile(2)`` reads in the reference.
     Fewer counts than axes are padded with leading 1s, as documented and as
     the reference does; the engine refuses them.
     """
-    given = _either_spelling("tile", "reps", reps, "dims", dims)
-    if given is None:
+    counts = _either_spelling("tile", "reps", _counts(reps), "dims", _counts(dims))
+    if counts is None:
         raise TypeError("tile() missing required argument 'dims'")
-    counts = [int(r) for r in given]
     short = len(a_impl.shape) - len(counts)
     return _C_engine.tile(a_impl, [1] * short + counts)
 

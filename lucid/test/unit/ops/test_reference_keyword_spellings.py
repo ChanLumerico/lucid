@@ -133,3 +133,13 @@ def test_any_all_read_both_parts_of_a_complex_entry(device: str) -> None:
     )
     assert lucid.any(z, dim=1).tolist() == [True, True]
     assert lucid.all(z, dim=0).tolist() == [True, False]
+
+
+def test_tile_takes_a_single_count(ref: ModuleType, device: str) -> None:
+    # ``x.tile(2)`` used to fail with "'int' object is not iterable".
+    data = [[1, 2], [3, 4]]
+    x = lucid.tensor(data, device=device)
+    want = ref.tensor(data).tile(2).tolist()
+    assert x.tile(2).tolist() == want
+    assert lucid.tile(x, 2).tolist() == want
+    assert x.tile(dims=2).tolist() == want

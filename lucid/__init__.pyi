@@ -1757,7 +1757,7 @@ def as_strided(input: Tensor, size: Sequence[_int], stride: Sequence[_int], stor
             [3., 4.]])
     """
     ...
-def tile(input: Tensor, reps: Sequence[_int] | None = ..., *, dims: Sequence[_int] | None = ...) -> Tensor:
+def tile(input: Tensor, reps: _int | Sequence[_int] | None = ..., *, dims: _int | Sequence[_int] | None = ...) -> Tensor:
     r"""    Construct a tensor by repeating ``input`` ``reps`` times per axis.
     
     Unlike :func:`repeat` (single axis), :func:`tile` accepts a per-axis
