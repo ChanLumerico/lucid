@@ -67,8 +67,7 @@ def _case_marks(name: str, move: str) -> list[pytest.MarkDecorator]:
             pytest.mark.xfail(
                 strict=True,
                 raises=NotImplementedError,
-                reason="engine optimizer kernels on CPU accept float32/float64 "
-                "only; the reference steps float16 on CPU (FOUND, LCD-77 report)",
+                reason="LCD-417: engine CPU optimizers refuse float16",
             )
         ]
     return []
