@@ -512,6 +512,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
+  - `lucid.argsort`, `Tensor.argsort` and the indices of `lucid.topk` are int64 on CPU and Metal; they were int32 (LCD-249).
+  - `linalg.vector_norm` / `matrix_norm` / `norm`, `cdist` and `F.normalize` refuse integer and bool input with `DtypeMismatch`. Before, the result dtype depended on `ord`, or the call raised NotImplementedError (LCD-384).
+  - `linalg.ldl_factor` / `ldl_factor_ex` take `hermitian` keyword-only, defaulting to False. Passing it by position is deprecated until 3.18 (LCD-395). Reading `Generator.seed` as a property is deprecated in favour of `initial_seed()`; in 3.18 `seed()` becomes the reseeding method (LCD-374). A variance divisor ≤ 0 now warns "degrees of freedom is <= 0".
+  - `F.interpolate` raises ValueError for `align_corners` with nearest / nearest-exact / area, and for `recompute_scale_factor=True` with `size=`. `transforms.functional.resize(antialias=True)` delegates to `F.interpolate`, so an upscale-only bicubic resize now uses the a=-0.5 antialias filter (LCD-48).
+  - Conv, conv-transpose, pool and unfold/fold refuse zero or negative stride/kernel/dilation, negative padding, and `output_padding ≥ max(stride, dilation)`. Pool padding over `kernel_size // 2` is refused at every dilation. Conv padding strings are case-sensitive: `padding="SAME"` raises (LCD-396, LCD-405).
+  - `nn.GRU` / `nn.RNN` parameters are `{weight,bias}_{ih,hh}_l{k}[_reverse]`, as for LSTM, instead of `cell_l{k}.*`. The `cell_l*` submodules, and hooks on them, are gone; old checkpoints still load (LCD-135).
+  - Zoo:
+    - The GoogLeNet backbone returns `BaseModelOutput(last_hidden_state=…)`; it used to put the feature map in `logits`.
+    - GPT / GPT-2 / Transformer sequence and token classifiers return `SequenceClassificationOutput` / `TokenClassificationOutput`.
+    - `transformer_base_cls` / `transformer_base_token_cls` drop the unused decoder LayerNorm (2 state-dict keys).
+    - YOLO v1 matches with its decoder's boxes, so its loss values change.
+    - Detectors return int64 labels (LCD-203, LCD-204, LCD-211).
+  - Engine `Validator::ndim` failures and the group_norm / dropoutnd / fold geometry errors raise ShapeMismatch / InvalidArgument (still LucidError subclasses); they used to raise a bare LucidError (LCD-396).
+
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)
 
 - A refusal is catchable by its kind from either layer: ShapeMismatch and DeviceMismatch are also ValueError, DtypeMismatch also TypeError, and a new InvalidArgument (also ValueError) carries the engine's argument-value refusals — groups=0, dropout(p=1.5), bins=0 — which were bare LucidError. An axis or index out of range is IndexError throughout. Every class stays a LucidError, so a RuntimeError
