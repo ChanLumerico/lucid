@@ -14,13 +14,7 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, cast, override
 
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
-from lucid.nn.modules.conv import (
-    _ConvFn,
-    _conv_forward_with_mode,
-    _same_pad_pair,
-)
-from lucid.nn.parameter import Parameter
+from lucid.nn.functional.conv import _ConvArgs, _convnd
 from lucid._types import PaddingMode
 from lucid.nn.quantized._utils import activation_qparams, quantize_weight
 from lucid.quantization._functional import dequantize, fake_quantize
@@ -118,53 +112,13 @@ class _QuantizedConvNd(nn.Module):
         self.register_buffer("zero_point", lucid.tensor(0.0))
 
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        """Run the rank-specific convolution — overridden per subclass."""
-        raise NotImplementedError
-
-    def _resolve_pad(
-        self, x: Tensor, rank: int
-    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
-        """Padding amounts for this input, mirroring the float module.
-
-        ``"same"`` depends on the input's spatial size and can be
-        asymmetric, so it cannot be baked into a single integer at
-        construction time — which is why the quantized module has to carry
-        the string rather than the number the float module happened to
-        store beside it.
-        """
-        if self.padding_str == "valid":
-            return (0,) * rank, (0,) * rank
-        if self.padding_str == "same":
-            ks = _as_tuple(self.kernel_size, rank)
-            st = _as_tuple(self.stride, rank)
-            dl = _as_tuple(self.dilation, rank)
-            los: list[int] = []
-            his: list[int] = []
-            for i in range(rank):
-                lo, hi = _same_pad_pair(int(x.shape[2 + i]), ks[i], st[i], dl[i])
-                los.append(lo)
-                his.append(hi)
-            return tuple(los), tuple(his)
-        pad = _as_tuple(self.padding, rank)
-        return pad, pad
-
-    def _conv_with_mode(
-        self, x: Tensor, weight: Tensor, rank: int, conv_fn: object
-    ) -> Tensor:
-        """Convolve honouring ``padding_str`` and ``padding_mode``."""
-        pad_lo, pad_hi = self._resolve_pad(x, rank)
-        return _conv_forward_with_mode(
-            x,
-            cast("Parameter", weight),
-            cast("Parameter | None", self.bias),
-            _as_tuple(self.stride, rank),
-            pad_lo,
-            pad_hi,
-            _as_tuple(self.dilation, rank),
-            self.groups,
-            self.padding_mode,
-            cast("_ConvFn", conv_fn),
+        """Convolve as the float module would, ``"same"`` and ``padding_mode``
+        included — ``"same"`` depends on the input's spatial size, which is
+        why the module carries the string rather than a baked-in number."""
+        args = _ConvArgs(
+            self.stride, self.padding_str or self.padding, self.dilation, self.groups
         )
+        return _convnd(x, weight, self.bias, args, self._rank, self.padding_mode)
 
     def _activation(self, y: Tensor) -> Tensor:
         """Post-conv activation hook (identity; ReLU in the fused variant)."""
@@ -387,10 +341,6 @@ class Conv1d(_QuantizedConvNd):
 
     _rank = 1
 
-    @override
-    def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return self._conv_with_mode(x, weight, 1, F.conv1d)
-
 
 class Conv2d(_QuantizedConvNd):
     r"""Quantized 2-D convolution — int8 kernel, dequantize-to-float compute.
@@ -546,10 +496,6 @@ class Conv2d(_QuantizedConvNd):
 
     _rank = 2
 
-    @override
-    def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return self._conv_with_mode(x, weight, 2, F.conv2d)
-
 
 class Conv3d(_QuantizedConvNd):
     r"""Quantized 3-D convolution — int8 kernel, dequantize-to-float compute.
@@ -704,7 +650,3 @@ class Conv3d(_QuantizedConvNd):
     """
 
     _rank = 3
-
-    @override
-    def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return self._conv_with_mode(x, weight, 3, F.conv3d)

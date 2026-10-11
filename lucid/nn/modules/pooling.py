@@ -25,6 +25,9 @@ from lucid.nn.functional.pooling import (
     max_unpool3d,
     fractional_max_pool2d,
     fractional_max_pool3d,
+    lp_pool1d,
+    lp_pool2d,
+    lp_pool3d,
 )
 
 
@@ -1493,20 +1496,9 @@ class LPPool1d(Module):
         Tensor
             Pooled output tensor.
         """
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
-
-        xi = _unwrap(x)  # (N, C, L)
-        p = float(self.norm_type)
-        k = self.kernel_size
-        s = self.stride
-
-        # Unfold last dim → (N, C, L_out, k)
-        unfolded = _C_engine.unfold_dim(xi, 2, k, s)
-        absv = _C_engine.abs(unfolded)
-        powered = _C_engine.pow_scalar(absv, p)
-        summed = _C_engine.sum(powered, [3], False)  # (N, C, L_out)
-        return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
+        return lp_pool1d(
+            x, self.norm_type, self.kernel_size, self.stride, self.ceil_mode
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1632,22 +1624,13 @@ class LPPool2d(Module):
         Tensor
             Pooled output tensor.
         """
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
-
-        xi = _unwrap(x)  # (N, C, H, W)
-        p = float(self.norm_type)
-
-        # Unfold H-dim (axis 2) → (N, C, H_out, W, kh)
-        uh = _C_engine.unfold_dim(xi, 2, self.kh, self.sh)
-        # uh shape: (N, C, H_out, W, kh) — now unfold W-dim (axis 3)
-        uw = _C_engine.unfold_dim(uh, 3, self.kw, self.sw)
-        # uw shape: (N, C, H_out, W_out, kh, kw)
-
-        absv = _C_engine.abs(uw)
-        powered = _C_engine.pow_scalar(absv, p)
-        summed = _C_engine.sum(powered, [4, 5], False)  # (N, C, H_out, W_out)
-        return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
+        return lp_pool2d(
+            x,
+            self.norm_type,
+            (self.kh, self.kw),
+            (self.sh, self.sw),
+            self.ceil_mode,
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1756,8 +1739,6 @@ class LPPool3d(Module):
         Tensor
             Pooled output tensor.
         """
-        from lucid.nn.functional.pooling import lp_pool3d
-
         return lp_pool3d(
             x,
             norm_type=self.norm_type,

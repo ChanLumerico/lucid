@@ -2,18 +2,126 @@
 nn.functional convolution operations.
 """
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, NamedTuple
+
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.functional._spatial_args import (
+    _add_batch_axis,
+    _conv_padding,
+    _drop_batch_axis,
+    _ntuple,
+    _require_non_negative,
+    _require_positive,
+)
+from lucid.nn.functional.sampling import pad as _pad
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
+# A convolution's ``padding_mode`` as the mode :func:`pad` calls it.
+_PAD_MODE: dict[str, str] = {
+    "zeros": "constant",
+    "reflect": "reflect",
+    "replicate": "replicate",
+    "circular": "circular",
+}
 
-def _normalize_int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]:
-    if isinstance(v, int):
-        return (v,) * n
-    return tuple(v)
+_CONV: dict[int, Callable[..., _C_engine.TensorImpl]] = {
+    1: _C_engine.nn.conv1d,
+    2: _C_engine.nn.conv2d,
+    3: _C_engine.nn.conv3d,
+}
+_CONV_TRANSPOSE: dict[int, Callable[..., _C_engine.TensorImpl]] = {
+    1: _C_engine.nn.conv_transpose1d,
+    2: _C_engine.nn.conv_transpose2d,
+    3: _C_engine.nn.conv_transpose3d,
+}
+
+
+class _ConvArgs(NamedTuple):
+    """A convolution's geometry, as its caller spelled it."""
+
+    stride: int | Sequence[int]
+    padding: str | int | Sequence[int]
+    dilation: int | Sequence[int]
+    groups: int
+
+
+def _convnd(
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None,
+    args: _ConvArgs,
+    n: int,
+    padding_mode: str = "zeros",
+) -> Tensor:
+    """The one body of ``conv{1,2,3}d`` and of the ``Conv*d`` modules.
+
+    Reads the arguments through ``_spatial_args``, runs an unbatched
+    input as a batch of one, and pre-pads with :func:`pad` whenever the
+    engine's symmetric zero padding cannot express the request — an odd
+    ``"same"`` total, or a ``padding_mode`` other than ``"zeros"``.
+    """
+    op = f"conv{n}d"
+    s = _ntuple(args.stride, n, op, "stride")
+    _require_positive(s, op, "stride")
+    d = _ntuple(args.dilation, n, op, "dilation")
+    _require_positive(d, op, "dilation")
+    # A weight of the wrong rank has no kernel to size "same" from; size it
+    # as 1 so that the engine's own rank check is what refuses it.
+    kernel = (
+        tuple(int(v) for v in weight.shape[2:]) if weight.ndim == n + 2 else (1,) * n
+    )
+    before, after = _conv_padding(args.padding, kernel, s, d, op)
+    xb, unbatched = _add_batch_axis(x, n)
+    if padding_mode != "zeros" or before != after:
+        flat: list[int] = []
+        for axis in reversed(range(n)):
+            flat += [before[axis], after[axis]]
+        xb = _pad(xb, tuple(flat), mode=_PAD_MODE[padding_mode])
+        before = (0,) * n
+    b = _unwrap(bias) if bias is not None else None
+    out = _wrap(_CONV[n](_unwrap(xb), _unwrap(weight), b, *s, *before, *d, args.groups))
+    return _drop_batch_axis(out, unbatched)
+
+
+def _conv_transposend(
+    x: Tensor,
+    weight: Tensor,
+    bias: Tensor | None,
+    args: _ConvArgs,
+    output_padding: int | Sequence[int],
+    n: int,
+) -> Tensor:
+    """The one body of ``conv_transpose{1,2,3}d`` and of their modules."""
+    op = f"conv_transpose{n}d"
+    if isinstance(args.padding, str):
+        raise TypeError(
+            f"{op}: padding must be an integer or {n} integers, got {args.padding!r}"
+        )
+    s = _ntuple(args.stride, n, op, "stride")
+    _require_positive(s, op, "stride")
+    d = _ntuple(args.dilation, n, op, "dilation")
+    _require_positive(d, op, "dilation")
+    p = _ntuple(args.padding, n, op, "padding")
+    _require_non_negative(p, op, "padding")
+    out_pad = _ntuple(output_padding, n, op, "output_padding")
+    _check_output_padding(op, out_pad, s, d)
+    xb, unbatched = _add_batch_axis(x, n)
+    wi = _unwrap(weight)
+    # The engine requires an explicit bias.  The transposed weight's second
+    # axis is C_out // groups, so sizing the bias from that axis alone is
+    # short by exactly ``groups``.
+    if bias is not None:
+        b = _unwrap(bias)
+    else:
+        b = _C_engine.zeros([int(wi.shape[1]) * args.groups], wi.dtype, wi.device)
+    out = _wrap(
+        _CONV_TRANSPOSE[n](_unwrap(xb), wi, b, *s, *p, *out_pad, *d, args.groups)
+    )
+    return _drop_batch_axis(out, unbatched)
 
 
 def _check_output_padding(
@@ -30,7 +138,9 @@ def _check_output_padding(
     way.  Anything larger reaches past every input position: the engine used
     to answer anyway, with rows that hold the bias alone.
     """
-    for axis, (op, s, d) in enumerate(zip(output_padding, stride, dilation)):
+    for axis, (op, s, d) in enumerate(
+        zip(output_padding, stride, dilation, strict=True)
+    ):
         if op < 0 or op >= max(s, d):
             raise ValueError(
                 f"{name}: output_padding {tuple(output_padding)} must be "
@@ -44,11 +154,11 @@ def conv1d(
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, ...] = 1,
-    padding: int | tuple[int, ...] = 0,
+    padding: str | int | tuple[int, ...] = 0,
     dilation: int | tuple[int, ...] = 1,
     groups: int = 1,
 ) -> Tensor:
-    r"""1-D cross-correlation over batched 3-D input.
+    r"""1-D cross-correlation over a 3-D (or unbatched 2-D) input.
 
     Slides a learned filter along a single spatial axis.  As with every
     major deep-learning framework, the operation is technically
@@ -59,15 +169,18 @@ def conv1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, L)``.
+        Input of shape ``(N, C_in, L)``, or ``(C_in, L)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_out, C_in/groups, kL)``.
     bias : Tensor, optional
         Per-output-channel bias of shape ``(C_out,)``.
     stride : int or tuple of int, optional
         Step between adjacent kernel positions (default ``1``).
-    padding : int or tuple of int, optional
+    padding : int, tuple of int, or {'valid', 'same'}, optional
         Zero padding applied to both sides of the spatial axis.
+        ``"valid"`` is no padding; ``"same"`` pads so the output is as long
+        as the input, which needs ``stride=1`` — an odd total puts the
+        extra element at the end.
     dilation : int or tuple of int, optional
         Spacing between kernel taps (atrous convolution).  Default ``1``.
     groups : int, optional
@@ -106,11 +219,7 @@ def conv1d(
     >>> y.shape
     (2, 8, 50)
     """
-    s = _normalize_int_or_tuple(stride, 1)[0]
-    p = _normalize_int_or_tuple(padding, 1)[0]
-    d = _normalize_int_or_tuple(dilation, 1)[0]
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(_C_engine.nn.conv1d(_unwrap(x), _unwrap(weight), b, s, p, d, groups))
+    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 1)
 
 
 def conv2d(
@@ -118,11 +227,11 @@ def conv2d(
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int] = 1,
-    padding: int | tuple[int, int] = 0,
+    padding: str | int | tuple[int, int] = 0,
     dilation: int | tuple[int, int] = 1,
     groups: int = 1,
 ) -> Tensor:
-    r"""2-D cross-correlation over batched 4-D input.
+    r"""2-D cross-correlation over a 4-D (or unbatched 3-D) input.
 
     Despite the name, computes **cross-correlation** rather than strict
     mathematical convolution (no kernel flip).  The kernel slides over
@@ -134,15 +243,17 @@ def conv2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, H, W)``.
+        Input of shape ``(N, C_in, H, W)``, or ``(C_in, H, W)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_out, C_in/groups, kH, kW)``.
     bias : Tensor, optional
         Per-output-channel bias of shape ``(C_out,)``.
     stride : int or (int, int), optional
         Step between adjacent kernel positions (default ``1``).
-    padding : int or (int, int), optional
-        Zero padding on each spatial side.
+    padding : int, (int, int), or {'valid', 'same'}, optional
+        Zero padding on each spatial side.  ``"valid"`` is no padding;
+        ``"same"`` keeps the spatial size, needs ``stride=1``, and puts
+        the extra element of an odd total after.
     dilation : int or (int, int), optional
         Spacing between kernel taps (atrous convolution).  Default ``1``.
     groups : int, optional
@@ -183,15 +294,7 @@ def conv2d(
     >>> y.shape
     (1, 8, 32, 32)
     """
-    sh, sw = _normalize_int_or_tuple(stride, 2)
-    ph, pw = _normalize_int_or_tuple(padding, 2)
-    dh, dw = _normalize_int_or_tuple(dilation, 2)
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(
-        _C_engine.nn.conv2d(
-            _unwrap(x), _unwrap(weight), b, sh, sw, ph, pw, dh, dw, groups
-        )
-    )
+    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 2)
 
 
 def conv3d(
@@ -199,11 +302,11 @@ def conv3d(
     weight: Tensor,
     bias: Tensor | None = None,
     stride: int | tuple[int, int, int] = 1,
-    padding: int | tuple[int, int, int] = 0,
+    padding: str | int | tuple[int, int, int] = 0,
     dilation: int | tuple[int, int, int] = 1,
     groups: int = 1,
 ) -> Tensor:
-    r"""3-D cross-correlation over batched 5-D input.
+    r"""3-D cross-correlation over a 5-D (or unbatched 4-D) input.
 
     Extends :func:`conv2d` to volumetric data (depth × height × width).
     Standard in medical imaging (CT, MRI), video understanding (I3D,
@@ -214,15 +317,17 @@ def conv3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, D, H, W)``.
+        Input of shape ``(N, C_in, D, H, W)``, or ``(C_in, D, H, W)``
+        unbatched.
     weight : Tensor
         Filters of shape ``(C_out, C_in/groups, kD, kH, kW)``.
     bias : Tensor, optional
         Per-output-channel bias of shape ``(C_out,)``.
     stride : int or (int, int, int), optional
         Step between adjacent kernel positions per axis (default ``1``).
-    padding : int or (int, int, int), optional
-        Zero padding on each spatial side.
+    padding : int, (int, int, int), or {'valid', 'same'}, optional
+        Zero padding on each spatial side; the strings read as in
+        :func:`conv2d`.
     dilation : int or (int, int, int), optional
         Spacing between kernel taps (atrous convolution).  Default ``1``.
     groups : int, optional
@@ -262,15 +367,7 @@ def conv3d(
     >>> y.shape
     (1, 4, 16, 32, 32)
     """
-    sd, sh, sw = _normalize_int_or_tuple(stride, 3)
-    pd, ph, pw = _normalize_int_or_tuple(padding, 3)
-    dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
-    b = _unwrap(bias) if bias is not None else None
-    return _wrap(
-        _C_engine.nn.conv3d(
-            _unwrap(x), _unwrap(weight), b, sd, sh, sw, pd, ph, pw, dd, dh, dw, groups
-        )
-    )
+    return _convnd(x, weight, bias, _ConvArgs(stride, padding, dilation, groups), 3)
 
 
 def conv_transpose1d(
@@ -295,7 +392,7 @@ def conv_transpose1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, L_in)``.
+        Input of shape ``(N, C_in, L_in)``, or ``(C_in, L_in)`` unbatched.
     weight : Tensor
         Filters of shape ``(C_in, C_out/groups, kL)``.
     bias : Tensor, optional
@@ -346,22 +443,8 @@ def conv_transpose1d(
     >>> y.shape
     (1, 2, 21)
     """
-    s = _normalize_int_or_tuple(stride, 1)[0]
-    p = _normalize_int_or_tuple(padding, 1)[0]
-    op = _normalize_int_or_tuple(output_padding, 1)[0]
-    d = _normalize_int_or_tuple(dilation, 1)[0]
-    _check_output_padding("conv_transpose1d", (op,), (s,), (d,))
-    wi = _unwrap(weight)
-    # engine requires explicit bias; create zeros(C_out) when caller passes None.
-    # The transposed weight's second axis is C_out // groups, so it has to be
-    # multiplied back up — sizing the bias from the axis alone is short by
-    # exactly ``groups``.
-    if bias is not None:
-        b = _unwrap(bias)
-    else:
-        c_out = int(wi.shape[1]) * groups
-        b = _C_engine.zeros([c_out], wi.dtype, wi.device)
-    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), wi, b, s, p, op, d, groups))
+    args = _ConvArgs(stride, padding, dilation, groups)
+    return _conv_transposend(x, weight, bias, args, output_padding, 1)
 
 
 def conv_transpose2d(
@@ -386,7 +469,8 @@ def conv_transpose2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, H_in, W_in)``.
+        Input of shape ``(N, C_in, H_in, W_in)``, or unbatched
+        ``(C_in, H_in, W_in)``.
     weight : Tensor
         Filters of shape ``(C_in, C_out/groups, kH, kW)``.
     bias : Tensor, optional
@@ -436,21 +520,8 @@ def conv_transpose2d(
     >>> y.shape
     (1, 8, 14, 14)
     """
-    sh, sw = _normalize_int_or_tuple(stride, 2)
-    ph, pw = _normalize_int_or_tuple(padding, 2)
-    oh, ow = _normalize_int_or_tuple(output_padding, 2)
-    dh, dw = _normalize_int_or_tuple(dilation, 2)
-    _check_output_padding("conv_transpose2d", (oh, ow), (sh, sw), (dh, dw))
-    wi = _unwrap(weight)
-    if bias is not None:
-        b = _unwrap(bias)
-    else:
-        b = _C_engine.zeros([int(wi.shape[1]) * groups], wi.dtype, wi.device)
-    return _wrap(
-        _C_engine.nn.conv_transpose2d(
-            _unwrap(x), wi, b, sh, sw, ph, pw, oh, ow, dh, dw, groups
-        )
-    )
+    args = _ConvArgs(stride, padding, dilation, groups)
+    return _conv_transposend(x, weight, bias, args, output_padding, 2)
 
 
 def conv_transpose3d(
@@ -474,7 +545,8 @@ def conv_transpose3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C_in, D_in, H_in, W_in)``.
+        Input of shape ``(N, C_in, D_in, H_in, W_in)``, or unbatched
+        without ``N``.
     weight : Tensor
         Filters of shape ``(C_in, C_out/groups, kD, kH, kW)``.
     bias : Tensor, optional
@@ -522,18 +594,5 @@ def conv_transpose3d(
     >>> y.shape
     (1, 4, 8, 16, 16)
     """
-    sd, sh, sw = _normalize_int_or_tuple(stride, 3)
-    pd, ph, pw = _normalize_int_or_tuple(padding, 3)
-    od, oh, ow = _normalize_int_or_tuple(output_padding, 3)
-    dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
-    _check_output_padding("conv_transpose3d", (od, oh, ow), (sd, sh, sw), (dd, dh, dw))
-    wi = _unwrap(weight)
-    if bias is not None:
-        b = _unwrap(bias)
-    else:
-        b = _C_engine.zeros([int(wi.shape[1]) * groups], wi.dtype, wi.device)
-    return _wrap(
-        _C_engine.nn.conv_transpose3d(
-            _unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow, dd, dh, dw, groups
-        )
-    )
+    args = _ConvArgs(stride, padding, dilation, groups)
+    return _conv_transposend(x, weight, bias, args, output_padding, 3)

@@ -2,64 +2,19 @@
 nn.functional pooling operations.
 """
 
-import itertools
-import math
 from typing import Callable, Literal, TYPE_CHECKING, overload
 
 import lucid as _lucid
-from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
-from lucid._unsupported import unsupported_if
+from lucid.nn.functional._pool_core import (
+    _adaptive_max_pool,
+    _adaptive_pool,
+    _avg_pool,
+    _max_pool,
+)
+from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-
-def _int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]:
-    return (v,) * n if isinstance(v, int) else tuple(v)
-
-
-def _window_argmax_indices(
-    x: Tensor,
-    kernel: tuple[int, ...],
-    stride: tuple[int, ...],
-    padding: tuple[int, ...],
-    out_spatial: tuple[int, ...],
-) -> Tensor:
-    """Where each pooling window's maximum sits, as the reference reports it.
-
-    Per leading ``(N, C)`` slice, a flat index into the input's unpadded
-    spatial extent — the form :func:`max_unpool2d` and its siblings take.
-    Padding is ``-inf``, so it is never chosen, and a tie goes to the first
-    element of the window in row-major order, as the reference's does.
-    The values come from the engine kernel; this only locates them.
-    """
-    n = len(kernel)
-    lead = x.ndim - n
-    spatial = tuple(int(s) for s in x.shape[lead:])
-    pads: list[int] = []
-    for d in reversed(range(n)):
-        # Enough on the right to hold every window the engine produced,
-        # including the partial last one ``ceil_mode`` keeps.
-        right = (out_spatial[d] - 1) * stride[d] + kernel[d] - spatial[d] - padding[d]
-        pads += [padding[d], max(right, 0)]
-    windows = _lucid.nn.functional.pad(x, tuple(pads), value=float("-inf"))
-    for d in range(n):
-        windows = windows.unfold(lead + d, kernel[d], stride[d])
-    for d in range(n):
-        windows = windows.narrow(lead + d, 0, out_spatial[d])
-    flat_window = windows.reshape(*x.shape[:lead], *out_spatial, math.prod(kernel))
-    local = _lucid.argmax(flat_window, dim=-1)
-    index = None
-    for d in range(n):
-        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d]
-        shape = [1] * n
-        shape[d] = out_spatial[d]
-        origin = _lucid.arange(out_spatial[d], dtype=_lucid.int64, device=x.device)
-        coord = offset + (origin * stride[d] - padding[d]).reshape(*shape)
-        index = coord if index is None else index * spatial[d] + coord
-    assert index is not None
-    return index
 
 
 def _unpool_default_size(
@@ -74,139 +29,11 @@ def _unpool_default_size(
     The extent that pooling with these settings would have shrunk to
     ``x``'s: ``(in - 1) * stride - 2 * padding + kernel`` per axis.
     """
-    k = _int_or_tuple(kernel_size, n)
-    s = k if stride is None else _int_or_tuple(stride, n)
-    p = _int_or_tuple(padding, n)
+    k = _ntuple(kernel_size, n, f"max_unpool{n}d", "kernel_size")
+    s = k if stride is None else _ntuple(stride, n, f"max_unpool{n}d", "stride")
+    p = _ntuple(padding, n, f"max_unpool{n}d", "padding")
     extent = tuple(int(v) for v in x.shape[-n:])
     return tuple((i - 1) * sd - 2 * pd + kd for i, kd, sd, pd in zip(extent, k, s, p))
-
-
-def _adaptive_ranges(n_in: int, n_out: int) -> list[tuple[int, int]]:
-    """The reference's adaptive windows: ``[floor(i·in/out), ceil((i+1)·in/out))``."""
-    return [((i * n_in) // n_out, -(-(i + 1) * n_in // n_out)) for i in range(n_out)]
-
-
-def _adaptive_argmax_indices(x: Tensor, out_spatial: tuple[int, ...]) -> Tensor:
-    """:func:`_window_argmax_indices` for adaptive pooling's uneven windows."""
-    n = len(out_spatial)
-    lead = x.ndim - n
-    spatial = tuple(int(s) for s in x.shape[lead:])
-    if all(i % o == 0 for i, o in zip(spatial, out_spatial)):
-        kernel = tuple(i // o for i, o in zip(spatial, out_spatial))
-        return _window_argmax_indices(x, kernel, kernel, (0,) * n, out_spatial)
-    cells = itertools.product(
-        *(_adaptive_ranges(i, o) for i, o in zip(spatial, out_spatial))
-    )
-    found: list[Tensor] = []
-    for cell in cells:
-        window = x
-        for d, (lo, hi) in enumerate(cell):
-            window = window.narrow(lead + d, lo, hi - lo)
-        extent = [hi - lo for lo, hi in cell]
-        local = _lucid.argmax(window.reshape(*x.shape[:lead], -1), dim=-1)
-        index = None
-        for d in range(n):
-            coord = (local // math.prod(extent[d + 1 :])) % extent[d] + cell[d][0]
-            index = coord if index is None else index * spatial[d] + coord
-        assert index is not None
-        found.append(index)
-    return _lucid.stack(found, dim=-1).reshape(*x.shape[:lead], *out_spatial)
-
-
-def _adaptive_pool_python(
-    x: Tensor,
-    output_size: tuple[int, ...],
-    reduce: str,
-) -> Tensor:
-    """Engine fallback for adaptive pooling with non-divisible sizes.
-
-    Computes a per-output-slot reduction over ``input[..., start:end]`` where
-    ``start = floor(i * Hin / Hout)`` and ``end = ceil((i+1) * Hin / Hout)``,
-    matching the reference framework's contract.  Iterates per output slot
-    via ``narrow`` + the reduction — each step is an engine op so the result
-    stays on the original device with no host round-trip.
-
-    ``reduce`` selects the cell reduction: ``"mean"`` for average pooling,
-    ``"max"`` for max pooling.  The window geometry is identical between the
-    two, which is why they share this routine — the divisible fast path in the
-    engine differs only in the same way.
-    """
-    n_spatial: int = len(output_size)
-    in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
-    ndim: int = x.ndim
-
-    def _ranges(ax: int) -> list[tuple[int, int]]:
-        in_d: int = in_spatial[ax]
-        out_d: int = int(output_size[ax])
-        out: list[tuple[int, int]] = []
-        for i in range(out_d):
-            start: int = (i * in_d) // out_d
-            # Reference contract: end uses ceil((i+1)·Hin/Hout).
-            end: int = -(-(i + 1) * in_d // out_d)
-            out.append((start, end))
-        return out
-
-    # Convert spatial axis index (0..n_spatial-1) to absolute dim in ``x``.
-    def _abs(ax: int) -> int:
-        return ndim - n_spatial + ax
-
-    def _cell(window: Tensor, dims: int | tuple[int, ...]) -> Tensor:
-        if reduce == "max":
-            return window.max(dim=dims)
-        return window.mean(dim=dims)
-
-    if n_spatial == 1:
-        cols: list[Tensor] = []
-        for s, e in _ranges(0):
-            cols.append(_cell(x.narrow(_abs(0), s, e - s), _abs(0)))
-        # Each ``cols[i]`` has shape == ``x.shape[:-1]``; stack along last dim.
-        return _lucid.stack(cols, dim=-1)
-
-    if n_spatial == 2:
-        rows: list[Tensor] = []
-        for si, ei in _ranges(0):
-            slab: Tensor = x.narrow(_abs(0), si, ei - si)
-            cols2: list[Tensor] = []
-            for sj, ej in _ranges(1):
-                pane: Tensor = slab.narrow(_abs(1), sj, ej - sj)
-                cols2.append(_cell(pane, (_abs(0), _abs(1))))
-            rows.append(_lucid.stack(cols2, dim=-1))
-        return _lucid.stack(rows, dim=-2)
-
-    # n_spatial == 3.
-    planes: list[Tensor] = []
-    for si, ei in _ranges(0):
-        slab_i: Tensor = x.narrow(_abs(0), si, ei - si)
-        rows3: list[Tensor] = []
-        for sj, ej in _ranges(1):
-            slab_ij: Tensor = slab_i.narrow(_abs(1), sj, ej - sj)
-            cols3: list[Tensor] = []
-            for sk, ek in _ranges(2):
-                cube: Tensor = slab_ij.narrow(_abs(2), sk, ek - sk)
-                cols3.append(_cell(cube, (_abs(0), _abs(1), _abs(2))))
-            rows3.append(_lucid.stack(cols3, dim=-1))
-        planes.append(_lucid.stack(rows3, dim=-2))
-    return _lucid.stack(planes, dim=-3)
-
-
-def _adaptive_call(
-    x: Tensor,
-    output_size: tuple[int, ...],
-    engine_fn: Callable[..., _C_engine.TensorImpl],
-    reduce: str,
-) -> Tensor:
-    """Engine call with Python fallback when the input dims aren't divisible.
-
-    The engine op reduces adaptive pooling to a fixed-kernel pool, which only
-    expresses the case where every input axis divides its output evenly; the
-    fallback covers the rest.  Both avg and max route through here so the two
-    cannot drift apart on which sizes they accept.
-    """
-    n_spatial: int = len(output_size)
-    in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
-    if all(in_spatial[i] % int(output_size[i]) == 0 for i in range(n_spatial)):
-        return _wrap(engine_fn(_unwrap(x), *output_size))
-    return _adaptive_pool_python(x, output_size, reduce)
 
 
 @overload
@@ -264,7 +91,7 @@ def max_pool1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, L)``.
+        Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     kernel_size : int or tuple of int
         Size of the pooling window.
     stride : int or tuple of int, optional
@@ -310,21 +137,8 @@ def max_pool1d(
     >>> y.shape
     (2, 4, 8)
     """
-    unsupported_if(
-        dilation != 1,
-        "max_pool1d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
-    k = _int_or_tuple(kernel_size, 1)[0]
-    s = k if stride is None else _int_or_tuple(stride, 1)[0]
-    p = _int_or_tuple(padding, 1)[0]
-    _int_or_tuple(dilation, 1)[0]
-    out = _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p, ceil_mode))
-    if not return_indices:
-        return out
-    return out, _window_argmax_indices(x, (k,), (s,), (p,), (int(out.shape[-1]),))
+    g = _pool_geometry(kernel_size, stride, padding, dilation, 1, "max_pool1d")
+    return _max_pool(x, g, ceil_mode, return_indices)
 
 
 @overload
@@ -383,7 +197,7 @@ def max_pool2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     kernel_size : int or (int, int)
         Size of the pooling window.
     stride : int or (int, int), optional
@@ -428,22 +242,8 @@ def max_pool2d(
     >>> y.shape
     (1, 16, 16, 16)
     """
-    unsupported_if(
-        dilation != 1 and dilation != (1, 1),
-        "max_pool2d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
-    kh, kw = _int_or_tuple(kernel_size, 2)
-    sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
-    ph, pw = _int_or_tuple(padding, 2)
-    dh, dw = _int_or_tuple(dilation, 2)
-    out = _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode))
-    if not return_indices:
-        return out
-    out_hw = (int(out.shape[-2]), int(out.shape[-1]))
-    return out, _window_argmax_indices(x, (kh, kw), (sh, sw), (ph, pw), out_hw)
+    g = _pool_geometry(kernel_size, stride, padding, dilation, 2, "max_pool2d")
+    return _max_pool(x, g, ceil_mode, return_indices)
 
 
 def avg_pool1d(
@@ -463,7 +263,7 @@ def avg_pool1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, L)``.
+        Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     kernel_size : int or tuple of int
         Size of the pooling window.
     stride : int or tuple of int, optional
@@ -505,12 +305,8 @@ def avg_pool1d(
     >>> y.shape
     (2, 3, 9)
     """
-    k = _int_or_tuple(kernel_size, 1)[0]
-    s = k if stride is None else _int_or_tuple(stride, 1)[0]
-    p = _int_or_tuple(padding, 1)[0]
-    return _wrap(
-        _C_engine.nn.avg_pool1d(_unwrap(x), k, s, p, ceil_mode, count_include_pad)
-    )
+    g = _pool_geometry(kernel_size, stride, padding, 1, 1, "avg_pool1d")
+    return _avg_pool(x, g, ceil_mode, count_include_pad, None)
 
 
 def avg_pool2d(
@@ -532,7 +328,7 @@ def avg_pool2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     kernel_size : int or (int, int)
         Size of the pooling window.
     stride : int or (int, int), optional
@@ -577,21 +373,8 @@ def avg_pool2d(
     >>> y.shape
     (1, 8, 14, 14)
     """
-    unsupported_if(
-        divisor_override is not None,
-        "avg_pool2d",
-        "divisor_override",
-        divisor_override,
-        detail="The window size is always the divisor.",
-    )
-    kh, kw = _int_or_tuple(kernel_size, 2)
-    sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
-    ph, pw = _int_or_tuple(padding, 2)
-    return _wrap(
-        _C_engine.nn.avg_pool2d(
-            _unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode, count_include_pad
-        )
-    )
+    g = _pool_geometry(kernel_size, stride, padding, 1, 2, "avg_pool2d")
+    return _avg_pool(x, g, ceil_mode, count_include_pad, divisor_override)
 
 
 def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor:
@@ -605,7 +388,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, L)``.
+        Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     output_size : int or tuple of int
         Desired length of the output spatial axis.
 
@@ -638,8 +421,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     >>> y.shape
     (2, 32, 5)
     """
-    sz: tuple[int, ...] = (_int_or_tuple(output_size, 1)[0],)
-    return _adaptive_call(x, sz, _C_engine.nn.adaptive_avg_pool1d, "mean")
+    return _adaptive_pool(x, output_size, 1, "mean")
 
 
 def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor:
@@ -654,7 +436,7 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     output_size : int or (int, int)
         Desired spatial shape of the output.  Scalar duplicates per
         axis; ``(1, 1)`` performs global average pooling.
@@ -689,8 +471,7 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
     >>> y.shape
     (1, 512, 1, 1)
     """
-    oh, ow = _int_or_tuple(output_size, 2)
-    return _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_avg_pool2d, "mean")
+    return _adaptive_pool(x, output_size, 2, "mean")
 
 
 @overload
@@ -732,7 +513,7 @@ def adaptive_max_pool2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     output_size : int or (int, int)
         Desired spatial output shape.
     return_indices : bool, optional
@@ -764,11 +545,7 @@ def adaptive_max_pool2d(
     >>> y.shape
     (1, 64, 3, 3)
     """
-    oh, ow = _int_or_tuple(output_size, 2)
-    out = _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_max_pool2d, "max")
-    if not return_indices:
-        return out
-    return out, _adaptive_argmax_indices(x, (oh, ow))
+    return _adaptive_max_pool(x, output_size, 2, return_indices)
 
 
 @overload
@@ -810,7 +587,7 @@ def adaptive_max_pool1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, L)``.
+        Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     output_size : int or tuple of int
         Desired output length.
     return_indices : bool, optional
@@ -844,11 +621,7 @@ def adaptive_max_pool1d(
     >>> y.shape
     (2, 8, 4)
     """
-    sz: tuple[int, ...] = (_int_or_tuple(output_size, 1)[0],)
-    out = _adaptive_call(x, sz, _C_engine.nn.adaptive_max_pool1d, "max")
-    if not return_indices:
-        return out
-    return out, _adaptive_argmax_indices(x, sz)
+    return _adaptive_max_pool(x, output_size, 1, return_indices)
 
 
 @overload
@@ -889,7 +662,7 @@ def adaptive_max_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     output_size : int or (int, int, int)
         Desired output spatial shape.
     return_indices : bool, optional
@@ -921,11 +694,7 @@ def adaptive_max_pool3d(
     >>> y.shape
     (1, 8, 1, 1, 1)
     """
-    od, oh, ow = _int_or_tuple(output_size, 3)
-    out = _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_max_pool3d, "max")
-    if not return_indices:
-        return out
-    return out, _adaptive_argmax_indices(x, (od, oh, ow))
+    return _adaptive_max_pool(x, output_size, 3, return_indices)
 
 
 def adaptive_avg_pool3d(
@@ -941,9 +710,9 @@ def adaptive_avg_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     output_size : int or (int, int, int)
-        Desired output spatial shape.
+        Desired ``(oD, oH, oW)``; a single int applies to all three axes.
 
     Returns
     -------
@@ -974,8 +743,7 @@ def adaptive_avg_pool3d(
     >>> y.shape
     (1, 16, 2, 2, 2)
     """
-    od, oh, ow = _int_or_tuple(output_size, 3)
-    return _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_avg_pool3d, "mean")
+    return _adaptive_pool(x, output_size, 3, "mean")
 
 
 @overload
@@ -1033,7 +801,7 @@ def max_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     kernel_size : int or (int, int, int)
         Size of the pooling window per axis.
     stride : int or (int, int, int), optional
@@ -1079,27 +847,8 @@ def max_pool3d(
     >>> y.shape
     (1, 4, 4, 8, 8)
     """
-    unsupported_if(
-        dilation != 1 and dilation != (1, 1, 1),
-        "max_pool3d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
-    kd, kh, kw = _int_or_tuple(kernel_size, 3)
-    sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
-    pd, ph, pw = _int_or_tuple(padding, 3)
-    out = _wrap(
-        _C_engine.nn.max_pool3d(
-            _unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw, ceil_mode
-        )
-    )
-    if not return_indices:
-        return out
-    out_dhw = tuple(int(v) for v in out.shape[-3:])
-    return out, _window_argmax_indices(
-        x, (kd, kh, kw), (sd, sh, sw), (pd, ph, pw), out_dhw
-    )
+    g = _pool_geometry(kernel_size, stride, padding, dilation, 3, "max_pool3d")
+    return _max_pool(x, g, ceil_mode, return_indices)
 
 
 def avg_pool3d(
@@ -1121,7 +870,7 @@ def avg_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     kernel_size : int or (int, int, int)
         Size of the pooling window per axis.
     stride : int or (int, int, int), optional
@@ -1167,21 +916,8 @@ def avg_pool3d(
     >>> y.shape
     (1, 4, 4, 8, 8)
     """
-    unsupported_if(
-        divisor_override is not None,
-        "avg_pool3d",
-        "divisor_override",
-        divisor_override,
-        detail="The window size is always the divisor.",
-    )
-    kd, kh, kw = _int_or_tuple(kernel_size, 3)
-    sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
-    pd, ph, pw = _int_or_tuple(padding, 3)
-    return _wrap(
-        _C_engine.nn.avg_pool3d(
-            _unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw, ceil_mode, count_include_pad
-        )
-    )
+    g = _pool_geometry(kernel_size, stride, padding, 1, 3, "avg_pool3d")
+    return _avg_pool(x, g, ceil_mode, count_include_pad, divisor_override)
 
 
 # ── P3 fills: lp_pool / max_unpool ──────────────────────────────────────────
@@ -1197,22 +933,25 @@ def _lp_pool(
     ceil_mode: bool,
     n: int,
 ) -> Tensor:
-    """Shared body of ``lp_pool1d`` and ``lp_pool2d``.
+    """Shared body of ``lp_pool{1,2,3}d`` and of the ``LPPool*d`` modules.
 
     ``Lp_pool(x) = (avg_pool(|x|^p) · K) ^ (1/p)`` where ``K`` is the
     pool window size.  We compute ``avg_pool`` on ``|x|^p``, multiply
     back by ``K`` to undo the averaging (so we get a sum), then take
-    the ``p``-th root.  ``ceil_mode`` is forwarded to the underlying
-    ``avg_pool*`` call where supported.
+    the ``p``-th root.  ``ceil_mode`` goes to the ``avg_pool*`` call: it
+    used to be dropped, so ``ceil_mode=True`` left off the partial last
+    window.
     """
     p = float(norm_type)
     if p <= 0.0:
         raise ValueError(f"lp_pool: norm_type must be > 0, got {p}")
     abs_pow = _lucid.abs(x) ** p
     K = 1
-    for k in _int_or_tuple(kernel_size, n):
+    for k in _ntuple(kernel_size, n, f"lp_pool{n}d", "kernel_size"):
         K *= int(k)
-    pooled = avg_pool_fn(abs_pow, kernel_size=kernel_size, stride=stride)
+    pooled = avg_pool_fn(
+        abs_pow, kernel_size=kernel_size, stride=stride, ceil_mode=ceil_mode
+    )
     summed = pooled * float(K)
     return summed ** (1.0 / p)
 
@@ -1236,7 +975,7 @@ def lp_pool1d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, L)``.
+        Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
     norm_type : float
         Exponent :math:`p > 0`.
     kernel_size : int or tuple of int
@@ -1299,7 +1038,7 @@ def lp_pool2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     norm_type : float
         Exponent :math:`p > 0`.
     kernel_size : int or (int, int)
@@ -1360,7 +1099,7 @@ def lp_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     norm_type : float
         Exponent :math:`p > 0`.
     kernel_size : int or (int, int, int)
@@ -1763,7 +1502,7 @@ def fractional_max_pool2d(
             f"fractional_max_pool2d expects 4-D input (N, C, H, W), "
             f"got shape {tuple(x.shape)}"
         )
-    kH, kW = _int_or_tuple(kernel_size, 2)
+    kH, kW = _ntuple(kernel_size, 2, "fractional_max_pool2d", "kernel_size")
     N, C, H, W = (
         int(x.shape[0]),
         int(x.shape[1]),
@@ -1776,7 +1515,7 @@ def fractional_max_pool2d(
             "fractional_max_pool2d: specify output_size or output_ratio, not both"
         )
     if output_size is not None:
-        oH, oW = _int_or_tuple(output_size, 2)
+        oH, oW = _ntuple(output_size, 2, "fractional_max_pool2d", "output_size")
     elif output_ratio is not None:
         rH, rW = (
             (output_ratio, output_ratio)
@@ -1898,7 +1637,7 @@ def fractional_max_pool3d(
             f"fractional_max_pool3d expects 5-D input (N, C, D, H, W), "
             f"got shape {tuple(x.shape)}"
         )
-    kD, kH, kW = _int_or_tuple(kernel_size, 3)
+    kD, kH, kW = _ntuple(kernel_size, 3, "fractional_max_pool3d", "kernel_size")
     N, C, D, H, W = (
         int(x.shape[0]),
         int(x.shape[1]),
@@ -1912,7 +1651,7 @@ def fractional_max_pool3d(
             "fractional_max_pool3d: specify output_size or output_ratio, not both"
         )
     if output_size is not None:
-        oD, oH, oW = _int_or_tuple(output_size, 3)
+        oD, oH, oW = _ntuple(output_size, 3, "fractional_max_pool3d", "output_size")
     elif output_ratio is not None:
         if isinstance(output_ratio, float):
             rD = rH = rW = output_ratio

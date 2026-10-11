@@ -12,6 +12,7 @@ from lucid.nn.modules._lazy import fill as _fill
 from lucid._factories.creation import ones, zeros
 import lucid as _lucid
 from lucid._C import engine as _C_engine
+from lucid.nn.functional._spatial_args import _add_batch_axis, _drop_batch_axis
 from lucid.nn.functional.normalization import (
     layer_norm,
     rms_norm,
@@ -1246,12 +1247,12 @@ class _InstanceNormBase(Module):
             self.register_buffer("running_var", None)
 
     def _check_input_dim(self, x: Tensor) -> None:
-        """Internal helper for the _InstanceNormBase module."""
-        if self._expected_dim and x.ndim != self._expected_dim:
+        """Refuse an input that is neither batched nor unbatched."""
+        dim = self._expected_dim
+        if dim and x.ndim not in (dim, dim - 1):
             raise ValueError(
-                f"{type(self).__name__} expects a {self._expected_dim}-D input "
-                f"(N, C{', *spatial' if self._expected_dim > 2 else ''}); "
-                f"got ndim={x.ndim}"
+                f"{type(self).__name__} expects a {dim}-D input (N, C, *spatial) "
+                f"or a {dim - 1}-D unbatched one (C, *spatial); got ndim={x.ndim}"
             )
 
     @override
@@ -1269,6 +1270,7 @@ class _InstanceNormBase(Module):
             Normalised tensor of the same shape as ``input``.
         """
         self._check_input_dim(x)
+        x, unbatched = _add_batch_axis(x, self._expected_dim - 2)
         # eval mode + track_running_stats=True ⇒ use running stats path.
         use_input_stats: bool = self.training or not self.track_running_stats
         rm: Tensor | None = (
@@ -1285,7 +1287,7 @@ class _InstanceNormBase(Module):
         _tracing_active = _C_engine.compile.current_tracer() is not None
         if self.training and self.track_running_stats and not _tracing_active:
             self._update_running_stats(x)
-        return instance_norm(
+        out = instance_norm(
             x,
             running_mean=rm,
             running_var=rv,
@@ -1295,16 +1297,14 @@ class _InstanceNormBase(Module):
             momentum=self.momentum,
             eps=self.eps,
         )
+        return _drop_batch_axis(out, unbatched)
 
     def _update_running_stats(self, x: Tensor) -> None:
         """Update running stats from per-channel batch statistics."""
         # Reduce over batch + spatial → (C,).  Matches BatchNorm's reduction.
         reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
-        # 3.3 AMP fix (same rationale as BatchNorm's update): push an
-        # AutocastGuard(F32) so the running-stats arithmetic is not
-        # demoted to F16 by AmpPolicy::Promote ops (``mul`` / ``add``).
-        # Without this the F32 running buffers gradually accumulate F16
-        # precision error and eval mode produces NaN.
+        # Keep the running stats in F32 under autocast — the 3.3 AMP fix in
+        # ``_BatchNormBase._update_running_stats`` gives the rationale.
         _amp_off = (
             _C_engine.AutocastGuard(_C_engine.F32)
             if _C_engine.amp_is_active()
@@ -1341,14 +1341,8 @@ class _InstanceNormBase(Module):
         finally:
             _amp_off = None
 
-            # 3.2.2: same leak fix as 3.2.1's BatchNorm — InstanceNorm's
-            # running-stats update is a lazy MLX expression whose parents
-            # chain back through the input activation graph.  Since
-            # running stats are not part of the loss compute path,
-            # ``loss.item()`` never evaluates them and the chain grows
-            # one full forward graph per training step.  Force-eval here
-            # breaks the chain.  Triggered by ``track_running_stats=True``
-            # on Metal (default is False; this fixes the opt-in path).
+            # The same lazy-chain leak as BatchNorm's (its 3.2.1 fix): force
+            # the running stats so the chain does not grow every step.
             if x._impl.device.name == "GPU":
                 _eval_running_stats_metal(self._buffers)
 
@@ -2275,20 +2269,22 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        r"""Apply normalisation to the input tensor.
+        r"""Normalise ``x``, sizing the layer from it on the first call.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor whose shape is documented in the class docstring.
+        x : Tensor
+            ``(N, C, *spatial)``, or unbatched ``(C, *spatial)``; its ``C``
+            sets ``num_features`` the first time.
 
         Returns
         -------
         Tensor
-            Normalised tensor of the same shape as ``input``.
+            Normalised tensor of the same shape as ``x``.
         """
         if self.num_features is None:
-            self._initialize(int(x.shape[1]))
+            unbatched = x.ndim == self._expected_dim - 1
+            self._initialize(int(x.shape[0 if unbatched else 1]))
         return _InstanceNormBase.forward(self, x)
 
 
