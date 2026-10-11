@@ -90,28 +90,28 @@ class TestCoordinateMapping:
 
 
 class TestEngineStandIn:
-    """The size-only kernels step by ``in / out``: allowed only when that is
-    where the reference puts every sample — on the device that runs them,
-    since the CPU kernel divides exactly and the Metal one in float32."""
+    """The size-only kernels step by ``in / out``, by the reference's rule
+    for a size on both devices (LCD-403): allowed only when a scale factor
+    puts every sample where that does."""
 
     @pytest.mark.parametrize(
-        ("mode", "spatial", "sizes", "scales", "corners", "cpu", "metal"),
+        ("mode", "spatial", "sizes", "scales", "corners", "expected"),
         [
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
-            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, True, True),
-            ("bilinear", [5, 7], [8, 11], [None, None], False, True, True),
-            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, True, True),
-            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False, False),
-            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, True, True),
-            ("nearest", [5], [8], [None], False, True, True),
-            # Metal's float32 in/out lands sample 5382 on 2153; the
-            # reference's float32 1/2.5 lands it on 2152.
-            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, True, False),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], False, False),
+            ("bilinear", [5, 7], [8, 11], [1.7, 1.7], True, True),
+            ("bilinear", [5, 7], [8, 11], [None, None], False, True),
+            ("bilinear", [4, 6], [8, 12], [2.0, 2.0], False, True),
+            ("nearest", [5, 7], [8, 11], [1.7, 1.7], False, False),
+            ("nearest", [4, 6], [8, 12], [2.0, 2.0], False, True),
+            ("nearest", [5], [8], [None], False, True),
+            # float32 in/out lands sample 5382 on 2153; the reference's
+            # float32 1/2.5 lands it on 2152.
+            ("nearest", [1, 2155], [1, 5387], [1.0, 2.5], False, False),
             # With a size the reference also steps by float32 in/out, which
-            # the exact CPU division does not reproduce.
-            ("nearest", [1, 2111], [1, 5277], [None, None], False, False, True),
+            # the kernels now do on both devices.
+            ("nearest", [1, 2111], [1, 5277], [None, None], False, True),
             # 1-D: no same-size shortcut in the reference, so x1.1 resamples.
-            ("nearest", [4], [4], [1.1], False, False, False),
+            ("nearest", [4], [4], [1.1], False, False),
         ],
     )
     def test_when_the_kernel_may_run(
@@ -121,14 +121,10 @@ class TestEngineStandIn:
         sizes: list[int],
         scales: list[float | None],
         corners: bool,
-        cpu: bool,
-        metal: bool,
+        expected: bool,
     ) -> None:
-        for device, expected in (("cpu", cpu), ("metal", metal)):
-            got = _interpolate._engine_maps_like(
-                mode, spatial, sizes, scales, corners, device
-            )
-            assert got is expected, device
+        got = _interpolate._engine_maps_like(mode, spatial, sizes, scales, corners)
+        assert got is expected
 
     @pytest.mark.parametrize(
         ("shape", "kw"),
@@ -136,7 +132,7 @@ class TestEngineStandIn:
             ((1, 1, 1, 2155), {"scale_factor": (1.0, 2.5)}),
             ((1, 1, 1, 2111), {"size": (1, 5277)}),
         ],
-        ids=["metal-float32-step", "cpu-exact-division"],
+        ids=["scale-step", "size-step"],
     )
     def test_each_device_reads_what_the_mapping_says(
         self, device: str, shape: tuple[int, ...], kw: dict[str, Any]

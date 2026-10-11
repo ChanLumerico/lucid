@@ -1,0 +1,171 @@
+"""Where ``interpolate``'s engine kernels read, on both devices, in every dtype.
+
+The CPU nearest kernel divided exactly and the Metal one multiplied by
+``in / out`` in float32, so on a long axis the two copied different
+samples (1137 axis pairs between 1000 and 9000 long).  The Metal linear
+kernels built their coordinates in the input's dtype: a bfloat16 bilinear
+resize was off by 1.13.  Both now ask one rule, the reference's
+(``lucid/_C/backend/SamplePositions.h``, LCD-403).
+
+Nearest is held to the reference's indices exactly — each output sample
+reports the index it copied.  The linear modes are held to the
+reference's values in the same dtype, and their gradients to the
+reference's, within that dtype's rounding.  Sizes go through the engine
+kernels (a size is the mapping they compute).
+"""
+
+import random
+from typing import Any
+
+import numpy as np
+import pytest
+
+import lucid
+import lucid.nn.functional as F
+
+_DTYPES = ["float32", "float16", "bfloat16", "float64"]
+# Every value a resize can produce from standard-normal input, rounded the
+# way the dtype rounds: blends of a few samples, so a few ulp of ~4.
+_ATOL = {"float32": 2e-6, "float16": 4e-3, "bfloat16": 3.2e-2, "float64": 1e-12}
+
+
+def _skip_unsupported(device: str, dtype: str) -> None:
+    if device == "metal" and dtype == "float64":
+        pytest.skip("Metal has no float64")
+
+
+def _long_axes() -> list[tuple[int, int]]:
+    rng = random.Random(403)
+    pairs = [(2155, 5387), (2111, 5277), (9000, 1001), (1000, 8999)]
+    pairs += [(rng.randint(1000, 9000), rng.randint(1000, 12000)) for _ in range(8)]
+    return pairs
+
+
+def _host(t: Any) -> np.ndarray:
+    """``t`` (either framework) as float64 numpy."""
+    if isinstance(t, lucid.Tensor):
+        return np.asarray(t.to("cpu").to(lucid.float64).numpy())
+    return t.detach().double().numpy()
+
+
+def _copied_indices(
+    ref: Any, device: str, dtype: str, n: int, m: int, rank: int
+) -> tuple[list[int], list[int]]:
+    """The input index each output sample copies, Lucid's and the reference's.
+
+    The input holds its own index split in two (``i % 64`` and ``i // 64``),
+    each exact in every dtype for an axis below 16384.
+    """
+    shape = (1, 1) + (1,) * (rank - 1) + (n,)
+    size = (1,) * (rank - 1) + (m,)
+    i = np.arange(n, dtype=np.float64)
+    out: dict[str, list[int]] = {}
+    for name in ("lucid", "ref"):
+        parts = []
+        for part in (i % 64, i // 64):
+            data = part.reshape(shape)
+            if name == "lucid":
+                x = lucid.tensor(data, dtype=getattr(lucid, dtype), device=device)
+                parts.append(_host(F.interpolate(x, size=size, mode="nearest")))
+            else:
+                x = ref.tensor(data, dtype=getattr(ref, dtype))
+                parts.append(
+                    _host(ref.nn.functional.interpolate(x, size=size, mode="nearest"))
+                )
+        out[name] = (parts[1] * 64 + parts[0]).astype(np.int64).ravel().tolist()
+    return out["lucid"], out["ref"]
+
+
+@pytest.mark.parity
+class TestNearestIndices:
+    @pytest.mark.parametrize("dtype", _DTYPES)
+    @pytest.mark.parametrize("rank", [1, 2, 3])
+    def test_long_axes_copy_the_reference_sample(
+        self, ref: Any, device: str, dtype: str, rank: int
+    ) -> None:
+        _skip_unsupported(device, dtype)
+        for n, m in _long_axes():
+            got, want = _copied_indices(ref, device, dtype, n, m, rank)
+            assert got == want, f"n={n} m={m}"
+
+    @pytest.mark.parametrize("dtype", _DTYPES)
+    def test_gradient_lands_on_the_copied_sample(self, device: str, dtype: str) -> None:
+        # The adjoint of the forward: each input sample gathers the
+        # gradient of every output that copied it.  (The reference's own
+        # float64 backward steps by a float32 scale its forward does not
+        # use, so it is no oracle there.)
+        _skip_unsupported(device, dtype)
+        n, m = 2155, 5387
+        x = lucid.zeros(1, 1, 1, n, dtype=getattr(lucid, dtype), device=device)
+        x.requires_grad_(True)
+        F.interpolate(x, size=(1, m), mode="nearest").sum().backward()
+        # Positions are computed in float32 for every dtype but float64,
+        # whose index probe must then be float64 too.
+        wide = lucid.float64 if dtype == "float64" else lucid.float32
+        index = lucid.arange(n, dtype=wide).reshape(1, 1, 1, n)
+        copied = _host(F.interpolate(index.to(device), size=(1, m), mode="nearest"))
+        counts = np.bincount(copied.astype(np.int64).ravel(), minlength=n)
+        assert x.grad is not None
+        assert _host(x.grad).ravel().tolist() == counts.astype(np.float64).tolist()
+
+
+def _linear_cases() -> list[Any]:
+    cases = []
+    for mode, shapes in (
+        ("linear", [((2, 3, 9), (31,)), ((1, 1, 2155), (5387,))]),
+        (
+            "bilinear",
+            [
+                ((2, 3, 40, 50), (68, 85)),
+                ((1, 2, 7, 9), (3, 31)),
+                ((1, 1, 1, 2155), (1, 5387)),
+            ],
+        ),
+        ("trilinear", [((1, 2, 3, 4, 5), (5, 7, 3)), ((2, 1, 4, 3, 6), (2, 6, 13))]),
+    ):
+        for shape, size in shapes:
+            for corners in (False, True):
+                cases.append(
+                    pytest.param(
+                        mode, shape, size, corners, id=f"{mode}-{size}-{corners}"
+                    )
+                )
+    return cases
+
+
+@pytest.mark.parity
+class TestLinearValues:
+    @pytest.mark.parametrize("dtype", _DTYPES)
+    @pytest.mark.parametrize(("mode", "shape", "size", "corners"), _linear_cases())
+    def test_values_and_gradient_in_the_input_dtype(
+        self,
+        ref: Any,
+        device: str,
+        dtype: str,
+        mode: str,
+        shape: tuple[int, ...],
+        size: tuple[int, ...],
+        corners: bool,
+    ) -> None:
+        _skip_unsupported(device, dtype)
+        rng = np.random.default_rng(len(shape) * 100 + size[-1])
+        data = rng.standard_normal(shape)
+        cotangent = rng.standard_normal(shape[:2] + size)
+        lx = lucid.tensor(
+            data, dtype=getattr(lucid, dtype), device=device, requires_grad=True
+        )
+        rx = ref.tensor(data, dtype=getattr(ref, dtype), requires_grad=True)
+        kw = {"size": size, "mode": mode, "align_corners": corners}
+        l_out = F.interpolate(lx, **kw)
+        r_out = ref.nn.functional.interpolate(rx, **kw)
+        atol = _ATOL[dtype]
+        np.testing.assert_allclose(_host(l_out), _host(r_out), atol=atol, rtol=0)
+        l_out.backward(
+            lucid.tensor(cotangent, dtype=getattr(lucid, dtype), device=device)
+        )
+        r_out.backward(ref.tensor(cotangent, dtype=getattr(ref, dtype)))
+        assert lx.grad is not None
+        # A gradient sample sums every output that read it: a few ulp each.
+        np.testing.assert_allclose(
+            _host(lx.grad), _host(rx.grad), atol=8 * atol, rtol=0
+        )

@@ -409,37 +409,23 @@ def _engine_resample(
     return _wrap(_C_engine.squeeze(out, 2) if x.ndim == 3 else out)
 
 
-def _kernel_nearest(in_size: int, out_size: int, device: str) -> list[int]:
-    """Input index the engine's nearest kernel copies on ``device``.
-
-    The two backends do not agree with each other: the CPU kernel divides
-    exactly, the Metal one multiplies by ``in / out`` in single precision.
-    """
-    if device == "metal":
-        ratio = _f32(in_size / out_size)
-        return [
-            min(max(math.floor(_f32(d * ratio)), 0), in_size - 1)
-            for d in range(out_size)
-        ]
-    return [min(d * in_size // out_size, in_size - 1) for d in range(out_size)]
-
-
 def _engine_maps_like(
     mode: str,
     spatial: list[int],
     sizes: list[int],
     scales: list[float | None],
     align_corners: bool,
-    device: str,
 ) -> bool:
-    """Whether the size-only engine kernel on ``device`` lands every sample
-    where the reference does.  The kernels step by ``in / out`` (or pin
-    corners)."""
+    """Whether the size-only engine kernel lands every sample where the
+    reference does.  The kernels step by ``in / out`` (or pin corners), on
+    either device, by the reference's own rule for a size."""
     rank = len(spatial)
     for n, m, s in zip(spatial, sizes, scales, strict=True):
         if mode == "nearest":
+            if s is None:
+                continue
             reference = _nearest_indices(n, m, s, exact=False, rank=rank)
-            if _kernel_nearest(n, m, device) != reference:
+            if _nearest_indices(n, m, None, exact=False, rank=rank) != reference:
                 return False
         elif not (align_corners or m == n or s is None):
             ratio = _coordinate_scale(n, m, False, s)
@@ -542,7 +528,7 @@ def resample(
     if (
         kernel
         and x.is_floating_point()
-        and _engine_maps_like(mode, spatial, sizes, scales, corners, x.device.type)
+        and _engine_maps_like(mode, spatial, sizes, scales, corners)
     ):
         return _engine_resample(x, mode, sizes, corners)
 

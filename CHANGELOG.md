@@ -556,6 +556,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - hold tensor.pyi to the runtime Tensor's methods
 
+- interpolate reads where the reference does on both devices
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
