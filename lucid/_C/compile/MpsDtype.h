@@ -39,6 +39,8 @@ inline std::optional<MPSDataType> mps_dtype_of(Dtype dt) {
         return MPSDataTypeFloat32;
     case Dtype::F16:
         return MPSDataTypeFloat16;
+    case Dtype::BF16:
+        return MPSDataTypeBFloat16;
     case Dtype::I64:
         return MPSDataTypeInt64;
     case Dtype::I32:

@@ -65,7 +65,7 @@ def _fallback_notice(reason_category: str, detail: str) -> None:
     ----------
     reason_category : str
         Short key for the kind of fallback (``"lowering"``,
-        ``"bfloat16"``, ...); the once-per-process bookkeeping is keyed
+        ``"first-run"``, ...); the once-per-process bookkeeping is keyed
         on it.
     detail : str
         The specific reason, as the engine or the check stated it.
@@ -109,38 +109,6 @@ def _narrate(message: str) -> None:
 #: Directory of :mod:`lucid.compile`, whose frames a fallback warning
 #: skips on its way to the caller's.
 _PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
-
-
-def _bfloat16_unlowered(
-    model: Module, args: tuple[object, ...], kwargs: dict[str, object]
-) -> bool:
-    """Whether the call carries a bfloat16 tensor the MPSGraph path cannot take.
-
-    The compile emitters have no bfloat16 type, so such a call is traced
-    and then refused at lowering — a whole trace spent to learn it — and
-    runs eagerly.  Asked before the trace instead.  Kept to this one
-    predicate so that when the emitters learn bfloat16 the check is
-    removed in one place.
-
-    Parameters
-    ----------
-    model : Module
-        The wrapped model; its parameters and buffers are checked.
-    args, kwargs : tuple, dict
-        The call's arguments; every tensor in them, nested ones included.
-
-    Returns
-    -------
-    bool
-        ``True`` when any of them is ``lucid.bfloat16``.
-    """
-    import lucid
-    from lucid.compile._core.signature import leaf_tensors
-
-    if any(t.dtype == lucid.bfloat16 for t in leaf_tensors(args, kwargs)):
-        return True
-    held = [*model.parameters(), *model.buffers()]
-    return any(t is not None and t.dtype == lucid.bfloat16 for t in held)
 
 
 def run_eager(

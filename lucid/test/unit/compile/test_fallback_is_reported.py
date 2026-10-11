@@ -12,7 +12,8 @@ binding raises it; the Python layer caught that exception to fall back
 and dropped the message with it.
 
 Printed under ``LUCID_COMPILE_VERBOSE=1`` was still silent for anyone who
-did not know to set it — a bfloat16 model ran eagerly with nothing said.
+did not know to set it — a model the emitters could not take ran eagerly
+with nothing said.
 So a fallback now also warns, once per kind of reason in a process: the
 news is that it happened, and a warning on every call would be noise.
 """

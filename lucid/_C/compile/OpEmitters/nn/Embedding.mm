@@ -19,6 +19,7 @@
 #include <string_view>
 #include <vector>
 
+#include "../../MpsDtype.h"
 #include "../_AttrHelpers.h"
 
 namespace lucid::compile {
@@ -35,19 +36,12 @@ public:
         if (x_id < 0) return false;
         std::int64_t depth = int_attr(node, "num_classes", 0);
         if (depth <= 0) return false;
-        MPSDataType out_mps;
-        switch (node.outputs[0].dtype) {
-            case Dtype::F32: out_mps = MPSDataTypeFloat32; break;
-            case Dtype::F16: out_mps = MPSDataTypeFloat16; break;
-            case Dtype::I32: out_mps = MPSDataTypeInt32; break;
-            case Dtype::I64: out_mps = MPSDataTypeInt64; break;
-            // ``F.one_hot`` builds int8 and casts after, so without these
-            // every compiled one-hot fell back.
-            case Dtype::I8: out_mps = MPSDataTypeInt8; break;
-            case Dtype::I16: out_mps = MPSDataTypeInt16; break;
-            case Dtype::Bool: out_mps = MPSDataTypeBool; break;
-            default: return false;
-        }
+        // Every real dtype MPSGraph holds — ``F.one_hot`` builds int8 and
+        // casts after.  A complex one-hot is declined.
+        const auto out_dt = mps_dtype_of(node.outputs[0].dtype);
+        if (!out_dt || (*out_dt & MPSDataTypeComplexBit))
+            return false;
+        const MPSDataType out_mps = *out_dt;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;

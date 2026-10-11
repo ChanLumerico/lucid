@@ -520,7 +520,7 @@ def compile[**P, R](
     -----
     * A call the compiler cannot lower runs eagerly, with a one-time
       ``UserWarning`` naming why; ``LUCID_COMPILE_VERBOSE=1`` reports every
-      occurrence.  bfloat16 graphs are not lowered yet and run eagerly.
+      occurrence.
     * Attention lowers to a matmul-softmax-matmul decomposition, which
       materialises the score matrix; eager Metal's fused kernel never
       does.  A call whose attention would write more than 512 MiB of

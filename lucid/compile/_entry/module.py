@@ -59,7 +59,6 @@ from lucid._C import engine as _C_engine
 
 from lucid.compile._core.fallback import (
     EagerFallbackSet,
-    _bfloat16_unlowered,
     _fallback_notice,
     _narrate,
     run_eager,
@@ -1024,13 +1023,6 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # update), so it compiles normally; track_running_stats=False BN keeps no
         # stats and is likewise unaffected.
         if self._model.training and model_has_tracking_bn(self._model):
-            return None
-
-        # The MPSGraph emitters have no bfloat16 type, so such a call would
-        # be traced in full only for the lowering to refuse it.  Asked here
-        # instead, and said once, since the call still runs — eagerly.
-        if _bfloat16_unlowered(self._model, args, kwargs):
-            _fallback_notice("bfloat16", "bfloat16 is not lowered to MPSGraph yet")
             return None
 
         # kwargs are traced as-is (line below) and their tensor values are

@@ -141,16 +141,6 @@ _KNOWN: dict[tuple[str, str, str], tuple[int, str]] = {
         "operands are the other side of the pair. Retire: spell it "
         "`!is_half_float(dt) && is_floating_point(dt)` plus the device rule.",
     ),
-    ("lucid/_C/compile/MpsDtype.h", "mps_dtype_of", "half-pair"): (
-        1,
-        "compiled graphs refuse bfloat16 at the MPS dtype map; refused, "
-        "not misread. Retire: export card (MPSDataTypeBFloat16).",
-    ),
-    ("lucid/_C/compile/OpEmitters/nn/Embedding.mm", "emit", "half-pair"): (
-        1,
-        "compiled embedding refuses a bfloat16 table; refused, not misread. "
-        "Retire: export card, with mps_dtype_of.",
-    ),
     ("lucid/_C/nn/Interpolate.cpp", "resample_matrix", "bare-else"): (
         1,
         "not a reinterpretation: the else only picks float precision for "
