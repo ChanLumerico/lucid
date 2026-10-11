@@ -496,6 +496,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - probes keep a 0-d operand 0-d (LCD-391)
 
+- edge axis resizes ctc_loss's operands together (LCD-275)
+
 ### Changed
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)

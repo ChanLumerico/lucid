@@ -77,7 +77,9 @@ def test_a_resized_solve_keeps_its_sides_and_pivots_coherent(qualname: str) -> N
         fn(*resized.args, **call.kwargs)
 
 
-@pytest.mark.parametrize("qualname", (*_SOLVES, "lucid.nn.utils.pack_padded_sequence"))
+@pytest.mark.parametrize(
+    "qualname", (*_SOLVES, "lucid.nn.utils.pack_padded_sequence", "F.ctc_loss")
+)
 def test_the_edge_axis_answers_ops_with_joint_operands(qualname: str) -> None:
     finding = EdgeAxis().run(_symbol(qualname), Context())
     assert finding.status == Status.PASS, finding.detail
@@ -98,6 +100,31 @@ def test_a_resized_padded_batch_takes_lengths_of_its_own_batch() -> None:
     assert list(empty.args[1]) == []
     with pytest.raises(ValueError):
         fn(*empty.args, **call.kwargs)
+
+
+def test_a_resized_ctc_problem_keeps_its_targets_and_lengths_coherent() -> None:
+    """LCD-275: the edge axis once emptied ``log_probs`` alone, so every ctc
+    call it built was incoherent and the cell was dropped from coverage."""
+    fn, call = _first_call("F.ctc_loss")
+    shape = call.base.shape
+
+    single = call.resized(np.full((1,) * len(shape), 0.7))
+    assert tuple(single.args[1].shape) == (1, 0)  # C = 1 holds only the blank
+    assert single.args[2].numpy().tolist() == [1]
+    assert single.args[3].numpy().tolist() == [0]
+    fn(*single.args, **call.kwargs)
+
+    resized = call.resized(np.full((4, 3, 3), 0.1))
+    targets = resized.args[1].numpy()
+    assert targets.shape == (3, 2) and targets.min() >= 1 and targets.max() <= 2
+    assert resized.args[2].numpy().tolist() == [4, 4, 4]
+    assert resized.args[3].numpy().tolist() == [2, 2, 2]
+    fn(*resized.args, **call.kwargs)
+
+    # An empty T is still a coherent problem: every length is 0.
+    empty = call.resized(np.zeros((0, *shape[1:])))
+    assert empty.args[2].numpy().tolist() == [0] * shape[1]
+    assert empty.args[3].numpy().tolist() == [0] * shape[1]
 
 
 @pytest.mark.parametrize("qualname", ["Tensor.view", "lucid.view"])

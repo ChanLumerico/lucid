@@ -1394,6 +1394,31 @@ def _padded_batch_resized(call: Call, array: np.ndarray) -> Call:
     return rebuilt
 
 
+def _ctc_resized(call: Call, array: np.ndarray) -> Call:
+    """``ctc_loss(log_probs, targets, input_lengths, target_lengths)``.
+
+    ``log_probs`` is ``(T, N, C)``: the lengths are one per sequence, every
+    input length at most ``T``, and a target is ``L`` labels from
+    ``1 .. C-1`` (0 is the blank) with ``L <= T``.  The targets are the
+    labels ``1 .. L`` — no repeat, so ``T >= L`` suffices — with ``L`` the
+    original target length capped by ``C - 1`` and ``T``.  An empty ``T``
+    is still a problem (every length 0) and is asked as such.
+    """
+    if call.primary != 0 or len(call.args) != 4 or array.ndim != 3:
+        return call.with_primary(array)
+    if not _all_tensors(call):
+        return call.with_primary(array)
+    steps, batch, classes = (int(n) for n in array.shape)
+    width = int(call.args[1].shape[-1]) if len(call.args[1].shape) == 2 else 0
+    length = max(0, min(width, classes - 1, steps))
+    rebuilt = call.with_primary(array)
+    labels = np.broadcast_to(np.arange(1, length + 1), (batch, length))
+    rebuilt.args[1] = _rebuild(call.args[1], labels, keep_integer=True)
+    rebuilt.args[2] = _rebuild(call.args[2], np.full(batch, steps), keep_integer=True)
+    rebuilt.args[3] = _rebuild(call.args[3], np.full(batch, length), keep_integer=True)
+    return rebuilt
+
+
 #: Keyed by qualified name; consulted by :func:`invocations`, which sets
 #: the rule on every candidate it yields for that symbol.
 _JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
@@ -1403,6 +1428,7 @@ _JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
     "lucid.linalg.lu_solve": _linear_system_resized,
     "lucid.linalg.ldl_solve": _linear_system_resized,
     "lucid.nn.utils.pack_padded_sequence": _padded_batch_resized,
+    "F.ctc_loss": _ctc_resized,
 }
 
 
