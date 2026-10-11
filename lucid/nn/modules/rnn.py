@@ -3,8 +3,7 @@ Recurrent modules: LSTM, GRU, RNN.
 """
 
 import math
-from collections import OrderedDict
-from typing import Protocol, cast, override
+from typing import ClassVar, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -90,209 +89,157 @@ def _pad_rows(x: Tensor, total: int) -> Tensor:
     return _lucid.cat([x, pad], 0)
 
 
-class _CellStack(Protocol):
-    """What :func:`_run_cell_stack` reads off a GRU or an RNN."""
-
-    num_layers: int
-    hidden_size: int
-    batch_first: bool
-    bidirectional: bool
-    dropout_val: float
-    training: bool
-
-    def _cell(self, layer: int, reverse: bool = False) -> GRUCell | RNNCell: ...
+# A recurrent layer's weights for one layer and direction:
+# ``(weight_ih, weight_hh, bias_ih, bias_hh)``.
+type _Weights = tuple[Tensor, Tensor, Tensor | None, Tensor | None]
 
 
-def _run_cell_stack(
-    kind: str, module: _CellStack, x: Tensor | PackedSequence, hx: Tensor | None
-) -> tuple[Tensor | PackedSequence, Tensor]:
-    """The stacked recurrence of GRU and RNN, which differ only in the cell.
+def _rnn_step(x: Tensor, h: Tensor, w: _Weights, nonlinearity: str) -> Tensor:
+    """One Elman step, ``(B, I)`` and ``(B, H)`` to ``(B, H)``."""
+    pre = linear(x, w[0], w[2]) + linear(h, w[1], w[3])
+    return tanh(pre) if nonlinearity == "tanh" else relu(pre)
 
-    Steps each layer's cell over time — in both directions when
-    bidirectional — and hands the layer output, through the inter-layer
-    dropout, to the next layer.  A dense input runs every sequence the
-    full length, so ``_carry`` and ``_pad_rows`` both become identities.
-    """
-    num_dirs: int = 2 if module.bidirectional else 1
-    layout, (h0,) = _sequence_major(
-        kind,
-        x,
-        module.batch_first,
-        (("h0", hx, module.hidden_size),),
-        module.num_layers * num_dirs,
-    )
-    seq, batch_sizes = layout.seq, layout.batch_sizes
-    T: int = seq.shape[0]
-    B: int = seq.shape[1]
 
-    h_n: list[Tensor] = []
-    inp = seq
-    for layer in range(module.num_layers):
-        dir_outs: list[list[Tensor]] = []
-        for direction in range(num_dirs):
-            cell = module._cell(layer, reverse=direction == 1)
-            h: Tensor = h0[layer * num_dirs + direction]
-            steps = range(T - 1, -1, -1) if direction == 1 else range(T)
-            outs: list[Tensor] = []
-            for t in steps:
-                bs = batch_sizes[t]
-                step = cell(_slice(inp[t], slice(0, bs)), _slice(h, slice(0, bs)))
-                h = _carry(h, step, bs)
-                outs.append(_pad_rows(step, B))
-            if direction == 1:
-                outs.reverse()
-            h_n.append(h)
-            dir_outs.append(outs)
-        if num_dirs == 2:
-            layer_out = stack(
-                [_cat_last(dir_outs[0][t], dir_outs[1][t]) for t in range(T)], 0
-            )
-        else:
-            layer_out = stack(dir_outs[0], 0)
-        inp = _inter_layer_dropout(
-            layer_out, module.dropout_val, layer, module.num_layers, module.training
+def _gru_step(x: Tensor, h: Tensor, w: _Weights) -> Tensor:
+    """One GRU step, ``(B, I)`` and ``(B, H)`` to ``(B, H)``."""
+    hs = int(h.shape[-1])
+    gates_x = linear(x, w[0], w[2])
+    gates_h = linear(h, w[1], w[3])
+    r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
+    z = sigmoid(gates_x[:, hs : 2 * hs] + gates_h[:, hs : 2 * hs])
+    n = tanh(gates_x[:, 2 * hs :] + r * gates_h[:, 2 * hs :])
+    return (1.0 - z) * n + z * h
+
+
+def _check_nonlinearity(nonlinearity: str) -> str:
+    """Refuse an activation the Elman recurrence does not have."""
+    if nonlinearity not in ("tanh", "relu"):
+        raise ValueError(
+            f"Unknown nonlinearity {nonlinearity!r}. Select from 'tanh' or 'relu'."
         )
-
-    out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
-    return out, h_n_tensor
+    return nonlinearity
 
 
-# Cell-internal parameter names (RNNCell/GRUCell/LSTMCell).  Used by the
-# state_dict naming hooks on GRU and RNN to translate between the lucid
-# cell layout (`cell_l0.weight_ih`) and the flat layout used by the
-# reference framework and many external checkpoints (`weight_ih_l0`).
-_CELL_PARAM_NAMES: tuple[str, ...] = ("weight_ih", "weight_hh", "bias_ih", "bias_hh")
+def _read_cell_keys(
+    module: Module, state_dict: dict[str, Tensor], prefix: str, *_rest: object
+) -> None:
+    """Load a GRU / RNN checkpoint saved before the parameters were flat.
+
+    The layers used to hold one cell sub-module per layer and direction, so
+    an old checkpoint names ``weight_ih_l0`` as ``cell_l0.weight_ih``.  Each
+    such key is read as the flat one it stands for; a checkpoint holding
+    both keeps the flat one.  A pre-hook rather than a loader override, so
+    ``load_state_dict(assign=True)`` reads the old keys too.
+    """
+    for name in list(module._parameters):
+        param, _, tag = name.partition("_l")
+        legacy = f"{prefix}cell_l{tag}.{param}"
+        if legacy in state_dict:
+            value = state_dict.pop(legacy)
+            state_dict.setdefault(f"{prefix}{name}", value)
 
 
-class _CellNamingMixin:
-    r"""Mixin providing ``state_dict`` v2 hooks with flat checkpoint keys.
+class _FlatRecurrent(Module):
+    """GRU and RNN: flat per-layer parameters and the stacked recurrence.
 
-    GRU and RNN store per-layer weights inside child cell sub-modules
-    (e.g. ``cell_l0`` of type :class:`GRUCell`).  The natural
-    ``state_dict`` key for that layout is ``cell_l0.weight_ih``, but
-    most external checkpoints flatten these into ``weight_ih_l0``.
-    These hooks write/read the flat keys directly while tolerating the
-    older ``cell_l*`` layout for backwards compatibility with checkpoints
-    saved by earlier Lucid versions.
-
-    Notes
-    -----
-    This is a **private** base class.  External code should never
-    instantiate it directly; it is only mixed into :class:`GRU` and
-    :class:`RNN`.
-
-    The mixin sets ``_version = 2`` so the serialisation machinery can
-    distinguish flat-key checkpoints from legacy cell-submodule ones.
-    Setting ``_state_dict_skip_recursion = True`` prevents the default
-    recursive walker from also emitting ``cell_l*.weight_ih`` entries,
-    which would cause duplicate / unexpected keys on load.
-
-    See Also
-    --------
-    GRU, RNN
+    The parameters are ``weight_ih_l{k}``, ``weight_hh_l{k}``,
+    ``bias_ih_l{k}`` and ``bias_hh_l{k}`` (``_reverse`` for the backward
+    direction) — the names LSTM and the reference use, and so the
+    ``state_dict`` keys.  Each subclass sets ``_gates`` and ``_step``.
     """
 
-    # version = 2 ⇒ flat state_dict keys; missing/v1 metadata ⇒ accept
-    # both the flat and the old `cell_l*.weight_*` layout on load.
-    _version: int = 2
-    # The walker should not descend into the cell submodules — we have
-    # already serialised their parameters under flattened keys.
-    _state_dict_skip_recursion: bool = True
-
-    # Declared here so mypy knows _CellNamingMixin subclasses always have
-    # these attributes (they are set in each concrete __init__).
+    _gates: ClassVar[int]
+    input_size: int
+    hidden_size: int
     num_layers: int
+    bias: bool
+    batch_first: bool
+    dropout_val: float
     bidirectional: bool
-    _modules: OrderedDict[str, Module | None]
 
-    def _save_to_state_dict(
-        self,
-        destination: dict[str, object],
-        prefix: str,
-        keep_vars: bool,
-    ) -> None:
-        # Skip the default impl entirely — we don't want the cell submodules
-        # to recurse with their own keys; the top-level walker handles
-        # children, but these are meant to be flattened.  Mark the cell
-        # submodules so the recursive walker does not visit them.
-        """Internal helper for the _CellNamingMixin module."""
+    def _register_weights(self, device: DeviceLike, dtype: DTypeLike) -> None:
+        """Allocate every layer's weights, in the reference's order, and
+        initialise them from ``U(-1/sqrt(H), 1/sqrt(H))``."""
+        dirs = 2 if self.bidirectional else 1
+        rows = self._gates * self.hidden_size
+        stdv = 1.0 / math.sqrt(self.hidden_size)
         for layer in range(self.num_layers):
-            for direction in range(2 if self.bidirectional else 1):
-                suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
-                for pname in _CELL_PARAM_NAMES:
-                    p = cell._parameters.get(pname)
-                    if p is None:
-                        continue
-                    key: str = f"{prefix}{pname}_l{layer}{suffix}"
-                    destination[key] = p if keep_vars else p.detach()
+            width = self.input_size if layer == 0 else self.hidden_size * dirs
+            for suffix in ("", "_reverse")[:dirs]:
+                shapes: dict[str, tuple[int, ...]] = {
+                    "weight_ih": (rows, width),
+                    "weight_hh": (rows, self.hidden_size),
+                }
+                if self.bias:
+                    shapes |= {"bias_ih": (rows,), "bias_hh": (rows,)}
+                for name, shape in shapes.items():
+                    p = Parameter(empty(*shape, dtype=dtype, device=device))
+                    init.uniform_(p, -stdv, stdv)
+                    self.register_parameter(f"{name}_l{layer}{suffix}", p)
+        self.register_load_state_dict_pre_hook(_read_cell_keys)
 
-    def _load_from_state_dict(
-        self,
-        state_dict: dict[str, object],
-        prefix: str,
-        local_metadata: dict[str, object],
-        strict: bool,
-        missing_keys: list[str],
-        unexpected_keys: list[str],
-        error_msgs: list[str],
-    ) -> None:
-        """Internal helper for the _CellNamingMixin module."""
-        from lucid._C import engine as _C_engine
-        from lucid._tensor.tensor import Tensor
+    def _weights(self, layer: int, reverse: bool) -> _Weights:
+        """One layer and direction's ``(weight_ih, weight_hh, bias_ih, bias_hh)``."""
+        tag = f"_l{layer}{'_reverse' if reverse else ''}"
+        p = self._parameters
+        w_ih, w_hh = p[f"weight_ih{tag}"], p[f"weight_hh{tag}"]
+        assert w_ih is not None and w_hh is not None
+        return w_ih, w_hh, p.get(f"bias_ih{tag}"), p.get(f"bias_hh{tag}")
 
-        for layer in range(self.num_layers):
-            for direction in range(2 if self.bidirectional else 1):
-                suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
-                for pname in _CELL_PARAM_NAMES:
-                    p = cell._parameters.get(pname)
-                    if p is None:
-                        continue
-                    flat_key: str = f"{prefix}{pname}_l{layer}{suffix}"
-                    legacy_key: str = f"{prefix}cell_l{layer}{suffix}.{pname}"
-                    src: Tensor | None = cast(Tensor | None, state_dict.get(flat_key))
-                    if src is None:
-                        src = cast(Tensor | None, state_dict.get(legacy_key))
-                    if src is None:
-                        missing_keys.append(flat_key)
-                        continue
-                    if tuple(src.shape) != tuple(p.shape):
-                        error_msgs.append(
-                            f"size mismatch for {flat_key}: "
-                            f"expected {tuple(p.shape)}, got {tuple(src.shape)}"
-                        )
-                        continue
-                    converted: Tensor = src.to(device=p.device, dtype=p.dtype)
-                    new_impl: _C_engine.TensorImpl = _C_engine.contiguous(
-                        converted._impl
-                    ).clone_with_grad(p.requires_grad)
-                    p._impl = new_impl
-                    # Mark whichever key was actually consumed so the top
-                    # level walker doesn't list it as unexpected.
-                    # (`_collect_expected` knows our flat layout via
-                    # `_enumerate_local_keys` below.)
+    def _step(self, x: Tensor, h: Tensor, w: _Weights) -> Tensor:
+        """One timestep of this layer's cell."""
+        raise NotImplementedError
 
-    def _local_state_dict_keys(self, prefix: str) -> list[str]:
-        """Override: tell the top-level driver our flat key set.
+    def _run(
+        self, kind: str, x: Tensor | PackedSequence, hx: Tensor | None
+    ) -> tuple[Tensor | PackedSequence, Tensor]:
+        """The stacked recurrence: each layer, each direction, each step.
 
-        Returns *both* the canonical flat keys (e.g.
-        ``weight_ih_l0_reverse``) and the legacy cell-submodule keys
-        (``cell_l0_reverse.weight_ih``).  Either form satisfies an
-        ``unexpected_keys`` check, so an external checkpoint using the
-        flat layout AND a legacy-Lucid checkpoint using the cell layout
-        both load cleanly.
+        A layer's output goes through the inter-layer dropout to the next.
+        A dense input runs every sequence the full length, so ``_carry``
+        and ``_pad_rows`` both become identities.
         """
-        keys: list[str] = []
+        dirs = 2 if self.bidirectional else 1
+        layout, (h0,) = _sequence_major(
+            kind,
+            x,
+            self.batch_first,
+            (("h0", hx, self.hidden_size),),
+            self.num_layers * dirs,
+        )
+        seq, batch_sizes = layout.seq, layout.batch_sizes
+        T: int = seq.shape[0]
+        B: int = seq.shape[1]
+        h_n: list[Tensor] = []
+        inp = seq
         for layer in range(self.num_layers):
-            for direction in range(2 if self.bidirectional else 1):
-                suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
-                for pname in _CELL_PARAM_NAMES:
-                    if cell._parameters.get(pname) is not None:
-                        keys.append(f"{prefix}{pname}_l{layer}{suffix}")
-                        keys.append(f"{prefix}cell_l{layer}{suffix}.{pname}")
-        return keys
+            dir_outs: list[list[Tensor]] = []
+            for direction in range(dirs):
+                w = self._weights(layer, direction == 1)
+                h: Tensor = h0[layer * dirs + direction]
+                outs: list[Tensor] = []
+                for t in range(T - 1, -1, -1) if direction == 1 else range(T):
+                    bs = batch_sizes[t]
+                    step = self._step(
+                        _slice(inp[t], slice(0, bs)), _slice(h, slice(0, bs)), w
+                    )
+                    h = _carry(h, step, bs)
+                    outs.append(_pad_rows(step, B))
+                if direction == 1:
+                    outs.reverse()
+                h_n.append(h)
+                dir_outs.append(outs)
+            if dirs == 2:
+                layer_out = stack(
+                    [_cat_last(dir_outs[0][t], dir_outs[1][t]) for t in range(T)], 0
+                )
+            else:
+                layer_out = stack(dir_outs[0], 0)
+            inp = _inter_layer_dropout(
+                layer_out, self.dropout_val, layer, self.num_layers, self.training
+            )
+        out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
+        return out, h_n_tensor
 
 
 # ── LSTM ──────────────────────────────────────────────────────────────────────
@@ -886,7 +833,7 @@ class RNNCell(Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.nonlinearity = nonlinearity
+        self.nonlinearity = _check_nonlinearity(nonlinearity)
         self.weight_ih = Parameter(
             empty(hidden_size, input_size, dtype=dtype, device=device)
         )
@@ -924,12 +871,8 @@ class RNNCell(Module):
             Output and (optionally) the new hidden state; see the class docstring.
         """
         unbatched, x, (h0,) = _cell_batch("RNNCell", x, (("hx", hx),), self.hidden_size)
-        pre = linear(x, self.weight_ih, self.bias_ih) + linear(
-            h0, self.weight_hh, self.bias_hh
-        )
-        return _cell_unbatch(
-            unbatched, tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
-        )
+        w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
+        return _cell_unbatch(unbatched, _rnn_step(x, h0, w, self.nonlinearity))
 
     @override
     def extra_repr(self) -> str:
@@ -1271,13 +1214,8 @@ class GRUCell(Module):
             Output and (optionally) the new hidden state; see the class docstring.
         """
         unbatched, x, (h0,) = _cell_batch("GRUCell", x, (("hx", hx),), self.hidden_size)
-        hs = self.hidden_size
-        gates_x = linear(x, self.weight_ih, self.bias_ih)
-        gates_h = linear(h0, self.weight_hh, self.bias_hh)
-        r = sigmoid(gates_x[:, :hs] + gates_h[:, :hs])
-        z = sigmoid(gates_x[:, hs : 2 * hs] + gates_h[:, hs : 2 * hs])
-        n = tanh(gates_x[:, 2 * hs :] + r * gates_h[:, 2 * hs :])
-        return _cell_unbatch(unbatched, (1.0 - z) * n + z * h0)
+        w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
+        return _cell_unbatch(unbatched, _gru_step(x, h0, w))
 
     @override
     def extra_repr(self) -> str:
@@ -1288,7 +1226,7 @@ class GRUCell(Module):
 # ── Multi-step GRU ────────────────────────────────────────────────────────────
 
 
-class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
+class GRU(_FlatRecurrent):
     r"""Multi-layer Gated Recurrent Unit (GRU) recurrent layer.
 
     Applies a stack of GRU cells over an input sequence.  At each time
@@ -1355,11 +1293,10 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
 
     Notes
     -----
-    Internally this module stores one :class:`GRUCell` sub-module per
-    layer per direction (named ``cell_l{layer}`` and
-    ``cell_l{layer}_reverse``).  The :class:`_CellNamingMixin` flattens
-    these into ``weight_ih_l{layer}`` etc. for checkpoint compatibility
-    with the reference framework.
+    The parameters are ``weight_ih_l{k}`` ``(3H, I)``, ``weight_hh_l{k}``
+    ``(3H, H)``, ``bias_ih_l{k}`` and ``bias_hh_l{k}`` ``(3H,)``, with
+    ``_reverse`` for the backward direction — as for :class:`LSTM`.  A
+    checkpoint saved under the older ``cell_l{k}.weight_ih`` names loads.
 
     :meth:`flatten_parameters` is a no-op retained for API
     compatibility.
@@ -1397,6 +1334,8 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
     RNN : Vanilla Elman RNN (no gating).
     """
 
+    _gates = 3
+
     def __init__(
         self,
         input_size: int,
@@ -1414,24 +1353,15 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.bias = bias
         self.batch_first = batch_first
         self.dropout_val = _check_dropout(dropout, num_layers)
         self.bidirectional = bidirectional
+        self._register_weights(device, dtype)
 
-        num_dirs = 2 if bidirectional else 1
-        for layer in range(num_layers):
-            for d in range(num_dirs):
-                suffix = "_reverse" if d == 1 else ""
-                in_sz = input_size if layer == 0 else hidden_size * num_dirs
-                self.add_module(
-                    f"cell_l{layer}{suffix}",
-                    GRUCell(in_sz, hidden_size, bias=bias, device=device, dtype=dtype),
-                )
-
-    def _cell(self, layer: int, reverse: bool = False) -> GRUCell:
-        """Internal helper for the GRU module."""
-        suffix: str = "_reverse" if reverse else ""
-        return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+    @override
+    def _step(self, x: Tensor, h: Tensor, w: _Weights) -> Tensor:
+        return _gru_step(x, h, w)
 
     def flatten_parameters(self) -> None:
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
@@ -1457,7 +1387,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        return _run_cell_stack("GRU", self, x, hx)
+        return self._run("GRU", x, hx)
 
     @override
     def extra_repr(self) -> str:
@@ -1472,7 +1402,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
 # ── Multi-step RNN ────────────────────────────────────────────────────────────
 
 
-class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
+class RNN(_FlatRecurrent):
     r"""Multi-layer Elman recurrent neural network (RNN).
 
     Applies a stack of Elman RNN cells over an input sequence.  At each
@@ -1547,10 +1477,10 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
 
     Notes
     -----
-    Internally this module stores one :class:`RNNCell` sub-module per
-    layer per direction.  The :class:`_CellNamingMixin` flattens these
-    into ``weight_ih_l{layer}`` etc. for checkpoint compatibility with
-    the reference framework.
+    The parameters are ``weight_ih_l{k}`` ``(H, I)``, ``weight_hh_l{k}``
+    ``(H, H)``, ``bias_ih_l{k}`` and ``bias_hh_l{k}`` ``(H,)``, with
+    ``_reverse`` for the backward direction — as for :class:`LSTM`.  A
+    checkpoint saved under the older ``cell_l{k}.weight_ih`` names loads.
 
     :meth:`flatten_parameters` is a no-op kept for API compatibility.
 
@@ -1590,6 +1520,8 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
     GRU : Gated RNN without a separate cell state.
     """
 
+    _gates = 1
+
     def __init__(
         self,
         input_size: int,
@@ -1608,32 +1540,16 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.nonlinearity = nonlinearity
+        self.nonlinearity = _check_nonlinearity(nonlinearity)
+        self.bias = bias
         self.batch_first = batch_first
         self.dropout_val = _check_dropout(dropout, num_layers)
         self.bidirectional = bidirectional
+        self._register_weights(device, dtype)
 
-        num_dirs = 2 if bidirectional else 1
-        for layer in range(num_layers):
-            for d in range(num_dirs):
-                suffix = "_reverse" if d == 1 else ""
-                in_sz = input_size if layer == 0 else hidden_size * num_dirs
-                self.add_module(
-                    f"cell_l{layer}{suffix}",
-                    RNNCell(
-                        in_sz,
-                        hidden_size,
-                        bias=bias,
-                        nonlinearity=nonlinearity,
-                        device=device,
-                        dtype=dtype,
-                    ),
-                )
-
-    def _cell(self, layer: int, reverse: bool = False) -> RNNCell:
-        """Internal helper for the RNN module."""
-        suffix: str = "_reverse" if reverse else ""
-        return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+    @override
+    def _step(self, x: Tensor, h: Tensor, w: _Weights) -> Tensor:
+        return _rnn_step(x, h, w, self.nonlinearity)
 
     def flatten_parameters(self) -> None:
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
@@ -1659,7 +1575,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        return _run_cell_stack("RNN", self, x, hx)
+        return self._run("RNN", x, hx)
 
     @override
     def extra_repr(self) -> str:

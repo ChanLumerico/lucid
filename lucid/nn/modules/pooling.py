@@ -30,6 +30,9 @@ from lucid.nn.functional.pooling import (
     lp_pool3d,
 )
 
+# An adaptive pool's ``output_size``; ``None`` keeps that axis's extent.
+type _OutSize = int | tuple[int | None, ...]
+
 
 class MaxPool1d(Module):
     r"""Applies 1-D max pooling over a sequence.
@@ -629,7 +632,7 @@ class AdaptiveAvgPool1d(Module):
     ...     assert pool(x).shape == (1, 16, 8)
     """
 
-    def __init__(self, output_size: int | tuple[int, ...]) -> None:
+    def __init__(self, output_size: _OutSize) -> None:
         """Initialise the AdaptiveAvgPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
@@ -720,7 +723,7 @@ class AdaptiveAvgPool2d(Module):
     ...     assert pool(x).shape == (2, 256, 4, 4)
     """
 
-    def __init__(self, output_size: _Size2d) -> None:
+    def __init__(self, output_size: _OutSize) -> None:
         """Initialise the AdaptiveAvgPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
@@ -807,7 +810,7 @@ class AdaptiveMaxPool2d(Module):
     (4, 128, 1, 1)
     """
 
-    def __init__(self, output_size: _Size2d, return_indices: bool = False) -> None:
+    def __init__(self, output_size: _OutSize, return_indices: bool = False) -> None:
         """Initialise the AdaptiveMaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.return_indices = return_indices
@@ -960,8 +963,6 @@ class MaxPool3d(Module):
             Pooled output tensor, or ``(output, indices)`` when the layer
             was built with ``return_indices=True``.
         """
-        # dilation and ceil_mode used to be dropped here, so
-        # MaxPool3d(ceil_mode=True) silently pooled with floor.
         return max_pool3d(
             x,
             self.kernel_size,
@@ -1175,7 +1176,7 @@ class AdaptiveAvgPool3d(Module):
     ...     assert pool(x).shape == (1, 64, 2, 4, 4)
     """
 
-    def __init__(self, output_size: _Size3d) -> None:
+    def __init__(self, output_size: _OutSize) -> None:
         """Initialise the AdaptiveAvgPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
@@ -1266,9 +1267,7 @@ class AdaptiveMaxPool1d(Module):
     (4, 128, 1)
     """
 
-    def __init__(
-        self, output_size: int | tuple[int, ...], return_indices: bool = False
-    ) -> None:
+    def __init__(self, output_size: _OutSize, return_indices: bool = False) -> None:
         """Initialise the AdaptiveMaxPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.return_indices = return_indices
@@ -1360,7 +1359,7 @@ class AdaptiveMaxPool3d(Module):
     (2, 64, 8, 1, 1)
     """
 
-    def __init__(self, output_size: _Size3d, return_indices: bool = False) -> None:
+    def __init__(self, output_size: _OutSize, return_indices: bool = False) -> None:
         """Initialise the AdaptiveMaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.return_indices = return_indices
@@ -2194,19 +2193,11 @@ class FractionalMaxPool2d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Apply the pooling operation to the input tensor.
+    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+        """Pool ``x`` of shape ``(N, C, H, W)``, or unbatched.
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
-
-        Returns
-        -------
-        Tensor
-            Pooled output tensor.
+        Returns the pooled tensor, and with ``return_indices`` also each
+        window maximum's flat position in the input.
         """
         return fractional_max_pool2d(
             x,
@@ -2308,19 +2299,11 @@ class FractionalMaxPool3d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Apply the pooling operation to the input tensor.
+    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+        """Pool ``x`` of shape ``(N, C, D, H, W)``, or unbatched.
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
-
-        Returns
-        -------
-        Tensor
-            Pooled output tensor.
+        Returns the pooled tensor, and with ``return_indices`` also each
+        window maximum's flat position in the input.
         """
         return fractional_max_pool3d(
             x,

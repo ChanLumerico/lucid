@@ -124,6 +124,49 @@ def _conv_transposend(
     return _drop_batch_axis(out, unbatched)
 
 
+def _output_padding_for_size(
+    x: Tensor,
+    output_size: Sequence[int],
+    args: _ConvArgs,
+    kernel_size: int | Sequence[int],
+    n: int,
+    label: str,
+) -> tuple[int, ...]:
+    """The ``output_padding`` that makes a transposed conv give ``output_size``.
+
+    A stride ``s`` maps ``s`` input sizes onto one convolution output, so
+    its transpose has to be told which to give back.  ``output_size`` names
+    it, with or without the leading batch and channel entries; each axis
+    has to lie within ``s - 1`` of the smallest size it can produce.
+    """
+    sizes = tuple(int(v) for v in output_size)
+    if len(sizes) in (n + 1, n + 2):
+        sizes = sizes[len(sizes) - n :]
+    if len(sizes) != n:
+        raise ValueError(
+            f"{label}: output_size must have {n} or {n + 2} elements, got {sizes}"
+        )
+    if isinstance(args.padding, str):
+        raise TypeError(f"{label}: padding must be integers, got {args.padding!r}")
+    stride = _ntuple(args.stride, n, label, "stride")
+    padding = _ntuple(args.padding, n, label, "padding")
+    dilation = _ntuple(args.dilation, n, label, "dilation")
+    kernel = _ntuple(kernel_size, n, label, "kernel_size")
+    spatial = tuple(int(v) for v in x.shape[x.ndim - n :])
+    out: list[int] = []
+    for axis in range(n):
+        smallest = (spatial[axis] - 1) * stride[axis] - 2 * padding[axis]
+        smallest += dilation[axis] * (kernel[axis] - 1) + 1
+        if not smallest <= sizes[axis] < smallest + stride[axis]:
+            raise ValueError(
+                f"{label}: requested an output size of {sizes}, but valid sizes "
+                f"on axis {axis} range from {smallest} to "
+                f"{smallest + stride[axis] - 1} (for an input of {spatial})"
+            )
+        out.append(sizes[axis] - smallest)
+    return tuple(out)
+
+
 def _check_output_padding(
     name: str,
     output_padding: tuple[int, ...],

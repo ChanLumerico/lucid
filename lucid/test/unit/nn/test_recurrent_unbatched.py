@@ -50,16 +50,6 @@ def _module_cases() -> list[object]:
     ]
 
 
-def _flat_name(name: str) -> str:
-    """A cell-module parameter name (``cell_l0_reverse.weight_ih``) in the
-    reference's flat layout (``weight_ih_l0_reverse``)."""
-    match = re.fullmatch(r"cell_l(\d+)(_reverse)?\.(\w+)", name)
-    if match is None:
-        return name
-    layer, reverse, param = match.groups()
-    return f"{param}_l{layer}{reverse or ''}"
-
-
 def _pair(
     ref: ModuleType, kind: str, kwargs: dict[str, object], device: str
 ) -> tuple[object, object]:
@@ -68,7 +58,7 @@ def _pair(
     theirs = getattr(ref.nn, kind)(_I, _H, **kwargs)
     named = dict(theirs.named_parameters())
     for name, p in ours.named_parameters():
-        named[_flat_name(name)].data = ref.tensor(p.numpy())
+        named[name].data = ref.tensor(p.numpy())
     return ours.to(device), theirs
 
 
@@ -108,7 +98,7 @@ def _run_module(
     loss.backward()
     grads = {n: t.grad for n, t in leaves.items() if not n.startswith("w_")}
     for name, p in module.named_parameters():
-        grads[_flat_name(name)] = p.grad
+        grads[name] = p.grad
     return [out, *finals], grads
 
 

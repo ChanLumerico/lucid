@@ -8,7 +8,6 @@ the way the reference does: a number in ``[0, 1]``, with a warning when a
 single layer leaves nowhere to apply it.
 """
 
-import re
 from types import ModuleType
 
 import numpy as np
@@ -112,14 +111,6 @@ def test_dropout_outside_the_unit_interval_is_refused(
         getattr(nn, kind)(_I, _H, num_layers=2, dropout=dropout)
 
 
-def _flat_name(name: str) -> str:
-    match = re.fullmatch(r"cell_l(\d+)(_reverse)?\.(\w+)", name)
-    if match is None:
-        return name
-    layer, reverse, param = match.groups()
-    return f"{param}_l{layer}{reverse or ''}"
-
-
 @pytest.mark.parity
 @pytest.mark.parametrize("bidirectional", [False, True], ids=["uni", "bidir"])
 @pytest.mark.parametrize("kind", _KINDS)
@@ -134,7 +125,7 @@ def test_dropout_one_matches_the_reference(
     theirs = getattr(ref.nn, kind)(_I, _H, **kwargs)
     named = dict(theirs.named_parameters())
     for name, p in ours.named_parameters():
-        named[_flat_name(name)].data = ref.tensor(p.numpy())
+        named[name].data = ref.tensor(p.numpy())
     ours.to(device).train()
     theirs.train()
 

@@ -9,6 +9,7 @@ from lucid.nn.functional._pool_core import (
     _adaptive_max_pool,
     _adaptive_pool,
     _avg_pool,
+    _fractional_max_pool,
     _max_pool,
 )
 from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry
@@ -377,7 +378,7 @@ def avg_pool2d(
     return _avg_pool(x, g, ceil_mode, count_include_pad, divisor_override)
 
 
-def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor:
+def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int | None, ...]) -> Tensor:
     r"""1-D adaptive average pooling — produces a fixed output length.
 
     Computes kernel / stride dynamically so that the output's spatial
@@ -389,7 +390,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     ----------
     x : Tensor
         Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
-    output_size : int or tuple of int
+    output_size : int or tuple of (int or None)
         Desired length of the output spatial axis.
 
     Returns
@@ -424,7 +425,7 @@ def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor
     return _adaptive_pool(x, output_size, 1, "mean")
 
 
-def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor:
+def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int | None, ...]) -> Tensor:
     r"""2-D adaptive average pooling — produces a fixed ``(H, W)``.
 
     Computes per-axis kernel / stride so the output shape exactly
@@ -437,7 +438,7 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
     ----------
     x : Tensor
         Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
-    output_size : int or (int, int)
+    output_size : int or (int or None, int or None)
         Desired spatial shape of the output.  Scalar duplicates per
         axis; ``(1, 1)`` performs global average pooling.
 
@@ -477,7 +478,7 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
 @overload
 def adaptive_max_pool2d(
     x: Tensor,
-    output_size: int | tuple[int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[False] = False,
 ) -> Tensor: ...
 
@@ -485,7 +486,7 @@ def adaptive_max_pool2d(
 @overload
 def adaptive_max_pool2d(
     x: Tensor,
-    output_size: int | tuple[int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[True],
 ) -> tuple[Tensor, Tensor]: ...
 
@@ -493,14 +494,14 @@ def adaptive_max_pool2d(
 @overload
 def adaptive_max_pool2d(
     x: Tensor,
-    output_size: int | tuple[int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def adaptive_max_pool2d(
     x: Tensor,
-    output_size: int | tuple[int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]:
     r"""2-D adaptive max pooling — fixed-shape ``(H, W)`` via per-cell max.
@@ -514,7 +515,7 @@ def adaptive_max_pool2d(
     ----------
     x : Tensor
         Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
-    output_size : int or (int, int)
+    output_size : int or (int or None, int or None)
         Desired spatial output shape.
     return_indices : bool, optional
         Also return ``(output, indices)``: each output cell's maximum as a
@@ -551,7 +552,7 @@ def adaptive_max_pool2d(
 @overload
 def adaptive_max_pool1d(
     x: Tensor,
-    output_size: int | tuple[int, ...],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[False] = False,
 ) -> Tensor: ...
 
@@ -559,7 +560,7 @@ def adaptive_max_pool1d(
 @overload
 def adaptive_max_pool1d(
     x: Tensor,
-    output_size: int | tuple[int, ...],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[True],
 ) -> tuple[Tensor, Tensor]: ...
 
@@ -567,14 +568,14 @@ def adaptive_max_pool1d(
 @overload
 def adaptive_max_pool1d(
     x: Tensor,
-    output_size: int | tuple[int, ...],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def adaptive_max_pool1d(
     x: Tensor,
-    output_size: int | tuple[int, ...],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]:
     r"""1-D adaptive max pooling — produces a fixed output length.
@@ -588,7 +589,7 @@ def adaptive_max_pool1d(
     ----------
     x : Tensor
         Input of shape ``(N, C, L)``, or ``(C, L)`` unbatched.
-    output_size : int or tuple of int
+    output_size : int or tuple of (int or None)
         Desired output length.
     return_indices : bool, optional
         Also return ``(output, indices)``: each output cell's maximum as a
@@ -627,7 +628,7 @@ def adaptive_max_pool1d(
 @overload
 def adaptive_max_pool3d(
     x: Tensor,
-    output_size: int | tuple[int, int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[False] = False,
 ) -> Tensor: ...
 
@@ -635,7 +636,7 @@ def adaptive_max_pool3d(
 @overload
 def adaptive_max_pool3d(
     x: Tensor,
-    output_size: int | tuple[int, int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: Literal[True],
 ) -> tuple[Tensor, Tensor]: ...
 
@@ -643,14 +644,14 @@ def adaptive_max_pool3d(
 @overload
 def adaptive_max_pool3d(
     x: Tensor,
-    output_size: int | tuple[int, int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def adaptive_max_pool3d(
     x: Tensor,
-    output_size: int | tuple[int, int, int],
+    output_size: int | tuple[int | None, ...],
     return_indices: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]:
     r"""3-D adaptive max pooling — produces a fixed ``(D, H, W)``.
@@ -663,7 +664,7 @@ def adaptive_max_pool3d(
     ----------
     x : Tensor
         Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
-    output_size : int or (int, int, int)
+    output_size : int or (int or None, int or None, int or None)
         Desired output spatial shape.
     return_indices : bool, optional
         Also return ``(output, indices)``: each output cell's maximum as a
@@ -699,7 +700,7 @@ def adaptive_max_pool3d(
 
 def adaptive_avg_pool3d(
     x: Tensor,
-    output_size: int | tuple[int, int, int],
+    output_size: int | tuple[int | None, ...],
 ) -> Tensor:
     r"""3-D adaptive average pooling — produces a fixed ``(D, H, W)``.
 
@@ -711,7 +712,7 @@ def adaptive_avg_pool3d(
     ----------
     x : Tensor
         Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
-    output_size : int or (int, int, int)
+    output_size : int or (int or None, int or None, int or None)
         Desired ``(oD, oH, oW)``; a single int applies to all three axes.
 
     Returns
@@ -1410,26 +1411,38 @@ def max_unpool3d(
     return _scatter_unpool(x, indices, spatial, n_spatial=3)
 
 
-def _frac_pool_starts(
-    size: int, kernel: int, out_size: int, sample: float
-) -> list[int]:
-    """Fractional window start positions for one spatial dimension (Graham 2014 §3).
+@overload
+def fractional_max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    output_size: int | tuple[int, int] | None = None,
+    output_ratio: float | tuple[float, float] | None = None,
+    return_indices: Literal[False] = False,
+    _random_samples: Tensor | None = None,
+) -> Tensor: ...
 
-    ``alpha = (size - kernel) / (out_size - 1)``
-    ``start[i] = floor((i + sample) * alpha) - floor(sample * alpha)``
-    Last index always clamps to ``size - kernel`` to avoid out-of-bounds.
-    """
-    if out_size == 1:
-        return [size - kernel]
-    alpha = (size - kernel) / (out_size - 1)
-    base = int(sample * alpha)
-    starts: list[int] = []
-    for i in range(out_size):
-        if i == out_size - 1:
-            starts.append(size - kernel)
-        else:
-            starts.append(int((i + sample) * alpha) - base)
-    return starts
+
+@overload
+def fractional_max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    output_size: int | tuple[int, int] | None = None,
+    output_ratio: float | tuple[float, float] | None = None,
+    *,
+    return_indices: Literal[True],
+    _random_samples: Tensor | None = None,
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
+def fractional_max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    output_size: int | tuple[int, int] | None = None,
+    output_ratio: float | tuple[float, float] | None = None,
+    return_indices: bool = False,
+    _random_samples: Tensor | None = None,
+) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def fractional_max_pool2d(
@@ -1439,7 +1452,7 @@ def fractional_max_pool2d(
     output_ratio: float | tuple[float, float] | None = None,
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""Fractional max-pooling over a 2-D input (Graham, 2014).
 
     Performs max-pooling with a **non-integer** effective stride.
@@ -1451,7 +1464,7 @@ def fractional_max_pool2d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, H, W)``.
+        Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     kernel_size : int or (int, int)
         Size of the pooling window.
     output_size : int or (int, int), optional
@@ -1465,8 +1478,9 @@ def fractional_max_pool2d(
         (flattened ``H × W`` index) as a second tensor.
     _random_samples : Tensor, optional
         Per-instance uniform samples of shape ``(N, C, 2)`` driving
-        the window-boundary draws.  Defaults to fresh
-        :func:`lucid.rand`.
+        the window-boundary draws, ordered ``(width, height)`` as the
+        reference orders them (``N = 1`` for an unbatched input).
+        Defaults to fresh :func:`lucid.rand`.
 
     Returns
     -------
@@ -1497,85 +1511,43 @@ def fractional_max_pool2d(
     >>> y.shape
     (1, 4, 7, 7)
     """
-    if x.ndim != 4:
-        raise ValueError(
-            f"fractional_max_pool2d expects 4-D input (N, C, H, W), "
-            f"got shape {tuple(x.shape)}"
-        )
-    kH, kW = _ntuple(kernel_size, 2, "fractional_max_pool2d", "kernel_size")
-    N, C, H, W = (
-        int(x.shape[0]),
-        int(x.shape[1]),
-        int(x.shape[2]),
-        int(x.shape[3]),
+    return _fractional_max_pool(
+        x, kernel_size, output_size, output_ratio, return_indices, _random_samples, 2
     )
 
-    if output_size is not None and output_ratio is not None:
-        raise ValueError(
-            "fractional_max_pool2d: specify output_size or output_ratio, not both"
-        )
-    if output_size is not None:
-        oH, oW = _ntuple(output_size, 2, "fractional_max_pool2d", "output_size")
-    elif output_ratio is not None:
-        rH, rW = (
-            (output_ratio, output_ratio)
-            if isinstance(output_ratio, float)
-            else (float(output_ratio[0]), float(output_ratio[1]))
-        )
-        oH, oW = max(1, int(H * rH)), max(1, int(W * rW))
-    else:
-        raise ValueError(
-            "fractional_max_pool2d: one of output_size or output_ratio must be given"
-        )
 
-    if _random_samples is None:
-        _random_samples = _lucid.rand(N, C, 2, dtype=_lucid.float32, device=x.device)
+@overload
+def fractional_max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    output_size: int | tuple[int, int, int] | None = None,
+    output_ratio: float | tuple[float, float, float] | None = None,
+    return_indices: Literal[False] = False,
+    _random_samples: Tensor | None = None,
+) -> Tensor: ...
 
-    batch_out: list[Tensor] = []
-    batch_idx: list[Tensor] = []
 
-    for n in range(N):
-        chan_out: list[Tensor] = []
-        chan_idx: list[Tensor] = []
+@overload
+def fractional_max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    output_size: int | tuple[int, int, int] | None = None,
+    output_ratio: float | tuple[float, float, float] | None = None,
+    *,
+    return_indices: Literal[True],
+    _random_samples: Tensor | None = None,
+) -> tuple[Tensor, Tensor]: ...
 
-        for c in range(C):
-            sh = float(_random_samples[n, c, 0].item())
-            sw = float(_random_samples[n, c, 1].item())
-            h_starts = _frac_pool_starts(H, kH, oH, sh)
-            w_starts = _frac_pool_starts(W, kW, oW, sw)
 
-            plane_out: list[Tensor] = []
-            plane_idx: list[Tensor] = []
-
-            for hs in h_starts:
-                row_out: list[Tensor] = []
-                row_idx: list[Tensor] = []
-                for ws in w_starts:
-                    patch = x[n, c, hs : hs + kH, ws : ws + kW].reshape(-1)
-                    row_out.append(patch.max().unsqueeze(0))
-                    if return_indices:
-                        li = int(patch.argmax().item())
-                        lr, lc = divmod(li, kW)
-                        flat = (hs + lr) * W + (ws + lc)
-                        row_idx.append(
-                            _lucid.tensor([flat], dtype=_lucid.int64, device=x.device)
-                        )
-                plane_out.append(_lucid.cat(row_out))  # (oW,)
-                if return_indices:
-                    plane_idx.append(_lucid.cat(row_idx))
-
-            chan_out.append(_lucid.stack(plane_out))  # (oH, oW)
-            if return_indices:
-                chan_idx.append(_lucid.stack(plane_idx))
-
-        batch_out.append(_lucid.stack(chan_out))  # (C, oH, oW)
-        if return_indices:
-            batch_idx.append(_lucid.stack(chan_idx))
-
-    out = _lucid.stack(batch_out)  # (N, C, oH, oW)
-    if return_indices:
-        return out, _lucid.stack(batch_idx)  # type: ignore[return-value]
-    return out
+@overload
+def fractional_max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    output_size: int | tuple[int, int, int] | None = None,
+    output_ratio: float | tuple[float, float, float] | None = None,
+    return_indices: bool = False,
+    _random_samples: Tensor | None = None,
+) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def fractional_max_pool3d(
@@ -1585,7 +1557,7 @@ def fractional_max_pool3d(
     output_ratio: float | tuple[float, float, float] | None = None,
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""Fractional max-pooling over a 3-D input (Graham, 2014).
 
     Volumetric extension of :func:`fractional_max_pool2d`.  Provides
@@ -1595,7 +1567,7 @@ def fractional_max_pool3d(
     Parameters
     ----------
     x : Tensor
-        Input of shape ``(N, C, D, H, W)``.
+        Input of shape ``(N, C, D, H, W)``, or ``(C, D, H, W)`` unbatched.
     kernel_size : int or (int, int, int)
         Size of the pooling window per axis.
     output_size : int or (int, int, int), optional
@@ -1632,100 +1604,6 @@ def fractional_max_pool3d(
     >>> y.shape
     (1, 2, 4, 4, 4)
     """
-    if x.ndim != 5:
-        raise ValueError(
-            f"fractional_max_pool3d expects 5-D input (N, C, D, H, W), "
-            f"got shape {tuple(x.shape)}"
-        )
-    kD, kH, kW = _ntuple(kernel_size, 3, "fractional_max_pool3d", "kernel_size")
-    N, C, D, H, W = (
-        int(x.shape[0]),
-        int(x.shape[1]),
-        int(x.shape[2]),
-        int(x.shape[3]),
-        int(x.shape[4]),
+    return _fractional_max_pool(
+        x, kernel_size, output_size, output_ratio, return_indices, _random_samples, 3
     )
-
-    if output_size is not None and output_ratio is not None:
-        raise ValueError(
-            "fractional_max_pool3d: specify output_size or output_ratio, not both"
-        )
-    if output_size is not None:
-        oD, oH, oW = _ntuple(output_size, 3, "fractional_max_pool3d", "output_size")
-    elif output_ratio is not None:
-        if isinstance(output_ratio, float):
-            rD = rH = rW = output_ratio
-        else:
-            rD = float(output_ratio[0])
-            rH = float(output_ratio[1])
-            rW = float(output_ratio[2])
-        oD = max(1, int(D * rD))
-        oH = max(1, int(H * rH))
-        oW = max(1, int(W * rW))
-    else:
-        raise ValueError(
-            "fractional_max_pool3d: one of output_size or output_ratio must be given"
-        )
-
-    if _random_samples is None:
-        _random_samples = _lucid.rand(N, C, 3, dtype=_lucid.float32, device=x.device)
-
-    batch_out: list[Tensor] = []
-    batch_idx: list[Tensor] = []
-
-    for n in range(N):
-        chan_out: list[Tensor] = []
-        chan_idx: list[Tensor] = []
-
-        for c in range(C):
-            sd = float(_random_samples[n, c, 0].item())
-            sh = float(_random_samples[n, c, 1].item())
-            sw = float(_random_samples[n, c, 2].item())
-            d_starts = _frac_pool_starts(D, kD, oD, sd)
-            h_starts = _frac_pool_starts(H, kH, oH, sh)
-            w_starts = _frac_pool_starts(W, kW, oW, sw)
-
-            vol_out: list[Tensor] = []
-            vol_idx: list[Tensor] = []
-
-            for ds in d_starts:
-                plane_out: list[Tensor] = []
-                plane_idx: list[Tensor] = []
-                for hs in h_starts:
-                    row_out: list[Tensor] = []
-                    row_idx: list[Tensor] = []
-                    for ws in w_starts:
-                        patch = x[
-                            n, c, ds : ds + kD, hs : hs + kH, ws : ws + kW
-                        ].reshape(-1)
-                        row_out.append(patch.max().unsqueeze(0))
-                        if return_indices:
-                            li = int(patch.argmax().item())
-                            ld = li // (kH * kW)
-                            lr = (li % (kH * kW)) // kW
-                            lc = li % kW
-                            flat = ((ds + ld) * H + (hs + lr)) * W + (ws + lc)
-                            row_idx.append(
-                                _lucid.tensor(
-                                    [flat], dtype=_lucid.int64, device=x.device
-                                )
-                            )
-                    plane_out.append(_lucid.cat(row_out))  # (oW,)
-                    if return_indices:
-                        plane_idx.append(_lucid.cat(row_idx))
-                vol_out.append(_lucid.stack(plane_out))  # (oH, oW)
-                if return_indices:
-                    vol_idx.append(_lucid.stack(plane_idx))
-
-            chan_out.append(_lucid.stack(vol_out))  # (oD, oH, oW)
-            if return_indices:
-                chan_idx.append(_lucid.stack(vol_idx))
-
-        batch_out.append(_lucid.stack(chan_out))  # (C, oD, oH, oW)
-        if return_indices:
-            batch_idx.append(_lucid.stack(chan_idx))
-
-    out = _lucid.stack(batch_out)  # (N, C, oD, oH, oW)
-    if return_indices:
-        return out, _lucid.stack(batch_idx)  # type: ignore[return-value]
-    return out

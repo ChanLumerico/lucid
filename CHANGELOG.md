@@ -502,6 +502,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - one argument normaliser for the spatial functionals
 
+- attention, transposed conv, pools and RNNs take reference args
+
 ### Changed
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)

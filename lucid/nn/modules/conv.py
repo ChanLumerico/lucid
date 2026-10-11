@@ -3,7 +3,8 @@ Convolution and transposed convolution modules.
 """
 
 import math
-from typing import cast, override
+from collections.abc import Sequence
+from typing import ClassVar, cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d, PaddingMode
@@ -13,7 +14,12 @@ from lucid.nn.modules._lazy import fill as _fill
 from lucid._factories.creation import empty
 import lucid.nn.init as init
 from lucid.nn.functional._spatial_args import _check_string_padding
-from lucid.nn.functional.conv import _ConvArgs, _conv_transposend, _convnd
+from lucid.nn.functional.conv import (
+    _ConvArgs,
+    _conv_transposend,
+    _convnd,
+    _output_padding_for_size,
+)
 
 _VALID_PADDING_MODES = frozenset({"zeros", "reflect", "replicate", "circular"})
 
@@ -61,6 +67,15 @@ def _string_padding(
 def _in_channels(x: Tensor, n: int) -> int:
     """The channel count of a batched or unbatched ``n``-D conv input."""
     return int(x.shape[0 if x.ndim == n + 1 else 1])
+
+
+def _init_conv_weights(weight: Parameter, bias: Parameter | None) -> None:
+    """Kaiming-uniform weight; a bias bounded by the weight's fan-in."""
+    init.kaiming_uniform_(weight, a=math.sqrt(5))
+    if bias is not None:
+        fan_in, _ = init._calculate_fan_in_and_fan_out(weight)
+        bound: float = 1.0 / math.sqrt(fan_in)
+        init.uniform_(bias, -bound, bound)
 
 
 class Conv1d(Module):
@@ -243,12 +258,8 @@ class Conv1d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        """Internal helper for the Conv1d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
+        """Initialise ``weight`` and ``bias`` as the reference does."""
+        _init_conv_weights(self.weight, self.bias)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -475,12 +486,8 @@ class Conv2d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        """Internal helper for the Conv2d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
+        """Initialise ``weight`` and ``bias`` as the reference does."""
+        _init_conv_weights(self.weight, self.bias)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -678,12 +685,8 @@ class Conv3d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        """Internal helper for the Conv3d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
+        """Initialise ``weight`` and ``bias`` as the reference does."""
+        _init_conv_weights(self.weight, self.bias)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -718,7 +721,48 @@ class Conv3d(Module):
         return s
 
 
-class ConvTranspose1d(Module):
+class _ConvTransposeNd(Module):
+    """What ``ConvTranspose{1,2,3}d`` share: initialisation and the forward.
+
+    Each subclass sets ``_rank`` and builds its weight in ``__init__``.
+    """
+
+    _rank: ClassVar[int]
+    in_channels: int
+    out_channels: int
+    kernel_size: int | tuple[int, ...]
+    stride: int | tuple[int, ...]
+    padding: int | tuple[int, ...]
+    output_padding: int | tuple[int, ...]
+    dilation: int | tuple[int, ...]
+    groups: int
+    weight: Parameter
+    bias: Parameter | None
+
+    def _init_weights(self) -> None:
+        """Initialise ``weight`` and ``bias`` as the reference does."""
+        _init_conv_weights(self.weight, self.bias)
+
+    def _describe(self) -> str:
+        """The ``extra_repr`` of every rank."""
+        return (
+            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}, padding={self.padding}"
+        )
+
+    def _transpose(self, x: Tensor, output_size: Sequence[int] | None) -> Tensor:
+        """The forward of every rank: ``output_size``, when given, picks the
+        ``output_padding`` that produces it."""
+        args = _ConvArgs(self.stride, self.padding, self.dilation, self.groups)
+        out_pad = self.output_padding
+        if output_size is not None:
+            out_pad = _output_padding_for_size(
+                x, output_size, args, self.kernel_size, self._rank, type(self).__name__
+            )
+        return _conv_transposend(x, self.weight, self.bias, args, out_pad, self._rank)
+
+
+class ConvTranspose1d(_ConvTransposeNd):
     r"""Applies a 1D transposed convolution (fractionally-strided convolution).
 
     A transposed convolution — sometimes loosely called a *deconvolution*,
@@ -835,6 +879,8 @@ class ConvTranspose1d(Module):
     (4, 32, 20)
     """
 
+    _rank = 1
+
     def __init__(
         self,
         in_channels: int,
@@ -874,45 +920,23 @@ class ConvTranspose1d(Module):
         )
         self._init_weights()
 
-    def _init_weights(self) -> None:
-        """Internal helper for the ConvTranspose1d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
-
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Apply the convolution to the input tensor.
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
+        """Upsample ``x`` of shape ``(N, C_in, L)``, or unbatched.
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
-
-        Returns
-        -------
-        Tensor
-            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
-            spatial dimensions determined by stride, padding, dilation, and
-            kernel size.
+        ``output_size`` picks one of the ``stride`` sizes the layer can
+        produce, in place of ``output_padding``: the output's length,
+        optionally after its batch and channel sizes.
         """
-        args = _ConvArgs(self.stride, self.padding, self.dilation, self.groups)
-        return _conv_transposend(
-            x, self.weight, self.bias, args, self.output_padding, 1
-        )
+        return self._transpose(x, output_size)
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return (
-            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-            f"stride={self.stride}, padding={self.padding}"
-        )
+        return self._describe()
 
 
-class ConvTranspose2d(Module):
+class ConvTranspose2d(_ConvTransposeNd):
     r"""Applies a 2D transposed convolution (fractionally-strided convolution).
 
     Also known as a *fractionally-strided convolution*, this module is
@@ -1021,6 +1045,8 @@ class ConvTranspose2d(Module):
     (4, 128, 32, 32)
     """
 
+    _rank = 2
+
     def __init__(
         self,
         in_channels: int,
@@ -1057,45 +1083,23 @@ class ConvTranspose2d(Module):
         )
         self._init_weights()
 
-    def _init_weights(self) -> None:
-        """Internal helper for the ConvTranspose2d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
-
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Apply the convolution to the input tensor.
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
+        """Upsample ``x`` of shape ``(N, C_in, H, W)``, or unbatched.
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
-
-        Returns
-        -------
-        Tensor
-            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
-            spatial dimensions determined by stride, padding, dilation, and
-            kernel size.
+        ``output_size`` picks one of the ``stride`` sizes the layer can
+        produce, in place of ``output_padding``: the output's height and width,
+        optionally after its batch and channel sizes.
         """
-        args = _ConvArgs(self.stride, self.padding, self.dilation, self.groups)
-        return _conv_transposend(
-            x, self.weight, self.bias, args, self.output_padding, 2
-        )
+        return self._transpose(x, output_size)
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return (
-            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-            f"stride={self.stride}, padding={self.padding}"
-        )
+        return self._describe()
 
 
-class ConvTranspose3d(Module):
+class ConvTranspose3d(_ConvTransposeNd):
     r"""Applies a 3D transposed convolution (fractionally-strided convolution).
 
     The 3D extension of :class:`ConvTranspose2d`.  It upsamples all
@@ -1195,6 +1199,8 @@ class ConvTranspose3d(Module):
     (1, 64, 8, 8, 8)
     """
 
+    _rank = 3
+
     def __init__(
         self,
         in_channels: int,
@@ -1237,61 +1243,30 @@ class ConvTranspose3d(Module):
         )
         self._init_weights()
 
-    def _init_weights(self) -> None:
-        """Internal helper for the ConvTranspose3d module."""
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1.0 / math.sqrt(fan_in)
-            init.uniform_(self.bias, -bound, bound)
-
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Apply the convolution to the input tensor.
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
+        """Upsample ``x`` of shape ``(N, C_in, D, H, W)``, or unbatched.
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
-
-        Returns
-        -------
-        Tensor
-            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
-            spatial dimensions determined by stride, padding, dilation, and
-            kernel size.
+        ``output_size`` picks one of the ``stride`` sizes the layer can
+        produce, in place of ``output_padding``: the output's depth, height and width,
+        optionally after its batch and channel sizes.
         """
-        args = _ConvArgs(self.stride, self.padding, self.dilation, self.groups)
-        return _conv_transposend(
-            x, self.weight, self.bias, args, self.output_padding, 3
-        )
+        return self._transpose(x, output_size)
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return (
-            f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
-            f"stride={self.stride}, padding={self.padding}"
-        )
+        return self._describe()
 
 
 # ── Lazy convolutions ─────────────────────────────────────────────────────────
 #
 # Each lazy variant inherits from its eager counterpart so the forward path
-# (`_resolve_pad` + `_conv_forward_with_mode`) is reused unchanged.  Parent
+# (``_convnd`` / ``_conv_transposend``) is reused unchanged.  Parent
 # `__init__` is intentionally skipped via `Module.__init__(self)` because it
 # requires `in_channels`, which is what we are deferring.  The first forward
 # call (or `_load_from_state_dict`) materialises the real `weight` / `bias`
 # Parameter objects.
-
-
-def _init_lazy_conv_weights(weight: Parameter, bias: Parameter | None) -> None:
-    """Shared kaiming-uniform initialiser for lazily-built conv weights."""
-    init.kaiming_uniform_(weight, a=math.sqrt(5))
-    if bias is not None:
-        fan_in, _ = init._calculate_fan_in_and_fan_out(weight)
-        bound: float = 1.0 / math.sqrt(fan_in)
-        init.uniform_(bias, -bound, bound)
 
 
 class LazyConv1d(Conv1d):
@@ -1444,7 +1419,7 @@ class LazyConv1d(Conv1d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -1671,7 +1646,7 @@ class LazyConv2d(Conv2d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -1895,7 +1870,7 @@ class LazyConv3d(Conv3d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -2121,7 +2096,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -2175,13 +2150,16 @@ class LazyConvTranspose1d(ConvTranspose1d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
         r"""Apply the convolution to the input tensor.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+        x : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`; the first
+            call sizes ``in_channels`` from it.
+        output_size : sequence of int, optional
+            As for the eager layer's ``forward``.
 
         Returns
         -------
@@ -2192,7 +2170,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         """
         if self.in_channels is None:
             self._initialize(_in_channels(x, 1))
-        return ConvTranspose1d.forward(self, x)
+        return ConvTranspose1d.forward(self, x, output_size)
 
     @override
     def extra_repr(self) -> str:
@@ -2344,7 +2322,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -2398,13 +2376,16 @@ class LazyConvTranspose2d(ConvTranspose2d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
         r"""Apply the convolution to the input tensor.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+        x : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`; the first
+            call sizes ``in_channels`` from it.
+        output_size : sequence of int, optional
+            As for the eager layer's ``forward``.
 
         Returns
         -------
@@ -2415,7 +2396,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         """
         if self.in_channels is None:
             self._initialize(_in_channels(x, 2))
-        return ConvTranspose2d.forward(self, x)
+        return ConvTranspose2d.forward(self, x, output_size)
 
     @override
     def extra_repr(self) -> str:
@@ -2570,7 +2551,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             if self._has_bias
             else None
         )
-        _init_lazy_conv_weights(weight, bias)
+        _init_conv_weights(weight, bias)
         # ``fill`` and not assignment — the placeholder object is what
         # anything that read ``parameters()`` early is holding on to.
         _fill(self, "weight", weight)
@@ -2624,13 +2605,16 @@ class LazyConvTranspose3d(ConvTranspose3d):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
         r"""Apply the convolution to the input tensor.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+        x : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`; the first
+            call sizes ``in_channels`` from it.
+        output_size : sequence of int, optional
+            As for the eager layer's ``forward``.
 
         Returns
         -------
@@ -2641,7 +2625,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         """
         if self.in_channels is None:
             self._initialize(_in_channels(x, 3))
-        return ConvTranspose3d.forward(self, x)
+        return ConvTranspose3d.forward(self, x, output_size)
 
     @override
     def extra_repr(self) -> str:

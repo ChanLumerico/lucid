@@ -116,6 +116,58 @@ def _masked_attention(
     return out, weights if need_weights else None
 
 
+def _broadcast_leading(shapes: list[tuple[int, ...]]) -> tuple[int, ...]:
+    """The shape the leading (batch, head) axes of Q, K and V broadcast to."""
+    rank = max(len(s) for s in shapes)
+    out: list[int] = []
+    for axis in range(rank):
+        sizes = {s[axis - rank + len(s)] for s in shapes if axis - rank + len(s) >= 0}
+        sizes.discard(1)
+        if len(sizes) > 1:
+            raise ValueError(
+                "scaled_dot_product_attention: the leading dimensions of query, "
+                f"key and value do not broadcast: {shapes}; for fewer key / value "
+                "heads than query heads, pass enable_gqa=True"
+            )
+        out.append(sizes.pop() if sizes else 1)
+    return tuple(out)
+
+
+def _attention_operands(
+    query: Tensor, key: Tensor, value: Tensor, enable_gqa: bool
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Q, K and V with one leading shape, as the reference's math reads them.
+
+    With ``enable_gqa`` each key / value head serves ``H_q / H_kv``
+    consecutive query heads, so it is repeated that many times.  The
+    leading axes then broadcast against each other as a matmul's would —
+    a key shared across the batch is a ``1`` there.  The engine kernels
+    take equal leading shapes only, and refused both.
+    """
+    if enable_gqa and min(query.ndim, key.ndim, value.ndim) >= 3:
+        heads = int(query.shape[-3])
+        grouped: list[Tensor] = []
+        for name, t in (("key", key), ("value", value)):
+            kv_heads = int(t.shape[-3])
+            if heads % kv_heads != 0:
+                raise ValueError(
+                    "scaled_dot_product_attention: with enable_gqa, the "
+                    f"{name} heads ({kv_heads}) must divide the query heads "
+                    f"({heads})"
+                )
+            if kv_heads != heads:
+                t = t.repeat_interleave(heads // kv_heads, dim=-3)
+            grouped.append(t)
+        key, value = grouped
+    shapes = [tuple(int(v) for v in t.shape[:-2]) for t in (query, key, value)]
+    lead = _broadcast_leading(shapes)
+    query, key, value = (
+        t if shape == lead else t.expand(*lead, *t.shape[-2:])
+        for t, shape in zip((query, key, value), shapes, strict=True)
+    )
+    return query, key, value
+
+
 def scaled_dot_product_attention(
     query: Tensor,
     key: Tensor,
@@ -124,6 +176,7 @@ def scaled_dot_product_attention(
     dropout_p: float = 0.0,
     is_causal: bool = False,
     scale: float | None = None,
+    enable_gqa: bool = False,
 ) -> Tensor:
     r"""Scaled dot-product attention — the core of every Transformer block.
 
@@ -174,11 +227,17 @@ def scaled_dot_product_attention(
         ``0..i`` — so decoding against a KV cache wants an explicit mask.
     scale : float, optional
         Override the default :math:`1/\sqrt{d_k}` scale factor.
+    enable_gqa : bool, optional
+        Grouped-query attention: ``key`` and ``value`` may have fewer heads
+        than ``query``, as long as theirs divides its; each key / value head
+        then serves that many consecutive query heads.  Default ``False``.
 
     Returns
     -------
     Tensor
-        Attention output of shape ``(B, H, T, V)``.
+        Attention output of shape ``(B, H, T, V)``.  The leading axes of
+        ``query``, ``key`` and ``value`` broadcast against each other, so a
+        ``key`` of batch ``1`` serves every query in the batch.
 
     Notes
     -----
@@ -203,6 +262,7 @@ def scaled_dot_product_attention(
 
     import lucid as _lucid
 
+    query, key, value = _attention_operands(query, key, value, enable_gqa)
     if query.is_metal and query.ndim != 4 and key.ndim == value.ndim == query.ndim:
         # Metal's fused attention takes (B, H, L, D) and nothing else, and
         # raised "expected to be rank 4" on the (B, L, D) that MobileNet-v4's

@@ -11,7 +11,6 @@ ValueError, the module door and the engine entry.  An empty batch
 and is compared against the reference: shapes, values and gradients.
 """
 
-import re
 from types import ModuleType
 
 import numpy as np
@@ -122,16 +121,6 @@ def test_engine_lstm_refuses_empty_sequence(device: str, requires_grad: bool) ->
 # ── B == 0 runs, as in the reference ─────────────────────────────────────────
 
 
-def _flat_name(name: str) -> str:
-    """A cell-module parameter name (``cell_l0_reverse.weight_ih``) in the
-    reference's flat layout (``weight_ih_l0_reverse``)."""
-    match = re.fullmatch(r"cell_l(\d+)(_reverse)?\.(\w+)", name)
-    if match is None:
-        return name
-    layer, reverse, param = match.groups()
-    return f"{param}_l{layer}{reverse or ''}"
-
-
 def _run_empty_batch(
     fw: ModuleType, kind: str, layout: str, device: str
 ) -> dict[str, object]:
@@ -163,7 +152,7 @@ def _run_empty_batch(
         "out": out,
         "states": states,
         "leaf_grads": {name: leaf.grad for name, leaf in leaves.items()},
-        "param_grads": {_flat_name(n): p.grad for n, p in module.named_parameters()},
+        "param_grads": {n: p.grad for n, p in module.named_parameters()},
     }
 
 

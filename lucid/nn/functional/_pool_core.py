@@ -10,7 +10,8 @@ read by :mod:`lucid.nn.functional._spatial_args`.
 
 import itertools
 import math
-from collections.abc import Callable
+import struct
+from collections.abc import Callable, Sequence
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -22,6 +23,7 @@ from lucid.nn.functional._spatial_args import (
     _add_batch_axis,
     _drop_batch_axis,
     _ntuple,
+    _require_positive,
 )
 
 _MAX_POOL: dict[int, Callable[..., _C_engine.TensorImpl]] = {
@@ -195,8 +197,26 @@ def _avg_pool(
     return _drop_batch_axis(out, unbatched)
 
 
+def _adaptive_size(
+    output_size: int | tuple[int | None, ...], spatial: tuple[int, ...], op: str
+) -> tuple[int, ...]:
+    """``output_size`` per spatial axis; ``None`` keeps that axis's extent."""
+    n = len(spatial)
+    if isinstance(output_size, int):
+        return (output_size,) * n
+    sizes = tuple(output_size)
+    if len(sizes) != n:
+        raise ValueError(
+            f"{op}: expected output_size to be a single integer or {n} entries, "
+            f"got {output_size!r}"
+        )
+    return tuple(
+        e if v is None else int(v) for v, e in zip(sizes, spatial, strict=True)
+    )
+
+
 def _adaptive_pool(
-    x: Tensor, output_size: int | tuple[int, ...], n: int, reduce: str
+    x: Tensor, output_size: int | tuple[int | None, ...], n: int, reduce: str
 ) -> Tensor:
     """The one body of the ``adaptive_{avg,max}_pool{1,2,3}d`` values.
 
@@ -207,8 +227,8 @@ def _adaptive_pool(
     """
     op = f"adaptive_{'avg' if reduce == 'mean' else 'max'}_pool{n}d"
     xb, unbatched = _add_batch_axis(x, n)
-    sizes = _ntuple(output_size, n, op, "output_size")
     spatial = tuple(int(s) for s in xb.shape[-n:])
+    sizes = _adaptive_size(output_size, spatial, op)
     if all(i % o == 0 for i, o in zip(spatial, sizes, strict=True)):
         out = _wrap(_ADAPTIVE_POOL[(reduce, n)](_unwrap(xb), *sizes))
     else:
@@ -217,7 +237,7 @@ def _adaptive_pool(
 
 
 def _adaptive_max_pool(
-    x: Tensor, output_size: int | tuple[int, ...], n: int, return_indices: bool
+    x: Tensor, output_size: int | tuple[int | None, ...], n: int, return_indices: bool
 ) -> Tensor | tuple[Tensor, Tensor]:
     """:func:`_adaptive_pool` for max, with the argmax when it is asked for."""
     out = _adaptive_pool(x, output_size, n, "max")
@@ -226,3 +246,152 @@ def _adaptive_max_pool(
     xb, unbatched = _add_batch_axis(x, n)
     sizes = tuple(int(v) for v in out.shape[-n:])
     return out, _drop_batch_axis(_adaptive_argmax_indices(xb, sizes), unbatched)
+
+
+def _round32(v: float) -> float:
+    """``v`` rounded to single precision, as a ``float`` kernel holds it."""
+    return float(struct.unpack("f", struct.pack("f", v))[0])
+
+
+def _frac_pool_starts(
+    size: int, kernel: int, out_size: int, sample: float, single: bool
+) -> list[int]:
+    """Fractional window starts on one axis (Graham 2014 §3), as the reference.
+
+    ``alpha = (size - kernel) / (out_size - 1)`` and
+    ``start[i] = floor((i + u) * alpha) - floor(u * alpha)``; the last window
+    ends flush with the input.  The arithmetic is in the input's precision
+    (``single``), as the reference's kernel does it: a start that lands
+    near an integer rounds the same way.
+    """
+    if out_size == 1:
+        return [size - kernel]
+    r = _round32 if single else float
+    alpha = r(r(size - kernel) / r(out_size - 1))
+    base = int(r(sample * alpha))
+    starts = [int(r(r(i + sample) * alpha)) - base for i in range(out_size - 1)]
+    return [*starts, size - kernel]
+
+
+def _fractional_output_size(
+    output_size: int | Sequence[int] | None,
+    output_ratio: float | Sequence[float] | None,
+    spatial: tuple[int, ...],
+    kernel: tuple[int, ...],
+    op: str,
+) -> tuple[int, ...]:
+    """The pooled extent per axis, from ``output_size`` or ``output_ratio``."""
+    n = len(spatial)
+    if (output_size is None) == (output_ratio is None):
+        raise ValueError(f"{op}: give exactly one of output_size and output_ratio")
+    if output_size is not None:
+        out = _ntuple(output_size, n, op, "output_size")
+    else:
+        assert output_ratio is not None
+        ratios = (
+            (float(output_ratio),) * n
+            if isinstance(output_ratio, (int, float))
+            else tuple(float(r) for r in output_ratio)
+        )
+        if len(ratios) != n or not all(0.0 < r < 1.0 for r in ratios):
+            raise ValueError(
+                f"{op}: output_ratio must be {n} numbers in (0, 1), got {output_ratio!r}"
+            )
+        out = tuple(max(1, int(s * r)) for s, r in zip(spatial, ratios, strict=True))
+    for o, k, s in zip(out, kernel, spatial, strict=True):
+        if o < 1 or o + k - 1 > s:
+            raise ValueError(
+                f"{op}: output_size {out} with kernel_size {kernel} does not fit "
+                f"an input of {spatial}"
+            )
+    return out
+
+
+def _fractional_plane(
+    plane: Tensor, starts: list[list[int]], kernel: tuple[int, ...]
+) -> tuple[Tensor, Tensor]:
+    """One ``(*spatial)`` plane's window maxima and their flat input positions."""
+    n = len(kernel)
+    spatial = tuple(int(v) for v in plane.shape)
+    out = tuple(len(s) for s in starts)
+    windows = plane
+    for d in range(n):
+        taps = [s + k for s in starts[d] for k in range(kernel[d])]
+        rows = _lucid.tensor(taps, dtype=_lucid.int64, device=plane.device)
+        windows = windows.index_select(2 * d, rows)
+        windows = windows.reshape(
+            *windows.shape[: 2 * d], out[d], kernel[d], *spatial[d + 1 :]
+        )
+    order = [2 * d for d in range(n)] + [2 * d + 1 for d in range(n)]
+    flat = windows.permute(order).reshape(*out, math.prod(kernel))
+    local = _lucid.argmax(flat, dim=-1)
+    index = None
+    for d in range(n):
+        shape = [1] * n
+        shape[d] = out[d]
+        origin = _lucid.tensor(starts[d], dtype=_lucid.int64, device=plane.device)
+        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d]
+        coord = offset + origin.reshape(*shape)
+        index = coord if index is None else index * spatial[d] + coord
+    assert index is not None
+    return flat.max(dim=-1), index
+
+
+def _fractional_max_pool(
+    x: Tensor,
+    kernel_size: int | Sequence[int],
+    output_size: int | Sequence[int] | None,
+    output_ratio: float | Sequence[float] | None,
+    return_indices: bool,
+    samples: Tensor | None,
+    n: int,
+) -> Tensor | tuple[Tensor, Tensor]:
+    """The one body of ``fractional_max_pool{2,3}d`` and their modules."""
+    op = f"fractional_max_pool{n}d"
+    xb, unbatched = _add_batch_axis(x, n)
+    if xb.ndim != n + 2:
+        raise ValueError(
+            f"{op}: expected a {n + 2}-D or unbatched {n + 1}-D input, "
+            f"got shape {tuple(x.shape)}"
+        )
+    kernel = _ntuple(kernel_size, n, op, "kernel_size")
+    _require_positive(kernel, op, "kernel_size")
+    spatial = tuple(int(v) for v in xb.shape[2:])
+    out = _fractional_output_size(output_size, output_ratio, spatial, kernel, op)
+    batch, channels = int(xb.shape[0]), int(xb.shape[1])
+    if samples is None:
+        samples = _lucid.rand(batch, channels, n, dtype=xb.dtype, device=xb.device)
+    if tuple(samples.shape) != (batch, channels, n):
+        raise ValueError(
+            f"{op}: _random_samples must have shape {(batch, channels, n)}, "
+            f"got {tuple(samples.shape)}"
+        )
+    # The reference reads a 2-D sample as (width, height) and a 3-D one as
+    # (depth, height, width).
+    axis_sample = (1, 0) if n == 2 else tuple(range(n))
+    single = xb.dtype != _lucid.float64
+    values: list[Tensor] = []
+    indices: list[Tensor] = []
+    # One host read for every sample, not one per plane.
+    flat = samples.reshape(-1).tolist()
+    assert isinstance(flat, list)
+    u = [float(v) for v in flat if isinstance(v, (int, float))]
+    for b in range(batch):
+        for c in range(channels):
+            at = (b * channels + c) * n
+            starts = [
+                _frac_pool_starts(
+                    spatial[d], kernel[d], out[d], u[at + axis_sample[d]], single
+                )
+                for d in range(n)
+            ]
+            value, index = _fractional_plane(xb[b, c], starts, kernel)
+            values.append(value)
+            indices.append(index)
+    result = _drop_batch_axis(
+        _lucid.stack(values).reshape(batch, channels, *out), unbatched
+    )
+    if not return_indices:
+        return result
+    where = _lucid.stack(indices).reshape(batch, channels, *out)
+    return result, _drop_batch_axis(where, unbatched)
