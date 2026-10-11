@@ -264,16 +264,42 @@ def _untraced(tracer: object) -> Iterator[None]:
         _C_engine.compile.set_current_tracer(tracer)
 
 
+#: The dtypes a gradient can flow through — eager never tracks an integer
+#: or bool value.  The backward walker's ``carries_gradient`` is the same rule.
+_GRADIENT_DTYPES = frozenset(
+    {
+        _C_engine.Dtype.F16,
+        _C_engine.Dtype.BF16,
+        _C_engine.Dtype.F32,
+        _C_engine.Dtype.F64,
+        _C_engine.Dtype.C64,
+        _C_engine.Dtype.C128,
+    }
+)
+
+
 def _loss_ancestors(graph: object, loss_id: int) -> set[int]:
-    """Every trace id the tensor ``loss_id`` depends on (itself included).
+    """Every trace id a gradient of ``loss_id`` flows back to (itself included).
 
     One reverse walk over the ops recorded so far — the forward and the
-    loss, since the optimizer update has not been traced yet.
+    loss, since the optimizer update has not been traced yet.  The walk
+    stops where the backward walker (``VjpEmitter.mm``) does: at a gradient
+    sink (``detach``, a comparison, a factory) and at an op with no
+    floating result (a cast to an integer).  A parameter seen only through
+    one gets no gradient, so eager leaves its ``grad`` None and the
+    optimizer skips it.
     """
+    sink = _C_engine.compile.VjpRegistration.GradSink
+    status = _C_engine.compile.vjp_registration_status
     needed = {loss_id}
     for node in reversed(graph.ops):  # type: ignore[attr-defined]
-        if any(int(meta.id) in needed for meta in node.outputs):
-            needed.update(int(i) for i in node.inputs if int(i) >= 0)
+        if not any(int(meta.id) in needed for meta in node.outputs):
+            continue
+        if status(node.name) == sink or not any(
+            meta.dtype in _GRADIENT_DTYPES for meta in node.outputs
+        ):
+            continue
+        needed.update(int(i) for i in node.inputs if int(i) >= 0)
     return needed
 
 

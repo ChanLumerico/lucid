@@ -249,17 +249,6 @@ public:
     }
 };
 
-// detach: the value, with no gradient back to its input.  Registered so
-// the walker reaches it and stops there; MPSGraph's autodiff, which would
-// differentiate straight through the identity, is not on its safe list.
-class DetachVjp final : public VjpEmitter {
-public:
-    std::string_view op_name() const override { return "detach"; }
-    bool emit(BackwardContext&, const OpNode&, const std::vector<void*>&) override {
-        return true;
-    }
-};
-
 // meshgrid: output k is input k broadcast along every axis but its own, so
 // its gradient is output k's gradient summed over those axes.
 class MeshgridVjp final : public VjpEmitter {
@@ -300,7 +289,6 @@ struct ReorderVjpRegistrar {
         register_vjp_emitter(std::make_unique<ScatterAddVjp>());
         register_vjp_emitter(std::make_unique<ScatterSetVjp>());
         register_vjp_emitter(std::make_unique<RepeatVjp>());
-        register_vjp_emitter(std::make_unique<DetachVjp>());
         register_vjp_emitter(std::make_unique<MeshgridVjp>());
     }
 };

@@ -881,3 +881,89 @@ def test_the_builder_refuses_a_gradient_off_the_loss_path() -> None:
     assert out.startswith("refused:"), out
     assert "does not reach the loss" in out, out
     assert "param id" in out, out
+
+
+# ── LCD-213: a parameter seen only through a non-differentiable op ──
+
+#: Ways a parameter can reach the loss with no gradient flowing back: eager
+#: leaves its ``grad`` None and the optimizer skips it.  ``mixed`` also
+#: uses it directly, so it does get a gradient — the stop is per edge.
+GATES: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
+    "detach": lambda g: g.detach(),
+    "comparison": lambda g: (g > 0).to(lucid.float32),
+    "detach_then_comparison": lambda g: (g.detach() > 0).to(lucid.float32),
+    "integer_cast": lambda g: g.to(lucid.int32).to(lucid.float32),
+    "mixed": lambda g: g.detach() + g,
+}
+
+
+class _Gated(nn.Module):
+    def __init__(self, gate: str) -> None:
+        super().__init__()
+        self.fc = nn.Linear(6, 3)
+        self.gate = nn.Parameter(lucid.full((1,), 1.5))
+        self._through = GATES[gate]
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.fc(x) * self._through(self.gate)
+
+
+GATED_OPTS = [
+    pytest.param(
+        lambda m: optim.SGD(m.parameters(), lr=0.1, momentum=0.9, weight_decay=0.1),
+        id="SGD",
+    ),
+    pytest.param(
+        lambda m: optim.AdamW(m.parameters(), lr=0.05, weight_decay=0.1), id="AdamW"
+    ),
+]
+
+
+@pytest.mark.parametrize("make_opt", GATED_OPTS)
+@pytest.mark.parametrize("gate", sorted(GATES))
+def test_fused_step_skips_a_parameter_with_no_gradient(
+    gate: str, make_opt: OptFactory
+) -> None:
+    """Used to raise "manual_vjp: no gradient produced for param id …": the
+    reach test followed data, through ``detach`` and comparisons alike.
+    Weight decay and momentum move a parameter fed a zero gradient, so only
+    skipping it, as eager does, keeps the two runs together."""
+
+    def make() -> tuple[_Gated, optim.Optimizer]:
+        lucid.manual_seed(0)
+        m = _Gated(gate).to(COMPILE_DEVICE)
+        return m, make_opt(m)
+
+    x, t = _data()
+    em, eo = make()
+    cm, co = make()
+    step = fused_step(cm, F.mse_loss, co)
+    for _ in range(STEPS):
+        eo.zero_grad()
+        F.mse_loss(em(x), t).backward()
+        eo.step()
+        step(x, t)
+    assert (em.gate.grad is None) == (gate != "mixed")
+    assert _drift(_snapshot(em), _snapshot(cm)) < TOL
+    assert sorted(co.state_dict()["state"]) == sorted(eo.state_dict()["state"])
+
+
+@pytest.mark.parametrize("gate", sorted(GATES))
+def test_make_step_leaves_a_gradient_none_where_eager_does(gate: str) -> None:
+    """The backward walker under ``make_step``: an integer cast used to pass a
+    truncated gradient back to the float it came from."""
+    lucid.manual_seed(0)
+    model = _Gated(gate).to(COMPILE_DEVICE)
+    x, t = _data()
+    F.mse_loss(model(x), t).backward()
+    eager = [
+        None if p.grad is None else p.grad.detach().clone() for p in model.parameters()
+    ]
+    model.zero_grad()
+    for p in model.parameters():
+        p.grad = None
+    lucid.compile.make_step(model, F.mse_loss)(x, t).backward()
+    for want, p in zip(eager, model.parameters(), strict=True):
+        assert (p.grad is None) == (want is None)
+        if want is not None:
+            assert float((p.grad - want).abs().max().item()) < TOL

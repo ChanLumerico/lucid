@@ -59,8 +59,25 @@ const std::unordered_set<std::string>& no_grad_ops() {
         "isfinite",
         // argmax / argmin produce integer indices — also grad-sinks.
         "argmax",       "argmin",
+        // detach — the value, cut from its input's gradient.  A sink
+        // rather than a no-op VJP so fused_step's reach test, which reads
+        // this set through ``vjp_registration_status``, leaves a parameter
+        // seen only through it out of the update, as eager leaves its grad
+        // None.  MPSGraph's autodiff would differentiate straight through
+        // the identity, so it stays off that fallback's safe list.
+        "detach",
     };
     return s;
+}
+
+// Whether a gradient can flow back through ``node``: some result is a
+// floating or complex value.  fused_step's reach test
+// (``lucid/compile/_entry/fused_step.py``) applies the same rule.
+bool carries_gradient(const OpNode& node) {
+    for (const auto& om : node.outputs)
+        if (is_floating_point(om.dtype) || is_complex(om.dtype))
+            return true;
+    return false;
 }
 
 }  // namespace
@@ -331,8 +348,11 @@ bool BackwardWalker::compute_grads(TensorId loss_id,
         }
         if (!any_demand) continue;  // no path from loss touches this op
 
-        // Grad-sink ops (factories, etc.) don't propagate.
-        if (sink.find(node.name) != sink.end())
+        // Grad-sink ops (factories, etc.) don't propagate, and nor does an
+        // op none of whose results can hold a gradient: eager never tracks
+        // an integer or bool value, so a float cast to int32 and back
+        // reaches its input with no gradient, not a truncated one.
+        if (sink.find(node.name) != sink.end() || !carries_gradient(node))
             continue;
 
         VjpEmitter* vjp = find_vjp_emitter(node.name);
