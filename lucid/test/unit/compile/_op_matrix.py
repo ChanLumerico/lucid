@@ -306,8 +306,8 @@ def _cases() -> list[Case]:
     add("invert", lambda t: ~t, dtypes=("i64", "i32", "bool"))
     add("bitwise_or", lambda t: t | t.flip([0]), dtypes=("i64", "i32", "bool"))
     add("bitwise_xor", lambda t: t ^ t.flip([0]), dtypes=("i64", "i32", "bool"))
-    add("shift_left", lambda t: t << (t.flip([0]).abs() % 4), dtypes=("i64", "i32"))
-    add("shift_right", lambda t: t >> (t.flip([0]).abs() % 4), dtypes=("i64", "i32"))
+    add("shift_left", lambda t: t << t.flip([0]).abs().clamp(max=3), dtypes=("i64", "i32"))
+    add("shift_right", lambda t: t >> t.flip([0]).abs().clamp(max=3), dtypes=("i64", "i32"))
     add("shift_right_scalar", lambda t: t >> 1, dtypes=("i64", "i32"))
 
     # ── reductions
@@ -391,7 +391,7 @@ def _cases() -> list[Case]:
             lucid.zeros_like(t), 1, _idx(5, 4, 3, 2, 1, 0).reshape(1, 6).expand(4, 6), t
         ),
         "unfold_dim": lambda t: t.unfold(1, 3, 2) * 1,
-        "one_hot": lambda t: F.one_hot(t.abs() % 5, 5),
+        "one_hot": lambda t: F.one_hot(t.abs().clamp(max=4), 5),
         "meshgrid": lambda t: lucid.meshgrid(t[0], t[1], indexing="ij"),
         # Unequal lengths, or the xy axis swap would be invisible.
         "meshgrid_xy": lambda t: lucid.meshgrid(t[0][:3], t[1], indexing="xy"),
@@ -649,7 +649,9 @@ def _cases() -> list[Case]:
         dtypes=fo,
     )
     add(
-        "embedding", lambda t: F.embedding(t.abs() % 5, _w(5, 3)), dtypes=("i64", "i32")
+        "embedding",
+        lambda t: F.embedding(t.abs().clamp(max=4), _w(5, 3)),
+        dtypes=("i64", "i32"),
     )
     add("cross_entropy", lambda t: F.cross_entropy(t, _idx(0, 5, 2, 1)), dtypes=fo)
     add(
@@ -710,6 +712,12 @@ _NO_I64_SQUARE = "MPSGraph has no int64 square kernel (``x * x`` is folded into 
 _INT_MATMUL = "MPSGraph's matmul aborts on integers, so the emitter declines"
 _BOOL_SUM = "MPSGraph cannot sum bool exactly (_DataMovement.h), so it declines"
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
+# ``remainder`` and ``fmod`` are exact engine kernels now (LCD-159), and the
+# compile backend has no emitter for either yet.  The fallback answers
+# eagerly, so the value is still exact.  Other cases bound an index or an
+# exponent with ``clamp`` rather than ``%`` so they keep testing their own
+# op while this stands.
+_NO_DIVMOD_EMITTER = "LCD-444: no MPSGraph emitter for remainder / fmod yet"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("square", "i64"): _NO_I64_SQUARE,
     ("astype_f32", "f32"): _NO_OPS,
@@ -724,6 +732,11 @@ EXPECTED_EAGER: dict[tuple[str, str], str] = {
     # An integer inner product runs as ``A @ B^T``: no kernel takes integers.
     ("inner", "i64"): _INT_MATMUL,
     ("inner", "i32"): _INT_MATMUL,
+    **{
+        (name, dtype): _NO_DIVMOD_EMITTER
+        for name in ("remainder", "fmod")
+        for dtype in ("f32", "i64", "i32", "bool")
+    },
 }
 
 
