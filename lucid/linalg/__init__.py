@@ -3187,80 +3187,6 @@ def _householder_product_differentiable(H: Tensor, tau: Tensor) -> Tensor:
     return Q
 
 
-def ldl_factor(
-    A: Tensor,
-    hermitian: bool = True,
-) -> tuple[Tensor, Tensor]:
-    r"""LDL factorization of a symmetric (or Hermitian) matrix.
-
-    For a real symmetric matrix :math:`A` (possibly indefinite),
-    computes a Bunch-Kaufman block factorization
-
-    .. math::
-
-        A \,=\, L\,D\,L^\top,
-
-    where :math:`L` is unit-lower-triangular and :math:`D` is
-    block-diagonal with :math:`1 \times 1` or :math:`2 \times 2`
-    blocks.  Unlike :func:`cholesky`, this factorization exists for
-    *indefinite* symmetric matrices (e.g., saddle-point systems).
-
-    Parameters
-    ----------
-    A : Tensor
-        Symmetric / Hermitian matrix of shape ``(*, n, n)``.
-    hermitian : bool, optional
-        If ``True`` (default), treat ``A`` as Hermitian (conjugate
-        symmetric in the complex case).
-
-    Returns
-    -------
-    LD : Tensor
-        Packed factor of shape ``(*, n, n)``.  The strict lower
-        triangle holds :math:`L`; the diagonal holds :math:`D`'s
-        entries (:math:`2 \times 2` blocks are stored in the
-        sub-diagonal).  The strict upper triangle is zero.
-    pivots : Tensor
-        ``int32`` pivot indices, shape ``(*, n)``, 1-based (LAPACK
-        convention).  A positive entry :math:`p` at :math:`k` marks a
-        :math:`1 \times 1` block, with row :math:`k` interchanged with
-        row :math:`p`; a pair of equal negative entries :math:`-p` at
-        :math:`k, k+1` marks a :math:`2 \times 2` block, with row
-        :math:`k+1` interchanged with row :math:`p`.
-
-    Notes
-    -----
-    Backed by LAPACK ``sytrf``.  Cost is :math:`O(n^3 / 3)`.  Pair
-    with :func:`ldl_solve` for solving symmetric indefinite systems.
-
-    ``sytrf`` writes the factor into the lower triangle and leaves the
-    upper one as it found it — the input's own entries.  Those are
-    cleared here, so ``LD`` holds the factorization and nothing else.
-
-    Raises
-    ------
-    LinAlgError
-        If a :math:`1 \times 1` block of :math:`D` is exactly zero — the
-        factorization completes, but :math:`D` is singular.
-        :func:`ldl_factor_ex` returns it with a non-zero ``info`` instead.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.linalg import ldl_factor
-    >>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
-    >>> LD, piv = ldl_factor(A)
-    >>> LD
-    tensor([[4., 0.], [0.25, 2.75]])
-    >>> piv
-    tensor([1, 2], dtype=lucid.int32)
-    """
-    LD, pivots, _ = _ldl_factor_ex(
-        A, hermitian=hermitian, check_errors=True, op="ldl_factor"
-    )
-    return LD, pivots
-
-
 # ── Full LU decomposition (P, L, U) ────────────────────────────────────────
 
 
@@ -3880,10 +3806,10 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
-    _ldl_factor_ex,
     _lu_factor_ex,
     cholesky_ex,
     inv_ex,
+    ldl_factor,
     ldl_factor_ex,
     lu_factor_ex,
     solve_ex,

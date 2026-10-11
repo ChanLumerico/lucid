@@ -175,11 +175,9 @@ def test_cholesky_ex_keeps_the_factors_that_succeeded(device: str, ref: Any) -> 
     out, info = LA.cholesky_ex(lucid.tensor(a, device=device))
     rout, rinfo = ref.linalg.cholesky_ex(ref.tensor(a))
     assert _np(info).tolist() == rinfo.numpy().tolist() == [0, 2, 0]
-    ok = [0, 2]
-    np.testing.assert_allclose(
-        _np(out)[ok], rout.numpy()[ok], rtol=_rtol(device), atol=1e-6
-    )
-    np.testing.assert_array_equal(_np(out)[1], np.zeros((2, 2)))
+    # The failed matrix holds LAPACK's partial factor, as the reference's
+    # does (LCD-395); it used to be zero-filled.
+    np.testing.assert_allclose(_np(out), rout.numpy(), rtol=_rtol(device), atol=1e-6)
 
 
 @pytest.mark.parity

@@ -4,16 +4,17 @@
 ``ldl_factor_ex`` report a matrix the routine could not factor through an
 ``int32`` ``info`` code — LAPACK's own number for it — and raise
 :class:`LinAlgError` only under ``check_errors=True``.  ``lu_factor`` and
-``ldl_factor`` are the checked forms of the last two.  Re-exported by
-:mod:`lucid.linalg`, which owns the factorisations they wrap.
+``ldl_factor`` are the checked forms of the last two; ``ldl_factor`` lives
+here beside its variant.  Re-exported by :mod:`lucid.linalg`, which owns
+the factorisations they wrap.
 """
 
 from collections.abc import Callable
 
 import lucid
+from lucid._deprecation import warn_deprecated
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
-from lucid._unsupported import unsupported_if
 from lucid.linalg import (
     LinAlgError,
     _la,
@@ -21,6 +22,7 @@ from lucid.linalg import (
     cholesky,
     inv,
     solve,
+    solve_triangular,
 )
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
@@ -180,6 +182,49 @@ def _on_the_rest(fn: Callable[[Tensor], Tensor], A: Tensor, info: Tensor) -> Ten
     return lucid.where(failed.reshape(*batch, *trailing), lucid.zeros_like(out), out)
 
 
+def _partial_cholesky(M: Tensor, order: int, upper: bool) -> Tensor:
+    """LAPACK's partial factor of the matrix ``M`` whose minor ``order`` failed.
+
+    The columns before the failed minor (rows, for ``upper``) hold the
+    factor of the leading block that succeeded; the rest of the triangle is
+    ``M``'s own entries, untouched — except that the upper routine writes
+    the reduced, non-positive pivot over the failed diagonal, as LAPACK's
+    upper ``potrf`` does and the lower one does not.  Real input only, as
+    :func:`cholesky` is.
+    """
+    done = order - 1
+    if upper:
+        U = _partial_cholesky(M.mT, order, False).mT
+        U[done, done] = M[done, done] - (U[:done, done] * U[:done, done]).sum()
+        return U
+    lower = lucid.tril(M)
+    if done == 0:
+        return lower
+    L11 = cholesky(M[:done, :done])
+    L21 = solve_triangular(L11, M[done:, :done].mT, upper=False).mT
+    return lucid.cat([lucid.cat([L11, L21]), lower[:, done:]], dim=1)
+
+
+def _with_partial_factors(out: Tensor, A: Tensor, info: Tensor, upper: bool) -> Tensor:
+    """``out`` with each failed matrix's zeros replaced by its partial factor.
+
+    Taken without a gradient: the failed matrices received none before, and
+    a partial factor is not a function the caller asked to differentiate.
+    """
+    n = int(A.shape[-1])
+    with lucid.no_grad():
+        flat = A.detach().reshape(-1, n, n)
+        codes = [int(c.item()) for c in info.reshape(-1)]
+        partials = lucid.stack(
+            [
+                _partial_cholesky(flat[b], code, upper) if code else flat[b]
+                for b, code in enumerate(codes)
+            ]
+        ).reshape(*out.shape)
+    failed = (info != 0).reshape(*info.shape, 1, 1)
+    return lucid.where(failed, partials, out)
+
+
 def cholesky_ex(
     A: Tensor,
     *,
@@ -194,7 +239,7 @@ def cholesky_ex(
 
     * ``info == 0`` — success; :math:`L` (or :math:`U`) is meaningful.
     * ``info == k > 0`` — the leading minor of order :math:`k` is not
-      positive-definite; that matrix's factor is zero-filled.
+      positive-definite; that matrix's factor is LAPACK's partial one.
 
     Parameters
     ----------
@@ -210,8 +255,10 @@ def cholesky_ex(
     Returns
     -------
     L : Tensor
-        Cholesky factor of shape ``(*, n, n)`` — zeros for the matrices
-        that failed.
+        Cholesky factor of shape ``(*, n, n)``.  For a matrix that failed
+        at order :math:`k`, the first :math:`k - 1` columns (rows, for
+        ``upper``) are the factor of its leading block that succeeded, and
+        the rest of the triangle is the input's own, as LAPACK leaves it.
     info : Tensor
         ``int32`` status, scalar or shape ``(*,)`` matching the batch
         of ``A``.
@@ -246,7 +293,8 @@ def cholesky_ex(
     info = _potrf_info(A, upper)
     if check_errors:
         _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
-    return _on_the_rest(lambda M: cholesky(M, upper=upper), A, info), info
+    out = _on_the_rest(lambda M: cholesky(M, upper=upper), A, info)
+    return _with_partial_factors(out, A, info, upper), info
 
 
 def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
@@ -442,10 +490,98 @@ def _lu_factor_ex(
     return LU, pivots, info
 
 
+def ldl_factor(
+    A: Tensor,
+    *positional: bool,
+    hermitian: bool = False,
+) -> tuple[Tensor, Tensor]:
+    r"""LDL factorization of a symmetric (or Hermitian) matrix.
+
+    For a real symmetric matrix :math:`A` (possibly indefinite),
+    computes a Bunch-Kaufman block factorization
+
+    .. math::
+
+        A \,=\, L\,D\,L^\top,
+
+    where :math:`L` is unit-lower-triangular and :math:`D` is
+    block-diagonal with :math:`1 \times 1` or :math:`2 \times 2`
+    blocks.  Unlike :func:`cholesky`, this factorization exists for
+    *indefinite* symmetric matrices (e.g., saddle-point systems).
+
+    Parameters
+    ----------
+    A : Tensor
+        Symmetric / Hermitian matrix of shape ``(*, n, n)``.
+    hermitian : bool, keyword-only, optional
+        Whether a complex ``A`` is Hermitian rather than symmetric.  A real
+        ``A`` is both, so either value factors it the same.  Default
+        ``False``, as the reference's.  Passing it by position still works
+        and warns, until 3.18.0.
+
+    Returns
+    -------
+    LD : Tensor
+        Packed factor of shape ``(*, n, n)``.  The strict lower
+        triangle holds :math:`L`; the diagonal holds :math:`D`'s
+        entries (:math:`2 \times 2` blocks are stored in the
+        sub-diagonal).  The strict upper triangle is zero.
+    pivots : Tensor
+        ``int32`` pivot indices, shape ``(*, n)``, 1-based (LAPACK
+        convention).  A positive entry :math:`p` at :math:`k` marks a
+        :math:`1 \times 1` block, with row :math:`k` interchanged with
+        row :math:`p`; a pair of equal negative entries :math:`-p` at
+        :math:`k, k+1` marks a :math:`2 \times 2` block, with row
+        :math:`k+1` interchanged with row :math:`p`.
+
+    Notes
+    -----
+    Backed by LAPACK ``sytrf``.  Cost is :math:`O(n^3 / 3)`.  Pair
+    with :func:`ldl_solve` for solving symmetric indefinite systems.
+
+    ``sytrf`` writes the factor into the lower triangle and leaves the
+    upper one as it found it — the input's own entries.  Those are
+    cleared here, so ``LD`` holds the factorization and nothing else.
+
+    Raises
+    ------
+    LinAlgError
+        If a :math:`1 \times 1` block of :math:`D` is exactly zero — the
+        factorization completes, but :math:`D` is singular.
+        :func:`ldl_factor_ex` returns it with a non-zero ``info`` instead.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.linalg import ldl_factor
+    >>> A = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
+    >>> LD, piv = ldl_factor(A)
+    >>> LD
+    tensor([[4., 0.], [0.25, 2.75]])
+    >>> piv
+    tensor([1, 2], dtype=lucid.int32)
+    """
+    if positional:
+        if len(positional) > 1:
+            raise TypeError(
+                f"ldl_factor() takes 1 positional argument but {1 + len(positional)} "
+                "were given"
+            )
+        warn_deprecated(
+            "passing hermitian to ldl_factor() by position",
+            since="3.16.0",
+            removal="3.18.0",
+            alternative="ldl_factor(A, hermitian=...)",
+        )
+    del hermitian  # only real input is factored, where it changes nothing
+    LD, pivots, _ = _ldl_factor_ex(A, check_errors=True, op="ldl_factor")
+    return LD, pivots
+
+
 def ldl_factor_ex(
     A: Tensor,
     *,
-    hermitian: bool = True,
+    hermitian: bool = False,
     check_errors: bool = False,
 ) -> tuple[Tensor, Tensor, Tensor]:
     r"""LDL factorization with an explicit status.
@@ -465,7 +601,7 @@ def ldl_factor_ex(
     A : Tensor
         Symmetric / Hermitian matrix of shape ``(*, n, n)``.
     hermitian : bool, keyword-only, optional
-        As :func:`ldl_factor`.  Default ``True``.
+        As :func:`ldl_factor`.  Default ``False``.
     check_errors : bool, keyword-only, optional
         If ``True``, raise :class:`LinAlgError` for the first failed matrix
         instead of reporting it through ``info``.
@@ -486,23 +622,17 @@ def ldl_factor_ex(
     >>> int(info)
     1
     """
-    return _ldl_factor_ex(
-        A, hermitian=hermitian, check_errors=check_errors, op="ldl_factor_ex"
-    )
+    del hermitian  # only real input is factored, where it changes nothing
+    return _ldl_factor_ex(A, check_errors=check_errors, op="ldl_factor_ex")
 
 
 def _ldl_factor_ex(
-    A: Tensor, *, hermitian: bool, check_errors: bool, op: str
+    A: Tensor, *, check_errors: bool, op: str
 ) -> tuple[Tensor, Tensor, Tensor]:
     """``(LD, pivots, info)``, ``info`` being ``sytrf``'s own code from the
-    kernel; ``check_errors`` raises for the first matrix it marks."""
-    unsupported_if(
-        not hermitian,
-        op,
-        "hermitian",
-        hermitian,
-        detail="Only the Hermitian case is computed.",
-    )
+    kernel; ``check_errors`` raises for the first matrix it marks.  The
+    kernel takes real input only, for which symmetric and Hermitian are one
+    and the same, so ``hermitian`` has nothing to choose here."""
     ld_impl, piv_impl, info_impl = _la.ldl_factor(_unwrap(A))
     LD, pivots, info = lucid.tril(_wrap(ld_impl)), _wrap(piv_impl), _wrap(info_impl)
     if check_errors:

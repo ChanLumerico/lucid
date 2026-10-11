@@ -1,0 +1,99 @@
+"""``ldl_factor``'s ``hermitian`` and ``cholesky_ex``'s partial factor (LCD-395).
+
+``ldl_factor(A, hermitian=True)`` took ``hermitian`` by position and
+refused ``False``; the reference's is ``(A, *, hermitian=False)``, and for
+a real ``A`` the flag changes nothing.  ``cholesky_ex`` zero-filled a
+matrix that failed, where the reference returns LAPACK's partial factor.
+"""
+
+import inspect
+import warnings
+from types import ModuleType
+
+import pytest
+
+import lucid
+import lucid.linalg as LA
+from lucid._deprecation import LucidDeprecationWarning
+
+_FAILING = [
+    [[1.0, 2.0], [2.0, 1.0]],
+    [[-1.0, 0.0], [0.0, 1.0]],
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]],
+    [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+    [[float("nan"), 0.0], [0.0, 4.0]],
+    [
+        [4.0, 2.0, 1.0, 1.0],
+        [2.0, 5.0, 3.0, 1.0],
+        [1.0, 3.0, 1.0, 2.0],
+        [1.0, 1.0, 2.0, 6.0],
+    ],
+    [
+        [1.0, 2.0, 1.0, 1.0],
+        [2.0, 1.0, 3.0, 1.0],
+        [1.0, 3.0, 5.0, 2.0],
+        [1.0, 1.0, 2.0, 6.0],
+    ],
+]
+
+
+@pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
+@pytest.mark.parametrize("index", range(len(_FAILING)))
+def test_cholesky_ex_returns_the_partial_factor(
+    ref: ModuleType, device: str, upper: bool, index: int
+) -> None:
+    a = _FAILING[index]
+    got, info = LA.cholesky_ex(lucid.tensor(a, device=device), upper=upper)
+    want, rinfo = ref.linalg.cholesky_ex(ref.tensor(a), upper=upper)
+    assert int(info.item()) == int(rinfo.item()) != 0
+    assert ref.allclose(ref.tensor(got.tolist()), want, atol=1e-5, equal_nan=True)
+
+
+@pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
+def test_a_batch_mixes_full_and_partial_factors(
+    ref: ModuleType, device: str, upper: bool
+) -> None:
+    ok = [[4.0, 2.0], [2.0, 3.0]]
+    a = [ok, _FAILING[0], [[9.0, 3.0], [3.0, 5.0]], _FAILING[1]]
+    got, info = LA.cholesky_ex(lucid.tensor(a, device=device), upper=upper)
+    want, rinfo = ref.linalg.cholesky_ex(ref.tensor(a), upper=upper)
+    assert info.tolist() == rinfo.tolist() == [0, 2, 0, 1]
+    assert ref.allclose(ref.tensor(got.tolist()), want, atol=1e-5)
+
+
+def test_ldl_hermitian_is_keyword_only_and_off_by_default(ref: ModuleType) -> None:
+    for name in ("ldl_factor", "ldl_factor_ex"):
+        param = inspect.signature(getattr(LA, name)).parameters["hermitian"]
+        assert param.kind is inspect.Parameter.KEYWORD_ONLY
+        assert param.default is False
+    with pytest.raises(TypeError):
+        ref.linalg.ldl_factor(ref.eye(2), True)
+
+
+@pytest.mark.parametrize("hermitian", [False, True])
+def test_ldl_factors_a_real_matrix_either_way(
+    ref: ModuleType, device: str, hermitian: bool
+) -> None:
+    a = [[4.0, 1.0, -2.0], [1.0, -3.0, 0.5], [-2.0, 0.5, 1.0]]
+    want_ld, want_piv, want_info = ref.linalg.ldl_factor_ex(
+        ref.tensor(a), hermitian=hermitian
+    )
+    x = lucid.tensor(a, device=device)
+    for ld, piv in (
+        LA.ldl_factor(x, hermitian=hermitian),
+        LA.ldl_factor_ex(x, hermitian=hermitian)[:2],
+    ):
+        assert ref.allclose(ref.tensor(ld.tolist()), want_ld, atol=1e-5)
+        assert piv.tolist() == want_piv.tolist()
+    assert int(LA.ldl_factor_ex(x, hermitian=hermitian)[2].item()) == int(want_info)
+
+
+def test_hermitian_by_position_warns_until_its_removal() -> None:
+    a = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
+    with pytest.warns(LucidDeprecationWarning, match="hermitian=..."):
+        ld, _ = LA.ldl_factor(a, True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert ld.tolist() == LA.ldl_factor(a)[0].tolist()
+    with pytest.raises(TypeError, match="positional"):
+        LA.ldl_factor(a, True, False)
