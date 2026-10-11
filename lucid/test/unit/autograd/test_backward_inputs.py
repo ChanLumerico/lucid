@@ -127,11 +127,6 @@ def test_the_values(name: str, device: str) -> None:
     assert _SCENARIOS[name](lucid, device) == expected[name]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="engine: Engine::grad on a released graph finds no path and "
-    "reports the inputs unreachable instead of refusing the second pass",
-)
 def test_a_freed_graph_still_refuses_a_second_pass(device: str) -> None:
     a = lucid.ones(2, requires_grad=True, device=device)
     y = (a * a).sum()

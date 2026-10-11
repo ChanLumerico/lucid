@@ -58,8 +58,17 @@ void refuse_released(const Node& node) {
 // What a root keeps once its graph has been spent.  Clearing its grad_fn
 // instead made it look like a leaf, and a second backward() on the same
 // loss quietly wrote the seed into the loss's own .grad.
+//
+// Severing the root is what frees the graph, so this node is all that is
+// left of it: it carries the release marker, which refuses it wherever the
+// marker is checked, and the sequence numbers of the nodes the graph held,
+// which say where a gradient through it would have gone (``spent_reaches``).
 class SpentGraphNode final : public Node {
 public:
+    explicit SpentGraphNode(std::vector<std::uint64_t> held) : held_(std::move(held)) {
+        saved_versions_.reserve(1);
+    }
+
     std::vector<Storage> apply(Storage /*grad_out*/) override {
         refuse();
         return {};
@@ -74,17 +83,48 @@ public:
 
     std::string node_name() const override { return "SpentGraph"; }
 
+    // Whether ``node`` was part of the spent graph.  Matched by sequence
+    // number, unique for the life of the process, so a node made after the
+    // graph was freed is never taken for one of its own.
+    bool held(const Node& node) const {
+        return std::binary_search(held_.begin(), held_.end(), node.sequence_nr());
+    }
+
+    const std::vector<std::uint64_t>& held_sequence() const noexcept { return held_; }
+
 private:
     static void refuse() { ErrorBuilder("backward").fail(kSecondPass); }
+
+    std::vector<std::uint64_t> held_;
 };
 
+// ``node`` as a spent root, or null.  Only a spent root is both released and
+// edgeless, which a walk over every node of a graph tests before the cast.
+const SpentGraphNode* as_spent(const Node& node) {
+    if (!node.next_edges().empty() || !node.saved_released())
+        return nullptr;
+    return dynamic_cast<const SpentGraphNode*>(&node);
+}
+
 // Sever the root from the graph it just ran so the nodes can be freed.
-void release_root(const std::shared_ptr<TensorImpl>& root) {
+// ``order`` is that whole graph; a spent root inside it hands on what its
+// own graph held.
+void release_root(const std::shared_ptr<TensorImpl>& root,
+                  const std::vector<std::shared_ptr<Node>>& order) {
     if (root->is_leaf()) {
         root->clear_grad_fn();
         return;
     }
-    root->set_grad_fn(std::make_shared<SpentGraphNode>());
+    std::vector<std::uint64_t> held;
+    held.reserve(order.size());
+    for (const auto& node : order) {
+        held.push_back(node->sequence_nr());
+        if (const auto* spent = as_spent(*node))
+            held.insert(held.end(), spent->held_sequence().begin(), spent->held_sequence().end());
+    }
+    std::sort(held.begin(), held.end());
+    held.erase(std::unique(held.begin(), held.end()), held.end());
+    root->set_grad_fn(std::make_shared<SpentGraphNode>(std::move(held)));
 }
 
 // A gradient with a zero derivative of its own (see zero_derivative_through).
@@ -423,7 +463,7 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
     }
 
     if (!retain_graph)
-        release_root(root);
+        release_root(root, order);
 }
 
 void Engine::backward(const std::shared_ptr<TensorImpl>& root,
@@ -553,7 +593,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     // Sever the reference from root back into the graph so the nodes can be
     // garbage-collected.  Skipped when retain_graph is true.
     if (!retain_graph) {
-        release_root(root);
+        release_root(root, order);
     }
 }
 
@@ -627,6 +667,21 @@ bool captures_at_barrier(const Node* barrier,
                        [&](std::size_t s) { return inputs[s]->grad_output_nr() == input_nr; });
 }
 
+// Whether ``node`` is a spent root whose freed graph held a requested input.
+//
+// The spent root has no edges, so the walk cannot follow the gradient past
+// it.  Read as a dead end, it hid every input in the graph it stands for: a
+// second grad() reported them unreachable — and under allow_unused, or from
+// backward(inputs=), answered None without a word — where the reference
+// refuses the pass.
+bool spent_reaches(const Node& node, const CaptureTargets& targets) {
+    const auto* spent = as_spent(node);
+    if (spent == nullptr)
+        return false;
+    return std::any_of(targets.by_node.begin(), targets.by_node.end(),
+                       [&](const auto& target) { return spent->held(*target.first); });
+}
+
 // The nodes from which some requested input is still reachable.
 //
 // backward() has to walk the whole graph — every leaf is a destination.
@@ -642,12 +697,16 @@ bool captures_at_barrier(const Node* barrier,
 //
 // One reverse sweep suffices: ``order`` is topological, so a node's
 // successors have already been decided by the time it is examined.
+//
+// A spent root reaches what its freed graph held (``spent_reaches``), so it
+// is sent its gradient and refuses the pass there, as backward() refuses it.
 std::unordered_set<const Node*> reaching_nodes(const std::vector<std::shared_ptr<Node>>& order,
                                                const CaptureTargets& targets) {
     std::unordered_set<const Node*> reaching;
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
         const Node* node = it->get();
-        bool hit = targets.by_node.find(node) != targets.by_node.end();
+        bool hit =
+            targets.by_node.find(node) != targets.by_node.end() || spent_reaches(*node, targets);
         if (!hit) {
             for (const auto& edge : node->next_edges()) {
                 if (edge.node && reaching.find(edge.node.get()) != reaching.end()) {
@@ -668,8 +727,13 @@ std::unordered_set<const Node*> reaching_nodes(const std::vector<std::shared_ptr
 // itself, but its gradient is captured rather than propagated unless a
 // *further* request sits upstream of it.  An AccumulateGrad has no edges, so
 // it never propagates — executing one is precisely what writes a leaf's
-// .grad, which this path never does.
-bool propagates(const Node* node, const std::unordered_set<const Node*>& reaching) {
+// .grad, which this path never does.  A spent root that reaches a request
+// runs, so that it refuses.
+bool propagates(const Node* node,
+                const std::unordered_set<const Node*>& reaching,
+                const CaptureTargets& targets) {
+    if (spent_reaches(*node, targets))
+        return true;
     for (const auto& edge : node->next_edges()) {
         if (edge.node && reaching.find(edge.node.get()) != reaching.end())
             return true;
@@ -746,7 +810,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
     const auto hold_at = [&](const Node* next, std::uint32_t slot) {
         return next->is_barrier() &&
                (has_slot_hooks(*next, slot) || captures_at_barrier(next, slot, targets, inputs) ||
-                !propagates(next, reaching));
+                !propagates(next, reaching, targets));
     };
 
     Node* const root_fn = root->grad_fn().get();
@@ -771,7 +835,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             if (!on_path(node.get()))
                 continue;
 
-            const bool runs = propagates(node.get(), reaching);
+            const bool runs = propagates(node.get(), reaching, targets);
 
             // Hooks before the checks, as in backward().
             SlotGrads<TensorImplPtr> slots;
@@ -835,7 +899,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         if (!on_path(node.get()))
             continue;
 
-        const bool runs = propagates(node.get(), reaching);
+        const bool runs = propagates(node.get(), reaching, targets);
 
         // Hooks before the checks, as in backward().
         SlotGrads<Storage> slots;
@@ -897,7 +961,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
     }
 
     if (!retain_graph)
-        release_root(root);
+        release_root(root, order);
 
     return results;
 }
