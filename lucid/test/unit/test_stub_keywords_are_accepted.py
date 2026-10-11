@@ -149,23 +149,26 @@ _NOT_OFFERED = frozenset(
 #: names otherwise, or an argument it has no form for.  Strict, so taking
 #: one flips its case to XPASS.
 _REFERENCE_KEYWORD_GAPS = {
-    "add": "alpha= is not implemented",
-    "sub": "alpha= is not implemented",
-    "div": "rounding_mode= is not implemented",
-    "round": "decimals= is not implemented",
-    "pow": "the exponent operand is named other",
-    "dot": "the second operand is named other, the reference's tensor",
-    "outer": "the second operand is named other, the reference's vec2",
-    "mm": "the second operand is named other, the reference's mat2",
+    "add": "LCD-412: alpha= is not implemented",
+    "sub": "LCD-412: alpha= is not implemented",
+    "div": "LCD-412: rounding_mode= is not implemented",
+    "round": "LCD-412: decimals= is not implemented",
+    "pow": "LCD-410: the exponent operand is named other",
+    "dot": "LCD-410: the second operand is named other, the reference's tensor",
+    "outer": "LCD-410: the second operand is named other, the reference's vec2",
+    "mm": "LCD-410: the second operand is named other, the reference's mat2",
     "bmm": "LCD-357: the second operand is named other, the reference's mat2",
-    "take": "the index operand is named indices",
-    "where": "the operands are named cond / x / y",
-    "sort": "stable= is not implemented",
-    "argsort": "stable= is not implemented",
-    "topk": "sorted= is not implemented",
-    "searchsorted": "sorted_seq / out_int32 / side / sorter",
-    "bucketize": "out_int32= is not implemented",
-    "repeat_interleave": "output_size= is not implemented",
+    "take": "LCD-410: the index operand is named indices",
+    "where": "LCD-410: the operands are named cond / x / y",
+    "sort": "LCD-412: stable= is not implemented",
+    "argsort": "LCD-412: stable= is not implemented",
+    "topk": "LCD-412: sorted= is not implemented",
+    "searchsorted": (
+        "LCD-412: out_int32= / side= / sorter= are not implemented; "
+        "LCD-410: the first operand is named sorted_seq"
+    ),
+    "bucketize": "LCD-412: out_int32= is not implemented",
+    "repeat_interleave": "LCD-412: output_size= is not implemented",
 }
 
 
