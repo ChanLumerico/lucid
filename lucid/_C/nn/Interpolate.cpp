@@ -23,6 +23,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../backend/SamplePositions.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -104,34 +105,21 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input0,
 namespace {
 
 // The 1-D linear resampling map as a constant matrix: row ``o`` holds the
-// two weights the forward kernel gives output ``o`` — the same source
-// coordinate, computed in the same type and clamped the same way — so the
-// matrix is exactly the map the kernel applies along one axis.  Returned
-// as ``(in, out)`` when ``transposed``, else ``(out, in)``.
-template <typename T>
+// two weights the forward kernel gives output ``o``, from the same taps
+// (``backend/SamplePositions.h``), so the matrix is exactly the map the
+// kernel applies along one axis.  Returned as ``(in, out)`` when
+// ``transposed``, else ``(out, in)``.
+template <typename R>
 void fill_resample(double* m, int in_dim, int out_dim, bool align, bool transposed) {
+    const auto taps = backend::resample::linear_axis<R>(in_dim, out_dim, align);
     for (int o = 0; o < out_dim; ++o) {
-        T src;
-        if (align)
-            src = out_dim <= 1 ? T{0}
-                               : static_cast<T>(o) * static_cast<T>(in_dim - 1) /
-                                     static_cast<T>(out_dim - 1);
-        else
-            src = (static_cast<T>(o) + T{0.5}) * static_cast<T>(in_dim) / static_cast<T>(out_dim) -
-                  T{0.5};
-        if (src < T{0})
-            src = T{0};
-        if (src > static_cast<T>(in_dim - 1))
-            src = static_cast<T>(in_dim - 1);
-        const int i0 = static_cast<int>(std::floor(src));
-        const int i1 = std::min(i0 + 1, in_dim - 1);
-        const T frac = src - static_cast<T>(i0);
-        const auto at = [&](int i) -> double& {
+        const auto& t = taps[static_cast<std::size_t>(o)];
+        const auto at = [&](std::int64_t i) -> double& {
             return transposed ? m[static_cast<std::size_t>(i) * out_dim + o]
                               : m[static_cast<std::size_t>(o) * in_dim + i];
         };
-        at(i0) += static_cast<double>(T{1} - frac);
-        at(i1) += static_cast<double>(frac);
+        at(t.lo) += static_cast<double>(R{1} - t.frac);
+        at(t.hi) += static_cast<double>(t.frac);
     }
 }
 

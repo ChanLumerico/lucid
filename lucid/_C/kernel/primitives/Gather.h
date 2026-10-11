@@ -1,8 +1,6 @@
 // lucid/_C/kernel/primitives/Gather.h
 //
-// CPU gather and nearest-neighbor index helpers used by the Embedding
-// forward pass and spatial upsampling (nearest-neighbor interpolation).
-// These are intentionally low-level, typed functions rather than
+// CPU gather helpers used by the Embedding forward pass.  These are intentionally low-level, typed functions rather than
 // Storage-level wrappers so that higher-level ops can compose them with
 // custom index precomputation without double allocations.
 
@@ -10,7 +8,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -69,45 +66,6 @@ inline void gather_nd_cpu(const T* src_data,
     for (std::size_t i = 0; i < n_out; ++i) {
         dst_data[i] = src_data[flat_indices[i]];
     }
-}
-
-// Map an output spatial index to the corresponding nearest input index.
-//
-// Implements the nearest-neighbor resampling rule used by spatial
-// upsampling / downsampling primitives: an integer division-style
-// rescaling that floors to the input grid and clamps at the boundary
-// to prevent off-by-one writes at the last pixel.
-//
-// Math
-// ----
-// $$
-//   \mathrm{idx} = \mathrm{clamp}\!\left(
-//     \left\lfloor \frac{o \cdot D_\text{in}}{D_\text{out}} \right\rfloor,
-//     \, 0,\, D_\text{in} - 1\right)
-// $$
-//
-// Parameters
-// ----------
-// out_idx : int
-//     Output-space coordinate $o \in [0, D_\text{out})$.
-// in_dim : int
-//     Length of the input spatial axis ($D_\text{in}$).
-// out_dim : int
-//     Length of the output spatial axis ($D_\text{out}$).
-//
-// Returns
-// -------
-// int
-//     Corresponding input-space coordinate in $[0, D_\text{in} - 1]$.
-//
-// Notes
-// -----
-// Computation uses ``double`` intermediate division to avoid integer
-// truncation surprises near boundaries (e.g., $o \cdot D_\text{in}$
-// overflowing 32-bit when both factors are large).
-inline int make_nearest_scale_index(int out_idx, int in_dim, int out_dim) {
-    const int idx = static_cast<int>(std::floor(static_cast<double>(out_idx) * in_dim / out_dim));
-    return std::clamp(idx, 0, in_dim - 1);
 }
 
 }  // namespace primitives

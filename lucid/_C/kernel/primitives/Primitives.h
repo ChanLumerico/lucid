@@ -20,7 +20,7 @@
 // BatchedMatmul.h    : N-D batched GEMM helpers used by MatMul.
 // BroadcastReduce.h  : ``reduce_grad_to_shape`` for broadcast-aware
 //                      gradient reductions.
-// Gather.h           : Index-select primitives for Embedding / upsample.
+// Gather.h           : Index-select primitives for Embedding.
 // Im2Col.h           : Convolution im2col / col2im transforms.
 // Scatter.h          : Scatter-add and zero-storage helpers (adjoint of
 //                      Gather).
