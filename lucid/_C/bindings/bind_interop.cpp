@@ -8,11 +8,19 @@
 // destructor here therefore frees the block only if the name is still
 // the original one — otherwise the consumer owns it and freeing would be
 // a double free.
+//
+// The MLX queries at the end answer for the MLX the engine links (the pinned
+// liblucid_mlx), not for any ``mlx`` Python package in the same process: the
+// two are separate instances with separate buffer caches.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include <string>
+
+#include <mlx/device.h>
+#include <mlx/memory.h>
+#include <mlx/version.h>
 
 #include "../core/TensorImpl.h"
 #include "../interop/Dlpack.h"
@@ -86,6 +94,28 @@ void register_interop(py::module_& m) {
         "deleter runs when the last reference to the resulting tensor's "
         "storage dies. Only row-major packed capsules are adopted; a strided "
         "one raises rather than quietly copying.");
+
+    m.def(
+        "mlx_runtime_version", [] { return std::string(mlx::core::version()); },
+        "Version of the MLX library the engine has loaded (the build pinned in "
+        "pyproject.toml [tool.lucid.mlx]), independent of any installed ``mlx`` "
+        "Python package.");
+
+    m.def(
+        "metal_clear_cache", [] { mlx::core::clear_cache(); },
+        "Release the engine's MLX buffer cache back to the OS. Leaves another "
+        "MLX instance in the process (an ``mlx`` Python package) untouched.");
+
+    m.def(
+        "metal_cache_memory", [] { return mlx::core::get_cache_memory(); },
+        "Bytes held in the engine's MLX buffer cache: reserved, not backing a "
+        "live array.");
+
+    m.def(
+        "metal_device_info",
+        [] { return mlx::core::device_info(mlx::core::Device(mlx::core::Device::gpu)); },
+        "The Metal device description the engine's MLX reports (``device_name``, "
+        "``architecture``, memory sizes, ...), as a dict of str or int values.");
 }
 
 }  // namespace lucid::bindings

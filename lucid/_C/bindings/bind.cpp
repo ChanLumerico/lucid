@@ -17,6 +17,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <cstring>
+#include <string>
+#include <string_view>
+
+#include <mlx/version.h>
+
 #include "../backend/Dispatcher.h"
 #include "../core/TensorImpl.h"
 #include "../core/fwd.h"
@@ -57,8 +63,42 @@ void register_compile(py::module_& m);
 void register_tokenizer(py::module_& utils);
 }  // namespace lucid::bindings
 
+#ifndef LUCID_MLX_PIN
+#error "LUCID_MLX_PIN is set by CMake from pyproject.toml [tool.lucid.mlx] version"
+#endif
+
+namespace {
+
+#define LUCID_STR_IMPL(x) #x
+#define LUCID_STR(x) LUCID_STR_IMPL(x)
+// The headers compiled against and the pin must name the same MLX: a stale
+// include dir would otherwise build an engine whose layout assumptions belong
+// to another release.
+static_assert(std::string_view(LUCID_STR(MLX_VERSION_MAJOR) "." LUCID_STR(
+                  MLX_VERSION_MINOR) "." LUCID_STR(MLX_VERSION_PATCH)) == LUCID_MLX_PIN,
+              "MLX headers do not match [tool.lucid.mlx] version");
+#undef LUCID_STR
+#undef LUCID_STR_IMPL
+
+// The MLX C++ ABI changes between patch releases, so an engine must run only
+// on the MLX it was built for.  rpath resolution can still hand it another
+// liblucid_mlx (a wheel whose copied dylib was swapped, a rebuilt cache
+// entry); refuse to load rather than fail later on a missing symbol or a
+// silently different inline layout.
+void require_pinned_mlx() {
+    const char* loaded = mlx::core::version();
+    if (std::strcmp(loaded, LUCID_MLX_PIN) != 0) {
+        throw py::import_error(std::string("lucid._C.engine was built for MLX ") + LUCID_MLX_PIN +
+                               " but loaded MLX " + loaded +
+                               " (stale build - rebuild the engine, e.g. `pip install -e .`)");
+    }
+}
+
+}  // namespace
+
 PYBIND11_MODULE(engine, m) {
     m.doc() = "Lucid C++ engine (production rebuild).";
+    require_pinned_mlx();
 
     // Version constants are read by lucid/__init__.py to enforce ABI
     // compatibility between the Python wheel and the compiled extension.

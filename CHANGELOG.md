@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - flexible sequence and plane ranges, and constant outputs
 
+- report and manage the engine's own MLX instance
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
