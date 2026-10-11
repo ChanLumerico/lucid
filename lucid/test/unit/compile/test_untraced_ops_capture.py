@@ -71,9 +71,8 @@ def test_integer_topk_values_follow_the_input() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="LCD-407 follow-up: the compiled TopK (MPSGraph) names equal values "
-    "highest index first; eager topk names them lowest first, as the reference "
-    "does.  These rows have ties.",
+    reason="LCD-425: compiled TopK names ties highest-first (eager topk names "
+    "them lowest first, as the reference does; these rows have ties)",
 )
 def test_integer_topk_indices_follow_the_input() -> None:
     _replays(lambda x: lucid.topk(x, 2, dim=-1)[1] + 1, _ints(1), _ints(2))

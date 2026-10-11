@@ -1,8 +1,9 @@
 // lucid/_C/kernel/primitives/Gather.h
 //
-// CPU gather helpers used by the Embedding forward pass.  These are intentionally low-level, typed functions rather than
-// Storage-level wrappers so that higher-level ops can compose them with
-// custom index precomputation without double allocations.
+// CPU gather helpers used by the Embedding forward pass.  These are
+// intentionally low-level, typed functions rather than Storage-level
+// wrappers so that higher-level ops can compose them with custom index
+// precomputation without double allocations.
 
 #pragma once
 
