@@ -481,6 +481,21 @@ std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
     return out;
 }
 
+std::vector<int> distinct_dims(const std::vector<int>& dims, int ndim, const char* op) {
+    std::vector<int> out;
+    out.reserve(dims.size());
+    std::vector<bool> seen(static_cast<std::size_t>(std::max(ndim, 1)), false);
+    for (int d : dims) {
+        const int wrapped = wrap_dim(d, ndim, op);
+        if (seen[static_cast<std::size_t>(wrapped)])
+            ErrorBuilder(op).fail("dim " + std::to_string(wrapped) +
+                                  " appears multiple times in the list of dims");
+        seen[static_cast<std::size_t>(wrapped)] = true;
+        out.push_back(wrapped);
+    }
+    return out;
+}
+
 // Build the output shape of a reduction, applying keepdims semantics.
 // Reduced dimensions either disappear (keepdims=false) or become 1.
 Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes, bool keepdims) {

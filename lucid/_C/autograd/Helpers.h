@@ -980,6 +980,19 @@ int wrap_dim(int dim, int ndim, const char* op);
 //     Some entry of ``axes`` is refused by :func:`wrap_dim`.
 std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
+// Wrap each entry of ``dims`` through :func:`wrap_dim`, keeping the order,
+// and refuse a list that names one axis twice, as the reference does.  An
+// op that walks the list (``flip``) would otherwise act on that axis twice
+// and undo itself.
+//
+// Raises
+// ------
+// IndexError
+//     Some entry of ``dims`` is refused by :func:`wrap_dim`.
+// LucidError
+//     Two entries name the same axis.
+std::vector<int> distinct_dims(const std::vector<int>& dims, int ndim, const char* op);
+
 // Compute the output shape of a reduction over selected axes.
 //
 // Reduced dimensions are removed by default; passing ``keepdims=true``

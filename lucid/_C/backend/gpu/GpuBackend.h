@@ -102,6 +102,7 @@
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
 #include "MlxBridge.h"
+#include "SortOrder.h"
 
 namespace lucid {
 namespace backend {
@@ -1506,9 +1507,10 @@ public:
                                             Dtype dt,
                                             bool descending) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto idx = sort_order(*ga.arr, axis);
-        if (descending)
-            idx = take_descending_top_indices(idx, axis, output_shape);
+        // The order lives in ``gpu/SortOrder.h``.
+        const int k = static_cast<int>(output_shape[static_cast<std::size_t>(axis)]);
+        auto idx =
+            descending ? gpu_descending_order(*ga.arr, axis, k) : gpu_sort_order(*ga.arr, axis);
         auto values = ::mlx::core::take_along_axis(*ga.arr, idx, axis);
         return {
             Storage{gpu::wrap_mlx_array(std::move(values), dt)},
@@ -1518,7 +1520,7 @@ public:
 
     Storage argsort(const Storage& a, const Shape&, int axis, Dtype) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = ::mlx::core::astype(sort_order(*ga.arr, axis), ::mlx::core::int64);
+        auto out = ::mlx::core::astype(gpu_sort_order(*ga.arr, axis), ::mlx::core::int64);
         return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I64)};
     }
 
@@ -5991,35 +5993,6 @@ private:
         for (int i = 0; i < N; ++i)
             strides_v.push_back(suffix[i + 1]);
         return ::mlx::core::as_strided(padded, windowed, strides_v, 0);
-    }
-
-    // ``argsort`` that also takes bool.  MLX ships no bool sort kernel —
-    // sorting a bool tensor on Metal died with "Unable to load kernel
-    // carg_block_sort_bool_…" — so the order is taken on uint8, where
-    // false < true exactly as for bool, and the caller gathers the original
-    // values with it.
-    static ::mlx::core::array sort_order(const ::mlx::core::array& a, int axis) {
-        if (a.dtype() == ::mlx::core::bool_)
-            return ::mlx::core::argsort(::mlx::core::astype(a, ::mlx::core::uint8), axis);
-        return ::mlx::core::argsort(a, axis);
-    }
-
-    ::mlx::core::array take_descending_top_indices(const ::mlx::core::array& idx,
-                                                   int axis,
-                                                   const Shape& output_shape) {
-        const auto& full_shape = idx.shape();
-        const std::int64_t k = output_shape[static_cast<std::size_t>(axis)];
-        const std::int64_t L = full_shape[axis];
-        std::vector<std::int32_t> selector(static_cast<std::size_t>(k));
-        for (std::int64_t i = 0; i < k; ++i)
-            selector[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(L - 1 - i);
-        ::mlx::core::Shape selector_shape(full_shape.size(), 1);
-        selector_shape[axis] = static_cast<int>(k);
-        ::mlx::core::array selector_arr(selector.data(), selector_shape, ::mlx::core::int32);
-        ::mlx::core::Shape out_shape = full_shape;
-        out_shape[axis] = static_cast<int>(k);
-        selector_arr = ::mlx::core::broadcast_to(selector_arr, out_shape);
-        return ::mlx::core::take_along_axis(idx, selector_arr, axis);
     }
 
     // The ``sum`` / ``mean`` of a loss, accumulated in float32 for a half

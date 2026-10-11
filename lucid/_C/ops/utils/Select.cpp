@@ -779,8 +779,7 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
     Validator::input(a, "flip").non_null();
     const auto& sh = a->shape();
     const int ndim = static_cast<int>(sh.size());
-    for (auto& d : dims)
-        d = wrap_dim(d, ndim, "flip");
+    dims = distinct_dims(dims, ndim, "flip");
     if (ndim == 0)
         return on_scalar_axis(a, 0, "flip",
                               [](const TensorImplPtr& v, int ax) { return flip_op(v, {ax}); });

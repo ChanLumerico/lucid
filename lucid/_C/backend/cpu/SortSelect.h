@@ -38,9 +38,9 @@ inline std::pair<std::size_t, std::size_t> around_axis(const Shape& shape, int a
 }
 
 // The first ``output_shape[axis]`` elements of each line along ``axis`` in
-// sorted order, and the int64 position each came from.  A full-length
-// selection is a stable sort, so equal keys keep their input order — what
-// sort / argsort document, and what the GPU path does.
+// sorted order, and the int64 position each came from.  Equal keys keep
+// their input order, in a full sort and a top-k alike — what sort / argsort
+// document, and what the GPU path does.
 template <typename T>
 std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
                                                   const Shape& input_shape,
@@ -74,6 +74,10 @@ std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
             // undefined behaviour: ``[1, nan, 3, -1]`` came back
             // ``[1, nan, -1, 3]``, and a longer array can walk the pivot off
             // the end of the buffer.  Ordering NaN makes the comparator valid.
+            //
+            // Equal values are ordered by position, lowest first.  A full
+            // sort is stable anyway, but ``partial_sort`` (a top-k) is not:
+            // ``topk([0, 5, 4, 4], 3)`` named 1, 3, 2.
             auto cmp = [&](std::int64_t lhs, std::int64_t rhs) {
                 const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
                 const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
@@ -82,10 +86,12 @@ std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
                     const bool rn = std::isnan(rv);
                     if (ln || rn) {
                         if (ln && rn)
-                            return false;  // equivalent, so neither precedes
+                            return lhs < rhs;
                         return descending ? ln : rn;
                     }
                 }
+                if (lv == rv)
+                    return lhs < rhs;
                 return descending ? (lv > rv) : (lv < rv);
             };
             if (K == L)
