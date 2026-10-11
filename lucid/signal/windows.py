@@ -853,9 +853,11 @@ def kaiser(
     radical = lucid.sqrt(lucid.clip(1.0 - arg * arg, 0.0, 1.0))
     num = lucid.i0(float(beta) * radical)
     # The denominator is ``i0`` at the same dtype and on the same device as
-    # the numerator, so the peak sample is exactly 1 and a float64 window is
-    # float64 throughout — a host-side float32-grade ``I0(beta)`` capped it
-    # at ~1e-8 relative accuracy.
+    # the numerator, so a float64 window is float64 throughout — a host-side
+    # float32-grade ``I0(beta)`` capped it at ~1e-8 relative accuracy — and
+    # the peak is 1 to the window dtype's rounding (a float32 peak used to be
+    # 1.0000002; a float64 one can be 1 - 1 ulp, the vectorized and scalar
+    # ``i0`` evaluations differing in the last bit).
     denom = lucid.i0(lucid.full_like(num[:1], float(beta)))
     w = num / denom
     return _trim(w, M, sym)
