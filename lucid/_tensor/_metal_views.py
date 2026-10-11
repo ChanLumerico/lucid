@@ -42,6 +42,7 @@ CPU tensors are untouched: their views alias the buffer already.
 """
 
 import functools
+import inspect
 import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -49,6 +50,7 @@ from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 
 if TYPE_CHECKING:
+    from lucid._ops._registry import OpEntry
     from lucid._tensor.tensor import Tensor
 
 _ATTR = "_metal_view"
@@ -402,6 +404,34 @@ def _makers() -> dict[str, Callable[[Callable[..., object]], Callable[..., objec
     return makers
 
 
+def _same_positions(free: OpEntry, method: OpEntry) -> bool:
+    """Whether ``free`` and ``method`` read the same arguments by position."""
+    from lucid._ops import _signature_for_entry
+
+    free_kinds = [p.kind for p in _signature_for_entry(free).parameters.values()]
+    method_kinds = [p.kind for p in _signature_for_entry(method).parameters.values()]
+    return (
+        free.n_tensor_args == method.n_tensor_args
+        and free_kinds == method_kinds
+        and inspect.Parameter.KEYWORD_ONLY not in free_kinds
+    )
+
+
+def _by_position(
+    linked: Callable[..., object], signature: inspect.Signature
+) -> Callable[..., object]:
+    """``linked``, called with every argument in position, as its replay is."""
+
+    @functools.wraps(linked)
+    def call(*args: object, **kwargs: object) -> object:
+        if kwargs:
+            bound = signature.bind(*args, **kwargs)
+            return linked(*bound.args, **bound.kwargs)
+        return linked(*args)
+
+    return call
+
+
 def _install_free_functions(
     makers: dict[str, Callable[[Callable[..., object]], Callable[..., object]]],
 ) -> None:
@@ -416,7 +446,7 @@ def _install_free_functions(
     import sys
 
     import lucid._ops as ops
-    from lucid._ops._registry import _REGISTRY, OpEntry
+    from lucid._ops._registry import _REGISTRY
 
     by_method: dict[str, OpEntry] = {}
     by_free: dict[str, OpEntry] = {}
@@ -428,12 +458,21 @@ def _install_free_functions(
     top = sys.modules.get("lucid")
     for name, make in makers.items():
         shared = by_free.get(name)
-        if shared is None or by_method.get(name) is not shared:
+        method = by_method.get(name)
+        if shared is None or method is None:
             continue
         generated = ops.__dict__.get(name)
         if generated is None:
             continue
-        linked = make(generated)
+        if method is shared:
+            linked = make(generated)
+        elif _same_positions(shared, method):
+            # The reference names a parameter of the method otherwise than
+            # the free function's (``split_size`` / ``split_size_or_sections``):
+            # the replay is recorded by position, which the two share.
+            linked = _by_position(make(generated), inspect.signature(generated))
+        else:
+            continue
         setattr(ops, name, linked)
         # ``lucid.<name>`` is copied from ``lucid._ops`` the first time any op
         # is looked up there; if that already happened, replace the copy.

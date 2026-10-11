@@ -885,8 +885,6 @@ class Tensor:
         g_impl = self._impl.grad_as_impl()
         if g_impl is not None:
             return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
-        # Normal backward pass gradient: wrap the grad Storage as a TensorImpl
-        # via the engine's ``grad_to_tensor`` helper — no numpy round-trip.
         g_impl = self._impl.grad_to_tensor()
         if g_impl is None:
             return None
@@ -2412,6 +2410,7 @@ class Tensor:
         self,
         size: tuple[int, ...],
         fill_value: float,
+        *,
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
@@ -2467,6 +2466,7 @@ class Tensor:
     def new_tensor(
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
+        *,
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
@@ -3275,7 +3275,6 @@ class Tensor:
         out_shape = list(self._impl.shape)
         k = index._impl.shape[0]
         out_shape[dim] = k
-        # Reshape 1-D index to broadcast over all other dims via engine ops.
         bcast_shape = [1] * len(out_shape)
         bcast_shape[dim] = k
         idx_rs = _C_engine.reshape(index._impl, bcast_shape)
@@ -4064,7 +4063,7 @@ class Tensor:
         return result
 
     def addmm(
-        self, mat1: Self, mat2: Self, beta: float = 1.0, alpha: float = 1.0
+        self, mat1: Self, mat2: Self, *, beta: float = 1.0, alpha: float = 1.0
     ) -> Self:
         r"""Fused matrix multiply-add.
 

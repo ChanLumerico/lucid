@@ -703,6 +703,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - channel_shuffle permutes through the Tensor method
 - one copy of the Xcode-tool runner and minos reader
 - top-level functions take the reference's names
+- registry ops and Tensor methods take reference names
 
 ---
 

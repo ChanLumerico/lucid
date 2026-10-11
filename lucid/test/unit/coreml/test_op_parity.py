@@ -1300,8 +1300,8 @@ _UNREACHED = [
     ("min_dim", lambda x: lucid.min(x, dim=1)),
     ("min_keepdim", lambda x: lucid.min(x, dim=1, keepdim=True)),
     ("triu", lucid.triu),
-    ("triu_above_the_diagonal", lambda x: lucid.triu(x, k=1)),
-    ("tril_below_the_diagonal", lambda x: lucid.tril(x, k=-1)),
+    ("triu_above_the_diagonal", lambda x: lucid.triu(x, diagonal=1)),
+    ("tril_below_the_diagonal", lambda x: lucid.tril(x, diagonal=-1)),
     ("clone", lambda x: x.clone() + 1.0),
     # Factories: the value is a constant, and what is checked is that the
     # constant written into the package is the one Lucid made.

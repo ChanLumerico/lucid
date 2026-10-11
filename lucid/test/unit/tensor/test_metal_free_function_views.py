@@ -29,7 +29,7 @@ View = Callable[[lucid.Tensor], lucid.Tensor]
 #: is taken from.  Registry-generated ones first, then the hand-written ones
 #: built on them, then the constructor.
 FREE_VIEWS: dict[str, tuple[tuple[int, ...], View]] = {
-    "view": ((2, 3, 4), lambda x: lucid.view(x, 6, 4)),
+    "view": ((2, 3, 4), lambda x: lucid.view(x, (6, 4))),
     "reshape": ((2, 3, 4), lambda x: lucid.reshape(x, (4, 6))),
     "flatten": ((2, 3, 4), lambda x: lucid.flatten(x)),
     "unflatten": ((2, 3, 4), lambda x: lucid.unflatten(x, 2, (2, 2))),
@@ -42,7 +42,7 @@ FREE_VIEWS: dict[str, tuple[tuple[int, ...], View]] = {
     "movedim": ((2, 3, 4), lambda x: lucid.movedim(x, 0, 2)),
     "narrow": ((2, 3, 4), lambda x: lucid.narrow(x, 2, 1, 2)),
     "diagonal": ((2, 3, 4), lambda x: lucid.diagonal(x, 1, 1, 2)),
-    "expand": ((2, 3, 4), lambda x: lucid.expand(x, 2, 3, 4)),
+    "expand": ((2, 3, 4), lambda x: lucid.expand(x, (2, 3, 4))),
     "broadcast_to": ((2, 3, 4), lambda x: lucid.broadcast_to(x, (2, 3, 4))),
     "as_strided": ((2, 3, 4), lambda x: lucid.as_strided(x, (3, 4), (4, 1), 4)),
     "detach": ((2, 3, 4), lambda x: lucid.detach(x)),
@@ -122,6 +122,12 @@ def test_a_write_through_a_method_view_matches_the_cpu(name: str, write: str) ->
 PIECES: dict[str, tuple[tuple[int, ...], Callable[[lucid.Tensor], object]]] = {
     "split (size)": ((2, 3, 4), lambda x: lucid.split(x, 3, 2)),
     "split (sizes)": ((2, 3, 4), lambda x: lucid.split(x, [1, 3], 2)),
+    # The method names the sizes ``split_size``; the free function's
+    # keywords reach the replay by position (LCD-410).
+    "split (keywords)": (
+        (2, 3, 4),
+        lambda x: lucid.split(x, split_size_or_sections=3, dim=2),
+    ),
     "chunk": ((2, 3, 4), lambda x: lucid.chunk(x, 2, 2)),
     "unbind": ((2, 3, 4), lambda x: lucid.unbind(x, 1)),
     "hsplit": ((2, 3, 4), lambda x: lucid.hsplit(x, 3)),
@@ -160,7 +166,7 @@ CHAINS: dict[str, tuple[tuple[int, ...], View]] = {
     ),
     "free of method": ((2, 3, 4), lambda x: lucid.narrow(x.transpose(0, 1), 0, 1, 2)),
     "method of free": ((2, 3, 4), lambda x: lucid.movedim(x, 0, 2)[1].t()),
-    "piece of a view": ((2, 3, 4), lambda x: lucid.split(lucid.view(x, 4, 6), 2)[1]),
+    "piece of a view": ((2, 3, 4), lambda x: lucid.split(lucid.view(x, (4, 6)), 2)[1]),
     "Tensor of a view": ((2, 3, 4), lambda x: lucid.Tensor(lucid.narrow(x, 1, 1, 2))),
 }
 
@@ -225,7 +231,7 @@ def test_a_free_function_detach_is_writable_under_autograd() -> None:
 @pytest.mark.parametrize(
     "view",
     [
-        lambda x: lucid.expand(x, 2, 3, 4),
+        lambda x: lucid.expand(x, (2, 3, 4)),
         lambda x: lucid.broadcast_to(x, (2, 3, 4)),
         lambda x: lucid.as_strided(x, (3, 3), (1, 1)),
     ],

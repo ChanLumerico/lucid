@@ -27,7 +27,6 @@ import operator
 from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
-from lucid._deprecation import warn_deprecated
 from lucid import _promotion
 from lucid._dispatch import (
     _REAL_FLOATS,
@@ -147,7 +146,9 @@ def _make_arith_adapter(
     powers = engine_fn is _C_engine.pow
     opmath = engine_fn in _OPMATH_OPS
 
-    def _adapter(input: _Impl, other: _Impl) -> _Impl:
+    # Positional-only: the wrappers bind the advertised names to position
+    # (``exponent`` for ``pow``), so ``other=`` must not reach the body too.
+    def _adapter(input: _Impl, other: _Impl, /) -> _Impl:
         if powers and isinstance(input, _C_engine.TensorImpl):
             scalar = _scalar_power(input, other)
             if scalar is not None:
@@ -229,14 +230,6 @@ def _scatter_add_adapter(
     return _C_engine.scatter_add(x_impl, _unwrap(index), _unwrap(src), dim)
 
 
-#: ``gather`` took ``(input, indices, dim=-1)`` until 3.16.  The reference
-#: order ``(input, dim, index)`` replaced it; the old one still answers, and
-#: warns, until the release named here.
-_GATHER_OLD_ORDER = "the argument order gather(input, indices, dim)"
-_GATHER_SINCE = "3.16.0"
-_GATHER_REMOVAL = "3.18.0"
-
-
 def _as_dim(value: object) -> int:
     """``value`` as a ``gather`` dim: an int, or a 0-d integer tensor."""
     impl = getattr(value, "_impl", None)
@@ -255,95 +248,28 @@ def _as_dim(value: object) -> int:
         ) from None
 
 
-def _gather_operands(
-    args: tuple[object, ...], kwargs: dict[str, object]
-) -> tuple[int, Tensor]:
-    """``(dim, index)`` from whichever spelling of ``gather`` the caller used.
+def _gather_adapter(input: _Impl, dim: int, index: Tensor) -> _Impl:
+    """gather(input, dim, index).
 
-    The reference order is ``gather(input, dim, index)``.  Lucid's was
-    ``gather(input, indices, dim=-1)`` and released code still calls it so,
-    which no single signature can bind alongside the reference one — the
-    argument after ``input`` decides instead.  An integer there is a
-    ``dim``: the reference order.  So is a 0-d tensor followed by a tensor
-    index, which the reference reads as a dim too.  Any other tensor there,
-    or the old keyword ``indices=``, is the old order, which still answers
-    and warns.
+    ``dim`` may be a 0-d integer tensor, as the reference reads one.
     """
-    extra = sorted(set(kwargs) - {"dim", "index", "indices"})
-    if extra:
-        raise TypeError(f"gather() got an unexpected keyword argument {extra[0]!r}")
-    if len(args) > 2:
-        raise TypeError(
-            f"gather() takes 3 positional arguments but {len(args) + 1} were given"
-        )
-    second = getattr(args[0], "_impl", None) if args else None
-    index_follows = "index" in kwargs or (len(args) > 1 and hasattr(args[1], "_impl"))
-    zero_d_dim = isinstance(second, _Impl) and not second.shape and index_follows
-    old_order = "indices" in kwargs or (second is not None and not zero_d_dim)
-    if old_order and "index" in kwargs:
-        raise TypeError("gather() got multiple values for argument 'index'")
-
-    names = ("indices", "dim") if old_order else ("dim", "index")
-    bound: dict[str, object] = {"dim": -1} if old_order else {}
-    for name, value in zip(names, args):
-        if name in kwargs:
-            raise TypeError(f"gather() got multiple values for argument {name!r}")
-        bound[name] = value
-    bound.update(kwargs)
-    missing = [name for name in names if name not in bound]
-    if missing:
-        raise TypeError(f"gather() missing required argument {missing[0]!r}")
-
-    index = bound["indices" if old_order else "index"]
     if not hasattr(index, "_impl"):
         raise TypeError(f"gather(): index must be a Tensor, got {type(index).__name__}")
-    dim = _as_dim(bound["dim"])
-    if old_order:
-        warn_deprecated(
-            _GATHER_OLD_ORDER,
-            since=_GATHER_SINCE,
-            removal=_GATHER_REMOVAL,
-            alternative="gather(input, dim, index)",
-        )
-    return dim, cast("Tensor", index)
-
-
-def _gather_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
-    """gather(input, dim, index), read by :func:`_gather_operands`.
-
-    The parameters after ``input`` stay open because the old order binds
-    by type rather than by name: a signature naming either order would
-    turn the other one's calls away before they got here.  ``input`` is
-    named so that ``input=`` binds; the free function unwraps positional
-    tensors only, so a keyword one arrives as a Tensor — hence ``_unwrap``.
-    """
-    # The reference order with positional ints, as every caller inside
-    # Lucid writes it (cross_entropy and nll_loss among them), skips the
-    # parsing below.
-    if (
-        not kwargs
-        and len(args) == 2
-        and type(args[0]) is int
-        and hasattr(args[1], "_impl")
-    ):
-        return _C_engine.gather(
-            _unwrap(input), _unwrap(cast("Tensor", args[1])), args[0]
-        )
-    dim, index = _gather_operands(args, kwargs)
-    return _C_engine.gather(_unwrap(input), _unwrap(index), dim)
+    d = dim if type(dim) is int else _as_dim(dim)
+    return _C_engine.gather(_unwrap(input), _unwrap(index), d)
 
 
 # ── Composite indexing adapters ──────────────────────────────────────────────
 
 
-def _take_adapter(a_impl: _Impl, indices: Tensor) -> _Impl:
-    """take(a, indices) — ``a`` read as 1-D, in the shape of ``indices``.
+def _take_adapter(a_impl: _Impl, index: Tensor) -> _Impl:
+    """take(a, indices) — ``a`` read as 1-D, in the shape of ``index``.
 
     The engine op takes a 1-D index only, so any other shape — a matrix of
     positions, a 0-d one — raised ``ShapeMismatch`` where the reference
     answers in the index's shape.
     """
-    idx = _unwrap(indices)
+    idx = _unwrap(index)
     shape = list(idx.shape)
     if len(shape) == 1:
         return _C_engine.take(a_impl, idx)
@@ -568,13 +494,20 @@ def _unflatten_adapter(a_impl: _Impl, dim: int, sizes: Sequence[int]) -> _Impl:
     return _C_engine.unflatten(a_impl, int(dim), [int(s) for s in sizes])
 
 
-def _view_adapter(a_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
-    """view(a, *shape) — accept ``view(t, 2, 3)`` and ``view(t, [2, 3])``."""
-    if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
-        s = [int(d) for d in shape[0]]
-    else:
-        s = [int(d) for d in shape]  # type: ignore[arg-type]
-    return _C_engine.view(a_impl, s)
+def _int_list(value: int | Sequence[int]) -> list[int]:
+    """An int-list argument as a list: one int is a list of one.
+
+    The method spellings ``x.view(2, 3)`` reach these adapters as one tuple
+    (``lucid._tensor._methods``), the reference's own reading.
+    """
+    if isinstance(value, int):
+        return [int(value)]
+    return [int(d) for d in value]
+
+
+def _view_adapter(a_impl: _Impl, size: int | Sequence[int]) -> _Impl:
+    """view(input, size) — ``x.view(2, 3)`` is ``x.view((2, 3))``."""
+    return _C_engine.view(a_impl, _int_list(size))
 
 
 def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
@@ -582,15 +515,9 @@ def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
     return _C_engine.concat(_promote_impls([_unwrap(t) for t in tensors]), int(dim))
 
 
-def _reshape_adapter(x_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
-    """reshape(x, *shape) — accept variadic ints or single list/tuple."""
-    if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
-        s = [int(d) for d in shape[0]]
-    elif len(shape) == 1 and isinstance(shape[0], int):
-        s = [int(shape[0])]
-    else:
-        s = [int(d) for d in shape]  # type: ignore[arg-type]
-    return _C_engine.reshape(x_impl, s)
+def _reshape_adapter(x_impl: _Impl, shape: int | Sequence[int]) -> _Impl:
+    """reshape(input, shape) — ``x.reshape(2, 3)`` is ``x.reshape((2, 3))``."""
+    return _C_engine.reshape(x_impl, _int_list(shape))
 
 
 def _transpose_adapter(
@@ -608,25 +535,23 @@ def _transpose_adapter(
     return _C_engine.swapaxes(x_impl, int(dim0), int(dim1))
 
 
-def _permute_adapter(x_impl: _Impl, *dims: int | Sequence[int]) -> _Impl:
-    """permute(x, *dims) — accept variadic ints or single list/tuple."""
-    if len(dims) == 1 and isinstance(dims[0], (list, tuple)):
-        p = [int(d) for d in dims[0]]
-    else:
-        p = [int(d) for d in dims]  # type: ignore[arg-type]
-    return _C_engine.permute(x_impl, p)
+def _permute_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
+    """permute(input, dims) — ``x.permute(1, 0)`` is ``x.permute((1, 0))``."""
+    return _C_engine.permute(x_impl, _int_list(dims))
 
 
-def _expand_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
-    """expand(x, *sizes) — accept variadic ints or single list/tuple.
+def _broadcast_to_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
+    """broadcast_to(input, size) — ``expand`` without the ``-1``."""
+    return _C_engine.expand(x_impl, _int_list(size))
+
+
+def _expand_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
+    """expand(input, size) — ``x.expand(2, 3)`` is ``x.expand((2, 3))``.
 
     ``-1`` in any position means *keep the existing size along that dim*,
     matching the reference framework semantics.
     """
-    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
-        raw = [int(d) for d in sizes[0]]
-    else:
-        raw = [int(d) for d in sizes]  # type: ignore[arg-type]
+    raw = _int_list(size)
     # Resolve -1 entries: replace with the corresponding source dimension.
     src_shape = list(x_impl.shape)
     ndim_src = len(src_shape)
@@ -692,86 +617,29 @@ def _flipud_adapter(x_impl: _Impl) -> _Impl:
     return _C_engine.flip(x_impl, [0])
 
 
-# ── Parameters the reference spells differently ─────────────────────────────
-#
-# ``tril(x, diagonal=1)``, ``flatten(x, start_dim=1)`` and ``tile(x,
-# dims=...)`` reached the engine binding, whose parameters are ``k``,
-# ``start_axis`` / ``end_axis`` and ``reps``, and failed there with a raw
-# "incompatible function arguments".  The released Lucid names hold their
-# position — renaming a parameter a caller may pass by keyword breaks that
-# caller — so the reference's spelling is added beside each, by keyword.
+def _tril_adapter(a_impl: _Impl, diagonal: int = 0) -> _Impl:
+    """tril(input, diagonal=0)."""
+    return _C_engine.tril(a_impl, int(diagonal))
 
 
-def _either_spelling[T](
-    op: str, lucid_name: str, lucid_value: T | None, ref_name: str, ref_value: T | None
-) -> T | None:
-    """The one value given for a parameter that has two names, or ``None``."""
-    if ref_value is None:
-        return lucid_value
-    if lucid_value is not None:
-        raise TypeError(
-            f"{op}() got values for both {lucid_name!r} and {ref_name!r}, "
-            f"which name the same argument; pass one"
-        )
-    return ref_value
+def _triu_adapter(a_impl: _Impl, diagonal: int = 0) -> _Impl:
+    """triu(input, diagonal=0)."""
+    return _C_engine.triu(a_impl, int(diagonal))
 
 
-def _tril_adapter(
-    a_impl: _Impl, k: int | None = None, *, diagonal: int | None = None
-) -> _Impl:
-    """tril(input, k=0, *, diagonal=None) — ``diagonal`` is the reference's ``k``."""
-    offset = _either_spelling("tril", "k", k, "diagonal", diagonal)
-    return _C_engine.tril(a_impl, 0 if offset is None else offset)
+def _flatten_adapter(a_impl: _Impl, start_dim: int = 0, end_dim: int = -1) -> _Impl:
+    """flatten(input, start_dim=0, end_dim=-1)."""
+    return _C_engine.flatten(a_impl, int(start_dim), int(end_dim))
 
 
-def _triu_adapter(
-    a_impl: _Impl, k: int | None = None, *, diagonal: int | None = None
-) -> _Impl:
-    """triu(input, k=0, *, diagonal=None) — ``diagonal`` is the reference's ``k``."""
-    offset = _either_spelling("triu", "k", k, "diagonal", diagonal)
-    return _C_engine.triu(a_impl, 0 if offset is None else offset)
-
-
-def _flatten_adapter(
-    a_impl: _Impl,
-    start_axis: int | None = None,
-    end_axis: int | None = None,
-    *,
-    start_dim: int | None = None,
-    end_dim: int | None = None,
-) -> _Impl:
-    """flatten(input, start_axis=0, end_axis=-1, *, start_dim, end_dim)."""
-    start = _either_spelling(
-        "flatten", "start_axis", start_axis, "start_dim", start_dim
-    )
-    end = _either_spelling("flatten", "end_axis", end_axis, "end_dim", end_dim)
-    return _C_engine.flatten(
-        a_impl, 0 if start is None else start, -1 if end is None else end
-    )
-
-
-def _counts(value: int | Sequence[int] | None) -> list[int] | None:
-    """``value`` as per-axis counts: one int is one count."""
-    if value is None:
-        return None
-    return [value] if isinstance(value, int) else [int(r) for r in value]
-
-
-def _tile_adapter(
-    a_impl: _Impl,
-    reps: int | Sequence[int] | None = None,
-    *,
-    dims: int | Sequence[int] | None = None,
-) -> _Impl:
-    """tile(input, reps, *, dims) — ``dims`` is the reference's ``reps``.
+def _tile_adapter(a_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
+    """tile(input, dims) — ``x.tile(2, 2)`` is ``x.tile((2, 2))``.
 
     A single int is one count, as ``x.tile(2)`` reads in the reference.
     Fewer counts than axes are padded with leading 1s, as documented and as
     the reference does; the engine refuses them.
     """
-    counts = _either_spelling("tile", "reps", _counts(reps), "dims", _counts(dims))
-    if counts is None:
-        raise TypeError("tile() missing required argument 'dims'")
+    counts = _int_list(dims)
     short = len(a_impl.shape) - len(counts)
     return _C_engine.tile(a_impl, [1] * short + counts)
 
@@ -964,18 +832,14 @@ def _repeat_adapter(x_impl: _Impl, repeats: int, dim: int | None = None) -> _Imp
     return _C_engine.repeat(x_impl, int(repeats), axis)
 
 
-def _repeat_method_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
-    """``Tensor.repeat(*sizes)`` — tile copies along each dim.
+def _repeat_method_adapter(x_impl: _Impl, repeats: int | Sequence[int]) -> _Impl:
+    """``Tensor.repeat(repeats)`` — tile copies along each dim.
 
     Routes to ``engine.tile`` so the method semantics match the reference
     framework's ``Tensor.repeat`` (and stay separated from the free
     function above).
     """
-    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
-        reps = list(sizes[0])
-    else:
-        reps = list(sizes)
-    return _C_engine.tile(x_impl, [int(r) for r in reps])
+    return _C_engine.tile(x_impl, _int_list(repeats))
 
 
 def _repeat_interleave_adapter(
@@ -1019,27 +883,29 @@ def _split_adapter(
     return _C_engine.split_at(x_impl, indices, int(dim))
 
 
+def _split_method_adapter(
+    x_impl: _Impl, split_size: int | Sequence[int], dim: int = 0
+) -> list[_Impl]:
+    """``Tensor.split(split_size, dim=0)`` — the method's name for the sizes."""
+    return _split_adapter(x_impl, split_size, dim)
+
+
 # ── tensordot / meshgrid / where / masked_fill / pad ─────────────────────────
 
 
 def _tensordot_adapter(
     a_impl: _Impl,
     b_impl: _Impl,
-    dims: int | Sequence[int] | Sequence[Sequence[int]] = 2,
-    _axes_b: Sequence[int] | None = None,
+    dims: int | Sequence[Sequence[int]] = 2,
 ) -> _Impl:
-    """tensordot — accept int / nested-list / pair-of-lists ``dims``."""
-    if _axes_b is not None:
-        axes_a = [int(d) for d in cast(Sequence[int], dims)]
-        axes_b = [int(d) for d in _axes_b]
-    elif isinstance(dims, int):
+    """tensordot(a, b, dims=2) — an int, or a pair of axis lists."""
+    if isinstance(dims, int):
         ra = len(a_impl.shape)
         axes_a = list(range(ra - int(dims), ra))
         axes_b = list(range(int(dims)))
     else:
-        _dims_seq = cast(Sequence[Sequence[int]], dims)
-        axes_a = [int(d) for d in _dims_seq[0]]
-        axes_b = [int(d) for d in _dims_seq[1]]
+        axes_a = [int(d) for d in dims[0]]
+        axes_b = [int(d) for d in dims[1]]
     return _C_engine.tensordot(a_impl, b_impl, axes_a, axes_b)
 
 
@@ -1120,9 +986,9 @@ def _clip_adapter(
 
 
 def _where_adapter(
-    cond: Tensor,
-    x: TensorOrScalar | None = None,
-    y: TensorOrScalar | None = None,
+    condition: Tensor,
+    input: TensorOrScalar | None = None,
+    other: TensorOrScalar | None = None,
 ) -> _Impl | tuple[_Impl, ...]:
     """where(cond, x, y) — bool-cast the condition, promote the branches.
 
@@ -1139,22 +1005,22 @@ def _where_adapter(
     branch beside a ``float32`` one — or beside ``1.5`` — raised
     ``DtypeMismatch`` where the reference answers in float.
     """
-    if x is None and y is None:
-        return _nonzero_adapter(_unwrap(cond), as_tuple=True)
-    if x is None or y is None:
+    if input is None and other is None:
+        return _nonzero_adapter(_unwrap(condition), as_tuple=True)
+    if input is None or other is None:
         raise TypeError("where() takes either cond alone, or cond, x and y")
-    c = _unwrap(cond)
+    c = _unwrap(condition)
     if c.dtype != _C_engine.Bool:
         c = _C_engine.astype(c, _C_engine.Bool)
     # Tensor is a TYPE_CHECKING-only name here, so the test is for
     # scalar-ness rather than for the wrapper type.
     ref_impl = c
-    for branch in (x, y):
+    for branch in (input, other):
         if not isinstance(branch, (bool, int, float, complex)):
             ref_impl = _unwrap(branch)
             break
     x_impl, y_impl = _promote_impls(
-        [_unwrap_or_scalar(x, ref_impl), _unwrap_or_scalar(y, ref_impl)]
+        [_unwrap_or_scalar(input, ref_impl), _unwrap_or_scalar(other, ref_impl)]
     )
     return _C_engine.where(c, x_impl, y_impl)
 
@@ -1396,23 +1262,23 @@ def _cartesian_prod_adapter(*tensors: Tensor) -> _Impl:
 
 
 def _searchsorted_adapter(
-    sorted_seq: Tensor,
-    values: Tensor,
+    sorted_sequence: Tensor,
+    input: Tensor,
     *,
     right: bool = False,
 ) -> _Impl:
     """searchsorted(sorted_seq, values, right=False) — accept tensor inputs."""
-    return _C_engine.searchsorted(_unwrap(sorted_seq), _unwrap(values), bool(right))
+    return _C_engine.searchsorted(_unwrap(sorted_sequence), _unwrap(input), bool(right))
 
 
 def _bucketize_adapter(
-    values: Tensor,
+    input: Tensor,
     boundaries: Tensor,
     *,
     right: bool = False,
 ) -> _Impl:
     """bucketize(values, boundaries, right=False)."""
-    return _C_engine.bucketize(_unwrap(values), _unwrap(boundaries), bool(right))
+    return _C_engine.bucketize(_unwrap(input), _unwrap(boundaries), bool(right))
 
 
 def _isclose_adapter(

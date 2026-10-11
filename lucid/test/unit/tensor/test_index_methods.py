@@ -2,8 +2,7 @@
 
 ``gather`` took ``(input, indices, dim=-1)``; the reference takes
 ``(input, dim, index)`` and ``x.gather(1, idx)`` failed with a binding
-error.  The reference order is the signature now, and the old one still
-answers, warning once per call, until 3.18.
+error.  The reference order is the signature now; the old one is refused.
 
 ``index_add`` / ``index_copy`` / ``index_fill`` / ``index_put`` and their
 in-place forms existed only as ``lucid.*`` functions.  The methods are
@@ -14,7 +13,6 @@ requires grad is refused while autograd records.
 """
 
 import ast
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +22,6 @@ import lucid
 import lucid.nn as nn
 from lucid._C import engine as _C_engine
 import lucid.nn.functional as F
-from lucid._deprecation import LucidDeprecationWarning
 from lucid.test._helpers.compare import assert_close
 
 METHODS = (
@@ -107,19 +104,17 @@ class TestGatherOrder:
             self.IDX, device=device
         )
 
-    def test_the_reference_order_answers_without_a_warning(self, device: str) -> None:
+    def test_the_reference_order_answers(self, device: str) -> None:
         x, idx = self._operands(device)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", LucidDeprecationWarning)
-            for out in (
-                x.gather(1, idx),
-                x.gather(dim=1, index=idx),
-                lucid.gather(x, 1, idx),
-                lucid.gather(x, 1, index=idx),
-                lucid.gather(x, dim=1, index=idx),
-                lucid.gather(x, -1, idx),
-            ):
-                assert_close(out, np.array(self.WANT, dtype=np.float32))
+        for out in (
+            x.gather(1, idx),
+            x.gather(dim=1, index=idx),
+            lucid.gather(x, 1, idx),
+            lucid.gather(x, 1, index=idx),
+            lucid.gather(x, dim=1, index=idx),
+            lucid.gather(x, -1, idx),
+        ):
+            assert_close(out, np.array(self.WANT, dtype=np.float32))
 
     def test_a_zero_d_integer_tensor_is_a_dim(self, device: str) -> None:
         # The reference reads a 0-d integer tensor there as the dim, so it
@@ -127,15 +122,13 @@ class TestGatherOrder:
         # order put its index.
         x, idx = self._operands(device)
         dim = lucid.tensor(1, device=device)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", LucidDeprecationWarning)
-            for out in (
-                lucid.gather(x, dim, idx),
-                x.gather(dim, idx),
-                lucid.gather(x, dim, index=idx),
-                lucid.gather(x, dim=dim, index=idx),
-            ):
-                assert_close(out, np.array(self.WANT, dtype=np.float32))
+        for out in (
+            lucid.gather(x, dim, idx),
+            x.gather(dim, idx),
+            lucid.gather(x, dim, index=idx),
+            lucid.gather(x, dim=dim, index=idx),
+        ):
+            assert_close(out, np.array(self.WANT, dtype=np.float32))
 
     def test_input_binds_by_keyword(self, device: str) -> None:
         x, idx = self._operands(device)
@@ -161,6 +154,7 @@ class TestGatherOrder:
             lambda x, i: lucid.gather(x, indices=i, dim=1),
             lambda x, i: x.gather(i, 1),
             lambda x, i: x.gather(i, dim=1),
+            lambda x, i: lucid.gather(x, i),
         ],
         ids=[
             "free-positional",
@@ -168,43 +162,21 @@ class TestGatherOrder:
             "free-indices-kw",
             "method",
             "method-dim-kw",
+            "no-dim",
         ],
     )
-    def test_the_old_order_still_answers_and_warns_once(self, device: str, call) -> None:  # type: ignore[no-untyped-def]
-        x, idx = self._operands(device)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            out = call(x, idx)
-        assert_close(out, np.array(self.WANT, dtype=np.float32))
-        deprecations = [
-            w for w in caught if issubclass(w.category, LucidDeprecationWarning)
-        ]
-        assert len(deprecations) == 1
-        message = str(deprecations[0].message)
-        assert "gather(input, indices, dim)" in message
-        assert "removed in 3.18.0" in message and "gather(input, dim, index)" in message
-
-    def test_the_old_order_defaults_to_the_last_axis(self) -> None:
+    def test_the_old_lucid_order_is_refused(self, call) -> None:  # type: ignore[no-untyped-def]
+        # ``gather(input, indices, dim=-1)`` was Lucid's order until 3.16;
+        # it answered with a warning until the reference's became the only
+        # one (LCD-410).
         x, idx = self._operands("cpu")
-        with pytest.warns(LucidDeprecationWarning):
-            out = lucid.gather(x, idx)
-        assert_close(out, np.array(self.WANT, dtype=np.float32))
-
-    def test_the_warning_names_the_line_that_has_to_change(self) -> None:
-        # Frames inside the package are skipped, this file's included, so
-        # the caller is code compiled under a name of its own.
-        x, idx = self._operands("cpu")
-        user_code = compile("\n\nx.gather(idx, dim=1)\n", "user_code.py", "exec")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            exec(user_code, {"x": x, "idx": idx})
-        (warning,) = caught
-        assert (warning.filename, warning.lineno) == ("user_code.py", 3)
+        with pytest.raises(TypeError):
+            call(x, idx)
 
     @pytest.mark.parametrize(
         "call,message",
         [
-            (lambda x, i: lucid.gather(x, 1), "missing required argument 'index'"),
+            (lambda x, i: lucid.gather(x, 1), "required positional argument: 'index'"),
             (lambda x, i: lucid.gather(x, 1.5, i), "dim must be an int"),
             (lambda x, i: lucid.gather(x, 1, [0, 1]), "index must be a Tensor"),
             (
@@ -217,7 +189,7 @@ class TestGatherOrder:
             ),
             (
                 lambda x, i: lucid.gather(x, i, index=i),
-                "multiple values for argument 'index'",
+                "0-d integer tensor",
             ),
             (lambda x, i: x.gather(1, i, 0), "takes 3 positional arguments"),
             (lambda x, i: lucid.gather(x, lucid.tensor(1.0), i), "0-d integer tensor"),
@@ -253,24 +225,22 @@ class TestGatherOrder:
 
 
 class TestLibraryUsesTheReferenceOrder:
-    """No caller inside Lucid takes the deprecated path."""
+    """No caller inside Lucid spells the old order."""
 
-    def test_internal_callers_do_not_warn(self) -> None:
+    def test_internal_callers_run(self) -> None:
         rng = _rng()
         logits = lucid.tensor(rng.standard_normal((4, 5)).astype(np.float32))
         target = lucid.tensor([0, 3, 1, 4])
         weight = lucid.tensor(rng.random(5).astype(np.float32))
         x = lucid.tensor(rng.standard_normal((2, 3, 6)).astype(np.float32))
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", LucidDeprecationWarning)
-            F.cross_entropy(logits, target, weight=weight)
-            F.nll_loss(F.log_softmax(logits, dim=1), target, weight=weight)
-            F.pad(x, (2, 2), mode="reflect")
-            F.pdist(lucid.tensor(rng.standard_normal((4, 3)).astype(np.float32)))
-            lucid.take_along_dim(x, lucid.tensor([[[0, 5]]]), dim=2)
-            lucid.view_as_complex(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
-            nn.RNN(6, 4, bidirectional=True)(x.transpose(0, 1))
-            lucid.distributions.Categorical(logits=logits).log_prob(target)
+        F.cross_entropy(logits, target, weight=weight)
+        F.nll_loss(F.log_softmax(logits, dim=1), target, weight=weight)
+        F.pad(x, (2, 2), mode="reflect")
+        F.pdist(lucid.tensor(rng.standard_normal((4, 3)).astype(np.float32)))
+        lucid.take_along_dim(x, lucid.tensor([[[0, 5]]]), dim=2)
+        lucid.view_as_complex(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
+        nn.RNN(6, 4, bidirectional=True)(x.transpose(0, 1))
+        lucid.distributions.Categorical(logits=logits).log_prob(target)
 
     def test_no_library_call_spells_the_old_order(self) -> None:
         """The callers the test above cannot reach — the zoo, Core ML export,

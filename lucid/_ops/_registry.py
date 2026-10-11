@@ -240,14 +240,14 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("unsqueeze",  _R.unsqueeze,  1, method_name="unsqueeze",  free_fn_name="unsqueeze",
             extra_kwargs=["dim"]),
     OpEntry("flatten",    A._flatten_adapter, 1, method_name="flatten", free_fn_name="flatten",
-            extra_kwargs=["start_axis", "end_axis", "start_dim", "end_dim"]),
+            extra_kwargs=["start_dim", "end_dim"]),
     OpEntry("permute",    A._permute_adapter, 1, method_name="permute",    free_fn_name="permute"),
     OpEntry("transpose",  A._transpose_adapter, 1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   A._swapaxes_adapter, 1, method_name="swapaxes",
             extra_kwargs=["axis0", "axis1"]),
     # broadcast_to is expand without the -1: a view on the CPU, as expand is.
-    OpEntry("broadcast_to",_R.expand,1,method_name="broadcast_to",free_fn_name="broadcast_to",
-            extra_kwargs=["shape"]),
+    OpEntry("broadcast_to", A._broadcast_to_adapter, 1, method_name="broadcast_to",
+            free_fn_name="broadcast_to", extra_kwargs=["size"]),
     OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
     OpEntry("as_strided", A._as_strided_adapter, 1, method_name="as_strided", free_fn_name="as_strided"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
@@ -262,7 +262,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("repeat_method", A._repeat_method_adapter, 1,
             method_name="repeat", free_fn_name=None),
     OpEntry("tile",       A._tile_adapter, 1, method_name="tile",     free_fn_name="tile",
-            extra_kwargs=["reps", "dims"]),
+            extra_kwargs=["dims"]),
     OpEntry("flip",       A._flip_adapter,   1, method_name="flip",   free_fn_name="flip",
             extra_kwargs=["dims"]),
     OpEntry("fliplr",     A._fliplr_adapter, 1, method_name="fliplr", free_fn_name="fliplr"),
@@ -270,16 +270,15 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("roll",       A._roll_adapter, 1, method_name="roll",     free_fn_name="roll",
             extra_kwargs=["shifts", "dims"]),
     OpEntry("tril",       A._tril_adapter, 1, method_name="tril",     free_fn_name="tril",
-            extra_kwargs=["k", "diagonal"]),
+            extra_kwargs=["diagonal"]),
     OpEntry("triu",       A._triu_adapter, 1, method_name="triu",     free_fn_name="triu",
-            extra_kwargs=["k", "diagonal"]),
+            extra_kwargs=["diagonal"]),
     OpEntry("pad",        A._pad_adapter, 1, method_name="pad",        free_fn_name="pad",
             extra_kwargs=["padding", "mode", "value"]),
 
     # ── index / gather ─────────────────────────────────────────────────────
     # gather(input, dim, index), the reference order.  The engine takes
-    # (a, indices, dim); the adapter reorders, and still answers the old
-    # Lucid order gather(input, indices, dim=-1) with a deprecation warning.
+    # (a, indices, dim); the adapter reorders.
     OpEntry("gather",    A._gather_adapter, 1, method_name="gather", free_fn_name="gather",
             extra_kwargs=["dim", "index"]),
     OpEntry("sort",      A._sort_adapter,    1, method_name="sort",      free_fn_name="sort",
@@ -319,7 +318,11 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim"]),
     OpEntry("hstack",      A._make_join_adapter(_R.hstack),      -1, free_fn_name="hstack"),
     OpEntry("vstack",      A._make_join_adapter(_R.vstack),      -1, free_fn_name="vstack"),
-    OpEntry("split",       A._split_adapter, 1,  method_name="split",      free_fn_name="split",
+    # The reference's method names the sizes ``split_size``, its free
+    # function ``split_size_or_sections``: one entry each.
+    OpEntry("split",       A._split_adapter, 1,  method_name=None,         free_fn_name="split",
+            extra_kwargs=["dim"]),
+    OpEntry("split_method", A._split_method_adapter, 1, method_name="split", free_fn_name=None,
             extra_kwargs=["dim"]),
     OpEntry("chunk",       A._chunk_adapter, 1, method_name="chunk",      free_fn_name="chunk",
             extra_kwargs=["chunks", "dim"]),

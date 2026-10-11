@@ -250,7 +250,10 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("TensorOrScalar", "lucid._types", "TensorOrScalar"),
         ("_IndexType", "lucid._types", "_IndexType"),
     ),
-    "lucid._tensor._metal_views": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid._tensor._metal_views": (
+        ("OpEntry", "lucid._ops._registry", "OpEntry"),
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+    ),
     "lucid._tensor._methods": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._tensor._repr": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._tensor._to": (("Tensor", "lucid._tensor.tensor", "Tensor"),),

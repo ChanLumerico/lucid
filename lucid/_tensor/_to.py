@@ -44,7 +44,7 @@ def _inject_to(cls: type) -> None:
 
     def to(
         self: Tensor,
-        *args: _dtype_cls | _device_cls | _C_engine.Device | str,
+        *args: _dtype_cls | _device_cls | _C_engine.Device | str | bool,
         **kwargs: object,
     ) -> Tensor:
         """
@@ -55,7 +55,8 @@ def _inject_to(cls: type) -> None:
           .to(dtype)                   → dtype conversion
           .to(device, dtype)           → both
           .to(other_tensor)            → match other's device & dtype
-          .to(device=, dtype=, copy=)
+          .to(device, dtype, non_blocking, copy)
+          .to(device=, dtype=, non_blocking=, copy=)
 
         Examples
         --------
@@ -101,7 +102,10 @@ def _inject_to(cls: type) -> None:
 
         target_device = self._impl.device
         target_dtype = self._impl.dtype
-        copy = _builtin_bool(kwargs.get("copy", False))
+        # The reference's positional tail is ``(non_blocking, copy)``; a
+        # transfer here is synchronous, so only ``copy`` is read.
+        flags = [a for a in args if isinstance(a, _builtin_bool)]
+        copy = _builtin_bool(kwargs.get("copy", flags[1] if len(flags) > 1 else False))
 
         for a in args:
             if isinstance(a, cls):

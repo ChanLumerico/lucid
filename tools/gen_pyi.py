@@ -1161,6 +1161,7 @@ class Tensor:
         self,
         size: tuple[int, ...],
         fill_value: float,
+        *,
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
@@ -1168,6 +1169,7 @@ class Tensor:
     def new_tensor(
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
+        *,
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
@@ -1180,7 +1182,10 @@ class Tensor:
     def share_memory_(self) -> Self: ...
     def fill_(self, value: float) -> Self: ...
     def copy_(self, other: Self) -> Self: ...
-    def flip(self, dims: int | list[int] | Sequence[int]) -> Self: ...
+    @overload
+    def flip(self, dims: _int | Sequence[_int]) -> Self: ...
+    @overload
+    def flip(self, *dims: _int) -> Self: ...
     def fliplr(self) -> Self: ...
     def flipud(self) -> Self: ...
     def index_select(self, dim: int, index: Self) -> Self: ...
@@ -1200,9 +1205,9 @@ class Tensor:
     def where(self, condition: Self, other: Self | float) -> Self: ...
     def diff(self, n: int = 1, dim: int = -1) -> Self: ...
     def addmm(
-        self, mat1: Self, mat2: Self, beta: float = 1.0, alpha: float = 1.0
+        self, mat1: Self, mat2: Self, *, beta: float = 1.0, alpha: float = 1.0
     ) -> Self: ...
-    def bmm(self, other: Self) -> Tensor: ...
+    def bmm(self, mat2: Self) -> Tensor: ...
     def zero_(self) -> Self: ...
     def register_hook(
         self, hook: Callable[[Tensor], Tensor | None]
@@ -1287,7 +1292,7 @@ class Tensor:
     def __setitem__(self, idx: _IndexType, value: TensorOrScalar) -> None: ...
 
     # ── injected .to() and device/dtype casts (_to.py) ─────────────────
-    def to(self, device: DeviceLike | DTypeLike | Tensor | None = None, dtype: DTypeLike | None = None, *, copy: _bool = False) -> Tensor: ...
+    def to(self, device: DeviceLike | DTypeLike | Tensor | None = None, dtype: DTypeLike | None = None, non_blocking: _bool = False, copy: _bool = False) -> Tensor: ...
     def metal(self) -> Tensor: ...
     def cpu(self) -> Tensor: ...
     def float(self) -> Tensor: ...
@@ -1307,7 +1312,7 @@ _SHADOWED_BUILTINS = re.compile(r"\b(int|float|bool)\b")
 
 def _method_param(param: inspect.Parameter, operand: bool) -> str:
     if operand:
-        ptype = "Tensor | _float" if param.name == "other" else "Tensor"
+        ptype = "Tensor | _float" if param.name in ("other", "exponent") else "Tensor"
     else:
         ptype = _SHADOWED_BUILTINS.sub(
             r"_\1", _PARAM_TYPE_MAP.get(param.name, "object")
@@ -1408,9 +1413,6 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
         "    def unsqueeze(self, dim: DimLike = None) -> Tensor: ...",
-        # The reference order.  The runtime method still takes the old
-        # Lucid order (index, dim) with a deprecation warning; the stub
-        # names only the order that stays.
         "    def gather(self, dim: _int, index: Tensor) -> Tensor: ...",
         "    def sort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
         "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
@@ -1420,24 +1422,33 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def log_softmax(self, dim: _int = -1) -> Tensor: ...",
         "    def clip(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
         "    def clamp(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
-        "    def repeat(self, *sizes: _int) -> Tensor: ...",
+        "    @overload",
+        "    def repeat(self, repeats: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def repeat(self, *repeats: _int) -> Tensor: ...",
         "    def repeat_interleave(self, repeats: _int, dim: _int | None = None) -> Tensor: ...",
-        "    def split(self, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
+        "    def split(self, split_size: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "    def any(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def all(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def t(self) -> Tensor: ...",
-        "    def view(self, *shape: _int | tuple[_int, ...]) -> Tensor: ...",
+        "    @overload",
+        "    def view(self, size: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def view(self, *size: _int) -> Tensor: ...",
         "    def narrow(self, dim: _int, start: _int, length: _int) -> Tensor: ...",
         "    def scatter(self, dim: _int, index: Tensor, src: Tensor | _float, reduce: str | None = None) -> Tensor: ...",
         "    def kthvalue(self, k: _int, dim: _int = -1, keepdim: _bool = False) -> Tensor: ...",
         "    def movedim(self, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...",
-        "    def flatten(self, start_axis: _int | None = None, end_axis: _int | None = None, *, start_dim: _int | None = None, end_dim: _int | None = None) -> Tensor: ...",
-        "    def tril(self, k: _int | None = None, *, diagonal: _int | None = None) -> Tensor: ...",
-        "    def triu(self, k: _int | None = None, *, diagonal: _int | None = None) -> Tensor: ...",
-        "    def tile(self, reps: _int | Sequence[_int] | None = None, *, dims: _int | Sequence[_int] | None = None) -> Tensor: ...",
+        "    def flatten(self, start_dim: _int = 0, end_dim: _int = -1) -> Tensor: ...",
+        "    def tril(self, diagonal: _int = 0) -> Tensor: ...",
+        "    def triu(self, diagonal: _int = 0) -> Tensor: ...",
+        "    @overload",
+        "    def tile(self, dims: _int | Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def tile(self, *dims: _int) -> Tensor: ...",
         "    def unflatten(self, dim: _int, sizes: Sequence[_int]) -> Tensor: ...",
         "    def histc(self, bins: _int = 100, min: _float = 0.0, max: _float = 0.0) -> Tensor: ...",
-        "    def take(self, indices: Tensor) -> Tensor: ...",
+        "    def take(self, index: Tensor) -> Tensor: ...",
         "    def nonzero(self, *, as_tuple: _bool = False) -> Tensor: ...",
         "    def eq(self, other: Tensor | _float) -> Tensor: ...",
         "    def ne(self, other: Tensor | _float) -> Tensor: ...",
@@ -1452,14 +1463,26 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def bitwise_right_shift(self, other: Tensor | _float) -> Tensor: ...",
         "    def isclose(self, other: Tensor | _float, rtol: _float = 1e-5, atol: _float = 1e-8, equal_nan: _bool = False) -> Tensor: ...",
         "    def scatter_add(self, dim: _int, index: Tensor, src: Tensor) -> Tensor: ...",
-        "    def reshape(self, *shape: _int | Sequence[_int]) -> Tensor: ...",
-        "    def permute(self, *dims: _int | Sequence[_int]) -> Tensor: ...",
-        "    def expand(self, *sizes: _int | Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def reshape(self, shape: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def reshape(self, *shape: _int) -> Tensor: ...",
+        "    @overload",
+        "    def permute(self, dims: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def permute(self, *dims: _int) -> Tensor: ...",
+        "    @overload",
+        "    def expand(self, size: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def expand(self, *size: _int) -> Tensor: ...",
         "    def diagonal(self, offset: _int = 0, dim1: _int = -2, dim2: _int = -1) -> Tensor: ...",
         "    def as_strided(self, size: Sequence[_int], stride: Sequence[_int], storage_offset: _int | None = None) -> Tensor: ...",
         "    def swapaxes(self, axis0: _int, axis1: _int) -> Tensor: ...",
         "    def transpose(self, dim0: _int | None = None, dim1: _int | None = None) -> Tensor: ...",
-        "    def broadcast_to(self, shape: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def broadcast_to(self, size: Sequence[_int]) -> Tensor: ...",
+        "    @overload",
+        "    def broadcast_to(self, *size: _int) -> Tensor: ...",
         "    def unbind(self, dim: _int = 0) -> list[Tensor]: ...",
         "    def rsqrt(self) -> Tensor: ...",
     ]
@@ -1959,6 +1982,10 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "a": "Tensor",
     "b": "Tensor",
     "tensor": "Tensor",
+    "mat2": "Tensor",
+    "vec2": "Tensor",
+    "condition": "Tensor",
+    "sorted_sequence": "Tensor",
     "tensors": "list[Tensor]",
     "arrays": "list[Tensor]",
     "indices": "Tensor",

@@ -1474,7 +1474,7 @@ class CorrCholeskyTransform(Transform):
         # Masked-out lanes are set to 1.0 *before* the log: a zero there
         # would make ``log(0) * 0`` a NaN and poison the whole sum.
         remaining = 1.0 - (y * y).cumsum(dim=-1)
-        mask = lucid.tril(lucid.ones(d, d, dtype=x.dtype, device=x.device), k=-2)
+        mask = lucid.tril(lucid.ones(d, d, dtype=x.dtype, device=x.device), diagonal=-2)
         safe = lucid.clip(remaining, min=1e-12) * mask + (1.0 - mask)
         stick_logdet = 0.5 * (safe.log() * mask).sum(dim=-1).sum(dim=-1)
 

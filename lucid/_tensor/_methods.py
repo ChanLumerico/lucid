@@ -21,6 +21,13 @@ if TYPE_CHECKING:
 
 _OPERANDS: dict[str, tuple[str, ...]] = {}
 
+#: Methods whose one argument is a list of ints, which the reference also
+#: reads spread out — ``x.permute(1, 0)`` is ``x.permute((1, 0))`` — where
+#: its free functions take the list alone (``lucid.permute(x, (1, 0))``).
+_SPREAD_INT_LIST = frozenset(
+    {"permute", "reshape", "view", "expand", "broadcast_to", "repeat", "tile", "flip"}
+)
+
 
 def _operand_names(e: OpEntry) -> tuple[str, ...]:
     """The advertised names of ``e``'s tensor operands after ``self``.
@@ -47,9 +54,15 @@ def _fixed_arity_method(e: OpEntry, tensor_cls: type) -> object:
     """
     # ``self`` is the only operand of a one-tensor op: nothing to bind.
     binds = e.n_tensor_args > 1
+    spreads = e.method_name in _SPREAD_INT_LIST
 
     def method(self: Tensor, *args: object, **kwargs: object) -> Tensor:
         """Standard-arity method body for registry-driven Tensor methods."""
+        # No arguments at all is the empty list spread out: ``x.reshape(*s)``
+        # for a 0-d ``s``, which the reference refuses and Lucid's callers
+        # write for 0-d tensors.
+        if spreads and (len(args) > 1 or not (args or kwargs)):
+            args = (args,)
         if kwargs and binds:
             names = _operand_names(e)
             args, kwargs = _bind_leading(method.__name__, names, args, kwargs)

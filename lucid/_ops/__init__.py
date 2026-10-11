@@ -154,19 +154,37 @@ _GENERIC_PARAM_REWRITE = {
 }
 
 
+#: Tensor operands the reference names other than ``input`` / ``other``.
+#: The wrapper binds its leading operands itself (:func:`_bind_leading`), so
+#: these names reach no callee: an engine builtin keeps its ``(a, b)``.
+_REFERENCE_OPERANDS: dict[str, tuple[str, ...]] = {
+    "pow": ("input", "exponent"),
+    "pow_": ("input", "exponent"),
+    "mm": ("input", "mat2"),
+    "bmm": ("input", "mat2"),
+    "dot": ("input", "tensor"),
+    "outer": ("input", "vec2"),
+    "tensordot": ("a", "b"),
+    "split": ("tensor",),
+}
+
+
 def _rename_leading_tensor_params(
-    sig: inspect.Signature, n_tensor_args: int
+    sig: inspect.Signature, n_tensor_args: int, op: str = ""
 ) -> inspect.Signature:
     """Rewrite the first ``n_tensor_args`` parameters from their internal /
     single-letter names (``a``, ``b``, ``x_impl``) to their user-facing
-    counterparts (``input``, ``other``).  Domain-specific names like
-    ``indices`` or ``mask`` are left alone — they already convey role."""
+    counterparts — the reference's (``_REFERENCE_OPERANDS``) for ``op``,
+    else ``input`` / ``other``.  Domain-specific names like ``indices`` or
+    ``mask`` are left alone — they already convey role."""
     if n_tensor_args <= 0:
         return sig
     params = list(sig.parameters.values())
     upto = _b_min(n_tensor_args, len(params))
+    named = _REFERENCE_OPERANDS.get(op, ())
     for i in range(upto):
-        new_name = _GENERIC_PARAM_REWRITE.get(params[i].name)
+        new_name = named[i] if i < len(named) else None
+        new_name = new_name or _GENERIC_PARAM_REWRITE.get(params[i].name)
         if new_name is not None:
             params[i] = params[i].replace(name=new_name)
     return sig.replace(parameters=params)
@@ -207,7 +225,7 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
             ]
         )
         if entry.n_tensor_args != -1:
-            return _rename_leading_tensor_params(sig, entry.n_tensor_args)
+            return _rename_leading_tensor_params(sig, entry.n_tensor_args, entry.name)
     else:
         try:
             if _FORWARDREF is not None:
@@ -246,7 +264,7 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
             ]
         return sig.replace(parameters=params)
 
-    return _rename_leading_tensor_params(sig, entry.n_tensor_args)
+    return _rename_leading_tensor_params(sig, entry.n_tensor_args, entry.name)
 
 
 # ── Keyword binding of the leading tensors ───────────────────────────────────
