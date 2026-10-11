@@ -1,6 +1,7 @@
 [build-system]
 requires = [
-    "setuptools>=68",
+    # 77 is the first release that reads PEP 639 `license-files`.
+    "setuptools>=77",
     "wheel",
     # Pinned to 3.0.x: pybind11's stub-introspection rendering (numeric
     # param unions, parameterized tuple returns) varies across minors, which
@@ -24,7 +25,8 @@ name = "lucid-dl"
 version = "3.15.5"
 description = "Apple Silicon ML framework"
 readme = "README.md"
-license = "MIT"
+license = "MIT AND BSD-3-Clause"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "ChanLumerico", email = "greensox284@gmail.com" }]
 # Lucid relies on PEP 649 lazy annotations (Python 3.14) to make
 # TYPE_CHECKING-only imports work in `|`-union annotations without
@@ -40,7 +42,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
-    # Note: SPDX `license = "MIT"` above replaces the legacy
+    # Note: the SPDX `license` expression above replaces the legacy
     # `License :: OSI Approved :: MIT License` classifier (PEP 639).
 ]
 

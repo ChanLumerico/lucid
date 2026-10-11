@@ -25,7 +25,8 @@ its gradient.  ``Y`` and ``K`` live on the positive half-line: ``-inf`` /
 ``+inf`` at 0 and NaN below, as the reference framework has them.
 
 The Cephes coefficient tables are those of the Cephes Mathematical Library
-(Stephen L. Moshier, 3-clause BSD licence).
+(Stephen L. Moshier, 3-clause BSD licence; see THIRD_PARTY_NOTICES.md at the
+repository root).
 """
 
 import math

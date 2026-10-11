@@ -368,7 +368,7 @@ op, and the PR checklist.
 
 ## 📜 License
 
-See [LICENSE](LICENSE).
+See [LICENSE](LICENSE). Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 <div align="center">
 
