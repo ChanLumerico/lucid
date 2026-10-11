@@ -35,8 +35,7 @@ def _input(rank: int, batched: bool, size: int = 9) -> np.ndarray:
     return _data(*((2, 3) if batched else (3,)), *(size,) * rank)
 
 
-# (kernel, stride, padding, dilation) — padding stays within half the kernel,
-# which the reference's 1-D check reads against the undilated kernel.
+# (kernel, stride, padding, dilation); padding is at most kernel // 2.
 _DILATED = [(2, 2, 0, 2), (3, 2, 1, 2), (3, 1, 1, 3), (2, 3, 1, 2)]
 
 
@@ -77,6 +76,27 @@ def test_max_pool_modules_take_dilation(
     layer = getattr(nn, f"MaxPool{rank}d")(3, stride=2, padding=1, dilation=2)
     want = getattr(ref.nn, f"MaxPool{rank}d")(3, stride=2, padding=1, dilation=2)
     _close(layer(lucid.tensor(x, device=device)), want(ref.from_numpy(x)))
+
+
+@pytest.mark.parametrize("rank", [1, 2, 3])
+@pytest.mark.parametrize("dilation", [1, 2, 3])
+@pytest.mark.parametrize("kernel,padding", [(3, 1), (3, 2), (4, 2), (4, 3), (2, 1)])
+def test_padding_past_half_the_kernel_is_refused_at_any_dilation(
+    ref: ModuleType, rank: int, dilation: int, kernel: int, padding: int
+) -> None:
+    # The limit is kernel_size // 2 whatever the dilation, though a dilated
+    # window padded further would still reach the input.
+    x = _input(rank, batched=True, size=12)
+    name = f"max_pool{rank}d"
+    args = (kernel, 1, padding, dilation)
+    if padding <= kernel // 2:
+        want = getattr(ref.nn.functional, name)(ref.from_numpy(x), *args)
+        _close(getattr(F, name)(lucid.tensor(x), *args), want)
+        return
+    with pytest.raises(RuntimeError, match="half"):
+        getattr(ref.nn.functional, name)(ref.from_numpy(x), *args)
+    with pytest.raises(ValueError, match="half"):
+        getattr(F, name)(lucid.tensor(x), *args)
 
 
 def test_a_dilated_window_wider_than_the_input_is_refused(ref: ModuleType) -> None:

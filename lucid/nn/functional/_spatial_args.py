@@ -151,8 +151,10 @@ def _pool_geometry(
 ) -> _PoolGeometry:
     """A pooling op's window, checked the way the reference checks it.
 
-    Padding may be at most half the window it pads: past that, a window
-    can hold nothing but padding.
+    Padding may be at most half the kernel size, ``kernel_size // 2``.
+    Dilation does not widen the limit; the reference refuses
+    ``kernel_size=3, padding=2, dilation=2`` too, though that window would
+    reach the input.
     """
     kernel = _ntuple(kernel_size, n, op, "kernel_size")
     _require_positive(kernel, op, "kernel_size")
@@ -161,11 +163,9 @@ def _pool_geometry(
     _require_positive(dilations, op, "dilation")
     pads = _ntuple(padding, n, op, "padding")
     _require_non_negative(pads, op, "padding")
-    for k, d, p in zip(kernel, dilations, pads, strict=True):
-        if p > ((k - 1) * d + 1) // 2:
-            raise ValueError(
-                f"{op}: padding should be at most half of the effective kernel "
-                f"size, got padding={pads}, kernel_size={kernel} and "
-                f"dilation={dilations}"
-            )
+    if any(p > k // 2 for k, p in zip(kernel, pads, strict=True)):
+        raise ValueError(
+            f"{op}: padding should be at most half of the kernel size, got "
+            f"padding={pads} and kernel_size={kernel}"
+        )
     return _PoolGeometry(kernel, strides, pads, dilations)
