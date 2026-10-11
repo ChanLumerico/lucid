@@ -165,6 +165,26 @@ if [[ -n "${PY}" && -f "${BASELINE_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1d. Stubs agree with the source and the loaded engine ───────────────────
+# Hard-fail, under a second.  ``tools/check_stubs.py`` regenerates the three
+# stubs and diffs them, and compares the hand-written engine sub-namespace
+# stubs (``_C_engine.nn`` / ``linalg`` / ``fft`` / ``einops`` / ``diffeq`` /
+# ``quantized`` / ``coreml`` / ``utils``) with the bound submodules: names
+# both ways and every function's parameter names (LCD-402 — ``linalg``
+# declared a ``foo`` the engine never had and omitted ``matrix_power``).
+# CI runs the same script through lucid/test/stubs; land runs it too.  Only
+# when Python or engine source, a stub, or the generator is staged.
+STUBS_SCRIPT="${REPO_ROOT}/tools/check_stubs.py"
+if [[ -n "${PY}" && -f "${STUBS_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMRD \
+        | grep -qE '^(lucid/.*\.(py|pyi|cpp|h|mm)|tools/(gen_pyi|check_stubs|stub_namespaces)\.py)$'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" "${STUBS_SCRIPT}" >&2); then
+            echo "  ❌  Pre-commit blocked: stubs disagree with the source or the engine (see above)." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 2. Docstring coverage gate ──────────────────────────────────────────────
 # Hard-fail.  The validator surfaces six distinct blind-spot categories
 # that all manifest as empty / sparse / misleading docs pages on the

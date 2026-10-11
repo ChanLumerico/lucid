@@ -6,8 +6,8 @@ Runs gen_pyi.py to a temp directory and diffs output against committed stubs.
 Exits non-zero if any stub is stale.
 """
 
-import sys
 import difflib
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -36,6 +36,21 @@ def main() -> int:
         generated = _run_gen_pyi_to_tempdir()
     except Exception as exc:
         print(f"[check_stubs] ERROR running gen_pyi: {exc}", file=sys.stderr)
+        return 1
+
+    from lucid._C import engine as _C_engine
+    from tools.stub_namespaces import namespace_drift, unpinned
+
+    drift = unpinned(namespace_drift(generated["lucid/_C/engine.pyi"], _C_engine))
+    for line in drift:
+        print(f"[check_stubs] NAMESPACE {line}")
+    if drift:
+        print(
+            f"\n[check_stubs] {len(drift)} engine sub-namespace stub(s) disagree with the"
+            " loaded engine.\n  Fix the _<name>_namespace classes in tools/gen_pyi.py"
+            " (C++ changes need the engine rebuilt first), then regenerate.",
+            file=sys.stderr,
+        )
         return 1
 
     for rel_path, new_content in generated.items():
@@ -71,13 +86,9 @@ def main() -> int:
             f"    git add {' '.join(stale)}\n",
             file=sys.stderr,
         )
-        print(
-            "\n  Commit blocked. Run the following to fix, then re-stage and commit:\n"
-        )
+        print("\n  Commit blocked. Run the following to fix, then re-stage and commit:\n")
         print("    python tools/gen_pyi.py")
-        print(
-            "    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi"
-        )
+        print("    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi")
         return 1
 
     print("[check_stubs] all stubs up to date.")
