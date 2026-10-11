@@ -119,25 +119,32 @@ def test_roformer_dropout_path_keeps_a_dead_row_finite() -> None:
     assert float(eval_out[0, 1].abs().max().item()) == 0.0
 
 
+def _called(node: ast.AST) -> set[str]:
+    return {
+        n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+        for n in ast.walk(node)
+        if isinstance(n, ast.Call)
+    }
+
+
 def _hand_rolled_dual_paths(source: str) -> list[str]:
-    """Functions that call the fused attention *and* a softmax themselves —
-    a second, hand-written path that can drift from the masked core."""
-    hits: list[str] = []
-    for fn in ast.walk(ast.parse(source)):
-        if not isinstance(fn, ast.FunctionDef):
-            continue
-        called = {
-            (
-                n.func.attr
-                if isinstance(n.func, ast.Attribute)
-                else getattr(n.func, "id", "")
-            )
-            for n in ast.walk(fn)
-            if isinstance(n, ast.Call)
-        }
-        if {"scaled_dot_product_attention", "softmax"} <= called:
-            hits.append(fn.name)
-    return hits
+    """Classes (or module-level functions) that call the fused attention
+    *and* a softmax themselves — a second, hand-written path that can drift
+    from the masked core.
+
+    Scanned per class, not per function: BERT kept its softmax in a helper
+    method and its fused call in ``forward``, which a per-function scan
+    passes.
+    """
+    tree = ast.parse(source)
+    units: list[ast.ClassDef | ast.FunctionDef] = [
+        node for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef))
+    ]
+    return [
+        unit.name
+        for unit in units
+        if {"scaled_dot_product_attention", "softmax"} <= _called(unit)
+    ]
 
 
 def test_zoo_attention_has_no_hand_rolled_second_path() -> None:
@@ -154,10 +161,15 @@ def test_zoo_attention_has_no_hand_rolled_second_path() -> None:
 
 
 def test_the_dual_path_check_can_fail() -> None:
+    """The shape LCD-387 had in BERT: the softmax in a helper method, the
+    fused call in ``forward``."""
     src = (
-        "def forward(self, q, k, v):\n"
-        "    if self.training:\n"
+        "class SelfAttention:\n"
+        "    def _unfused(self, q, k, v):\n"
         "        return F.softmax(q @ k, dim=-1) @ v\n"
-        "    return F.scaled_dot_product_attention(q, k, v)\n"
+        "    def forward(self, q, k, v):\n"
+        "        if self.output_attentions:\n"
+        "            return self._unfused(q, k, v)\n"
+        "        return F.scaled_dot_product_attention(q, k, v)\n"
     )
-    assert _hand_rolled_dual_paths(src) == ["forward"]
+    assert _hand_rolled_dual_paths(src) == ["SelfAttention"]
