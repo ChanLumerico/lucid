@@ -5,7 +5,7 @@
 # fmt: off
 
 from contextlib import AbstractContextManager
-from typing import Callable, Sequence, overload
+from typing import IO, Callable, Sequence, overload
 import builtins
 
 _float = builtins.float
@@ -70,9 +70,9 @@ bool = bool_
 # (re-export from lucid._device)
 
 # ── Global defaults ───────────────────────────────────────────────────────────
-def set_default_dtype(dt: dtype) -> None: ...
+def set_default_dtype(d: dtype, /) -> None: ...
 def get_default_dtype() -> dtype: ...
-def set_default_device(dev: device | str) -> None: ...
+def set_default_device(device: device | str) -> None: ...
 def get_default_device() -> device: ...
 
 # ── Gradient control ──────────────────────────────────────────────────────────
@@ -83,8 +83,13 @@ def is_grad_enabled() -> _bool: ...
 def set_grad_enabled(mode: _bool) -> None: ...
 
 # ── Serialization ─────────────────────────────────────────────────────────────
-def save(obj: object, path: str) -> None: ...
-def load(path: str, weights_only: _bool = True) -> object: ...
+def save(obj: object, f: str | bytes | IO[bytes], *, pickle_protocol: _int = 4) -> None: ...
+def load(
+    f: str | bytes | IO[bytes],
+    *,
+    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
+    weights_only: _bool = True,
+) -> object: ...
 def save_safetensors(
     state_dict: dict[str, Tensor],
     path: str,
@@ -135,10 +140,10 @@ def compile[**P, R](
 def compile(*, dynamic: _bool = ...) -> _CompileDecorator: ...
 
 # ── Type predicates ───────────────────────────────────────────────────────────
-def is_tensor(obj: object) -> _bool: ...
-def is_floating_point(t: Tensor) -> _bool: ...
-def is_complex(t: Tensor) -> _bool: ...
-def is_signed(t: Tensor) -> _bool: ...
+def is_tensor(obj: object, /) -> _bool: ...
+def is_floating_point(input: Tensor) -> _bool: ...
+def is_complex(input: Tensor) -> _bool: ...
+def is_signed(input: Tensor) -> _bool: ...
 
 # ── Tensor constructors (lucid.tensor / as_tensor / from_numpy) ──────────────
 def tensor(
@@ -154,7 +159,7 @@ def as_tensor(
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor: ...
-def from_numpy(arr: np.ndarray) -> Tensor: ...
+def from_numpy(ndarray: np.ndarray, /) -> Tensor: ...
 
 # ── Tensor factories — deterministic (creation.py) ───────────────────────
 def zeros(
@@ -210,28 +215,28 @@ def linspace(
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def zeros_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def ones_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def empty_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def full_like(
-    t: Tensor,
+    input: Tensor,
     fill_value: _complex,
     *,
     dtype: DTypeLike = None,
@@ -276,7 +281,7 @@ def randint(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def bernoulli(
-    p: _float,
+    input: _float,
     *,
     size: list[_int] | tuple[_int, ...] | None = None,
     dtype: DTypeLike = None,
@@ -295,14 +300,14 @@ def normal(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def rand_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def randn_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
@@ -1413,10 +1418,7 @@ def cumprod(input: Tensor, dim: DimLike = ...) -> Tensor:
     """
     ...
 def cummax(input: Tensor, dim: DimLike = ...) -> Tensor: ...
-def cummin(input: Tensor, dim: DimLike = ...) -> Tensor: ...
-def erf(input: Tensor) -> Tensor: ...
-def erfinv(input: Tensor) -> Tensor: ...
-def trace(input: Tensor) -> Tensor:
+def cummin(input: Tensor, dim: DimLike = ...) -> Tensor:
     r"""    Return the running minimum of ``input`` along ``dim``.
     
     Output ``i`` along ``dim`` is the minimum of elements ``0..i``.  Only the
@@ -1446,6 +1448,28 @@ def trace(input: Tensor) -> Tensor:
     >>> x = lucid.tensor([1.0, 3.0, 2.0, 4.0])
     >>> lucid.cummin(x, dim=0)
     Tensor([1., 1., 1., 1.])
+    """
+    ...
+def erf(input: Tensor) -> Tensor: ...
+def erfinv(input: Tensor) -> Tensor: ...
+def trace(input: Tensor) -> Tensor:
+    r"""    Sum of the main diagonal of a 2-D tensor.
+    
+    Parameters
+    ----------
+    input : Tensor
+        A 2-D tensor; it need not be square.
+    
+    Returns
+    -------
+    Tensor
+        0-d tensor holding :math:`\sum_i \text{input}[i, i]`.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.trace(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
+    tensor(5.)
     """
     ...
 def reshape(input: Tensor, shape: _int | Sequence[_int]) -> Tensor:
@@ -1523,7 +1547,7 @@ def unsqueeze(input: Tensor, dim: DimLike) -> Tensor:
 def flatten(input: Tensor, start_dim: _int = ..., end_dim: _int = ...) -> Tensor:
     r"""    Collapse a contiguous range of dimensions into a single dim.
     
-    All dimensions from ``start_axis`` to ``end_axis`` (inclusive) are
+    All dimensions from ``start_dim`` to ``end_dim`` (inclusive) are
     merged into one, preserving row-major order of the original elements.
     Often used to feed a feature map into a fully-connected head.
     
@@ -1531,18 +1555,15 @@ def flatten(input: Tensor, start_dim: _int = ..., end_dim: _int = ...) -> Tensor
     ----------
     input : Tensor
         Source tensor.
-    start_axis : int, default 0
+    start_dim : int, default 0
         First dimension to flatten.
-    end_axis : int, default -1
+    end_dim : int, default -1
         Last dimension to flatten (inclusive).
-    start_dim, end_dim : int, keyword-only, optional
-        The reference's names for ``start_axis`` and ``end_axis``; pass
-        one spelling of each.
     
     Returns
     -------
     Tensor
-        Tensor whose rank is reduced by ``end_axis - start_axis``.
+        Tensor whose rank is reduced by ``end_dim - start_dim``.
     
     Notes
     -----
@@ -1644,7 +1665,7 @@ def broadcast_to(input: Tensor, size: _int | Sequence[_int]) -> Tensor:
     r"""    Broadcast a tensor to a target shape.
     
     Performs the standard right-aligned broadcasting rules: dimensions of
-    size 1 in the input may be expanded to any size in ``shape``; new
+    size 1 in the input may be expanded to any size in ``size``; new
     leading dimensions may be prepended.  On the CPU the result is a view of
     ``input``'s buffer, as :func:`expand`'s is; on metal it is a copy.
     
@@ -1652,7 +1673,7 @@ def broadcast_to(input: Tensor, size: _int | Sequence[_int]) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    shape : ShapeLike
+    size : ShapeLike
         Target shape.  Must be broadcast-compatible with ``input.shape``.
     
     Returns
@@ -1690,7 +1711,7 @@ def expand(input: Tensor, size: _int | Sequence[_int]) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    sizes : int or sequence of int
+    size : int or sequence of int
         Target sizes.  ``-1`` means "keep current size".
     
     Returns
@@ -1709,7 +1730,7 @@ def expand(input: Tensor, size: _int | Sequence[_int]) -> Tensor:
     --------
     >>> import lucid
     >>> x = lucid.tensor([[1.0], [2.0], [3.0]])  # shape (3, 1)
-    >>> lucid.expand(x, 3, 4).shape
+    >>> lucid.expand(x, (3, 4)).shape
     (3, 4)
     """
     ...
@@ -1758,10 +1779,10 @@ def as_strided(input: Tensor, size: Sequence[_int], stride: Sequence[_int], stor
     """
     ...
 def tile(input: Tensor, dims: _int | Sequence[_int]) -> Tensor:
-    r"""    Construct a tensor by repeating ``input`` ``reps`` times per axis.
+    r"""    Construct a tensor by repeating ``input`` ``dims`` times per axis.
     
     Unlike :func:`repeat` (single axis), :func:`tile` accepts a per-axis
-    repetition vector.  If ``len(reps) < input.ndim`` it is padded on the
+    repetition vector.  If ``len(dims) < input.ndim`` it is padded on the
     left with 1's; if greater, ``input`` is treated as having leading
     size-1 dims.
     
@@ -1769,10 +1790,8 @@ def tile(input: Tensor, dims: _int | Sequence[_int]) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    reps : sequence of int
+    dims : int or sequence of int
         Repetition counts per axis (right-aligned with input shape).
-    dims : sequence of int, keyword-only, optional
-        The reference's name for ``reps``; pass one of the two.
     
     Returns
     -------
@@ -1929,7 +1948,7 @@ def roll(input: Tensor, shifts: _int | Sequence[_int], dims: _int | Sequence[_in
 def tril(input: Tensor, diagonal: _int = ...) -> Tensor:
     r"""    Return the lower-triangular part of a 2-D-or-higher tensor.
     
-    Elements above the ``k``-th diagonal (i.e. where ``j > i + k``) are
+    Elements above the ``diagonal``-th diagonal (where ``j > i + diagonal``) are
     zeroed out.  Batched matrices are supported — the operation is
     applied independently to each trailing 2-D slice.
     
@@ -1937,12 +1956,10 @@ def tril(input: Tensor, diagonal: _int = ...) -> Tensor:
     ----------
     input : Tensor
         Source tensor with ``ndim >= 2``.
-    k : int, default 0
+    diagonal : int, default 0
         Diagonal offset.  ``0`` keeps the main diagonal; positive values
         keep additional super-diagonals; negative values exclude
         sub-diagonals.
-    diagonal : int, keyword-only, optional
-        The reference's name for ``k``; pass one of the two.
     
     Returns
     -------
@@ -1967,18 +1984,16 @@ def tril(input: Tensor, diagonal: _int = ...) -> Tensor:
 def triu(input: Tensor, diagonal: _int = ...) -> Tensor:
     r"""    Return the upper-triangular part of a 2-D-or-higher tensor.
     
-    Elements below the ``k``-th diagonal (i.e. where ``j < i + k``) are
+    Elements below the ``diagonal``-th diagonal (where ``j < i + diagonal``) are
     zeroed.  Batched matrices are supported.
     
     Parameters
     ----------
     input : Tensor
         Source tensor with ``ndim >= 2``.
-    k : int, default 0
+    diagonal : int, default 0
         Diagonal offset.  Positive values exclude super-diagonals,
         negative values include sub-diagonals.
-    diagonal : int, keyword-only, optional
-        The reference's name for ``k``; pass one of the two.
     
     Returns
     -------
@@ -1994,7 +2009,7 @@ def triu(input: Tensor, diagonal: _int = ...) -> Tensor:
     --------
     >>> import lucid
     >>> A = lucid.ones(3, 3)
-    >>> lucid.triu(A, k=1)
+    >>> lucid.triu(A, diagonal=1)
     Tensor([[0., 1., 1.],
             [0., 0., 1.],
             [0., 0., 0.]])
@@ -2483,25 +2498,25 @@ def less_equal(input: Tensor, other: Tensor | Scalar) -> Tensor:
     """
     ...
 def where(condition: Tensor, input: TensorOrScalar | None = ..., other: TensorOrScalar | None = ...) -> Tensor:
-    r"""    Elementwise selection between ``x`` and ``y`` based on ``cond``.
+    r"""    Elementwise selection between ``input`` and ``other`` based on ``condition``.
     
-    For each element position the result is ``x`` where ``cond`` is
-    True and ``y`` otherwise.  All three inputs broadcast against each
+    For each element position the result is ``input`` where ``condition`` is
+    True and ``other`` otherwise.  All three inputs broadcast against each
     other.  ``where(cond)`` alone is ``nonzero(cond, as_tuple=True)``.
     
     Parameters
     ----------
-    cond : Tensor
+    condition : Tensor
         Boolean tensor.
-    x : Tensor, optional
-        Values used where ``cond`` is True.
-    y : Tensor, optional
-        Values used where ``cond`` is False.
+    input : Tensor, optional
+        Values used where ``condition`` is True.
+    other : Tensor, optional
+        Values used where ``condition`` is False.
     
     Returns
     -------
     Tensor or tuple of Tensor
-        Tensor of the broadcast shape, or with ``cond`` alone one
+        Tensor of the broadcast shape, or with ``condition`` alone one
         ``int64`` index tensor per dim.
     
     Notes
@@ -2515,8 +2530,8 @@ def where(condition: Tensor, input: TensorOrScalar | None = ..., other: TensorOr
             y_i & \text{otherwise} .
         \end{cases}
     
-    Differentiable through both ``x`` and ``y`` — the gradient is gated
-    by ``cond``.
+    Differentiable through both ``input`` and ``other`` — the gradient is gated
+    by ``condition``.
     
     Examples
     --------
@@ -3595,7 +3610,7 @@ def mm(input: Tensor, mat2: Tensor) -> Tensor:
     ----------
     input : Tensor
         Left matrix of shape ``(n, k)``.
-    other : Tensor or scalar
+    mat2 : Tensor or scalar
         Right matrix of shape ``(k, m)``. The inner dimension must match
         ``input``.
     
@@ -3637,7 +3652,7 @@ def bmm(input: Tensor, mat2: Tensor) -> Tensor:
     ----------
     input : Tensor
         Left operand of shape ``(B, n, k)``.
-    other : Tensor or scalar
+    mat2 : Tensor or scalar
         Right operand of shape ``(B, k, m)``.
     
     Returns
@@ -3854,10 +3869,10 @@ def logical_not(input: Tensor) -> Tensor:
     """
     ...
 def take(input: Tensor, index: Tensor) -> Tensor:
-    r"""    Return elements of ``input`` at the given flat ``indices``.
+    r"""    Return elements of ``input`` at the given flat ``index``.
     
     The input is treated as if it were flattened in row-major order; the
-    output has the same shape as ``indices``.  Unlike :func:`gather`
+    output has the same shape as ``index``.  Unlike :func:`gather`
     there is no per-axis selection — indices address the entire tensor
     as a 1-D array.
     
@@ -3865,13 +3880,13 @@ def take(input: Tensor, index: Tensor) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    indices : Tensor
+    index : Tensor
         Integer indices into the flattened input.
     
     Returns
     -------
     Tensor
-        Tensor of the same shape as ``indices``.
+        Tensor of the same shape as ``index``.
     
     Notes
     -----
@@ -4195,15 +4210,15 @@ def cartesian_prod(*tensors: Tensor) -> Tensor:
 def searchsorted(sorted_sequence: Tensor, input: Tensor, *, right: _bool = ...) -> Tensor:
     r"""    Find insertion points to maintain order in a sorted sequence.
     
-    For each ``v = values[i]`` returns the smallest ``j`` such that
-    ``v < sorted_seq[j]`` (or ``<=`` when ``right=True``).  Equivalent
+    For each ``v = input[i]`` returns the smallest ``j`` such that
+    ``v < sorted_sequence[j]`` (or ``<=`` when ``right=True``).  Equivalent
     to per-element binary search.
     
     Parameters
     ----------
-    sorted_seq : Tensor
+    sorted_sequence : Tensor
         1-D sorted sequence of boundaries.
-    values : Tensor
+    input : Tensor
         Query values (arbitrary shape).
     right : bool, default False
         Use ``<=`` rather than ``<`` for the comparison.
@@ -4212,7 +4227,7 @@ def searchsorted(sorted_sequence: Tensor, input: Tensor, *, right: _bool = ...) 
     -------
     Tensor
         ``int64`` tensor of insertion indices with the same shape as
-        ``values``.
+        ``input``.
     
     Notes
     -----
@@ -4228,7 +4243,7 @@ def searchsorted(sorted_sequence: Tensor, input: Tensor, *, right: _bool = ...) 
     """
     ...
 def bucketize(input: Tensor, boundaries: Tensor, *, right: _bool = ...) -> Tensor:
-    r"""    Return the bucket index of each element of ``values`` in ``boundaries``.
+    r"""    Return the bucket index of each element of ``input`` in ``boundaries``.
     
     For each ``v = values[i]`` returns the smallest ``j`` such that
     ``v < boundaries[j]`` (or ``v <= boundaries[j]`` when
@@ -4236,7 +4251,7 @@ def bucketize(input: Tensor, boundaries: Tensor, *, right: _bool = ...) -> Tenso
     
     Parameters
     ----------
-    values : Tensor
+    input : Tensor
         Query values (arbitrary shape).
     boundaries : Tensor
         1-D, sorted, monotonically non-decreasing bucket edges.
@@ -4247,7 +4262,7 @@ def bucketize(input: Tensor, boundaries: Tensor, *, right: _bool = ...) -> Tenso
     -------
     Tensor
         ``int64`` tensor of bucket indices with the same shape as
-        ``values``.
+        ``input``.
     
     Notes
     -----
@@ -4928,7 +4943,7 @@ def view(input: Tensor, size: _int | Sequence[_int]) -> Tensor:
     ----------
     input : Tensor
         Source tensor.
-    shape : int or sequence of int
+    size : int or sequence of int
         Target shape.  Exactly one entry may be ``-1`` (auto-inferred).
     
     Returns
@@ -5083,8 +5098,8 @@ def conj(input: Tensor) -> Tensor:
     ...
 
 # ── Reference-compatible overrides (see _ops/__init__.py) ───────────
-def sum(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...
-def mean(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
+def sum(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
+def mean(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
     r"""    Compute the arithmetic mean along ``dim``.
     
     The sample mean of ``n`` values is
@@ -5099,7 +5114,7 @@ def mean(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int or list of int, optional
         Dimension(s) to reduce.  ``None`` reduces over all elements.
@@ -5126,7 +5141,7 @@ def mean(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
     Tensor([2., 3.])
     """
     ...
-def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
+def prod(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
     r"""    Compute the product of elements along ``dim``.
     
     The multiplicative analogue of :func:`sum`.  Reducing along ``dim``
@@ -5135,7 +5150,7 @@ def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int or list of int, optional
         Dimension(s) to reduce.  ``None`` reduces over the whole tensor.
@@ -5164,9 +5179,9 @@ def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False
     Tensor(24.)
     """
     ...
-def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
-def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
-    r"""    Return the smallest element of ``x``, or the smallest along ``dim``.
+def max(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...
+def min(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor:
+    r"""    Return the smallest element of ``input``, or the smallest along ``dim``.
     
     Only the values come back.  The reference framework's ``min(x, dim)``
     returns a ``(values, indices)`` pair; here :func:`argmin` gives the
@@ -5174,7 +5189,7 @@ def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False)
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int or list of int, optional
         Axis or axes to reduce.  ``None`` reduces every element.
@@ -5325,7 +5340,7 @@ def std(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool
     tensor(1.118)
     """
     ...
-def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor:
+def argmax(input: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor:
     r"""    Return the indices of the maximum values along ``dim``.
     
     For each slice along ``dim`` the index of the largest element is returned.
@@ -5335,7 +5350,7 @@ def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int, optional
         Dimension along which to reduce.  ``None`` means reduce over the
@@ -5365,7 +5380,7 @@ def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor
     Tensor([1, 0])
     """
     ...
-def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor:
+def argmin(input: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor:
     r"""    Return the indices of the minimum values along ``dim``.
     
     Symmetric to :func:`argmax` — for each slice along ``dim`` the index of
@@ -5375,7 +5390,7 @@ def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim : int, optional
         Reduction dimension.  ``None`` reduces over all elements.
@@ -5401,7 +5416,7 @@ def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor
     Tensor(1)
     """
     ...
-def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
+def squeeze(input: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
     r"""    Remove dimensions of size 1.
     
     When ``dim`` is ``None`` *every* size-1 axis is removed.  When ``dim``
@@ -5410,7 +5425,7 @@ def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Source tensor.
     dim : int or list of int, optional
         Specific axis (or axes) to squeeze.
@@ -5418,7 +5433,7 @@ def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
     Returns
     -------
     Tensor
-        ``x`` without the chosen size-1 axes — a view of it on the CPU, a
+        ``input`` without the chosen size-1 axes — a view of it on the CPU, a
         copy on metal.
     
     Notes
@@ -5435,7 +5450,7 @@ def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
     (3, 4)
     """
     ...
-def repeat(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
+def repeat(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
     r"""    Tile a tensor along an existing dimension.
     
     Replicates ``input`` as a whole block ``repeats`` times along ``dim``.
@@ -5444,7 +5459,7 @@ def repeat(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Source tensor.
     repeats : int
         Number of block repetitions.
@@ -5469,8 +5484,8 @@ def repeat(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
     Tensor([1, 2, 3, 1, 2, 3])
     """
     ...
-def repeat_interleave(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
-    r"""    Repeat each element of ``x`` ``repeats`` times along ``dim``.
+def repeat_interleave(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor:
+    r"""    Repeat each element of ``input`` ``repeats`` times along ``dim``.
     
     The opposite ordering of :func:`repeat`: instead of replicating the
     whole block, each individual element (or sub-slice) is replicated
@@ -5478,7 +5493,7 @@ def repeat_interleave(x: Tensor, repeats: _int, dim: _int | None = None) -> Tens
     
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Source tensor.
     repeats : int
         Number of repeats per element.
@@ -5504,7 +5519,7 @@ def repeat_interleave(x: Tensor, repeats: _int, dim: _int | None = None) -> Tens
     Tensor([1, 1, 2, 2, 3, 3])
     """
     ...
-def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]:
+def split(tensor: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]:
     r"""    Split a tensor into pieces of explicit sizes along ``dim``.
     
     If ``split_size_or_sections`` is an integer, the tensor is split into
@@ -5514,7 +5529,7 @@ def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -
     
     Parameters
     ----------
-    x : Tensor
+    tensor : Tensor
         Source tensor.
     split_size_or_sections : int or list of int
         Per-piece size, or a list of sizes.
@@ -5524,7 +5539,7 @@ def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -
     Returns
     -------
     list of Tensor
-        The pieces of ``x`` — views of its buffer on the CPU, copies on
+        The pieces of ``tensor`` — views of its buffer on the CPU, copies on
         metal.
     
     Notes
@@ -5660,10 +5675,6 @@ def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor:
     
     Inverse op is :func:`scatter`.
     
-    Deprecated since 3.16: the old Lucid order ``gather(input, indices,
-    dim=-1)`` (an index tensor second, or the keyword ``indices=``) still
-    answers, with a ``LucidDeprecationWarning``, until 3.18.
-    
     Examples
     --------
     >>> import lucid
@@ -5673,168 +5684,7 @@ def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor:
     tensor([[1, 3], [5, 5]], dtype=lucid.int64)
     """
     ...
-
-# ── Constants ────────────────────────────────────────────────────────
-pi: _float
-e: _float
-inf: _float
-nan: _float
-newaxis: None
-
-# ── Composite ops (elementwise / shape / blas / reductions / predicates / dtype) ─
-def absolute(input: Tensor) -> Tensor: ...
-def acosh(input: Tensor) -> Tensor: ...
-def addbmm(input: Tensor, batch1: Tensor, batch2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
-def addcdiv(input: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: _float = ...) -> Tensor: ...
-def addcmul(input: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: _float = ...) -> Tensor: ...
-def addmm(input: Tensor, mat1: Tensor, mat2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
-def addmv(input: Tensor, mat: Tensor, vec: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
-def addr(input: Tensor, vec1: Tensor, vec2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
-def adjoint(input: Tensor) -> Tensor: ...
-def allclose(a: Tensor, b: Tensor, rtol: _float = ..., atol: _float = ..., equal_nan: _bool = ...) -> _bool: ...
-def amax(x: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
-def amin(x: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
-def angle(input: Tensor) -> Tensor: ...
-def arccosh(input: Tensor) -> Tensor: ...
-def arcsinh(input: Tensor) -> Tensor: ...
-def arctan2(input: Tensor, other: Tensor) -> Tensor: ...
-def arctanh(input: Tensor) -> Tensor: ...
-def argwhere(x: Tensor) -> Tensor: ...
-def asinh(input: Tensor) -> Tensor: ...
-def atanh(input: Tensor) -> Tensor: ...
-def atleast_1d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
-def atleast_2d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
-def atleast_3d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
-def baddbmm(input: Tensor, batch1: Tensor, batch2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
-def bincount(input: Tensor, weights: Tensor | None = ..., minlength: _int = ...) -> Tensor: ...
-def block_diag(*tensors: Tensor) -> Tensor: ...
-def can_cast(from_: dtype, to: dtype) -> _bool: ...
-def cdist(x1: Tensor, x2: Tensor, p: _float = ...) -> Tensor: ...
-def column_stack(tensors: Sequence[Tensor]) -> Tensor: ...
-def combinations(input: Tensor, r: _int = ..., with_replacement: _bool = ...) -> Tensor: ...
-def conj_physical(input: Tensor) -> Tensor: ...
-def copysign(x: Tensor, y: Tensor) -> Tensor: ...
-def corrcoef(input: Tensor) -> Tensor: ...
-def count_nonzero(x: Tensor, dim: _int | Sequence[_int] | None = ...) -> Tensor: ...
-def cov(input: Tensor, correction: _int = ...) -> Tensor: ...
-def diag_embed(x: Tensor, offset: _int = ..., dim1: _int = ..., dim2: _int = ...) -> Tensor: ...
-def digamma(x: Tensor) -> Tensor: ...
-def divide(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
-def dsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
-def dstack(tensors: Sequence[Tensor]) -> Tensor: ...
-def erfc(x: Tensor) -> Tensor: ...
-def expm1(input: Tensor) -> Tensor: ...
-def float_power(input: Tensor | Scalar, exponent: Tensor | Scalar) -> Tensor: ...
-def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor: ...
-def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor: ...
-def frexp(input: Tensor) -> tuple[Tensor, Tensor]: ...
-def gcd(x: Tensor, y: Tensor) -> Tensor: ...
-def ger(input: Tensor, vec2: Tensor) -> Tensor: ...
-def heaviside(input: Tensor, values: Tensor | Scalar) -> Tensor: ...
-def histogram(input: Tensor, bins: _int | Sequence[_float] | Tensor = ..., range: tuple[_float, _float] | None = ..., density: _bool = ..., weight: Tensor | None = ...) -> tuple[Tensor, Tensor]: ...
-def histogram2d(x: Tensor, y: Tensor, bins: _int | tuple[_int, _int] = ..., range: tuple[tuple[_float, _float], tuple[_float, _float]] | None = ..., density: _bool = ...) -> tuple[Tensor, Tensor, Tensor]: ...
-def histogramdd(input: Tensor, bins: _int | Sequence[_int] = ..., range: Sequence[tuple[_float, _float]] | None = ..., density: _bool = ...) -> tuple[Tensor, list[Tensor]]: ...
-def hsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
-def i0(x: Tensor) -> Tensor: ...
-def index_add(input: Tensor, dim: _int, index: Tensor, source: Tensor, alpha: _float = ...) -> Tensor: ...
-def index_copy(input: Tensor, dim: _int, index: Tensor, source: Tensor) -> Tensor: ...
-def index_fill(input: Tensor, dim: _int, index: Tensor, value: _float) -> Tensor: ...
-def index_put(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: _bool = ...) -> Tensor: ...
-def index_put_(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: _bool = ...) -> Tensor: ...
-def is_conj(input: Tensor) -> _bool: ...
-def is_neg(input: Tensor) -> _bool: ...
-def is_nonzero(input: Tensor) -> _bool: ...
-def is_same_size(input: Tensor, other: Tensor) -> _bool: ...
-def is_storage(obj: object, /) -> _bool: ...
-def isin(elements: Tensor | TensorLike, test_elements: Tensor | TensorLike, *, invert: _bool = ...) -> Tensor: ...
-def isneginf(input: Tensor) -> Tensor: ...
-def isposinf(input: Tensor) -> Tensor: ...
-def isreal(input: Tensor) -> Tensor: ...
-def lcm(x: Tensor, y: Tensor) -> Tensor: ...
-def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor: ...
-def lgamma(x: Tensor) -> Tensor: ...
-def logdet(x: Tensor) -> Tensor: ...
-def logit(input: Tensor, eps: _float | None = ...) -> Tensor: ...
-def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor: ...
-def moveaxis(input: Tensor, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...
-def multinomial(input: Tensor, num_samples: _int, replacement: _bool = ..., *, generator: _C_engine.Generator | None = ...) -> Tensor: ...
-def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
-def mv(input: Tensor, vec: Tensor) -> Tensor: ...
-def nanmean(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
-def nanmedian(input: Tensor, dim: _int | None = ..., keepdim: _bool = ...) -> Tensor | tuple[Tensor, Tensor]: ...
-def nanquantile(input: Tensor, q: _float | Sequence[_float] | Tensor, dim: _int | None = ..., keepdim: _bool = ..., interpolation: str = ...) -> Tensor: ...
-def nansum(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
-def negative(input: Tensor) -> Tensor: ...
-def numel(input: Tensor) -> _int: ...
-def poisson(input: Tensor, *, generator: _C_engine.Generator | None = ...) -> Tensor: ...
-def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor: ...
-def positive(input: Tensor) -> Tensor: ...
-def promote_types(type1: dtype, type2: dtype) -> dtype: ...
-def put(input: Tensor, index: Tensor, source: Tensor, accumulate: _bool = ...) -> Tensor: ...
-def quantile(input: Tensor, q: _float | Sequence[_float] | Tensor, dim: _int | None = ..., keepdim: _bool = ..., interpolation: str = ...) -> Tensor: ...
-def resolve_conj(input: Tensor) -> Tensor: ...
-def resolve_neg(input: Tensor) -> Tensor: ...
-def result_type(tensor: Tensor | Scalar, other: Tensor | Scalar) -> dtype: ...
-def rot90(input: Tensor, k: _int = ..., dims: Sequence[_int] = ...) -> Tensor: ...
-def row_stack(tensors: Sequence[Tensor]) -> Tensor: ...
-def rsub(input: Tensor, other: Tensor | Scalar, *, alpha: _float = ...) -> Tensor: ...
-def scatter_reduce(input: Tensor, dim: _int, index: Tensor, src: Tensor, reduce: str = ..., include_self: _bool = ...) -> Tensor: ...
-def signbit(input: Tensor) -> Tensor: ...
-def sinc(input: Tensor) -> Tensor: ...
-def std_mean(x: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ...
-def subtract(input: Tensor, other: Tensor | Scalar, *, alpha: _float = ...) -> Tensor: ...
-def swapaxes(input: Tensor, axis0: _int, axis1: _int) -> Tensor: ...
-def swapdims(input: Tensor, dim0: _int, dim1: _int) -> Tensor: ...
-def t(input: Tensor) -> Tensor: ...
-def take_along_dim(input: Tensor, indices: Tensor, dim: _int | None = ...) -> Tensor: ...
-def tensor_split(input: Tensor, indices_or_sections: _int | Sequence[_int], dim: _int = ...) -> list[Tensor]: ...
-def tril_indices(row: _int, col: _int | None = ..., offset: _int = ..., *, dtype: DTypeLike = ..., device: DeviceLike = ...) -> Tensor: ...
-def triu_indices(row: _int, col: _int | None = ..., offset: _int = ..., *, dtype: DTypeLike = ..., device: DeviceLike = ...) -> Tensor: ...
-def true_divide(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
-def var_mean(x: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ...
-def vdot(input: Tensor, other: Tensor) -> Tensor: ...
-def view_as_complex(input: Tensor) -> Tensor: ...
-def view_as_real(input: Tensor) -> Tensor: ...
-def vsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
-def xlogy(input: Tensor | Scalar, other: Tensor | Scalar) -> Tensor: ...
-
-# ── Tensor-method aliases ─────────────────
-def diff(input: Tensor) -> Tensor:
-    r"""    Compute the ``n``-th order finite difference along an axis.
-    
-    The first-order difference is :math:`y_i = x_{i+1} - x_i`; higher
-    orders apply the operation recursively.  Each application reduces
-    the size of the chosen axis by one.
-    
-    Parameters
-    ----------
-    input : Tensor
-        Source tensor.
-    
-    Returns
-    -------
-    Tensor
-        Tensor with the differenced axis shorter by ``n`` elements.
-    
-    Notes
-    -----
-    .. math::
-    
-        \Delta^n x[i] \;=\; \Delta^{n-1} x[i+1] \;-\; \Delta^{n-1} x[i] ,
-        \qquad \Delta^0 x = x .
-    
-    First-order differences are widely used as a discrete approximation
-    to the derivative on a unit-spaced grid.
-    
-    Examples
-    --------
-    >>> import lucid
-    >>> x = lucid.tensor([1.0, 3.0, 6.0, 10.0])
-    >>> lucid.diff(x)
-    Tensor([2., 3., 4.])
-    """
-    ...
-def lerp(input: Tensor) -> Tensor:
+def lerp(input: Tensor, end: Tensor, weight: _float | Tensor) -> Tensor:
     r"""    Linearly interpolate between ``input`` and an endpoint with a weight.
     
     Computes the affine combination
@@ -5871,3 +5721,163 @@ def lerp(input: Tensor) -> Tensor:
     Tensor([0.5, 1. , 2. ])
     """
     ...
+def diff(input: Tensor, n: _int = 1, dim: _int = -1) -> Tensor:
+    r"""    Compute the ``n``-th order finite difference along an axis.
+    
+    The first-order difference is :math:`y_i = x_{i+1} - x_i`; higher
+    orders apply the operation recursively.  Each application reduces
+    the size of the chosen axis by one.
+    
+    Parameters
+    ----------
+    input : Tensor
+        Source tensor.
+    
+    Returns
+    -------
+    Tensor
+        Tensor with the differenced axis shorter by ``n`` elements.
+    
+    Notes
+    -----
+    .. math::
+    
+        \Delta^n x[i] \;=\; \Delta^{n-1} x[i+1] \;-\; \Delta^{n-1} x[i] ,
+        \qquad \Delta^0 x = x .
+    
+    First-order differences are widely used as a discrete approximation
+    to the derivative on a unit-spaced grid.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([1.0, 3.0, 6.0, 10.0])
+    >>> lucid.diff(x)
+    Tensor([2., 3., 4.])
+    """
+    ...
+
+# ── Constants ────────────────────────────────────────────────────────
+pi: _float
+e: _float
+inf: _float
+nan: _float
+newaxis: None
+
+# ── Composite ops (elementwise / shape / blas / reductions / predicates / dtype) ─
+def absolute(input: Tensor) -> Tensor: ...
+def acosh(input: Tensor) -> Tensor: ...
+def addbmm(input: Tensor, batch1: Tensor, batch2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
+def addcdiv(input: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: _float = ...) -> Tensor: ...
+def addcmul(input: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: _float = ...) -> Tensor: ...
+def addmm(input: Tensor, mat1: Tensor, mat2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
+def addmv(input: Tensor, mat: Tensor, vec: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
+def addr(input: Tensor, vec1: Tensor, vec2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
+def adjoint(input: Tensor) -> Tensor: ...
+def allclose(input: Tensor, other: Tensor, rtol: _float = ..., atol: _float = ..., equal_nan: _bool = ...) -> _bool: ...
+def amax(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
+def amin(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
+def angle(input: Tensor) -> Tensor: ...
+def arccosh(input: Tensor) -> Tensor: ...
+def arcsinh(input: Tensor) -> Tensor: ...
+def arctan2(input: Tensor, other: Tensor) -> Tensor: ...
+def arctanh(input: Tensor) -> Tensor: ...
+def argwhere(input: Tensor) -> Tensor: ...
+def asinh(input: Tensor) -> Tensor: ...
+def atanh(input: Tensor) -> Tensor: ...
+def atleast_1d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
+def atleast_2d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
+def atleast_3d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]: ...
+def baddbmm(input: Tensor, batch1: Tensor, batch2: Tensor, *, beta: _float = ..., alpha: _float = ...) -> Tensor: ...
+def bincount(input: Tensor, weights: Tensor | None = ..., minlength: _int = ...) -> Tensor: ...
+def block_diag(*tensors: Tensor) -> Tensor: ...
+def can_cast(from_: dtype, to: dtype) -> _bool: ...
+def cdist(x1: Tensor, x2: Tensor, p: _float = ...) -> Tensor: ...
+def column_stack(tensors: Sequence[Tensor]) -> Tensor: ...
+def combinations(input: Tensor, r: _int = ..., with_replacement: _bool = ...) -> Tensor: ...
+def conj_physical(input: Tensor) -> Tensor: ...
+def copysign(input: Tensor, other: Tensor) -> Tensor: ...
+def corrcoef(input: Tensor) -> Tensor: ...
+def count_nonzero(input: Tensor, dim: _int | Sequence[_int] | None = ...) -> Tensor: ...
+def cov(input: Tensor, *, correction: _int = ...) -> Tensor: ...
+def diag_embed(input: Tensor, offset: _int = ..., dim1: _int = ..., dim2: _int = ...) -> Tensor: ...
+def digamma(input: Tensor) -> Tensor: ...
+def divide(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
+def dsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
+def dstack(tensors: Sequence[Tensor]) -> Tensor: ...
+def erfc(input: Tensor) -> Tensor: ...
+def expm1(input: Tensor) -> Tensor: ...
+def float_power(input: Tensor | Scalar, exponent: Tensor | Scalar) -> Tensor: ...
+def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor: ...
+def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor: ...
+def frexp(input: Tensor) -> tuple[Tensor, Tensor]: ...
+def gcd(input: Tensor, other: Tensor) -> Tensor: ...
+def ger(input: Tensor, vec2: Tensor) -> Tensor: ...
+def heaviside(input: Tensor, values: Tensor | Scalar) -> Tensor: ...
+def histogram(input: Tensor, bins: _int | Sequence[_float] | Tensor = ..., *, range: tuple[_float, _float] | None = ..., weight: Tensor | None = ..., density: _bool = ...) -> tuple[Tensor, Tensor]: ...
+def histogram2d(x: Tensor, y: Tensor, bins: _int | tuple[_int, _int] = ..., range: tuple[tuple[_float, _float], tuple[_float, _float]] | None = ..., density: _bool = ...) -> tuple[Tensor, Tensor, Tensor]: ...
+def histogramdd(input: Tensor, bins: _int | Sequence[_int] = ..., range: Sequence[tuple[_float, _float]] | None = ..., density: _bool = ...) -> tuple[Tensor, list[Tensor]]: ...
+def hsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
+def i0(input: Tensor) -> Tensor: ...
+def index_add(input: Tensor, dim: _int, index: Tensor, source: Tensor, *, alpha: _float = ...) -> Tensor: ...
+def index_copy(input: Tensor, dim: _int, index: Tensor, source: Tensor) -> Tensor: ...
+def index_fill(input: Tensor, dim: _int, index: Tensor, value: _float) -> Tensor: ...
+def index_put(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: _bool = ...) -> Tensor: ...
+def index_put_(input: Tensor, indices: list[Tensor] | tuple[Tensor, ...], values: Tensor, accumulate: _bool = ...) -> Tensor: ...
+def is_conj(input: Tensor) -> _bool: ...
+def is_neg(input: Tensor) -> _bool: ...
+def is_nonzero(input: Tensor) -> _bool: ...
+def is_same_size(input: Tensor, other: Tensor) -> _bool: ...
+def is_storage(obj: object, /) -> _bool: ...
+def isin(elements: Tensor | TensorLike, test_elements: Tensor | TensorLike, *, invert: _bool = ...) -> Tensor: ...
+def isneginf(input: Tensor) -> Tensor: ...
+def isposinf(input: Tensor) -> Tensor: ...
+def isreal(input: Tensor) -> Tensor: ...
+def lcm(input: Tensor, other: Tensor) -> Tensor: ...
+def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
+def lgamma(input: Tensor) -> Tensor: ...
+def logdet(input: Tensor) -> Tensor: ...
+def logit(input: Tensor, eps: _float | None = ...) -> Tensor: ...
+def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor: ...
+def moveaxis(input: Tensor, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...
+def multinomial(input: Tensor, num_samples: _int, replacement: _bool = ..., *, generator: _C_engine.Generator | None = ...) -> Tensor: ...
+def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
+def mv(input: Tensor, vec: Tensor) -> Tensor: ...
+def nanmean(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
+def nanmedian(input: Tensor, dim: _int | None = ..., keepdim: _bool = ...) -> Tensor | tuple[Tensor, Tensor]: ...
+def nanquantile(input: Tensor, q: _float | Sequence[_float] | Tensor, dim: _int | None = ..., keepdim: _bool = ..., *, interpolation: str = ...) -> Tensor: ...
+def nansum(input: Tensor, dim: _int | Sequence[_int] | None = ..., keepdim: _bool = ...) -> Tensor: ...
+def negative(input: Tensor) -> Tensor: ...
+def numel(input: Tensor) -> _int: ...
+def poisson(input: Tensor, generator: _C_engine.Generator | None = ...) -> Tensor: ...
+def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor: ...
+def positive(input: Tensor) -> Tensor: ...
+def promote_types(type1: dtype, type2: dtype) -> dtype: ...
+def put(input: Tensor, index: Tensor, source: Tensor, accumulate: _bool = ...) -> Tensor: ...
+def quantile(input: Tensor, q: _float | Sequence[_float] | Tensor, dim: _int | None = ..., keepdim: _bool = ..., *, interpolation: str = ...) -> Tensor: ...
+def resolve_conj(input: Tensor) -> Tensor: ...
+def resolve_neg(input: Tensor) -> Tensor: ...
+def result_type(tensor: Tensor | Scalar, other: Tensor | Scalar) -> dtype: ...
+def rot90(input: Tensor, k: _int = ..., dims: Sequence[_int] = ...) -> Tensor: ...
+def row_stack(tensors: Sequence[Tensor]) -> Tensor: ...
+def rsub(input: Tensor, other: Tensor | Scalar, *, alpha: _float = ...) -> Tensor: ...
+def scatter_reduce(input: Tensor, dim: _int, index: Tensor, src: Tensor, reduce: str = ..., *, include_self: _bool = ...) -> Tensor: ...
+def signbit(input: Tensor) -> Tensor: ...
+def sinc(input: Tensor) -> Tensor: ...
+def std_mean(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ...
+def subtract(input: Tensor, other: Tensor | Scalar, *, alpha: _float = ...) -> Tensor: ...
+def swapaxes(input: Tensor, axis0: _int, axis1: _int) -> Tensor: ...
+def swapdims(input: Tensor, dim0: _int, dim1: _int) -> Tensor: ...
+def t(input: Tensor) -> Tensor: ...
+def take_along_dim(input: Tensor, indices: Tensor, dim: _int | None = ...) -> Tensor: ...
+def tensor_split(input: Tensor, indices_or_sections: _int | Sequence[_int], dim: _int = ...) -> list[Tensor]: ...
+def tril_indices(row: _int, col: _int | None = ..., offset: _int = ..., *, dtype: DTypeLike = ..., device: DeviceLike = ...) -> Tensor: ...
+def triu_indices(row: _int, col: _int | None = ..., offset: _int = ..., *, dtype: DTypeLike = ..., device: DeviceLike = ...) -> Tensor: ...
+def true_divide(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
+def var_mean(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ...
+def vdot(input: Tensor, other: Tensor) -> Tensor: ...
+def view_as_complex(input: Tensor) -> Tensor: ...
+def view_as_real(input: Tensor) -> Tensor: ...
+def vsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
+def xlogy(input: Tensor | Scalar, other: Tensor | Scalar) -> Tensor: ...
+

@@ -636,6 +636,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ContinuousBernoulli.icdf stays in [0, 1]; BSL-1.0
 
+- stubs and docstrings bind what the runtime binds
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

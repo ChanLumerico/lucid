@@ -1518,7 +1518,7 @@ _INIT_HEADER = """\
 # fmt: off
 
 from contextlib import AbstractContextManager
-from typing import Callable, Sequence, overload
+from typing import IO, Callable, Sequence, overload
 import builtins
 
 _float = builtins.float
@@ -1583,9 +1583,9 @@ bool = bool_
 # (re-export from lucid._device)
 
 # ── Global defaults ───────────────────────────────────────────────────────────
-def set_default_dtype(dt: dtype) -> None: ...
+def set_default_dtype(d: dtype, /) -> None: ...
 def get_default_dtype() -> dtype: ...
-def set_default_device(dev: device | str) -> None: ...
+def set_default_device(device: device | str) -> None: ...
 def get_default_device() -> device: ...
 
 # ── Gradient control ──────────────────────────────────────────────────────────
@@ -1596,8 +1596,13 @@ def is_grad_enabled() -> _bool: ...
 def set_grad_enabled(mode: _bool) -> None: ...
 
 # ── Serialization ─────────────────────────────────────────────────────────────
-def save(obj: object, path: str) -> None: ...
-def load(path: str, weights_only: _bool = True) -> object: ...
+def save(obj: object, f: str | bytes | IO[bytes], *, pickle_protocol: _int = 4) -> None: ...
+def load(
+    f: str | bytes | IO[bytes],
+    *,
+    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
+    weights_only: _bool = True,
+) -> object: ...
 def save_safetensors(
     state_dict: dict[str, Tensor],
     path: str,
@@ -1648,10 +1653,10 @@ def compile[**P, R](
 def compile(*, dynamic: _bool = ...) -> _CompileDecorator: ...
 
 # ── Type predicates ───────────────────────────────────────────────────────────
-def is_tensor(obj: object) -> _bool: ...
-def is_floating_point(t: Tensor) -> _bool: ...
-def is_complex(t: Tensor) -> _bool: ...
-def is_signed(t: Tensor) -> _bool: ...
+def is_tensor(obj: object, /) -> _bool: ...
+def is_floating_point(input: Tensor) -> _bool: ...
+def is_complex(input: Tensor) -> _bool: ...
+def is_signed(input: Tensor) -> _bool: ...
 
 # ── Tensor constructors (lucid.tensor / as_tensor / from_numpy) ──────────────
 def tensor(
@@ -1667,7 +1672,7 @@ def as_tensor(
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor: ...
-def from_numpy(arr: np.ndarray) -> Tensor: ...
+def from_numpy(ndarray: np.ndarray, /) -> Tensor: ...
 
 # ── Tensor factories — deterministic (creation.py) ───────────────────────
 def zeros(
@@ -1723,28 +1728,28 @@ def linspace(
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def zeros_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def ones_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def empty_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def full_like(
-    t: Tensor,
+    input: Tensor,
     fill_value: _complex,
     *,
     dtype: DTypeLike = None,
@@ -1789,7 +1794,7 @@ def randint(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def bernoulli(
-    p: _float,
+    input: _float,
     *,
     size: list[_int] | tuple[_int, ...] | None = None,
     dtype: DTypeLike = None,
@@ -1808,14 +1813,14 @@ def normal(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def rand_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...
 def randn_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
@@ -2328,7 +2333,7 @@ def _sig_from_callable(name: str, fn: object) -> str:
 # reference order that parser accepts (H9: no *args / **kwargs in a stub).
 _COMPOSITE_SIGNATURES: dict[str, str] = {
     name: (
-        f"def {name}(x: Tensor, dim: _int | Sequence[_int] | None = None, "
+        f"def {name}(input: Tensor, dim: _int | Sequence[_int] | None = None, "
         "unbiased: _bool | None = None, keepdim: _bool = False, *, "
         "correction: _int | _float | None = None) -> tuple[Tensor, Tensor]: ..."
     )
@@ -2525,23 +2530,27 @@ def gen_init_pyi() -> tuple[str, int]:
     # Uses _int / _bool aliases (defined at top of _INIT_HEADER) to avoid shadowing
     # by lucid's own int / bool dtype aliases.
     overrides = [
-        "def sum(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
-        "def mean(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def sum(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def mean(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def prod(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def max(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def min(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def var(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
         "def std(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
-        "def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor: ...",
-        "def repeat(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
-        "def repeat_interleave(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
-        "def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
+        "def argmax(input: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def argmin(input: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def squeeze(input: Tensor, dim: _int | list[_int] | None = None) -> Tensor: ...",
+        "def repeat(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "def repeat_interleave(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "def split(tensor: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "def tensordot(a: Tensor, b: Tensor, dims: _int | list[list[_int]] = 2) -> Tensor: ...",
         "def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]: ...",
         "def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor: ...",
+        # ``lucid.lerp`` / ``lucid.diff`` forward to the method of that name.
+        "def lerp(input: Tensor, end: Tensor, weight: _float | Tensor) -> Tensor: ...",
+        "def diff(input: Tensor, n: _int = 1, dim: _int = -1) -> Tensor: ...",
     ]
+    seen.update(line.split("(")[0].removeprefix("def ").strip() for line in overrides)
 
     # ── Composite ops (lucid._ops.composite) ─────────────────────────────────
     import lucid._ops.composite as _comp
