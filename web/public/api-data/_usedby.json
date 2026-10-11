@@ -22,6 +22,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid._factories._build"
+    },
+    {
+      "kind": "module",
       "module": "lucid._factories.converters"
     },
     {
@@ -51,6 +55,10 @@
     {
       "kind": "module",
       "module": "lucid._ops.composite.indexing"
+    },
+    {
+      "kind": "module",
+      "module": "lucid._ops.composite.shape"
     },
     {
       "kind": "module",
@@ -94,11 +102,11 @@
     },
     {
       "kind": "module",
-      "module": "lucid.autograd._functional"
+      "module": "lucid.autograd._grad_mode"
     },
     {
       "kind": "module",
-      "module": "lucid.autograd._grad_mode"
+      "module": "lucid.autograd._hooks"
     },
     {
       "kind": "module",
@@ -464,6 +472,10 @@
   "lucid.autograd._backward.backward": [
     {
       "kind": "module",
+      "module": "lucid._tensor.tensor"
+    },
+    {
+      "kind": "module",
       "module": "lucid.autograd"
     },
     {
@@ -528,6 +540,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.autograd._backward"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.autograd._functional"
+    },
+    {
+      "kind": "module",
       "module": "lucid.autograd.checkpoint"
     },
     {
@@ -563,6 +583,10 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.autograd._backward"
     },
     {
       "kind": "module",
