@@ -425,7 +425,14 @@ def _dynamic_mapping() -> dict[type, _DynFromFloat]:
     """Map each float module type to its dynamic-quant ``from_float`` builder."""
     import lucid.nn.quantized.dynamic as nnqd
 
-    return {nn.Linear: nnqd.Linear.from_float, nn.LSTM: nnqd.LSTM.from_float}
+    return {
+        nn.Linear: nnqd.Linear.from_float,
+        nn.LSTM: nnqd.LSTM.from_float,
+        nn.GRU: nnqd.GRU.from_float,
+        nn.LSTMCell: nnqd.LSTMCell.from_float,
+        nn.GRUCell: nnqd.GRUCell.from_float,
+        nn.RNNCell: nnqd.RNNCell.from_float,
+    }
 
 
 def quantize_dynamic(
@@ -439,7 +446,8 @@ def quantize_dynamic(
     ``quantize_dynamic`` is the whole dynamic-PTQ workflow in one call: unlike
     the static ``prepare`` → *calibrate* → ``convert`` flow it needs **no
     calibration data and no observers**. Every module whose type is in
-    ``qconfig_spec`` (default ``{Linear, LSTM}``) is swapped in place for its
+    ``qconfig_spec`` (default: Linear, LSTM, GRU and the LSTM / GRU / RNN
+    cells) is swapped in place for its
     dynamic counterpart, which stores its weight as int8 codes but measures the
     activation range and quantizes activations *per forward*, at runtime. That
     makes it the go-to for models where activation statistics vary widely between
@@ -467,7 +475,9 @@ def quantize_dynamic(
         it into, so the quantized module is returned directly.
     qconfig_spec : set of module types, optional
         Which module types to quantize; ``None`` (default) uses the mapping's
-        keys — ``{nn.Linear, nn.LSTM}``.
+        keys — ``{nn.Linear, nn.LSTM, nn.GRU, nn.LSTMCell, nn.GRUCell,
+        nn.RNNCell}``, the reference framework's dynamic set.  ``nn.RNN`` and
+        the convolutions have no dynamic form.
     dtype : QDtype, default ``qint8``
         The quantized dtype for the weights (its ``bits`` also selects the MLX
         fast-path bit width when that backend is active).
@@ -490,6 +500,9 @@ def quantize_dynamic(
       aimed at the weight-heavy layers.
     - If no module of a targeted type is found, a ``UserWarning`` is raised and
       the model is returned unchanged.
+    - A type named in ``qconfig_spec`` that has no dynamic form (``nn.Conv2d``,
+      ``nn.RNN``) stays float, with a ``UserWarning`` naming it — the
+      reference framework leaves it float silently.
     - The model is switched to ``eval`` mode before swapping.
 
     Examples
@@ -510,7 +523,7 @@ def quantize_dynamic(
 
     >>> conv = nn.Sequential(nn.Conv2d(3, 8, 3))
     >>> Q.quantize_dynamic(conv) is not None    # doctest: +SKIP
-    UserWarning: quantize_dynamic(): no module of a targeted type (Linear, LSTM) found ...
+    UserWarning: quantize_dynamic(): no module of a targeted type (GRU, ...) found ...
 
     See Also
     --------
@@ -518,6 +531,7 @@ def quantize_dynamic(
     lucid.quantization.convert : Static-PTQ bake step.
     lucid.quantization.prepare_qat : Quantization-aware training entry point.
     lucid.nn.quantized.dynamic.Linear : The dynamic quantized Linear installed here.
+    lucid.nn.quantized.dynamic.GRU : The dynamic quantized GRU installed here.
     """
     import lucid
 
@@ -528,19 +542,38 @@ def quantize_dynamic(
         mapping = dict(mapping)
         mapping[nn.Linear] = _mlx_dynamic_builder()
     types = qconfig_spec if qconfig_spec is not None else set(mapping)
-    if not any(type(m) in types for m in model.modules()):
-        warnings.warn(
-            "quantize_dynamic(): no module of a targeted type "
-            f"({', '.join(sorted(t.__name__ for t in types))}) found — "
-            "the model is returned unchanged.",
-            stacklevel=2,
-        )
+    _warn_left_float(model, types, set(mapping))
     # Handle a bare top-level target (no parent to swap it in).
     build = mapping.get(type(model))
     if build is not None and type(model) in types:
         return build(model, dtype)
     _swap_dynamic(model, mapping, types, dtype)
     return model
+
+
+def _warn_left_float(model: nn.Module, types: set[type], mapped: set[type]) -> None:
+    """Warn when ``quantize_dynamic`` would leave every targeted module float.
+
+    Either no module of a targeted type is in ``model``, or a targeted type
+    present in it has no dynamically quantized form.  Both name the types.
+    """
+    present = {type(m) for m in model.modules()} & types
+    if not present:
+        warnings.warn(
+            "quantize_dynamic(): no module of a targeted type "
+            f"({', '.join(sorted(t.__name__ for t in types))}) found — "
+            "the model is returned unchanged.",
+            # warn ← _warn_left_float ← quantize_dynamic ← caller
+            stacklevel=3,
+        )
+    unmapped = present - mapped
+    if unmapped:
+        warnings.warn(
+            f"quantize_dynamic(): {', '.join(sorted(t.__name__ for t in unmapped))} "
+            "has no dynamically quantized form and stays float; dynamic "
+            f"quantization covers {', '.join(sorted(t.__name__ for t in mapped))}.",
+            stacklevel=3,
+        )
 
 
 def _swap_dynamic(

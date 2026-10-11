@@ -163,7 +163,6 @@
     "lucid/nn/quantized/conv.py": 2,
     "lucid/nn/quantized/conv_transpose.py": 13,
     "lucid/nn/quantized/dynamic/linear.py": 1,
-    "lucid/nn/quantized/dynamic/rnn.py": 3,
     "lucid/nn/quantized/functional_module.py": 1,
     "lucid/nn/quantized/intrinsic.py": 4,
     "lucid/nn/quantized/linear.py": 1,

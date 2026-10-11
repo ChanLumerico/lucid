@@ -7,9 +7,9 @@ is the go-to for Linear-heavy / Transformer inference, produced by
 """
 
 from lucid.nn.quantized.dynamic.linear import Linear
-from lucid.nn.quantized.dynamic.rnn import LSTM
+from lucid.nn.quantized.dynamic.rnn import GRU, LSTM, GRUCell, LSTMCell, RNNCell
 
-__all__ = ["Linear", "LSTM"]
+__all__ = ["Linear", "LSTM", "GRU", "LSTMCell", "GRUCell", "RNNCell"]
 
 
 def __dir__() -> list[str]:
