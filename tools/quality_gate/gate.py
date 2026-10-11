@@ -208,7 +208,10 @@ def rebaseline(root: Path, collectors: list[Collector], reason: str, workdir: Pa
 def _extract(root: Path, ref: str, dest: Path) -> None:
     """Materialise *ref*'s tree (the parts the gate reads) without a git worktree."""
     present = git(root, "ls-tree", "--name-only", ref).split("\n")
-    wanted = [p for p in ("lucid", "pyproject.toml", "mypy.ini", ".gitignore") if p in present]
+    # tools/: mypy follows lucid/'s imports into it and counts what it finds.
+    wanted = [
+        p for p in ("lucid", "tools", "pyproject.toml", "mypy.ini", ".gitignore") if p in present
+    ]
     proc = subprocess.run(
         ["git", "archive", "--format=tar", ref, "--", *wanted],
         cwd=root,

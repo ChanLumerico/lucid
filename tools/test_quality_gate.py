@@ -293,6 +293,24 @@ def test_diff_counts_a_mypy_finding_in_a_new_file(tmp_path: Path) -> None:
     assert full.returncode == 1 and "redundant-expr" in full.stdout, full.stdout
 
 
+def test_mypy_counts_an_error_in_a_tools_module_lucid_imports(tmp_path: Path) -> None:
+    """LCD-317: ``mypy --strict lucid/`` follows lucid/'s imports into tools/
+    and fails on what it finds there; the gate runs that same command, so it
+    must count those findings too instead of keeping lucid/ files only."""
+    root = tmp_path / "repo"
+    (root / "lucid").mkdir(parents=True)
+    (root / "tools").mkdir()
+    (root / "lucid" / "__init__.py").write_text("from tools import helper\n")
+    (root / "tools" / "helper.py").write_text(CLEAN)
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t", "--collectors", "mypy")
+    assert done.returncode == 0, done.stdout + done.stderr
+    (root / "tools" / "helper.py").write_text(CLEAN + "\nwrong: int = add(1, 2) + 'a'\n")
+    out = gate(root, "--full", "--collectors", "mypy")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "tools/helper.py" in out.stdout, out.stdout
+
+
 def test_a_finding_moved_into_a_new_file_is_an_increase(repo: Path) -> None:
     """Counts are never netted across files: only a git rename carries them."""
     (repo / "lucid" / "pkg" / "other.py").write_text(CLEAN)

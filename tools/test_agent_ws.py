@@ -16,6 +16,7 @@ Not under ``lucid/test`` (the default ``testpaths``), so it runs on request::
     .venv/bin/python3 -m pytest tools/test_agent_ws.py
 """
 
+import importlib.util
 import json
 import os
 import shlex
@@ -205,3 +206,40 @@ def test_land_takes_an_audit_baseline_that_agrees_with_itself(scratch: Scratch) 
     result = land(scratch)
     assert result.returncode == 0, result.stdout + result.stderr
     assert scratch.git(scratch.main, "cat-file", "-e", f"main:{COVERAGE}").returncode == 0
+
+
+def test_worktree_venv_resolves_lucid_and_tools_without_the_root_on_sys_path(
+    tmp_path: Path,
+) -> None:
+    """LCD-317: mypy silences errors in modules under any ``sys.path`` entry,
+    so the worktree venv maps ``lucid`` and ``tools`` with a finder instead of
+    putting the worktree root on ``sys.path``."""
+    spec = importlib.util.spec_from_file_location("agent_ws", AGENT_WS)
+    assert spec is not None and spec.loader is not None
+    agent_ws = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agent_ws)
+    root, site, main_site = tmp_path / "wt", tmp_path / "site", tmp_path / "main-site"
+    for d in (root / "lucid", root / "tools", site, main_site):
+        d.mkdir(parents=True)
+    (root / "lucid" / "__init__.py").write_text("")
+    (root / "tools" / "helper.py").write_text("")
+    for name, text in agent_ws.venv_site_files(root, main_site).items():
+        (site / name).write_text(text)
+    probe = (
+        "import site, sys; site.addsitedir(sys.argv[1]);"
+        "import lucid, tools.helper;"
+        "print(lucid.__file__); print(tools.helper.__file__);"
+        "print(sys.argv[2] in sys.path, sys.argv[3] in sys.path)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-S", "-c", probe, str(site), str(root), str(main_site)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert out == [
+        str(root / "lucid" / "__init__.py"),
+        str(root / "tools" / "helper.py"),
+        "False True",
+    ]

@@ -446,10 +446,11 @@ def bootstrap(root: Path, main_root: Path) -> list[str]:
             dst.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(["cp", "-c", str(so), str(dst)], check=True)
             done.append(f"cloned {dst.relative_to(root)}")
-    # 2. A light venv: the worktree root first on sys.path, then the main venv's
-    #    site-packages for every dependency.  `lucid` therefore resolves to this
-    #    worktree even for `python tools/x.py`, and the shared editable install
-    #    is never touched.
+    # 2. A light venv: `lucid` and `tools` from this worktree, then the main
+    #    venv's site-packages for every dependency.  `lucid` therefore resolves
+    #    to this worktree even for `python tools/x.py`, and the shared editable
+    #    install is never touched.  Rewritten when stale, so an older worktree
+    #    picks up a change on its next bootstrap.
     venv_py = root / ".venv/bin/python3"
     main_py = main_root / ".venv/bin/python3"
     if not venv_py.exists() and main_py.exists():
@@ -457,12 +458,14 @@ def bootstrap(root: Path, main_root: Path) -> list[str]:
             [str(main_py), "-m", "venv", "--without-pip", str(root / ".venv")],
             check=True,
         )
+        done.append("created .venv (worktree lucid + main venv packages)")
+    if venv_py.exists() and main_py.exists():
         main_site = next((main_root / ".venv/lib").glob("python3.*/site-packages"))
         site = next((root / ".venv/lib").glob("python3.*/site-packages"))
-        (site / "_lucid_worktree.pth").write_text(
-            f"{root}\nimport site; site.addsitedir({str(main_site)!r})\n"
-        )
-        done.append("created .venv (worktree lucid + main venv packages)")
+        for name, text in venv_site_files(root, main_site).items():
+            if not (site / name).is_file() or (site / name).read_text() != text:
+                (site / name).write_text(text)
+                done.append(f"wrote .venv site-packages/{name}")
     # 3. The vault is not in git; link its folders so notes written here land
     #    in the one shared vault instead of a copy that dies with the worktree.
     vault = main_root / "obsidian"
@@ -476,6 +479,42 @@ def bootstrap(root: Path, main_root: Path) -> list[str]:
             link.symlink_to(entry)
             done.append(f"linked obsidian/{entry.name}")
     return done
+
+
+def venv_site_files(root: Path, main_site: Path) -> dict[str, str]:
+    """The worktree venv's site-packages additions, by file name.
+
+    A meta-path finder rather than the worktree root on ``sys.path``: mypy
+    reads the interpreter's ``sys.path`` as installed packages and silences
+    every error in a module it finds under one of those directories.  A root
+    entry therefore hid the errors of the ``tools/`` modules ``lucid/``
+    imports in worktrees only, while the main checkout (an editable *finder*)
+    and CI reported them (LCD-317).
+    """
+    finder = (
+        '"""Written by tools/agent_ws.py bootstrap: lucid and tools from this worktree."""\n'
+        "\n"
+        "import sys\n"
+        "from importlib.machinery import PathFinder\n"
+        "\n"
+        f"ROOT = {str(root)!r}\n"
+        "\n"
+        "\n"
+        "class WorktreeFinder:\n"
+        "    @classmethod\n"
+        "    def find_spec(cls, fullname, path=None, target=None):\n"
+        '        if fullname in ("lucid", "tools"):\n'
+        "            return PathFinder.find_spec(fullname, [ROOT])\n"
+        "        return None\n"
+        "\n"
+        "\n"
+        "sys.meta_path.insert(0, WorktreeFinder)\n"
+    )
+    pth = (
+        "import _lucid_worktree_finder\n"
+        f"import site; site.addsitedir({str(main_site)!r})\n"
+    )
+    return {"_lucid_worktree_finder.py": finder, "_lucid_worktree.pth": pth}
 
 
 def needs_bootstrap(root: Path) -> bool:

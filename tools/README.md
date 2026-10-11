@@ -22,7 +22,7 @@ Python is `lucid/` minus `lucid/test/`; C++ is `lucid/_C/`.
 | `lizard` | functions over 100 lines or CCN 15 (py + C++); `_`-internal Python functions over 7 parameters | D3 |
 | `vulture` | dead code at 60 % confidence; scans tests as users of the API, counts only production files | D7 |
 | `jscpd` | clone pairs of 8+ lines / 50+ tokens (py + C++), via `npx jscpd@5.4.0` | D2 |
-| `mypy` | `mypy.ini` (strict) plus `warn-unused-ignores`, `ignore-without-code`, `redundant-cast`, `redundant-expr`, `truthy-bool`, `possibly-undefined` | D1, D4 |
+| `mypy` | the documented `mypy --strict lucid/` verbatim (`config.MYPY_COMMAND`) plus `warn-unused-ignores`, `ignore-without-code`, `redundant-cast`, `redundant-expr`, `truthy-bool`, `possibly-undefined`; every file it reports counts, including the `tools/` modules `lucid/` imports | D1, D4 |
 | `semgrep` | Lucid rules in `tools/semgrep/rules/` (none until DS-4) | D5 |
 | `clang-tidy` | stub, off by default (DS-3) | — |
 

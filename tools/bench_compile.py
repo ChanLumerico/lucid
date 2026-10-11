@@ -65,9 +65,9 @@ class _LstmHead(nn.Module):
         self.fc = nn.Linear(hidden_size, n_classes)
 
     @override
-    def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
         y, _ = self.lstm(x)
-        return _unwrap(self.fc(y[-1]))
+        return _unwrap(self.fc(_unwrap(y)[-1]))
 
 
 def _seq_to_cls(input_size: int = 64, hidden_size: int = 256) -> nn.Module:
@@ -83,9 +83,9 @@ def _seq_to_cls(input_size: int = 64, hidden_size: int = 256) -> nn.Module:
             self.head = nn.Linear(hidden_size, 10)
 
         @override
-        def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
             y, _ = self.lstm(_unwrap(self.embed(x)))
-            return _unwrap(self.head(y[-1]))
+            return _unwrap(self.head(_unwrap(y)[-1]))
 
     return _M()
 
@@ -266,7 +266,7 @@ def _training_cases(quick: bool) -> list[tuple[str, Callable[[], nn.Module], Cal
                 self.fc2 = nn.Linear(128, 10)
 
             @override
-            def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
                 return _unwrap(self.fc2(_unwrap(self.fc1(x)).relu()))
 
         return _M()

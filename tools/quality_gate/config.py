@@ -62,6 +62,13 @@ JSCPD_MIN_TOKENS = 50
 JSCPD_FORMATS = "python,cpp,objectivec"
 
 # ── mypy (full mode only — the slow one) ──────────────────────────────────
+# The documented type check (CLAUDE.md, tools/README.md), run verbatim: the
+# gate only appends the auditing codes below and its output format, and it
+# counts every error the command prints.  Before LCD-317 it counted lucid/
+# files only, so an error in a tools/ module that lucid/ imports
+# (tools/bench_compile.py via a test) failed the documented command while
+# the gate stayed green.
+MYPY_COMMAND = ("mypy", "--strict", "lucid/")
 # On top of mypy.ini (strict).  `--platform darwin` so a Linux CI runner
 # sees the same `sys.platform` branches as the Macs.
 MYPY_FLAGS = (

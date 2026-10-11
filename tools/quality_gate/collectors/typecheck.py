@@ -1,7 +1,8 @@
 """mypy with the suppression-auditing error codes, counted per code.
 
-``mypy --strict lucid/`` is already a zero-error gate; what this adds is the
-codes that find *laundering* — an ignore that no longer suppresses anything,
+``config.MYPY_COMMAND`` (``mypy --strict lucid/``) is already a zero-error
+gate; the collector runs that exact command and adds the codes that find
+*laundering* — an ignore that no longer suppresses anything,
 a cast to the type the value already has, a condition that is always true.
 Slow next to the others (~25 s warm, ~30 s cold), so ``--fast`` skips it;
 ``--full`` (CI) and ``--diff`` (land, both trees) run it.
@@ -15,7 +16,7 @@ from typing import override
 
 from tools.quality_gate import config
 from tools.quality_gate.collectors import Collector, run_tool
-from tools.quality_gate.core import Counts, GateError, Scope, is_py_target
+from tools.quality_gate.core import Counts, GateError, Scope
 
 
 class MypyCollector(Collector):
@@ -31,8 +32,7 @@ class MypyCollector(Collector):
             [
                 sys.executable,
                 "-m",
-                "mypy",
-                config.PY_ROOT.rstrip("/"),
+                *config.MYPY_COMMAND,
                 *config.MYPY_FLAGS,
                 "--output=json",
                 "--no-error-summary",
@@ -48,7 +48,9 @@ class MypyCollector(Collector):
                 finding = json.loads(line)
             except json.JSONDecodeError as exc:
                 raise GateError(f"mypy: unreadable line {line[:200]!r}") from exc
-            if finding.get("severity") != "error" or not is_py_target(finding["file"]):
+            # Every file the command reports counts, a tools/ module that
+            # lucid/ imports included; lucid/test/ is ignore_errors in mypy.ini.
+            if finding.get("severity") != "error":
                 continue
             counts[("mypy", finding.get("code") or "misc", finding["file"])] += 1
         return dict(counts)

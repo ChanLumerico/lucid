@@ -662,6 +662,7 @@ def _compare_latent_diffusion(model_name: str, kind: str, identifier: str) -> di
         ours = create_model(model_name, pretrained=True).eval()
         rng = np.random.default_rng(0)
         pairs = []
+        export_comparison: dict[str, object] = {}
         if kind == "dit":
             theirs = diffusers.Transformer2DModel.from_pretrained(identifier, subfolder="transformer").eval()
             denoiser = getattr(ours, "dit", ours)
@@ -796,7 +797,7 @@ def _diamond_reference(revision: str) -> Iterator[ModuleType]:
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module.__name__] = module
                 spec.loader.exec_module(module)
-            yield module
+            yield sys.modules[namespace + ".diffusion.inner_model"]
         finally:
             for name in list(sys.modules):
                 if name == namespace or name.startswith(namespace + "."):

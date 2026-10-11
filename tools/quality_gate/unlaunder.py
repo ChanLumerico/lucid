@@ -109,8 +109,7 @@ def run_mypy(root: Path, workdir: Path) -> list[Finding]:
         [
             sys.executable,
             "-m",
-            "mypy",
-            config.PY_ROOT.rstrip("/"),
+            *config.MYPY_COMMAND,
             *config.MYPY_FLAGS,
             f"--config-file={cfg}",
             # Its own cache: the stripped config would otherwise invalidate
