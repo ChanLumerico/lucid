@@ -3,7 +3,7 @@
 from lucid.models._registry import register_model
 from lucid.models.vision.zfnet._config import ZFNetConfig
 from lucid.models.vision.zfnet._model import ZFNet, ZFNetForImageClassification
-from lucid.models._utils._common import apply_overrides
+from lucid.models._utils._common import apply_overrides, reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical config
@@ -74,14 +74,7 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     """
     cfg = apply_overrides(_CFG, overrides)
     if pretrained:
-        # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
-        # returns whatever comes back, with no check that weights loaded.
-        # Silently handing back a randomly-initialised model is worse than
-        # refusing: the caller believes they have trained weights.
-        raise NotImplementedError(
-            "No pretrained ZFNet weights are published; "
-            "zfnet(pretrained=True) cannot be honoured."
-        )
+        reject_unavailable_pretrained("zfnet")
     return ZFNet(cfg)
 
 
@@ -113,8 +106,8 @@ def zfnet_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``zfnet_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ZFNetConfig`.  Use
         ``num_classes=N`` to retarget the head and ``dropout=p`` to
@@ -144,12 +137,5 @@ def zfnet_cls(
     """
     cfg = apply_overrides(_CFG, overrides)
     if pretrained:
-        # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
-        # returns whatever comes back, with no check that weights loaded.
-        # Silently handing back a randomly-initialised model is worse than
-        # refusing: the caller believes they have trained weights.
-        raise NotImplementedError(
-            "No pretrained ZFNet weights are published; "
-            "zfnet_cls(pretrained=True) cannot be honoured."
-        )
+        reject_unavailable_pretrained("zfnet_cls")
     return ZFNetForImageClassification(cfg)

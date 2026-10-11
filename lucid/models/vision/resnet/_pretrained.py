@@ -65,8 +65,9 @@ def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``resnet_18``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnet_18_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig` to
         customise individual fields (e.g. ``in_channels=1`` for
@@ -129,8 +130,9 @@ def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_34``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnet_34_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig` to
         customise individual fields without writing a config by hand.
@@ -186,8 +188,9 @@ def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``resnet_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnet_50_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig` to
         customise individual fields (``in_channels``, ``num_classes``,
@@ -250,8 +253,9 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_101``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnet_101_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig` to
         customise individual fields without writing a config by hand.
@@ -305,8 +309,9 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_152``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnet_152_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig` to
         customise individual fields without writing a config by hand.
@@ -742,8 +747,9 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``wide_resnet_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``wide_resnet_50_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -871,8 +877,9 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``wide_resnet_101``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``wide_resnet_101_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -993,8 +1000,8 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_200``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -1047,8 +1054,8 @@ def resnet_200_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_200_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -1099,8 +1106,8 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_269``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -1153,8 +1160,8 @@ def resnet_269_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnet_269_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 

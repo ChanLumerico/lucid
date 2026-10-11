@@ -105,7 +105,8 @@ def realnvp_cifar(pretrained: bool = False, **overrides: object) -> RealNVPModel
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_cifar``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -156,7 +157,8 @@ def realnvp_imagenet32(pretrained: bool = False, **overrides: object) -> RealNVP
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_imagenet32``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -201,7 +203,8 @@ def realnvp_imagenet64(pretrained: bool = False, **overrides: object) -> RealNVP
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_imagenet64``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -247,7 +250,8 @@ def realnvp_lsun(pretrained: bool = False, **overrides: object) -> RealNVPModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_lsun``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -294,7 +298,8 @@ def realnvp_celeba(pretrained: bool = False, **overrides: object) -> RealNVPMode
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_celeba``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -345,7 +350,8 @@ def realnvp_cifar_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_cifar_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -391,7 +397,9 @@ def realnvp_imagenet32_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_imagenet32_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -437,7 +445,9 @@ def realnvp_imagenet64_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_imagenet64_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -483,7 +493,8 @@ def realnvp_lsun_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_lsun_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.
@@ -533,7 +544,8 @@ def realnvp_celeba_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``realnvp_celeba_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RealNVPConfig` field overrides forwarded into
         the underlying config.

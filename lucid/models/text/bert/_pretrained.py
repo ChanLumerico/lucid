@@ -112,9 +112,10 @@ def bert_tiny(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration.  No checkpoints are wired up
-        yet, so the model is always returned with random initialisation.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTTinyWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTTinyWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -170,8 +171,10 @@ def bert_mini(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTMiniWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTMiniWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -225,8 +228,10 @@ def bert_small(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTSmallWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTSmallWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -281,8 +286,10 @@ def bert_medium(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTMediumWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTMediumWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -339,9 +346,10 @@ def bert_base(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration.  Returns a randomly
-        initialised model today.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTBaseWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTBaseWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -400,9 +408,10 @@ def bert_large(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration.  Returns a randomly
-        initialised model today.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTLargeWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTLargeWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -463,8 +472,10 @@ def bert_base_mlm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTBaseMLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTBaseMLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -520,8 +531,10 @@ def bert_large_mlm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`BERTLargeMLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : BERTLargeMLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object

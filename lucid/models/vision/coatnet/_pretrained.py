@@ -128,8 +128,8 @@ def coatnet_0(pretrained: bool = False, **overrides: object) -> CoAtNet:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``coatnet_0``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Keyword overrides applied on top of the canonical CoAtNet-0
         config.  Common examples: ``image_size=384``, ``in_channels=1``,
@@ -190,8 +190,8 @@ def coatnet_0_cls(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``coatnet_0_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Keyword overrides on top of the canonical CoAtNet-0 config.
         Commonly used: ``num_classes`` to switch label space,

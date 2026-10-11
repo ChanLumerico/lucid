@@ -369,6 +369,49 @@ def test_pretrained_without_weights_is_refused(
     )
 
 
+_STALE_PRETRAINED_DOC = re.compile(
+    r"reserved for future|currently ignored|currently a no-op", re.IGNORECASE
+)
+_SAYS_REFUSED = re.compile(r"\braise|\brefuse|NotImplementedError")
+
+
+def _pretrained_doc(factory: Callable[..., object]) -> str:
+    """The ``pretrained`` entry of a factory's Parameters section, or ``""``."""
+    doc = (inspect.getdoc(factory) or "") + "\n"
+    match = re.search(r"^pretrained\s*:.*\n(?:[ \t]+.*\n?)*", doc, re.MULTILINE)
+    return match.group(0) if match else ""
+
+
+@pytest.mark.parametrize("name", sorted(list_models()))
+def test_pretrained_doc_tells_the_truth(name: str, _downloads_blocked: None) -> None:
+    """LCD-368: 167 factories documented ``pretrained`` as "reserved for
+    future" or "currently ignored" while refusing it — or while loading a
+    checkpoint — and 39 more said they loaded weights "when available" for
+    a configuration that has none."""
+    factory = model_entrypoint(name)
+    doc = _pretrained_doc(factory)
+    assert not _STALE_PRETRAINED_DOC.search(doc), f"{name}: {doc}"
+    if doc and name in _UNWEIGHTED and _pretrained_outcome(factory) == "refuses":
+        assert _SAYS_REFUSED.search(
+            doc
+        ), f"{name}(pretrained=True) raises, but its docstring says:\n{doc}"
+
+
+def test_the_pretrained_doc_check_can_fail() -> None:
+    def stale(pretrained: bool = False) -> None:
+        """Build.
+
+        Parameters
+        ----------
+        pretrained : bool, optional
+            If ``True``, loads ImageNet weights when available.
+        """
+
+    doc = _pretrained_doc(stale)
+    assert doc.startswith("pretrained : bool")
+    assert not _SAYS_REFUSED.search(doc)
+
+
 def test_rejection_type_is_the_helpers() -> None:
     with pytest.raises(_REJECTION):
         reject_unavailable_pretrained("probe")

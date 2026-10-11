@@ -54,8 +54,9 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``inception_next_tiny``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``inception_next_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical
         InceptionNeXt-T config.  Each override must match a field of
@@ -178,8 +179,9 @@ def inception_next_small(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``inception_next_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``inception_next_small_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical
         InceptionNeXt-S config.
@@ -295,8 +297,9 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``inception_next_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``inception_next_base_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical
         InceptionNeXt-B config.

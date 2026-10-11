@@ -64,8 +64,9 @@ def efficientnet_b0(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``efficientnet_b0``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b0_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -117,8 +118,9 @@ def efficientnet_b1(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b1``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b1_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -169,8 +171,9 @@ def efficientnet_b2(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b2_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -222,8 +225,9 @@ def efficientnet_b3(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b3_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -275,8 +279,9 @@ def efficientnet_b4(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b4``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b4_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -328,8 +333,9 @@ def efficientnet_b5(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b5``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b5_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -381,8 +387,9 @@ def efficientnet_b6(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b6``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b6_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -435,8 +442,9 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``efficientnet_b7``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientnet_b7_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 

@@ -35,8 +35,9 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``inception_v3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``inception_v3_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`InceptionConfig`.
         Note that ``aux_logits`` only affects the classifier variant.

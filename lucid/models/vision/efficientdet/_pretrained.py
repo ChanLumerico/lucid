@@ -29,7 +29,8 @@ def efficientdet_d0(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d0``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -85,7 +86,8 @@ def efficientdet_d1(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d1``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -137,7 +139,8 @@ def efficientdet_d2(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -189,7 +192,8 @@ def efficientdet_d3(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -241,7 +245,8 @@ def efficientdet_d4(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d4``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -293,7 +298,8 @@ def efficientdet_d5(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d5``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -345,7 +351,8 @@ def efficientdet_d6(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d6``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 
@@ -398,7 +405,8 @@ def efficientdet_d7(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``efficientdet_d7``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`EfficientDetConfig`.
 

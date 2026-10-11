@@ -44,7 +44,8 @@ def fast_rcnn(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``fast_rcnn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`FastRCNNConfig`
         (``num_classes``, ``score_thresh``, ``nms_thresh``,

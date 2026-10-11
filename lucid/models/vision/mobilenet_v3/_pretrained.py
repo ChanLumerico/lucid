@@ -41,8 +41,9 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``mobilenet_v3_large``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``mobilenet_v3_large_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV3Config`
         (e.g. ``width_mult=0.75`` for a slimmer variant).
@@ -100,8 +101,9 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``mobilenet_v3_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``mobilenet_v3_small_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV3Config`.
 

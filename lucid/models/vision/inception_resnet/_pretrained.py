@@ -35,8 +35,9 @@ def inception_resnet_v2(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``inception_resnet_v2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``inception_resnet_v2_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`InceptionResNetConfig`.
         Use ``scale_a`` / ``scale_b`` / ``scale_c`` to tune the

@@ -65,7 +65,8 @@ def vae(pretrained: bool = False, **overrides: object) -> VAEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``vae``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`VAEConfig` field overrides (e.g. ``latent_dim=...``,
         ``kl_weight=...``, ``recon_loss="bce"``) forwarded into the
@@ -127,7 +128,8 @@ def hvae(pretrained: bool = False, **overrides: object) -> VAEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``hvae``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`VAEConfig` field overrides forwarded into the
         underlying config.  The tuple ``latent_dim`` must match the
@@ -190,7 +192,8 @@ def vae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenerat
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``vae_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`VAEConfig` field overrides forwarded into the
         underlying config.  Pass ``kl_weight=...`` to engage
@@ -241,7 +244,8 @@ def hvae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenera
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``hvae_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`VAEConfig` field overrides forwarded into the
         underlying config.

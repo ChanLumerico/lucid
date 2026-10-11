@@ -39,8 +39,9 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``xception``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``xception_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`XceptionConfig`
         (e.g. ``in_channels=1`` for grayscale input).

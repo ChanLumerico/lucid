@@ -44,7 +44,8 @@ def attention_unet(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``attention_unet``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`AttentionUNetConfig`
         (``num_classes``, ``in_channels`` for RGB inputs,
@@ -113,7 +114,8 @@ def attention_unet_3d(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``attention_unet_3d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`AttentionUNetConfig`.
 

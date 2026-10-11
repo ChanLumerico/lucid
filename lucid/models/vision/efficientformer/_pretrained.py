@@ -81,8 +81,9 @@ def efficientformer_l1(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``efficientformer_l1``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientformer_l1_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical L1 config.  Each
         override must match a field of :class:`EfficientFormerConfig`.
@@ -138,8 +139,9 @@ def efficientformer_l3(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``efficientformer_l3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientformer_l3_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical L3 config.
 
@@ -193,8 +195,9 @@ def efficientformer_l7(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``efficientformer_l7``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``efficientformer_l7_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical L7 config.
 

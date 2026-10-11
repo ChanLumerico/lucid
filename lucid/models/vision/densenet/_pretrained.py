@@ -60,8 +60,9 @@ def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``densenet_121``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``densenet_121_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`
         (``growth_rate``, ``dropout_rate``, ``in_channels``, etc.).
@@ -112,8 +113,9 @@ def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``densenet_169``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``densenet_169_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`.
 
@@ -163,8 +165,9 @@ def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``densenet_201``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``densenet_201_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`.
 
@@ -215,8 +218,8 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``densenet_264``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`.
 
@@ -444,8 +447,8 @@ def densenet_264_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``densenet_264_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`.
 
@@ -498,8 +501,9 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``densenet_161``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``densenet_161_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`DenseNetConfig`.
 

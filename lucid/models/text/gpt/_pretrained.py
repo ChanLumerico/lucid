@@ -48,9 +48,9 @@ def gpt(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration.  No checkpoints are wired
-        yet, so the model is returned with random initialisation.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPTWeights`; a string
+        names a specific tag.  ``False`` returns a randomly initialised model.
     weights : GPTWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -123,8 +123,9 @@ def gpt_lm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPTLMWeights`; a string
+        names a specific tag.  ``False`` returns a randomly initialised model.
     weights : GPTLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object

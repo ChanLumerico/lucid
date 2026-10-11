@@ -107,7 +107,8 @@ def nice_mnist(pretrained: bool = False, **overrides: object) -> NICEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_mnist``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -159,7 +160,8 @@ def nice_tfd(pretrained: bool = False, **overrides: object) -> NICEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_tfd``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -212,7 +214,8 @@ def nice_svhn(pretrained: bool = False, **overrides: object) -> NICEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_svhn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -262,7 +265,8 @@ def nice_cifar(pretrained: bool = False, **overrides: object) -> NICEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_cifar``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -323,7 +327,8 @@ def nice_mnist_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_mnist_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -373,7 +378,8 @@ def nice_tfd_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_tfd_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -421,7 +427,8 @@ def nice_svhn_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_svhn_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.
@@ -472,7 +479,8 @@ def nice_cifar_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``nice_cifar_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NICEConfig` field overrides forwarded into the
         underlying config.

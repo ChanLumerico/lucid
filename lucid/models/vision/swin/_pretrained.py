@@ -44,8 +44,9 @@ def swin_tiny(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when available
-        in the model zoo.  Defaults to ``False`` (random initialization).
+        No checkpoint is published for ``swin_tiny``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``swin_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical Swin-T config.
         Common examples: ``image_size=384``, ``in_channels=1``,
@@ -97,8 +98,9 @@ def swin_small(pretrained: bool = False, **overrides: object) -> SwinTransformer
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when available.
-        Defaults to ``False``.
+        No checkpoint is published for ``swin_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``swin_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical Swin-S config.
 
@@ -145,8 +147,9 @@ def swin_base(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k or ImageNet-22k pretrained
-        weights when available.  Defaults to ``False``.
+        No checkpoint is published for ``swin_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``swin_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical Swin-B config.
 
@@ -195,8 +198,9 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``swin_large``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``swin_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical Swin-L config.
 

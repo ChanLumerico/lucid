@@ -91,8 +91,9 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``sk_resnet_18``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``sk_resnet_18_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -148,8 +149,9 @@ def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnet_34``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``sk_resnet_34_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -202,8 +204,8 @@ def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnet_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -254,8 +256,8 @@ def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnet_101``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -316,8 +318,8 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnext_50_32x4d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -520,8 +522,8 @@ def sk_resnet_50_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnet_50_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -573,8 +575,8 @@ def sk_resnet_101_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnet_101_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -629,8 +631,9 @@ def sk_resnext_50_32x4d_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``sk_resnext_50_32x4d_cls``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 

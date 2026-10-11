@@ -47,7 +47,8 @@ def transformer_base(pretrained: bool = False, **overrides: object) -> Transform
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides (e.g.
         ``vocab_size=...``, ``decoder_vocab_size=...``,
@@ -111,7 +112,8 @@ def transformer_large(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_large``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides forwarded into
         the underlying config.
@@ -169,7 +171,9 @@ def transformer_base_seq2seq(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_base_seq2seq``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides forwarded into
         the underlying config.
@@ -232,7 +236,9 @@ def transformer_large_seq2seq(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_large_seq2seq``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides forwarded into
         the underlying config.
@@ -288,7 +294,8 @@ def transformer_base_cls(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_base_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides forwarded into
         the underlying config.  Pass ``num_labels=N`` to set the number of
@@ -343,7 +350,9 @@ def transformer_base_token_cls(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``transformer_base_token_cls``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`TransformerConfig` field overrides forwarded into
         the underlying config.  Pass ``num_labels=N`` to set the tag set

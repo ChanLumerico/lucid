@@ -55,8 +55,8 @@ def rcnn(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored
-        — the returned model is randomly initialised.
+        No checkpoint is published for ``rcnn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`RCNNConfig` (e.g.
         ``num_classes=20`` for PASCAL VOC, ``score_thresh=0.3`` for a

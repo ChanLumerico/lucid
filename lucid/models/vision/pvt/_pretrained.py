@@ -113,8 +113,9 @@ def pvt_v2_b0(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b0``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b0_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B0 config.
 
@@ -164,8 +165,9 @@ def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b1``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b1_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B1 config.
 
@@ -211,8 +213,9 @@ def pvt_v2_b2(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b2_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B2 config.
 
@@ -260,8 +263,8 @@ def pvt_v2_b2_li(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b2_li``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B2-Li config.
 
@@ -306,8 +309,9 @@ def pvt_v2_b3(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b3_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B3 config.
 
@@ -353,8 +357,9 @@ def pvt_v2_b4(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b4``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b4_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B4 config.
 
@@ -403,8 +408,9 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``pvt_v2_b5``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``pvt_v2_b5_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B5 config.
 

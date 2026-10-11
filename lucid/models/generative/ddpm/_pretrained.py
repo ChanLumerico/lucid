@@ -235,7 +235,8 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ddpm_imagenet64``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides forwarded into the
         underlying config.
@@ -415,7 +416,8 @@ def ddpm_imagenet64_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ddpm_imagenet64_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides forwarded into the
         underlying config.

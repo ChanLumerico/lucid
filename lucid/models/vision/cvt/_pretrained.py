@@ -66,8 +66,9 @@ def cvt_13(pretrained: bool = False, **overrides: object) -> CvT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``cvt_13``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cvt_13_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical CvT-13
         config.  Each override must match a field of :class:`CvTConfig`.
@@ -118,8 +119,9 @@ def cvt_21(pretrained: bool = False, **overrides: object) -> CvT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``cvt_21``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cvt_21_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical CvT-21 config.
 
@@ -168,8 +170,9 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``cvt_w24``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cvt_w24_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical CvT-W24 config.
 

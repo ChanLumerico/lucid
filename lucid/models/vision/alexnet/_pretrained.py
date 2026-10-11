@@ -33,8 +33,9 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``alexnet``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``alexnet_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`AlexNetConfig` to
         customise individual fields (``in_channels=1`` for grayscale,

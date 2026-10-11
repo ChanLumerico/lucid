@@ -112,7 +112,8 @@ def rectified_flow_cifar(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_cifar``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides forwarded
         into the underlying config.
@@ -160,7 +161,9 @@ def rectified_flow_bedroom(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_bedroom``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -201,7 +204,8 @@ def rectified_flow_church(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_church``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -241,7 +245,9 @@ def rectified_flow_celeba_hq(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_celeba_hq``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -283,7 +289,9 @@ def rectified_flow_afhq_cat(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_afhq_cat``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -331,7 +339,9 @@ def rectified_flow_cifar_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_cifar_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.  Pass
         ``t_schedule="t0"`` to build the one-step distillation stage.
@@ -376,7 +386,9 @@ def rectified_flow_bedroom_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_bedroom_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -418,7 +430,9 @@ def rectified_flow_church_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_church_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -460,7 +474,9 @@ def rectified_flow_celeba_hq_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_celeba_hq_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 
@@ -502,7 +518,9 @@ def rectified_flow_afhq_cat_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``rectified_flow_afhq_cat_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`RectifiedFlowConfig` field overrides.
 

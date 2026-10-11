@@ -41,8 +41,9 @@ def vit_base_16(pretrained: bool = False, **overrides: object) -> ViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available
-        in the model zoo.  Defaults to ``False`` (random initialization).
+        No checkpoint is published for ``vit_base_16``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical ViT-Base/16
         config — e.g. ``image_size=384``, ``in_channels=1``, or
@@ -96,8 +97,9 @@ def vit_base_32(pretrained: bool = False, **overrides: object) -> ViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+        No checkpoint is published for ``vit_base_32``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Base/32 config.
 
@@ -144,8 +146,9 @@ def vit_large_16(pretrained: bool = False, **overrides: object) -> ViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+        No checkpoint is published for ``vit_large_16``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Large/16 config.
 
@@ -192,8 +195,9 @@ def vit_large_32(pretrained: bool = False, **overrides: object) -> ViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+        No checkpoint is published for ``vit_large_32``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Large/32 config.
 
@@ -241,8 +245,9 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads JFT-300M / ImageNet-21k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``vit_huge_14``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Huge/14 config.
 
@@ -545,8 +550,9 @@ def vit_huge_14_cls(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads JFT-300M / ImageNet-21k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``vit_huge_14_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vit_base_16_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Huge/14 config.
 

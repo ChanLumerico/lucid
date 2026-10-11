@@ -52,8 +52,9 @@ def vgg_11(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``vgg_11``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_11_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig` to
         customise individual fields (``in_channels``, ``num_classes``,
@@ -106,8 +107,9 @@ def vgg_13(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_13``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_13_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -161,8 +163,9 @@ def vgg_16(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_16``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_16_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -216,8 +219,9 @@ def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_19``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_19_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -268,8 +272,9 @@ def vgg_11_bn(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_11_bn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_11_bn_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -312,8 +317,9 @@ def vgg_13_bn(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_13_bn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_13_bn_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -359,8 +365,9 @@ def vgg_16_bn(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_16_bn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_16_bn_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -405,8 +412,9 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``vgg_19_bn``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``vgg_19_bn_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 

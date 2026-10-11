@@ -38,8 +38,8 @@ def lenet_5(pretrained: bool = False, **overrides: object) -> LeNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``lenet_5``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`LeNetConfig` to
         customise individual fields.  Use ``activation="relu"`` and
@@ -102,8 +102,8 @@ def lenet_5_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``lenet_5_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`LeNetConfig` to
         retarget ``num_classes`` (e.g. ``num_classes=100`` for

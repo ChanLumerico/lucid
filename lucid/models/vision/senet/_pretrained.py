@@ -59,8 +59,9 @@ def se_resnet_18(pretrained: bool = False, **overrides: object) -> SENet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``se_resnet_18``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``se_resnet_18_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SENetConfig`
         (e.g. ``reduction=8`` to tighten the SE bottleneck).
@@ -111,8 +112,9 @@ def se_resnet_34(pretrained: bool = False, **overrides: object) -> SENet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``se_resnet_34``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``se_resnet_34_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SENetConfig`.
 
@@ -166,8 +168,9 @@ def se_resnet_50(pretrained: bool = False, **overrides: object) -> SENet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``se_resnet_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``se_resnet_50_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SENetConfig`.
 
@@ -221,8 +224,9 @@ def se_resnet_101(pretrained: bool = False, **overrides: object) -> SENet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``se_resnet_101``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``se_resnet_101_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SENetConfig`.
 
@@ -274,8 +278,9 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``se_resnet_152``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``se_resnet_152_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`SENetConfig`.
 

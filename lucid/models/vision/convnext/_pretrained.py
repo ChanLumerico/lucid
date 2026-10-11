@@ -43,8 +43,9 @@ def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when available
-        in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``convnext_tiny``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``convnext_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-T config.
         Each override must match a field of :class:`ConvNeXtConfig`.
@@ -93,8 +94,9 @@ def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when available.
-        Defaults to ``False``.
+        No checkpoint is published for ``convnext_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``convnext_small_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-S config.
 
@@ -144,8 +146,9 @@ def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k or ImageNet-22k pretrained
-        weights when available.  Defaults to ``False``.
+        No checkpoint is published for ``convnext_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``convnext_base_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-B config.
 
@@ -196,8 +199,9 @@ def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``convnext_large``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``convnext_large_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-L config.
 
@@ -249,8 +253,9 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``convnext_xlarge``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``convnext_xlarge_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical ConvNeXt-XL config.
 

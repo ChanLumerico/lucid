@@ -64,7 +64,8 @@ def neural_ode(pretrained: bool = False, **overrides: object) -> NeuralODEModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``neural_ode``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NeuralODEConfig` field overrides forwarded into
         the underlying config.
@@ -126,7 +127,8 @@ def neural_ode_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``neural_ode_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NeuralODEConfig` field overrides forwarded into
         the underlying config.

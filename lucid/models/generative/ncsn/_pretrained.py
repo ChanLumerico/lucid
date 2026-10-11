@@ -88,7 +88,8 @@ def ncsn_cifar(pretrained: bool = False, **overrides: object) -> NCSNModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ncsn_cifar``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NCSNConfig` field overrides forwarded into the
         underlying config.
@@ -142,7 +143,8 @@ def ncsn_celeba(pretrained: bool = False, **overrides: object) -> NCSNModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ncsn_celeba``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NCSNConfig` field overrides forwarded into the
         underlying config.
@@ -197,7 +199,8 @@ def ncsn_cifar_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ncsn_cifar_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NCSNConfig` field overrides forwarded into the
         underlying config.
@@ -246,7 +249,8 @@ def ncsn_celeba_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``ncsn_celeba_gen``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`NCSNConfig` field overrides forwarded into the
         underlying config.

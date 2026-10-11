@@ -42,8 +42,9 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``googlenet``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``googlenet_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`GoogLeNetConfig`
         (``in_channels``, etc.).  Auxiliary-classifier fields are

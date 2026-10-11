@@ -76,8 +76,10 @@ def gpt2_small(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2SmallWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2SmallWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -137,8 +139,10 @@ def gpt2_medium(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2MediumWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2MediumWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -196,8 +200,10 @@ def gpt2_large(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2LargeWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2LargeWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -255,8 +261,10 @@ def gpt2_xlarge(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2XLargeWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2XLargeWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -314,8 +322,10 @@ def gpt2_small_lm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2SmallLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2SmallLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -369,8 +379,10 @@ def gpt2_medium_lm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2MediumLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2MediumLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -424,8 +436,10 @@ def gpt2_large_lm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2LargeLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2LargeLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -479,8 +493,10 @@ def gpt2_xlarge_lm(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        ``True`` loads the ``DEFAULT`` checkpoint of :class:`GPT2XLargeLMWeights`; a
+        string names a specific tag.  ``False`` returns a randomly initialised
+        model.
     weights : GPT2XLargeLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object

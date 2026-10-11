@@ -75,7 +75,8 @@ def unet(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``unet``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`UNetConfig` —
         ``num_classes``, ``in_channels`` (e.g. 3 for RGB), ``base_channels``,
@@ -130,7 +131,8 @@ def res_unet_2d(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``res_unet_2d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`UNetConfig` (``num_classes``,
         ``in_channels``, ``base_channels``, ``depth``, ...).
@@ -200,7 +202,8 @@ def unet_3d(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``unet_3d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`UNetConfig` (``num_classes``,
         ``in_channels``, ``base_channels``, ``depth``, ``bilinear``, ...).
@@ -261,7 +264,8 @@ def res_unet_3d(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+        No checkpoint is published for ``res_unet_3d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`UNetConfig`.
 

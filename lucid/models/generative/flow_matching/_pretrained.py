@@ -105,7 +105,8 @@ def flow_matching_cifar(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_cifar``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides forwarded
         into the underlying config.
@@ -154,7 +155,9 @@ def flow_matching_imagenet32(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet32``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -195,7 +198,9 @@ def flow_matching_imagenet64(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet64``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -236,7 +241,9 @@ def flow_matching_imagenet128(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet128``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -284,7 +291,9 @@ def flow_matching_cifar_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_cifar_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -328,7 +337,9 @@ def flow_matching_imagenet32_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet32_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -370,7 +381,9 @@ def flow_matching_imagenet64_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet64_gen``, so ``True``
+        raises ``NotImplementedError`` rather than return randomly initialised
+        weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 
@@ -412,7 +425,9 @@ def flow_matching_imagenet128_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        No checkpoint is published for ``flow_matching_imagenet128_gen``, so
+        ``True`` raises ``NotImplementedError`` rather than return randomly
+        initialised weights.
     **overrides : object
         Optional :class:`FlowMatchingConfig` field overrides.
 

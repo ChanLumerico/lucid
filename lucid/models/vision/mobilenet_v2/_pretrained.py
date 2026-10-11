@@ -38,8 +38,9 @@ def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``mobilenet_v2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``mobilenet_v2_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV2Config`
         (e.g. ``in_channels=1`` for grayscale input).
@@ -97,8 +98,8 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``mobilenet_v2_075``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV2Config`.
 
@@ -237,8 +238,8 @@ def mobilenet_v2_075_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``mobilenet_v2_075_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV2Config`.
 

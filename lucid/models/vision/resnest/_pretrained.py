@@ -55,8 +55,8 @@ def resnest_14(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``resnest_14``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -108,8 +108,8 @@ def resnest_26(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_26``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -161,8 +161,9 @@ def resnest_50(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnest_50_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`
         (e.g. ``radix=4`` to widen the split-attention).
@@ -214,8 +215,9 @@ def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_101``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnest_101_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -265,8 +267,9 @@ def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_200``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnest_200_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -317,8 +320,9 @@ def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_269``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnest_269_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -377,8 +381,8 @@ def resnest_14_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_14_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -430,8 +434,8 @@ def resnest_26_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnest_26_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 

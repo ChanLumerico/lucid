@@ -76,8 +76,9 @@ def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_tiny``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``maxvit_tiny_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides applied on top of the canonical MaxViT-Tiny
         config.  Each override must match a field of :class:`MaxViTConfig`.
@@ -128,8 +129,9 @@ def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``maxvit_small_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical MaxViT-Small config.
 
@@ -177,8 +179,9 @@ def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-1k or ImageNet-22k pretrained
-        weights when available.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``maxvit_base_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical MaxViT-Base config.
 
@@ -226,8 +229,9 @@ def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_large``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``maxvit_large_cls`` is the checkpointed variant.
     **overrides : object
         Keyword overrides on top of the canonical MaxViT-Large config.
 
@@ -276,8 +280,8 @@ def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_xlarge``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Keyword overrides on top of the canonical MaxViT-XLarge config.
 
@@ -577,8 +581,8 @@ def maxvit_xlarge_cls(
     Parameters
     ----------
     pretrained : bool, optional
-        If ``True``, loads ImageNet-22k or JFT-300M pretrained weights
-        when available.  Defaults to ``False``.
+        No checkpoint is published for ``maxvit_xlarge_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides : object
         Keyword overrides on top of the canonical MaxViT-XLarge config.
 

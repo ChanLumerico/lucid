@@ -51,8 +51,9 @@ def resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No checkpoint is published for ``resnext_50_32x4d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnext_50_32x4d_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeXtConfig` to
         customise ``in_channels``, ``num_classes``, ``cardinality``,
@@ -110,8 +111,9 @@ def resnext_101_32x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnext_101_32x4d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnext_101_32x4d_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeXtConfig`.
 
@@ -166,8 +168,9 @@ def resnext_101_32x8d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnext_101_32x8d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``resnext_101_32x8d_cls`` is the checkpointed variant.
     **overrides
         Keyword overrides forwarded into :class:`ResNeXtConfig`.
 
@@ -221,8 +224,8 @@ def resnext_101_64x4d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnext_101_64x4d``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeXtConfig`.
 
@@ -509,8 +512,8 @@ def resnext_101_64x4d_cls(
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+        No checkpoint is published for ``resnext_101_64x4d_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
     **overrides
         Keyword overrides forwarded into :class:`ResNeXtConfig`.
 
