@@ -23,6 +23,7 @@
 
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
+#include "../core/GradMode.h"
 #include "../core/TensorImpl.h"
 #include "../ops/gfunc/Gfunc.h"
 #include "AccumulateGrad.h"
@@ -86,18 +87,9 @@ void release_root(const std::shared_ptr<TensorImpl>& root) {
     root->set_grad_fn(std::make_shared<SpentGraphNode>());
 }
 
-// A gradient with a zero derivative of its own.
-//
-// Many graph-mode formulas build an input's gradient from the incoming
-// gradient and a comparison on the saved input — relu6, hardtanh, clamp
-// and max/min mask the seed by where x falls.  A comparison carries no
-// graph, so when the seed is itself a constant the result came back
-// detached: its derivative with respect to x is zero almost everywhere,
-// but autograd.grad on it raised "not reachable" and backward() refused
-// it, where the reference framework answers zeros (its node still lists
-// x as an input).  This node restores that connection with the derivative
-// the result actually has — zero, emitted directly rather than as
-// ``grad * 0``, which an infinite upstream gradient would turn into NaN.
+// A gradient with a zero derivative of its own (see zero_derivative_through).
+// The derivative is emitted directly rather than as ``grad * 0``, which an
+// infinite upstream gradient would turn into NaN.
 class ZeroDerivativeNode final : public Node {
 public:
     ZeroDerivativeNode(Edge edge, Shape shape, Dtype dtype, Device device)
@@ -120,26 +112,6 @@ private:
     Dtype dtype_;
     Device device_;
 };
-
-// Attach every detached gradient in ``grads`` to the edge it is about to
-// travel, so the gradient stays part of the graph create_graph is building.
-std::vector<TensorImplPtr> keep_in_graph(std::vector<TensorImplPtr> grads,
-                                         const std::vector<Edge>& edges) {
-    for (std::size_t i = 0; i < grads.size() && i < edges.size(); ++i) {
-        const auto& g = grads[i];
-        if (!g || g->requires_grad() || !edges[i].node)
-            continue;
-        auto node =
-            std::make_shared<ZeroDerivativeNode>(edges[i], g->shape(), g->dtype(), g->device());
-        auto alias = TensorImpl::make_view(g, g->shape(), g->stride(), 0, /*join_family=*/false);
-        alias->set_grad_fn(std::move(node));
-        alias->set_grad_output_nr(0);
-        alias->set_leaf(false);
-        alias->set_requires_grad(true);
-        grads[i] = std::move(alias);
-    }
-    return grads;
-}
 
 // ── Delivery ─────────────────────────────────────────────────────────────────
 //
@@ -362,6 +334,27 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root)
 
 }  // namespace
 
+TensorImplPtr zero_derivative_through(TensorImplPtr grad, const Edge& edge) {
+    if (!grad || grad->requires_grad() || !edge.node || !GradMode::is_enabled())
+        return grad;
+    auto node =
+        std::make_shared<ZeroDerivativeNode>(edge, grad->shape(), grad->dtype(), grad->device());
+    auto alias =
+        TensorImpl::make_view(grad, grad->shape(), grad->stride(), 0, /*join_family=*/false);
+    alias->set_grad_fn(std::move(node));
+    alias->set_grad_output_nr(0);
+    alias->set_leaf(false);
+    alias->set_requires_grad(true);
+    return alias;
+}
+
+TensorImplPtr zero_derivative_through(TensorImplPtr grad, const TensorImplPtr& source) {
+    if (!source || !source->requires_grad() || !source->grad_fn())
+        return grad;
+    return zero_derivative_through(std::move(grad),
+                                   Edge(source->grad_fn(), source->grad_output_nr()));
+}
+
 // ── Graph-mode backward (create_graph=true) ───────────────────────────────────
 //
 // Runs the same topological traversal as backward() but uses TensorImplPtr
@@ -416,8 +409,7 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
 
         // apply_for_graph throws NotImplementedError if the op doesn't support
         // graph mode — gives the user a clear, actionable message.
-        const auto input_grads =
-            keep_in_graph(apply_node_for_graph(*node, grad_in), node->next_edges());
+        const auto input_grads = apply_node_for_graph(*node, grad_in);
 
         if (!retain_graph)
             release(*node);
@@ -815,8 +807,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             node->restore_saved_for_graph();
             if (node->is_barrier())
                 deliver_held_for_graph(*node, std::move(slots), grad_in);
-            const auto input_grads =
-                keep_in_graph(apply_node_for_graph(*node, grad_in), node->next_edges());
+            const auto input_grads = apply_node_for_graph(*node, grad_in);
 
             const auto& edges = node->next_edges();
             for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {

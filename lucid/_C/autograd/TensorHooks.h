@@ -245,6 +245,14 @@ LUCID_API Storage grad_slot_buffer(const ErrorBuilder& err, const TensorImpl& g)
 // metal gradient comes back as it is.
 LUCID_API Storage own_grad_copy(const Storage& s);
 
+// ``s``, a gradient a node that calls into Python hands on, told apart from
+// that node's ``None``.  Those nodes say ``None`` with an empty storage
+// (``Node::empty_grad_is_none``), and a CPU gradient of zero elements owns
+// no memory either: it read as ``None``, and its input's ``.grad`` stayed
+// unset where the reference gives an empty gradient.  Such a buffer is
+// given a placeholder pointer, which its zero bytes never read.
+LUCID_API Storage present_gradient(Storage s);
+
 // The buffer ``self.grad = g`` installs.
 //
 // The gradient slot is a bare Storage, read as ``self``'s dtype, device and

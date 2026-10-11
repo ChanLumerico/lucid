@@ -189,4 +189,23 @@ public:
                                            bool create_graph = false);
 };
 
+// ``grad`` kept in the graph through ``source`` with derivative zero.
+//
+// For a graph-mode formula that reads ``source`` only through a comparison
+// — relu masks the incoming gradient by ``x <= 0``.  The reference's
+// backward of such an op is itself an op of ``x`` (``threshold_backward``),
+// so the gradient it returns requires grad and a second derivative through
+// it is zeros; a comparison carries no graph, so without this the result
+// came back detached and a second derivative raised.  A gradient no
+// formula built from ``source`` — that of a linear function — is a
+// constant and stays detached, as the reference has it.
+//
+// Returns ``grad`` itself when it already requires grad, when ``source``
+// does not, or outside graph mode.
+LUCID_API TensorImplPtr zero_derivative_through(TensorImplPtr grad, const TensorImplPtr& source);
+
+// The same, through the edge a node's input gradient travels, for a node
+// that keeps no handle on that input (max pooling keeps only its winners).
+LUCID_API TensorImplPtr zero_derivative_through(TensorImplPtr grad, const Edge& edge);
+
 }  // namespace lucid

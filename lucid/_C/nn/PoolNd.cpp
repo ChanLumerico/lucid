@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
+#include "../autograd/Engine.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
@@ -327,7 +328,9 @@ std::vector<TensorImplPtr> MaxPoolNdBackward<N>::apply_for_graph(const TensorImp
     std::vector<std::int64_t> in_shape(xs.begin(), xs.end());
     auto base = zeros_op(Shape{planes, in_plane}, this->dtype_, this->device_);
     auto dx = scatter_add_op(base, safe_idx, src, /*dim=*/1);
-    return {reshape_op(dx, in_shape)};
+    // The winners are a function of the input: the gradient stays in the
+    // graph with derivative zero, as the reference's pooling backward does.
+    return {zero_derivative_through(reshape_op(dx, in_shape), this->next_edges()[0])};
 }
 
 template class MaxPoolNdBackward<1>;

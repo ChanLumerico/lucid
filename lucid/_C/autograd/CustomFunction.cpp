@@ -161,7 +161,7 @@ std::vector<Storage> PythonBackwardNode::invoke_backward(const py::tuple& grads)
     // is an empty storage, a tensor its buffer.
     auto collect_one = [&](py::handle item) {
         const TensorImplPtr g = tensor_from_python(item, kBackwardResult);
-        storages.push_back(g ? grad_slot_buffer(err, *g) : Storage{CpuStorage{}});
+        storages.push_back(g ? present_gradient(grad_slot_buffer(err, *g)) : Storage{CpuStorage{}});
     };
 
     // Unpack tuple/list returns (multiple inputs) or a single tensor return.

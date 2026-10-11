@@ -273,6 +273,15 @@ Storage own_grad_copy(const Storage& s) {
     return clone_storage(s, storage_nbytes(s) / dtype_size(dt), dt, Device::CPU);
 }
 
+Storage present_gradient(Storage s) {
+    auto* cpu = std::get_if<CpuStorage>(&s);
+    if (cpu == nullptr || cpu->ptr || cpu->nbytes != 0)
+        return s;
+    static const std::shared_ptr<std::byte[]> kPlaceholder(new std::byte[1]{});
+    cpu->ptr = kPlaceholder;
+    return s;
+}
+
 // Every write of a whole gradient lands here or in a hook's replacement:
 // ``.grad =``, clip_grad and GradScaler writing back.  The slot is a bare
 // Storage — no dtype, shape or device of its own — and ``.grad``, the

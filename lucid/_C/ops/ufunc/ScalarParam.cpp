@@ -8,6 +8,7 @@
 
 #include <cmath>
 
+#include "../../autograd/Engine.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -160,7 +161,9 @@ TensorImplPtr ClipBackward::grad_formula_impl(const TensorImplPtr& g,
     auto below_high = less_equal_op(x, full_like_op(x, max_));
     auto zero = zeros_like_op(x);
     auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zero), zero);
-    return mul_op(g, slope);
+    // Kept in the graph with derivative zero: ``hardtanh`` is this op, and
+    // the reference's hardtanh backward is an op of ``x``.
+    return zero_derivative_through(mul_op(g, slope), x);
 }
 
 TensorImplPtr clip_op(const TensorImplPtr& a, double min_v, double max_v) {

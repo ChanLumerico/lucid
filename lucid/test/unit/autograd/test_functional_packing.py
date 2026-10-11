@@ -255,14 +255,6 @@ def test_hessian_products_seed_a_single_element_input(
         getattr(AG, name)(lambda a: (a**3).sum(), lucid.tensor([1.0, 2.0]))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "LCD-422: a gradient taken with create_graph=True "
-        "reports requires_grad=True even when it is a constant, so strict "
-        "cannot tell a linear function from a curved one"
-    ),
-)
 @pytest.mark.parametrize("name", ["hessian", "jacobian"])
 def test_strict_refuses_a_linear_function(ref: ModuleType, name: str) -> None:
     for m in (ref, lucid):

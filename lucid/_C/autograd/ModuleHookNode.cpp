@@ -61,7 +61,7 @@ void add_to_slot_for_graph(TensorImplPtr& slot, TensorImplPtr grad) {
 // engine adds into what flows on in place — a gradient a hook kept read
 // ``[3, 3, 3]`` after backward instead of the ``[1, 1, 1]`` it was handed.
 Storage emitted(const TensorImplPtr& grad) {
-    return grad ? own_grad_copy(grad->storage()) : Storage{CpuStorage{}};
+    return grad ? present_gradient(own_grad_copy(grad->storage())) : Storage{CpuStorage{}};
 }
 
 py::tuple output_tuple(const ModuleBackwardHookState& state) {

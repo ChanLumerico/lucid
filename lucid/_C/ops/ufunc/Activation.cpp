@@ -10,6 +10,7 @@
 
 #include <cmath>
 
+#include "../../autograd/Engine.h"
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Allocator.h"
@@ -58,7 +59,8 @@ Storage ReluBackward::grad_formula(const Storage& g) {
 TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
                                               const TensorImplPtr& x,
                                               const TensorImplPtr&) {
-    return where_op(less_equal_op(x, zeros_like_op(x)), zeros_like_op(g), g);
+    return zero_derivative_through(
+        where_op(less_equal_op(x, zeros_like_op(x)), zeros_like_op(g), g), x);
 }
 
 // ── graph-mode derivatives ───────────────────────────────────────────────────
@@ -72,7 +74,10 @@ TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
 // Every branch tests the condition the reference's backward tests, and
 // the other side is its ``else``.  That decides a NaN input, which no
 // comparison holds for: relu, relu6, elu, selu and hard_swish pass it the
-// gradient, leaky_relu gives it the slope.
+// gradient, leaky_relu gives it the slope.  A formula that reads ``x``
+// only through those comparisons keeps its result in the graph with
+// derivative zero (zero_derivative_through), as the reference's own
+// backward op does.
 
 // leaky_relu'(x) = 1 where x > 0, slope elsewhere.
 TensorImplPtr LeakyReluBackward::grad_formula_impl(const TensorImplPtr& g,
@@ -80,7 +85,7 @@ TensorImplPtr LeakyReluBackward::grad_formula_impl(const TensorImplPtr& g,
                                                    const TensorImplPtr&) {
     auto positive = greater_op(x, zeros_like_op(x));
     auto slope = where_op(positive, ones_like_op(x), full_like_op(x, slope_));
-    return mul_op(g, slope);
+    return zero_derivative_through(mul_op(g, slope), x);
 }
 
 // softplus'(x) = sigmoid(beta * x); the threshold branch is linear, and
@@ -140,7 +145,7 @@ TensorImplPtr HardSigmoidBackward::grad_formula_impl(const TensorImplPtr& g,
     auto slope =
         where_op(above_low, where_op(below_high, full_like_op(x, 1.0 / 6.0), zeros_like_op(x)),
                  zeros_like_op(x));
-    return mul_op(g, slope);
+    return zero_derivative_through(mul_op(g, slope), x);
 }
 
 // hard_swish(x) = x * hard_sigmoid(x), so inside the band the derivative
@@ -165,7 +170,7 @@ TensorImplPtr Relu6Backward::grad_formula_impl(const TensorImplPtr& g,
     auto low = less_equal_op(x, zeros_like_op(x));
     auto high = greater_equal_op(x, full_like_op(x, 6.0));
     auto slope = where_op(low, zeros_like_op(x), where_op(high, zeros_like_op(x), ones_like_op(x)));
-    return mul_op(g, slope);
+    return zero_derivative_through(mul_op(g, slope), x);
 }
 
 TensorImplPtr relu_op(const TensorImplPtr& a) {
