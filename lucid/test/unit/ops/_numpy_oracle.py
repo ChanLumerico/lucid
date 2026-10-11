@@ -355,8 +355,8 @@ REFS: dict[str, Ref] = {
     "invert": lambda x, c: ~x,
     "bitwise_or": lambda x, c: x | _flip0(x),
     "bitwise_xor": lambda x, c: x ^ _flip0(x),
-    "shift_left": lambda x, c: np.left_shift(x, np.abs(_flip0(x)) % 4),
-    "shift_right": lambda x, c: np.right_shift(x, np.abs(_flip0(x)) % 4),
+    "shift_left": lambda x, c: np.left_shift(x, np.minimum(np.abs(_flip0(x)), 3)),
+    "shift_right": lambda x, c: np.right_shift(x, np.minimum(np.abs(_flip0(x)), 3)),
     "shift_right_scalar": lambda x, c: np.right_shift(x, 1),
     # ── reductions
     "sum": lambda x, c: x.sum(),
@@ -435,7 +435,9 @@ REFS: dict[str, Ref] = {
         False,
     ),
     "unfold_dim": lambda x, c: _unfold(x, 1, 3, 2) * 1,
-    "one_hot": lambda x, c: np.eye(5, dtype=np.int64)[np.abs(x).astype(np.int64) % 5],
+    "one_hot": lambda x, c: np.eye(5, dtype=np.int64)[
+        np.minimum(np.abs(x).astype(np.int64), 4)
+    ],
     "meshgrid": lambda x, c: tuple(np.meshgrid(x[0], x[1], indexing="ij")),
     "meshgrid_xy": lambda x, c: tuple(np.meshgrid(x[0][:3], x[1], indexing="xy")),
     # ── linear algebra
@@ -539,7 +541,7 @@ REFS: dict[str, Ref] = {
     "interp_trilinear_ac": lambda x, c: _bilinear(x, (3, 5, 4), True),
     "interp_nearest3d": lambda x, c: _nearest(x, (3, 5, 4)),
     "interp_bilinear_t": lambda x, c: _bilinear(x, (8, 6), False).swapaxes(-1, -2),
-    "embedding": lambda x, c: _f(c.w(5, 3))[np.abs(x) % 5],
+    "embedding": lambda x, c: _f(c.w(5, 3))[np.minimum(np.abs(x), 4)],
     "cross_entropy": lambda x, c: -_log_softmax(x, 1)[
         np.arange(4), c.idx(0, 5, 2, 1)
     ].mean(),

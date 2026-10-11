@@ -7,11 +7,13 @@
 //
 // What MLX gives, measured on 0.32 (LCD-159):
 //
-//   * ``floor_divide`` on integers is C division: it truncates, so
-//     ``-7 // 2`` is -3 on both the GPU and the CPU stream.  The
-//     floor correction below is therefore not optional.  It is written so
-//     that it is a no-op where the quotient already floors, so it stays
-//     right if MLX ever changes this.
+//   * ``floor_divide`` on integers does not round one way across builds.
+//     pip MLX 0.32.0 truncates (``-7 // 2`` is -3, eager or compiled, on
+//     both streams); the vendored 0.32.3 Lucid links floors.  So the
+//     integer kernel below takes whichever quotient MLX gives, applies the
+//     floor correction (a no-op on a quotient that already floors), and
+//     derives ``fmod`` from the floored remainder rather than from MLX's
+//     quotient.
 //   * ``remainder`` on integers is floored and exact at int64 (2**62 + 3
 //     mod 7 is 0; arange(2e7) mod 3 is exact).
 //   * ``remainder`` on floats is ``fmod`` with the floored sign fix, and
@@ -54,19 +56,27 @@ inline mx::array sign_bit(const mx::array& x) {
     return mx::logical_or(mx::less(x, zero), negative_zero);
 }
 
-// The truncated quotient and remainder, and where flooring moves them.
+// ``r`` non-zero with its sign opposite to ``s``'s.
+inline mx::array signs_differ(const mx::array& r, const mx::array& s) {
+    const mx::array zero = mx::zeros_like(r);
+    return mx::logical_and(mx::not_equal(r, zero),
+                           mx::not_equal(mx::less(r, zero), mx::less(s, zero)));
+}
+
+// MLX's quotient, truncated or floored (see above), floored here; the
+// floored remainder has the sign of ``b``, and the truncated one, which
+// ``fmod`` is, the sign of ``a``.
 template <DivMod M>
 mx::array integer(const mx::array& a, const mx::array& b) {
-    const mx::array q = mx::floor_divide(a, b);  // truncates on integers
+    const mx::array q = mx::floor_divide(a, b);
     const mx::array r = mx::subtract(a, mx::multiply(q, b));
-    if constexpr (M == DivMod::Fmod)
-        return r;
-    const mx::array zero = mx::zeros_like(r);
-    const mx::array adjust = mx::logical_and(mx::not_equal(r, zero),
-                                             mx::not_equal(mx::less(r, zero), mx::less(b, zero)));
+    const mx::array to_floor = signs_differ(r, b);
     if constexpr (M == DivMod::FloorDiv)
-        return mx::subtract(q, mx::astype(adjust, q.dtype()));
-    return mx::where(adjust, mx::add(r, b), r);
+        return mx::subtract(q, mx::astype(to_floor, q.dtype()));
+    const mx::array floored = mx::where(to_floor, mx::add(r, b), r);
+    if constexpr (M == DivMod::Remainder)
+        return floored;
+    return mx::where(signs_differ(floored, a), mx::subtract(floored, b), floored);
 }
 
 // ``a`` and ``b`` are float32; the 16-bit floats arrive widened.
@@ -77,8 +87,7 @@ mx::array floating(const mx::array& a, const mx::array& b) {
     if constexpr (M == DivMod::Fmod)
         return mod;
     const mx::array zero = mx::zeros_like(mod);
-    const mx::array adjust = mx::logical_and(mx::not_equal(mod, zero),
-                                             mx::not_equal(mx::less(b, zero), mx::less(mod, zero)));
+    const mx::array adjust = signs_differ(mod, b);
     if constexpr (M == DivMod::Remainder)
         return mx::where(adjust, mx::add(mod, b), mod);
     const mx::array one = mx::ones_like(mod);
