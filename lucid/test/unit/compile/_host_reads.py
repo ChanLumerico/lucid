@@ -18,6 +18,7 @@ import pytest
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 
 
 class Apply(nn.Module):
@@ -107,14 +108,52 @@ HOST_READS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "dlpack": lambda m, x: x * 0 + _dlpack_total(x),
 }
 
-#: A copy made outside the op dispatcher that reaches the result through an
-#: op, not a host read. Unrecorded, the copy was a feed pinned at its
-#: trace-time value. A compiled call holding one runs eagerly: no executable
-#: spans two devices or hands out a shared buffer.
+_DOUBLE = """
+#include <metal_stdlib>
+using namespace metal;
+kernel void dbl(
+    device const float* inp [[buffer(0)]],
+    device float* out       [[buffer(1)]],
+    uint gid [[thread_position_in_grid]])
+{
+    out[gid] = inp[gid] * 2.0f;
+}
+"""
+
+
+def _metal_kernel(x: lucid.Tensor) -> lucid.Tensor:
+    doubled = lucid.metal.run_kernel(_DOUBLE, "dbl", [x * 1], (16,), grid=(16, 1, 1))
+    return x * 0 + doubled.to(x.device)
+
+
+def _fused_linear(x: lucid.Tensor, fused: Callable[..., lucid.Tensor]) -> lucid.Tensor:
+    # The weights are constants; the input is what the trace sees.
+    weight = lucid.tensor(
+        [[(i + j) % 5 - 2.0 for j in range(4)] for i in range(3)], device=x.device
+    )
+    bias = lucid.tensor([0.5, -0.5, 1.0], device=x.device)
+    rows = x.reshape(4, 4)
+    out = fused(rows, weight, bias)
+    return out * 2 + x.sum()
+
+
+#: A tensor made outside the op dispatcher that reaches the result through an
+#: op, not a host read. Unrecorded, it was a feed pinned at its trace-time
+#: value. A compiled call holding one runs eagerly: no executable spans two
+#: devices, hands out a shared buffer, or runs a fused or custom kernel.
 DERIVED_VALUES: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "moved-result": lambda m, x: (x * 3).to(_elsewhere(x)),
     "moved-twice": lambda m, x: x.to(_elsewhere(x)).to(x.device) * 3,
     "shared-operand": lambda m, x: lucid.metal.to_shared(x * 3) * 2,
+    "metal-kernel": lambda m, x: _metal_kernel(x),
+}
+
+#: The fused inference kernels (``nn.FusedLinear``), CPU only. Their output
+#: was a tensor the trace had never seen, so a Core ML package kept the
+#: example's result for every input. Export refuses them now.
+FUSED_KERNELS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
+    "fused-linear-relu": lambda m, x: _fused_linear(x, F.fused_linear_relu),
+    "fused-linear-gelu": lambda m, x: _fused_linear(x, F.fused_linear_gelu),
 }
 
 #: Entries whose read is of the model's weights rather than of its input.

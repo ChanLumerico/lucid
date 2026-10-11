@@ -30,6 +30,7 @@ from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 from lucid.test.unit.compile._host_reads import (
     CONSTANT_READS,
     DERIVED_VALUES,
+    FUSED_KERNELS,
     HOST_READS,
     STATE_READS,
     Apply,
@@ -179,6 +180,47 @@ def test_a_copy_of_a_constant_records_nothing() -> None:
         lucid.metal.to_shared(constant).tolist()
     assert [op.name for op in tracer.graph.ops] == []
     assert not tracer.graph.unsupported
+
+
+@pytest.mark.parametrize("name", sorted(FUSED_KERNELS))
+def test_a_fused_kernel_is_recorded_and_follows_the_input(name: str) -> None:
+    """The fused kernels run on the CPU only, where a compiled call is eager.
+
+    What matters is that the trace records them: a Core ML export and a
+    compile trace see the kernel's output as computed from the input.
+    """
+    x = inputs()[0]
+    with lucid.compile._tracing(watch=((x,), {})) as tracer:
+        FUSED_KERNELS[name](Apply(FUSED_KERNELS[name]), x)
+    assert any(op.name.startswith("_fused_linear") for op in tracer.graph.ops)
+    _said, compiled = _follows_the_input(FUSED_KERNELS[name], "cpu")
+    assert compiled.cache_info()["eager_only"]
+
+
+def test_a_metal_kernel_is_recorded() -> None:
+    x = inputs()[0].to(COMPILE_DEVICE)
+    with lucid.compile._tracing(watch=((x,), {})) as tracer:
+        DERIVED_VALUES["metal-kernel"](Apply(DERIVED_VALUES["metal-kernel"]), x)
+    assert "_run_metal_kernel" in [op.name for op in tracer.graph.ops]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="LCD-345 follow-up: Tensor.to(device) runs contiguous on a CPU constant "
+    "first, which records a CPU op, so the Metal trace is mixed-device and eager",
+)
+def test_a_cpu_constant_moved_to_metal_stays_compiled() -> None:
+    def fn(x: lucid.Tensor) -> lucid.Tensor:
+        return x * lucid.tensor([2.0]).to(x.device)
+
+    compiled = lucid.compile.compile(fn)
+    first, second = (t.to(COMPILE_DEVICE) for t in inputs())
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        compiled(first)
+        got = compiled(second)
+    assert float((got - second * 2).abs().max().item()) <= 1e-5
+    assert not compiled.cache_info()["eager_only"]
 
 
 class _Linear(nn.Module):

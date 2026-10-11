@@ -18,6 +18,7 @@ import lucid.coreml as cml
 from lucid._C import engine as _C_engine
 from lucid.test.unit.compile._host_reads import (
     CONSTANT_READS,
+    FUSED_KERNELS,
     HOST_READS,
     STATE_READS,
     Apply,
@@ -34,9 +35,7 @@ pytestmark = pytest.mark.skipif(
 def test_a_host_read_is_refused(name: str, tmp_path: object) -> None:
     first, _second = inputs()
     with pytest.raises(ValueError, match="read on the host"):
-        cml.export(
-            Apply(HOST_READS[name]).eval(), first, f"{tmp_path}/{name}.mlpackage"
-        )
+        cml.export(Apply(HOST_READS[name]).eval(), first, f"{tmp_path}/{name}.mlpackage")
 
 
 _EXPORTABLE = {**CONSTANT_READS, **{n: HOST_READS[n] for n in STATE_READS}}
@@ -52,3 +51,13 @@ def test_a_read_of_a_constant_exports(name: str, tmp_path: object) -> None:
     got = exported.predict(second)
     assert isinstance(got, lucid.Tensor)
     assert float((got - model(second)).abs().max().item()) <= 1e-5
+
+
+@pytest.mark.parametrize("name", sorted(FUSED_KERNELS))
+def test_a_fused_kernel_is_refused(name: str, tmp_path: object) -> None:
+    """``F.fused_linear_relu(x, w, b) * 2 + x.sum()`` exported with the
+    example's kernel output baked in, off from eager by about 4 on another
+    input (LCD-345). The kernel is now recorded, and has no translation."""
+    first, _second = inputs()
+    with pytest.raises(cml.UnsupportedOp, match="_fused_linear"):
+        cml.export(Apply(FUSED_KERNELS[name]).eval(), first, f"{tmp_path}/{name}.mlpackage")
