@@ -79,19 +79,18 @@ def _or_zeros(grads: Sequence[Tensor | None], like: Sequence[Tensor]) -> list[Te
 
 
 def _seeds(
-    v: Tensor | Sequence[Tensor] | None,
-    like: tuple[Tensor, ...],
-    single: bool,
-    subject: str,
+    v: Tensor | Sequence[Tensor] | None, like: tuple[Tensor, ...], subject: str
 ) -> list[Tensor]:
     """``v`` as a list, or ones for a ``like`` that is one single-element tensor.
+
+    One tensor, bare or in a 1-tuple: the reference accepts either.
 
     The reference lets ``v`` be left out exactly there — a scalar loss, a
     scalar input — where a vector of ones is the only seed that makes sense.
     """
     if v is not None:
         return list(_as_tuple(v)[0])
-    if not single or like[0].numel() != 1:
+    if len(like) != 1 or like[0].numel() != 1:
         raise RuntimeError(
             f"The vector v can only be None if {subject} a single Tensor with "
             "a single element."
@@ -402,8 +401,8 @@ def vjp(
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         outputs = func(*xs)
-        outs, one_output = _as_tuple(outputs)
-        seeds = _seeds(v, outs, one_output, "the user-provided function returns")
+        outs, _ = _as_tuple(outputs)
+        seeds = _seeds(v, outs, "the user-provided function returns")
         grads = _grad(
             list(outs),
             xs,
@@ -524,8 +523,8 @@ def jvp(
     tensor([2., 0., 0.])
     """
     _require_differentiable(inputs, "jvp")
-    inputs_t, one_input = _as_tuple(inputs)
-    v_t = _seeds(v, inputs_t, one_input, "the input to the user-provided function is")
+    inputs_t, _ = _as_tuple(inputs)
+    v_t = _seeds(v, inputs_t, "the input to the user-provided function is")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         outputs = func(*xs)

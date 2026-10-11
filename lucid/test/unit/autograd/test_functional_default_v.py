@@ -71,3 +71,16 @@ def test_the_default_seed_under_create_graph(device: str) -> None:
     _, (grad,) = vjp(lambda t: (t * t * t).sum(), x, create_graph=True)
     (second,) = lucid.autograd.grad(grad.sum(), x)
     assert second.tolist() == pytest.approx([6.0 * v for v in _DATA])
+
+
+def test_one_tensor_in_a_tuple_is_seeded_too(ref: ModuleType, device: str) -> None:
+    # ``(loss,)`` and ``(x,)`` cover one single-element tensor as a bare one
+    # does; the reference seeds both.
+    data = [2.0]
+    x = lucid.tensor(data, device=device)
+    _, (grad,) = vjp(lambda a: ((a * a).sum(),), x)
+    _, want = ref.autograd.functional.vjp(lambda a: ((a * a).sum(),), ref.tensor(data))
+    assert grad.tolist() == want.tolist()
+    _, tangent = jvp(lambda a: a * 3, (x,))
+    _, want_t = ref.autograd.functional.jvp(lambda a: a * 3, (ref.tensor(data),))
+    assert tangent.tolist() == want_t.tolist()

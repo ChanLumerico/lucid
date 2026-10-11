@@ -464,6 +464,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a 0-d tensor's dim 0/-1 reduces it whole; dof <= 0 warns
 
+- v=None seeds one single-element tensor in a 1-tuple too
+
 ### Changed
 
 - `Tensor.view` / `lucid.view` refuse a shape the input's strides cannot read in place (use `.reshape`), as the reference does; Metal reshape/flatten/squeeze/unsqueeze/view of a dense tensor now alias their base instead of copying (MV-ENG-1)
