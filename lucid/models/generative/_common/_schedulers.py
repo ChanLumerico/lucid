@@ -109,8 +109,9 @@ class DiffusionScheduler(ABC):
             positive and (for sub-sampling schedulers) ``<=
             num_train_timesteps``.
         device : DeviceLike, optional
-            Placement of the materialised :attr:`timesteps` tensor.
-            ``None`` (the default) keeps it with the rest of the schedule.
+            Moves the whole schedule — :attr:`timesteps` and every table —
+            there, as :meth:`to` does.  ``None`` (the default) leaves it where
+            it is.
 
         Examples
         --------
@@ -268,9 +269,13 @@ class DDPMScheduler(DiffusionScheduler):
         # final step noiseless for every ``n``, which is Algorithm 2 line 3
         # ("z = 0 if t == 1").
         idx = [i * step for i in range(num_inference_steps)][::-1]
-        where = self.device if device is None else device
-        self.timesteps = lucid.tensor(idx, device=where).long()
+        self.timesteps = lucid.tensor(idx, device=self.device).long()
         self._step_ratio = step
+        if device is not None:
+            # The whole schedule moves, not just ``timesteps``: :attr:`device`
+            # reads ``timesteps``, so moving it alone reported the new device
+            # while ``add_noise`` kept copying CPU tables on every call.
+            self.to(device)
 
     @override
     def add_noise(self, original: Tensor, noise: Tensor, timesteps: Tensor) -> Tensor:

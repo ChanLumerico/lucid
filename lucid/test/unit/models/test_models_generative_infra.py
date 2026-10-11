@@ -272,6 +272,31 @@ class TestDDPMSchedulerDevice:
         assert sched.timesteps.device.type == device
 
     @pytest.mark.parametrize("device", _METAL)
+    def test_set_timesteps_moves_every_table(self, device: str) -> None:
+        """``generate`` passes its device here; moving ``timesteps`` alone
+        reported that device while ``add_noise`` kept copying CPU tables."""
+        sched = DDPMScheduler(num_train_timesteps=20)
+        sched.set_timesteps(5, device=device)
+        assert self._tables(sched) == {device}
+        assert sched.device.type == device
+
+    def test_the_model_builds_its_scheduler_where_it_lives(self) -> None:
+        from lucid.models.generative.ddpm import DDPMConfig, DDPMForImageGeneration
+
+        cfg = DDPMConfig(
+            sample_size=8,
+            base_channels=16,
+            channel_mult=(1,),
+            num_res_blocks=1,
+            resnet_groups=8,
+            attention_resolutions=(),
+            num_train_timesteps=10,
+        )
+        device = _METAL[-1]
+        model = DDPMForImageGeneration(cfg).to(device)
+        assert self._tables(model.make_scheduler()) == {device}
+
+    @pytest.mark.parametrize("device", _METAL)
     def test_to_moves_every_table(self, device: str) -> None:
         sched = DDPMScheduler(num_train_timesteps=20).to(device)
         assert self._tables(sched) == {device}

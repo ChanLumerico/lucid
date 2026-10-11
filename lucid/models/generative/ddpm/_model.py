@@ -45,6 +45,7 @@ from lucid.models._utils._generative import (
     diffusion_vlb_term,
     extract_into_tensor,
     make_beta_schedule,
+    resolve_generation_device,
 )
 from lucid.models.generative._common._schedulers import DDPMScheduler
 from lucid.models.generative.ddpm._config import DDPMConfig
@@ -844,6 +845,9 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
             beta_schedule=config.beta_schedule,
             prediction_type=config.prediction_type,
             clip_denoised=config.clip_denoised,
+            # Built where the model is, so sampling a Metal model does not
+            # start by moving the schedule across.
+            device=resolve_generation_device(self, None),
         )
 
     def _split_output(self, raw: Tensor) -> tuple[Tensor, Tensor | None]:
