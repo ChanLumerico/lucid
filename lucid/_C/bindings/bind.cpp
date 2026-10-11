@@ -25,7 +25,9 @@
 
 #include "../backend/Dispatcher.h"
 #include "../compile/Tracer.h"
+#include "../core/Error.h"
 #include "../core/TensorImpl.h"
+#include "../core/Validate.h"
 #include "../core/fwd.h"
 #include "../version.h"
 
@@ -93,6 +95,59 @@ void require_pinned_mlx() {
                                " but loaded MLX " + loaded +
                                " (stale build - rebuild the engine, e.g. `pip install -e .`)");
     }
+}
+
+enum class FusedActivation { Relu, Gelu };
+
+// The ``_fused_linear_*`` inference kernels.  CpuBackend fuses the GEMM and
+// the activation for F32 only; every other device and dtype computes the same
+// function as the backend's own ``linear`` followed by ``relu`` / ``gelu``
+// (tanh form, as the CPU kernel), so ``nn.FusedLinear`` runs wherever
+// ``nn.Linear`` does.  Either way the tracer records one fused op, which the
+// compile and Core ML emitters translate.  The operands are checked here,
+// before any kernel reads them: the CPU kernel derives K from x's byte size
+// and would read past a smaller weight.
+lucid::TensorImplPtr fused_linear_forward(const char* name,
+                                          FusedActivation act,
+                                          const lucid::TensorImplPtr& x,
+                                          const lucid::TensorImplPtr& w,
+                                          const lucid::TensorImplPtr& b) {
+    using lucid::Validator;
+    const std::string op(name);
+    Validator::input(x, op + ".x")
+        .dtype_in({lucid::Dtype::F16, lucid::Dtype::BF16, lucid::Dtype::F32, lucid::Dtype::F64})
+        .ndim_at_least(1);
+    Validator::input(w, op + ".weight").non_null().ndim(2);
+    Validator::input(b, op + ".bias").non_null().ndim(1);
+    Validator::pair(x, w, op).same_device().same_dtype();
+    Validator::pair(x, b, op).same_device().same_dtype();
+    const auto& xs = x->shape();
+    const auto& ws = w->shape();
+    if (ws[1] != xs.back())
+        throw lucid::ShapeMismatch(ws, xs, op + ": weight.shape[1] != x.shape[-1]");
+    if (b->shape()[0] != ws[0])
+        throw lucid::ShapeMismatch(b->shape(), ws, op + ": bias.shape[0] != weight.shape[0]");
+
+    lucid::Shape out_shape(xs.begin(), xs.end() - 1);
+    out_shape.push_back(ws[0]);
+    const lucid::Dtype dt = x->dtype();
+    auto& be = lucid::backend::Dispatcher::for_device(x->device());
+    lucid::Storage out;
+    if (x->device() == lucid::Device::CPU && dt == lucid::Dtype::F32) {
+        out = act == FusedActivation::Relu
+                  ? be.fused_linear_relu_forward(x->storage(), w->storage(), b->storage(),
+                                                 out_shape, dt)
+                  : be.fused_linear_gelu_forward(x->storage(), w->storage(), b->storage(),
+                                                 out_shape, dt);
+    } else {
+        lucid::Storage pre =
+            be.linear(x->storage(), w->storage(), b->storage(), xs, ws, out_shape, dt);
+        out = act == FusedActivation::Relu ? be.relu(pre, out_shape, dt)
+                                           : be.gelu(pre, out_shape, dt);
+    }
+    return lucid::compile::traced_derive(
+        op, std::vector<lucid::TensorImplPtr>{x, w, b},
+        std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, dt, x->device(), false));
 }
 
 }  // namespace
@@ -176,64 +231,26 @@ PYBIND11_MODULE(engine, m) {
     // Fused kernel bindings that directly call IBackend dispatch and therefore
     // cannot be separated into their own translation units without exposing
     // internal Dispatcher headers to bind_nn.cpp.
+    // The output never requires grad: the Python wrappers call these only
+    // when no operand needs one, and take linear + activation otherwise.
     m.def(
         "_fused_linear_relu",
-        // The lambda validates shapes and delegates to the backend; the
-        // output TensorImpl is created without requires_grad because the
-        // fused path has no autograd support (use linear + relu separately
-        // if gradients are needed).
         [](const lucid::TensorImplPtr& x, const lucid::TensorImplPtr& w,
-           const lucid::TensorImplPtr& b) -> lucid::TensorImplPtr {
-            if (!x || !w || !b)
-                throw std::invalid_argument("_fused_linear_relu: null input");
-
-            const auto& xs = x->shape();
-            const auto& ws = w->shape();
-            if (ws.size() < 2)
-                throw std::invalid_argument("_fused_linear_relu: weight must be >= 2-D");
-            lucid::Shape out_shape(xs.begin(), xs.end() - 1);
-            out_shape.push_back(ws[0]);
-
-            auto& be = lucid::backend::Dispatcher::for_device(x->device());
-            lucid::Storage out = be.fused_linear_relu_forward(x->storage(), w->storage(),
-                                                              b->storage(), out_shape, x->dtype());
-            // No emitter: a traced call runs eagerly, an export refuses.
-            return lucid::compile::traced_derive(
-                "_fused_linear_relu", std::vector<lucid::TensorImplPtr>{x, w, b},
-                std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
-                                                    x->device(), false));
+           const lucid::TensorImplPtr& b) {
+            return fused_linear_forward("_fused_linear_relu", FusedActivation::Relu, x, w, b);
         },
         py::arg("x"), py::arg("weight"), py::arg("bias"),
-        "Fused linear + ReLU: y = max(0, x @ W.T + b).  "
-        "CPU: BLAS SGEMM + vDSP vrelu (single cache pass).");
+        "Fused linear + ReLU inference kernel: y = max(0, x @ W.T + b), no autograd.");
 
     m.def(
         "_fused_linear_gelu",
-        // Same structure as _fused_linear_relu; activation switched to GELU
-        // approximated via vForce vtanh on the CPU backend.
         [](const lucid::TensorImplPtr& x, const lucid::TensorImplPtr& w,
-           const lucid::TensorImplPtr& b) -> lucid::TensorImplPtr {
-            if (!x || !w || !b)
-                throw std::invalid_argument("_fused_linear_gelu: null input");
-
-            const auto& xs = x->shape();
-            const auto& ws = w->shape();
-            if (ws.size() < 2)
-                throw std::invalid_argument("_fused_linear_gelu: weight must be >= 2-D");
-            lucid::Shape out_shape(xs.begin(), xs.end() - 1);
-            out_shape.push_back(ws[0]);
-
-            auto& be = lucid::backend::Dispatcher::for_device(x->device());
-            lucid::Storage out = be.fused_linear_gelu_forward(x->storage(), w->storage(),
-                                                              b->storage(), out_shape, x->dtype());
-            return lucid::compile::traced_derive(
-                "_fused_linear_gelu", std::vector<lucid::TensorImplPtr>{x, w, b},
-                std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, x->dtype(),
-                                                    x->device(), false));
+           const lucid::TensorImplPtr& b) {
+            return fused_linear_forward("_fused_linear_gelu", FusedActivation::Gelu, x, w, b);
         },
         py::arg("x"), py::arg("weight"), py::arg("bias"),
-        "Fused linear + GELU: y = GELU(x @ W.T + b).  "
-        "CPU: BLAS SGEMM + vForce vtanh.");
+        "Fused linear + tanh-approximate GELU inference kernel: y = GELU(x @ W.T + b), "
+        "no autograd.");
 
     // Custom Metal kernel launcher.  The dtype string is converted to a
     // Dtype enum here rather than in C++ generic code so that Python callers

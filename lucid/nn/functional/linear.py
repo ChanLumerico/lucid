@@ -192,8 +192,10 @@ def fused_linear_relu(x: Tensor, weight: Tensor, bias: Tensor) -> Tensor:
         y = \max\!\big(0,\, x W^\top + b\big)
 
     Implementation: a single BLAS SGEMM followed by vDSP ``vrelu`` over
-    the GEMM output buffer.  Selected by the Phase-19 FusionPass when
-    grad-mode is disabled and none of ``x`` / ``weight`` / ``bias`` has
+    the GEMM output buffer for CPU float32; on Metal and in the half
+    formats, the backend's linear followed by its ReLU.  Selected by the
+    Phase-19 FusionPass when grad-mode is disabled and none of ``x`` /
+    ``weight`` / ``bias`` has
     ``requires_grad=True``.  In training mode the call routes through
     the standard :func:`linear` + :func:`relu` graph so autograd's
     backward derivations are exact.
@@ -264,9 +266,11 @@ def fused_linear_gelu(
 
     Implementation: a single BLAS SGEMM followed by vForce ``vtanh``
     over the GEMM output to evaluate the tanh-form GELU
-    :math:`\tfrac{x}{2}\big[1 + \tanh(\sqrt{2/\pi}\,(x + 0.044715 x^3))\big]`.
-    Engaged only in inference mode (no grad-tracking inputs) and only
-    when ``approximate="tanh"``; otherwise the call falls back to the
+    :math:`\tfrac{x}{2}\big[1 + \tanh(\sqrt{2/\pi}\,(x + 0.044715 x^3))\big]`
+    for CPU float32; on Metal and in the half formats, the backend's linear
+    followed by the same tanh-form GELU.  Engaged only in inference mode
+    (no grad-tracking inputs) and only when ``approximate="tanh"``;
+    otherwise the call falls back to the
     standard :func:`linear` + :func:`gelu` graph so gradients remain
     exact.
 

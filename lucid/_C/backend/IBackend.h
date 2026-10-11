@@ -2052,9 +2052,10 @@ public:
                                        Dtype input_dtype,
                                        std::size_t& numel_out) = 0;
 
-    // Optional fused kernels; default implementations call the base backend's
-    // linear() followed by relu/gelu and throw if the dtype is unsupported.
-    // Backends that can fuse these two ops (e.g. ANE) override them.
+    // Optional fused linear + activation kernels (gelu is the tanh form).  The
+    // defaults throw; a backend overrides them only for the dtypes it really
+    // fuses (CpuBackend: F32).  The ``_fused_linear_*`` bindings call these
+    // for CPU F32 only and compose linear() with relu()/gelu() elsewhere.
     virtual Storage fused_linear_relu_forward(
         const Storage& x, const Storage& w, const Storage& b, const Shape& out_shape, Dtype dt) {
         (void)x;

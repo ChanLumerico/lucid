@@ -162,3 +162,92 @@ class TestFusedLinearModule:
         m = nn.FusedLinear(4, 8)
         params = list(m.parameters())
         assert len(params) == 2  # weight + bias
+
+
+def _metal_ok() -> bool:
+    try:
+        lucid.zeros((1,)).to("metal")
+        return True
+    except Exception:  # noqa: BLE001 — any failure means no Metal here
+        return False
+
+
+_DEVICES = [
+    "cpu",
+    pytest.param("metal", marks=pytest.mark.skipif(not _metal_ok(), reason="no Metal")),
+]
+_DTYPES = [lucid.float32, lucid.float16, lucid.bfloat16]
+_FUSED = {
+    "relu": (F.fused_linear_relu, F.relu),
+    "gelu": (F.fused_linear_gelu, lambda p: F.gelu(p, approximate="tanh")),
+}
+
+
+class TestFusedKernelEveryDevice:
+    """The fused kernels ran only on the CPU in float32: Metal and the half
+    formats raised ``NotImplementedError``, so ``nn.FusedLinear().eval()``
+    did not run on Metal at all (LCD-450). Elsewhere the binding composes
+    the backend's linear and activation, the same function."""
+
+    @pytest.mark.parametrize("dtype", _DTYPES, ids=["f32", "f16", "bf16"])
+    @pytest.mark.parametrize("device", _DEVICES)
+    @pytest.mark.parametrize("act", sorted(_FUSED))
+    def test_matches_the_unfused_composition(
+        self, act: str, device: str, dtype: lucid.dtype
+    ) -> None:
+        fused, activation = _FUSED[act]
+        lucid.manual_seed(0)
+        x = lucid.randn(2, 5, 8).to(device).to(dtype)
+        w = lucid.randn(3, 8).to(device).to(dtype)
+        b = lucid.randn(3).to(device).to(dtype)
+        with lucid.no_grad():
+            got = fused(x, w, b)
+            want = activation(F.linear(x, w, b))
+        assert got.shape == want.shape == (2, 5, 3)
+        assert got.dtype == dtype and got.device == want.device
+        # CPU float32 runs the fused BLAS kernel; elsewhere it is the same ops.
+        tol = 1e-6 if (device, dtype) == ("cpu", lucid.float32) else 0.0
+        diff = float((got.float() - want.float()).abs().max().item())
+        assert diff <= tol * max(1.0, float(want.float().abs().max().item()))
+
+    @pytest.mark.parametrize("dtype", _DTYPES, ids=["f32", "f16", "bf16"])
+    @pytest.mark.parametrize("device", _DEVICES)
+    @pytest.mark.parametrize("act", sorted(_FUSED))
+    def test_the_module_runs_in_eval(self, act: str, device: str, dtype: lucid.dtype) -> None:
+        m = nn.FusedLinear(8, 4, activation=act).to(device).to(dtype).eval()
+        x = lucid.randn(3, 8).to(device).to(dtype)
+        with lucid.no_grad():
+            got = m(x)
+            want = _FUSED[act][1](F.linear(x, m.weight, m.bias))
+        diff = float((got.float() - want.float()).abs().max().item())
+        assert diff <= 1e-6 * max(1.0, float(want.float().abs().max().item()))
+
+    def test_an_empty_batch(self) -> None:
+        x, w, b = lucid.randn(0, 8), lucid.randn(3, 8), lucid.randn(3)
+        with lucid.no_grad():
+            assert F.fused_linear_gelu(x, w, b).shape == (0, 3)
+
+
+class TestFusedKernelChecksItsOperands:
+    """The CPU kernel derived K from the input's byte size, so a weight with
+    fewer input features was read past its end and the answer was garbage."""
+
+    @pytest.mark.parametrize(
+        "w_shape, b_shape", [((3, 5), (3,)), ((3, 8), (4,))], ids=["weight", "bias"]
+    )
+    def test_a_shape_mismatch_raises(
+        self, w_shape: tuple[int, ...], b_shape: tuple[int, ...]
+    ) -> None:
+        x, w, b = lucid.randn(4, 8), lucid.randn(*w_shape), lucid.randn(*b_shape)
+        with lucid.no_grad(), pytest.raises(ValueError, match="shape"):
+            F.fused_linear_relu(x, w, b)
+
+    def test_a_dtype_mismatch_raises(self) -> None:
+        x, w, b = lucid.randn(4, 8), lucid.randn(3, 8).half(), lucid.randn(3)
+        with lucid.no_grad(), pytest.raises(TypeError):
+            F.fused_linear_relu(x, w, b)
+
+    def test_an_integer_input_raises(self) -> None:
+        x, w, b = lucid.randint(0, 3, (4, 8)), lucid.randn(3, 8), lucid.randn(3)
+        with lucid.no_grad(), pytest.raises(TypeError):
+            F.fused_linear_relu(x, w, b)

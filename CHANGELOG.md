@@ -656,6 +656,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - preserve tie/NaN grads in clamp/fmax/fmin (LCD-436, LCD-441)
 
+- run the fused linear kernels on Metal and in half precision
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
