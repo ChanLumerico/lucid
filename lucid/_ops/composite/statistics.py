@@ -1185,7 +1185,7 @@ def _moments(
     )
     xi = _unwrap(x)
     axes = _reduction_axes(xi, dim, name)
-    spread = _corrected_variance(xi, axes, correction, keepdim)
+    spread = _corrected_variance(xi, axes, correction, keepdim, name)
     if name == "std_mean":
         spread = _zero_safe_root(spread, 2)
     return _wrap(spread), _wrap(_C_engine.mean(xi, axes, keepdim))

@@ -426,15 +426,21 @@ def test_every_spelling_matches_the_reference(
         if _deprecated_spelling(fn, args):
             _assert_still_keepdim(call, args, kwargs)
             continue
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
+        with warnings.catch_warnings(record=True) as ours_said:
+            warnings.simplefilter("always")
             ours = _outputs(call(*args, **kwargs))
-        with warnings.catch_warnings():
-            # The reference warns that N <= correction; Lucid answers silently.
-            warnings.simplefilter("ignore", UserWarning)
+        with warnings.catch_warnings(record=True) as theirs_said:
+            warnings.simplefilter("always")
             theirs = _outputs(getattr(ref, fn)(ref.tensor(_X), *args, **kwargs))
+        # Both warn that N <= correction, and Lucid of nothing else.
+        assert all(_dof(w) for w in ours_said)
+        assert any(map(_dof, ours_said)) == any(map(_dof, theirs_said))
         for o, t in zip(ours, theirs, strict=True):
             _assert_matches(_lucid_np(o), _ref_np(t), f"{fn}{args}{kwargs}")
+
+
+def _dof(caught: warnings.WarningMessage) -> bool:
+    return "degrees of freedom is <= 0" in str(caught.message)
 
 
 def _assert_still_keepdim(

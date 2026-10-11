@@ -22,11 +22,12 @@ The four variance functions also read their arguments in one place,
 
 import math
 import operator
+import warnings
 from collections.abc import Sequence
 from typing import SupportsIndex
 
 from lucid._C import engine as _C_engine
-from lucid._deprecation import warn_deprecated
+from lucid._deprecation import _PACKAGE_DIR, warn_deprecated
 from lucid._dtype import _ENGINE_TO_DTYPE
 
 _Impl = _C_engine.TensorImpl
@@ -70,18 +71,26 @@ def _reduction_axes(x_impl: _Impl, dim: object, name: str) -> list[int]:
     axis in twice.  The reference refuses the call; so does this, in the
     name of the public op that was called.  A float used to truncate
     (``int(1.5)``) or fail as "not iterable".  An axis out of range is left
-    for the engine to report.
+    for the engine to report.  A 0-d tensor's ``dim`` 0 or -1, which the
+    reference accepts, is every axis it has (``[]``): ``var`` read
+    ``shape[0]`` of it for its divisor and raised ``IndexError``.
     """
     axes = _to_axes(dim, name)
+    ndim = len(x_impl.shape)
     if len(axes) > 1:
-        ndim = len(x_impl.shape)
-        if len({axis + ndim if axis < 0 else axis for axis in axes}) != len(axes):
-            canonical = [axis + ndim if axis < 0 else axis for axis in axes]
+        # A 0-d tensor's one axis answers to both 0 and -1, as a rank-1 one's.
+        rank = max(ndim, 1)
+        canonical = [axis + rank if axis < 0 else axis for axis in axes]
+        if len(set(canonical)) != len(axes):
             repeated = next(a for a in canonical if canonical.count(a) > 1)
             raise ValueError(
                 f"{name}(): dim {repeated} appears multiple times in the "
                 f"list of dims {tuple(axes)}"
             )
+    if ndim == 0 and all(axis in (0, -1) for axis in axes):
+        # That one axis is the whole tensor: the engine's empty list, whose
+        # element count the variance divisor reads as 1, not as shape[0].
+        return []
     return axes
 
 
@@ -192,6 +201,7 @@ def _bessel_correct(
     x_impl: _Impl,
     axes_list: Sequence[int],
     correction: float,
+    name: str,
 ) -> _Impl:
     """Turn the engine's ``sum / N`` variance into ``sum / max(N - correction, 0)``.
 
@@ -206,7 +216,8 @@ def _bessel_correct(
     negative ``N - correction``, so it is finite under a ``nan`` / ``inf``
     value.  The value here is the forward's and the slope is that one, so
     a loss summed over many slices is not poisoned by a ``nan`` gradient
-    the reference does not give.
+    the reference does not give.  A divisor of 0 or less warns, as the
+    reference's does, in the name of the op ``name`` that was called.
     """
     shape = x_impl.shape
     n = math.prod([shape[a] for a in axes_list] if axes_list else shape)
@@ -215,6 +226,12 @@ def _bessel_correct(
     dof = n - correction
     if dof > 0:
         return _scale(result_impl, n / dof)
+    warnings.warn(
+        f"{name}(): degrees of freedom is <= 0. Correction should be strictly "
+        "less than the reduction factor (input numel divided by output numel).",
+        UserWarning,
+        skip_file_prefixes=(_PACKAGE_DIR,),
+    )
     undivided = _scale(result_impl, math.inf)
     if dof == 0 or not result_impl.requires_grad:
         return undivided
@@ -322,11 +339,11 @@ def _variance_operands(
 
 
 def _corrected_variance(
-    x_impl: _Impl, axes: list[int], correction: float, keepdim: bool
+    x_impl: _Impl, axes: list[int], correction: float, keepdim: bool, name: str
 ) -> _Impl:
     """The variance over ``axes`` divided by ``max(N - correction, 0)``."""
     biased = _C_engine.var(x_impl, axes, keepdim)
-    return _bessel_correct(biased, x_impl, axes, correction)
+    return _bessel_correct(biased, x_impl, axes, correction, name)
 
 
 def _variance(
@@ -342,7 +359,7 @@ def _variance(
             name, args, kwargs, keepdim_third=True
         )
     axes = _reduction_axes(x_impl, dim, name)
-    return _corrected_variance(x_impl, axes, correction, keepdim)
+    return _corrected_variance(x_impl, axes, correction, keepdim, name)
 
 
 def _var_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
