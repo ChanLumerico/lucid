@@ -186,8 +186,8 @@
     "lucid/utils/transforms/_presets.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 10766,
-    "lucid/_C/backend/gpu/GpuBackend.h": 4613,
+    "lucid/_C/backend/cpu/CpuBackend.h": 10759,
+    "lucid/_C/backend/gpu/GpuBackend.h": 4605,
     "lucid/_ops/composite/elementwise.py": 215,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2797,

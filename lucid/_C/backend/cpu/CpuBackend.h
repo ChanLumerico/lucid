@@ -10269,10 +10269,10 @@ public:
 
     Storage interpolate_nearest_2d_forward(
         const Storage& input, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
-        return resample(input,
-                        cpu::interp::make_request(cpu::interp::Filter::Nearest, in_shape, 1, H_out,
-                                                  W_out, false),
-                        dt, false);
+        return cpu::interp::resample(*this, input,
+                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
+                                                               in_shape, 1, H_out, W_out, false),
+                                     dt, false);
     }
 
     Storage interpolate_nearest_3d_forward(const Storage& input,
@@ -10281,18 +10281,19 @@ public:
                                            int H_out,
                                            int W_out,
                                            Dtype dt) override {
-        return resample(input,
-                        cpu::interp::make_request(cpu::interp::Filter::Nearest, in_shape, D_out,
-                                                  H_out, W_out, false),
-                        dt, false);
+        return cpu::interp::resample(*this, input,
+                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
+                                                               in_shape, D_out, H_out, W_out,
+                                                               false),
+                                     dt, false);
     }
 
     Storage interpolate_nearest_2d_backward(
         const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
-        return resample(grad_out,
-                        cpu::interp::make_request(cpu::interp::Filter::Nearest, in_shape, 1, H_out,
-                                                  W_out, false),
-                        dt, true);
+        return cpu::interp::resample(*this, grad_out,
+                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
+                                                               in_shape, 1, H_out, W_out, false),
+                                     dt, true);
     }
 
     Storage interpolate_nearest_3d_backward(const Storage& grad_out,
@@ -10301,10 +10302,11 @@ public:
                                             int H_out,
                                             int W_out,
                                             Dtype dt) override {
-        return resample(grad_out,
-                        cpu::interp::make_request(cpu::interp::Filter::Nearest, in_shape, D_out,
-                                                  H_out, W_out, false),
-                        dt, true);
+        return cpu::interp::resample(*this, grad_out,
+                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
+                                                               in_shape, D_out, H_out, W_out,
+                                                               false),
+                                     dt, true);
     }
 
     Storage interpolate_bilinear_forward(const Storage& input,
@@ -10313,10 +10315,11 @@ public:
                                          int W_out,
                                          bool align_corners,
                                          Dtype dt) override {
-        return resample(input,
-                        cpu::interp::make_request(cpu::interp::Filter::Linear, in_shape, 1, H_out,
-                                                  W_out, align_corners),
-                        dt, false);
+        return cpu::interp::resample(*this, input,
+                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
+                                                               in_shape, 1, H_out, W_out,
+                                                               align_corners),
+                                     dt, false);
     }
 
     Storage interpolate_bilinear_backward(const Storage& grad_out,
@@ -10325,10 +10328,11 @@ public:
                                           int W_out,
                                           bool align_corners,
                                           Dtype dt) override {
-        return resample(grad_out,
-                        cpu::interp::make_request(cpu::interp::Filter::Linear, in_shape, 1, H_out,
-                                                  W_out, align_corners),
-                        dt, true);
+        return cpu::interp::resample(*this, grad_out,
+                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
+                                                               in_shape, 1, H_out, W_out,
+                                                               align_corners),
+                                     dt, true);
     }
 
     Storage interpolate_trilinear_forward(const Storage& input,
@@ -10338,10 +10342,11 @@ public:
                                           int W_out,
                                           bool align_corners,
                                           Dtype dt) override {
-        return resample(input,
-                        cpu::interp::make_request(cpu::interp::Filter::Linear, in_shape, D_out,
-                                                  H_out, W_out, align_corners),
-                        dt, false);
+        return cpu::interp::resample(*this, input,
+                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
+                                                               in_shape, D_out, H_out, W_out,
+                                                               align_corners),
+                                     dt, false);
     }
 
     Storage interpolate_trilinear_backward(const Storage& grad_out,
@@ -10351,23 +10356,11 @@ public:
                                            int W_out,
                                            bool align_corners,
                                            Dtype dt) override {
-        return resample(grad_out,
-                        cpu::interp::make_request(cpu::interp::Filter::Linear, in_shape, D_out,
-                                                  H_out, W_out, align_corners),
-                        dt, true);
-    }
-
-    // Every interpolate kernel (cpu/Interpolate.h): the 16-bit formats through
-    // float32, as the rest of the backend widens them.
-    Storage resample(const Storage& src, const cpu::interp::Request& r, Dtype dt, bool backward) {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(resample(detail::as_f32(src), r, Dtype::F32, backward), dt);
-        const auto& cs = std::get<CpuStorage>(src);
-        if (dt == Dtype::F32)
-            return Storage{cpu::interp::run<float>(cs, r, dt, backward)};
-        if (dt == Dtype::F64)
-            return Storage{cpu::interp::run<double>(cs, r, dt, backward)};
-        ErrorBuilder("cpu::interpolate").not_implemented("dtype must be a floating dtype");
+        return cpu::interp::resample(*this, grad_out,
+                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
+                                                               in_shape, D_out, H_out, W_out,
+                                                               align_corners),
+                                     dt, true);
     }
 
     Storage affine_grid_forward(

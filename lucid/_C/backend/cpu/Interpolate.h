@@ -2,8 +2,7 @@
 //
 // ``interpolate`` on the CPU stream: nearest and (bi/tri)linear resizes of
 // 2-D and 3-D maps and their adjoints, written once over the scalar type.
-// The two 16-bit formats reach these through float32 — :class:`CpuBackend`
-// widens them at the door.
+// The two 16-bit formats reach these through float32 (``resample`` below).
 //
 // A 2-D map is a 3-D one a single sample deep, but its depth axis is never
 // blended: the reference blends only the axes the mode names, and blending
@@ -24,8 +23,10 @@
 
 #include "../../core/Allocator.h"
 #include "../../core/Dtype.h"
+#include "../../core/ErrorBuilder.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
+#include "../IBackend.h"
 #include "../SamplePositions.h"
 #include "Parallel.h"
 
@@ -237,6 +238,25 @@ CpuStorage run(const CpuStorage& src, const Request& r, Dtype dt, bool backward)
     else
         linear_forward(s, o, r);
     return out;
+}
+
+// ``src`` resized as ``r`` asks (or, ``backward``, a gradient taken back),
+// in ``dt``: float32 and float64 directly, float16 and bfloat16 through
+// float32 by ``be``'s ``astype``, as the rest of the CPU backend widens them.
+inline Storage
+resample(IBackend& be, const Storage& src, const Request& r, Dtype dt, bool backward) {
+    if (is_half_float(dt)) {
+        const auto n_in = static_cast<std::int64_t>(r.planes * (backward ? r.out : r.in).size());
+        const auto n_out = static_cast<std::int64_t>(r.planes * (backward ? r.in : r.out).size());
+        Storage wide = be.astype(src, Shape{n_in}, dt, Dtype::F32);
+        return be.astype(resample(be, wide, r, Dtype::F32, backward), Shape{n_out}, Dtype::F32, dt);
+    }
+    const auto& cs = std::get<CpuStorage>(src);
+    if (dt == Dtype::F32)
+        return Storage{run<float>(cs, r, dt, backward)};
+    if (dt == Dtype::F64)
+        return Storage{run<double>(cs, r, dt, backward)};
+    ErrorBuilder("cpu::interpolate").not_implemented("dtype must be a floating dtype");
 }
 
 }  // namespace lucid::backend::cpu::interp

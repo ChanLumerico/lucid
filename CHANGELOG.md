@@ -627,6 +627,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - loss and RNN validators take object, as boundaries do
 - drop the state_dict recursion and key-list hooks
 - the graph-mode resample matrix reads the shared taps
+- interpolate's dtype door is a free function
 
 ---
 
