@@ -119,6 +119,24 @@ def _state_like(
     return _follow(src, dst)
 
 
+def _host_copy(src: _C_engine.TensorImpl) -> object:
+    """``src`` as a host array of its own, as a checkpoint stores state.
+
+    A copy, so the checkpoint shares no buffer with the live state and
+    pickles without engine objects.
+    """
+    import numpy as _np
+
+    return _np.asarray(src.data_as_python()).copy()
+
+
+def _from_host(value: object, device: _C_engine.Device) -> _C_engine.TensorImpl:
+    """A checkpointed state entry — a host array or a tensor — on ``device``."""
+    if isinstance(value, Tensor):
+        return value._impl.transfer_to_device(device, False)
+    return _C_engine.TensorImpl(value, device, False)
+
+
 class Optimizer:
     """Base class for all optimizers.
 
@@ -149,7 +167,8 @@ class Optimizer:
     state : dict
         Per-parameter optimizer state indexed by flat parameter index.
         Populated by :meth:`state_dict` and consumed by
-        :meth:`load_state_dict`.
+        :meth:`load_state_dict`; an optimizer that keeps its state in
+        Python (:class:`~lucid.optim.SparseAdam`) holds its live state here.
 
     Notes
     -----
@@ -227,6 +246,12 @@ class Optimizer:
     # ``None`` for an optimizer that runs in Python; that one overrides
     # :meth:`_check_hyperparams`.
     _ENGINE_RULES: ClassVar[_EngineRules | None] = None
+
+    # ``True`` for an optimizer whose live per-parameter state *is*
+    # :attr:`state` (SparseAdam).  Checkpointing then snapshots and rebuilds
+    # that state through ``_save_state`` / ``_load_state`` instead of
+    # replacing it with the host-array snapshot, which ``step`` cannot read.
+    _LIVE_STATE: ClassVar[bool] = False
 
     # The reader of ``_HYPERPARAMS`` out of a group, derived once per class
     # by :meth:`__init_subclass__`.  On the class rather than the instance,
@@ -700,20 +725,15 @@ class Optimizer:
             if eng is None:
                 flat_idx += len(params)
                 continue
-            buffers: list[tuple[str, list[object]]] = eng.state_buffers()  # type: ignore[attr-defined]
+            buffers: list[tuple[str, list[_C_engine.TensorImpl | None]]]
+            buffers = eng.state_buffers()  # type: ignore[attr-defined]
             step_count: int = int(getattr(eng, "step_count", 0) or 0)
             for slot, _ in enumerate(params):
                 snapshot: dict[str, object] = {}
                 for name, tensors in buffers:
-                    if slot < len(tensors) and tensors[slot] is not None:
-                        # tensors[slot] is a TensorImpl — round-trip via numpy
-                        # so the saved checkpoint is portable across processes
-                        # (no shared C++ pointers across pickling).
-                        import numpy as _np
-
-                        snapshot[name] = _np.asarray(
-                            tensors[slot].data_as_python()  # type: ignore[attr-defined]
-                        ).copy()
+                    buf = tensors[slot] if slot < len(tensors) else None
+                    if buf is not None:
+                        snapshot[name] = _host_copy(buf)
                 if step_count != 0 and "step" not in snapshot:
                     # An engine with one count per group, not per parameter.
                     snapshot["step"] = step_count
@@ -750,9 +770,7 @@ class Optimizer:
                         step_count = max(step_count, int(v))
                         continue
                     by_name.setdefault(k, [None] * len(params))
-                    # Wrap as TensorImpl on the param's device so the engine
-                    # can copy it back into its buffer slot.
-                    by_name[k][slot] = _C_engine.TensorImpl(v, p._impl.device, False)
+                    by_name[k][slot] = _from_host(v, p._impl.device)
             if by_name:
                 eng.load_state_buffers([(k, v) for k, v in by_name.items()])  # type: ignore[attr-defined]
             if step_count and hasattr(eng, "step_count"):
@@ -788,8 +806,10 @@ class Optimizer:
             g: dict[str, object] = {k: v for k, v in group.items() if k != "params"}
             g["params"] = [id_map[id(p)] for p in group["params"]]  # type: ignore[attr-defined]
             groups_out.append(g)
-        self.state = self._save_state()
-        return {"state": self.state, "param_groups": groups_out}
+        state = self._save_state()
+        if not self._LIVE_STATE:
+            self.state = state
+        return {"state": state, "param_groups": groups_out}
 
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
         """Restore from a state_dict produced by :meth:`state_dict`.
@@ -811,6 +831,7 @@ class Optimizer:
                     continue
                 g_new[k] = v
         loaded_state: dict[int, dict[str, object]] = state_dict.get("state", {})  # type: ignore[assignment]
-        self.state = loaded_state
+        if not self._LIVE_STATE:
+            self.state = loaded_state
         self._load_state(loaded_state)
         self._sync_hyperparams()

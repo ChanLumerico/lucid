@@ -345,11 +345,23 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
+    "lucid.coreml._convert": (
+        ("Bindings", "lucid.coreml._emit", "Bindings"),
+        ("Builder", "lucid.coreml._build", "Builder"),
+        ("EmitResult", "lucid.coreml._emit", "EmitResult"),
+        ("TracedOp", "lucid.coreml._emit", "TracedOp"),
+    ),
     "lucid.coreml._emit": (("Builder", "lucid.coreml._build", "Builder"),),
     "lucid.coreml._model": (
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
         ("TensorImpl", "lucid._C.engine", "TensorImpl"),
+    ),
+    "lucid.coreml._sized": (
+        ("Bindings", "lucid.coreml._emit", "Bindings"),
+        ("Builder", "lucid.coreml._build", "Builder"),
+        ("EmitResult", "lucid.coreml._emit", "EmitResult"),
+        ("TracedOp", "lucid.coreml._emit", "TracedOp"),
     ),
     "lucid.coreml._spec": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.fft": (("Tensor", "lucid._tensor.tensor", "Tensor"),),

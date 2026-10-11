@@ -267,14 +267,8 @@ def test_the_repro_stops_moving_at_lr_zero(device: str) -> None:
 # ── an edit equals a fresh optimizer on the same state ─────────────────────
 
 
-def _transfer_state(name: str, src: optim.Optimizer, dst: optim.Optimizer) -> None:
+def _transfer_state(src: optim.Optimizer, dst: optim.Optimizer) -> None:
     """Give ``dst`` the state ``src`` holds now, with ``dst``'s own groups."""
-    if name == "SparseAdam":
-        # SparseAdam keeps its moments in Python lists and replaces each
-        # entry when it steps, so sharing them is a copy.
-        for attr in ("_step", "_exp_avg", "_exp_avg_sq"):
-            setattr(dst, attr, list(getattr(src, attr)))
-        return
     saved = copy.deepcopy(src.state_dict())
     for mine, theirs in zip(dst.param_groups, saved["param_groups"]):
         for key, value in mine.items():
@@ -303,7 +297,7 @@ def test_an_edit_equals_a_fresh_optimizer_on_the_same_state(
         _apply_edit(opt.param_groups[0], edit)
         fresh_params = _params(_values(params), device)
         fresh = getattr(optim, name)(fresh_params, **_ctor_kwargs(opt.param_groups[0]))
-        _transfer_state(name, opt, fresh)
+        _transfer_state(opt, fresh)
         for k in range(phase * _PHASE, (phase + 1) * _PHASE):
             grads = _grads(name, k)
             _feed(params, grads, device)
@@ -345,7 +339,7 @@ def test_an_lbfgs_edit_equals_a_fresh_optimizer_on_the_same_state() -> None:
     opt.param_groups[0]["lr"] = 0.25
     fresh_params = _params(_values(params), "cpu")
     fresh = optim.LBFGS(fresh_params, lr=0.25)
-    _transfer_state("LBFGS", opt, fresh)
+    _transfer_state(opt, fresh)
     for _ in range(2):
         opt.step(closure_for(params, opt))
         fresh.step(closure_for(fresh_params, fresh))

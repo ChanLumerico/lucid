@@ -1,23 +1,18 @@
 """
-Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, Rprop.
+Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, Rprop, SparseAdam.
 """
 
-from typing import Any, Iterable, cast, override
+import math
+import operator
+from typing import Any, Iterable, SupportsIndex, cast, override
+
+import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap
+from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.parameter import Parameter
-from lucid.optim.optimizer import Optimizer, _state_like
-
-
-def _scale(
-    tensor: _C_engine.TensorImpl, scalar: float, like: _C_engine.TensorImpl
-) -> _C_engine.TensorImpl:
-    """``tensor * scalar``, the scalar filled in ``like``'s shape, dtype and device."""
-    return _C_engine.mul(
-        tensor, _C_engine.full(list(like.shape), scalar, like.dtype, like.device)
-    )
+from lucid.optim.optimizer import Optimizer, _follow, _from_host, _host_copy
 
 
 class RMSprop(Optimizer):
@@ -925,29 +920,113 @@ class Rprop(Optimizer):
         return loss
 
 
+def _moment_like(src: _C_engine.TensorImpl, param: Parameter) -> Tensor | None:
+    """Moment ``src`` ready for ``param``'s buffer, or ``None`` when shaped for another.
+
+    Follows the parameter through a conversion by the rule every
+    optimizer's state follows (:func:`~lucid.optim.optimizer._follow`).
+    """
+    if list(src.shape) != list(param._impl.shape):
+        return None
+    return _wrap(_follow(src, param._impl))
+
+
+def _moment(entry: dict[str, object], key: str) -> Tensor:
+    """State entry ``key`` of one parameter, which must be a tensor."""
+    value = entry[key]
+    if not isinstance(value, Tensor):
+        raise TypeError(
+            f"SparseAdam: state entry {key!r} must be a Tensor, "
+            f"got {type(value).__name__}"
+        )
+    return value
+
+
+def _step_count(value: object) -> int:
+    """A parameter's ``step`` entry as an int.
+
+    Raises
+    ------
+    TypeError
+        ``value`` is not an integer (a Python or a 0-d host-array integer).
+    """
+    if not isinstance(value, SupportsIndex):
+        raise TypeError(
+            f"SparseAdam: 'step' must be an integer, got {type(value).__name__}"
+        )
+    return operator.index(value)
+
+
+def _group_params(group: dict[str, object]) -> list[Parameter]:
+    """The parameters of one param group (``add_param_group`` stores a list)."""
+    params = group["params"]
+    if not isinstance(params, list):
+        raise TypeError(
+            f"SparseAdam: a param group's 'params' must be a list, "
+            f"got {type(params).__name__}"
+        )
+    return params
+
+
+def _sparse_adam_rows(
+    param: Parameter,
+    grad: Tensor,
+    exp_avg: Tensor,
+    exp_avg_sq: Tensor,
+    step: int,
+    hparams: tuple[float, float, float, float],
+) -> tuple[Tensor, Tensor]:
+    """One SparseAdam update of the rows of ``param`` its gradient touches.
+
+    A row is a slice along dim 0 (the whole tensor for a 0-d parameter)
+    holding at least one nonzero gradient value.  Only those rows of the
+    moments and of the parameter change; the arithmetic is the
+    reference's, ``m += (1 - beta1)(g - m)``.  Returns the new moments.
+    """
+    lr, beta1, beta2, eps = hparams
+    shape = param.shape
+    n = shape[0] if shape else 1
+    g = grad.reshape(n, -1)
+    rows = (g != 0).any(dim=1).nonzero().reshape(-1)
+    if rows.shape[0] == 0:
+        return exp_avg, exp_avg_sq
+    g = g.index_select(0, rows)
+    m_all = exp_avg.reshape(n, -1)
+    v_all = exp_avg_sq.reshape(n, -1)
+    m = m_all.index_select(0, rows)
+    v = v_all.index_select(0, rows)
+    m = m + (g - m) * (1.0 - beta1)
+    v = v + (g * g - v) * (1.0 - beta2)
+    step_size = lr * math.sqrt(1.0 - beta2**step) / (1.0 - beta1**step)
+    p_all = param.reshape(n, -1)
+    p = p_all.index_select(0, rows) + (m / (v.sqrt() + eps)) * -step_size
+    param._impl.copy_from(p_all.index_copy(0, rows, p).reshape(shape)._impl)
+    return (
+        m_all.index_copy(0, rows, m).reshape(shape),
+        v_all.index_copy(0, rows, v).reshape(shape),
+    )
+
+
 class SparseAdam(Optimizer):
-    r"""Adam optimizer designed for sparse gradient workloads.
+    r"""Lazy Adam for gradients that touch a few rows of a parameter.
 
-    Implements a dense Adam update that is API-compatible with the sparse
-    variant used in embedding-heavy models.  All moment state is stored as
-    dense :class:`~lucid._C.engine.TensorImpl` buffers and updated using
-    engine operations, so the optimizer works correctly on both CPU and GPU.
+    The variant of Adam meant for embedding tables: each step updates the
+    moments and the values of only the rows the gradient touches — a row
+    being a slice along the first dimension.  A row absent from a batch
+    keeps its moments and its value; it does not keep moving on its old
+    momentum the way it would under :class:`~lucid.optim.Adam`.
 
-    The update rule is identical to standard Adam:
+    For each touched row, with the parameter's step count :math:`t` (one
+    count per parameter, advanced by every step in which it has a
+    gradient):
 
     .. math::
 
-        m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
-        v_t &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 \\
-        \hat{m}_t &= \frac{m_t}{1 - \beta_1^t} \\
-        \hat{v}_t &= \frac{v_t}{1 - \beta_2^t} \\
-        \theta_t &= \theta_{t-1}
+        m &\leftarrow m + (1 - \beta_1)(g - m) \\
+        v &\leftarrow v + (1 - \beta_2)(g^2 - v) \\
+        \theta &\leftarrow \theta
             - \frac{\alpha \sqrt{1 - \beta_2^t}}{1 - \beta_1^t}
-              \cdot \frac{m_t}{\sqrt{v_t} + \epsilon}
-
-    Moment buffers are allocated lazily on the first step for each
-    parameter to avoid unnecessary memory usage for parameters with
-    all-zero gradients.
+              \cdot \frac{m}{\sqrt{v} + \epsilon}
 
     Parameters
     ----------
@@ -968,32 +1047,48 @@ class SparseAdam(Optimizer):
         and ``"eps"``.
     defaults : dict
         Default hyperparameter values.
+    state : dict
+        The live state of each parameter that has stepped, by flat
+        parameter index: ``"step"`` (int), ``"exp_avg"`` and
+        ``"exp_avg_sq"`` (tensors shaped like the parameter).  It is what
+        :meth:`state_dict` saves and :meth:`load_state_dict` restores.
 
     Notes
     -----
-    ``SparseAdam`` skips parameter updates when the gradient is ``None``,
-    which is the common case for embedding rows that were not accessed in
-    the current mini-batch.  This makes it efficient even though the
-    underlying storage is dense.
+    Lucid's gradients are dense — ``nn.Embedding(sparse=True)`` is not
+    supported — so a row counts as touched when its gradient holds a
+    nonzero value.  The reference framework takes only a sparse gradient
+    and updates every row it lists, so the two differ for a row that was
+    looked up but whose gradient is exactly zero: the reference decays its
+    moments, Lucid leaves it alone.  Within a touched row every element is
+    updated, zero or not, as the reference's embedding gradient lists whole
+    rows.
 
-    Unlike the engine-backed optimizers (Adam, AdamW, SGD), ``SparseAdam``
-    manages its own Python-side moment buffers and does **not** use a C++
-    engine optimizer object.
+    A parameter whose gradient is ``None`` is skipped and its step count
+    does not advance; one whose gradient is all zero advances its count
+    and changes nothing else, as in the reference.
+
+    The moments follow their parameter through a conversion
+    (``module.to()``, ``.double()``, ``.half()``) between steps.
 
     Examples
     --------
     >>> import lucid
     >>> import lucid.nn as nn
     >>> import lucid.optim as optim
-    >>> embedding = nn.Embedding(100, 8)
-    >>> loss = embedding(lucid.tensor([[3, 17, 3]])).sum()
-    >>> optimizer = optim.SparseAdam(embedding.parameters(), lr=1e-3)
-    >>> optimizer.zero_grad()
-    >>> loss.backward()
+    >>> embedding = nn.Embedding(4, 2)
+    >>> optimizer = optim.SparseAdam(embedding.parameters(), lr=0.1)
+    >>> before = embedding.weight.detach().clone()
+    >>> embedding(lucid.tensor([0, 2])).sum().backward()
     >>> optimizer.step()
+    >>> (embedding.weight != before).any(dim=1).tolist()
+    [True, False, True, False]
+    >>> optimizer.state[0]["step"]
+    1
     """
 
     _HYPERPARAMS = ("lr", "betas", "eps")
+    _LIVE_STATE = True
 
     def __init__(
         self,
@@ -1005,15 +1100,6 @@ class SparseAdam(Optimizer):
         """Initialise the SparseAdam.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(lr=lr, betas=betas, eps=eps)
         super().__init__(params, defaults)
-        # Per-parameter moment state (TensorImpl, None before first step)
-        self._step: list[int] = [0] * self._n_params()
-        self._exp_avg: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
-        self._exp_avg_sq: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
-        # The parameter impl each pair of buffers was last made ready for.
-        self._moments_for: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
-
-    def _n_params(self) -> int:
-        return sum(len(g["params"]) for g in self.param_groups)  # type: ignore[arg-type, misc]
 
     @override
     @classmethod
@@ -1033,46 +1119,39 @@ class SparseAdam(Optimizer):
         if not 0.0 <= beta2 < 1.0:
             raise _C_engine.InvalidArgument("SparseAdam: betas[1] must be in [0, 1)")
 
-    def _moments(
-        self, idx: int, param: _C_engine.TensorImpl
-    ) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
-        """Parameter ``idx``'s moment buffers, ready for its impl ``param``.
+    def _flat_params(self) -> list[Parameter]:
+        """Every parameter, in the flat order ``state`` is indexed by."""
+        return [p for group in self.param_groups for p in _group_params(group)]
 
-        They follow the parameter through a conversion (``module.to()``,
-        ``.double()``, ``.half()``) by the rule every optimizer's state
-        follows (:func:`~lucid.optim.optimizer._state_like`).  A parameter
-        with no buffers yet, or whose shape no longer matches them, starts
-        from zero moments and a zero step count.  A conversion gives the
-        parameter a new impl, so an unchanged impl skips the check — one
-        identity test per parameter, as the engine optimizers rebind.
+    def _state_for(self, idx: int, param: Parameter) -> dict[str, object]:
+        """Parameter ``idx``'s state, its moments ready for ``param``'s buffer.
+
+        A parameter with no state yet, or whose shape no longer matches its
+        moments, starts from zero moments and a zero step count.
         """
-        m = self._exp_avg[idx]
-        v = self._exp_avg_sq[idx]
-        if self._moments_for[idx] is param and m is not None and v is not None:
-            return m, v
-        self._moments_for[idx] = param
-        if m is not None and v is not None:
-            m = _state_like(m, param)
-            v = _state_like(v, param)
-        if m is None or v is None:
-            sh = list(param.shape)
-            m = _C_engine.zeros(sh, param.dtype, param.device)
-            v = _C_engine.zeros(sh, param.dtype, param.device)
-            self._step[idx] = 0
-        return m, v
+        entry = self.state.get(idx)
+        if entry:
+            m = _moment_like(_moment(entry, "exp_avg")._impl, param)
+            v = _moment_like(_moment(entry, "exp_avg_sq")._impl, param)
+            if m is not None and v is not None:
+                entry["exp_avg"] = m
+                entry["exp_avg_sq"] = v
+                return entry
+        entry = {
+            "step": 0,
+            "exp_avg": lucid.zeros_like(param),
+            "exp_avg_sq": lucid.zeros_like(param),
+        }
+        self.state[idx] = entry
+        return entry
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single SparseAdam optimisation step.
 
-        Iterates over all parameters.  For each parameter whose gradient
-        is not ``None``, lazily initialises first- and second-moment
-        buffers (on first call), increments the step counter, computes
-        bias-corrected moment estimates, and applies the Adam update
-        in-place via engine ops.
-
-        Parameters with ``None`` gradients (e.g. embedding rows not
-        accessed in the current batch) are skipped entirely.
+        Each parameter with a gradient advances its step count and updates
+        the rows its gradient touches (see the class notes); parameters
+        whose gradient is ``None`` are skipped.
 
         Parameters
         ----------
@@ -1102,48 +1181,94 @@ class SparseAdam(Optimizer):
         # The groups are read below as they are; an edited one is checked
         # first.
         self._sync_hyperparams()
-        flat_idx = 0
-        for group in self.param_groups:
-            lr = group["lr"]
-            b1: float
-            b2: float
-            b1, b2 = group["betas"]  # type: ignore[misc]  # betas is tuple[float, float] at runtime
-            eps = group["eps"]
-            for p in group["params"]:  # type: ignore[attr-defined]
-                if p.grad is None:
-                    flat_idx += 1
-                    continue
-
-                pi = p._impl
-                gi = p.grad._impl
-                dv = pi.device
-                dt = pi.dtype
-                sh = list(pi.shape)
-
-                m, v = self._moments(flat_idx, pi)
-                self._step[flat_idx] += 1
-                t = self._step[flat_idx]
-
-                # m = b1 * m + (1 - b1) * g
-                m = _C_engine.add(_scale(m, b1, pi), _scale(gi, 1.0 - b1, pi))
-                # v = b2 * v + (1 - b2) * g^2
-                g_sq = _C_engine.mul(gi, gi)
-                v = _C_engine.add(_scale(v, b2, pi), _scale(g_sq, 1.0 - b2, pi))
-
-                self._exp_avg[flat_idx] = m
-                self._exp_avg_sq[flat_idx] = v
-
-                # Bias correction
-                bc1 = 1.0 - b1**t
-                bc2 = 1.0 - b2**t
-                step_size = lr * (bc2**0.5) / bc1
-
-                # p = p - step_size * m / (sqrt(v) + eps)
-                denom = _C_engine.add(
-                    _C_engine.sqrt(v), _C_engine.full(sh, eps, dt, dv)  # type: ignore[arg-type]
-                )
-                update = _scale(_C_engine.div(m, denom), step_size, pi)
-                new_p = _C_engine.sub(pi, update)
-                pi.copy_from(new_p)
-                flat_idx += 1
+        idx = 0
+        with lucid.no_grad():
+            for group in self.param_groups:
+                hp = self._hyperparam_dict(self._hyperparams_of(group))
+                beta1, beta2 = hp["betas"]
+                hparams = (hp["lr"], beta1, beta2, hp["eps"])
+                for p in _group_params(group):
+                    grad = p.grad
+                    if grad is not None:
+                        self._step_param(idx, p, grad, hparams)
+                    idx += 1
         return loss
+
+    def _step_param(
+        self,
+        idx: int,
+        param: Parameter,
+        grad: Tensor,
+        hparams: tuple[float, float, float, float],
+    ) -> None:
+        """Advance parameter ``idx``'s step count and update its touched rows."""
+        entry = self._state_for(idx, param)
+        step = _step_count(entry["step"]) + 1
+        entry["step"] = step
+        if grad.numel() == 0:
+            return
+        entry["exp_avg"], entry["exp_avg_sq"] = _sparse_adam_rows(
+            param,
+            grad,
+            _moment(entry, "exp_avg"),
+            _moment(entry, "exp_avg_sq"),
+            step,
+            hparams,
+        )
+
+    # ── state_dict round-trip ────────────────────────────────────────────────
+    #
+    # The live state is ``self.state`` itself (``_LIVE_STATE``); a
+    # checkpoint holds host-array copies under the reference's keys.
+
+    @override
+    def _save_state(self) -> dict[int, dict[str, object]]:
+        """Each stepped parameter's step count and moments, as host arrays."""
+        return {
+            idx: {
+                "step": entry["step"],
+                "exp_avg": _host_copy(_moment(entry, "exp_avg")._impl),
+                "exp_avg_sq": _host_copy(_moment(entry, "exp_avg_sq")._impl),
+            }
+            for idx, entry in self.state.items()
+        }
+
+    @override
+    def _load_state(self, state: dict[int, dict[str, object]]) -> None:
+        """Replace the live state with ``state``'s, every entry checked first.
+
+        Each moment is placed on its parameter's device and cast to its
+        dtype.  A parameter without an entry starts afresh, as in the
+        reference.  Nothing is replaced when an entry is refused.
+
+        Raises
+        ------
+        IndexError
+            An entry for a parameter index the optimizer does not have.
+        TypeError
+            A ``step`` that is not an integer.
+        lucid._C.engine.ShapeMismatch
+            A moment not shaped like its parameter.
+        """
+        params = self._flat_params()
+        loaded: dict[int, dict[str, object]] = {}
+        for idx, entry in state.items():
+            if not 0 <= idx < len(params):
+                raise IndexError(
+                    f"SparseAdam.load_state_dict: state for parameter {idx}, "
+                    f"but the optimizer has {len(params)} parameters"
+                )
+            param = params[idx]
+            restored: dict[str, object] = {"step": _step_count(entry["step"])}
+            for key in ("exp_avg", "exp_avg_sq"):
+                src = _from_host(entry[key], param._impl.device)
+                moment = _moment_like(src, param)
+                if moment is None:
+                    raise _C_engine.ShapeMismatch(
+                        f"SparseAdam.load_state_dict: {key} of parameter {idx} "
+                        f"has shape {list(src.shape)}, the parameter "
+                        f"{list(param._impl.shape)}"
+                    )
+                restored[key] = moment
+            loaded[idx] = restored
+        self.state = loaded
