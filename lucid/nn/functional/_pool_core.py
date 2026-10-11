@@ -275,19 +275,27 @@ def _avg_pool(
 def _adaptive_size(
     output_size: int | tuple[int | None, ...], spatial: tuple[int, ...], op: str
 ) -> tuple[int, ...]:
-    """``output_size`` per spatial axis; ``None`` keeps that axis's extent."""
+    """``output_size`` per spatial axis; ``None`` keeps that axis's extent.
+
+    A size of 0 is an empty axis, as in the reference; a negative one is
+    refused rather than reaching the window arithmetic, which divides by it.
+    """
     n = len(spatial)
-    if isinstance(output_size, int):
-        return (output_size,) * n
-    sizes = tuple(output_size)
-    if len(sizes) != n:
+    given = (output_size,) * n if isinstance(output_size, int) else tuple(output_size)
+    if len(given) != n:
         raise ValueError(
             f"{op}: expected output_size to be a single integer or {n} entries, "
             f"got {output_size!r}"
         )
-    return tuple(
-        e if v is None else int(v) for v, e in zip(sizes, spatial, strict=True)
+    sizes = tuple(
+        e if v is None else int(v) for v, e in zip(given, spatial, strict=True)
     )
+    if min(sizes) < 0:
+        raise ValueError(
+            f"{op}: elements of output_size must be greater than or equal to 0, "
+            f"got {sizes}"
+        )
+    return sizes
 
 
 def _adaptive_pool(
@@ -304,7 +312,11 @@ def _adaptive_pool(
     xb, unbatched = _add_batch_axis(x, n)
     spatial = tuple(int(s) for s in xb.shape[-n:])
     sizes = _adaptive_size(output_size, spatial, op)
-    if all(i % o == 0 for i, o in zip(spatial, sizes, strict=True)):
+    if 0 in sizes:
+        # No windows: an empty result, still on ``x``'s graph.
+        empty = xb.narrow(xb.ndim - n + sizes.index(0), 0, 0)
+        out = empty.reshape(*xb.shape[: xb.ndim - n], *sizes)
+    elif all(i % o == 0 for i, o in zip(spatial, sizes, strict=True)):
         out = _wrap(_ADAPTIVE_POOL[(reduce, n)](_unwrap(xb), *sizes))
     else:
         out = _adaptive_pool_python(xb, sizes, reduce)
@@ -318,6 +330,8 @@ def _adaptive_max_pool(
     out = _adaptive_pool(x, output_size, n, "max")
     if not return_indices:
         return out
+    if out.numel() == 0:
+        return out, _lucid.zeros(*out.shape, dtype=_lucid.int64, device=out.device)
     xb, unbatched = _add_batch_axis(x, n)
     sizes = tuple(int(v) for v in out.shape[-n:])
     return out, _drop_batch_axis(_adaptive_argmax_indices(xb, sizes), unbatched)
@@ -450,7 +464,11 @@ def _fractional_max_pool(
     # One host read for every sample, not one per plane.
     flat = samples.reshape(-1).tolist()
     assert isinstance(flat, list)
-    u = [float(v) for v in flat if isinstance(v, (int, float))]
+    u: list[float] = []
+    for v in flat:
+        if not isinstance(v, (int, float)):
+            raise TypeError(f"{op}: _random_samples must be real, got {v!r}")
+        u.append(float(v))
     for b in range(batch):
         for c in range(channels):
             at = (b * channels + c) * n

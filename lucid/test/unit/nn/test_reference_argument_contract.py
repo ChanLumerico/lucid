@@ -189,6 +189,53 @@ def test_adaptive_pool_keeps_an_axis_given_as_none(
     _close(getattr(nn, cls)(size)(lucid.tensor(x, device=device)), want)
 
 
+@pytest.mark.parametrize("kind", ["avg", "max"])
+@pytest.mark.parametrize("rank", [1, 2, 3])
+@pytest.mark.parametrize("batched", [True, False], ids=["batched", "unbatched"])
+@pytest.mark.parametrize("spelling", ["int", "one_axis", "with_none"])
+def test_adaptive_pool_to_zero_is_empty(
+    ref: ModuleType, device: str, kind: str, rank: int, batched: bool, spelling: str
+) -> None:
+    # A size of 0 used to divide by zero in the window arithmetic.
+    size: object = {
+        "int": 0,
+        "one_axis": (0,) + (2,) * (rank - 1),
+        "with_none": (None,) * (rank - 1) + (0,),
+    }[spelling]
+    x = _data(*((2, 3) if batched else (3,)), *(5 + axis for axis in range(rank)))
+    name = f"adaptive_{kind}_pool{rank}d"
+    want = getattr(ref.nn.functional, name)(ref.from_numpy(x), size)
+    xs = lucid.tensor(x, device=device, requires_grad=True)
+    got = getattr(F, name)(xs, size)
+    assert tuple(got.shape) == tuple(want.shape)
+    got.sum().backward()
+    assert xs.grad is None or float(xs.grad.abs().sum().item()) == 0.0
+    if kind == "max":
+        _, idx = getattr(F, name)(xs, size, return_indices=True)
+        assert tuple(idx.shape) == tuple(want.shape)
+
+
+@pytest.mark.parametrize("kind", ["avg", "max"])
+@pytest.mark.parametrize("rank", [1, 2, 3])
+def test_adaptive_pool_refuses_a_negative_size(
+    ref: ModuleType, kind: str, rank: int
+) -> None:
+    x = _data(2, 3, *(5,) * rank)
+    name = f"adaptive_{kind}_pool{rank}d"
+    with pytest.raises(RuntimeError):
+        getattr(ref.nn.functional, name)(ref.from_numpy(x), -1)
+    with pytest.raises(ValueError, match="greater than or equal to 0"):
+        getattr(F, name)(lucid.tensor(x), -1)
+
+
+def test_fractional_samples_that_are_not_real_are_refused() -> None:
+    samples = lucid.tensor([[[0.5 + 0j, 0.25 + 0j]]])
+    with pytest.raises(TypeError, match="_random_samples"):
+        F.fractional_max_pool2d(
+            lucid.randn(1, 1, 8, 8), 2, output_size=4, _random_samples=samples
+        )
+
+
 # ── GRU / RNN parameter names ─────────────────────────────────────────────────
 
 _RECURRENT = {

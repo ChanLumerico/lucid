@@ -17,8 +17,8 @@ gaps.  One of them was neither loud nor low-severity:
    ``adaptive_avg_pool*`` accepted them — the engine op lowers adaptive pooling
    to a fixed-kernel pool, and only avg had the Python fallback wired up.  The
    ``adaptive_max_pool2d`` docstring even advertised ``(1, 64, 11, 13) → (3, 3)``,
-   which raised.  Both families now share one ``_adaptive_call`` helper so they
-   cannot drift apart again.
+   which raised.  Both families now run through ``_adaptive_pool`` in
+   ``lucid.nn.functional._pool_core``, so they cannot drift apart again.
 """
 
 import numpy as np
