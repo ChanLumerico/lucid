@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
 from lucid.coreml import _flex, _sized, _spec
 from lucid.coreml._convert import emit_cast, moved, scalar_like, widened
+from lucid.coreml._linear import fused_linear_gelu, fused_linear_relu, linear
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
@@ -392,41 +393,10 @@ for _name in ("avg_pool1d", "avg_pool2d", "avg_pool3d"):
     _register_pool(_name, "avg_pool", True)
 
 
-@_emitter("linear")
-def _linear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    """``x @ weight.T + bias``, as one operation where Core ML allows it.
-
-    MIL's ``linear`` takes its weight and bias as constants only, and
-    says so at parse time rather than at emission: a model that computes
-    either of them — DETR builds a decoder bias from its query embedding
-    — produces a package that loads nowhere, with ``Param 'bias' must be
-    const`` and an internal value name to go on.
-
-    So the fused operation is used when both operands really are
-    constants, and otherwise the same arithmetic goes out as a transposed
-    ``matmul`` and an ``add``. Two operations instead of one, only for
-    the models that need it.
-    """
-    const_operands = all(b.is_const(name) for name in ins[1:])
-    if const_operands:
-        bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
-        if len(ins) > 2:
-            bindings.append(("bias", ins[2]))
-        return "linear", bindings
-
-    product = b.emit(
-        "matmul",
-        [
-            ("x", ins[0]),
-            ("y", ins[1]),
-            ("transpose_x", b.const_bool(False)),
-            ("transpose_y", b.const_bool(True)),
-        ],
-        b.result_dims(op),
-    )
-    if len(ins) == 2:
-        return "identity", [("x", product)]
-    return "add", [("x", product), ("y", ins[2])]
+# The fully connected layer and nn.FusedLinear's kernels: lucid/coreml/_linear.py.
+EMITTERS["linear"] = linear
+EMITTERS["_fused_linear_relu"] = fused_linear_relu
+EMITTERS["_fused_linear_gelu"] = fused_linear_gelu
 
 
 @_emitter("batch_norm_eval")
