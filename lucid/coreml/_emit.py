@@ -25,6 +25,7 @@ import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
 from lucid.coreml import _flex, _spec
+from lucid.coreml._convert import emit_cast, moved, scalar_like, widened
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
@@ -222,13 +223,6 @@ def _flag(value: object, default: bool = False) -> bool:
     return bool(value)
 
 
-def _scalar_like(b: Builder, value: str, number: int) -> str:
-    """A scalar ``number`` of ``value``'s type: MIL refuses int32 beside a float."""
-    if b.dtype_of(value) in (_MIL_INT32, _MIL_BOOL):
-        return b.const_int(number)
-    return b.const_float(float(number))
-
-
 # ── elementwise unary: Lucid name -> the MIL op that is exactly it ───────────
 #
 # A table, because these differ only by a name and writing thirty of them
@@ -302,7 +296,7 @@ for _lucid_name, _mil_name in _EPSILON_UNARY.items():
 @_emitter("neg")
 def _neg(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # MIL has no negation op; multiplying by -1 is the whole of it.
-    return "mul", [("x", ins[0]), ("y", _scalar_like(b, ins[0], -1))]
+    return "mul", [("x", ins[0]), ("y", scalar_like(b, ins[0], -1))]
 
 
 def _integer_clip(b: Builder, value: str, low: int, high: int | None) -> EmitResult:
@@ -888,7 +882,7 @@ def _filled(b: Builder, op: TracedOp, value: float) -> Constant | EmitResult:
     if kind != _MIL_BOOL:
         return made
     held = made.name if isinstance(made, Constant) else b.emit(*made, shape, _MIL_INT32)
-    return "cast", [("x", held), ("dtype", b.const_str("bool"))]
+    return emit_cast(b, held, "bool")
 
 
 @_emitter("zeros")
@@ -1013,7 +1007,7 @@ def _astype(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     if target is None:
         name = str(op.outputs[0].dtype).split(".")[-1]
         raise NotImplementedError(f"lucid.coreml: no Core ML cast target for {name}")
-    return "cast", [("x", ins[0]), ("dtype", b.const_str(target))]
+    return emit_cast(b, ins[0], target)
 
 
 @_emitter("max")
@@ -1154,7 +1148,7 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 def _gather(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # The result has the *indices'* shape, not the source's, which is the
     # along-axis form rather than the row-lookup ``gather`` uses.
-    return "gather_along_axis", [
+    bindings: Bindings = [
         ("x", ins[0]),
         ("indices", ins[1]),
         ("axis", b.const_int(_as_int(_attr(op, "axis")))),
@@ -1166,6 +1160,7 @@ def _gather(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # gives: the trace's indices are already in range.
         ("validate_indices", b.const_bool(False)),
     ]
+    return moved(b, op, "gather_along_axis", bindings, ("x",))
 
 
 @_emitter("pow_scalar")
@@ -1217,17 +1212,7 @@ def _unfold_dim(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("scatter_add")
 def _scatter_add(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "scatter_along_axis", [
-        ("data", ins[0]),
-        ("indices", ins[1]),
-        ("updates", ins[2]),
-        ("axis", b.const_int(_as_int(_attr(op, "dim")))),
-        ("mode", b.const_str("add")),
-        # Same iOS17 requirement the gathers carry: the whole
-        # scatter / gather family gained this parameter, and leaving it
-        # out makes the package fail to parse rather than to run.
-        ("validate_indices", b.const_bool(False)),
-    ]
+    return _scatter_along_axis(b, op, ins, "add")
 
 
 @_emitter("scatter_set")
@@ -1237,14 +1222,30 @@ def _scatter_set(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     MIL's ``update`` mode, the twin of ``scatter_add`` above.  A position
     named twice keeps one of its values, which one unspecified, as on Metal.
     """
-    return "scatter_along_axis", [
+    return _scatter_along_axis(b, op, ins, "update")
+
+
+def _scatter_along_axis(
+    b: Builder, op: TracedOp, ins: list[str], mode: str
+) -> EmitResult:
+    """``scatter_along_axis`` in ``mode``, for every result type Lucid has.
+
+    A bool scatter (``mask[0] = True``) runs on int32 copies of 1 and 0
+    (:func:`moved`) and comes back as "nonzero": an ``add`` of two trues
+    is true, as eager's is.
+    """
+    bindings: Bindings = [
         ("data", ins[0]),
         ("indices", ins[1]),
         ("updates", ins[2]),
         ("axis", b.const_int(_as_int(_attr(op, "dim")))),
-        ("mode", b.const_str("update")),
+        ("mode", b.const_str(mode)),
+        # Same iOS17 requirement the gathers carry: the whole
+        # scatter / gather family gained this parameter, and leaving it
+        # out makes the package fail to parse rather than to run.
         ("validate_indices", b.const_bool(False)),
     ]
+    return moved(b, op, "scatter_along_axis", bindings, ("data", "updates"))
 
 
 @_emitter("where")
@@ -1295,31 +1296,6 @@ def _roll(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
             return "concat", bindings
         value = b.emit("concat", bindings, shape)
     return "identity", [("x", value)]
-
-
-def emit_cast(b: Builder, value: str, out_dtype: str) -> EmitResult:
-    """A ``cast`` the driver inserts, not one a Lucid op asks for.
-
-    An fp16 program still presents fp32 inputs and outputs, so the body is
-    bracketed by casts rather than forcing callers to hand over half
-    precision. These two casts are also the only operations that stay on
-    the CPU when the rest of the model runs on the Neural Engine.
-
-    Parameters
-    ----------
-    b : Builder
-        Builder minting the dtype constant.
-    value : str
-        Name of the value to cast.
-    out_dtype : str
-        MIL's spelling of the target type — ``"fp16"`` or ``"fp32"``.
-
-    Returns
-    -------
-    tuple[str, list]
-        ``("cast", bindings)`` for the driver to append.
-    """
-    return "cast", [("x", value), ("dtype", b.const_str(out_dtype))]
 
 
 # ── activations MIL spells differently, or not at all ────────────────────────
@@ -1459,13 +1435,11 @@ def _truth_reduce(b: Builder, ins: list[str], mil_name: str) -> EmitResult:
     if b.dtype_of(truth) != _MIL_BOOL:
         truth = b.emit(
             "not_equal",
-            [("x", truth), ("y", _scalar_like(b, truth, 0))],
+            [("x", truth), ("y", scalar_like(b, truth, 0))],
             shape,
             dtype=_MIL_BOOL,
         )
-    counted = b.emit(
-        "cast", [("x", truth), ("dtype", b.const_str("int32"))], shape, dtype=_MIL_INT32
-    )
+    counted = b.emit(*emit_cast(b, truth, "int32"), shape, dtype=_MIL_INT32)
     name, bindings = _reduce_every_axis(b, counted, mil_name)
     reduced = b.emit(name, bindings, [], dtype=_MIL_INT32)
     return "not_equal", [("x", reduced), ("y", b.const_int(0))]
@@ -1721,21 +1695,25 @@ def _topk(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
 def _unbind(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
     """One ``gather`` per slice: a scalar index drops the axis, as unbind does."""
     axis = _as_int(_attr(op, "axis")) % len(b.shape_of(ins[0]))
-    return Bound(
-        [
-            b.emit(
-                "gather",
-                [
-                    ("x", ins[0]),
-                    ("indices", b.const_int(i)),
-                    ("axis", b.const_int(axis)),
-                    ("validate_indices", b.const_bool(False)),
-                ],
-                b.result_dims(op, i),
+    source = widened(b, ins[0])
+    pieces = []
+    for i in range(len(op.outputs)):
+        piece = b.emit(
+            "gather",
+            [
+                ("x", source),
+                ("indices", b.const_int(i)),
+                ("axis", b.const_int(axis)),
+                ("validate_indices", b.const_bool(False)),
+            ],
+            b.result_dims(op, i),
+        )
+        if source != ins[0]:
+            piece = b.emit(
+                *emit_cast(b, piece, "bool"), b.result_dims(op, i), _MIL_BOOL
             )
-            for i in range(len(op.outputs))
-        ]
-    )
+        pieces.append(piece)
+    return Bound(pieces)
 
 
 # ── shape ────────────────────────────────────────────────────────────────────
@@ -2086,16 +2064,19 @@ def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     index_shape = list(shape[:axis1]) + [length, 1]
     indices = b.const_ints_shaped(picked, index_shape)
     gathered = list(shape[:axis1]) + [length, 1]
+    source = widened(b, ins[0])
     taken = b.emit(
         "gather_along_axis",
         [
-            ("x", ins[0]),
+            ("x", source),
             ("indices", indices),
             ("axis", b.const_int(axis2)),
             ("validate_indices", b.const_bool(False)),
         ],
         gathered,
     )
+    if source != ins[0]:
+        taken = b.emit(*emit_cast(b, taken, "bool"), gathered, _MIL_BOOL)
     return "reshape", [("x", taken), ("shape", b.const_ints(list(b.result_dims(op))))]
 
 

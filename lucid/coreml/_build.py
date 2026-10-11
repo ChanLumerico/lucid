@@ -32,6 +32,7 @@ import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.coreml import _flex, _spec, _staging
+from lucid.coreml._convert import MIL_CAST_NAMES, emit_cast
 from lucid.coreml._flex import ShapeNotFlexible
 from lucid.coreml._emit import (
     EMITTERS,
@@ -42,7 +43,6 @@ from lucid.coreml._emit import (
     TracedOp,
     _as_float,
     _as_int,
-    emit_cast,
 )
 from lucid.coreml._spec import (
     Classifier,
@@ -818,18 +818,6 @@ def _refuse_if_empty(tensor: Tensor) -> None:
     )
 
 
-#: MIL's spelling of each element type, for the ``cast`` operation's
-#: string parameter. Only the types a promotion can land on: casting a
-#: bool or a string is a different question, and an emitter that reaches
-#: one leaves the operand alone rather than inventing an answer.
-_MIL_CAST_NAMES = {
-    _C_engine.coreml.DTYPE_FLOAT16: "fp16",
-    _C_engine.coreml.DTYPE_FLOAT32: "fp32",
-    _C_engine.coreml.DTYPE_INT32: "int32",
-    _C_engine.coreml.DTYPE_BOOL: "bool",
-}
-
-
 def _worth_storing_compressed(
     tensor: Tensor, weights: WeightPrecision | _spec.Palettize | _spec.Sparsify
 ) -> bool:
@@ -1595,7 +1583,7 @@ class Builder:
             settled = self._body_mil if kinds & floats else max(kinds)
         else:
             settled = target
-        spelling = _MIL_CAST_NAMES.get(settled)
+        spelling = MIL_CAST_NAMES.get(settled)
         if spelling is None:
             return names
         agreed = []
@@ -1606,8 +1594,7 @@ class Builder:
                 continue
             agreed.append(
                 self.emit(
-                    "cast",
-                    [("x", name), ("dtype", self.const_str(spelling))],
+                    *emit_cast(self, name, spelling),
                     # A scalar constant has no recorded shape, and none
                     # is the right answer for it.
                     self._shapes.get(name, []),
@@ -1638,7 +1625,7 @@ class Builder:
         str or None
             MIL's spelling, or ``None`` for a type ``cast`` cannot name.
         """
-        return _MIL_CAST_NAMES.get(self.result_mil_dtype(op, index))
+        return MIL_CAST_NAMES.get(self.result_mil_dtype(op, index))
 
     def narrow_to_int32(self, name: str) -> str:
         """The same value as int32, for an operand that takes nothing wider.
@@ -1649,8 +1636,7 @@ class Builder:
         emitter does not have to know which case it is in.
         """
         return self.emit(
-            "cast",
-            [("x", name), ("dtype", self.const_str("int32"))],
+            *emit_cast(self, name, "int32"),
             self.shape_of(name),
             dtype=_C_engine.coreml.DTYPE_INT32,
         )
