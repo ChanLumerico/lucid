@@ -59,6 +59,18 @@ def _pooled_extent(size: int, k: int, s: int, p: int, d: int, ceil_mode: bool) -
     return out
 
 
+def _digit(flat: Tensor, inner: int, extent: int) -> Tensor:
+    """One axis's coordinate of a non-negative row-major flat index.
+
+    ``(flat // inner) % extent``, spelled without ``%``: the two are equal
+    for a non-negative ``flat``, and ``lucid.compile`` has no emitter for
+    ``remainder`` yet (LCD-444), so a ``%`` here sent every compiled max
+    pool that returns its indices to eager.
+    """
+    q = flat // inner
+    return q - (q // extent) * extent
+
+
 def _pool_windows(x: Tensor, g: _PoolGeometry, out_spatial: tuple[int, ...]) -> Tensor:
     """Every pooling window of ``x`` as ``(*lead, *out_spatial, prod(kernel))``.
 
@@ -105,7 +117,7 @@ def _window_argmax_indices(
     local = _lucid.argmax(windows, dim=-1)
     index = None
     for d in range(n):
-        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d] * dilation[d]
+        offset = _digit(local, math.prod(kernel[d + 1 :]), kernel[d]) * dilation[d]
         shape = [1] * n
         shape[d] = out_spatial[d]
         origin = _lucid.arange(out_spatial[d], dtype=_lucid.int64, device=x.device)
@@ -155,7 +167,7 @@ def _adaptive_argmax_indices(x: Tensor, out_spatial: tuple[int, ...]) -> Tensor:
         local = _lucid.argmax(window.reshape(*x.shape[:lead], -1), dim=-1)
         index = None
         for d in range(n):
-            coord = (local // math.prod(extent[d + 1 :])) % extent[d] + cell[d][0]
+            coord = _digit(local, math.prod(extent[d + 1 :]), extent[d]) + cell[d][0]
             index = coord if index is None else index * spatial[d] + coord
         assert index is not None
         found.append(index)
@@ -455,7 +467,7 @@ def _fractional_plane(
         shape = [1] * n
         shape[d] = out[d]
         origin = _lucid.tensor(starts[d], dtype=_lucid.int64, device=plane.device)
-        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d]
+        offset = _digit(local, math.prod(kernel[d + 1 :]), kernel[d])
         coord = offset + origin.reshape(*shape)
         index = coord if index is None else index * spatial[d] + coord
     assert index is not None

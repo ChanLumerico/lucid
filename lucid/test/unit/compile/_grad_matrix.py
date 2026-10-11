@@ -169,7 +169,14 @@ GRAD_CASES = [
 #: prod, cumprod, cummax/cummin, sort/kthvalue, repeat_interleave,
 #: scatter/scatter_add and det (2026-09-24) emptied this of all but the one
 #: op that has no forward emitter to differentiate.
-EXPECTED_EAGER_GRAD: dict[str, str] = {}
+EXPECTED_EAGER_GRAD: dict[str, str] = {
+    # Float ``//``, ``%`` and ``fmod`` are exact engine kernels now (LCD-159)
+    # with no compile VJP, and the last two no forward emitter either.
+    **dict.fromkeys(
+        ("floordiv", "remainder", "fmod"),
+        "LCD-444: no compile VJP (or emitter) for floordiv / remainder / fmod",
+    ),
+}
 
 #: Case → why it has no manual VJP yet, although MPSGraph's autodiff
 #: differentiates it correctly where nothing else rules autodiff out — so it
