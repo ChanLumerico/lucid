@@ -266,9 +266,9 @@ public:
             is_bool ? [g castTensor:res[0] toType:MPSDataTypeBool name:nil] : res[0];
         MPSGraphTensor* indices = res[1];
 
-        // Lucid's topk indices are I32 but MPSGraph returns I32 by
-        // default — no cast needed for I32.  If a future macOS bumps
-        // this to I64, add a cast here.
+        // Lucid types topk indices int64; MPSGraph returns int32.  The
+        // builder casts each bound value to its traced dtype at
+        // ``held_at`` (``MpsDtype.h``), so no cast is needed here.
 
         const TensorId values_id = node.outputs[0].id;
         const TensorId indices_id = node.outputs[1].id;
