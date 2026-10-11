@@ -156,6 +156,9 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     echo "==> Storage API compliance"
     "$PYTHON_BIN" tools/check_storage_api.py
 
+    echo "==> Dtype dispatch refusals"
+    "$PYTHON_BIN" tools/check_dtype_dispatch.py
+
     echo "==> Dead model-config fields"
     "$PYTHON_BIN" tools/check_dead_config_fields.py
 

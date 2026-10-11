@@ -185,6 +185,23 @@ if [[ -n "${PY}" && -f "${STUBS_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1e. Engine dtype dispatch refuses what it does not handle ───────────────
+# Hard-fail, ~2 s.  ``tools/check_dtype_dispatch.py`` finds a dtype ``if``
+# chain ending in a bare ``else`` and a hand-written ``F32 || F64`` float test
+# (CHA-225: half walked in double lanes past an allocation).  It existed but
+# ran nowhere (LCD-326); CI runs it in scripts/ci_full.sh.  Only when engine
+# C++ or the checker itself is staged.
+DTYPE_SCRIPT="${REPO_ROOT}/tools/check_dtype_dispatch.py"
+if [[ -n "${PY}" && -f "${DTYPE_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMR \
+        | grep -qE '^(lucid/_C/.*\.(cpp|cc|h|hpp|mm)|tools/check_dtype_dispatch\.py)$'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" "${DTYPE_SCRIPT}" >&2); then
+            echo "  ❌  Pre-commit blocked: a dtype dispatch without a refusal (see above)." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 2. Docstring coverage gate ──────────────────────────────────────────────
 # Hard-fail.  The validator surfaces six distinct blind-spot categories
 # that all manifest as empty / sparse / misleading docs pages on the
