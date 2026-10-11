@@ -570,6 +570,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - grid_sample weights come from the floored positions
 
+- a 0-d ndarray keeps its rank under device= or dtype=
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

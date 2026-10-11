@@ -332,7 +332,7 @@
    },
    "type-ignore[attr-defined]": {
     "lucid/_deprecation.py": 1,
-    "lucid/_factories/converters.py": 12,
+    "lucid/_factories/converters.py": 7,
     "lucid/_ops/__init__.py": 2,
     "lucid/_ops/_adapters.py": 1,
     "lucid/amp/grad_scaler.py": 1,
@@ -1834,7 +1834,6 @@
    "unused-function": {
     "lucid/__init__.py": 9,
     "lucid/_dispatch.py": 1,
-    "lucid/_factories/converters.py": 1,
     "lucid/compile/_core/fallback.py": 1,
     "lucid/coreml/_emit.py": 58,
     "lucid/coreml/_spec.py": 2,

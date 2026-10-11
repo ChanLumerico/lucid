@@ -13,7 +13,7 @@ graph — only ``lucid.tensor(np_array)`` and explicit ``from_numpy``
 keep the numpy bridge.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeGuard
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs
@@ -141,10 +141,28 @@ def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:
     return _C_engine.Dtype.F32
 
 
-def _is_ndarray(obj: object) -> bool:
+def _is_ndarray(obj: object) -> TypeGuard[np.ndarray]:
     """Check ndarray-ness without importing numpy when it isn't loaded."""
     cls = type(obj)
     return cls.__module__ == "numpy" and cls.__name__ == "ndarray"
+
+
+def _ndarray_impl(
+    arr: np.ndarray, device_eng: _C_engine.Device
+) -> _C_engine.TensorImpl:
+    """The one handoff of an ndarray to the engine, at the array's own rank.
+
+    Every ndarray ingest ends here.  ``np.ascontiguousarray`` returns an
+    array of at least one dimension, so routing a 0-d array through it
+    handed the engine shape ``(1,)`` — ``tensor(np.asarray(0.5),
+    device="cpu")`` came back one-dimensional while the same call without
+    ``device`` stayed 0-d.  ``asarray(order="C")`` copies only what is not
+    already C-contiguous and keeps the rank.
+    """
+    if not arr.flags["C_CONTIGUOUS"]:
+        np = _require_numpy("lucid.tensor() ndarray ingest")
+        arr = np.asarray(arr, order="C")  # type: ignore[attr-defined]
+    return _C_engine.TensorImpl(arr, device_eng, False)
 
 
 def _require_numpy(operation: str) -> object:
@@ -181,31 +199,15 @@ def _to_impl(
     from lucid._tensor.tensor import Tensor as _Tensor
 
     # 3.1.1: hottest path — bare ``lucid.tensor(np_array)`` with no dtype
-    # override, default device, no grad.  Skips ``normalize_factory_kwargs``,
-    # ``_try_numpy_free_to_impl``'s isinstance gauntlet, the dead-code
-    # ``_np_dtype_to_engine`` lookup, and ``np.ascontiguousarray`` (gated
-    # on the C_CONTIGUOUS flag).  Profile of LeNet-5/MNIST training showed
+    # override, default device, no grad.  Skips ``normalize_factory_kwargs``
+    # and the literal path's isinstance gauntlet.  Profile of LeNet-5/MNIST training showed
     # ``lucid.tensor`` called 120k times per epoch via the DataLoader
     # per-sample tensorisation pattern — this fast path turns a ~9 µs
     # per-call hot loop into ~1 µs.
-    if (
-        dtype is None
-        and device is None
-        and not requires_grad
-        and type(data).__module__ == "numpy"
-        and type(data).__name__ == "ndarray"
-    ):
-        if data.dtype.kind == "u":  # type: ignore[attr-defined]
+    if dtype is None and device is None and not requires_grad and _is_ndarray(data):
+        if data.dtype.kind == "u":
             data = _widen_unsigned(data)
-        if data.flags["C_CONTIGUOUS"]:  # type: ignore[attr-defined]
-            return _C_engine.TensorImpl(data, _default_device_enum_cached(), False)
-        # Non-contiguous → still hot, just one more numpy call.
-        np = _require_numpy("lucid.tensor() ndarray fast path")
-        return _C_engine.TensorImpl(
-            np.ascontiguousarray(data),  # type: ignore[attr-defined]
-            _default_device_enum_cached(),
-            False,
-        )
+        return _ndarray_impl(data, _default_device_enum_cached())
 
     _dtype_eng, _device_eng, _rg = normalize_factory_kwargs(
         dtype, device, requires_grad
@@ -287,9 +289,8 @@ def _numpy_impl(
         dtype_eng = _np_dtype_to_engine(arr.dtype)
     else:
         arr = arr.astype(_engine_dtype_to_np(dtype_eng), copy=False)
-    arr = np.ascontiguousarray(arr)  # type: ignore[attr-defined]
     with np.errstate(invalid="ignore", over="ignore"):  # type: ignore[attr-defined]
-        impl = _C_engine.TensorImpl(arr, device_eng, False)
+        impl = _ndarray_impl(arr, device_eng)
     # bfloat16 has no NumPy counterpart, so the array above is float32 and
     # the engine narrows afterwards.  Doing it this way round rather than
     # picking the nearest NumPy dtype matters: float16 is *not* a
@@ -524,7 +525,7 @@ def as_tensor(
     return tensor(data, dtype=dtype, device=device)
 
 
-def _widen_unsigned(arr: object) -> object:
+def _widen_unsigned(arr: np.ndarray) -> np.ndarray:
     """An unsigned integer array as the next signed width, losslessly.
 
     Lucid has no unsigned dtypes.  Refusing them outright left no way in
@@ -533,14 +534,14 @@ def _widen_unsigned(arr: object) -> object:
     uint64 fits int64 unless it holds a value past int64's range.
     """
     np = _require_numpy("lucid.tensor() unsigned input")
-    size = arr.dtype.itemsize  # type: ignore[attr-defined]
+    size = arr.dtype.itemsize
     target = {1: np.int16, 2: np.int32}.get(size, np.int64)  # type: ignore[attr-defined]
     if size == 8 and arr.size and int(arr.max()) > np.iinfo(np.int64).max:  # type: ignore[attr-defined]
         raise OverflowError(
             "lucid.tensor: a uint64 array holds values past int64's range, "
             "and Lucid has no unsigned dtype to keep them"
         )
-    return arr.astype(target)  # type: ignore[attr-defined]
+    return arr.astype(target)
 
 
 def from_numpy(arr: np.ndarray) -> Tensor:
