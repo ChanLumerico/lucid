@@ -14,10 +14,10 @@ through the helpers here.
 """
 
 import operator
+import os
 from typing import TYPE_CHECKING, Self, override
 
 from lucid._C import engine as _C_engine
-from lucid._deprecation import warn_deprecated
 from lucid._dtype import int64
 from lucid._factories.converters import tensor
 
@@ -26,15 +26,6 @@ if TYPE_CHECKING:
 
 _UNSIGNED_64 = 1 << 64
 _SIGNED_64 = 1 << 63
-
-#: ``Generator.seed`` reads the key until this window closes; then it becomes
-#: the reference's ``seed()``, a method that reseeds from entropy.
-_SEED_PROPERTY = (
-    "reading Generator.seed as a property (in 3.18.0 seed() becomes the "
-    "reference's method that reseeds from entropy)"
-)
-_SEED_SINCE = "3.16.0"
-_SEED_REMOVAL = "3.18.0"
 
 #: The engine's own counter descriptor.  The engine stub declares it
 #: read-only; the binding writes it, which restoring a state needs.
@@ -115,9 +106,8 @@ class Generator(_C_engine.Generator):
     Notes
     -----
     The reference's constructor takes a ``device``; a Lucid stream is
-    device-independent, so there is none.  The reference's ``seed()``
-    method — reseed from entropy — is not here yet: ``seed`` still reads
-    the key, as a property, with a deprecation warning, until 3.18.0.
+    device-independent, so there is none.  :meth:`seed` reseeds from
+    entropy, as the reference's does; :meth:`initial_seed` reads the key.
 
     Examples
     --------
@@ -195,21 +185,19 @@ class Generator(_C_engine.Generator):
         _set_counter(self, counter)
         return self
 
-    @property
     @override
-    def seed(self) -> int:
-        """The key, read as a property — deprecated; use :meth:`initial_seed`.
+    def seed(self) -> int:  # type: ignore[override]  # the reference's method replaces the engine's key property
+        """Reseed the stream from the OS entropy source and return the new key.
 
-        In 3.18.0 ``seed`` becomes the reference's ``seed()``, a method
-        that reseeds the stream from entropy and returns the new key.
+        Returns
+        -------
+        int
+            The key, in :math:`[0, 2^{63})`; :meth:`manual_seed` with it
+            replays the stream from here.
         """
-        warn_deprecated(
-            _SEED_PROPERTY,
-            since=_SEED_SINCE,
-            removal=_SEED_REMOVAL,
-            alternative="Generator.initial_seed()",
-        )
-        return self.initial_seed()
+        key = int.from_bytes(os.urandom(8), "little") & (_SIGNED_64 - 1)
+        self.manual_seed(key)
+        return key
 
     #: How many Philox blocks the stream has drawn since it was seeded —
     #: the engine's own property, named here so it stays this class's

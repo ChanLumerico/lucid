@@ -6,13 +6,11 @@ what it returns, how it reads a seed — and a captured state replays the
 same draws on both devices.
 """
 
-import warnings
 from types import ModuleType
 
 import pytest
 
 import lucid
-from lucid._deprecation import LucidDeprecationWarning
 
 
 @pytest.mark.parametrize("seed", [0, 7, 2**63 - 1, 2**63, 2**64 - 1, -1, -(2**63)])
@@ -76,15 +74,19 @@ def test_the_default_state_round_trips_a_wide_seed() -> None:
     assert lucid.initial_seed() == 2**64 - 3
 
 
-def test_reading_seed_as_a_property_warns_and_still_answers() -> None:
+def test_seed_reseeds_from_entropy_as_the_reference_does() -> None:
+    # ``seed`` read the key as a property until LCD-410; it is the
+    # reference's method now, and ``initial_seed()`` reads the key.
     g = lucid.Generator(9)
-    with pytest.warns(LucidDeprecationWarning, match="initial_seed"):
-        assert g.seed == 9
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert g.initial_seed() == 9
-        assert lucid.initial_seed() >= 0
-        lucid.get_rng_state()
+    assert g.initial_seed() == 9
+    _ = lucid.rand(4, generator=g)
+    new = g.seed()
+    assert isinstance(new, int) and 0 <= new < 2**63
+    assert g.initial_seed() == new
+    assert g.counter == 0
+    want = lucid.rand(3, generator=g).tolist()
+    assert lucid.rand(3, generator=lucid.Generator(new)).tolist() == want
+    assert g.seed() != new  # 2**-63 to collide
 
 
 def test_counter_stays_readable_and_writable() -> None:

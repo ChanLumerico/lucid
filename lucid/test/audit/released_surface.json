@@ -1067,7 +1067,7 @@
   "lucid.linalg.inner": {"params": ["a:x", "a:y"]},
   "lucid.linalg.inv": {"params": ["a:x"]},
   "lucid.linalg.inv_ex": {"params": ["a:A", "k:check_errors="]},
-  "lucid.linalg.ldl_factor": {"params": ["a:A", "a:hermitian="]},
+  "lucid.linalg.ldl_factor": {"params": ["a:A", "k:hermitian="]},
   "lucid.linalg.ldl_factor_ex": {"params": ["a:A", "k:hermitian=", "k:check_errors="]},
   "lucid.linalg.ldl_solve": {"params": ["a:LD", "a:pivots", "a:B"]},
   "lucid.linalg.lstsq": {"params": ["a:A", "a:B", "a:rcond=", "a:driver="]},

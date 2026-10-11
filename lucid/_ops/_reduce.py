@@ -25,7 +25,7 @@ import warnings
 from collections.abc import Sequence
 
 from lucid._C import engine as _C_engine
-from lucid._deprecation import _PACKAGE_DIR, warn_deprecated
+from lucid._deprecation import _PACKAGE_DIR
 from lucid._dtype import _ENGINE_TO_DTYPE
 from lucid._ops._dims import _to_axes, _wrap_dims
 
@@ -215,17 +215,6 @@ def _scale(impl: _Impl, factor: float) -> _Impl:
 
 # ── var / std arguments ──────────────────────────────────────────────────────
 
-#: ``var`` / ``std`` read a third positional argument as ``keepdim`` until
-#: 3.16.  The reference reads it as ``unbiased`` — ``var(x, dim, unbiased,
-#: keepdim)`` — and the two cannot be told apart by type, both being bools.
-#: The old reading still answers, and warns, until the release named here;
-#: then the third positional argument becomes ``unbiased``.
-_VAR_KEEPDIM_POSITIONAL = (
-    "passing keepdim as the third positional argument of var()/std()"
-)
-_VAR_SINCE = "3.16.0"
-_VAR_REMOVAL = "3.18.0"
-
 _VAR_KEYWORDS = frozenset({"dim", "unbiased", "keepdim", "correction"})
 
 
@@ -242,21 +231,16 @@ def _variance_operands(
     name: str,
     args: tuple[object, ...],
     kwargs: dict[str, object],
-    *,
-    keepdim_third: bool,
 ) -> tuple[object, float, bool]:
     """``(dim, correction, keepdim)`` from any spelling of a variance call.
 
     The one reading of ``var`` / ``std`` / ``var_mean`` / ``std_mean``'s
     arguments.  The reference spellings are ``f(input, dim, unbiased,
     keepdim)``, ``f(input, unbiased)`` and keywords for the rest, so a bool
-    where the ``dim`` goes is ``unbiased`` — it used to reduce axis 0 or 1.
+    where the ``dim`` goes is ``unbiased`` — it used to reduce axis 0 or 1 —
+    and a third positional argument is ``unbiased``, never ``keepdim``.
     A number rather than a bool after ``dim`` is a ``correction``, as
     ``var_mean(x, dim, correction)`` has always been spelled.
-
-    ``keepdim_third`` is ``var`` / ``std``'s released ``(dim, keepdim)``
-    spelling: with it, exactly two arguments after ``input`` still answer
-    that way and warn, until :data:`_VAR_REMOVAL`.
     """
     unknown = sorted(set(kwargs) - _VAR_KEYWORDS)
     if unknown:
@@ -274,14 +258,6 @@ def _variance_operands(
                 f"pass dim and keepdim by keyword"
             )
         names = ("unbiased",)
-    elif len(args) == 2 and keepdim_third:
-        warn_deprecated(
-            _VAR_KEEPDIM_POSITIONAL,
-            since=_VAR_SINCE,
-            removal=_VAR_REMOVAL,
-            alternative=f"{name}(input, dim, keepdim=...)",
-        )
-        names = ("dim", "keepdim")
     else:
         bias = (
             "unbiased" if len(args) < 2 or isinstance(args[1], bool) else "correction"
@@ -318,9 +294,7 @@ def _variance(
         dim: object = args[0] if args else None
         correction, keepdim = 1.0, False
     else:
-        dim, correction, keepdim = _variance_operands(
-            name, args, kwargs, keepdim_third=True
-        )
+        dim, correction, keepdim = _variance_operands(name, args, kwargs)
     axes = _reduction_axes(x_impl, dim, name)
     return _corrected_variance(x_impl, axes, correction, keepdim, name)
 
@@ -328,9 +302,9 @@ def _variance(
 def _var_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
     """var(input, dim=None, unbiased=None, keepdim=False, *, correction=1).
 
-    The parameters after ``input`` stay open because a third positional
-    argument binds by count, not by name, during the ``keepdim``
-    deprecation — see :func:`_variance_operands`.
+    The parameters after ``input`` stay open because the reference's
+    overloads bind the second one by type — a bool there is ``unbiased``,
+    anything else ``dim`` — see :func:`_variance_operands`.
     """
     return _variance("var", input, args, kwargs)
 

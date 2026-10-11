@@ -705,6 +705,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - top-level functions take the reference's names
 - registry ops and Tensor methods take reference names
 - pooling and conv follow the reference's signatures
+- drop the reference-parity deprecation shims
 
 ---
 

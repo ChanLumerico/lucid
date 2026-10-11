@@ -1181,14 +1181,11 @@ def _moments(
     The positional contract has one owner, ``_variance_operands``; these
     two used to keep their own copies of it, which drifted — one refused a
     ``correction=True`` the released code accepted.  The third positional
-    argument is ``unbiased`` or a ``correction`` here, never ``keepdim``:
-    ``var_mean`` never read it as ``keepdim``, so it has no deprecation.
+    argument is ``unbiased`` or a ``correction``, never ``keepdim``.
     """
     from lucid._dispatch import _unwrap, _wrap
 
-    dim, correction, keepdim = _variance_operands(
-        name, args, kwargs, keepdim_third=False
-    )
+    dim, correction, keepdim = _variance_operands(name, args, kwargs)
     xi = _unwrap(x)
     axes = _reduction_axes(xi, dim, name)
     spread = _corrected_variance(xi, axes, correction, keepdim, name)

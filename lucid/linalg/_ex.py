@@ -13,7 +13,6 @@ from collections.abc import Callable
 from typing import final, override
 
 import lucid
-from lucid._deprecation import warn_deprecated
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
@@ -487,7 +486,7 @@ def _lu_factor_ex(
 
 def ldl_factor(
     A: Tensor,
-    *positional: bool,
+    *,
     hermitian: bool = False,
 ) -> tuple[Tensor, Tensor]:
     r"""LDL factorization of a symmetric (or Hermitian) matrix.
@@ -511,8 +510,7 @@ def ldl_factor(
     hermitian : bool, keyword-only, optional
         Whether a complex ``A`` is Hermitian rather than symmetric.  A real
         ``A`` is both, so either value factors it the same.  Default
-        ``False``, as the reference's.  Passing it by position still works
-        and warns, until 3.18.0.
+        ``False``, as the reference's.
 
     Returns
     -------
@@ -562,18 +560,6 @@ def ldl_factor(
     >>> piv
     tensor([1, 2], dtype=lucid.int32)
     """
-    if positional:
-        if len(positional) > 1:
-            raise TypeError(
-                f"ldl_factor() takes 1 positional argument but {1 + len(positional)} "
-                "were given"
-            )
-        warn_deprecated(
-            "passing hermitian to ldl_factor() by position",
-            since="3.16.0",
-            removal="3.18.0",
-            alternative="ldl_factor(A, hermitian=...)",
-        )
     del hermitian  # only real input is factored, where it changes nothing
     LD, pivots, _ = _ldl_factor_ex(A, check_errors=True, op="ldl_factor")
     return LD, pivots

@@ -39,7 +39,6 @@ import pytest
 
 import lucid
 import lucid.linalg as LA
-from lucid._deprecation import LucidDeprecationWarning
 
 #: Named inputs, each a 2-D float list: a zero slice, a constant slice, a
 #: mix of the two with a non-trivial row, and a column (one element per
@@ -395,10 +394,6 @@ _SPELLINGS: list[tuple[tuple[object, ...], dict[str, object]]] = [
 ]
 
 
-def _deprecated_spelling(fn: str, args: tuple[object, ...]) -> bool:
-    return fn in ("var", "std") and len(args) == 2
-
-
 def _callers(fn: str, x: lucid.Tensor) -> list[Callable[..., object]]:
     free = getattr(lucid, fn)
     if fn in ("var", "std"):
@@ -422,10 +417,9 @@ def test_every_spelling_matches_the_reference(
     kwargs: dict[str, object],
 ) -> None:
     x = lucid.tensor(_X, device=device)
+    # ``var(x, dim, b)`` reads ``b`` as ``unbiased``, as the reference does;
+    # it was ``keepdim`` until 3.16, then a deprecation until LCD-410.
     for call in _callers(fn, x):
-        if _deprecated_spelling(fn, args):
-            _assert_still_keepdim(call, args, kwargs)
-            continue
         with warnings.catch_warnings(record=True) as ours_said:
             warnings.simplefilter("always")
             ours = _outputs(call(*args, **kwargs))
@@ -441,21 +435,6 @@ def test_every_spelling_matches_the_reference(
 
 def _dof(caught: warnings.WarningMessage) -> bool:
     return "degrees of freedom is <= 0" in str(caught.message)
-
-
-def _assert_still_keepdim(
-    call: Callable[..., object], args: tuple[object, ...], kwargs: dict[str, object]
-) -> None:
-    """``var(x, dim, b)`` reads ``b`` as ``keepdim`` and warns, until 3.18."""
-    if "keepdim" in kwargs:
-        with pytest.warns(LucidDeprecationWarning), pytest.raises(TypeError):
-            call(*args, **kwargs)
-        return
-    with pytest.warns(LucidDeprecationWarning, match=r"removed in 3\.18\.0"):
-        got = call(*args, **kwargs)
-    expected = call(args[0], keepdim=args[1], **kwargs)
-    assert got.shape == expected.shape
-    np.testing.assert_allclose(_lucid_np(got), _lucid_np(expected))
 
 
 @pytest.mark.parametrize("fn", ["var_mean", "std_mean"])

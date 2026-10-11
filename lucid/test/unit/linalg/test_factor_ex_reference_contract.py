@@ -9,7 +9,6 @@ reference — what ``potrf`` leaves outside it depends on its blocking.
 """
 
 import inspect
-import warnings
 from collections.abc import Sequence
 from types import ModuleType
 
@@ -17,7 +16,6 @@ import pytest
 
 import lucid
 import lucid.linalg as LA
-from lucid._deprecation import LucidDeprecationWarning
 
 _FAILING = [
     [[1.0, 2.0], [2.0, 1.0]],
@@ -119,12 +117,10 @@ def test_ldl_factors_a_real_matrix_either_way(
     assert int(LA.ldl_factor_ex(x, hermitian=hermitian)[2].item()) == int(want_info)
 
 
-def test_hermitian_by_position_warns_until_its_removal() -> None:
+def test_hermitian_by_position_is_refused() -> None:
+    # Positional ``hermitian`` answered with a warning until LCD-410; the
+    # reference takes it by keyword only, and so does Lucid now.
     a = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
-    with pytest.warns(LucidDeprecationWarning, match="hermitian=..."):
-        ld, _ = LA.ldl_factor(a, True)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert ld.tolist() == LA.ldl_factor(a)[0].tolist()
-    with pytest.raises(TypeError, match="positional"):
-        LA.ldl_factor(a, True, False)
+    for call in (lambda: LA.ldl_factor(a, True), lambda: LA.ldl_factor_ex(a, True)):
+        with pytest.raises(TypeError, match="positional"):
+            call()
