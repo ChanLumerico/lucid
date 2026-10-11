@@ -36,7 +36,6 @@ _CI_TOOLS = (
     "cmake",
     "ninja",
     "pybind11",
-    "mlx",
     "clang-format",
 )
 

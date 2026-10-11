@@ -9,11 +9,13 @@ called ``@rpath/libmlx.dylib`` would collapse into whichever loaded first and
 the other side would die on a missing symbol.  Import order is therefore the
 axis that matters, and each order needs a fresh process.
 
-The no-``mlx``-installed case is covered by the packaging gate, which builds
-an environment without it.
+Which ``mlx`` is installed is the other axis: scripts/ci_mlx_compat.sh runs
+this file against an installed wheel with none, the [mlx] extra's floor, and
+the newest release (ci.yml's MLX compatibility job).
 """
 
 import gc
+import os
 import shutil
 import subprocess
 import sys
@@ -35,10 +37,15 @@ _requires_metal = pytest.mark.skipif(
 
 
 def _pinned_version() -> str:
-    if not _PYPROJECT.is_file():
-        pytest.skip("pyproject.toml is not beside the lucid package (installed wheel)")
-    with _PYPROJECT.open("rb") as fh:
-        return str(tomllib.load(fh)["tool"]["lucid"]["mlx"]["version"])
+    if _PYPROJECT.is_file():
+        with _PYPROJECT.open("rb") as fh:
+            return str(tomllib.load(fh)["tool"]["lucid"]["mlx"]["version"])
+    # An installed wheel has no pyproject beside it; scripts/ci_mlx_compat.sh
+    # passes the pin it was built with.
+    pin = os.environ.get("LUCID_MLX_PIN")
+    if not pin:
+        pytest.skip("pyproject.toml is not beside the lucid package and LUCID_MLX_PIN is unset")
+    return pin
 
 
 def test_the_engine_runs_the_pinned_mlx() -> None:

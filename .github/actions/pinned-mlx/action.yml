@@ -1,0 +1,41 @@
+name: Pinned MLX
+description: >
+  Prepare a job to build Lucid's engine against the MLX build pinned in
+  pyproject.toml [tool.lucid.mlx] (LCD-292).  Restores the per-machine cache
+  tools/fetch_mlx.py stages it into, so the 67 MB mlx-metal wheel is not
+  downloaded on every run, and exports MACOSX_DEPLOYMENT_TARGET as the pinned
+  build's macOS floor.  Needs the checkout and a Python 3.11+ on PATH.
+
+runs:
+  using: composite
+  steps:
+    # Every value comes from tools/fetch_mlx.py, the pin's one reader: the
+    # cache key is the staged entry's own name (version + sha256 prefix), so
+    # a re-pin starts a new cache rather than restoring the previous build.
+    - id: pin
+      shell: bash
+      run: |
+        python - <<'PY' >> "$GITHUB_OUTPUT"
+        import sys
+
+        sys.path.insert(0, "tools")
+        import fetch_mlx
+
+        pin = fetch_mlx.read_pin()
+        print(f"dir={fetch_mlx.cache_root()}")
+        print(f"key={fetch_mlx.pinned_entry(pin).name}")
+        print(f"macos={pin.macos}")
+        PY
+
+    # A self-hosted runner keeps the cache on its own disk between runs;
+    # uploading it to the Actions cache would only spend its bandwidth.
+    - uses: actions/cache@v4
+      if: runner.environment == 'github-hosted'
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: lucid-${{ steps.pin.outputs.key }}
+
+    # setup.py raises a lower target to this floor anyway; exporting it keeps
+    # every compiler the job runs on the same target.
+    - shell: bash
+      run: echo "MACOSX_DEPLOYMENT_TARGET=${{ steps.pin.outputs.macos }}" >> "$GITHUB_ENV"

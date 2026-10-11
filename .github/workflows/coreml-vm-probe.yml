@@ -44,10 +44,12 @@ jobs:
           key: phase-gate-py3.14
           max-size: 600M
 
+      - uses: ./.github/actions/pinned-mlx
+
       - name: Install Lucid
         run: |
           python -m pip install --upgrade pip
-          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1"
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Host

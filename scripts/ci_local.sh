@@ -30,7 +30,9 @@ mkdir -p "$LOGS"
 
 export PATH="$VENV/bin:$PATH"
 export PYTHON_BIN="$VENV/bin/python"
-export MACOSX_DEPLOYMENT_TARGET=26.0
+# The pinned MLX build's minos ([tool.lucid.mlx] macos), as CI exports it.
+MACOSX_DEPLOYMENT_TARGET="$("$PYTHON_BIN" tools/fetch_mlx.py --print-macos)"
+export MACOSX_DEPLOYMENT_TARGET
 export CLANG_FORMAT="$VENV/bin/clang-format" # the major ci.yml pins
 export PYTHONPATH="$ROOT/scripts/ci_mirror${PYTHONPATH:+:$PYTHONPATH}"
 # CI's pytest loads one plugin, pytest-benchmark.  Any other a venv carries
