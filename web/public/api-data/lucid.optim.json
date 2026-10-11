@@ -3,7 +3,7 @@
   "name": "optim",
   "path": "lucid.optim",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/__init__.py#L1",
   "members": [
     {
       "name": "Optimizer",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "Optimizer(params: Iterable[Parameter] | Iterable[dict[str, object]], defaults: dict[str, object])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L109",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L140",
       "subcategory": "optimizer",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], defaults: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L282",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L320",
           "subcategory": "optimizer",
           "summary": "Initialise the Optimizer.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -44,7 +44,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_param_group(group: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L371",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L409",
           "subcategory": "optimizer",
           "summary": "Add a parameter group, creating one new engine optimizer for it.",
           "extended": "The group's hyper-parameters are checked first, against the rules\nthe optimizer's constructor applies; a group that breaks one raises\n`InvalidArgument` and is not added.",
@@ -66,7 +66,7 @@
           "kind": "function",
           "labels": [],
           "signature": "zero_grad(set_to_none: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L611",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L650",
           "subcategory": "optimizer",
           "summary": "Zero gradients of all parameters.",
           "extended": null,
@@ -88,7 +88,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L630",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L669",
           "subcategory": "optimizer",
           "summary": "Perform a single optimization step.",
           "extended": "Subclasses must override this to update parameters from their\ncurrent gradients.  Optionally accepts a *closure* that re-evaluates\nthe model and returns the loss (required by some optimizers, e.g.\nLBFGS; ignored by most first-order methods).",
@@ -110,7 +110,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L758",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L790",
           "subcategory": "optimizer",
           "summary": "Return a checkpointable snapshot of the optimizer.",
           "extended": "Mirrors reference framework's optimizer state_dict layout:\n\n- `state`: `{param_index: {key: value, ...}}` — each parameter's\n  optimizer state under the reference framework's keys: the engine's\n  buffers and per-parameter scalars (`exp_avg`,\n  `momentum_buffer`, `step` ...) as numpy arrays, or the\n  Python-side state of an optimizer that keeps its own (LBFGS).\n- `param_groups`: list of group dicts; each group's `params` is a\n  list of integer indices into the flat parameter list.",
@@ -132,7 +132,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/optimizer.py#L780",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/optimizer.py#L814",
           "subcategory": "optimizer",
           "summary": "Restore from a state_dict produced by `state_dict`.",
           "extended": "Hyperparameters in `param_groups` are restored, and each\nparameter's state (returned from `_save_state`) is restored\nvia `_load_state` — for the engine optimizers, every buffer\nand per-parameter `step` goes back into the engine.",
@@ -187,7 +187,7 @@
         {
           "name": "state",
           "annotation": "dict",
-          "description": "Per-parameter optimizer state indexed by flat parameter index.\nPopulated by `state_dict` and consumed by\n`load_state_dict`."
+          "description": "Per-parameter optimizer state indexed by flat parameter index.\nPopulated by `state_dict` and consumed by\n`load_state_dict`; an optimizer that keeps its state in\nPython (`lucid.optim.SparseAdam`) holds its live state here."
         }
       ],
       "warns": [],
@@ -203,7 +203,7 @@
       ],
       "labels": [],
       "signature": "SGD(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float, momentum: float = 0, dampening: float = 0, weight_decay: float = 0, nesterov: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/sgd.py#L14",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/sgd.py#L14",
       "subcategory": "sgd",
       "methods": [
         {
@@ -212,7 +212,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float, momentum: float = 0, dampening: float = 0, weight_decay: float = 0, nesterov: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/sgd.py#L99",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/sgd.py#L99",
           "subcategory": "sgd",
           "summary": "Initialise the SGD.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -234,7 +234,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/sgd.py#L143",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/sgd.py#L143",
           "subcategory": "sgd",
           "summary": "Perform a single SGD step.",
           "extended": null,
@@ -324,7 +324,7 @@
       ],
       "labels": [],
       "signature": "Adam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0, amsgrad: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L14",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L14",
       "subcategory": "adam",
       "methods": [
         {
@@ -333,7 +333,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0, amsgrad: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L81",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L81",
           "subcategory": "adam",
           "summary": "Initialise the Adam.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -355,7 +355,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L118",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L118",
           "subcategory": "adam",
           "summary": "Perform a single Adam optimisation step.",
           "extended": "Calls the engine-level Adam update for each parameter group, which\napplies the bias-corrected first- and second-moment update rule.",
@@ -443,7 +443,7 @@
       ],
       "labels": [],
       "signature": "AdamW(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0.01, amsgrad: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L156",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L156",
       "subcategory": "adam",
       "methods": [
         {
@@ -452,7 +452,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0.01, amsgrad: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L230",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L230",
           "subcategory": "adam",
           "summary": "Initialise the AdamW.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -474,7 +474,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/adam.py#L267",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/adam.py#L267",
           "subcategory": "adam",
           "summary": "Perform a single AdamW optimisation step.",
           "extended": "Calls the engine-level AdamW update for each parameter group, which\napplies the adaptive gradient update followed by decoupled weight\ndecay directly on the parameters.",
@@ -572,8 +572,8 @@
         "Optimizer"
       ],
       "labels": [],
-      "signature": "LBFGS(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int = 25, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = 'strong_wolfe')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lbfgs.py#L17",
+      "signature": "LBFGS(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int | None = None, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lbfgs.py#L397",
       "subcategory": "lbfgs",
       "methods": [
         {
@@ -581,8 +581,8 @@
           "path": "lucid.optim.lbfgs.LBFGS.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int = 25, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = 'strong_wolfe')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lbfgs.py#L119",
+          "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, max_iter: int = 20, max_eval: int | None = None, tolerance_grad: float = 1e-07, tolerance_change: float = 1e-09, history_size: int = 100, line_search_fn: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lbfgs.py#L518",
           "subcategory": "lbfgs",
           "summary": "Initialise the LBFGS.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -599,12 +599,39 @@
           "see_also": []
         },
         {
+          "name": "add_param_group",
+          "path": "lucid.optim.lbfgs.LBFGS.add_param_group",
+          "kind": "function",
+          "labels": [],
+          "signature": "add_param_group(group: dict[str, object])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lbfgs.py#L547",
+          "subcategory": "lbfgs",
+          "summary": "Refuse a second group: L-BFGS optimises one flat vector of parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "When the optimizer already has its parameter group."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
           "name": "zero_grad",
           "path": "lucid.optim.lbfgs.LBFGS.zero_grad",
           "kind": "function",
           "labels": [],
           "signature": "zero_grad(set_to_none: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lbfgs.py#L325",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lbfgs.py#L660",
           "subcategory": "lbfgs",
           "summary": "Set gradients of all parameters to `None`.",
           "extended": "L-BFGS always sets gradients to `None` regardless of the\n`set_to_none` argument, because the closure passed to\n`step` is responsible for zeroing and recomputing gradients\non each function evaluation.",
@@ -622,7 +649,7 @@
           },
           "raises": [],
           "examples": [
-            ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's loss"
+            ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's first loss"
           ],
           "notes": [],
           "attributes": [],
@@ -635,10 +662,10 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lbfgs.py#L361",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lbfgs.py#L696",
           "subcategory": "lbfgs",
-          "summary": "Perform a single L-BFGS optimisation step.",
-          "extended": "Computes the L-BFGS search direction using the two-loop recursion,\nperforms a back-tracking Armijo line search to find an acceptable\nstep size, updates all parameters, and then updates the curvature\nhistory $(s, y)$.",
+          "summary": "Run up to `max_iter` L-BFGS iterations.",
+          "extended": "Each iteration takes the two-loop-recursion direction, moves along it\nby the fixed step `lr` or by a strong-Wolfe line search, and stores\nthe new curvature pair.  The loop ends after `max_iter` iterations,\nafter `max_eval` closure evaluations, or when a `tolerance_grad` /\n`tolerance_change` rule is met.",
           "parameters": [
             {
               "name": "closure",
@@ -649,7 +676,7 @@
           ],
           "returns": {
             "annotation": "Tensor",
-            "description": "The loss value at the final parameter position after the line\nsearch."
+            "description": "The closure's loss at the parameters `step` started from\n(its first evaluation), as the reference framework returns it."
           },
           "raises": [
             {
@@ -658,10 +685,10 @@
             }
           ],
           "examples": [
-            ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     output = model(x)\n...     loss = criterion(output, y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's loss"
+            ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     output = model(x)\n...     loss = criterion(output, y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's first loss"
           ],
           "notes": [
-            "The closure may be called multiple times per `step` call\n(up to `max_eval` times) during the line search.  Ensure that\nany side effects (e.g. batch norm running stats) are handled\nappropriately if this matters for your use-case."
+            "The closure is called up to `max_eval` times per `step`\ncall, always with gradients enabled.  Ensure that any side effects\n(e.g. batch norm running stats) are handled appropriately if this\nmatters for your use-case."
           ],
           "attributes": [],
           "warns": [],
@@ -669,18 +696,18 @@
         }
       ],
       "summary": "Limited-memory Broyden–Fletcher–Goldfarb–Shanno (L-BFGS) optimizer.",
-      "extended": "L-BFGS is a quasi-Newton method that approximates the inverse Hessian\nusing a limited history of gradient and parameter difference vectors.\nAt each step it computes a search direction $d_t$ via the\ntwo-loop recursion:\n\n$$\nd_t = -H_t^{-1} \\nabla L(\\theta_t)\n$$\n\nwhere $H_t^{-1}$ is the L-BFGS Hessian approximation built from\nthe last `history_size` curvature pairs\n$\\{(s_k, y_k)\\}_{k=t-m}^{t-1}$:\n\n$$\n\\begin{aligned}\ns_k &= \\theta_{k+1} - \\theta_k \\\\\ny_k &= \\nabla L(\\theta_{k+1}) - \\nabla L(\\theta_k)\n\\end{aligned}\n$$\n\nThe diagonal scaling of $H_t^{-1}$ is initialised as:\n\n$$\nH_{\\text{diag}} = \\frac{s_{t-1}^\\top y_{t-1}}{y_{t-1}^\\top y_{t-1}}\n$$\n\nA back-tracking Armijo line search finds a step size $\\alpha$ that\nsatisfies the sufficient-decrease condition:\n\n$$\nL(\\theta_t + \\alpha d_t)\n\\le L(\\theta_t) + c_1 \\alpha \\, \\nabla L(\\theta_t)^\\top d_t\n$$\n\nwith $c_1 = 10^{-4}$.",
+      "extended": "L-BFGS is a quasi-Newton method that approximates the inverse Hessian\nusing a limited history of gradient and parameter difference vectors.\nOne call to `step` runs up to `max_iter` iterations.  Each\niteration computes a search direction $d_k$ via the two-loop\nrecursion:\n\n$$\nd_k = -H_k \\nabla L(\\theta_k)\n$$\n\nwhere $H_k$ is the L-BFGS inverse-Hessian approximation built from\nthe last `history_size` curvature pairs\n$\\{(s_i, y_i)\\}$:\n\n$$\n\\begin{aligned}\ns_i &= \\theta_{i+1} - \\theta_i \\\\\ny_i &= \\nabla L(\\theta_{i+1}) - \\nabla L(\\theta_i)\n\\end{aligned}\n$$\n\nwith the initial diagonal scaling\n\n$$\nH_{\\text{diag}} = \\frac{s_{k-1}^\\top y_{k-1}}{y_{k-1}^\\top y_{k-1}}.\n$$\n\nA pair is stored only when $y^\\top s > 10^{-10}$.  The parameters\nthen move to $\\theta_{k+1} = \\theta_k + t_k d_k$.  With\n`line_search_fn=None` the step is fixed, $t_k = \\text{lr}$\n(on the very first iteration $\\text{lr} \\cdot \\min(1, 1/\\lVert\\nabla L\\rVert_1)$).  With `\"strong_wolfe\"`,\n$t_k$ is found by cubic interpolation so that\n\n$$\n\\begin{aligned}\nL(\\theta_k + t d_k) &\\le L(\\theta_k) + c_1 t \\, \\nabla L(\\theta_k)^\\top d_k \\\\\n\\lvert \\nabla L(\\theta_k + t d_k)^\\top d_k \\rvert\n&\\le c_2 \\lvert \\nabla L(\\theta_k)^\\top d_k \\rvert\n\\end{aligned}\n$$\n\nwith $c_1 = 10^{-4}$ and $c_2 = 0.9$.",
       "parameters": [
         {
           "name": "params",
           "annotation": "iterable of Parameter or iterable of dict",
-          "description": "Parameters to optimise.",
+          "description": "Parameters to optimise.  Only one parameter group is supported.",
           "default": null
         },
         {
           "name": "lr",
           "annotation": "float",
-          "description": "Initial step size for the line search (default: `1.0`).",
+          "description": "Step size (default: `1.0`).  The fixed step without a line search,\nand the first trial step of the strong-Wolfe search.",
           "default": "1.0"
         },
         {
@@ -691,20 +718,20 @@
         },
         {
           "name": "max_eval",
-          "annotation": "int",
-          "description": "Maximum number of closure evaluations per `step` call\n(default: `25`).",
-          "default": "25"
+          "annotation": "int or None",
+          "description": "Maximum number of closure evaluations per `step` call\n(default: `None`, meaning `max_iter * 5 // 4`).",
+          "default": "None"
         },
         {
           "name": "tolerance_grad",
           "annotation": "float",
-          "description": "Gradient-norm convergence threshold; optimisation stops when\n$\\|\\nabla L\\|_2 \\le \\text{tolerance\\_grad}$\n(default: `1e-7`).",
+          "description": "`step` stops once $\\lVert\\nabla L\\rVert_\\infty \\le$\n`tolerance_grad` (default: `1e-7`).",
           "default": "1e-07"
         },
         {
           "name": "tolerance_change",
           "annotation": "float",
-          "description": "Parameter-change convergence threshold (default: `1e-9`).",
+          "description": "`step` stops once the directional derivative, the parameter\nchange $\\lVert t_k d_k\\rVert_\\infty$ or the change of the loss\nfalls below this (default: `1e-9`).",
           "default": "1e-09"
         },
         {
@@ -716,23 +743,28 @@
         {
           "name": "line_search_fn",
           "annotation": "str or None",
-          "description": "Line search strategy.  Currently `\"strong_wolfe\"` (back-tracking\nArmijo) and `None` (fixed step) are recognised\n(default: `\"strong_wolfe\"`).",
-          "default": "'strong_wolfe'"
+          "description": "`\"strong_wolfe\"` or `None` for a fixed step (default: `None`).",
+          "default": "None"
         }
       ],
       "returns": null,
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `params` holds more than one parameter group, or an option is\nout of range (`lr < 0`, `history_size < 1`, an unknown\n`line_search_fn`)."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's loss"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> model = nn.Linear(4, 2)\n>>> x = lucid.randn(1, 4)\n>>> y = lucid.zeros((1, 2))\n>>> criterion = nn.MSELoss()\n>>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)\n>>> def closure():\n...     optimizer.zero_grad()\n...     loss = criterion(model(x), y)\n...     loss.backward()\n...     return loss\n>>> loss = optimizer.step(closure)   # step returns the closure's first loss"
       ],
       "notes": [
-        "Unlike first-order optimizers, L-BFGS **requires a closure** argument\nin `step` that clears gradients, computes the loss, and calls\n`loss.backward()`.  Without a closure the method raises\n`ValueError`.\n\nL-BFGS is best suited for full-batch or large-batch training where the\ncurvature information is reliable.  It is not recommended for\nstochastic mini-batch training because noisy gradients corrupt the\nHessian approximation."
+        "Unlike first-order optimizers, L-BFGS **requires a closure** argument\nin `step` that clears gradients, computes the loss, and calls\n`loss.backward()`.  Without a closure the method raises\n`ValueError`.\n\nThe state (the last direction `d` and step `t`, the curvature pairs\n`old_dirs` / `old_stps` with their `ro = 1 / yᵀs`, `H_diag`,\n`prev_flat_grad`, `prev_loss`, `n_iter` and `func_evals`) carries\nover from one `step` to the next and round-trips through\n`state_dict`.\n\nL-BFGS is best suited for full-batch or large-batch training where the\ncurvature information is reliable.  It is not recommended for\nstochastic mini-batch training because noisy gradients corrupt the\nHessian approximation."
       ],
       "attributes": [
         {
           "name": "param_groups",
           "annotation": "list of dict",
-          "description": "Single parameter group containing all parameters."
+          "description": "The single parameter group."
         },
         {
           "name": "defaults",
@@ -753,7 +785,7 @@
       ],
       "labels": [],
       "signature": "RMSprop(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, alpha: float = 0.99, eps: float = 1e-08, weight_decay: float = 0, momentum: float = 0, centered: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L18",
       "subcategory": "others",
       "methods": [
         {
@@ -762,7 +794,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, alpha: float = 0.99, eps: float = 1e-08, weight_decay: float = 0, momentum: float = 0, centered: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L103",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L98",
           "subcategory": "others",
           "summary": "Initialise the RMSprop.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -784,7 +816,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L138",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L133",
           "subcategory": "others",
           "summary": "Perform a single RMSprop step.",
           "extended": null,
@@ -880,7 +912,7 @@
       ],
       "labels": [],
       "signature": "Adagrad(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lr_decay: float = 0, weight_decay: float = 0, eps: float = 1e-10, initial_accumulator_value: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L147",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L142",
       "subcategory": "others",
       "methods": [
         {
@@ -889,7 +921,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lr_decay: float = 0, weight_decay: float = 0, eps: float = 1e-10, initial_accumulator_value: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L229",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L224",
           "subcategory": "others",
           "summary": "Initialise the Adagrad.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -911,7 +943,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L265",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L260",
           "subcategory": "others",
           "summary": "Perform a single Adagrad step.",
           "extended": null,
@@ -1001,7 +1033,7 @@
       ],
       "labels": [],
       "signature": "Adadelta(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, rho: float = 0.9, eps: float = 1e-06, weight_decay: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L274",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L269",
       "subcategory": "others",
       "methods": [
         {
@@ -1010,7 +1042,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 1.0, rho: float = 0.9, eps: float = 1e-06, weight_decay: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L341",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L336",
           "subcategory": "others",
           "summary": "Initialise the Adadelta.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1032,7 +1064,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L367",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L362",
           "subcategory": "others",
           "summary": "Perform a single Adadelta step.",
           "extended": null,
@@ -1116,7 +1148,7 @@
       ],
       "labels": [],
       "signature": "Adamax(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L376",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L371",
       "subcategory": "others",
       "methods": [
         {
@@ -1125,7 +1157,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L441",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L436",
           "subcategory": "others",
           "summary": "Initialise the Adamax.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1147,7 +1179,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L468",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L463",
           "subcategory": "others",
           "summary": "Perform a single Adamax step.",
           "extended": null,
@@ -1231,7 +1263,7 @@
       ],
       "labels": [],
       "signature": "RAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L477",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L472",
       "subcategory": "others",
       "methods": [
         {
@@ -1240,7 +1272,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L558",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L553",
           "subcategory": "others",
           "summary": "Initialise the RAdam.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1262,7 +1294,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L585",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L580",
           "subcategory": "others",
           "summary": "Perform a single RAdam step.",
           "extended": null,
@@ -1346,7 +1378,7 @@
       ],
       "labels": [],
       "signature": "NAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L594",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L589",
       "subcategory": "others",
       "methods": [
         {
@@ -1355,7 +1387,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.002, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08, weight_decay: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L658",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L653",
           "subcategory": "others",
           "summary": "Initialise the NAdam.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1377,7 +1409,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L685",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L680",
           "subcategory": "others",
           "summary": "Perform a single NAdam step.",
           "extended": null,
@@ -1461,7 +1493,7 @@
       ],
       "labels": [],
       "signature": "ASGD(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lambd: float = 0.0001, alpha: float = 0.75, t0: float = 1000000.0, weight_decay: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L694",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L689",
       "subcategory": "others",
       "methods": [
         {
@@ -1470,7 +1502,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, lambd: float = 0.0001, alpha: float = 0.75, t0: float = 1000000.0, weight_decay: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L780",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L775",
           "subcategory": "others",
           "summary": "Initialise the ASGD.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1492,7 +1524,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L809",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L804",
           "subcategory": "others",
           "summary": "Perform a single ASGD step.",
           "extended": null,
@@ -1582,7 +1614,7 @@
       ],
       "labels": [],
       "signature": "Rprop(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, etas: tuple[float, float] = (0.5, 1.2), step_sizes: tuple[float, float] = (1e-06, 50))",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L818",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L813",
       "subcategory": "others",
       "methods": [
         {
@@ -1591,7 +1623,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.01, etas: tuple[float, float] = (0.5, 1.2), step_sizes: tuple[float, float] = (1e-06, 50))",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L889",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L884",
           "subcategory": "others",
           "summary": "Initialise the Rprop.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1613,7 +1645,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L919",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L914",
           "subcategory": "others",
           "summary": "Perform a single Rprop step.",
           "extended": null,
@@ -1691,7 +1723,7 @@
       ],
       "labels": [],
       "signature": "SparseAdam(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L928",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L1010",
       "subcategory": "others",
       "methods": [
         {
@@ -1700,7 +1732,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(params: Iterable[Parameter] | Iterable[dict[str, object]], lr: float = 0.001, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-08)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L998",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L1093",
           "subcategory": "others",
           "summary": "Initialise the SparseAdam.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1722,10 +1754,10 @@
           "kind": "function",
           "labels": [],
           "signature": "step(closure: _OptimizerClosure = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/others.py#L1034",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/others.py#L1148",
           "subcategory": "others",
           "summary": "Perform a single SparseAdam optimisation step.",
-          "extended": "Iterates over all parameters.  For each parameter whose gradient\nis not `None`, lazily initialises first- and second-moment\nbuffers (on first call), increments the step counter, computes\nbias-corrected moment estimates, and applies the Adam update\nin-place via engine ops.\n\nParameters with `None` gradients (e.g. embedding rows not\naccessed in the current batch) are skipped entirely.",
+          "extended": "Each parameter with a gradient advances its step count and updates\nthe rows its gradient touches (see the class notes); parameters\nwhose gradient is `None` are skipped.",
           "parameters": [
             {
               "name": "closure",
@@ -1748,8 +1780,8 @@
           "see_also": []
         }
       ],
-      "summary": "Adam optimizer designed for sparse gradient workloads.",
-      "extended": "Implements a dense Adam update that is API-compatible with the sparse\nvariant used in embedding-heavy models.  All moment state is stored as\ndense `lucid._C.engine.TensorImpl` buffers and updated using\nengine operations, so the optimizer works correctly on both CPU and GPU.\n\nThe update rule is identical to standard Adam:\n\n$$\n\\begin{aligned}\nm_t &= \\beta_1 m_{t-1} + (1 - \\beta_1) g_t \\\\\nv_t &= \\beta_2 v_{t-1} + (1 - \\beta_2) g_t^2 \\\\\n\\hat{m}_t &= \\frac{m_t}{1 - \\beta_1^t} \\\\\n\\hat{v}_t &= \\frac{v_t}{1 - \\beta_2^t} \\\\\n\\theta_t &= \\theta_{t-1}\n    - \\frac{\\alpha \\sqrt{1 - \\beta_2^t}}{1 - \\beta_1^t}\n      \\cdot \\frac{m_t}{\\sqrt{v_t} + \\epsilon}\n\\end{aligned}\n$$\n\nMoment buffers are allocated lazily on the first step for each\nparameter to avoid unnecessary memory usage for parameters with\nall-zero gradients.",
+      "summary": "Lazy Adam for gradients that touch a few rows of a parameter.",
+      "extended": "The variant of Adam meant for embedding tables: each step updates the\nmoments and the values of only the rows the gradient touches — a row\nbeing a slice along the first dimension.  A row absent from a batch\nkeeps its moments and its value; it does not keep moving on its old\nmomentum the way it would under `lucid.optim.Adam`.\n\nFor each touched row, with the parameter's step count $t$ (one\ncount per parameter, advanced by every step in which it has a\ngradient):\n\n$$\n\\begin{aligned}\nm &\\leftarrow m + (1 - \\beta_1)(g - m) \\\\\nv &\\leftarrow v + (1 - \\beta_2)(g^2 - v) \\\\\n\\theta &\\leftarrow \\theta\n    - \\frac{\\alpha \\sqrt{1 - \\beta_2^t}}{1 - \\beta_1^t}\n      \\cdot \\frac{m}{\\sqrt{v} + \\epsilon}\n\\end{aligned}\n$$",
       "parameters": [
         {
           "name": "params",
@@ -1779,10 +1811,10 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> embedding = nn.Embedding(100, 8)\n>>> loss = embedding(lucid.tensor([[3, 17, 3]])).sum()\n>>> optimizer = optim.SparseAdam(embedding.parameters(), lr=1e-3)\n>>> optimizer.zero_grad()\n>>> loss.backward()\n>>> optimizer.step()"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> import lucid.optim as optim\n>>> embedding = nn.Embedding(4, 2)\n>>> optimizer = optim.SparseAdam(embedding.parameters(), lr=0.1)\n>>> before = embedding.weight.detach().clone()\n>>> embedding(lucid.tensor([0, 2])).sum().backward()\n>>> optimizer.step()\n>>> (embedding.weight != before).any(dim=1).tolist()\n[True, False, True, False]\n>>> optimizer.state[0][\"step\"]\n1"
       ],
       "notes": [
-        "`SparseAdam` skips parameter updates when the gradient is `None`,\nwhich is the common case for embedding rows that were not accessed in\nthe current mini-batch.  This makes it efficient even though the\nunderlying storage is dense.\n\nUnlike the engine-backed optimizers (Adam, AdamW, SGD), `SparseAdam`\nmanages its own Python-side moment buffers and does **not** use a C++\nengine optimizer object."
+        "Lucid's gradients are dense — `nn.Embedding(sparse=True)` is not\nsupported — so a row counts as touched when its gradient holds a\nnonzero value.  The reference framework takes only a sparse gradient\nand updates every row it lists, so the two differ for a row that was\nlooked up but whose gradient is exactly zero: the reference decays its\nmoments, Lucid leaves it alone.  Within a touched row every element is\nupdated, zero or not, as the reference's embedding gradient lists whole\nrows.\n\nA parameter whose gradient is `None` is skipped and its step count\ndoes not advance; one whose gradient is all zero advances its count\nand changes nothing else, as in the reference.\n\nThe moments follow their parameter through a conversion\n(`module.to()`, `.double()`, `.half()`) between steps."
       ],
       "attributes": [
         {
@@ -1794,6 +1826,11 @@
           "name": "defaults",
           "annotation": "dict",
           "description": "Default hyperparameter values."
+        },
+        {
+          "name": "state",
+          "annotation": "dict",
+          "description": "The live state of each parameter that has stepped, by flat\nparameter index: `\"step\"` (int), `\"exp_avg\"` and\n`\"exp_avg_sq\"` (tensors shaped like the parameter).  It is what\n`state_dict` saves and `load_state_dict` restores."
         }
       ],
       "warns": [],
@@ -1809,7 +1846,7 @@
       ],
       "labels": [],
       "signature": "StepLR(optimizer: Optimizer, step_size: int, gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L236",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L236",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -1818,7 +1855,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, step_size: int, gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L293",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L293",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the StepLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1840,7 +1877,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L306",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L306",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -1924,7 +1961,7 @@
       ],
       "labels": [],
       "signature": "ExponentialLR(optimizer: Optimizer, gamma: float, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L321",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L321",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -1933,7 +1970,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, gamma: float, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L370",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L370",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the ExponentialLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -1955,7 +1992,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L381",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L381",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2028,7 +2065,7 @@
       ],
       "labels": [],
       "signature": "MultiStepLR(optimizer: Optimizer, milestones: list[int], gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L396",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L396",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2037,7 +2074,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, milestones: list[int], gamma: float = 0.1, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L445",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L445",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the MultiStepLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2059,7 +2096,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L458",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L458",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2143,7 +2180,7 @@
       ],
       "labels": [],
       "signature": "CosineAnnealingLR(optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L473",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L473",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2152,7 +2189,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L527",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L527",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the CosineAnnealingLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2174,7 +2211,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L540",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L540",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2258,7 +2295,7 @@
       ],
       "labels": [],
       "signature": "LambdaLR(optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]], last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L559",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L559",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2267,7 +2304,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, lr_lambda: Callable[[int], float] | list[Callable[[int], float]], last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L614",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L614",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the LambdaLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2289,7 +2326,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L628",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L628",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2362,7 +2399,7 @@
       ],
       "labels": [],
       "signature": "CyclicLR(optimizer: Optimizer, base_lr: float, max_lr: float, step_size_up: int = 2000, mode: str = 'triangular', gamma: float = 1.0, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L644",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L644",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2371,7 +2408,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, base_lr: float, max_lr: float, step_size_up: int = 2000, mode: str = 'triangular', gamma: float = 1.0, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L724",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L724",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the CyclicLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2393,7 +2430,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L743",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L743",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2508,7 +2545,7 @@
       "bases": [],
       "labels": [],
       "signature": "ReduceLROnPlateau(optimizer: Optimizer, mode: str = 'min', factor: float = 0.1, patience: int = 10, verbose: bool = False, threshold: float = 0.0001, min_lr: float = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L764",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L764",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2517,7 +2554,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, mode: str = 'min', factor: float = 0.1, patience: int = 10, verbose: bool = False, threshold: float = 0.0001, min_lr: float = 0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L841",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L841",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the ReduceLROnPlateau.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2539,7 +2576,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L862",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L862",
           "subcategory": "lr_scheduler",
           "summary": "Serialisable state — see `_LRScheduler.state_dict`.",
           "extended": "`ReduceLROnPlateau` does not share the `_LRScheduler` base, so the\ncontract is spelled out again here rather than inherited.",
@@ -2561,7 +2598,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L874",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L874",
           "subcategory": "lr_scheduler",
           "summary": "Restore state produced by `state_dict`.",
           "extended": null,
@@ -2583,7 +2620,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(metrics: float)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L878",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L878",
           "subcategory": "lr_scheduler",
           "summary": "Update the scheduler with the latest monitored metric value.",
           "extended": "Checks whether the metric has improved relative to the stored best.\nIf it has not improved for more than `patience` epochs, the\nlearning rate is reduced by `factor`.",
@@ -2708,7 +2745,7 @@
       ],
       "labels": [],
       "signature": "NoamScheduler(optimizer: Optimizer, d_model: int, warmup_steps: int, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L913",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L913",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2717,7 +2754,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, d_model: int, warmup_steps: int, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L967",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L967",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the NoamScheduler.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2739,7 +2776,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L980",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L980",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2823,7 +2860,7 @@
       ],
       "labels": [],
       "signature": "MultiplicativeLR(optimizer: Optimizer, lr_lambda: Callable[[int], float], last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L997",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L997",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2832,7 +2869,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, lr_lambda: Callable[[int], float], last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1046",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1046",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the MultiplicativeLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2854,7 +2891,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1057",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1057",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -2927,7 +2964,7 @@
       ],
       "labels": [],
       "signature": "LinearLR(optimizer: Optimizer, start_factor: float = 1.0 / 3, end_factor: float = 1.0, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1073",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1073",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -2936,7 +2973,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, start_factor: float = 1.0 / 3, end_factor: float = 1.0, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1138",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1138",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the LinearLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -2958,7 +2995,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1153",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1153",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -3053,7 +3090,7 @@
       ],
       "labels": [],
       "signature": "ConstantLR(optimizer: Optimizer, factor: float = 1.0 / 3, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1171",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1171",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3062,7 +3099,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, factor: float = 1.0 / 3, total_iters: int = 5, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1227",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1227",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the ConstantLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3084,7 +3121,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1240",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1240",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -3168,7 +3205,7 @@
       ],
       "labels": [],
       "signature": "PolynomialLR(optimizer: Optimizer, total_iters: int = 5, power: float = 1.0, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1255",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1255",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3177,7 +3214,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, total_iters: int = 5, power: float = 1.0, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1319",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1319",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the PolynomialLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3199,7 +3236,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1334",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1334",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -3294,7 +3331,7 @@
       ],
       "labels": [],
       "signature": "CosineAnnealingWarmRestarts(optimizer: Optimizer, T_0: int, T_mult: int = 1, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1354",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1354",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3303,7 +3340,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, T_0: int, T_mult: int = 1, eta_min: float = 0.0, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1424",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1424",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the CosineAnnealingWarmRestarts.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3325,7 +3362,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1441",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1441",
           "subcategory": "lr_scheduler",
           "summary": "Advance the scheduler by one step and update the optimizer learning rates.",
           "extended": null,
@@ -3349,7 +3386,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1464",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1464",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -3444,7 +3481,7 @@
       ],
       "labels": [],
       "signature": "OneCycleLR(optimizer: Optimizer, max_lr: float, total_steps: int, pct_start: float = 0.3, anneal_strategy: str = 'cos', div_factor: float = 25.0, final_div_factor: float = 10000.0, last_epoch: int = -1, verbose: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1483",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1483",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3453,7 +3490,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, max_lr: float, total_steps: int, pct_start: float = 0.3, anneal_strategy: str = 'cos', div_factor: float = 25.0, final_div_factor: float = 10000.0, last_epoch: int = -1, verbose: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1562",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1562",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the OneCycleLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3475,7 +3512,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1589",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1589",
           "subcategory": "lr_scheduler",
           "summary": "Compute the learning rate for each parameter group at the current step.",
           "extended": null,
@@ -3601,7 +3638,7 @@
       "bases": [],
       "labels": [],
       "signature": "SequentialLR(optimizer: Optimizer, schedulers: list[_LRScheduler], milestones: list[int], last_epoch: int = -1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1628",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1628",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3610,7 +3647,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(optimizer: Optimizer, schedulers: list[_LRScheduler], milestones: list[int], last_epoch: int = -1)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1688",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1688",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the SequentialLR.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3632,7 +3669,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1708",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1708",
           "subcategory": "lr_scheduler",
           "summary": "Serialisable state, including each wrapped scheduler's own state.",
           "extended": "The children are live scheduler objects, so they are replaced by their\n`state_dict()` under `\"schedulers\"`; `load_state_dict` feeds\nthem back into the corresponding children.",
@@ -3654,7 +3691,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1723",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1723",
           "subcategory": "lr_scheduler",
           "summary": "Restore state produced by `state_dict`.",
           "extended": "`schedulers` must have the same length and order as when it was\nsaved — the children themselves are not reconstructed here.",
@@ -3676,7 +3713,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1744",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1744",
           "subcategory": "lr_scheduler",
           "summary": "Advance the active scheduler by one epoch, switching if a milestone is reached.",
           "extended": "Increments the internal epoch counter, checks whether any\nmilestone has been crossed, and delegates to the currently active\nscheduler's `_LRScheduler.step`.",
@@ -3700,7 +3737,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_last_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1775",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1775",
           "subcategory": "lr_scheduler",
           "summary": "Return the last learning rates from the currently active scheduler.",
           "extended": null,
@@ -3786,7 +3823,7 @@
       "bases": [],
       "labels": [],
       "signature": "ChainedScheduler(schedulers: list[_LRScheduler])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1787",
+      "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1787",
       "subcategory": "lr_scheduler",
       "methods": [
         {
@@ -3795,7 +3832,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(schedulers: list[_LRScheduler])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1837",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1837",
           "subcategory": "lr_scheduler",
           "summary": "Initialise the ChainedScheduler.  See the class docstring for parameter semantics.",
           "extended": null,
@@ -3817,7 +3854,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1870",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1870",
           "subcategory": "lr_scheduler",
           "summary": "Serialisable state, including each wrapped scheduler's own state.",
           "extended": "The children are live scheduler objects, so they are replaced by their\n`state_dict()` under `\"schedulers\"`; `load_state_dict` feeds\nthem back into the corresponding children.",
@@ -3839,7 +3876,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1885",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1885",
           "subcategory": "lr_scheduler",
           "summary": "Restore state produced by `state_dict`.",
           "extended": "`schedulers` must have the same length and order as when it was\nsaved — the children themselves are not reconstructed here.",
@@ -3861,7 +3898,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1906",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1906",
           "subcategory": "lr_scheduler",
           "summary": "Step all chained schedulers simultaneously.",
           "extended": "Calls `_LRScheduler.step` on every scheduler in order.\nEach scheduler writes its updated learning rates into the shared\noptimizer, so the final LR reflects the composition of all\nschedules.",
@@ -3885,7 +3922,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_last_lr()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/41c422f/lucid/optim/lr_scheduler.py#L1933",
+          "source": "https://github.com/ChanLumerico/lucid/blob/5517626/lucid/optim/lr_scheduler.py#L1933",
           "subcategory": "lr_scheduler",
           "summary": "Return the composed learning rates the chain last wrote.",
           "extended": null,
