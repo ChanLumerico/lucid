@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - report and manage the engine's own MLX instance
 
+- check the engine's link to its pinned MLX from the binaries
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
