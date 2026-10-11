@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import types
 from pathlib import Path
 
 import setuptools
@@ -63,7 +64,7 @@ def _macos_sdkroot() -> str:
     return subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
 
 
-def _load_fetch_mlx():
+def _load_fetch_mlx() -> types.ModuleType:
     """Import tools/fetch_mlx.py by path: tools/ is not a package in an sdist."""
     path = Path(__file__).resolve().parent / "tools" / "fetch_mlx.py"
     spec = importlib.util.spec_from_file_location("_lucid_fetch_mlx", path)
@@ -112,14 +113,18 @@ class CMakeExtension(Extension):
 # (`_enforce_apple_silicon_only()` aborts on anything else), so the
 # universal2 tag is actively wrong.
 #
-# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-26.2-arm64`
-# (26.2 = [tool.lucid.mlx] macos, the floor of the MLX build the wheel ships)
+# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-26.0-arm64`
 # in the build environment before invoking `python -m build`. This is
 # what cibuildwheel and modern release tooling do; the CI workflows
 # (`publish.yml`, `release-testpypi.yml`) and `scripts/ci_publish.sh`
 # set it explicitly. Adding a `bdist_wheel` cmdclass override is *not*
 # enough — PEP 517 build backends route around setup.py's cmdclass
 # for `bdist_wheel`, so the override silently fails.
+#
+# The tag says 26_0 although the engine needs macOS 26.2 ([tool.lucid.mlx]
+# macos, the minos of the MLX build the wheel ships): pip treats every macOS
+# 11+ release as X.0, so no wheel tag can say 26.2.  `lucid._C` refuses to
+# import on 26.0-26.1 with a message naming the floor instead.
 
 
 class CMakeBuildExt(build_ext):

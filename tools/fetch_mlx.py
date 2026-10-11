@@ -68,6 +68,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import BinaryIO
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -76,6 +77,7 @@ MLX_LIB = "liblucid_mlx.dylib"
 JACCL_LIB = "liblucid_jaccl.dylib"
 METALLIB = "mlx.metallib"
 PYPI_JSON = "https://pypi.org/pypi/mlx-metal/{version}/json"
+TIMEOUT = 60  # seconds without progress before a download is abandoned
 
 
 class FetchError(RuntimeError):
@@ -123,10 +125,48 @@ def _sha256(path: Path) -> str:
 
 
 def _run(*command: str) -> str:
-    proc = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run(command, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise FetchError(
+            f"{command[0]} not found: install the Xcode command line tools "
+            "(xcode-select --install)"
+        ) from exc
     if proc.returncode != 0:
         raise FetchError(f"{' '.join(command)} failed:\n{proc.stderr.strip()}")
     return proc.stdout
+
+
+def _offline_hint(url: str, exc: OSError) -> FetchError:
+    return FetchError(
+        f"could not download {url}: {exc}\n"
+        "Offline? Point LUCID_MLX_DIST_DIR at an unpacked copy of that wheel."
+    )
+
+
+def _download(url: str, out: BinaryIO) -> None:
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            shutil.copyfileobj(response, out, 1 << 20)
+    except OSError as exc:  # URLError, timeouts and resets are all OSError
+        raise _offline_hint(url, exc) from exc
+
+
+def _pypi_wheels(version: str) -> list[tuple[str, str, str]]:
+    """``(filename, sha256, url)`` of every file PyPI lists for mlx-metal *version*."""
+    url = PYPI_JSON.format(version=version)
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            payload = json.load(response)
+    except OSError as exc:
+        raise _offline_hint(url, exc) from exc
+    try:
+        return [
+            (str(f["filename"]), str(f["digests"]["sha256"]), str(f["url"]))
+            for f in payload["urls"]
+        ]
+    except (KeyError, TypeError) as exc:
+        raise FetchError(f"{url}: unexpected PyPI JSON ({exc!r})") from exc
 
 
 def fetch_wheel(pin: Pin, cache: Path) -> Path:
@@ -138,8 +178,8 @@ def fetch_wheel(pin: Pin, cache: Path) -> Path:
     fd, part_name = tempfile.mkstemp(dir=cache, prefix=".download-", suffix=".whl")
     part = Path(part_name)
     try:
-        with os.fdopen(fd, "wb") as out, urllib.request.urlopen(pin.url) as response:
-            shutil.copyfileobj(response, out, 1 << 20)
+        with os.fdopen(fd, "wb") as out:
+            _download(pin.url, out)
         got = _sha256(part)
         if got != pin.sha256:
             raise FetchError(f"{pin.url}: sha256 {got}, pinned {pin.sha256}")
@@ -181,11 +221,29 @@ def _extract_pinned(pin: Pin, cache: Path, stage: Path) -> None:
     _extract(fetch_wheel(pin, cache), stage)
 
 
+_DIST_FILES = ("lib/libmlx.dylib", "lib/libjaccl.dylib", f"lib/{METALLIB}")
+
+
 def _locate_dist(src: Path) -> Path:
     for root in (src / "mlx", src):
-        if (root / "lib/libmlx.dylib").is_file() and (root / "include").is_dir():
+        if (root / "include").is_dir() and all((root / f).is_file() for f in _DIST_FILES):
             return root
-    raise FetchError(f"LUCID_MLX_DIST_DIR={src}: no lib/libmlx.dylib + include/ (or under mlx/)")
+    raise FetchError(
+        f"LUCID_MLX_DIST_DIR={src}: expected include/ and {', '.join(_DIST_FILES)} "
+        "(directly or under mlx/), as in an unpacked mlx-metal wheel"
+    )
+
+
+def _dist_license(root: Path) -> Path:
+    """MLX's LICENSE for an unpacked dist; a wheel must not ship without it."""
+    candidates = [root / "LICENSE", *sorted(root.parent.glob("*.dist-info/licenses/LICENSE"))]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise FetchError(
+        f"LUCID_MLX_DIST_DIR: MLX's LICENSE not found (looked for {root / 'LICENSE'} and "
+        f"{root.parent}/*.dist-info/licenses/LICENSE); Lucid's wheel must carry it"
+    )
 
 
 def _copy_dist(root: Path, stage: Path) -> None:
@@ -195,9 +253,7 @@ def _copy_dist(root: Path, stage: Path) -> None:
     shutil.copyfile(root / "lib/libmlx.dylib", stage / "lib" / MLX_LIB)
     shutil.copyfile(root / "lib/libjaccl.dylib", stage / "lib" / JACCL_LIB)
     shutil.copyfile(root / "lib" / METALLIB, stage / "lib" / METALLIB)
-    licenses = sorted(root.parent.glob("*.dist-info/licenses/LICENSE"))
-    if licenses:
-        shutil.copyfile(licenses[0], stage / "LICENSE")
+    shutil.copyfile(_dist_license(root), stage / "LICENSE")
 
 
 def _relink(lib: Path) -> None:
@@ -252,6 +308,10 @@ def stage(pin: Pin | None = None) -> Path:
     if (entry / STAMP).is_file():
         return entry
     if entry.exists():
+        # Entries appear by rename with the stamp already inside, so a missing
+        # stamp is either a lost race (re-check) or damage.
+        if (entry / STAMP).is_file():
+            return entry
         raise FetchError(f"{entry} exists but is incomplete; delete it and build again")
     work = Path(tempfile.mkdtemp(dir=cache, prefix=".stage-"))
     try:
@@ -276,15 +336,19 @@ def _macos_tag(filename: str) -> tuple[int, int]:
     return (int(match.group(1)), int(match.group(2))) if match else (-1, -1)
 
 
-def _resolve(version: str) -> Pin:
-    """Look *version* up on PyPI and pick its newest-macOS arm64 wheel."""
-    with urllib.request.urlopen(PYPI_JSON.format(version=version)) as response:
-        files = json.load(response)["urls"]
-    wheels = [f for f in files if _macos_tag(f["filename"]) >= (0, 0)]
+def _resolve(version: str, floor: str) -> Pin:
+    """Look *version* up on PyPI; pick the oldest-macOS arm64 wheel at the *floor*'s major.
+
+    Taking the newest build instead would raise Lucid's macOS floor whenever
+    MLX starts publishing for a newer macOS.  The binary's own minos, read
+    after staging, is what the pin records.
+    """
+    major = int(floor.split(".")[0])
+    wheels = [w for w in _pypi_wheels(version) if _macos_tag(w[0]) >= (major, 0)]
     if not wheels:
-        raise FetchError(f"mlx-metal {version}: no macOS arm64 wheel on PyPI")
-    best = max(wheels, key=lambda f: _macos_tag(f["filename"]))
-    return Pin(version, best["filename"], best["digests"]["sha256"], best["url"], macos="")
+        raise FetchError(f"mlx-metal {version}: no macOS >= {major} arm64 wheel on PyPI")
+    filename, sha256, url = min(wheels, key=lambda w: _macos_tag(w[0]))
+    return Pin(version, filename, sha256, url, macos=floor)
 
 
 def _rewrite_pin(pyproject: Path, pin: Pin) -> None:
@@ -306,7 +370,7 @@ def _rewrite_pin(pyproject: Path, pin: Pin) -> None:
 
 def bump(version: str) -> Pin:
     """Re-pin to *version*, stage it, and record the macOS floor of its binary."""
-    resolved = _resolve(version)
+    resolved = _resolve(version, read_pin().macos)
     entry = stage(resolved)
     pin = Pin(
         resolved.version,

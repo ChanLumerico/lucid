@@ -341,16 +341,15 @@ autograd during training, with no branch in your code.
 | | Minimum |
 |---|---|
 | Hardware | Apple Silicon (M1 or later) |
-| OS | macOS 26 Tahoe |
+| OS | macOS 26.2 Tahoe |
 | Python | 3.14 only — the type annotations rely on PEP 649 lazy evaluation |
-| MLX | ≥ 0.31 (pip installs `mlx-metal`'s macOS 26 build) |
+| MLX | bundled — any `mlx` you install (or none) works alongside; `pip install lucid-dl[mlx]` for zero-copy interop (`mlx` ≥ 0.32) |
 | Build | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
 
 Linux, Windows, x86-64, and macOS 15 or earlier are not supported — 3.15.1 was the last
-release for macOS 15. MLX 0.32's macOS 26 build
-is compiled for macOS 26.2: on an M5-class Mac still running 26.0 or 26.1 it can pick GPU
-kernels that release predates and fail at runtime — update macOS, or install `mlx<0.32`.
-M1–M4 Macs are not affected.
+release for macOS 15. The engine ships its own MLX build (`liblucid_mlx`, MLX 0.32.3),
+compiled for macOS 26.2, so `import lucid` refuses 26.0 and 26.1 with that message even though
+the wheel is tagged `macosx_26_0` (pip has no tag for a macOS minor release).
 
 ## 🧠 Design Notes
 

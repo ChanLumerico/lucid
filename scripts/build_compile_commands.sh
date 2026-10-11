@@ -9,10 +9,10 @@ cd "$(dirname "$0")/.."
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 BUILD_DIR="${BUILD_DIR:-build/compile_commands}"
 LUCID_BUILD_MODE="${LUCID_BUILD_MODE:-release}"
-# Match the canonical build target (setup.py / ci_publish.sh / CI all use
-# 26.0) so the generated compile_commands.json — and thus clang-tidy / IDE
-# diagnostics — reflect the same SDK the real build uses.
-MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
+# Match the canonical build target (setup.py: [tool.lucid.mlx] macos, the
+# minos of the bundled MLX) so the generated compile_commands.json — and thus
+# clang-tidy / IDE diagnostics — reflect the same SDK the real build uses.
+MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.2}"
 SDKROOT="$(xcrun --show-sdk-path)"
 
 find_cmake() {
@@ -36,16 +36,17 @@ from pathlib import Path
 import sysconfig
 
 import pybind11
-import mlx.core as mlx_core
 
-mlx_pkg = Path(mlx_core.__file__).resolve().parent
 print(sysconfig.get_paths()["include"])
 print(pybind11.get_include())
-print(mlx_pkg / "include")
-print(mlx_pkg / "lib")
 print(sysconfig.get_config_var("EXT_SUFFIX"))
 PY
 )"
+
+# The pinned MLX the engine links (never the `mlx` Python package, whose libmlx
+# has another ABI), staged into the per-machine cache on first use.
+MLX_DIR="$("$PYTHON_BIN" tools/fetch_mlx.py --print-dir)"
+MLX_PIN="$("$PYTHON_BIN" tools/fetch_mlx.py --print-version)"
 
 CMAKE_PATHS=()
 while IFS= read -r line; do
@@ -66,9 +67,10 @@ echo "==> Configuring CMake compile database"
     -DLUCID_BUILD_MODE="$LUCID_BUILD_MODE" \
     -DLUCID_PYTHON_INCLUDE_DIR="${CMAKE_PATHS[0]}" \
     -DLUCID_PYBIND11_INCLUDE_DIR="${CMAKE_PATHS[1]}" \
-    -DLUCID_MLX_INCLUDE_DIR="${CMAKE_PATHS[2]}" \
-    -DLUCID_MLX_LIBRARY_DIR="${CMAKE_PATHS[3]}" \
-    -DLUCID_PYTHON_EXTENSION_SUFFIX="${CMAKE_PATHS[4]}" \
+    -DLUCID_MLX_INCLUDE_DIR="$MLX_DIR/include" \
+    -DLUCID_MLX_LIBRARY_DIR="$MLX_DIR/lib" \
+    -DLUCID_MLX_PIN="$MLX_PIN" \
+    -DLUCID_PYTHON_EXTENSION_SUFFIX="${CMAKE_PATHS[2]}" \
     -DLUCID_EXTENSION_OUTPUT_DIR="$(pwd)/lucid/_C" \
     ${EXTRA_CMAKE_ARGS:-}
 
