@@ -33,9 +33,11 @@ one owner the Gamma-family CDFs in ``lucid.distributions`` go through.
 
 import functools
 import math
+from collections.abc import Callable
 from typing import final, override
 
 import lucid
+from lucid._ops.composite._opmath import _in_float32, _real
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 
@@ -54,7 +56,12 @@ _LANCZOS_P: list[float] = [
 
 
 def _lgamma(x: Tensor) -> Tensor:
-    """:math:`\\ln|\\Gamma(x)|` on the whole real line."""
+    """:math:`\\ln|\\Gamma(x)|` on the whole real line; float32 for 16 bits."""
+    return _in_float32(_lgamma_wide, x)
+
+
+def _lgamma_wide(x: Tensor) -> Tensor:
+    """:func:`_lgamma` in ``x``'s own dtype, float32 or float64."""
     # The Lanczos series is only valid on the right half of the line, and
     # nothing here said so: ``lgamma(-0.5)`` came back NaN against the
     # reference's 1.2655, and ``lgamma(1e-30)`` came back inf against
@@ -205,7 +212,16 @@ def _horner(coeffs: tuple[int, ...], c: Tensor) -> Tensor:
 
 
 def _polygamma(n: int, x: Tensor) -> Tensor:
-    """:math:`\\psi^{(n)}(x)` on the whole real line, ``n >= 0``."""
+    """:math:`\\psi^{(n)}(x)` on the whole real line, ``n >= 0``.
+
+    A 16-bit ``x`` is evaluated in float32: the recurrence's shift and the
+    series cancel, and ``digamma(1.5)`` in float16 was 0.0391 for 0.0365.
+    """
+    return _in_float32(lambda v: _polygamma_wide(n, v), x)
+
+
+def _polygamma_wide(n: int, x: Tensor) -> Tensor:
+    """:func:`_polygamma` in ``x``'s own dtype, float32 or float64."""
     one = lucid.ones_like(x)
     # The poles are the non-positive integers, -inf among them.
     pole = (x <= 0.0) & (x == lucid.floor(x))
@@ -343,7 +359,10 @@ def _igam_fac(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
     fac = a + (_LANCZOS13_G - 0.5)
     res = lucid.sqrt(fac / math.e) / _lanczos_sum_expg_scaled(a)
     moderate = (a < 200.0) & (x < 200.0)
-    direct = lucid.exp(a - x) * (x / fac) ** a
+    # One exponent, not exp(a - x) * (x / fac)**a: the two factors can each
+    # leave float32's normal range while their product does not, and Metal
+    # flushes the subnormal — P(174.49, 105.92) came out 0 for 6.7e-10.
+    direct = lucid.exp(a - x + a * lucid.log(x / fac))
     numfac = (x - a - _LANCZOS13_G + 0.5) / fac
     scaled = lucid.exp(
         a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac
@@ -433,16 +452,28 @@ def _igamc_series(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
 
 
 def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
-    """Q by its continued fraction (DLMF 8.9.2) — for ``x`` above ``a``."""
+    """Q by its continued fraction (DLMF 8.9.2) — for ``x`` above ``a``.
+
+    ``a`` and ``x`` are 1-D.  Every ``_IGAM_CHUNK`` steps the lanes that
+    have converged are written out and dropped, so the step's ~15 ops run
+    only on the lanes still converging — near ``x = a`` a few lanes take
+    hundreds of steps that the rest would otherwise be carried through.
+    """
     ax = _igam_fac(a, x, k)
-    one = lucid.ones_like(a)
+    result = lucid.zeros_like(a)
+    live = ax != 0.0
+    lanes = lucid.arange(0, a.shape[0], 1, dtype=lucid.int64, device=a.device)[live]
+    a, x, ax = a[live], x[live], ax[live]
     y = 1.0 - a
     z = x + y + 1.0
-    pkm2, qkm2 = one, x
+    pkm2, qkm2 = lucid.ones_like(a), x
     pkm1, qkm1 = x + 1.0, z * x
     ans = pkm1 / qkm1
-    done = ax == 0.0
+    done = lucid.zeros_like(a) != 0.0
     for i in range(1, _IGAM_MAX_ITER + 1):
+        if lanes.shape[0] == 0:
+            break
+        one = lucid.ones_like(ans)
         y = y + 1.0
         z = z + 2.0
         yc = y * float(i)
@@ -456,18 +487,21 @@ def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor
         s = lucid.where(lucid.abs(pk) > k.big, one * k.biginv, one)
         pkm2, pkm1, qkm2, qkm1 = pkm1 * s, pk * s, qkm1 * s, qk * s
         done = done | (t <= k.machep)
-        if i % _IGAM_CHUNK == 0 and _all_true(done):
-            break
-    return lucid.where(ax == 0.0, lucid.zeros_like(a), ans * ax)
+        if i % _IGAM_CHUNK == 0 and _any_true(done):
+            result[lanes[done]] = ans[done] * ax[done]
+            keep = ~done
+            lanes, ax, ans, y, z = (v[keep] for v in (lanes, ax, ans, y, z))
+            pkm2, pkm1, qkm2, qkm1 = (v[keep] for v in (pkm2, pkm1, qkm2, qkm1))
+            done = done[keep]
+    if lanes.shape[0] > 0:
+        result[lanes] = ans * ax
+    return result
 
 
-def _igam_asymptotic(
-    a: Tensor, x: Tensor, k: _IgamConstants, *, lower: bool
-) -> Tensor:
+def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P or Q by Temme's uniform expansion (DLMF 8.12.3/4) — for x near a."""
     from lucid._ops.composite._gamma_temme import _TEMME_D
 
-    del k  # the series is summed in full; no tolerance decides its length
     sgn = -1.0 if lower else 1.0
     sigma = (x - a) / a
     eta_abs = lucid.sqrt(-2.0 * (lucid.log1p(sigma) - sigma))
@@ -490,11 +524,6 @@ def _igam_asymptotic(
     total = lucid.where(grown == 0.0, term, lucid.zeros_like(term)).sum(-1)
     scale = lucid.exp(-0.5 * a * eta * eta) / lucid.sqrt(2.0 * math.pi * a)
     return res + sgn * scale * total
-
-
-def _on(mask: Tensor, value: Tensor, fill: float) -> Tensor:
-    """``value`` where ``mask``, else ``fill`` — a harmless stand-in."""
-    return lucid.where(mask, value, lucid.full_like(value, fill))
 
 
 def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
@@ -526,20 +555,24 @@ def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     use_cf = rest & via_q & ~q_by_p_series & (x > 1.1)
     use_q_series = rest & via_q & ~q_by_p_series & (x <= 1.1)
 
-    out = lucid.zeros_like(a)
-    if _any_true(use_p_series):
-        p = _igam_series(_on(use_p_series, a, 1.0), _on(use_p_series, x, 0.5), k)
-        out = lucid.where(use_p_series, p if lower else 1.0 - p, out)
-    if _any_true(use_cf):
-        q = _igamc_continued_fraction(_on(use_cf, a, 1.0), _on(use_cf, x, 2.0), k)
-        out = lucid.where(use_cf, 1.0 - q if lower else q, out)
-    if _any_true(use_q_series):
-        q = _igamc_series(_on(use_q_series, a, 1.0), _on(use_q_series, x, 0.5), k)
-        out = lucid.where(use_q_series, 1.0 - q if lower else q, out)
-    if _any_true(asym):
-        t = _igam_asymptotic(_on(asym, a, 100.0), _on(asym, x, 100.0), k, lower=lower)
-        out = lucid.where(asym, t, out)
-    return out
+    # Each branch runs on its own elements only, gathered: evaluated
+    # everywhere under a mask, the continued fraction alone cost every
+    # element ~15 ops per step for as long as the slowest lane took.
+    flat_a, flat_x = a.reshape(-1), x.reshape(-1)
+    out = lucid.zeros_like(flat_a)
+    branches: list[tuple[Tensor, Callable[[Tensor, Tensor], Tensor], bool]] = [
+        (use_p_series, lambda u, v: _igam_series(u, v, k), lower),
+        (use_cf, lambda u, v: _igamc_continued_fraction(u, v, k), not lower),
+        (use_q_series, lambda u, v: _igamc_series(u, v, k), not lower),
+        (asym, lambda u, v: _igam_asymptotic(u, v, lower=lower), True),
+    ]
+    for mask, branch, as_is in branches:
+        flat_mask = mask.reshape(-1)
+        if not _any_true(flat_mask):
+            continue
+        value = branch(flat_a[flat_mask], flat_x[flat_mask])
+        out[flat_mask] = value if as_is else 1.0 - value
+    return out.reshape(a.shape)
 
 
 def _igam_edges(a: Tensor, x: Tensor, out: Tensor, *, lower: bool) -> Tensor:
@@ -587,15 +620,20 @@ class _RegularizedGamma(Function):
 def _regularized_gamma(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P(a, x) (``lower``) or Q(a, x), broadcast and promoted together.
 
-    An integer argument is promoted to float32 first, as every
-    ``lucid.special`` function promotes one.
+    An integer argument is promoted to float32 (:func:`_real`), and a 16-bit
+    pair is evaluated in float32 (:func:`_in_float32`): the scalar
+    algorithm's constants — ``2**24`` to rescale the continued fraction,
+    ``exp`` of ``a`` and ``x`` — are outside float16's range, and
+    ``gammainc`` answered NaN there.
     """
-    a = a if lucid.is_floating_point(a) else a.to(lucid.float32)
-    x = x if lucid.is_floating_point(x) else x.to(lucid.float32)
-    a, x = a + lucid.zeros_like(x), x + lucid.zeros_like(a)
-    out = _RegularizedGamma.apply(a, x, lower)
-    assert isinstance(out, Tensor)
-    return out
+
+    def evaluate(a: Tensor, x: Tensor) -> Tensor:
+        a, x = a + lucid.zeros_like(x), x + lucid.zeros_like(a)
+        out = _RegularizedGamma.apply(a, x, lower)
+        assert isinstance(out, Tensor)
+        return out
+
+    return _in_float32(evaluate, _real(a), _real(x))
 
 
 def gammainc(input: Tensor, other: Tensor) -> Tensor:
@@ -686,9 +724,11 @@ def gammaincc(input: Tensor, other: Tensor) -> Tensor:
     :math:`Q(a, 0) = 1`, :math:`Q(a, \infty) = 0`, :math:`Q(0, x) = 0` for
     :math:`x > 0`, :math:`Q(\infty, x) = 1` for a finite ``x``.  For a tiny
     shape the reference framework evaluates :math:`\ln\Gamma(1 + a)` after
-    rounding :math:`1 + a` to 1 and loses the Euler-Mascheroni term — at
-    :math:`a = 10^{-30}` it is 4% to 75% off; here that term is kept, and
-    the value agrees with the exact one.
+    rounding :math:`1 + a` to 1 and loses the Euler-Mascheroni term: at
+    :math:`a = 10^{-30}` its value is 4.4% above the one mpmath computes at
+    :math:`x = 10^{-6}`, 103% above at :math:`x = 0.5` and 286% above at
+    :math:`x = 1.05`.  Here that term is kept, and the value agrees with
+    mpmath's to float64 rounding.
 
     Examples
     --------
@@ -698,3 +738,9 @@ def gammaincc(input: Tensor, other: Tensor) -> Tensor:
     tensor([0.3679, 0.0004994])
     """
     return _regularized_gamma(input, other, lower=False)
+
+
+# Documented and listed under ``lucid.special``, the one path they are
+# reached by (H8), like the functions defined there.
+gammainc.__module__ = "lucid.special"
+gammaincc.__module__ = "lucid.special"

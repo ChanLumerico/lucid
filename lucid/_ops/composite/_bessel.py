@@ -34,6 +34,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._ops.composite._opmath import _in_float32
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -138,10 +139,16 @@ def _half_line_split(
     divides by zero or takes the log of a non-positive number — the unused
     branch's ``nan`` would reach the gradient through ``where`` — and the
     domain edge is :func:`_on_half_line`'s.  Both dtype paths of all six
-    functions go through here, so they share one domain rule.
+    functions go through here, so they share one domain rule — and one
+    precision rule: a 16-bit ``x`` is evaluated in float32
+    (:func:`_in_float32`), where ``Y0`` had answered NaN on ``(0, 8]``.
     """
-    value = lucid.where(x <= edge, small(_positive(x, edge)), large(_above(x, edge)))
-    return _on_half_line(x, value, at_zero)
+
+    def split(v: Tensor) -> Tensor:
+        value = lucid.where(v <= edge, small(_positive(v, edge)), large(_above(v, edge)))
+        return _on_half_line(v, value, at_zero)
+
+    return _in_float32(split, x)
 
 
 # ── I0 / I1 ──────────────────────────────────────────────────────────────────
