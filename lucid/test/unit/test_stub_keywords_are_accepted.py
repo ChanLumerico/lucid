@@ -18,12 +18,13 @@ leading tensor operands are the wrapper's to bind: their advertised names
 (``input`` / ``other``) are put back in position before the callee runs.
 """
 
+import annotationlib
 import ast
 import inspect
 import re
 from pathlib import Path
 from types import ModuleType
-from typing import Callable
+from typing import Callable, NamedTuple
 
 import pytest
 
@@ -137,92 +138,505 @@ def test_free_function_keywords_reach_the_callee(entry: OpEntry) -> None:
     assert [k for k in advertised if k not in accepted and k not in bound] == []
 
 
-#: Keywords the reference's signature line carries that no Lucid op does —
-#: the output, layout and factory arguments the whole surface leaves out.
-_NOT_OFFERED = frozenset(
-    {"out", "dtype", "layout", "device", "requires_grad", "memory_format", "generator"}
-)
+# ── Every public signature, held to the reference's ──────────────────────────
+#
+# The keyword checks above follow a call into its callee.  This one asks the
+# reference's own parser what it binds — the aten schema for a builtin, the
+# Python signature otherwise — and holds every public function and Tensor
+# method to it: each positional slot named as the reference names it (a
+# positional-only one by kind alone), each keyword-only argument keyword-only,
+# no argument required that the reference leaves optional, and no boolean
+# default turned round.  ~60 top-level functions named their operands
+# ``x`` / ``a`` / ``t`` where the reference says ``input``, and code passing
+# them by keyword raised ``TypeError`` (LCD-410); ``F.max_pool2d``'s sixth
+# positional argument was ``return_indices`` where the reference reads
+# ``ceil_mode`` (LCD-421).
 
-#: Reference keywords a registry op does not accept yet — an operand Lucid
-#: names otherwise, or an argument it has no form for.  Strict, so taking
-#: one flips its case to XPASS.
-_REFERENCE_KEYWORD_GAPS = {
-    "add": "LCD-412: alpha= is not implemented",
-    "sub": "LCD-412: alpha= is not implemented",
-    "div": "LCD-412: rounding_mode= is not implemented",
-    "round": "LCD-412: decimals= is not implemented",
-    "pow": "LCD-410: the exponent operand is named other",
-    "dot": "LCD-410: the second operand is named other, the reference's tensor",
-    "outer": "LCD-410: the second operand is named other, the reference's vec2",
-    "mm": "LCD-410: the second operand is named other, the reference's mat2",
-    "bmm": "LCD-357: the second operand is named other, the reference's mat2",
-    "take": "LCD-410: the index operand is named indices",
-    "where": "LCD-410: the operands are named cond / x / y",
-    "sort": "LCD-412: stable= is not implemented",
-    "argsort": "LCD-412: stable= is not implemented",
-    "topk": "LCD-412: sorted= is not implemented",
-    "searchsorted": (
-        "LCD-412: out_int32= / side= / sorter= are not implemented; "
-        "LCD-410: the first operand is named sorted_seq"
-    ),
-    "bucketize": "LCD-412: out_int32= is not implemented",
-    "repeat_interleave": "LCD-412: output_size= is not implemented",
+
+class _Param(NamedTuple):
+    name: str
+    kind: str  # "po" / "pk" / "var" / "kw" / "varkw"
+    optional: bool
+    default: object = None
+    int_list: bool = False
+
+
+_KINDS = {
+    inspect.Parameter.POSITIONAL_ONLY: "po",
+    inspect.Parameter.POSITIONAL_OR_KEYWORD: "pk",
+    inspect.Parameter.VAR_POSITIONAL: "var",
+    inspect.Parameter.KEYWORD_ONLY: "kw",
+    inspect.Parameter.VAR_KEYWORD: "varkw",
 }
 
+#: Arguments the whole surface leaves out: output buffers, layouts, memory
+#: formats — and the reference's own deprecated loss arguments, which are
+#: not added (LCD-410 decision).
+_OMITTED = frozenset(
+    {"out", "layout", "memory_format", "pin_memory", "size_average", "reduce"}
+)
+#: Factory keywords compared only where Lucid offers them.
+_FACTORY = frozenset({"dtype", "device", "requires_grad", "generator"})
 
-def _reference_keywords(ref: ModuleType, name: str) -> list[str] | None:
-    """The parameter names on the first signature line of ``ref.<name>``."""
-    m = re.search(
-        rf"^\s*{re.escape(name)}\((.*?)\)\s*->", getattr(ref, name).__doc__ or "", re.M
-    )
-    if m is None:
-        return None
-    pieces, depth, current = [], 0, ""
-    for ch in m.group(1) + ",":
-        depth += {"[": 1, "]": -1}.get(ch, 0)
-        if ch == "," and depth == 0:
-            pieces.append(current)
-            current = ""
-        else:
-            current += ch
-    names = [p.split("=")[0].split(":")[0].strip().lstrip("*\\") for p in pieces]
-    return [n for n in names if n and n not in ("*", "/")]
+#: The reference names these by overload (``sections`` for an int,
+#: ``indices`` for a list); Lucid keeps the one name its documentation uses.
+_BY_OVERLOAD = {"sections": "indices_or_sections", "indices": "indices_or_sections"}
+_OVERLOADED_NAMES = frozenset({"hsplit", "vsplit", "dsplit", "tensor_split"})
 
 
-def _reference_cases() -> list[object]:
+def _params(signature: inspect.Signature, drop_self: bool) -> list[_Param]:
+    params = list(signature.parameters.values())
+    if drop_self and params and params[0].name == "self":
+        params = params[1:]
     return [
-        pytest.param(
-            e.free_fn_name,
-            id=e.free_fn_name,
-            marks=(
-                [
-                    pytest.mark.xfail(
-                        strict=True, reason=_REFERENCE_KEYWORD_GAPS[e.free_fn_name]
-                    )
-                ]
-                if e.free_fn_name in _REFERENCE_KEYWORD_GAPS
-                else []
-            ),
+        _Param(
+            p.name,
+            _KINDS[p.kind],
+            p.default is not p.empty,
+            None if p.default is p.empty else p.default,
         )
-        for e in _FREE
+        for p in params
     ]
 
 
-@pytest.mark.parametrize("name", _reference_cases())
-def test_free_functions_take_the_reference_keywords(ref: ModuleType, name: str) -> None:
-    # ``tril(x, diagonal=1)`` and ``all(x, dim=1)`` reached the engine
-    # binding, which names its parameters otherwise, and failed there with
-    # "incompatible function arguments" (LCD-386).
-    if not hasattr(ref, name):
+def _signature(fn: object) -> inspect.Signature:
+    # Annotations left unevaluated: ``from_numpy``'s names a lazily imported
+    # ``np``, and only the parameters matter here.
+    return inspect.signature(fn, annotation_format=annotationlib.Format.FORWARDREF)  # type: ignore[arg-type]
+
+
+def _catch_all(params: list[_Param]) -> bool:
+    return any(p.kind == "varkw" for p in params)
+
+
+def _stub_params(path: Path, name: str, cls: str | None) -> list[_Param] | None:
+    """``name``'s parameters as the stub writes them (its first overload)."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    body = tree.body
+    if cls is not None:
+        body = next(
+            n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls
+        ).body
+    fn = next(
+        (n for n in body if isinstance(n, ast.FunctionDef) and n.name == name), None
+    )
+    if fn is None:
+        return None
+    a = fn.args
+    positional = a.posonlyargs + a.args
+    first_default = len(positional) - len(a.defaults)
+    out = [
+        _Param(arg.arg, "po" if i < len(a.posonlyargs) else "pk", i >= first_default)
+        for i, arg in enumerate(positional)
+    ]
+    if a.vararg is not None:
+        out.append(_Param(a.vararg.arg, "var", True))
+    out += [
+        _Param(arg.arg, "kw", default is not None)
+        for arg, default in zip(a.kwonlyargs, a.kw_defaults, strict=True)
+    ]
+    return out[1:] if cls is not None else out
+
+
+def _lucid_function(name: str, fn: object, stub: Path | None) -> list[_Param] | None:
+    """What ``fn`` binds; the stub's spelling where it reads its own arguments."""
+    params = _params(_signature(fn), drop_self=False)
+    if _catch_all(params) and stub is not None:
+        return _stub_params(stub, name, None)
+    return params
+
+
+def _lucid_method(name: str) -> list[_Param] | None:
+    """What ``Tensor.<name>`` binds: its own signature, its registry callee's,
+    or — for one that reads its own arguments — the stub's."""
+    params = _params(_signature(getattr(Tensor, name)), drop_self=True)
+    if not _catch_all(params):
+        return params
+    entry = _BY_METHOD.get(name)
+    if entry is not None and entry.n_tensor_args != -1:
+        params = _params(ops._signature_for_entry(entry), drop_self=False)[1:]
+        if not _catch_all(params):
+            return params
+    return _stub_params(STUB, name, "Tensor")
+
+
+def _reference_overloads(
+    ref: ModuleType, obj: object, aten: str | None, method: bool
+) -> list[list[_Param]]:
+    """Every way the reference's parser reads ``obj``."""
+    if inspect.isfunction(obj):  # the table is weak-keyed: functions only
+        dispatched = ref._jit_internal.boolean_dispatched.get(obj)
+        if dispatched is not None:  # ``max_pool2d``: one signature, two returns
+            obj = dispatched["if_true"]
+    try:
+        params = _params(inspect.signature(obj), drop_self=method)  # type: ignore[arg-type]
+        if not _catch_all(params):
+            return [params]
+    except TypeError, ValueError:
+        pass
+    if aten is None:
+        return []
+    try:
+        schemas = ref._C._jit_get_schemas_for_operator(f"aten::{aten}")
+    except RuntimeError:
+        return []
+    out = []
+    for schema in schemas:
+        args = schema.arguments
+        written = any(a.alias_info is not None and a.alias_info.is_write for a in args)
+        if written or any("Dimname" in str(a.type) for a in args):
+            continue  # an ``out=`` variant, or a named-dims one
+        params = []
+        for a in args:
+            name = a.name
+            if name == "self":
+                if method:
+                    continue
+                name = "input"  # the parser's name for ``self``
+            kind = str(a.type).replace("SymInt", "int")
+            params.append(
+                _Param(
+                    name,
+                    "kw" if a.kwarg_only else "pk",
+                    a.has_default_value(),
+                    a.default_value if a.has_default_value() else None,
+                    kind.startswith("int[") or kind.startswith("List[int]"),
+                )
+            )
+        out.append(params)
+    return out
+
+
+def _mismatches(ours: list[_Param], theirs: list[_Param], method: bool) -> list[str]:
+    """How ``ours`` binds a call differently from ``theirs``; empty if it does not."""
+    have = {p.name for p in ours}
+    ours = [p for p in ours if p.name not in _OMITTED]
+    theirs = [
+        p
+        for p in theirs
+        if p.name not in _OMITTED
+        and not p.name.startswith("_")
+        and not (p.name in _FACTORY and p.name not in have)
+    ]
+    problems = []
+    slots = [p for p in ours if p.kind in ("po", "pk")]
+    spread = next((p for p in ours if p.kind == "var"), None)
+    wanted = [p for p in theirs if p.kind in ("po", "pk")]
+    for i, want in enumerate(wanted):
+        if i < len(slots):
+            got = slots[i]
+            if want.kind == "po" and got.kind != "po":
+                problems.append(f"{got.name} is positional-only there")
+            elif want.kind == "pk" and got.name != want.name:
+                problems.append(f"slot {i} is {want.name}, not {got.name}")
+            elif want.kind == "pk" and got.kind == "po":
+                problems.append(f"{got.name} takes a keyword there")
+        elif (
+            spread is not None
+            and i == len(slots)
+            and want.int_list
+            and (i == 0 or method)
+        ):
+            continue  # ``f(*size)`` — the parser spreads a leading int list
+        else:
+            problems.append(f"no slot {i} ({want.name})")
+    if spread is not None and not any(p.kind == "var" for p in theirs):
+        rest = wanted[len(slots) :]
+        if not (rest and rest[0].int_list and (len(slots) == 0 or method)):
+            problems.append(f"*{spread.name}: the reference takes no varargs here")
+    keywords = {p.name for p in theirs if p.kind == "kw"}
+    by_name = {p.name: p for p in ours}
+    problems += [f"{p.name} is keyword-only there" for p in slots if p.name in keywords]
+    problems += [f"no keyword {n}" for n in sorted(keywords - by_name.keys())]
+    for want in theirs:
+        got = by_name.get(want.name)
+        if got is None or got.kind in ("var", "varkw"):
+            continue
+        if want.optional and not got.optional:
+            problems.append(f"{want.name} is optional there")
+        elif (
+            isinstance(got.default, bool)
+            and isinstance(want.default, bool)
+            and got.default != want.default
+        ):
+            problems.append(f"{want.name} defaults to {want.default} there")
+    return problems
+
+
+def _public(module: ModuleType) -> list[str]:
+    return [
+        n
+        for n in getattr(module, "__all__", [])
+        if callable(getattr(module, n, None))
+        and not isinstance(getattr(module, n), type)
+    ]
+
+
+def _tensor_methods() -> list[str]:
+    out = []
+    for name in sorted(dir(Tensor)):
+        member = inspect.getattr_static(Tensor, name)
+        if name.startswith("_") or isinstance(
+            member, (property, staticmethod, classmethod)
+        ):
+            continue
+        if callable(member):
+            out.append(name)
+    return out
+
+
+#: ``(namespace, Lucid names, the reference's module path, aten prefix)``.
+_NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
+    ("lucid", _public(lucid), "", ""),
+    ("Tensor", _tensor_methods(), "Tensor", ""),
+    ("nn.functional", _public(lucid.nn.functional), "nn.functional", ""),
+    (
+        "nn",
+        [n for n in lucid.nn.__all__ if isinstance(getattr(lucid.nn, n, None), type)],
+        "nn",
+        None,
+    ),
+    ("linalg", _public(lucid.linalg), "linalg", "linalg_"),
+    ("fft", _public(lucid.fft), "fft", "fft_"),
+    ("special", _public(lucid.special), "special", "special_"),
+]
+
+_LCD_412 = "LCD-412: the reference's argument is not implemented"
+_LCD_430 = "LCD-430: nn.functional / nn module signatures follow in a follow-up"
+_LCD_431 = "LCD-431: linalg / fft / special signatures follow in a follow-up"
+_EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-410"
+
+#: Signatures that still differ from the reference — strict, so a fix flips
+#: its case to XPASS and the entry leaves with it.
+_SIGNATURE_GAPS: dict[str, str] = {
+    "Tensor.add": _LCD_412,
+    "Tensor.diff": _LCD_412,
+    "Tensor.expand": _LCD_412,
+    "Tensor.gather": _LCD_412,
+    "Tensor.repeat_interleave": _LCD_412,
+    "Tensor.sub": _LCD_412,
+    "Tensor.topk": _LCD_412,
+    "linalg.cholesky": _LCD_431,
+    "linalg.cholesky_ex": _LCD_431,
+    "linalg.cond": _LCD_431,
+    "linalg.cross": _LCD_431,
+    "linalg.det": _LCD_431,
+    "linalg.eig": _LCD_431,
+    "linalg.eigh": _LCD_431,
+    "linalg.eigvals": _LCD_431,
+    "linalg.eigvalsh": _LCD_431,
+    "linalg.householder_product": _LCD_431,
+    "linalg.inv": _LCD_431,
+    "linalg.ldl_factor": _LCD_431,
+    "linalg.ldl_factor_ex": _LCD_431,
+    "linalg.ldl_solve": _LCD_431,
+    "linalg.lstsq": _LCD_431,
+    "linalg.lu_factor": _LCD_431,
+    "linalg.lu_solve": _LCD_431,
+    "linalg.matrix_exp": _LCD_431,
+    "linalg.matrix_norm": _LCD_431,
+    "linalg.matrix_power": _LCD_431,
+    "linalg.matrix_rank": _LCD_431,
+    "linalg.norm": _LCD_431,
+    "linalg.pinv": _LCD_431,
+    "linalg.qr": _LCD_431,
+    "linalg.solve": _LCD_431,
+    "linalg.solve_triangular": _LCD_431,
+    "linalg.svd": _LCD_431,
+    "linalg.svdvals": _LCD_431,
+    "linalg.vander": _LCD_431,
+    "linalg.vecdot": _LCD_431,
+    "linalg.vector_norm": _LCD_431,
+    "lucid.add": _LCD_412,
+    "lucid.bucketize": _LCD_412,
+    "lucid.compile": _EXPORT,
+    "lucid.diff": _LCD_412,
+    "lucid.from_dlpack": _LCD_412,
+    "lucid.gather": _LCD_412,
+    "lucid.isin": _LCD_412,
+    "lucid.repeat_interleave": _LCD_412,
+    "lucid.save": _EXPORT,
+    "lucid.searchsorted": _LCD_412,
+    "lucid.sub": _LCD_412,
+    "lucid.topk": _LCD_412,
+    "nn.BatchNorm1d": _LCD_430,
+    "nn.BatchNorm2d": _LCD_430,
+    "nn.BatchNorm3d": _LCD_430,
+    "nn.EmbeddingBag": _LCD_430,
+    "nn.GaussianNLLLoss": _LCD_430,
+    "nn.GroupNorm": _LCD_430,
+    "nn.Hardsigmoid": _LCD_430,
+    "nn.Hardswish": _LCD_430,
+    "nn.Hardtanh": _LCD_430,
+    "nn.InstanceNorm1d": _LCD_430,
+    "nn.InstanceNorm2d": _LCD_430,
+    "nn.InstanceNorm3d": _LCD_430,
+    "nn.LazyBatchNorm1d": _LCD_430,
+    "nn.LazyBatchNorm2d": _LCD_430,
+    "nn.LazyBatchNorm3d": _LCD_430,
+    "nn.LazyInstanceNorm1d": _LCD_430,
+    "nn.LazyInstanceNorm2d": _LCD_430,
+    "nn.LazyInstanceNorm3d": _LCD_430,
+    "nn.Mish": _LCD_430,
+    "nn.MultiheadAttention": _LCD_430,
+    "nn.ParameterList": _LCD_430,
+    "nn.RMSNorm": _LCD_430,
+    "nn.Transformer": _LCD_430,
+    "nn.TransformerDecoderLayer": _LCD_430,
+    "nn.TransformerEncoder": _LCD_430,
+    "nn.TransformerEncoderLayer": _LCD_430,
+    "nn.TripletMarginWithDistanceLoss": _LCD_430,
+    "nn.functional.alpha_dropout": _LCD_430,
+    "nn.functional.batch_norm": _LCD_430,
+    "nn.functional.bilinear": _LCD_430,
+    "nn.functional.binary_cross_entropy": _LCD_430,
+    "nn.functional.binary_cross_entropy_with_logits": _LCD_430,
+    "nn.functional.celu": _LCD_430,
+    "nn.functional.channel_shuffle": _LCD_430,
+    "nn.functional.cosine_embedding_loss": _LCD_430,
+    "nn.functional.cross_entropy": _LCD_430,
+    "nn.functional.dropout": _LCD_430,
+    "nn.functional.dropout1d": _LCD_430,
+    "nn.functional.dropout2d": _LCD_430,
+    "nn.functional.dropout3d": _LCD_430,
+    "nn.functional.elu": _LCD_430,
+    "nn.functional.embedding": _LCD_430,
+    "nn.functional.embedding_bag": _LCD_430,
+    "nn.functional.feature_alpha_dropout": _LCD_430,
+    "nn.functional.fold": _LCD_430,
+    "nn.functional.gaussian_nll_loss": _LCD_430,
+    "nn.functional.gelu": _LCD_430,
+    "nn.functional.glu": _LCD_430,
+    "nn.functional.grid_sample": _LCD_430,
+    "nn.functional.group_norm": _LCD_430,
+    "nn.functional.gumbel_softmax": _LCD_430,
+    "nn.functional.hardshrink": _LCD_430,
+    "nn.functional.hardsigmoid": _LCD_430,
+    "nn.functional.hardswish": _LCD_430,
+    "nn.functional.hardtanh": _LCD_430,
+    "nn.functional.hinge_embedding_loss": _LCD_430,
+    "nn.functional.huber_loss": _LCD_430,
+    "nn.functional.instance_norm": _LCD_430,
+    "nn.functional.interpolate": _LCD_430,
+    "nn.functional.kl_div": _LCD_430,
+    "nn.functional.l1_loss": _LCD_430,
+    "nn.functional.layer_norm": _LCD_430,
+    "nn.functional.leaky_relu": _LCD_430,
+    "nn.functional.linear": _LCD_430,
+    "nn.functional.local_response_norm": _LCD_430,
+    "nn.functional.log_softmax": _LCD_430,
+    "nn.functional.margin_ranking_loss": _LCD_430,
+    "nn.functional.mish": _LCD_430,
+    "nn.functional.mse_loss": _LCD_430,
+    "nn.functional.multi_margin_loss": _LCD_430,
+    "nn.functional.multilabel_margin_loss": _LCD_430,
+    "nn.functional.nll_loss": _LCD_430,
+    "nn.functional.normalize": _LCD_430,
+    "nn.functional.one_hot": _LCD_430,
+    "nn.functional.pad": _LCD_430,
+    "nn.functional.pdist": _LCD_430,
+    "nn.functional.pixel_shuffle": _LCD_430,
+    "nn.functional.pixel_unshuffle": _LCD_430,
+    "nn.functional.poisson_nll_loss": _LCD_430,
+    "nn.functional.prelu": _LCD_430,
+    "nn.functional.relu": _LCD_430,
+    "nn.functional.relu6": _LCD_430,
+    "nn.functional.rms_norm": _LCD_430,
+    "nn.functional.rrelu": _LCD_430,
+    "nn.functional.scaled_dot_product_attention": _LCD_430,
+    "nn.functional.selu": _LCD_430,
+    "nn.functional.sigmoid": _LCD_430,
+    "nn.functional.silu": _LCD_430,
+    "nn.functional.smooth_l1_loss": _LCD_430,
+    "nn.functional.softmax": _LCD_430,
+    "nn.functional.softmin": _LCD_430,
+    "nn.functional.softplus": _LCD_430,
+    "nn.functional.softshrink": _LCD_430,
+    "nn.functional.softsign": _LCD_430,
+    "nn.functional.tanh": _LCD_430,
+    "nn.functional.tanhshrink": _LCD_430,
+    "nn.functional.threshold": _LCD_430,
+    "nn.functional.triplet_margin_with_distance_loss": _LCD_430,
+    "nn.functional.unfold": _LCD_430,
+    "special.bessel_j0": _LCD_431,
+    "special.bessel_j1": _LCD_431,
+    "special.bessel_y0": _LCD_431,
+    "special.bessel_y1": _LCD_431,
+    "special.entr": _LCD_431,
+    "special.erfcx": _LCD_431,
+    "special.expit": _LCD_431,
+    "special.gammaln": _LCD_431,
+    "special.i0e": _LCD_431,
+    "special.i1": _LCD_431,
+    "special.i1e": _LCD_431,
+    "special.log_ndtr": _LCD_431,
+    "special.modified_bessel_i0": _LCD_431,
+    "special.modified_bessel_i1": _LCD_431,
+    "special.modified_bessel_k0": _LCD_431,
+    "special.modified_bessel_k1": _LCD_431,
+    "special.multigammaln": _LCD_431,
+    "special.ndtr": _LCD_431,
+    "special.ndtri": _LCD_431,
+    "special.polygamma": _LCD_431,
+    "special.psi": _LCD_431,
+    "special.xlog1py": _LCD_431,
+    "special.zeta": _LCD_431,
+}
+
+
+def _signature_cases() -> list[object]:
+    cases = []
+    for namespace, names, _, _ in _NAMESPACES:
+        for name in names:
+            key = f"{namespace}.{name}"
+            marks = (
+                [pytest.mark.xfail(strict=True, reason=_SIGNATURE_GAPS[key])]
+                if key in _SIGNATURE_GAPS
+                else []
+            )
+            cases.append(pytest.param(namespace, name, id=key, marks=marks))
+    return cases
+
+
+@pytest.mark.parametrize("namespace,name", _signature_cases())
+def test_signatures_bind_as_the_reference_binds(
+    ref: ModuleType, namespace: str, name: str
+) -> None:
+    _, _, ref_path, aten_prefix = next(n for n in _NAMESPACES if n[0] == namespace)
+    owner: object = ref
+    for part in filter(None, ref_path.split(".")):
+        owner = getattr(owner, part)
+    theirs = getattr(owner, name, None)
+    if theirs is None or (namespace != "nn" and isinstance(theirs, type)):
         pytest.skip("the reference has no function of this name")
-    wanted = _reference_keywords(ref, name)
-    if wanted is None:
-        pytest.skip("the reference documents no signature line")
-    params = inspect.signature(getattr(ops, name)).parameters.values()
-    if any(p.kind is p.VAR_KEYWORD for p in params):
-        pytest.skip("takes **kwargs; its keywords are its adapter's to read")
-    advertised = {p.name for p in params}
-    assert [k for k in wanted if k not in advertised and k not in _NOT_OFFERED] == []
+    method = namespace in ("Tensor", "nn")
+    if namespace == "Tensor":
+        ours = _lucid_method(name)
+    elif namespace == "nn":
+        if not isinstance(theirs, type):
+            pytest.skip("the reference's name is not a class")
+        ours = _params(_signature(getattr(lucid.nn, name).__init__), True)
+        theirs = theirs.__init__
+    else:
+        module = lucid
+        for part in filter(None, ref_path.split(".")):
+            module = getattr(module, part)
+        stub = Path(lucid.__file__).with_name("__init__.pyi") if not ref_path else None
+        ours = _lucid_function(name, getattr(module, name), stub)
+    if ours is None:
+        pytest.skip("Lucid's signature is a catch-all with no stub")
+    aten = None if aten_prefix is None else aten_prefix + name
+    overloads = _reference_overloads(ref, theirs, aten, method)
+    if not overloads:
+        pytest.skip("the reference exposes no signature")
+    if name in _OVERLOADED_NAMES:
+        overloads = [
+            [p._replace(name=_BY_OVERLOAD.get(p.name, p.name)) for p in o]
+            for o in overloads
+        ]
+    found = [_mismatches(ours, theirs_params, method) for theirs_params in overloads]
+    closest = min(found, key=len)
+    assert closest == []
 
 
 def _pair(device: str) -> tuple[Tensor, Tensor]:
@@ -255,11 +669,13 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
         if entry.inplace
         else getattr(lucid, entry.free_fn_name or entry.name)(a, b)
     )
+    # ``pow`` names its second operand ``exponent``, as the reference does.
+    second = ops._leading_tensor_names(entry)[1]
     if entry.free_fn_name:
-        got = getattr(lucid, entry.free_fn_name)(input=a, other=b)
+        got = getattr(lucid, entry.free_fn_name)(input=a, **{second: b})
         assert got.tolist() == want.tolist()
     if entry.method_name:
-        got = getattr(a.clone(), entry.method_name)(other=b)
+        got = getattr(a.clone(), entry.method_name)(**{second: b})
         assert got.tolist() == want.tolist()
 
 
@@ -270,7 +686,7 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
         lambda x, y: (lucid.matmul(input=x, other=y), lucid.matmul(x, y)),
         lambda x, y: (lucid.cumsum(input=x, dim=0), lucid.cumsum(x, 0)),
         lambda x, y: (
-            lucid.take(input=x, indices=lucid.tensor([2, 0], device=x.device)),
+            lucid.take(input=x, index=lucid.tensor([2, 0], device=x.device)),
             lucid.take(x, lucid.tensor([2, 0], device=x.device)),
         ),
         lambda x, y: (lucid.histc(input=x, bins=4), lucid.histc(x, 4)),

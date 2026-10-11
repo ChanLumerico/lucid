@@ -3,10 +3,11 @@
 ``tril(x, diagonal=1)``, ``flatten(x, start_dim=1)``, ``tile(x, dims=...)``
 and ``all(x, dim=1)`` went straight through to a pybind11 binding that
 takes ``k`` / ``start_axis`` / ``reps`` and no ``dim`` at all, and failed
-with "incompatible function arguments" (LCD-386).  Lucid's own names keep
-their place; the reference's are accepted beside them, and each answer is
-checked against the reference over every spelling — the free function,
-the Tensor method, positional and keyword — on both devices.
+with "incompatible function arguments" (LCD-386).  The reference's names
+are the only ones now — Lucid's own were dropped without a deprecation
+(LCD-410) — and each answer is checked against the reference over every
+spelling — the free function, the Tensor method, positional and keyword —
+on both devices.
 """
 
 from collections.abc import Callable
@@ -29,7 +30,6 @@ def test_tril_triu_take_diagonal(
     for got in (
         getattr(lucid, op)(x, diagonal=offset),
         getattr(lucid, op)(x, offset),
-        getattr(lucid, op)(x, k=offset),
         getattr(lucid, op)(input=x, diagonal=offset),
         getattr(x, op)(diagonal=offset),
         getattr(x, op)(offset),
@@ -55,21 +55,35 @@ def test_tile_takes_dims(ref: ModuleType, device: str) -> None:
         assert lucid.tile(x, dims=dims).tolist() == want
         assert x.tile(dims=dims).tolist() == want
         assert lucid.tile(x, dims).tolist() == want
+        assert x.tile(*dims).tolist() == want
 
 
 @pytest.mark.parametrize(
     "call",
     [
-        lambda m: m.tril(m.ones(2, 2), 1, diagonal=1),
-        lambda m: m.flatten(m.ones(2, 2), 0, start_dim=0),
-        lambda m: m.tile(m.ones(2), (2,), dims=(2,)),
+        lambda m: m.tril(m.ones(2, 2), k=1),
+        lambda m: m.ones(2, 2).triu(k=1),
+        lambda m: m.flatten(m.ones(2, 2), start_axis=0),
+        lambda m: m.ones(2, 2).flatten(end_axis=-1),
+        lambda m: m.tile(m.ones(2), reps=(2,)),
         lambda m: m.tile(m.ones(2)),
+        lambda m: m.tile(m.ones(2), 2, 2),
     ],
-    ids=["tril-both", "flatten-both", "tile-both", "tile-neither"],
+    ids=[
+        "tril-k",
+        "triu-method-k",
+        "flatten-start_axis",
+        "flatten-method-end_axis",
+        "tile-reps",
+        "tile-neither",
+        "tile-free-spread",
+    ],
 )
-def test_two_spellings_of_one_argument_are_refused(
+def test_the_old_lucid_spellings_are_refused(
     call: Callable[[ModuleType], object],
 ) -> None:
+    # The reference's free ``tile`` takes the counts as one list, as its
+    # method does not need to.
     with pytest.raises(TypeError):
         call(lucid)
 
@@ -143,3 +157,84 @@ def test_tile_takes_a_single_count(ref: ModuleType, device: str) -> None:
     assert x.tile(2).tolist() == want
     assert lucid.tile(x, 2).tolist() == want
     assert x.tile(dims=2).tolist() == want
+
+
+# ── LCD-410 / LCD-421: the reference's spellings are the only ones ───────────
+
+
+@pytest.mark.parametrize(
+    "spread, listed",
+    [
+        (lambda x: x.permute(1, 0), lambda m, x: m.permute(x, (1, 0))),
+        (lambda x: x.reshape(3, 2), lambda m, x: m.reshape(x, (3, 2))),
+        (lambda x: x.view(3, 2), lambda m, x: m.view(x, (3, 2))),
+        (lambda x: x[:1].expand(4, 3), lambda m, x: m.expand(x[:1], (4, 3))),
+        (lambda x: x.broadcast_to(2, 2, 3), lambda m, x: m.broadcast_to(x, (2, 2, 3))),
+        (lambda x: x.tile(2, 1), lambda m, x: m.tile(x, (2, 1))),
+        (lambda x: x.flip(0, 1), lambda m, x: m.flip(x, (0, 1))),
+    ],
+    ids=["permute", "reshape", "view", "expand", "broadcast_to", "tile", "flip"],
+)
+def test_methods_spread_an_int_list_and_free_functions_take_it_whole(
+    device: str, spread: Callable[..., object], listed: Callable[..., object]
+) -> None:
+    # As in the reference: ``x.permute(1, 0)`` and ``torch.permute(x, (1, 0))``,
+    # while ``torch.permute(x, 1, 0)`` is refused.
+    x = lucid.arange(6.0, device=device).reshape(2, 3)
+    assert spread(x).tolist() == listed(lucid, x).tolist()  # type: ignore[attr-defined]
+    name = listed.__code__.co_names[0]
+    with pytest.raises(TypeError):
+        getattr(lucid, name)(x, 1, 0)
+
+
+def test_operands_take_the_reference_names(device: str) -> None:
+    a = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
+    v = lucid.tensor([1.0, 2.0], device=device)
+    want = (a @ a).tolist()
+    assert lucid.mm(a, mat2=a).tolist() == want
+    assert a.mm(mat2=a).tolist() == want
+    assert lucid.pow(a, exponent=2).tolist() == a.pow(exponent=2).tolist()
+    assert v.dot(tensor=v).item() == 5.0
+    assert v.outer(vec2=v).shape == (2, 2)
+    assert lucid.where(condition=a > 2, input=a, other=0.0).tolist() == [
+        [0.0, 0.0],
+        [3.0, 4.0],
+    ]
+    assert lucid.take(a, index=lucid.tensor([3], device=device)).tolist() == [4.0]
+    for old in (
+        lambda: lucid.mm(a, other=a),
+        lambda: lucid.pow(a, other=2),
+        lambda: lucid.where(cond=a > 2, x=a, y=a),
+        lambda: lucid.take(a, indices=lucid.tensor([0], device=device)),
+        lambda: lucid.xlogy(x=a, y=a),
+        lambda: lucid.zeros_like(t=a),
+    ):
+        with pytest.raises(TypeError):
+            old()
+
+
+def test_max_pool_reads_ceil_mode_before_return_indices(ref: ModuleType) -> None:
+    # The sixth positional argument is ``ceil_mode`` (LCD-421): it used to be
+    # ``return_indices``, so a positional caller's two flags were swapped.
+    import lucid.nn.functional as F
+
+    data = [[[[float(i * 5 + j) for j in range(5)] for i in range(5)]]]
+    want = ref.nn.functional.max_pool2d(ref.tensor(data), 2, 2, 0, 1, True, False)
+    got = F.max_pool2d(lucid.tensor(data), 2, 2, 0, 1, True, False)
+    assert got.tolist() == want.tolist()
+    out, idx = F.max_pool2d(lucid.tensor(data), 2, 2, 0, 1, False, True)
+    assert out.shape == (1, 1, 2, 2) and idx.shape == (1, 1, 2, 2)
+
+
+def test_conv_transpose_takes_only_zeros_padding_mode() -> None:
+    import lucid.nn as nn
+
+    assert nn.ConvTranspose2d(2, 2, 3, padding_mode="zeros").padding_mode == "zeros"
+    with pytest.raises(ValueError, match="zeros"):
+        nn.ConvTranspose2d(2, 2, 3, padding_mode="reflect")
+
+
+def test_to_reads_non_blocking_then_copy_by_position() -> None:
+    x = lucid.zeros(3)
+    assert x.to("cpu", lucid.float32, False, False) is x
+    assert x.to("cpu", lucid.float32, False, True) is not x
