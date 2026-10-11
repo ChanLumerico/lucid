@@ -20,13 +20,35 @@ import lucid.nn.functional as F
 from lucid.autograd import grad
 from lucid.test._fixtures.devices import metal_available
 
+# (name, mode, padding, align_corners, grid reach, spatial rank).  The
+# kernel's own backward; then the graphs the composites build (LCD-426):
+# reflection's ``±1`` slope and clip in front of the kernel, the bicubic
+# weights, and the 5-D trilinear weights masked per corner.
 CASES = [
-    ("bilinear zeros", "bilinear", "zeros", False, 1.2),
-    ("bilinear zeros corners", "bilinear", "zeros", True, 1.2),
-    ("bilinear border", "bilinear", "border", False, 1.4),
-    ("bilinear border corners", "bilinear", "border", True, 1.4),
-    ("nearest zeros", "nearest", "zeros", False, 0.9),
+    ("bilinear zeros", "bilinear", "zeros", False, 1.2, 2),
+    ("bilinear zeros corners", "bilinear", "zeros", True, 1.2, 2),
+    ("bilinear border", "bilinear", "border", False, 1.4, 2),
+    ("bilinear border corners", "bilinear", "border", True, 1.4, 2),
+    ("nearest zeros", "nearest", "zeros", False, 0.9, 2),
+    ("bilinear reflection", "bilinear", "reflection", False, 2.6, 2),
+    ("bilinear reflection corners", "bilinear", "reflection", True, 2.6, 2),
+    *[
+        (f"bicubic {pad}{tag}", "bicubic", pad, align, 1.3, 2)
+        for pad in ("zeros", "border", "reflection")
+        for align, tag in ((False, ""), (True, " corners"))
+    ],
+    *[
+        (f"trilinear {pad}{tag}", "bilinear", pad, align, 1.4, 3)
+        for pad in ("zeros", "border", "reflection")
+        for align, tag in ((False, ""), (True, " corners"))
+    ],
 ]
+
+# Input, grid and output shapes for each spatial rank.
+_SHAPES = {
+    2: ((2, 3, 5, 6), (2, 4, 3, 2), (2, 3, 4, 3)),
+    3: ((2, 2, 3, 4, 5), (2, 2, 3, 2, 3), (2, 2, 2, 3, 2)),
+}
 
 
 def _sample(
@@ -36,16 +58,19 @@ def _sample(
 
 
 @pytest.mark.parametrize("first", [0, 1])
-@pytest.mark.parametrize("name,mode,pad,align,reach", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize(
+    "name,mode,pad,align,reach,rank", CASES, ids=[c[0] for c in CASES]
+)
 def test_the_second_derivative_matches_central_differences(
-    first: int, name: str, mode: str, pad: str, align: bool, reach: float
+    first: int, name: str, mode: str, pad: str, align: bool, reach: float, rank: int
 ) -> None:
     if mode == "nearest" and first == 1:
         pytest.skip("nearest sampling has no grid gradient")
     rng = np.random.default_rng(len(name) + first)
-    x0 = rng.standard_normal((2, 3, 5, 6))
-    g0 = rng.uniform(-reach, reach, (2, 4, 3, 2))
-    r0 = rng.standard_normal((2, 3, 4, 3))
+    x_shape, g_shape, y_shape = _SHAPES[rank]
+    x0 = rng.standard_normal(x_shape)
+    g0 = rng.uniform(-reach, reach, g_shape)
+    r0 = rng.standard_normal(y_shape)
     base = [x0, g0]
     u = [rng.standard_normal(b.shape) for b in base]
 
