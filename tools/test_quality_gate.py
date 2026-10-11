@@ -375,6 +375,20 @@ def test_unlaunder_strips_only_the_marked_sections() -> None:
     assert "strict = True" in out
 
 
+def test_unlaunder_strips_a_section_marked_with_any_issue() -> None:
+    """LCD-315: the marker is ``# transitional (<issue>)``, not LCD-260 alone."""
+    ini = (
+        "[mypy]\nstrict = True\n\n"
+        "# transitional (LCD-999) — another owner's type change.\n"
+        "[mypy-lucid.other.*]\nwarn_unused_ignores = False\n\n"
+        "# transitional (see LCD-999) is not the marker\n"
+        "[mypy-lucid.kept]\nignore_errors = True\n"
+    )
+    out = strip_transitional(ini)
+    assert "[mypy-lucid.other.*]" not in out
+    assert "[mypy-lucid.kept]" in out
+
+
 @pytest.mark.parametrize(
     ("line", "unused", "after"),
     [

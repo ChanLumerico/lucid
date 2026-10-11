@@ -48,7 +48,8 @@ from tools.quality_gate.collectors import run_tool
 from tools.quality_gate.collectors.lint import ruff_bin
 from tools.quality_gate.core import GateError
 
-TRANSITIONAL_MARKER = "# transitional (LCD-260)"
+# The convention is `# transitional (<issue>)` for any issue, not one id (LCD-315).
+TRANSITIONAL_MARKER = re.compile(r"#\s*transitional \(LCD-\d+\)")
 CAST = "redundant-cast"
 IGNORE = "unused-ignore"
 BLACK_LINE_LENGTH = 88  # what lucid/ is formatted with
@@ -83,7 +84,7 @@ def strip_transitional(ini_text: str) -> str:
     pending = False
     for raw in ini_text.splitlines():
         line = raw.strip()
-        if line.startswith(TRANSITIONAL_MARKER):
+        if TRANSITIONAL_MARKER.match(line):
             pending = True
         elif pending and line.startswith("[") and line.endswith("]"):
             doomed.add(line[1:-1].strip())
