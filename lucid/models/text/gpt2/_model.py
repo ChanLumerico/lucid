@@ -145,22 +145,19 @@ class _GPT2SelfAttention(nn.Module):
                 pad_mask = F.pad(pad_mask, (0, t_total - mask_len))
             bias = bias + pad_mask
 
-        # Fused SDPA on the memory-heavy path (large T forms a (B,H,T,t_total)
-        # score matrix).  Keep the explicit path for attention dropout (the fused
-        # kernel has none) and for the compiled StaticCache decode trace, whose
-        # fixed-shape masking must stay bit-identical to the traced graph.
-        from lucid.compile._entry.decode_step import is_compiled_decode_tracing
-
-        out: Tensor
-        if (self.training and self.attn_dropout.p > 0) or is_compiled_decode_tracing():
-            scores = q @ k.permute(0, 1, 3, 2) / self.scale + bias
-            probs = F.softmax(scores, dim=-1)
-            probs = self.attn_dropout(probs)
-            out = probs @ v
-        else:
-            out = F.scaled_dot_product_attention(
-                q, k, v, attn_mask=bias, scale=1.0 / self.scale
-            )
+        # One masked-attention core for every path: the fused kernel at
+        # inference, the materialised weights when attention dropout is on.
+        # A hand-written ``softmax(q kᵀ + bias) v`` here once took the dropout
+        # path, and a query row whose every key was ``-inf`` came out NaN there
+        # but ``0`` from the fused kernel (LCD-387).
+        out: Tensor = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=bias,
+            dropout_p=self.attn_dropout.p if self.training else 0.0,
+            scale=1.0 / self.scale,
+        )
         out = out.permute(0, 2, 1, 3).reshape(B, T, H * D)
         out = self.c_proj(out)
         return self.resid_dropout(out)

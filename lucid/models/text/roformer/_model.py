@@ -188,20 +188,18 @@ class _RoFormerSelfAttention(nn.Module):
             # twice and only the first result is kept.
             v, _ = apply_rotary_emb(v, v, cos, sin, interleaved=True)
 
-        # Fused SDPA on the memory-heavy path; keep the explicit-weights path
-        # only when attention dropout is active in training (fused kernel has
-        # none).  RoPE is already applied above, so SDPA sees rotated q/k.
-        ctx: Tensor
-        if self.training and self.dropout.p > 0:
-            scores = q @ k.permute(0, 1, 3, 2) / self.scale
-            if attention_mask is not None:
-                scores = scores + attention_mask
-            probs = self.dropout(F.softmax(scores, dim=-1))
-            ctx = probs @ v
-        else:
-            ctx = F.scaled_dot_product_attention(
-                q, k, v, attn_mask=attention_mask, scale=1.0 / self.scale
-            )
+        # One masked-attention core for every path (RoPE is already applied,
+        # so it sees rotated q/k).  A hand-written softmax took the dropout
+        # path and turned a fully masked query row into NaN where the fused
+        # kernel gives ``0`` (LCD-387).
+        ctx: Tensor = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=attention_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            scale=1.0 / self.scale,
+        )
         return ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
 
 

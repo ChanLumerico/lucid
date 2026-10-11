@@ -197,17 +197,16 @@ class _CvTAttention(nn.Module):
         k = k.reshape(B, Nkv, self.num_heads, head_dim).permute(0, 2, 1, 3)
         v = v.reshape(B, Nkv, self.num_heads, head_dim).permute(0, 2, 1, 3)
 
-        # Fused SDPA — ``scale=self.scale`` is CvT's non-standard ``dim**-0.5``
-        # (not the per-head default), so it must be passed explicitly.  The
-        # fused kernel has no dropout, so attention dropout takes the explicit
-        # path; at p = 0 (the default) the fused kernel still runs.
-        if self.training and self.attn_drop_p > 0.0:
-            scores = q @ k.permute(0, 1, 3, 2) * self.scale
-            probs = F.softmax(scores, dim=-1)
-            probs = F.dropout(probs, self.attn_drop_p, self.training)
-            out = probs @ v
-        else:
-            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        # ``scale=self.scale`` is CvT's non-standard ``dim**-0.5`` (not the
+        # per-head default), so it must be passed explicitly.  The fused
+        # kernel runs unless attention dropout is on.
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.attn_drop_p if self.training else 0.0,
+            scale=self.scale,
+        )
         out = out.permute(0, 2, 1, 3).reshape(B, Nq, C)
         return self.proj_drop(self.out_proj(out))
 

@@ -626,7 +626,7 @@
     "lucid/models/multimodal/clip/_pretrained.py": 10,
     "lucid/models/multimodal/clip/_tokenizer.py": 3,
     "lucid/models/text/bert/_config.py": 1,
-    "lucid/models/text/bert/_model.py": 34,
+    "lucid/models/text/bert/_model.py": 32,
     "lucid/models/text/bert/_pretrained.py": 12,
     "lucid/models/text/bert/_tokenizer.py": 4,
     "lucid/models/text/bert/_weights.py": 7,

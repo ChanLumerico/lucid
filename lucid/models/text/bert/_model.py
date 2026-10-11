@@ -21,6 +21,7 @@ from typing import ClassVar, final, override
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+from lucid.nn.functional.attention import _masked_attention
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import (
@@ -203,19 +204,32 @@ class _BERTSelfAttention(nn.Module):
                 literature uses it for.
 
         Returns:
-            ``(context, attention_weights)`` with weights ``(B, H, T, T)``.
+            ``(context, attention_weights)`` with weights ``(B, H, T, T)`` —
+            the ones applied to ``v``, so after dropout and the head mask, as
+            the reference returns them.
         """
-        scores = q @ k.permute(0, 1, 3, 2) / self.scale
-        if attention_mask is not None:
-            scores = scores + attention_mask
-        weights = F.softmax(scores, dim=-1)
+        # The same masked core the fused path runs through, asked for its
+        # weights: a hand-written softmax here turned a query row whose every
+        # key is ``-inf`` into NaN, where the fused path gives ``0`` (LCD-387).
+        ctx, weights = _masked_attention(
+            q,
+            k,
+            v,
+            attention_mask,
+            1.0 / self.scale,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            need_weights=True,
+        )
+        assert weights is not None  # need_weights=True always returns them
         if head_mask is not None:
+            # A per-head scalar, so scaling the weights and the context they
+            # produced is the same as scaling the weights before ``@ v``.
             shaped = (
                 head_mask.reshape(1, -1, 1, 1) if head_mask.ndim == 1 else head_mask
             )
+            ctx = ctx * shaped
             weights = weights * shaped
-        dropped = self.dropout(weights) if self.training else weights
-        return dropped @ v, weights
+        return ctx, weights
 
     @override
     def forward(

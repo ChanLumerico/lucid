@@ -142,18 +142,12 @@ class _Attention(nn.Module):
         k: Tensor = qkv[1]
         v: Tensor = qkv[2]
 
-        # Scaled dot-product attention.  Prefer the fused, memory-efficient kernel
-        # (never forms the (B,H,N,N) score matrix) — its default scale 1/sqrt(D)
-        # matches ``/ self.scale``.  The fused kernel has no dropout, so keep the
-        # explicit weights path only when attention dropout is active in training.
-        out: Tensor
-        if self.training and self.attn_drop.p > 0:
-            attn: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
-            attn = F.softmax(attn, dim=-1)
-            attn = self.attn_drop(attn)
-            out = attn @ v
-        else:
-            out = F.scaled_dot_product_attention(q, k, v)
+        # Scaled dot-product attention; its default scale 1/sqrt(D) matches
+        # ``/ self.scale``.  It runs the fused kernel unless attention dropout
+        # is on, when it materialises the weights to drop them.
+        out = F.scaled_dot_product_attention(
+            q, k, v, dropout_p=self.attn_drop.p if self.training else 0.0
+        )
 
         # (B, H, N, D) → (B, N, H*D) = (B, N, C)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)

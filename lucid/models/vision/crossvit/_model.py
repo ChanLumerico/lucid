@@ -94,16 +94,14 @@ class _Attention(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        # Fused SDPA when no attention dropout is active; the fused kernel has
-        # no dropout, so keep the explicit-weights path for training-time drop.
-        out: Tensor
-        if self.training and self.attn_drop.p > 0:
-            attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
-            attn = F.softmax(attn, dim=-1)
-            attn = self.attn_drop(attn)
-            out = attn @ v
-        else:
-            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        # The fused kernel runs unless attention dropout is on.
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.attn_drop.p if self.training else 0.0,
+            scale=self.scale,
+        )
         x = out.swapaxes(1, 2).reshape(B, N, C)
         x = self.proj(x)
         return self.proj_drop(x)
@@ -215,15 +213,14 @@ class _CrossAttention(nn.Module):
         )
         k = self.wk(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         v = self.wv(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
-        # Fused SDPA (cross-attention: 1 query token, N keys) unless dropout.
-        out: Tensor
-        if self.training and self.attn_drop.p > 0:
-            attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, 1, N)
-            attn = F.softmax(attn, dim=-1)
-            attn = self.attn_drop(attn)
-            out = attn @ v
-        else:
-            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        # Cross-attention: 1 query token, N keys.
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.attn_drop.p if self.training else 0.0,
+            scale=self.scale,
+        )
         x = out.swapaxes(1, 2).reshape(B, 1, C)
         x = self.proj(x)
         return self.proj_drop(x)
