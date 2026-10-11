@@ -1235,7 +1235,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     # flatten the two leading channel-related axes back into a single ``C``.
     reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
     perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
-    transposed = _lucid.permute(reshaped, *perm)
+    transposed = reshaped.permute(*perm)
     return transposed.reshape(n, c, *spatial)
 
 

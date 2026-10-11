@@ -655,6 +655,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop the state_dict recursion and key-list hooks
 - the graph-mode resample matrix reads the shared taps
 - interpolate's dtype door is a free function
+- channel_shuffle permutes through the Tensor method
 
 ---
 
