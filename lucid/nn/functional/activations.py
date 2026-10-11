@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._tensor._metal_views import _check as _metal_check
 from lucid._tensor._metal_views import write_back as _metal_write_back
 from lucid._types import GeluApproximate
@@ -857,10 +858,11 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
     tensor([[0.5, 1.462]])
     """
     impl = _unwrap(x)
-    n = impl.shape[dim] // 2
-    # Split into two halves along dim
-    parts = _C_engine.split_at(impl, [n], dim)
-    first, second = parts[0], parts[1]
+    dim = _wrap_dim(dim, len(impl.shape), "glu")
+    size = _dim_size(impl.shape, dim)
+    if size % 2:  # unequal halves broadcast into a silently wrong product
+        raise ValueError(f"glu: dim {dim} must have an even size, got {size}")
+    first, second = _C_engine.split_at(impl, [size // 2], dim)
     return _wrap(_C_engine.mul(first, _C_engine.sigmoid(second)))
 
 
@@ -1124,9 +1126,7 @@ def cosine_similarity(
     """
     x1n = normalize(x1, p=2.0, dim=dim, eps=eps)
     x2n = normalize(x2, p=2.0, dim=dim, eps=eps)
-    # Element-wise product then sum along dim
-    impl = _C_engine.sum(_C_engine.mul(_unwrap(x1n), _unwrap(x2n)), [dim])
-    return _wrap(impl)
+    return _wrap(_C_engine.sum(_C_engine.mul(_unwrap(x1n), _unwrap(x2n)), [dim]))
 
 
 def pairwise_distance(

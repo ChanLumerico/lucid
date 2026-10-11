@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import lucid
+import lucid.linalg
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
 from lucid._ops._dims import _wrap_dim, _wrap_dims
@@ -55,13 +56,14 @@ _PAST_THE_LAST_AXIS = {
     "argsort_descending": lambda lib, t, d: lib.argsort(t, dim=d, descending=True),
     "topk_smallest": lambda lib, t, d: lib.topk(t, 1, dim=d, largest=False),
     "swapaxes": lambda lib, t, d: lib.swapaxes(t, d, 0),
+    "glu": lambda lib, t, d: lib.nn.functional.glu(t, d),
 }
 
 
 @pytest.mark.parametrize("shape", [(), (3,), (2, 1, 3)], ids=str)
 @pytest.mark.parametrize("op", list(_PAST_THE_LAST_AXIS))
 def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
-    if op in ("split", "chunk") and not shape:
+    if op in ("split", "chunk", "glu") and not shape:
         pytest.skip("a 0-d tensor has nothing to split, whatever the dim")
     call = _PAST_THE_LAST_AXIS[op]
     bad = max(len(shape), 1)
@@ -70,6 +72,41 @@ def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
             call(ref, ref.zeros(shape), dim)
         with pytest.raises(IndexError, match=f"axis out of range: got {dim}"):
             call(lucid, lucid.zeros(shape, device=device), dim)
+
+
+# Copies of the rule outside lucid._ops._dims that answer a bad dim with a
+# silently wrong result rather than a refusal; each XPASSes once moved over.
+_STRAGGLERS = {
+    "Tensor.diff": lambda lib, d: lib.tensor([1.0, 2.0, 4.0]).diff(dim=d),
+    "linalg.cross": lambda lib, d: lib.linalg.cross(lib.ones(3, 3), lib.ones(3, 3), dim=d),
+}
+
+
+@pytest.mark.parametrize(
+    ("op", "dim"),
+    [
+        pytest.param(
+            "Tensor.diff",
+            1,
+            marks=pytest.mark.xfail(
+                strict=True, reason="LCD-424: Tensor.diff wraps dim with dim % ndim"
+            ),
+        ),
+        pytest.param(
+            "linalg.cross",
+            -3,
+            marks=pytest.mark.xfail(
+                strict=True, reason="LCD-424: linalg.cross wraps dim by ndim + dim"
+            ),
+        ),
+    ],
+)
+def test_a_straggler_refuses_an_axis_past_the_last(ref, op, dim):
+    call = _STRAGGLERS[op]
+    with pytest.raises(IndexError):
+        call(ref, dim)
+    with pytest.raises(IndexError):
+        call(lucid, dim)
 
 
 def test_squeeze_refuses_an_axis_named_twice(ref):
@@ -84,17 +121,17 @@ def _values(shape):
     return (np.arange(n, dtype=np.float32) + 1.0).reshape(shape)
 
 
-def _compare(ref, device, shape, call):
+def _compare(ref, device, shape, call, rtol=1e-5):
     values = _values(shape)
     x = lucid.tensor(values, device=device, requires_grad=True)
     xr = ref.tensor(values, requires_grad=True)
     got, want = call(lucid, F, x), call(ref, ref.nn.functional, xr)
     assert tuple(got.shape) == tuple(want.shape)
-    np.testing.assert_allclose(got.numpy(), want.detach().numpy(), rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(got.numpy(), want.detach().numpy(), rtol=rtol, atol=1e-6)
     weights = _values(tuple(want.shape))
     (got * lucid.tensor(weights, device=device)).sum().backward()
     (want * ref.tensor(weights)).sum().backward()
-    np.testing.assert_allclose(x.grad.numpy(), xr.grad.numpy(), rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(x.grad.numpy(), xr.grad.numpy(), rtol=rtol, atol=1e-6)
 
 
 _ROLLS = {
@@ -143,3 +180,44 @@ def test_normalize_takes_every_dim_spelling(ref, device, shape, dim, p):
 @pytest.mark.parametrize("dim", [0, -1, (0,), None], ids=str)
 def test_normalize_on_a_0d_tensor(ref, device, dim):
     _compare(ref, device, (), lambda lib, F, t: F.normalize(t, dim=dim))
+
+
+@pytest.mark.parametrize("shape", [(), (2, 3)], ids=str)
+def test_glu_refuses_an_odd_halved_dim(ref, device, shape):
+    """An odd split broadcast its unequal halves into a wrong answer."""
+    with pytest.raises(RuntimeError):
+        ref.nn.functional.glu(ref.ones(shape), -1)
+    with pytest.raises(ValueError, match="must have an even size"):
+        F.glu(lucid.ones(shape, device=device), -1)
+
+
+def test_glu_matches_reference(ref, device):
+    # The gate's slope at 8 is ~3e-4, where float32 sigmoid' differs in
+    # the fourth digit between the two libraries.
+    _compare(ref, device, (2, 4), lambda lib, F, t: F.glu(t, -1), rtol=1e-3)
+
+
+_BOOL_DIMS = {
+    "normalize": lambda lib, t: lib.nn.functional.normalize(t, dim=True),
+    "sum": lambda lib, t: lib.sum(t, dim=True),
+    "sum_tuple": lambda lib, t: lib.sum(t, dim=(True,)),
+    "squeeze": lambda lib, t: lib.squeeze(t, True),
+    "roll_shifts": lambda lib, t: lib.roll(t, True, 0),
+    "roll_dims": lambda lib, t: lib.roll(t, 1, True),
+}
+
+
+@pytest.mark.parametrize("op", list(_BOOL_DIMS))
+def test_a_bool_dim_is_refused(ref, op):
+    """``dim=True`` used to pass as axis 1."""
+    with pytest.raises(TypeError):
+        _BOOL_DIMS[op](ref, ref.ones(2, 3))
+    with pytest.raises(TypeError):
+        _BOOL_DIMS[op](lucid, lucid.ones(2, 3))
+
+
+def test_roll_takes_any_index_type(ref, device):
+    """A NumPy integer is an index for shifts and dims alike."""
+    shift, axis = np.int64(1), np.int64(-1)
+    _compare(ref, device, (2, 3), lambda lib, F, t: lib.roll(t, shift, axis))
+    _compare(ref, device, (2, 3), lambda lib, F, t: lib.roll(t, (shift,), (axis,)))

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._dims import _to_axes
 from lucid._ops._reduce import _require_normable
 from lucid._types import DimLike
 from lucid.linalg import vector_norm
@@ -677,6 +678,7 @@ def normalize(x: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12) -
     ``x`` is refused with a ``DtypeMismatch``, as the reference refuses it.
     """
     xi = _require_normable(_unwrap(x), "normalize")
+    _to_axes(dim, "normalize")  # refuses a bool or a non-index dim up front
     if isinstance(dim, int):
         return _wrap(_C_engine.nn.lp_normalize(xi, p, dim, eps))
     # Several dims, or all of them, have no kernel: the norm over them,

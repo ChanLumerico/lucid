@@ -1,4 +1,4 @@
-"""The dim rule on the Python side: the engine's ``wrap_dim``, once.
+"""The dim rule on the Python side: the owner of the engine's ``wrap_dim``.
 
 Every dim argument the engine takes goes through its ``wrap_dim``: a tensor
 of rank ``n`` answers to ``[-max(n, 1), max(n, 1))``, so a 0-d tensor has
@@ -6,9 +6,11 @@ one notional axis, named by both 0 and -1.  A Python wrapper that reads
 ``shape[dim]``, builds a permutation, or checks a dim list before the
 engine sees it has to resolve the dim by the same rule.  Copies of it that
 used the raw rank indexed past a 0-d shape (``list index out of range``) or
-let an axis past the last one through.  This module is the only Python
-copy: :func:`_to_axes` reads a dim spelling, :func:`_wrap_dim` and
+let an axis past the last one through.  This module owns the rule on the
+Python side: :func:`_to_axes` reads a dim spelling, :func:`_wrap_dim` and
 :func:`_wrap_dims` resolve it, :func:`_dim_size` reads the axis's extent.
+A new Python axis path takes its dims here.  The copies not yet moved over
+(``Tensor.diff``, ``linalg.cross`` among them) are tracked in LCD-424.
 """
 
 import operator
@@ -16,8 +18,13 @@ from collections.abc import Sequence
 from typing import SupportsIndex
 
 
-def _to_axes(dim: object, name: str) -> list[int]:
-    """``dim`` — ``None``, an index or a sequence of them — as engine axes."""
+def _to_axes(dim: object, name: str, what: str = "dim") -> list[int]:
+    """``dim`` — ``None``, an index or a sequence of them — as engine axes.
+
+    ``what`` names the argument in the refusal (``roll`` reads its
+    ``shifts`` here too).  A bool is refused, as the reference refuses it:
+    ``dim=True`` used to pass as axis 1.
+    """
     if dim is None:
         return []
     if type(dim) is int:
@@ -32,14 +39,18 @@ def _to_axes(dim: object, name: str) -> list[int]:
         else:
             return axes
     try:
-        if isinstance(dim, SupportsIndex):
+        if isinstance(dim, SupportsIndex) and not isinstance(dim, bool):
             return [operator.index(dim)]
-        if isinstance(dim, Sequence) and not isinstance(dim, str):
+        if (
+            isinstance(dim, Sequence)
+            and not isinstance(dim, str)
+            and not any(isinstance(d, bool) for d in dim)
+        ):
             return [operator.index(d) for d in dim]
     except TypeError:
         pass  # an element that is not an index; refused below with the whole dim
     raise TypeError(
-        f"{name}(): dim must be an int, a sequence of ints or None, got {dim!r}"
+        f"{name}(): {what} must be an int, a sequence of ints or None, got {dim!r}"
     )
 
 

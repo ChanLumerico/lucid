@@ -656,7 +656,7 @@ def _roll_adapter(
     signature.  As in the reference, no ``dims`` rolls the elements in
     their flattened order and puts the shape back, a 0-d tensor included.
     """
-    steps = [shifts] if isinstance(shifts, int) else [int(s) for s in shifts]
+    steps = _to_axes(shifts, "roll", "shifts")
     if dims is None:
         if len(steps) != 1:
             raise ValueError(
