@@ -6719,9 +6719,6 @@ private:
         auto round_int = [&](const ::mlx::core::array& a) {
             return gpu_index_of(::mlx::core::round(a, 0));
         };
-        auto floor_int = [&](const ::mlx::core::array& a) {
-            return gpu_index_of(::mlx::core::floor(a));
-        };
 
         ::mlx::core::array y_out{0};
         if (mode == 1) {
@@ -6755,14 +6752,13 @@ private:
                 iy_use = ::mlx::core::clip(iy, std::optional<::mlx::core::array>(zf),
                                            std::optional<::mlx::core::array>(Hm1f));
             }
-            auto x0 = floor_int(ix_use);
-            auto y0 = floor_int(iy_use);
-            auto x1 = gpu_next_index(x0);
-            auto y1 = gpu_next_index(y0);
-            auto x0_f = ::mlx::core::astype(x0, mlx_dt);
-            auto y0_f = ::mlx::core::astype(y0, mlx_dt);
-            auto x1_f = ::mlx::core::astype(x1, mlx_dt);
-            auto y1_f = ::mlx::core::astype(y1, mlx_dt);
+            // Weights from the floored positions, not the saturated
+            // indices cast back: two far axes made 0 * inf = NaN.
+            auto x0_f = ::mlx::core::floor(ix_use), y0_f = ::mlx::core::floor(iy_use);
+            auto x1_f = ::mlx::core::add(x0_f, ::mlx::core::array(1.0f, mlx_dt));
+            auto y1_f = ::mlx::core::add(y0_f, ::mlx::core::array(1.0f, mlx_dt));
+            auto x0 = gpu_index_of(x0_f), y0 = gpu_index_of(y0_f);
+            auto x1 = gpu_next_index(x0), y1 = gpu_next_index(y0);
             auto wa = ::mlx::core::multiply(::mlx::core::subtract(x1_f, ix_use),
                                             ::mlx::core::subtract(y1_f, iy_use));
             auto wb = ::mlx::core::multiply(::mlx::core::subtract(x1_f, ix_use),
@@ -6907,15 +6903,11 @@ private:
             auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
             dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
         } else {
-            auto x0 = gpu_index_of(::mlx::core::floor(ix));
-            auto y0 = gpu_index_of(::mlx::core::floor(iy));
-            auto x1 = gpu_next_index(x0);
-            auto y1 = gpu_next_index(y0);
-
-            auto x0_f = ::mlx::core::astype(x0, mlx_dt);
-            auto y0_f = ::mlx::core::astype(y0, mlx_dt);
-            auto x1_f = ::mlx::core::astype(x1, mlx_dt);
-            auto y1_f = ::mlx::core::astype(y1, mlx_dt);
+            // As in the forward: weights from the floored positions.
+            auto x0_f = ::mlx::core::floor(ix), y0_f = ::mlx::core::floor(iy);
+            auto x1_f = ::mlx::core::add(x0_f, one), y1_f = ::mlx::core::add(y0_f, one);
+            auto x0 = gpu_index_of(x0_f), y0 = gpu_index_of(y0_f);
+            auto x1 = gpu_next_index(x0), y1 = gpu_next_index(y0);
             auto wa = ::mlx::core::multiply(::mlx::core::subtract(x1_f, ix),
                                             ::mlx::core::subtract(y1_f, iy));
             auto wb = ::mlx::core::multiply(::mlx::core::subtract(x1_f, ix),

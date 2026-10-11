@@ -38,6 +38,11 @@ _MODES = ["bilinear", "nearest", "bicubic"]
 _PADDINGS = ["zeros", "border", "reflection"]
 
 
+# Which grid axis holds the coordinate: x, y, or both -- two far axes
+# multiply two far weights, which overflowed to inf on Metal.
+_AXES = ("x", "y", "both")
+
+
 def _cases() -> list[tuple[str, str, str, bool, str, int]]:
     """(id, mode, padding, align_corners, coordinate, axis it is on)."""
     out = []
@@ -45,8 +50,9 @@ def _cases() -> list[tuple[str, str, str, bool, str, int]]:
         for pad in _PADDINGS:
             for align in (False, True):
                 for coord in _COORDS:
-                    for axis in (0, 1):
-                        name = f"{mode}-{pad}-{'corners' if align else 'edges'}-{coord}-{'xy'[axis]}"
+                    for axis, label in enumerate(_AXES):
+                        corners = "corners" if align else "edges"
+                        name = f"{mode}-{pad}-{corners}-{coord}-{label}"
                         out.append((name, mode, pad, align, coord, axis))
     return out
 
@@ -57,8 +63,21 @@ _IMAGE = np.arange(16.0, dtype=np.float32).reshape(1, 1, 4, 4)
 
 def _grid(coord: str, axis: int) -> np.ndarray:
     point = [0.25, 0.25]
-    point[axis] = _COORDS[coord]
+    for a in (0, 1) if axis == 2 else (axis,):
+        point[a] = _COORDS[coord]
     return np.array([[[point]]], dtype=np.float32)
+
+
+# ``rotate`` (the engine's, behind the image transforms) cast its rounded
+# source position to int the same way.  (name, angle in degrees, cy, cx).
+ROTATIONS = [
+    ("rotate-nan-angle", math.nan, 1.5, 1.5),
+    ("rotate-inf-angle", math.inf, 1.5, 1.5),
+    ("rotate-cy-1e30", 30.0, 1e30, 1.5),
+    ("rotate-cy-inf", 30.0, math.inf, 1.5),
+    ("rotate-cy-3e9", 30.0, 3e9, 1.5),
+    ("rotate-cx--inf", 30.0, 1.5, -math.inf),
+]
 
 
 _CHILD = """
@@ -73,8 +92,19 @@ image = np.arange(16.0, dtype=np.float32).reshape(1, 1, 4, 4)
 def listed(t):
     return [None if math.isnan(v) else v for v in np.asarray(t.to("cpu").numpy(), dtype=np.float64).ravel().tolist()]
 
-for name, mode, pad, align, grid in json.loads(sys.stdin.read()):
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+
+for case in json.loads(sys.stdin.read()):
+    name = case[0]
     print("@@BEGIN " + name, flush=True)
+    if name.startswith("rotate"):
+        _, angle, cy, cx = case
+        x = lucid.tensor(image + 1.0, device=D)
+        y = _wrap(_C_engine.nn.rotate(_unwrap(x), angle, cy, cx))
+        print("@@END " + name + " " + json.dumps({"y": listed(y)}), flush=True)
+        continue
+    _, mode, pad, align, grid = case
     x = lucid.tensor(image, device=D, requires_grad=True)
     g = lucid.tensor(np.array(grid, dtype=np.float32), device=D, requires_grad=True)
     y = F.grid_sample(x, g, mode=mode, padding_mode=pad, align_corners=align)
@@ -85,10 +115,11 @@ for name, mode, pad, align, grid in json.loads(sys.stdin.read()):
 
 
 def _payload() -> list[Any]:
-    return [
+    grids: list[Any] = [
         [name, mode, pad, align, _grid(coord, axis).tolist()]
         for name, mode, pad, align, coord, axis in CASES
     ]
+    return grids + [list(case) for case in ROTATIONS]
 
 
 def _run(device: str) -> dict[str, Any]:
@@ -189,8 +220,8 @@ def test_far_coordinates(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="LCD-420 follow-up: reflect() in lucid/nn/functional/_grid_sampling.py "
-    "has no grid gradient at a NaN coordinate; the reference passes one through",
+    reason="LCD-426: reflect() in lucid/nn/functional/_grid_sampling.py has no "
+    "grid gradient at a NaN coordinate; the reference passes one through",
 )
 def test_reflection_grid_gradient_at_nan(ref: Any, device: str) -> None:
     name = "bilinear-reflection-edges-nan-x"
@@ -201,8 +232,9 @@ def test_reflection_grid_gradient_at_nan(ref: Any, device: str) -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="LCD-420 follow-up: the bicubic composite scatters NaN into the input "
-    "gradient at an infinite coordinate under zero padding; the reference gives 0",
+    reason="LCD-426: the bicubic grid_sample composite scatters NaN into the "
+    "input gradient at an infinite coordinate under zero padding; the reference "
+    "gives 0",
 )
 def test_bicubic_input_gradient_at_infinity(ref: Any, device: str) -> None:
     name = "bicubic-zeros-edges-inf-y"
@@ -214,3 +246,20 @@ def test_bicubic_input_gradient_at_infinity(ref: Any, device: str) -> None:
 def test_case_names_are_unique() -> None:
     names = [case[0] for case in CASES]
     assert len(names) == len(set(names))
+
+
+@pytest.mark.parametrize(
+    "name,angle,cy,cx", ROTATIONS, ids=[case[0] for case in ROTATIONS]
+)
+def test_rotate_far_or_nan_centre(
+    device: str, name: str, angle: float, cy: float, cx: float
+) -> None:
+    # A far centre puts every source outside the image (zeros); a NaN
+    # position reads sample 0, the one rule both devices share.
+    got = _result(device, name)
+    assert (
+        "crash" not in got
+    ), f"{name} on {device} killed the interpreter: {got['crash']}"
+    y = _array(got["y"])
+    far = math.isinf(cx) or abs(cy) > 1e9
+    np.testing.assert_array_equal(y, np.zeros(16) if far else np.full(16, 1.0))
