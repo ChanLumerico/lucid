@@ -188,7 +188,7 @@
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 11414,
     "lucid/_C/backend/gpu/GpuBackend.h": 5271,
-    "lucid/_ops/composite/elementwise.py": 235,
+    "lucid/_ops/composite/elementwise.py": 215,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2797,
     "lucid/compile/_optim/compiler.py": 804,
@@ -211,7 +211,7 @@
     "lucid/nn/modules/pooling.py": 814,
     "lucid/nn/modules/rnn.py": 87,
     "lucid/optim/lr_scheduler.py": 442,
-    "lucid/special/__init__.py": 1089,
+    "lucid/special/__init__.py": 1081,
     "lucid/utils/transforms/_color.py": 274
    },
    "noqa[ANN401]": {

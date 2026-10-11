@@ -12,7 +12,7 @@ Implemented (all pure-Python composites over engine ops — no C++ work):
 * ``erfcx``                 — scaled complementary error: ``exp(x²) · erfc(x)``
 * ``i0e``                   — exponentially-scaled modified Bessel I₀:
                               ``exp(-|x|) · i0(x)``
-* ``i1``                    — modified Bessel of order 1 (Abramowitz polynomial)
+* ``i1``                    — modified Bessel of order 1
 * ``i1e``                   — exponentially-scaled ``i1``
 * ``ndtr``                  — normal CDF ``Φ(x) = ½·(1 + erf(x/√2))``
 * ``ndtri``                 — inverse normal CDF (Beasley-Springer-Moro)
@@ -24,18 +24,20 @@ Implemented (all pure-Python composites over engine ops — no C++ work):
                               whole real line (reflection for ``x < 0``)
 * ``spherical_bessel_j0``   — ``sin(x)/x`` with continuous extension at 0
 
-Deferred (would need oscillatory / Hurwitz-zeta approximations or
-arbitrary-order Bessel machinery — enable in a follow-up if anyone
-actually asks): ``iv``, ``ive``, ``bessel_j0``/``j1``/``y0``/``y1``,
-``modified_bessel_k0``/``k1`` (and scaled variants), ``zeta``, the
-orthogonal-polynomial family (Chebyshev / Legendre / Hermite /
-Laguerre / Jacobi).
+Also: the order-0/1 Bessel family (``bessel_j0``/``j1``/``y0``/``y1``,
+``modified_bessel_k0``/``k1`` and their scaled forms — float32 by
+Abramowitz & Stegun polynomials, float64 by the Cephes double-precision
+series), the Hurwitz ``zeta`` and the orthogonal polynomials.
+
+Deferred (would need arbitrary-order Bessel machinery): ``iv``, ``ive``,
+and the Jacobi polynomials.
 """
 
 import math
 from typing import TYPE_CHECKING, Callable
 
 import lucid
+from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _polygamma
 from lucid._ops.composite.elementwise import _x_times_log
 
@@ -61,6 +63,7 @@ def _real(x: Tensor) -> Tensor:
     if lucid.is_floating_point(x):
         return x
     return x.to(lucid.float32)
+
 
 
 # ── Error-function family ──────────────────────────────────────────────────
@@ -209,6 +212,8 @@ def i0e(x: Tensor) -> Tensor:
     >>> i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))
     tensor([1., 0.4658, 0.1835, 0.08978])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._i0e(x)
     ax = lucid.abs(x)
     # ``i0``'s own large branch is ``P(3.75/|x|) · exp(|x|) / √|x|``, so the
     # scaled value is that polynomial over the square root and the
@@ -219,9 +224,9 @@ def i0e(x: Tensor) -> Tensor:
     )
     big = lucid.maximum(ax, lucid.full_like(ax, 3.75))
     y = 3.75 / big
-    poly = lucid.full_like(x, _I0E_LARGE_COEFFS[0])
+    poly = lucid.full_like(x, _bessel._AS_I0_LARGE[0])
     y_pow = lucid.ones_like(x)
-    for c in _I0E_LARGE_COEFFS[1:]:
+    for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y
         poly = poly + c * y_pow
     return lucid.where(ax <= 3.75, small, poly / lucid.sqrt(big))
@@ -279,11 +284,12 @@ def i1(x: Tensor) -> Tensor:
 
     The implementation uses the two-branch Abramowitz & Stegun §9.8
     polynomial approximation: a power series in :math:`(x/3.75)^2` for
-    :math:`|x| \le 3.75`, and an asymptotic expansion in
-    :math:`3.75/|x|` scaled by :math:`e^{|x|}/\sqrt{|x|}` for
-    :math:`|x| > 3.75`.  Accuracy is roughly :math:`10^{-7}` over the
-    real line.  ``I_1`` is odd, ``I_1(0) = 0``, and
-    :math:`I_1(x) \sim e^{x}/\sqrt{2\pi x}` as :math:`x \to \infty`.
+    :math:`|x| \le 3.75`, and an asymptotic expansion in :math:`3.75/|x|`
+    scaled by :math:`e^{|x|}/\sqrt{|x|}` for :math:`|x| > 3.75`.  Accuracy
+    is roughly :math:`10^{-7}` over the real line; a ``float64`` input takes
+    the Cephes double-precision series instead.  ``I_1`` is odd,
+    ``I_1(0) = 0``, and :math:`I_1(x) \sim e^{x}/\sqrt{2\pi x}` as
+    :math:`x \to \infty`.
 
     Examples
     --------
@@ -292,6 +298,8 @@ def i1(x: Tensor) -> Tensor:
     >>> i1(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.5652, 24.34])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._i1(x)
     ax = lucid.abs(x)
     ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
 
@@ -357,6 +365,8 @@ def i1e(x: Tensor) -> Tensor:
     >>> i1e(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.2079, 0.164])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._i1e(x)
     ax = lucid.abs(x)
     small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * i1(
         lucid.where(ax <= 3.75, x, lucid.sign(x) * 3.75)
@@ -1533,34 +1543,15 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
 
 # ── Bessel functions ───────────────────────────────────────────────────────
 #
-# Polynomial / asymptotic approximations from Abramowitz & Stegun §9
-# (J0, J1, Y0, Y1) and §9.8 (K0, K1).  Each is split into a small-|x|
-# polynomial branch and a large-|x| asymptotic-with-trig branch.  These
-# are the same approximations used by Cephes / SciPy and are accurate to
-# ≈ 1e-7 over the supported range, which is sufficient for typical ML
-# usage.  Higher precision needs would call into a proper implementation
-# (mpmath / Boost.Math).
+# float32: polynomial / asymptotic approximations from Abramowitz & Stegun
+# §9 (J0, J1, Y0, Y1) and §9.8 (K0, K1), each split into a small-|x|
+# polynomial branch and a large-|x| asymptotic-with-trig branch.  Their
+# eight-digit coefficients are accurate to ≈ 1e-7 — float32's own rounding
+# level, and no further.  float64 therefore takes the Cephes
+# double-precision series in ``lucid._ops.composite._bessel``.
 
 
-# A&S 9.8.2 large-argument polynomial for I₀, shared with ``lucid.i0``.
-# Named here because the *scaled* form is this polynomial on its own — the
-# ``exp(|x|)`` that ``i0`` multiplies it by is exactly what ``i0e`` divides
-# out, so pairing them cancels an overflow against an underflow instead of
-# never forming either.
-_I0E_LARGE_COEFFS: list[float] = [
-    0.39894228,
-    0.01328592,
-    0.00225319,
-    -0.00157565,
-    0.00916281,
-    -0.02057706,
-    0.02635537,
-    -0.01647633,
-    0.00392377,
-]
-
-
-# A&S 9.8.6 — the same polynomials ``_modified_bessel_k{0,1}_large`` use,
+# A&S 9.8.6 — ``e^x √x K(x)`` for x > 2: ``_modified_bessel_k{0,1}_large``
 # without the ``exp(-x)/√x`` tail.
 def _K0E_LARGE(z: Tensor) -> Tensor:
     return (
@@ -1667,12 +1658,14 @@ def bessel_j0(x: Tensor) -> Tensor:
                  \left(\frac{x}{2}\right)^{2k}.
 
     The implementation uses the Abramowitz & Stegun §9.4 two-branch
-    polynomial fit: a power series in :math:`(x/3)^2` for
-    :math:`|x| \le 3` and an asymptotic
+    polynomial fit: a power series in :math:`(x/3)^2` for :math:`|x| \le 3`
+    and an asymptotic
     :math:`\sqrt{2/(\pi x)} \cos(x - \pi/4) \cdot f(3/|x|)` form for
-    :math:`|x| > 3`.  Accuracy is :math:`\approx 10^{-7}` on the real
-    line.  ``J_0`` is even, :math:`J_0(0) = 1`, and the function decays
-    as :math:`\sqrt{2/(\pi x)}` for large ``x``.
+    :math:`|x| > 3`.  Accuracy is :math:`\approx 10^{-7}`
+    on the real line; a ``float64`` input takes the Cephes double-precision
+    series instead, with its first two zeros exact.  ``J_0`` is even,
+    :math:`J_0(0) = 1`, and the function decays as :math:`\sqrt{2/(\pi x)}`
+    for large ``x``.
 
     Examples
     --------
@@ -1683,6 +1676,8 @@ def bessel_j0(x: Tensor) -> Tensor:
     >>> bool(bessel_j0(lucid.tensor(2.4048)).abs() < 1e-4)  # the first zero
     True
     """
+    if x.dtype == lucid.float64:
+        return _bessel._j0(x)
     return _split(x, 3.0, _bessel_j0_small, _bessel_j0_large)
 
 
@@ -1755,10 +1750,11 @@ def bessel_j1(x: Tensor) -> Tensor:
         J_1(x) = \sum_{k=0}^\infty \frac{(-1)^k}{k!\, (k+1)!}
                  \left(\frac{x}{2}\right)^{2k+1}.
 
-    Implementation: Abramowitz & Stegun §9.4 two-branch polynomial,
-    accurate to :math:`\approx 10^{-7}`.  ``J_1`` is odd,
-    :math:`J_1(0) = 0`, with maximum :math:`\approx 0.5819` at
-    :math:`x \approx 1.8412`.
+    Implementation: Abramowitz & Stegun §9.4 two-branch polynomial, accurate
+    to :math:`\approx 10^{-7}`; a ``float64`` input takes the Cephes
+    double-precision series instead, with its first two zeros exact.
+    ``J_1`` is odd, :math:`J_1(0) = 0`, with maximum :math:`\approx 0.5819`
+    at :math:`x \approx 1.8412`.
 
     Examples
     --------
@@ -1769,6 +1765,8 @@ def bessel_j1(x: Tensor) -> Tensor:
     >>> bool(bessel_j1(lucid.tensor(3.8317)).abs() < 1e-4)  # the first zero
     True
     """
+    if x.dtype == lucid.float64:
+        return _bessel._j1(x)
     return _split(x, 3.0, _bessel_j1_small, _bessel_j1_large)
 
 
@@ -1843,11 +1841,12 @@ def bessel_y0(x: Tensor) -> Tensor:
                    \sin\!\left(x - \frac{\pi}{4}\right)
                                  \;\text{as } x \to \infty.
 
-    Implementation: Numerical Recipes §6.5 rational fit on
-    :math:`(0, 8]` with the :math:`J_0 \log` Wronskian term, and the
-    standard A&S 9.4.5 trigonometric asymptotic on :math:`(8, \infty)`.
-    Accuracy is :math:`\approx 10^{-7}`.  ``Y_0`` diverges to
-    :math:`-\infty` as :math:`x \to 0^+`.
+    Implementation: Numerical Recipes §6.5 rational fit on :math:`(0, 8]`
+    with the :math:`J_0 \log` Wronskian term, and the standard A&S 9.4.5
+    trigonometric asymptotic on :math:`(8, \infty)`. Accuracy is
+    :math:`\approx 10^{-7}`; a ``float64`` input takes the Cephes
+    double-precision series instead. ``Y_0`` diverges to :math:`-\infty` as
+    :math:`x \to 0^+`.
 
     Examples
     --------
@@ -1856,6 +1855,8 @@ def bessel_y0(x: Tensor) -> Tensor:
     >>> bessel_y0(lucid.tensor([1.0, 5.0, 10.0]))
     tensor([0.08826, -0.3085, 0.05567])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._y0(x)
     return _split(x, 8.0, _bessel_y0_small, _bessel_y0_large)
 
 
@@ -1931,10 +1932,10 @@ def bessel_y1(x: Tensor) -> Tensor:
                     \sin\!\left(x - \frac{3\pi}{4}\right)
                     \;\text{as } x \to \infty.
 
-    Implementation: Numerical Recipes §6.5 rational fit on
-    :math:`(0, 8]` (Wronskian-corrected with the :math:`J_1 \log`
-    term), trigonometric asymptotic on :math:`(8, \infty)`.  Accuracy
-    is :math:`\approx 10^{-7}`.
+    Implementation: Numerical Recipes §6.5 rational fit on :math:`(0, 8]`
+    (Wronskian-corrected with the :math:`J_1 \log` term), trigonometric
+    asymptotic on :math:`(8, \infty)`.  Accuracy is :math:`\approx 10^{-7}`;
+    a ``float64`` input takes the Cephes double-precision series instead.
 
     Examples
     --------
@@ -1943,6 +1944,8 @@ def bessel_y1(x: Tensor) -> Tensor:
     >>> bessel_y1(lucid.tensor([1.0, 5.0, 10.0]))
     tensor([-0.7812, 0.1479, 0.249])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._y1(x)
     return _split(x, 8.0, _bessel_y1_small, _bessel_y1_large)
 
 
@@ -1964,17 +1967,7 @@ def _modified_bessel_k0_small(x: Tensor) -> Tensor:
 
 def _modified_bessel_k0_large(x: Tensor) -> Tensor:
     # A&S 9.8.6 — asymptotic for x > 2.
-    z = 2.0 / x
-    poly = (
-        1.25331414
-        - 0.07832358 * z
-        + 0.02189568 * z**2
-        - 0.01062446 * z**3
-        + 0.00587872 * z**4
-        - 0.00251540 * z**5
-        + 0.00053208 * z**6
-    )
-    return poly * lucid.exp(-x) / lucid.sqrt(x)
+    return _K0E_LARGE(2.0 / x) * lucid.exp(-x) / lucid.sqrt(x)
 
 
 def modified_bessel_k0(x: Tensor) -> Tensor:
@@ -2008,8 +2001,9 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
                   \;\text{as } x \to \infty.
 
     Implementation: Abramowitz & Stegun §9.8 polynomial branches at the
-    cutoff :math:`x = 2`, accurate to :math:`\approx 10^{-7}`.  For
-    numerically stable evaluation at large arguments use
+    cutoff :math:`x = 2`, accurate to :math:`\approx 10^{-7}`; a ``float64``
+    input takes the Cephes double-precision series instead.  For numerically
+    stable evaluation at large arguments use
     :func:`scaled_modified_bessel_k0`.
 
     Examples
@@ -2019,6 +2013,8 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     >>> modified_bessel_k0(lucid.tensor([0.5, 1.0, 5.0]))
     tensor([0.9244, 0.421, 0.003691])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._k0(x)
     return _split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large)
 
 
@@ -2053,6 +2049,8 @@ def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
     >>> scaled_modified_bessel_k0(lucid.tensor([1.0, 5.0, 20.0]))
     tensor([1.144, 0.5478, 0.2785])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._k0e(x)
     # ``_modified_bessel_k0_large`` is ``poly(2/x) · exp(-x) / √x``, so the
     # scaled value is the polynomial over the square root.  Under the
     # split the direct product is safe — ``exp(2)`` is an ordinary number.
@@ -2080,17 +2078,7 @@ def _modified_bessel_k1_small(x: Tensor) -> Tensor:
 
 
 def _modified_bessel_k1_large(x: Tensor) -> Tensor:
-    z = 2.0 / x
-    poly = (
-        1.25331414
-        + 0.23498619 * z
-        - 0.03655620 * z**2
-        + 0.01504268 * z**3
-        - 0.00780353 * z**4
-        + 0.00325614 * z**5
-        - 0.00068245 * z**6
-    )
-    return poly * lucid.exp(-x) / lucid.sqrt(x)
+    return _K1E_LARGE(2.0 / x) * lucid.exp(-x) / lucid.sqrt(x)
 
 
 def modified_bessel_k1(x: Tensor) -> Tensor:
@@ -2122,10 +2110,10 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
         K_1(x) \sim \sqrt{\frac{\pi}{2x}}\, e^{-x}
                   \;\text{as } x \to \infty.
 
-    Implementation: Abramowitz & Stegun §9.8 two-branch polynomial,
-    accurate to :math:`\approx 10^{-7}`.  Use
-    :func:`scaled_modified_bessel_k1` for numerically stable
-    evaluation at large ``x``.
+    Implementation: Abramowitz & Stegun §9.8 two-branch polynomial, accurate
+    to :math:`\approx 10^{-7}`; a ``float64`` input takes the Cephes
+    double-precision series instead.  Use :func:`scaled_modified_bessel_k1`
+    for numerically stable evaluation at large ``x``.
 
     Examples
     --------
@@ -2134,6 +2122,8 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     >>> modified_bessel_k1(lucid.tensor([0.5, 1.0, 5.0]))
     tensor([1.656, 0.6019, 0.004045])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._k1(x)
     return _split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large)
 
 
@@ -2166,6 +2156,8 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
     >>> scaled_modified_bessel_k1(lucid.tensor([1.0, 5.0, 20.0]))
     tensor([1.636, 0.6003, 0.2854])
     """
+    if x.dtype == lucid.float64:
+        return _bessel._k1e(x)
     # ``_modified_bessel_k1_large`` is ``poly(2/x) · exp(-x) / √x``, so the
     # scaled value is the polynomial over the square root.  Under the
     # split the direct product is safe — ``exp(2)`` is an ordinary number.

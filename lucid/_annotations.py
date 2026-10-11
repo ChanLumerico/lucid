@@ -230,6 +230,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid._factories.random": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._ops": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._ops._adapters": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid._ops.composite._bessel": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._ops.composite.blas": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._ops.composite.complex": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._ops.composite.dtype": (("Tensor", "lucid._tensor.tensor", "Tensor"),),

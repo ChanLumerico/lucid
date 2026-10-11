@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, cast
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _unwrap_or_scalar, _wrap
+from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar, TensorOrScalar
@@ -1472,31 +1473,6 @@ def digamma(x: Tensor) -> Tensor:
 
 
 # ── Modified Bessel function I₀ ───────────────────────────────────────────
-#
-# Uses the Abramowitz & Stegun polynomial approximation (Table 9.8.1):
-#   |x| ≤ 3.75 : series in (x/3.75)²
-#   |x| > 3.75 : series in 3.75/|x|, multiplied by exp(|x|)/√|x|
-
-_I0_SMALL_COEFFS: list[float] = [
-    1.0,
-    3.5156229,
-    3.0899424,
-    1.2067492,
-    0.2659732,
-    0.0360768,
-    0.0045813,
-]
-_I0_LARGE_COEFFS: list[float] = [
-    0.39894228,
-    0.01328592,
-    0.00225319,
-    -0.00157565,
-    0.00916281,
-    -0.02057706,
-    0.02635537,
-    -0.01647633,
-    0.00392377,
-]
 
 
 def i0(x: Tensor) -> Tensor:
@@ -1511,6 +1487,8 @@ def i0(x: Tensor) -> Tensor:
 
     Differentiable through both branches (engine primitives only).
 
+    A ``float64`` input takes the Cephes double-precision series instead.
+
     Parameters
     ----------
     x : Tensor
@@ -1521,23 +1499,25 @@ def i0(x: Tensor) -> Tensor:
     Tensor
         :math:`I_0(x)` element-wise; always positive.
     """
+    if x.dtype == lucid.float64:
+        return _bessel._i0(x)
     ax = lucid.abs(x)
     # Guard: avoid division by zero in large-argument branch (ax == 0 → use small branch)
     ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
 
     # Small-argument branch: polynomial in t = (x / 3.75)²
     t_small = (x * (1.0 / 3.75)) ** 2
-    val_small = lucid.full_like(x, _I0_SMALL_COEFFS[0])
+    val_small = lucid.full_like(x, _bessel._AS_I0_SMALL[0])
     t_pow = lucid.ones_like(x)
-    for c in _I0_SMALL_COEFFS[1:]:
+    for c in _bessel._AS_I0_SMALL[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
 
     # Large-argument branch: polynomial in y = 3.75 / |x|
     y_large = 3.75 / ax_safe
-    val_large = lucid.full_like(x, _I0_LARGE_COEFFS[0])
+    val_large = lucid.full_like(x, _bessel._AS_I0_LARGE[0])
     y_pow = lucid.ones_like(x)
-    for c in _I0_LARGE_COEFFS[1:]:
+    for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
     val_large = val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)

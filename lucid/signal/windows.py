@@ -852,40 +852,13 @@ def kaiser(
     arg = 2.0 * n / float(N - 1) - 1.0
     radical = lucid.sqrt(lucid.clip(1.0 - arg * arg, 0.0, 1.0))
     num = lucid.i0(float(beta) * radical)
-    denom = float(_i0_scalar(float(beta)))
+    # The denominator is ``i0`` at the same dtype and on the same device as
+    # the numerator, so the peak sample is exactly 1 and a float64 window is
+    # float64 throughout — a host-side float32-grade ``I0(beta)`` capped it
+    # at ~1e-8 relative accuracy.
+    denom = lucid.i0(lucid.full_like(num[:1], float(beta)))
     w = num / denom
     return _trim(w, M, sym)
-
-
-def _i0_scalar(x: float) -> float:
-    """Scalar ``I0(x)`` using the same Abramowitz polynomial Lucid uses
-    in :func:`lucid.i0`.  Used to compute the Kaiser denominator without
-    allocating a length-1 tensor."""
-    ax = abs(x)
-    if ax <= 3.75:
-        t = (x / 3.75) ** 2
-        return (
-            1.0
-            + 3.5156229 * t
-            + 3.0899424 * t**2
-            + 1.2067492 * t**3
-            + 0.2659732 * t**4
-            + 0.0360768 * t**5
-            + 0.0045813 * t**6
-        )
-    y = 3.75 / ax
-    poly = (
-        0.39894228
-        + 0.01328592 * y
-        + 0.00225319 * y**2
-        - 0.00157565 * y**3
-        + 0.00916281 * y**4
-        - 0.02057706 * y**5
-        + 0.02635537 * y**6
-        - 0.01647633 * y**7
-        + 0.00392377 * y**8
-    )
-    return poly * math.exp(ax) / math.sqrt(ax)
 
 
 __all__ = [
