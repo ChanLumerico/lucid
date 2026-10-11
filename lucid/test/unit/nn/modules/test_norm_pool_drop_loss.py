@@ -197,13 +197,12 @@ class TestAvgPool3dForwardsItsArguments:
         excluded = nn.AvgPool3d(2, stride=1, padding=1, count_include_pad=False)(x)
         assert float((included - excluded).abs().max().item()) > 0.0
 
-    def test_divisor_override_errors_rather_than_being_dropped(self) -> None:
-        """The kernel does not support it.  Saying so beats returning a
-        plain average and letting the caller believe the divisor applied."""
-        import pytest
-
-        with pytest.raises(NotImplementedError, match="divisor_override"):
-            nn.AvgPool3d(2, divisor_override=4)(lucid.ones(1, 1, 4, 4, 4))
+    def test_divisor_override_reaches_the_kernel(self) -> None:
+        """A window of eight ones sums to 8; divided by 4 that is 2, where a
+        dropped override would give the plain average, 1 (LCD-57)."""
+        out = nn.AvgPool3d(2, divisor_override=4)(lucid.ones(1, 1, 4, 4, 4))
+        assert out.shape == (1, 1, 2, 2, 2)
+        assert float(out.min().item()) == float(out.max().item()) == 2.0
 
     def test_repr_shows_the_arguments_that_change_the_result(self) -> None:
         text = repr(nn.AvgPool3d(2, ceil_mode=True))

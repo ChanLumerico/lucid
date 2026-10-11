@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - diffusion schedulers carry a device
 
+- dilated max pooling and avg pool divisor_override
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

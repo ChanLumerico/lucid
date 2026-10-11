@@ -1155,7 +1155,6 @@
     "lucid/models/vision/crossvit/_config.py": 1,
     "lucid/models/vision/vjepa2/_config.py": 1,
     "lucid/nn/module.py": 3,
-    "lucid/nn/modules/conv.py": 2,
     "lucid/utils/data/dataset.py": 1,
     "lucid/utils/rollout/_driver.py": 1
    }
@@ -1865,7 +1864,7 @@
     "lucid/models/generative/genie/_model.py": 1,
     "lucid/models/text/transformer/_model.py": 1,
     "lucid/models/vision/coatnet/_model.py": 1,
-    "lucid/nn/module.py": 5,
+    "lucid/nn/module.py": 4,
     "lucid/nn/modules/rnn.py": 3,
     "lucid/profiler/__init__.py": 2,
     "lucid/serialization/__init__.py": 1,

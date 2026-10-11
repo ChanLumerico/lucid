@@ -341,8 +341,8 @@ def avg_pool2d(
     count_include_pad : bool, optional
         When ``True``, padding cells contribute to the denominator.
     divisor_override : int, optional
-        Explicit denominator overriding ``|R|`` (rare; useful for
-        symmetric / weight-style averages).
+        Divide each window's sum by this instead of ``|R|`` (rare; useful
+        for symmetric / weight-style averages).  Must not be ``0``.
 
     Returns
     -------
@@ -883,7 +883,7 @@ def avg_pool3d(
     count_include_pad : bool, optional
         Whether padding cells contribute to the denominator.
     divisor_override : int, optional
-        Explicit denominator overriding ``|R|``.
+        Divide each window's sum by this instead of ``|R|`` (never ``0``).
 
     Returns
     -------

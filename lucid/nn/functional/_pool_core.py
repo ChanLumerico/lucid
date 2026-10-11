@@ -17,7 +17,6 @@ import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
-from lucid._unsupported import unsupported_if
 from lucid.nn.functional._spatial_args import (
     _PoolGeometry,
     _add_batch_axis,
@@ -46,37 +45,66 @@ _ADAPTIVE_POOL: dict[tuple[str, int], Callable[..., _C_engine.TensorImpl]] = {
 }
 
 
+def _pooled_extent(size: int, k: int, s: int, p: int, d: int, ceil_mode: bool) -> int:
+    """How many windows fit along one axis, by the reference's arithmetic.
+
+    With ``ceil_mode`` a last partial window is kept only if it starts
+    inside the input or its left padding.
+    """
+    span = size + 2 * p - d * (k - 1) - 1
+    out = (span + (s - 1 if ceil_mode else 0)) // s + 1
+    if ceil_mode and (out - 1) * s >= size + p:
+        out -= 1
+    return out
+
+
+def _pool_windows(x: Tensor, g: _PoolGeometry, out_spatial: tuple[int, ...]) -> Tensor:
+    """Every pooling window of ``x`` as ``(*lead, *out_spatial, prod(kernel))``.
+
+    Padding is ``-inf``, so a maximum never comes from it.  A window spans
+    ``dilation * (kernel - 1) + 1`` inputs and keeps every ``dilation``-th.
+    """
+    kernel, stride, padding, dilation = g
+    n = len(kernel)
+    lead = x.ndim - n
+    spatial = tuple(int(s) for s in x.shape[lead:])
+    span = tuple(dl * (k - 1) + 1 for k, dl in zip(kernel, dilation, strict=True))
+    pads: list[int] = []
+    for d in reversed(range(n)):
+        # Enough on the right to hold every window, including the partial
+        # last one ``ceil_mode`` keeps.
+        right = (out_spatial[d] - 1) * stride[d] + span[d] - spatial[d] - padding[d]
+        pads += [padding[d], max(right, 0)]
+    windows = _lucid.nn.functional.pad(x, tuple(pads), value=float("-inf"))
+    for d in range(n):
+        windows = windows.unfold(lead + d, span[d], stride[d])
+        windows = windows.narrow(lead + d, 0, out_spatial[d])
+    for d in range(n):
+        if dilation[d] > 1:
+            taps = _lucid.arange(
+                0, span[d], dilation[d], dtype=_lucid.int64, device=x.device
+            )
+            windows = windows.index_select(x.ndim + d, taps)
+    return windows.reshape(*x.shape[:lead], *out_spatial, math.prod(kernel))
+
+
 def _window_argmax_indices(
-    x: Tensor, g: _PoolGeometry, out_spatial: tuple[int, ...]
+    x: Tensor, g: _PoolGeometry, out_spatial: tuple[int, ...], windows: Tensor
 ) -> Tensor:
     """Where each pooling window's maximum sits, as the reference reports it.
 
     Per leading ``(N, C)`` slice, a flat index into the input's unpadded
     spatial extent — the form :func:`max_unpool2d` and its siblings take.
-    Padding is ``-inf``, so it is never chosen, and a tie goes to the first
+    ``windows`` is :func:`_pool_windows` of ``x``; a tie goes to the first
     element of the window in row-major order, as the reference's does.
-    The values come from the engine kernel; this only locates them.
     """
-    kernel, stride, padding = g.kernel, g.stride, g.padding
+    kernel, stride, padding, dilation = g
     n = len(kernel)
-    lead = x.ndim - n
-    spatial = tuple(int(s) for s in x.shape[lead:])
-    pads: list[int] = []
-    for d in reversed(range(n)):
-        # Enough on the right to hold every window the engine produced,
-        # including the partial last one ``ceil_mode`` keeps.
-        right = (out_spatial[d] - 1) * stride[d] + kernel[d] - spatial[d] - padding[d]
-        pads += [padding[d], max(right, 0)]
-    windows = _lucid.nn.functional.pad(x, tuple(pads), value=float("-inf"))
-    for d in range(n):
-        windows = windows.unfold(lead + d, kernel[d], stride[d])
-    for d in range(n):
-        windows = windows.narrow(lead + d, 0, out_spatial[d])
-    flat_window = windows.reshape(*x.shape[:lead], *out_spatial, math.prod(kernel))
-    local = _lucid.argmax(flat_window, dim=-1)
+    spatial = tuple(int(s) for s in x.shape[x.ndim - n :])
+    local = _lucid.argmax(windows, dim=-1)
     index = None
     for d in range(n):
-        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d]
+        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d] * dilation[d]
         shape = [1] * n
         shape[d] = out_spatial[d]
         origin = _lucid.arange(out_spatial[d], dtype=_lucid.int64, device=x.device)
@@ -117,7 +145,9 @@ def _adaptive_argmax_indices(x: Tensor, out_spatial: tuple[int, ...]) -> Tensor:
     if all(i % o == 0 for i, o in zip(spatial, out_spatial, strict=True)):
         kernel = tuple(i // o for i, o in zip(spatial, out_spatial, strict=True))
         g = _PoolGeometry(kernel, kernel, (0,) * n, (1,) * n)
-        return _window_argmax_indices(x, g, out_spatial)
+        return _window_argmax_indices(
+            x, g, out_spatial, _pool_windows(x, g, out_spatial)
+        )
     found: list[Tensor] = []
     for cell, window in _adaptive_cells(x, out_spatial):
         extent = [hi - lo for lo, hi in cell]
@@ -155,21 +185,55 @@ def _adaptive_pool_python(
 def _max_pool(
     x: Tensor, g: _PoolGeometry, ceil_mode: bool, return_indices: bool
 ) -> Tensor | tuple[Tensor, Tensor]:
-    """The one body of ``max_pool{1,2,3}d`` and their modules."""
+    """The one body of ``max_pool{1,2,3}d`` and their modules.
+
+    The engine kernel pools undilated windows.  A dilated window is
+    gathered from :func:`_pool_windows` and reduced here; the indices come
+    from the same windows either way.
+    """
     n = len(g.kernel)
-    unsupported_if(
-        any(d != 1 for d in g.dilation),
-        f"max_pool{n}d",
-        "dilation",
-        g.dilation,
-        detail="Only dilation=1 is supported.",
-    )
     xb, unbatched = _add_batch_axis(x, n)
-    out = _wrap(_MAX_POOL[n](_unwrap(xb), *g.kernel, *g.stride, *g.padding, ceil_mode))
+    if any(d != 1 for d in g.dilation):
+        spatial = tuple(int(v) for v in xb.shape[2:])
+        out_spatial = tuple(
+            _pooled_extent(size, *axis, ceil_mode)
+            for size, axis in zip(spatial, zip(*g, strict=True), strict=True)
+        )
+        if min(out_spatial) < 1:
+            raise ValueError(
+                f"max_pool{n}d: an input of {spatial} is too small for "
+                f"kernel_size={g.kernel} with dilation={g.dilation}"
+            )
+        windows = _pool_windows(xb, g, out_spatial)
+        out = windows.max(dim=-1)
+    else:
+        out = _wrap(
+            _MAX_POOL[n](_unwrap(xb), *g.kernel, *g.stride, *g.padding, ceil_mode)
+        )
+        if not return_indices:
+            return _drop_batch_axis(out, unbatched)
+        out_spatial = tuple(int(v) for v in out.shape[-n:])
+        windows = _pool_windows(xb, g, out_spatial)
     if not return_indices:
         return _drop_batch_axis(out, unbatched)
-    index = _window_argmax_indices(xb, g, tuple(int(v) for v in out.shape[-n:]))
+    index = _window_argmax_indices(xb, g, out_spatial, windows)
     return _drop_batch_axis(out, unbatched), _drop_batch_axis(index, unbatched)
+
+
+def _padded_window_sizes(
+    spatial: tuple[int, ...], g: _PoolGeometry, out_spatial: tuple[int, ...]
+) -> list[list[int]]:
+    """Per axis, how many input-or-padding cells each window covers.
+
+    The reference's ``count_include_pad`` divisor: a window that runs past
+    the padding (``ceil_mode``) counts only what it covers.
+    """
+    sizes: list[list[int]] = []
+    for size, o, (k, s, p, _) in zip(
+        spatial, out_spatial, zip(*g, strict=True), strict=True
+    ):
+        sizes.append([min(i * s - p + k, size + p) - (i * s - p) for i in range(o)])
+    return sizes
 
 
 def _avg_pool(
@@ -179,21 +243,32 @@ def _avg_pool(
     count_include_pad: bool,
     divisor_override: int | None,
 ) -> Tensor:
-    """The one body of ``avg_pool{1,2,3}d`` and their modules."""
+    """The one body of ``avg_pool{1,2,3}d`` and their modules.
+
+    ``divisor_override`` rescales the engine's padded average to the
+    window's sum over the given divisor.
+    """
     n = len(g.kernel)
-    unsupported_if(
-        divisor_override is not None,
-        f"avg_pool{n}d",
-        "divisor_override",
-        divisor_override,
-        detail="The window size is always the divisor.",
-    )
+    if divisor_override is not None and int(divisor_override) == 0:
+        raise ValueError(f"avg_pool{n}d: divisor_override must not be zero")
     xb, unbatched = _add_batch_axis(x, n)
+    cip = count_include_pad or divisor_override is not None
     out = _wrap(
-        _AVG_POOL[n](
-            _unwrap(xb), *g.kernel, *g.stride, *g.padding, ceil_mode, count_include_pad
-        )
+        _AVG_POOL[n](_unwrap(xb), *g.kernel, *g.stride, *g.padding, ceil_mode, cip)
     )
+    if divisor_override is not None:
+        sizes = _padded_window_sizes(
+            tuple(int(v) for v in xb.shape[2:]), g, tuple(int(v) for v in out.shape[2:])
+        )
+        if all(v == k for axis, k in zip(sizes, g.kernel, strict=True) for v in axis):
+            out = out * (math.prod(g.kernel) / int(divisor_override))
+        else:
+            for d, axis in enumerate(sizes):
+                shape = [1] * n
+                shape[d] = len(axis)
+                count = _lucid.tensor(axis, dtype=out.dtype, device=out.device)
+                out = out * count.reshape(*shape)
+            out = out / int(divisor_override)
     return _drop_batch_axis(out, unbatched)
 
 

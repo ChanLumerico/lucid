@@ -7,6 +7,7 @@ from typing import override
 from lucid._tensor.tensor import Tensor
 from lucid._types import _Size2d, _Size3d
 from lucid.nn.module import Module
+from lucid.nn.functional._spatial_args import _ntuple
 from lucid.nn.functional.pooling import (
     max_pool1d,
     max_pool2d,
@@ -482,6 +483,8 @@ class AvgPool2d(Module):
         Use ceiling instead of floor for output sizes.  Default: ``False``.
     count_include_pad : bool, optional
         Count zero-padded values in the denominator.  Default: ``True``.
+    divisor_override : int or None, optional
+        Divide each window's sum by this, never ``0``, instead of its size.
 
     Attributes
     ----------
@@ -490,6 +493,7 @@ class AvgPool2d(Module):
     padding : int or tuple[int, int]
     ceil_mode : bool
     count_include_pad : bool
+    divisor_override : int or None
 
     Shape
     -----
@@ -533,6 +537,7 @@ class AvgPool2d(Module):
         padding: _Size2d = 0,
         ceil_mode: bool = False,
         count_include_pad: bool = True,
+        divisor_override: int | None = None,
     ) -> None:
         """Initialise the AvgPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -541,6 +546,7 @@ class AvgPool2d(Module):
         self.padding = padding
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
+        self.divisor_override = divisor_override
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -564,6 +570,7 @@ class AvgPool2d(Module):
             self.padding,
             self.ceil_mode,
             self.count_include_pad,
+            self.divisor_override,
         )
 
     @override
@@ -1015,10 +1022,8 @@ class AvgPool3d(Module):
     count_include_pad : bool, optional
         Include zero-padded elements in the denominator.  Default: ``True``.
     divisor_override : int or None, optional
-        If set, use this value as the divisor instead of the window size.
-        Forwarded to :func:`~lucid.nn.functional.avg_pool3d`, which does
-        not support it and raises — the window size is always the divisor.
-        Default: ``None``.
+        If set, each window's sum is divided by this instead of its
+        size.  Must not be ``0``.  Default: ``None``.
 
     Attributes
     ----------
@@ -1598,14 +1603,9 @@ class LPPool2d(Module):
         """Initialise the LPPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.norm_type = norm_type
-        kh, kw = (
-            (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
-        )
-        self.kh, self.kw = kh, kw
-        if stride is None:
-            self.sh, self.sw = kh, kw
-        else:
-            self.sh, self.sw = (stride, stride) if isinstance(stride, int) else stride
+        self.kh, self.kw = _ntuple(kernel_size, 2, "LPPool2d", "kernel_size")
+        step = kernel_size if stride is None else stride
+        self.sh, self.sw = _ntuple(step, 2, "LPPool2d", "stride")
         self.ceil_mode = ceil_mode
 
     @override
