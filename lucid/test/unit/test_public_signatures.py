@@ -34,10 +34,7 @@ import pytest
 
 import lucid
 
-#: Two that stay unreadable, for reasons that are not oversights.
-#:
-#: ``Generator`` is a pybind11 type whose ``__init__`` is a built-in
-#: method, and CPython cannot describe those from Python at all.
+#: One that stays unreadable, for a reason that is not an oversight.
 #:
 #: ``from_numpy`` annotates a numpy type, and numpy is a dependency of
 #: the bridge rather than of the package: ``converters`` imports it
@@ -46,9 +43,9 @@ import lucid
 #: readable would turn an optional import into a required one, which is
 #: the worse trade.
 #:
-#: Each has a test below that asserts the reason still holds, so an
-#: entry cannot outlive it unnoticed.
-NO_PYTHON_SIGNATURE = {"Generator", "from_numpy"}
+#: A test below asserts the reason still holds, so the entry cannot
+#: outlive it unnoticed.
+NO_PYTHON_SIGNATURE = {"from_numpy"}
 
 
 def _public_callables() -> list[str]:
@@ -82,17 +79,11 @@ def test_the_exemptions_are_still_public_callables() -> None:
     assert NO_PYTHON_SIGNATURE <= set(_public_callables())
 
 
-def test_generator_is_a_pybind11_type_python_cannot_describe() -> None:
-    """The exemption holds only while ``Generator`` is the bound C++ class.
-
-    Should it gain a Python wrapper, or a ``__signature__``, this fails and
-    the name leaves ``NO_PYTHON_SIGNATURE``.
-    """
-    generator = lucid.Generator
-    assert type(generator).__name__ == "pybind11_type"
-    assert generator.__module__ == "lucid._C.engine"
-    with pytest.raises(ValueError, match="no signature found for builtin"):
-        inspect.signature(generator)
+def test_generator_reads_as_a_python_class() -> None:
+    """``Generator`` was the bound C++ class, which ``inspect`` cannot
+    describe; the Python subclass that carries the reference's methods
+    (LCD-374) reads like any other callable, so it left the exemptions."""
+    assert list(inspect.signature(lucid.Generator).parameters) == ["seed"]
 
 
 def test_from_numpy_is_unreadable_only_through_its_numpy_annotation() -> None:
