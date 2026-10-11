@@ -38,11 +38,11 @@
 namespace py = pybind11;
 
 namespace {
-// See ``Tracer::on_host_read``.
-void note_host_read(const std::shared_ptr<lucid::TensorImpl>& t) {
-    if (auto* trc = lucid::compile::current_tracer())
-        trc->on_host_read(t.get());
-}
+// Every binding below that hands Python a tensor's values calls
+// ``note_host_read``; every one that returns a new TensorImpl made from an
+// existing one returns it through ``traced_derive`` (see Tracer.h).
+using lucid::compile::note_host_read;
+using lucid::compile::traced_derive;
 
 // Run a GPU tensor's pending work without holding the GIL.  The wait is the
 // GPU's; holding the GIL through it stalled every other Python thread in the
@@ -233,8 +233,10 @@ void register_tensor_impl(py::module_& m) {
                 if (!empty && last + elem > size)
                     throw std::invalid_argument(
                         "_make_view: the view reaches past the end of the storage");
-                return TensorImpl::make_view(base, std::move(view_shape), std::move(byte_stride),
-                                             static_cast<std::size_t>(offset * elem));
+                return traced_derive(
+                    "_make_view", base,
+                    TensorImpl::make_view(base, std::move(view_shape), std::move(byte_stride),
+                                          static_cast<std::size_t>(offset * elem)));
             },
             py::arg("base"), py::arg("shape"), py::arg("stride"), py::arg("offset"),
             "Testing hook: a view of base given in elements (shape, stride, offset).")
@@ -253,9 +255,11 @@ void register_tensor_impl(py::module_& m) {
         // layers so ``import lucid`` works without numpy installed.
         .def(
             "to_bytes",
-            [](TensorImpl& self) {
-                evaluate_without_gil(self);
-                return self.to_bytes();
+            [](const std::shared_ptr<TensorImpl>& self) {
+                // pickle, deepcopy and lucid.save read the values through here.
+                note_host_read(self);
+                evaluate_without_gil(*self);
+                return self->to_bytes();
             },
             "Return the tensor data as a contiguous bytes blob "
             "(row-major).  GPU tensors are downloaded to CPU first.")
@@ -265,13 +269,19 @@ void register_tensor_impl(py::module_& m) {
                     "Reconstruct a TensorImpl from a raw bytes blob + "
                     "metadata.  ``len(data)`` must equal "
                     "``prod(shape) * dtype_size(dtype)``.")
-        .def("transfer_to_device", &TensorImpl::transfer_to_device, py::arg("target"),
-             py::arg("requires_grad"),
-             "Cross-device copy (CPU↔GPU) without going through numpy.  "
-             "Used by ``Tensor.to(device=...)`` so the .to() call stays "
-             "numpy-free for ``import lucid`` users who didn't install the "
-             "``[numpy]`` extra.  SharedStorage tensors should use "
-             "``transfer_storage`` instead — that path is zero-copy relabel.")
+        .def(
+            "transfer_to_device",
+            [](const std::shared_ptr<TensorImpl>& self, Device target,
+               bool requires_grad) -> std::shared_ptr<TensorImpl> {
+                return traced_derive("to_device", self,
+                                     self->transfer_to_device(target, requires_grad));
+            },
+            py::arg("target"), py::arg("requires_grad"),
+            "Cross-device copy (CPU↔GPU) without going through numpy.  "
+            "Used by ``Tensor.to(device=...)`` so the .to() call stays "
+            "numpy-free for ``import lucid`` users who didn't install the "
+            "``[numpy]`` extra.  SharedStorage tensors should use "
+            "``transfer_storage`` instead — that path is zero-copy relabel.")
         .def(
             "tolist",
             [](const std::shared_ptr<TensorImpl>& self) {
@@ -348,7 +358,8 @@ void register_tensor_impl(py::module_& m) {
                 auto alias = TensorImpl::make_view(self, self->shape(), self->stride(), 0);
                 if (requires_grad)
                     alias->set_requires_grad(true);
-                return alias;
+                // Traced as ``detach``: the same values, a new leaf.
+                return traced_derive("detach", self, std::move(alias));
             },
             py::arg("requires_grad"),
             "Return a new TensorImpl sharing the same storage but with a different "
@@ -386,11 +397,7 @@ void register_tensor_impl(py::module_& m) {
                 // was pinned at its trace-time value — every compiled call
                 // replayed the first call's detached tensor, so a straight-
                 // through estimator (VQ-VAE, hard Gumbel) returned stale output.
-                if (auto* trc = lucid::compile::current_tracer()) {
-                    trc->on_op_enter("detach", self->device(), self->dtype(), self->shape());
-                    trc->on_op_io({self}, alias);
-                }
-                return alias;
+                return traced_derive("detach", self, std::move(alias));
             },
             "Return the alias ``.data`` hands out: the same storage, no autograd "
             "state, and writes through it untracked.")
@@ -436,8 +443,11 @@ void register_tensor_impl(py::module_& m) {
             // MTLResourceStorageModeShared buffers.
             auto& be = backend::Dispatcher::for_device(Device::GPU);
             Storage shared = be.to_shared_storage(t->storage(), t->shape());
-            return std::make_shared<TensorImpl>(std::move(shared), t->shape(), t->dtype(),
-                                                t->device(), t->requires_grad());
+            // No emitter: a compiled call cannot hand out a shared buffer.
+            return traced_derive("to_shared_storage", t,
+                                 std::make_shared<TensorImpl>(std::move(shared), t->shape(),
+                                                              t->dtype(), t->device(),
+                                                              t->requires_grad()));
         },
         py::arg("tensor"),
         "Convert a tensor's storage to MTLResourceStorageModeShared.\n"
@@ -463,8 +473,9 @@ void register_tensor_impl(py::module_& m) {
             // Zero-copy either way: the constructor adopts the buffer as a CPU
             // view or as a copy of its pinned MLX alias, and the result keeps
             // the descriptor, so relabelling it back is zero-copy too.
-            return std::make_shared<TensorImpl>(Storage{*sh}, t->shape(), t->dtype(), target_device,
-                                                t->requires_grad());
+            return traced_derive("transfer_storage", t,
+                                 std::make_shared<TensorImpl>(Storage{*sh}, t->shape(), t->dtype(),
+                                                              target_device, t->requires_grad()));
         },
         py::arg("tensor"), py::arg("device"),
         "Zero-copy device relabeling for SharedStorage tensors.\n\n"

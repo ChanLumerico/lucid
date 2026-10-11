@@ -616,6 +616,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - grad over a spent graph refuses, not "no path"
 
+- record copies and byte reads made outside the ops
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

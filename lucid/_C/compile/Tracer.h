@@ -224,6 +224,20 @@ public:
     // of it as a read of a traced value from the start of the trace.
     void watch(const TensorImplPtr& impl);
 
+    // ``out`` was made from ``src`` outside the op dispatcher — a device
+    // transfer, an alias with other autograd flags, a shared-buffer relabel
+    // (the TensorImpl bindings, ``bind_tensor.cpp``).  When the trace knows
+    // ``src``, ``out`` is recorded as op ``name`` reading it, so a later op
+    // or host read of ``out`` reaches the traced value.  Unrecorded, ``out``
+    // was a tensor the trace had never seen: a host read of it went
+    // unnoticed, and an op reading it took it as a feed pinned at its
+    // trace-time value — every compiled call answered with the first call's
+    // data.  ``name`` is an emitter's when ``out`` holds ``src``'s values on
+    // ``src``'s device (``"detach"``); any other name has no emitter and
+    // sends the call to eager.  A ``src`` the trace has not seen is a
+    // constant to it, and so is ``out``: nothing is recorded.
+    void on_derived(std::string_view name, const TensorImplPtr& src, const TensorImplPtr& out);
+
     // ``target`` now holds what ``value`` holds: an in-place op computed
     // ``value`` out of place and spliced it into ``target``
     // (``TensorImpl::take_storage_from`` / ``write_through``).  Later reads
@@ -320,6 +334,9 @@ public:
     }
 
 private:
+    // An op's output, a feed, or an argument of the traced call.
+    bool sees(const TensorImpl* impl) const;
+
     TraceGraph graph_;
     // Maps the raw :class:`TensorImpl` pointer of every traced tensor
     // (op output *or* external feed) back to the :type:`TensorId` it
@@ -388,5 +405,24 @@ LUCID_API Tracer* current_tracer();
 // --------
 // :func:`current_tracer` — reader for the same TLS slot.
 LUCID_API void set_current_tracer(Tracer* t);
+
+// The two hooks every entry point outside the op dispatcher owes the
+// active tracer, if one is installed.  A binding that hands Python a
+// tensor's values (``item`` / ``tolist`` / ``numpy`` / bytes / a DLPack
+// capsule) calls ``note_host_read`` first; one that makes a new tensor from
+// an existing one returns it through ``traced_derive``.  The source scan in
+// ``lucid/test/unit/compile/test_trace_entry_points.py`` holds every
+// TensorImpl binding to this.
+inline void note_host_read(const TensorImplPtr& impl) {
+    if (auto* trc = current_tracer())
+        trc->on_host_read(impl.get());
+}
+
+inline TensorImplPtr
+traced_derive(std::string_view name, const TensorImplPtr& src, TensorImplPtr out) {
+    if (auto* trc = current_tracer())
+        trc->on_derived(name, src, out);
+    return out;
+}
 
 }  // namespace lucid::compile

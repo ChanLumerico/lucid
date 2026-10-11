@@ -22,6 +22,7 @@
 #include <mlx/memory.h>
 #include <mlx/version.h>
 
+#include "../compile/Tracer.h"
 #include "../core/TensorImpl.h"
 #include "../interop/Dlpack.h"
 
@@ -53,6 +54,8 @@ void register_interop(py::module_& m) {
     m.def(
         "to_dlpack_metal",
         [](const TensorImplPtr& impl) -> py::object {
+            // The consumer reads the values outside any trace.
+            lucid::compile::note_host_read(impl);
             lucid::interop::DLManagedTensor* managed = lucid::interop::metal_to_dlpack(impl);
             PyObject* capsule = PyCapsule_New(managed, kFresh, &capsule_destructor);
             if (capsule == nullptr) {

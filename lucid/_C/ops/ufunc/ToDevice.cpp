@@ -4,6 +4,7 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Storage.h"
@@ -43,10 +44,16 @@ TensorImplPtr to_device_op(const TensorImplPtr& a, Device target) {
     else
         out = a->transfer_to_device(target, false);
 
+    // A copy of a traced value is recorded as a ``to_device`` op.  The trace
+    // runs on one device, so a compiled call holding a move runs eagerly; an
+    // unrecorded copy was a tensor the trace had never seen, and an op or
+    // host read of it kept the first call's values for every later call.
+    // A move of a constant — a tensor the trace has not seen — records
+    // nothing (Tracer::on_derived).
+    compile::traced_derive("to_device", a, out);
+
     // No saved version for ``a``: the derivative of a move never reads its
     // values, so writing to ``a`` in place after the move is not an error.
-    // Not traced for compile either — ``.to()`` never was, and an op the
-    // emitters cannot lower would push a compiled function back to eager.
     if (GradMode::is_enabled() && a->requires_grad()) {
         auto bwd = std::make_shared<ToDeviceBackward>();
         bwd->src_device_ = a->device();
