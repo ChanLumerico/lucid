@@ -77,6 +77,38 @@ def _is_validated(method: object) -> bool:
 # The scorers the base validates, and whether each takes a probability.
 _SCORERS: dict[str, bool] = {"log_prob": False, "cdf": False, "icdf": True}
 
+_RANK_WORDS = {1: "one", 2: "two"}
+
+
+def _rank_checked_setattr(self: Distribution, name: str, value: object) -> None:
+    """Refuse a parameter with fewer axes than its constraint's event.
+
+    A parameter whose constraint reads ``event_dim`` trailing axes as one
+    event — a probability vector, a covariance matrix — has no event without
+    them, and a family reads ``shape[-1]`` from it before anything else.  A
+    0-d ``Dirichlet`` concentration constructed and then raised
+    ``IndexError`` from ``entropy``; a 0-d ``Categorical`` raised it from the
+    constructor.  The rank is a shape requirement, not a value check, so it
+    holds with validation off too, as the reference framework's constructors
+    hold it.  ``Distribution.__init_subclass__`` installs this as
+    ``__setattr__`` on exactly the families that have such a parameter, so it
+    runs where every one of them stores its parameters and nowhere else.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is event-shaped and ``value`` is a tensor with fewer axes
+        than its event.
+    """
+    need = type(self)._event_ranks.get(name)
+    if need is not None and isinstance(value, lucid.Tensor) and value.ndim < need:
+        raise ValueError(
+            f"{type(self).__name__}: `{name}` parameter must be at least "
+            f"{_RANK_WORDS.get(need, str(need))}-dimensional, with optional "
+            f"leading batch dimensions; got shape {tuple(value.shape)}."
+        )
+    object.__setattr__(self, name, value)
+
 
 class Distribution:
     r"""Abstract base for a probability distribution.
@@ -191,6 +223,9 @@ class Distribution:
     """
 
     arg_constraints: dict[str, Constraint] = {}
+    # ``arg_constraints`` entries whose constraint reads trailing axes as one
+    # event, with that rank; derived per class (see ``_rank_checked_setattr``).
+    _event_ranks: dict[str, int] = {}
     has_rsample: bool = False
     has_enumerate_support: bool = False
 
@@ -217,40 +252,17 @@ class Distribution:
             method = cls.__dict__.get(name)
             if inspect.isfunction(method) and not _is_validated(method):
                 setattr(cls, name, _validated(method, probability=probability))
-
-    @override
-    def __setattr__(self, name: str, value: object) -> None:
-        """Refuse a parameter with fewer axes than its constraint's event.
-
-        A parameter whose constraint reads ``event_dim`` trailing axes as one
-        event — a probability vector, a covariance matrix — has no event
-        without them, and a family reads ``shape[-1]`` from it before
-        anything else.  A 0-d ``Dirichlet`` concentration constructed and
-        then raised ``IndexError`` from ``entropy``; a 0-d ``Categorical``
-        raised it from the constructor.  The rank is a shape requirement, not
-        a value check, so it holds with validation off too, as the reference
-        framework's constructors hold it.  It is checked here, where every
-        family stores its parameters, rather than in each constructor.
-
-        Raises
-        ------
-        ValueError
-            If ``name`` is constrained and ``value`` is a tensor with fewer
-            than the constraint's ``event_dim`` axes.
-        """
-        constraint = type(self).arg_constraints.get(name)
-        if (
-            constraint is not None
-            and isinstance(value, lucid.Tensor)
-            and value.ndim < constraint.event_dim
-        ):
-            rank = {1: "one", 2: "two"}.get(constraint.event_dim, str(constraint.event_dim))
-            raise ValueError(
-                f"{type(self).__name__}: `{name}` parameter must be at least "
-                f"{rank}-dimensional, with optional leading batch dimensions; "
-                f"got shape {tuple(value.shape)}."
-            )
-        super().__setattr__(name, value)
+        # Only a family with an event-shaped parameter pays for the rank
+        # check, and it pays on its own attribute sets alone.
+        cls._event_ranks = {
+            n: c.event_dim for n, c in cls.arg_constraints.items() if c.event_dim > 0
+        }
+        # Through ``type.__setattr__``: ``cls.__setattr__ = ...`` is, to a type
+        # checker, assigning over a method rather than installing one.
+        if cls._event_ranks:
+            type.__setattr__(cls, "__setattr__", _rank_checked_setattr)
+        elif cls.__setattr__ is _rank_checked_setattr:
+            type.__setattr__(cls, "__setattr__", object.__setattr__)
 
     @staticmethod
     def set_default_validate_args(value: bool) -> None:
