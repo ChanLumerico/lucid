@@ -27,6 +27,8 @@
 #include <cstdint>
 #include <limits>
 
+#include "_DataMovement.h"
+
 namespace lucid::compile {
 
 // What an index below zero means.
@@ -165,33 +167,33 @@ inline MPSGraphTensor* graph_drop_out_of_range(MPSGraph* g,
 // An overwrite scatter under policy B.  No in-range position can take a
 // write and keep its value, so an out-of-range write is aimed at a one-wide
 // sink slab appended past the end of ``axis`` and cut off again — eager's
-// ``gpu_sink_index`` / ``with_sink_slab``.
+// ``gpu_sink_index`` / ``with_sink_slab``.  nil when MPSGraph cannot write
+// the dtype exactly.
 inline MPSGraphTensor* graph_scatter_set_dropping(MPSGraph* g,
                                                   MPSGraphTensor* base,
                                                   const GraphAxisIndex& ix,
                                                   MPSGraphTensor* src,
                                                   NSInteger axis,
                                                   std::int64_t extent) {
-    NSMutableArray<NSNumber*>* slab_shape = [base.shape mutableCopy];
-    slab_shape[static_cast<NSUInteger>(axis)] = @1;
-    MPSGraphTensor* padded = [g concatTensor:base
-                                  withTensor:[g constantWithScalar:0.0
-                                                             shape:slab_shape
-                                                          dataType:base.dataType]
-                                   dimension:axis
-                                        name:nil];
+    // The slab is cut off again, so what it holds does not matter: a slice
+    // of ``base`` has its shape even where the batch is symbolic, which a
+    // constant does not ("shape[0] (-1) should be a strictly positive value
+    // for constant operation" aborted a dynamic-batch scatter).
+    MPSGraphTensor* padded =
+        [g concatTensor:base
+             withTensor:[g sliceTensor:base dimension:axis start:0 length:1 name:nil]
+              dimension:axis
+                   name:nil];
     MPSGraphTensor* past_end = [g constantWithScalar:static_cast<double>(extent)
                                             dataType:ix.safe.dataType];
     MPSGraphTensor* sink = [g selectWithPredicateTensor:ix.in_range
                                     truePredicateTensor:ix.safe
                                    falsePredicateTensor:past_end
                                                    name:@"scatter_sink_index"];
-    MPSGraphTensor* written = [g scatterAlongAxis:axis
-                                   withDataTensor:padded
-                                    updatesTensor:src
-                                    indicesTensor:sink
-                                             mode:MPSGraphScatterModeSet
-                                             name:@"scatter_axis"];
+    MPSGraphTensor* written = graph_scatter_along_axis(g, axis, padded, src, sink,
+                                                       MPSGraphScatterModeSet, @"scatter_axis");
+    if (written == nil)
+        return nil;
     return [g sliceTensor:written dimension:axis start:0 length:extent name:@"scatter_cut_sink"];
 }
 

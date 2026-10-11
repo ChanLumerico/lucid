@@ -5,7 +5,9 @@
 //   - ``gather``    (lucid/_C/ops/utils/Select.cpp) — narrow gather
 //                   matching index shape to the source rank, selects
 //                   along ``axis`` only.  MPSGraph's
-//                   ``gatherAlongAxis:`` mirrors the contract exactly.
+//                   ``gatherAlongAxis:`` mirrors the contract exactly
+//                   (through ``_DataMovement.h``, which keeps wide
+//                   integers whole).
 //   - ``embedding`` (lucid/_C/nn/Embedding.cpp) — gather along axis=0
 //                   with arbitrary-rank indices.  ``padding_idx`` rides
 //                   on the node and is deliberately not applied; see the
@@ -19,6 +21,7 @@
 #include <variant>
 
 #include "../OpEmitter.h"
+#include "../_DataMovement.h"
 #include "../_IndexBounds.h"
 
 namespace lucid::compile {
@@ -56,13 +59,11 @@ public:
                              NegativeIndex::Wrap);
         if (ix.safe == nil)
             return false;
-        MPSGraphTensor* out = graph_fill_out_of_range(
-            graph,
-            [graph gatherAlongAxis:static_cast<NSInteger>(axis)
-                 withUpdatesTensor:data_t
-                     indicesTensor:ix.safe
-                              name:@"gather"],
-            ix.in_range);
+        MPSGraphTensor* picked = graph_gather_along_axis(graph, static_cast<NSInteger>(axis),
+                                                         data_t, ix.safe, @"gather");
+        if (picked == nil)
+            return false;
+        MPSGraphTensor* out = graph_fill_out_of_range(graph, picked, ix.in_range);
         if (out == nil)
             return false;
         ctx.bind(node.outputs[0].id, (__bridge void*)out);
@@ -94,11 +95,9 @@ public:
             graph_axis_index(graph, i_t, static_extent(w_t, 0), NegativeIndex::OutOfRange);
         if (ix.safe == nil)
             return false;
-        MPSGraphTensor* rows = [graph gatherWithUpdatesTensor:w_t
-                                                indicesTensor:ix.safe
-                                                         axis:0
-                                              batchDimensions:0
-                                                         name:@"embedding"];
+        MPSGraphTensor* rows = graph_gather(graph, w_t, ix.safe, 0, @"embedding");
+        if (rows == nil)
+            return false;
         // ``in_range`` has the index's shape; a row is the table's
         // remaining axes, so the mask gains one unit axis per one of them.
         NSMutableArray<NSNumber*>* mask_shape = [ix.in_range.shape mutableCopy];

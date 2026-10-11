@@ -6,6 +6,8 @@
 // Lucid / reference-framework semantics
 // ``base[..., indices[i], ...] op= src[..., i, ...]`` (``=`` for set).
 // An out-of-range index drops its update (policy B, ``../_IndexBounds.h``).
+// Every scatter goes through ``../_DataMovement.h`` so int64 and bool are
+// written whole (LCD-435).
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -16,6 +18,7 @@
 #include <string_view>
 
 #include "../_AttrHelpers.h"
+#include "../_DataMovement.h"
 #include "../_IndexBounds.h"
 
 namespace lucid::compile {
@@ -48,12 +51,7 @@ inline MPSGraphTensor* scatter_reduce_dropping(MPSGraph* g,
         mode = MPSGraphScatterModeMul;
         break;
     }
-    return [g scatterAlongAxis:axis
-                withDataTensor:base
-                 updatesTensor:updates
-                 indicesTensor:ix.safe
-                          mode:mode
-                          name:@"scatter_axis"];
+    return graph_scatter_along_axis(g, axis, base, updates, ix.safe, mode, @"scatter_axis");
 }
 
 // MODE: 0=Add 1=Max 2=Min 3=Mul 4=Set.
@@ -77,11 +75,10 @@ public:
         const NSInteger axis = static_cast<NSInteger>(dim < 0 ? dim + (std::int64_t)base.shape.count : dim);
         if (!shapes_agree_off_axis(base, idx, axis) || !shapes_agree_off_axis(src, idx, -1))
             return false;
-        // MPSGraph scatters int64 data in 32 bits — -7 came back as
-        // 4294967289 — and bool data as all false.  Neither narrows safely,
-        // so both stay eager; float and int32 compile.
-        for (MPSGraphTensor* t : {base, src})
-            if (t.dataType == MPSDataTypeInt64 || t.dataType == MPSDataTypeBool) return false;
+        // MPSGraph's own scatter writes int64 in 32 bits and bool as false;
+        // ``_DataMovement.h`` carries both, and declines (nil below) a
+        // reduction it cannot apply exactly — int64 max / min / prod, a
+        // bool reduction, an int64 sum over more than 2^15 updates.
         if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)]) {
             return false;
         }

@@ -20,6 +20,7 @@
 #include <variant>
 
 #include "../OpEmitter.h"
+#include "../_DataMovement.h"
 #include "../_IndexBounds.h"
 
 namespace lucid::compile {
@@ -284,16 +285,15 @@ inline MPSGraphTensor* class_target_loss(MPSGraph* g,
         return nil;
     const MPSDataType ft = log_p.dataType;
     MPSGraphTensor* column = [g reshapeTensor:t.safe withShape:@[ @-1, @1 ] name:nil];
-    MPSGraphTensor* picked =
-        [g reshapeTensor:[g gatherAlongAxis:1 withUpdatesTensor:log_p indicesTensor:column name:nil]
-               withShape:@[ @-1 ]
-                    name:nil];
+    MPSGraphTensor* picked = [g reshapeTensor:graph_gather_along_axis(g, 1, log_p, column)
+                                    withShape:@[ @-1 ]
+                                         name:nil];
     MPSGraphTensor* w_t = [g constantWithScalar:1.0 dataType:ft];
     if (weight != nil) {
         if (weight.shape.count != 1)
             return nil;
         MPSGraphTensor* w = weight.dataType == ft ? weight : [g castTensor:weight toType:ft name:nil];
-        w_t = [g gatherAlongAxis:0 withUpdatesTensor:w indicesTensor:t.safe name:nil];
+        w_t = graph_gather_along_axis(g, 0, w, t.safe);
     }
     MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:ft];
     MPSGraphTensor* stray = [g selectWithPredicateTensor:t.ignored

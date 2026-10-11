@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "../_AttrHelpers.h"
+#include "../_DataMovement.h"
 #include "../_IndexBounds.h"
 #include "../_Resample.h"
 
@@ -292,10 +293,7 @@ public:
             MPSGraphTensor* spread = [g broadcastTensor:pixel.flat
                                                 toShape:@[ @(N), @(C), @(L) ]
                                                    name:nil];
-            MPSGraphTensor* v = [g gatherAlongAxis:2
-                                 withUpdatesTensor:flat_x
-                                     indicesTensor:spread
-                                              name:nil];
+            MPSGraphTensor* v = graph_gather_along_axis(g, 2, flat_x, spread);
             if (v != nil && pixel.inside != nil)
                 v = [g selectWithPredicateTensor:pixel.inside
                              truePredicateTensor:v

@@ -26,6 +26,8 @@
 
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include "_DataMovement.h"
+
 namespace lucid::compile {
 
 // ``x`` as the key the order is taken on: zeros of either sign made +0.0 and
@@ -62,14 +64,12 @@ graph_sort_order(MPSGraph* g, MPSGraphTensor* x, NSInteger axis, bool descending
                            name:nil];
 }
 
-// ``x`` read at ``order`` along ``axis`` — a sort's values.  Bool goes
-// through its key, which MPSGraph can gather.
+// ``x`` read at ``order`` along ``axis`` — a sort's values, every bit of
+// them: MPSGraph's own gather rounded int64 through float32, so 2^40 + 3
+// came back as 2^40 (LCD-435, ``_DataMovement.h``).
 inline MPSGraphTensor*
 graph_gather_sorted(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* order, NSInteger axis) {
-    const bool is_bool = x.dataType == MPSDataTypeBool;
-    MPSGraphTensor* src = is_bool ? [g castTensor:x toType:MPSDataTypeInt32 name:nil] : x;
-    MPSGraphTensor* v = [g gatherAlongAxis:axis withUpdatesTensor:src indicesTensor:order name:nil];
-    return is_bool && v != nil ? [g castTensor:v toType:MPSDataTypeBool name:nil] : v;
+    return graph_gather_along_axis(g, axis, x, order);
 }
 
 // ``argmax`` / ``argmin`` along ``axis`` (kept, length one): the first

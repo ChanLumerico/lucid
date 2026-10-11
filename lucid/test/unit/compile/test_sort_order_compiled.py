@@ -114,13 +114,10 @@ def test_wide_int64_ranks_exactly() -> None:
     _same(lambda t: lucid.argsort(t, descending=True) * 1, _wide())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-435: compiled int64 gather loses low bits (topk / sort read "
-    "their values with a gather)",
-)
 def test_wide_int64_values_come_back_whole() -> None:
+    """The values come back through ``_DataMovement.h`` (LCD-435)."""
     _same(lambda t: lucid.topk(t, 8)[0] * 1, _wide())
+    _same(lambda t: lucid.sort(t, descending=True) * 1, _wide())
 
 
 @pytest.mark.parametrize("n", [5387, 1 << 17])

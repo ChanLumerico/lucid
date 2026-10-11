@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "../../backend/SamplePositions.h"
+#include "_DataMovement.h"
 
 namespace lucid::compile {
 
@@ -52,7 +53,7 @@ along(MPSGraph* g, const std::vector<float>& v, NSUInteger axis, NSUInteger ndim
 }
 
 inline MPSGraphTensor* take(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* idx, NSUInteger axis) {
-    return [g gatherWithUpdatesTensor:x indicesTensor:idx axis:axis batchDimensions:0 name:nil];
+    return graph_gather(g, x, idx, axis);
 }
 
 // ``x`` summed onto ``in`` positions along ``axis``: position ``d`` goes to
