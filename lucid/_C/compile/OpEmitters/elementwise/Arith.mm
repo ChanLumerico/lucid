@@ -28,6 +28,7 @@
 
 #include "../../MpsDtype.h"
 #include "../OpEmitter.h"
+#include "../_SignedZero.h"
 
 namespace lucid::compile {
 
@@ -75,13 +76,23 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     return true;
 }
 
+// ``add`` and ``sub`` route an operand that is a +0 (add) or -0 (sub) splat
+// through ``add_pos_zero`` — MPSGraph would fold it away and keep a -0 that
+// IEEE turns into +0 (_SignedZero.h).
 class AddEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "add"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            return [g additionWithPrimaryTensor:a secondaryTensor:b name:@"add"];
-        });
+        const bool a_pos_zero = node.inputs.size() == 2 && is_pos_zero_splat(ctx, node.inputs[0]);
+        const bool b_pos_zero = node.inputs.size() == 2 && is_pos_zero_splat(ctx, node.inputs[1]);
+        return emit_binary(
+            ctx, node, [a_pos_zero, b_pos_zero](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+                if (b_pos_zero)
+                    return add_pos_zero(g, a, b);
+                if (a_pos_zero)
+                    return add_pos_zero(g, b, a);
+                return [g additionWithPrimaryTensor:a secondaryTensor:b name:@"add"];
+            });
     }
 };
 
@@ -89,9 +100,13 @@ class SubEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sub"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            return [g subtractionWithPrimaryTensor:a secondaryTensor:b name:@"sub"];
-        });
+        const bool b_neg_zero = node.inputs.size() == 2 && is_neg_zero_splat(ctx, node.inputs[1]);
+        return emit_binary(
+            ctx, node, [b_neg_zero](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+                if (b_neg_zero)
+                    return add_pos_zero(g, a, [g negativeWithTensor:b name:nil]);
+                return [g subtractionWithPrimaryTensor:a secondaryTensor:b name:@"sub"];
+            });
     }
 };
 

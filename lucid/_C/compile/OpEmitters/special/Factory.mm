@@ -21,6 +21,7 @@
 #include "../../MpsDtype.h"
 #include "../OpEmitter.h"
 #include "../_AttrHelpers.h"
+#include "../_SignedZero.h"
 
 namespace lucid::compile {
 
@@ -62,6 +63,7 @@ public:
             return false;
         MPSGraphTensor* y = [graph constantWithScalar:*v shape:ns_shape dataType:*ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        mark_zero_splat(ctx, node.outputs[0].id, meta.dtype, *v, y);
         return true;
     }
 };
@@ -96,6 +98,7 @@ public:
                                                 shape:ns_shape
                                              dataType:*ns_dt];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        mark_zero_splat(ctx, node.outputs[0].id, meta.dtype, static_cast<double>(FILL_VALUE), y);
         return true;
     }
 
@@ -284,7 +287,9 @@ public:
             NSMutableArray<NSNumber*>* lined = [NSMutableArray arrayWithCapacity:n];
             for (std::size_t d = 0; d < n; ++d)
                 [lined addObject:(d == axis ? x.shape[0] : @1)];
-            MPSGraphTensor* y = [graph broadcastTensor:[graph reshapeTensor:x withShape:lined name:nil]
+            MPSGraphTensor* y = [graph broadcastTensor:[graph reshapeTensor:x
+                                                                  withShape:lined
+                                                                       name:nil]
                                                toShape:full
                                                   name:nil];
             ctx.bind(node.outputs[k].id, (__bridge void*)y);
