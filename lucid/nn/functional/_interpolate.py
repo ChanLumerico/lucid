@@ -5,7 +5,9 @@ Every mode ``interpolate`` accepts is separable: an output sample along
 one axis reads a few input samples along that axis, with weights that
 depend only on its position.  So each axis is described by its *taps* —
 for every tap, the input index each output sample reads and the weight
-it reads it with — and the resample is a sum of gathers.
+it reads it with.  An axis is applied as a sum of gathers, or — while it
+is short enough for the dense ``(out, in)`` matrix to cost less — as one
+matrix product; the plan for each configuration is cached.
 
 Where an output sample lands in the input is decided in one place,
 :func:`_coordinate_scale` and :func:`_source_index`, which follow the
@@ -20,11 +22,12 @@ when that is the same mapping — a size, a recomputed or whole-number
 scale — and the gathers run when it is not.
 """
 
+import dataclasses
 import functools
 import math
 import struct
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -215,7 +218,11 @@ def _antialias_taps(
 _DENSE_PER_TAP = 512
 
 
-class _AxisPlan(NamedTuple):
+# Hashed by identity (``eq=False``): the plan cache hands out one object
+# per configuration, so the matrix cache below can key on it without
+# hashing every tap on every call.
+@dataclasses.dataclass(frozen=True, eq=False)
+class _AxisPlan:
     """How one axis is resampled — worked out once per configuration."""
 
     taps: _FrozenTaps
@@ -251,15 +258,26 @@ def _dense_entries(
     return tuple(entries), tuple(entries.values())
 
 
-def _apply_dense(x: Tensor, axis: int, plan: _AxisPlan) -> Tensor:
+# Building a matrix from its entries is a host-to-device copy of every
+# entry and a scatter, a third of the cost of a large resize; a pipeline
+# resizing every image to one size rebuilds the same few.  Bounded, since
+# each entry holds an (out, in) matrix on its device.
+@functools.lru_cache(maxsize=16)
+def _dense_matrix(
+    plan: _AxisPlan, in_size: int, device: str, dtype: _lucid.dtype
+) -> Tensor:
     assert plan.dense is not None
     positions, weights = plan.dense
-    in_size, out_size = int(x.shape[axis]), len(plan.taps[0][0])
-    matrix = _lucid.zeros(out_size * in_size, dtype=x.dtype, device=x.device)
-    matrix[_lucid.tensor(list(positions), dtype=_lucid.int64, device=x.device)] = (
-        _lucid.tensor(list(weights), dtype=x.dtype, device=x.device)
+    out_size = len(plan.taps[0][0])
+    matrix = _lucid.zeros(out_size * in_size, dtype=dtype, device=device)
+    matrix[_lucid.tensor(list(positions), dtype=_lucid.int64, device=device)] = (
+        _lucid.tensor(list(weights), dtype=dtype, device=device)
     )
-    matrix = matrix.reshape(out_size, in_size)
+    return matrix.reshape(out_size, in_size)
+
+
+def _apply_dense(x: Tensor, axis: int, plan: _AxisPlan) -> Tensor:
+    matrix = _dense_matrix(plan, int(x.shape[axis]), x.device.type, x.dtype)
     # The two trailing axes multiply in place; any other is moved there.
     if axis == x.ndim - 1:
         return x @ matrix.mT
@@ -533,7 +551,10 @@ def resample(
     # makes every later product smaller.
     for axis in reversed(range(2, x.ndim)):
         n, m, s = spatial[axis - 2], sizes[axis - 2], scales[axis - 2]
-        plan = _axis_plan(mode, n, m, corners, s, antialias, len(spatial))
+        # Only plain nearest depends on the rank; leaving it out of the
+        # other modes' key lets every rank share their plans.
+        rank = len(spatial) if mode == "nearest" else 0
+        plan = _axis_plan(mode, n, m, corners, s, antialias, rank)
         if plan.identity:
             continue
         if plan.dense is not None:

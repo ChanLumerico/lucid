@@ -13,12 +13,14 @@ from typing import Literal
 
 import lucid
 import lucid.nn.functional as F
+from lucid._dtype import iinfo
 from lucid._tensor import Tensor
 from lucid._types import DeviceLike
 
 _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
 #: The modes ``antialias`` applies to; the others ignore it, as in the reference.
 _ANTIALIASED_MODES = frozenset({"bilinear", "bicubic"})
+_COPYING_MODES = frozenset({"nearest", "nearest-exact"})
 
 
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
@@ -107,14 +109,21 @@ def resize(
     new_h, new_w = resize_target(h, w, size)
 
     mode = str(getattr(interpolation, "value", interpolation))
-    x = F.interpolate(
-        x,
+    # An integer image is filtered in float32 and brought back the way the
+    # reference does it: rounded, clamped to the dtype's range, cast.
+    # Nearest only copies samples, so it keeps the integers as they are.
+    integer = not x.is_floating_point() and mode not in _COPYING_MODES
+    out = F.interpolate(
+        x.to(lucid.float32) if integer else x,
         size=(new_h, new_w),
         mode=mode,
         align_corners=False if mode in _RESIZE_ALIGN_MODES else None,
         antialias=antialias and mode in _ANTIALIASED_MODES,
     )
-    return x[0] if unbatched else x
+    if integer:
+        info = iinfo(x.dtype)
+        out = out.round().clamp(info.min, info.max).to(x.dtype)
+    return out[0] if unbatched else out
 
 
 def crop(img: Tensor, top: int, left: int, height: int, width: int) -> Tensor:
