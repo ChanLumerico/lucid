@@ -194,6 +194,12 @@ def test_rot90_refuses_one_axis_twice(device, dims):
             lambda E, t: E.unflatten(t, 1, [6]),
             lambda r, t: r.unflatten(t, 1, (6,)),
         ),
+        (
+            "unflatten",
+            (),
+            lambda E, t: E.unflatten(t, 0, [1]),
+            lambda r, t: r.unflatten(t, 0, (1,)),
+        ),
         ("unfold", (), lambda E, t: E.unfold_dim(t, 0, 1, 1), lambda r, t: t.unfold(0, 1, 1)),
         ("unfold", (), lambda E, t: E.unfold_dim(t, -1, 1, 3), lambda r, t: t.unfold(-1, 1, 3)),
         ("unfold", (), lambda E, t: E.unfold_dim(t, 1, 1, 1), lambda r, t: t.unfold(1, 1, 1)),

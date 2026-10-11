@@ -76,9 +76,10 @@ TensorImplPtr unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes) 
     if (!a)
         ErrorBuilder("unflatten").fail("null input");
     const int ndim = static_cast<int>(a->shape().size());
+    // Refused as a state error, as the reference refuses it: a 0-d tensor
+    // has no dimension to split, whatever ``dim`` names.
     if (ndim == 0)
-        ErrorBuilder("unflatten")
-            .index_error("dim out of range: the op needs a tensor of rank >= 1");
+        ErrorBuilder("unflatten").fail("cannot unflatten a 0-d tensor: it has no dimension");
     const int d = wrap_dim(dim, ndim, "unflatten");
 
     std::int64_t product = 1;
