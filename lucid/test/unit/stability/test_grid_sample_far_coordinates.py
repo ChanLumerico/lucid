@@ -8,9 +8,20 @@ a wild address through.  Sample positions now become indices by one rule
 as 0 and anything past the int64 range saturates, which is how the
 reference reads them too.
 
+The matrix covers every path: the 4-D kernel (bilinear and nearest, zero
+and border padding), the reflection the kernel reads through a reflected
+grid, and the Python composites — bicubic and 5-D (LCD-426).  The images
+are not square and not a power of two on a side, so a reflection that only
+agrees on such sizes shows.  Each case compares the value, the input
+gradient and the grid gradient with the reference.
+
 Every case runs in a child interpreter, as in ``test_no_process_crash.py``,
 so a crash fails one case instead of the run.  The child reports the
 sampled value and both gradients; the parent holds them to the reference.
+
+Where Lucid departs from the reference on purpose, the case is held to a
+*stand-in* grid instead — a finite coordinate at which the reference does
+what Lucid does on the original one (see ``_DEPARTURES``).
 """
 
 import json
@@ -34,38 +45,164 @@ _COORDS = {
     "2^31": 2.0**31,
     "-2^31": -(2.0**31),
 }
-_MODES = ["bilinear", "nearest", "bicubic"]
 _PADDINGS = ["zeros", "border", "reflection"]
 
+# (label, image shape, modes).  4x4 is the kernel's original matrix; 3x5
+# and 3x4x5 have sides that are neither equal nor powers of two.
+_IMAGES = [
+    ("2d-4x4", (1, 1, 4, 4), ["bilinear", "nearest", "bicubic"]),
+    ("2d-3x5", (1, 1, 3, 5), ["bilinear", "nearest", "bicubic"]),
+    ("3d-3x4x5", (1, 1, 3, 4, 5), ["bilinear", "nearest"]),
+]
 
-# Which grid axis holds the coordinate: x, y, or both -- two far axes
-# multiply two far weights, which overflowed to inf on Metal.
-_AXES = ("x", "y", "both")
+# A case's departures from the reference, by name: the reason, and the
+# coordinate that stands in for the original one on that axis when the
+# reference is asked what Lucid computes.
+_DEPARTURES = {
+    "nan-split": (
+        "reference 5-D forward/backward read NaN at different positions; "
+        "we follow the forward",
+        1.0,  # reads the last sample, clipped: the forward's position
+    ),
+    "overflow-wrap": (
+        "reference signed-overflow wrap (UB); Lucid keeps a saturated "
+        "position off the image like its 4-D kernel",
+        1e10,  # off the image, finite: reads nothing
+    ),
+}
+
+# Cells that differ from the reference for a reason another issue owns.
+#
+# LCD-433: the reference's 5-D unnormalise ``((g + 1) * size - 1) / 2`` is
+# one fused multiply-add on arm64; Lucid rounds twice, so far out the
+# reflected position can sit a whole sample away.  Some such cells agree
+# today only because lucid.fmod's rounding (LCD-159) cancels the missing
+# FMA — the card's own repro, nearest at 1e10 on a 3x3x3 input, is one.
+# Landing LCD-159 alone flips those to failing; LCD-433 and LCD-159
+# together make every cell agree.
+_FMA = "LCD-433: 5-D reflection unnormalise needs a fused multiply-add"
+# LCD-159: the 5-D reference reflects with an exact ``fmod``; lucid.fmod
+# rounds once the quotient passes 2**24.  A span of 3 (the 4-high axis with
+# align_corners) is the one in this matrix that shows it.
+_FMOD = "LCD-159: engine fmod is inexact for |a/b| >= 2^24"
+_PINNED = {
+    **{
+        f"3d-3x4x5-{mode}-reflection-edges-{cell}": _FMA
+        # The cells left out (bilinear 1e10-y, nearest 1e10-z, ...) agree
+        # today by the LCD-159 cancellation described above.
+        for mode, cells in (
+            ("bilinear", ("1e10-x", "1e10-z", "1e10-all")),
+            ("nearest", ("1e10-x", "1e10-all")),
+            ("bilinear", ("-1e10-x", "-1e10-z", "-1e10-all")),
+            ("nearest", ("-1e10-x", "-1e10-z", "-1e10-all")),
+        )
+        for cell in cells
+    },
+    **{
+        f"3d-3x4x5-{mode}-reflection-corners-{sign}1e10-{axis}": _FMOD
+        for mode in ("bilinear", "nearest")
+        for sign in ("", "-")
+        for axis in ("y", "all")
+    },
+}
 
 
-def _cases() -> list[tuple[str, str, str, bool, str, int]]:
-    """(id, mode, padding, align_corners, coordinate, axis it is on)."""
+def _position(coord: float, size: int, align: bool) -> float:
+    """The 5-D composite's pixel position of ``coord``, in float32."""
+    with np.errstate(over="ignore", invalid="ignore"):
+        c = np.float32(coord) + np.float32(1)
+        if align:
+            return float(c * np.float32((size - 1) / 2))
+        return float((c * np.float32(size) - np.float32(1)) / np.float32(2))
+
+
+def _departure(
+    shape: tuple[int, ...], mode: str, pad: str, align: bool, coord: float, size: int
+) -> str | None:
+    """Which named departure, if any, one axis of a case makes."""
+    if len(shape) != 5:
+        return None
+    pos = _position(coord, size, align)
+    degenerate = align and size == 1
+    if pad == "border" and math.isnan(pos):
+        return "nan-split"
+    if pad == "reflection" and not degenerate and not math.isfinite(pos):
+        return "nan-split"
+    if pad == "zeros" and mode == "bilinear" and pos >= 2.0**63:
+        return "overflow-wrap"
+    return None
+
+
+def _axes(shape: tuple[int, ...]) -> list[tuple[str, tuple[int, ...]]]:
+    """(label, grid axes it sets): each axis on its own, then all at once."""
+    names = "xyz"[: len(shape) - 2]
+    single = [(name, (i,)) for i, name in enumerate(names)]
+    return single + [("all" if len(names) > 2 else "both", tuple(range(len(names))))]
+
+
+def _point(shape: tuple[int, ...], axes: tuple[int, ...], coord: float) -> list[float]:
+    point = [0.25, -0.5, 0.75][: len(shape) - 2]
+    for a in axes:
+        point[a] = coord
+    return point
+
+
+Case = tuple[str, tuple[int, ...], str, str, bool, list[float], list[float]]
+
+
+def _kinds(
+    shape: tuple[int, ...], mode: str, pad: str, align: bool, point: list[float]
+) -> list[str | None]:
+    """The departure each coordinate of ``point`` makes, or ``None``."""
+    sizes = list(shape[2:])[::-1]  # grid order: x first
+    return [
+        _departure(shape, mode, pad, align, coord, size)
+        for coord, size in zip(point, sizes, strict=True)
+    ]
+
+
+def _stand_in(
+    shape: tuple[int, ...], mode: str, pad: str, align: bool, point: list[float]
+) -> list[float]:
+    """``point`` with every departing coordinate replaced by its stand-in."""
+    kinds = _kinds(shape, mode, pad, align, point)
+    return [
+        coord if kind is None else _DEPARTURES[kind][1]
+        for coord, kind in zip(point, kinds, strict=True)
+    ]
+
+
+def _cases() -> list[Case]:
+    """(name, image shape, mode, padding, align_corners, point, stand-in)."""
     out = []
-    for mode in _MODES:
-        for pad in _PADDINGS:
-            for align in (False, True):
-                for coord in _COORDS:
-                    for axis, label in enumerate(_AXES):
-                        corners = "corners" if align else "edges"
-                        name = f"{mode}-{pad}-{corners}-{coord}-{label}"
-                        out.append((name, mode, pad, align, coord, axis))
+    for label, shape, modes in _IMAGES:
+        for mode in modes:
+            for pad in _PADDINGS:
+                for align in (False, True):
+                    corners = "corners" if align else "edges"
+                    for cname, coord in _COORDS.items():
+                        for axis_label, axes in _axes(shape):
+                            name = (
+                                f"{label}-{mode}-{pad}-{corners}-{cname}-{axis_label}"
+                            )
+                            point = _point(shape, axes, coord)
+                            stand_in = _stand_in(shape, mode, pad, align, point)
+                            out.append((name, shape, mode, pad, align, point, stand_in))
     return out
 
 
 CASES = _cases()
-_IMAGE = np.arange(16.0, dtype=np.float32).reshape(1, 1, 4, 4)
 
 
-def _grid(coord: str, axis: int) -> np.ndarray:
-    point = [0.25, 0.25]
-    for a in (0, 1) if axis == 2 else (axis,):
-        point[a] = _COORDS[coord]
-    return np.array([[[point]]], dtype=np.float32)
+def _params() -> list[Any]:
+    out = []
+    for case in CASES:
+        name = case[0]
+        marks = []
+        if name in _PINNED:
+            marks.append(pytest.mark.xfail(strict=True, reason=_PINNED[name]))
+        out.append(pytest.param(*case, marks=marks, id=name))
+    return out
 
 
 # ``rotate`` (the engine's, behind the image transforms) cast its rounded
@@ -87,7 +224,6 @@ import lucid
 import lucid.nn.functional as F
 
 D = sys.argv[1]
-image = np.arange(16.0, dtype=np.float32).reshape(1, 1, 4, 4)
 
 def listed(t):
     return [None if math.isnan(v) else v for v in np.asarray(t.to("cpu").numpy(), dtype=np.float64).ravel().tolist()]
@@ -100,13 +236,16 @@ for case in json.loads(sys.stdin.read()):
     print("@@BEGIN " + name, flush=True)
     if name.startswith("rotate"):
         _, angle, cy, cx = case
+        image = np.arange(16.0, dtype=np.float32).reshape(1, 1, 4, 4)
         x = lucid.tensor(image + 1.0, device=D)
         y = _wrap(_C_engine.nn.rotate(_unwrap(x), angle, cy, cx))
         print("@@END " + name + " " + json.dumps({"y": listed(y)}), flush=True)
         continue
-    _, mode, pad, align, grid = case
+    _, shape, mode, pad, align, point = case
+    image = np.arange(float(math.prod(shape)), dtype=np.float32).reshape(shape)
+    grid = np.array(point, dtype=np.float32).reshape((1,) * (len(shape) - 1) + (len(point),))
     x = lucid.tensor(image, device=D, requires_grad=True)
-    g = lucid.tensor(np.array(grid, dtype=np.float32), device=D, requires_grad=True)
+    g = lucid.tensor(grid, device=D, requires_grad=True)
     y = F.grid_sample(x, g, mode=mode, padding_mode=pad, align_corners=align)
     y.sum().backward()
     out = {"y": listed(y), "dx": listed(x.grad), "dg": listed(g.grad)}
@@ -116,8 +255,8 @@ for case in json.loads(sys.stdin.read()):
 
 def _payload() -> list[Any]:
     grids: list[Any] = [
-        [name, mode, pad, align, _grid(coord, axis).tolist()]
-        for name, mode, pad, align, coord, axis in CASES
+        [name, list(shape), mode, pad, align, point]
+        for name, shape, mode, pad, align, point, _ in CASES
     ]
     return grids + [list(case) for case in ROTATIONS]
 
@@ -166,8 +305,19 @@ def _array(values: list[float | None]) -> np.ndarray:
     return np.array([math.nan if v is None else v for v in values], dtype=np.float64)
 
 
-def _reference(ref: Any, mode: str, pad: str, align: bool, grid: np.ndarray) -> dict:
-    x = ref.tensor(_IMAGE, requires_grad=True)
+def _reference(
+    ref: Any,
+    shape: tuple[int, ...],
+    mode: str,
+    pad: str,
+    align: bool,
+    point: list[float],
+) -> dict[str, np.ndarray]:
+    image = np.arange(float(math.prod(shape)), dtype=np.float32).reshape(shape)
+    grid = np.array(point, dtype=np.float32).reshape(
+        (1,) * (len(shape) - 1) + (len(point),)
+    )
+    x = ref.tensor(image, requires_grad=True)
     g = ref.tensor(grid, requires_grad=True)
     y = ref.nn.functional.grid_sample(
         x, g, mode=mode, padding_mode=pad, align_corners=align
@@ -180,72 +330,53 @@ def _reference(ref: Any, mode: str, pad: str, align: bool, grid: np.ndarray) -> 
     }
 
 
-def _compared(mode: str, pad: str, coord: str) -> tuple[str, ...]:
-    """Which results are held to the reference.
-
-    The Python composites (bicubic, and the grid reflection) differ from the
-    reference on non-finite coordinates in their gradients; those are pinned
-    by the strict xfails below, not here.
-    """
-    if mode == "bicubic":
-        return ("y",)
-    if pad == "reflection" and coord == "nan":
-        return ("y", "dx")
-    return ("y", "dx", "dg")
-
-
-@pytest.mark.parametrize(
-    "name,mode,pad,align,coord,axis", CASES, ids=[case[0] for case in CASES]
-)
-def test_far_coordinates(
-    ref: Any,
-    device: str,
-    name: str,
-    mode: str,
-    pad: str,
-    align: bool,
-    coord: str,
-    axis: int,
+def _check(
+    got: dict[str, Any], want: dict[str, np.ndarray], keys: tuple[str, ...]
 ) -> None:
-    got = _result(device, name)
-    assert (
-        "crash" not in got
-    ), f"{name} on {device} killed the interpreter: {got['crash']}"
-    want = _reference(ref, mode, pad, align, _grid(coord, axis))
-    for key in _compared(mode, pad, coord):
+    for key in keys:
         np.testing.assert_allclose(
             _array(got[key]), want[key], atol=1e-5, equal_nan=True, err_msg=key
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-426: reflect() in lucid/nn/functional/_grid_sampling.py has no "
-    "grid gradient at a NaN coordinate; the reference passes one through",
-)
-def test_reflection_grid_gradient_at_nan(ref: Any, device: str) -> None:
-    name = "bilinear-reflection-edges-nan-x"
+@pytest.mark.parametrize("name,shape,mode,pad,align,point,stand_in", _params())
+def test_far_coordinates(
+    ref: Any,
+    device: str,
+    name: str,
+    shape: tuple[int, ...],
+    mode: str,
+    pad: str,
+    align: bool,
+    point: list[float],
+    stand_in: list[float],
+) -> None:
     got = _result(device, name)
-    want = _reference(ref, "bilinear", "reflection", False, _grid("nan", 0))
-    np.testing.assert_allclose(_array(got["dg"]), want["dg"], atol=1e-5, equal_nan=True)
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-426: the bicubic grid_sample composite scatters NaN into the "
-    "input gradient at an infinite coordinate under zero padding; the reference "
-    "gives 0",
-)
-def test_bicubic_input_gradient_at_infinity(ref: Any, device: str) -> None:
-    name = "bicubic-zeros-edges-inf-y"
-    got = _result(device, name)
-    want = _reference(ref, "bicubic", "zeros", False, _grid("inf", 1))
-    np.testing.assert_allclose(_array(got["dx"]), want["dx"], atol=1e-5, equal_nan=True)
+    assert "crash" not in got, (
+        f"{name} on {device} killed the interpreter: {got['crash']}"
+    )
+    want = _reference(ref, shape, mode, pad, align, point)
+    kinds = {k for k in _kinds(shape, mode, pad, align, point) if k is not None}
+    if not kinds:
+        _check(got, want, ("y", "dx", "dg"))
+        return
+    # A departure.  Under nan-split the value is still the reference's (its
+    # forward); the stand-in grid makes the reference do what Lucid does,
+    # gradients included.
+    if kinds == {"nan-split"}:
+        _check(got, want, ("y",))
+    stand_in_want = _reference(ref, shape, mode, pad, align, stand_in)
+    _check(got, stand_in_want, ("y", "dx", "dg"))
 
 
 def test_case_names_are_unique() -> None:
     names = [case[0] for case in CASES]
     assert len(names) == len(set(names))
+
+
+def test_every_departure_has_a_reason() -> None:
+    for reason, stand_in in _DEPARTURES.values():
+        assert reason and math.isfinite(stand_in)
 
 
 @pytest.mark.parametrize(
@@ -257,9 +388,9 @@ def test_rotate_far_or_nan_centre(
     # A far centre puts every source outside the image (zeros); a NaN
     # position reads sample 0, the one rule both devices share.
     got = _result(device, name)
-    assert (
-        "crash" not in got
-    ), f"{name} on {device} killed the interpreter: {got['crash']}"
+    assert "crash" not in got, (
+        f"{name} on {device} killed the interpreter: {got['crash']}"
+    )
     y = _array(got["y"])
     far = math.isinf(cx) or abs(cy) > 1e9
     np.testing.assert_array_equal(y, np.zeros(16) if far else np.full(16, 1.0))

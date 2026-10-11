@@ -594,6 +594,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - quiet the f16 sort key; format the resize VJP registrar
 
+- grid_sample composites follow the reference at far coordinates
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

@@ -11,7 +11,7 @@ from lucid.nn.functional._grid_sampling import (
     affine_grid_3d,
     check_options,
     composite_grid_sample,
-    reflect,
+    reflect_grid,
 )
 from lucid.nn.functional._interpolate import resample as _resample
 from lucid.nn.functional._spatial_args import (
@@ -201,10 +201,13 @@ def grid_sample(
     with the grid.
 
     4-D bilinear and nearest sampling run on one engine kernel;
-    reflection padding mirrors the grid first and then samples with
-    border padding.  Bicubic and 5-D sampling are composed from
-    ``gather`` and elementwise ops, so they cost more memory per output
-    point than the kernel.
+    reflection padding mirrors the grid in pixel space first and then
+    samples with border padding.  Bicubic and 5-D sampling are composed
+    from ``gather`` and elementwise ops, so they cost more memory per
+    output point than the kernel.  Coordinates far outside the image, and
+    NaN or infinite ones, land where the reference framework's do; the
+    few 5-D cases where its forward and backward disagree with each other
+    are listed in ``lucid/nn/functional/_grid_sampling.py``.
 
     Raises
     ------
@@ -229,10 +232,9 @@ def grid_sample(
     if x.ndim == 5 or mode == "bicubic":
         return composite_grid_sample(x, grid, mode, padding_mode, ac)
     if padding_mode == "reflection":
-        # In normalised coordinates both corner conventions mirror at
-        # ±1, so reflecting the grid and then clipping in the kernel
-        # (border) is the reference's reflect-then-clip, on the kernel.
-        grid = reflect(grid if grid.is_floating_point() else grid.float(), -1.0, 2.0)
+        # The kernel has no reflection: the grid is reflected in pixel
+        # space first and then read with border padding.
+        grid = reflect_grid(x, grid, ac, mode == "nearest")
         padding_mode = "border"
     return _wrap(
         _C_engine.nn.grid_sample(

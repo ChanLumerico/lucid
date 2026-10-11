@@ -6,17 +6,27 @@ filter and pads with zeros or the border; its ``affine_grid`` builds 2-D
 grids.  Everything else :func:`~lucid.nn.functional.grid_sample` and
 :func:`~lucid.nn.functional.affine_grid` accept is built here:
 
-- **reflection padding**, as a reflection of the grid itself, so the
-  4-D case still runs on the kernel (with border padding after it);
+- **reflection padding** of a 4-D input, as a grid the kernel then reads
+  with border padding (:func:`reflect_grid`);
 - **5-D (volumetric) input**, trilinear or nearest;
 - **bicubic**, sixteen taps of the cubic convolution kernel;
 - **3-D affine grids**.
 
 Each follows the reference framework's coordinate rules step by step —
 unnormalise, reflect, clip, then filter — so a sample lands on the same
-taps with the same weights.  The composites are differentiable in both
-the input (through ``gather``) and the grid (through the filter weights),
-the same two gradients the kernel provides.
+taps with the same weights, far outside the image and at non-finite
+coordinates too.  The reference has two sets of rules: its 4-D kernel
+folds a reflection by twice the span in floating point, and its 5-D
+kernel counts the flips in a 32-bit ``int``.  The two agree inside the
+image and part only far away, so each rank follows its own
+(``volumetric``).  A position becomes an index as the engine's
+``resample::index_of`` makes it one: NaN reads sample 0, and anything
+beyond the axis reads nothing.
+
+The composites are differentiable in both the input (through ``gather``)
+and the grid (through the filter weights, the reflection's ``±1`` slope
+and the clip's ``0`` / ``1`` slope), the same two gradients the kernel
+provides.
 """
 
 import itertools
@@ -30,6 +40,10 @@ if TYPE_CHECKING:
 
 
 _BICUBIC_A = -0.75
+
+# The reference's 5-D kernel counts reflection flips in a 32-bit int, and
+# a count that does not fit saturates there — an odd count.
+_INT32_LIMIT = 2.0**31
 
 
 def cubic_coefficients[T: (float, Tensor)](t: T) -> tuple[T, T, T, T]:
@@ -63,38 +77,119 @@ def cubic_coefficients[T: (float, Tensor)](t: T) -> tuple[T, T, T, T]:
     return far(t + 1.0), near(t), near(other), far(other + 1.0)
 
 
-def reflect(coord: Tensor, low: float, span: float) -> Tensor:
-    """Fold ``coord`` back into ``[low, low + span]`` by mirroring at both ends.
+def _distance(position: Tensor, low: float) -> Tensor:
+    """``|position - low|``, with the slope the reference gives it.
 
-    The reference's ``reflect_coordinates``: the distance from ``low``
-    is split into whole spans (``flips``) and a remainder, and an odd
-    number of flips reads the remainder from the far end.  The result is
-    piecewise linear in ``coord`` with slope ``±1``, which is the grid
-    gradient reflection padding has.
+    The slope is ``-1`` below ``low`` and ``+1`` everywhere else — at a NaN
+    position too, where ``abs`` would have none.  The reference's reflection
+    takes its sign from ``position - low < 0``, which is false for NaN, so a
+    NaN coordinate still passes its grid gradient through.
 
     Parameters
     ----------
-    coord : Tensor
-        Coordinates, any shape.
+    position : Tensor
+        Pixel-space positions.
     low : float
-        Lower mirror.
-    span : float
-        Distance to the upper mirror; positive.
+        The lower mirror.
 
     Returns
     -------
     Tensor
-        ``coord`` reflected into the interval, same shape.
+        The distances, same shape.
     """
-    distance = (coord - low).abs()
-    flips = (distance / span).floor()
-    extra = _lucid.fmod(distance, span)
-    odd = _lucid.fmod(flips, 2.0) == 1.0
-    return _lucid.where(odd, span - extra, extra) + low
+    shifted = position - low
+    return _lucid.where(shifted < 0.0, -shifted, shifted)
 
 
-def _unnormalize(coord: Tensor, size: int, align_corners: bool) -> Tensor:
-    """Map a normalised ``[-1, 1]`` coordinate onto pixel indices of an axis.
+def _reflect(position: Tensor, low: float, span: float, volumetric: bool) -> Tensor:
+    """Mirror ``position`` into ``[low, low + span]`` by the reference's rule.
+
+    The 4-D reference reduces the distance from ``low`` by whole double
+    spans — the count truncated in floating point, so the remainder is the
+    rounded one — and reads a remainder in the far half back from the far
+    end.  The 5-D reference splits the distance into a remainder
+    (``fmod``) and a count of whole spans, and reads the remainder from the
+    far end when the count is odd.  It counts in a 32-bit ``int``: a count
+    that does not fit saturates, which makes it odd, and a NaN count is
+    zero.  Its remainder is :func:`lucid.fmod`'s here, so a distance past
+    ``2**24`` spans reflects exactly once that op does (LCD-159).  Both
+    rules agree inside the image; the slope is ``±1`` either way.
+
+    Parameters
+    ----------
+    position : Tensor
+        Pixel-space positions.
+    low : float
+        Lower mirror.
+    span : float
+        Distance to the upper mirror; positive.
+    volumetric : bool
+        Follow the 5-D reference's rule instead of the 4-D one's.
+
+    Returns
+    -------
+    Tensor
+        The reflected positions, same shape.
+    """
+    distance = _distance(position, low)
+    if volumetric:
+        extra = _lucid.fmod(distance, span)
+        flips = (distance / span).floor()
+        odd = (flips >= _INT32_LIMIT) | (_lucid.fmod(flips, 2.0) == 1.0)
+        return _lucid.where(odd, span - extra, extra) + low
+    twice = 2.0 * span
+    extra = distance - (distance / twice).trunc() * twice
+    back = twice - extra
+    return _lucid.where(extra > back, back, extra) + low
+
+
+def _clip(position: Tensor, size: int) -> Tensor:
+    """Clamp ``position`` onto ``[0, size - 1]``; NaN passes through.
+
+    The slope is ``1`` strictly inside and ``0`` on or past either edge —
+    the reference counts the edge as clipped — and ``1`` at NaN.
+
+    Parameters
+    ----------
+    position : Tensor
+        Pixel-space positions.
+    size : int
+        Length of the axis.
+
+    Returns
+    -------
+    Tensor
+        The clamped positions, same shape.
+    """
+    last = float(size - 1)
+    inner = _lucid.where(position >= last, last, position)
+    return _lucid.where(position <= 0.0, 0.0, inner)
+
+
+def _constant_zero(position: Tensor) -> Tensor:
+    """``0`` at every position, NaN included, still in the grid's graph.
+
+    Parameters
+    ----------
+    position : Tensor
+        Any positions.
+
+    Returns
+    -------
+    Tensor
+        Zeros of the same shape and dtype, with a zero slope.
+    """
+    return _lucid.where(_lucid.ones_like(position, dtype=_lucid.bool), 0.0, position)
+
+
+def _unnormalize(
+    coord: Tensor, size: int, align_corners: bool, volumetric: bool
+) -> Tensor:
+    """Map a normalised ``[-1, 1]`` coordinate onto pixel positions of an axis.
+
+    The 4-D reference scales by ``size / 2`` and the 5-D one by ``size``
+    before halving; they round alike and part only where ``coord * size``
+    overflows.
 
     Parameters
     ----------
@@ -105,6 +200,8 @@ def _unnormalize(coord: Tensor, size: int, align_corners: bool) -> Tensor:
     align_corners : bool
         ``True``: ``±1`` are the centres of the end pixels; ``False``:
         their outer edges.
+    volumetric : bool
+        Follow the 5-D reference's arithmetic instead of the 4-D one's.
 
     Returns
     -------
@@ -112,77 +209,122 @@ def _unnormalize(coord: Tensor, size: int, align_corners: bool) -> Tensor:
         Pixel-space coordinates, same shape.
     """
     if align_corners:
-        return ((coord + 1.0) / 2.0) * (size - 1)
-    return ((coord + 1.0) * size - 1.0) / 2.0
+        return (coord + 1.0) * ((size - 1) / 2)
+    if volumetric:
+        return ((coord + 1.0) * size - 1.0) / 2.0
+    return (coord + 1.0) * (size / 2) - 0.5
 
 
-def _pad(coord: Tensor, size: int, padding_mode: str, align_corners: bool) -> Tensor:
-    """Bring a pixel-space coordinate inside the axis as ``padding_mode`` says.
+def _pad(
+    position: Tensor,
+    size: int,
+    padding_mode: str,
+    align_corners: bool,
+    volumetric: bool,
+) -> Tensor:
+    """Bring a pixel-space position inside the axis as ``padding_mode`` says.
 
     ``zeros`` leaves it where it is (the read is masked instead),
     ``border`` clips it, and ``reflection`` mirrors it about the image's
     edges — the end pixels' centres with ``align_corners``, their outer
     edges without — and then clips, as the reference does.
 
+    A NaN position stays NaN under the 4-D rules.  Under the 5-D rules it
+    clips to the last sample: the reference's 5-D forward does that
+    (``std::min(max, std::max(NaN, 0))``), while its backward keeps NaN and
+    differentiates at sample 0.  The two cannot be one graph, so the
+    composite follows the forward and its gradients follow that same
+    position.  For a NaN coordinate under border or reflection padding, and
+    an infinite one under reflection, ``dx`` and the grid gradient are
+    therefore the forward's, not the reference's.
+
     Parameters
     ----------
-    coord : Tensor
-        Pixel-space coordinates.
+    position : Tensor
+        Pixel-space positions.
     size : int
         Length of the axis.
     padding_mode : str
         ``"zeros"``, ``"border"`` or ``"reflection"``.
     align_corners : bool
-        Corner convention the coordinate was unnormalised with.
+        Corner convention the position was unnormalised with.
+    volumetric : bool
+        Follow the 5-D reference's rules instead of the 4-D one's.
 
     Returns
     -------
     Tensor
-        The padded coordinates, same shape.
+        The padded positions, same shape.
     """
     if padding_mode == "zeros":
-        return coord
+        return position
     if padding_mode == "reflection":
         if not align_corners:
-            coord = reflect(coord, -0.5, float(size))
+            position = _reflect(position, -0.5, float(size), volumetric)
         elif size > 1:
-            coord = reflect(coord, 0.0, float(size - 1))
+            position = _reflect(position, 0.0, float(size - 1), volumetric)
         else:
             # One pixel, mirrored at its own centre: every read is it.
-            coord = _lucid.zeros_like(coord)
-    return coord.clip(0.0, float(size - 1))
+            position = _constant_zero(position)
+    clipped = _clip(position, size)
+    if volumetric:
+        clipped = _lucid.where(_lucid.isnan(clipped), float(size - 1), clipped)
+    return clipped
 
 
-def _gather(flat: Tensor, coords: list[Tensor], sizes: list[int]) -> Tensor:
+def _index_of(position: Tensor) -> Tensor:
+    """A whole-numbered position as the sample it reads: NaN reads sample 0.
+
+    Parameters
+    ----------
+    position : Tensor
+        Floored or rounded positions.
+
+    Returns
+    -------
+    Tensor
+        The same positions with NaN replaced by ``0``; infinite and far
+        ones stay, and :func:`_gather` reads nothing there.
+    """
+    return _lucid.where(_lucid.isnan(position), 0.0, position)
+
+
+def _gather(
+    flat: Tensor, coords: list[Tensor], sizes: list[int]
+) -> tuple[Tensor, Tensor]:
     """Read ``flat`` at integral pixel coordinates; reads off the image are 0.
+
+    A read off the image takes nothing from ``flat`` — not even a NaN or
+    infinite value times zero — and sends it no gradient.
 
     Parameters
     ----------
     flat : Tensor
         Input with its spatial axes flattened, ``(N, C, S)``.
     coords : list of Tensor
-        One ``(N, P)`` tensor of integral coordinates per spatial axis,
-        fastest-varying (``x``) first.
+        One ``(N, P)`` tensor of whole-numbered, NaN-free coordinates per
+        spatial axis, fastest-varying (``x``) first.
     sizes : list of int
         The matching axis lengths.
 
     Returns
     -------
-    Tensor
-        ``(N, C, P)`` samples, zero where any coordinate is off its axis.
+    tuple of Tensor
+        ``(N, C, P)`` samples, zero where any coordinate is off its axis,
+        and the ``(N, P)`` mask of the reads that landed on it.
     """
     n, c, _ = flat.shape
-    index = _lucid.zeros_like(coords[0], dtype=_lucid.int64)
     inside = _lucid.ones_like(coords[0], dtype=_lucid.bool)
+    for coord, size in zip(coords, sizes, strict=True):
+        inside = inside & (coord >= 0.0) & (coord <= float(size - 1))
+    index = _lucid.zeros_like(coords[0], dtype=_lucid.int64)
     stride = 1
     for coord, size in zip(coords, sizes, strict=True):
-        last = float(size - 1)
-        inside = inside & (coord >= 0.0) & (coord <= last)
-        index = index + coord.clip(0.0, last).to(_lucid.int64) * stride
+        index = index + _lucid.where(inside, coord, 0.0).to(_lucid.int64) * stride
         stride *= size
     points = int(index.shape[1])
     values = _lucid.gather(flat, 2, index.unsqueeze(1).expand(n, c, points))
-    return values * inside.unsqueeze(1).to(flat.dtype)
+    return _lucid.where(inside.unsqueeze(1), values, 0.0), inside
 
 
 def _total(terms: list[Tensor]) -> Tensor:
@@ -205,7 +347,21 @@ def _total(terms: list[Tensor]) -> Tensor:
 
 
 def _linear(flat: Tensor, coords: list[Tensor], sizes: list[int]) -> Tensor:
-    """Bilinear / trilinear: the ``2**k`` surrounding pixels, weighted.
+    """Trilinear (or bilinear): the ``2**k`` surrounding pixels, weighted.
+
+    A corner off the image adds nothing, its weight included: at an
+    infinite position the weights are NaN, and the reference skips such a
+    corner rather than multiplying it by zero.  Every factor of such a
+    corner's weight is zeroed before the product, not the product after
+    it: a product's derivative multiplies by the other factors, so one NaN
+    factor would turn the zero gradient of a skipped corner into NaN.  The
+    corners are summed in the reference's order, the slowest axis
+    outermost.
+
+    A position at or past ``2**63`` reads nothing, as the engine's
+    ``resample::next_index`` keeps it: the reference's 5-D kernel adds one
+    to the saturated index, overflows, and reads its upper corner at
+    sample 0.
 
     Parameters
     ----------
@@ -221,16 +377,21 @@ def _linear(flat: Tensor, coords: list[Tensor], sizes: list[int]) -> Tensor:
     Tensor
         ``(N, C, P)`` samples.
     """
-    lower = [coord.floor() for coord in coords]
-    frac = [coord - base for coord, base in zip(coords, lower, strict=True)]
+    lower: list[Tensor] = []
+    fractions: list[Tensor] = []
+    for coord in coords:
+        base = coord.floor()
+        lower.append(_index_of(base))
+        fractions.append(coord - base)
     terms = []
     for corner in itertools.product((0, 1), repeat=len(coords)):
-        weight = _lucid.ones_like(frac[0])
-        taps = []
-        for upper, base, f in zip(corner, lower, frac, strict=True):
-            weight = weight * (f if upper else 1.0 - f)
-            taps.append(base + float(upper))
-        terms.append(_gather(flat, taps, sizes) * weight.unsqueeze(1))
+        uppers = corner[::-1]
+        taps = [low + float(upper) for low, upper in zip(lower, uppers, strict=True)]
+        values, inside = _gather(flat, taps, sizes)
+        weight = _lucid.ones_like(coords[0])
+        for upper, frac in zip(uppers, fractions, strict=True):
+            weight = weight * _lucid.where(inside, frac if upper else 1.0 - frac, 0.0)
+        terms.append(values * weight.unsqueeze(1))
     return _total(terms)
 
 
@@ -248,9 +409,10 @@ def _nearest(flat: Tensor, coords: list[Tensor], sizes: list[int]) -> Tensor:
     padded coordinates (``x`` first) with their axis lengths, and
     ``(N, C, P)`` samples.
     """
-    nearest = [coord.round() for coord in coords]
+    nearest = [_index_of(coord.round()) for coord in coords]
     weight = _total([index.clip(0.0, 0.0) for index in nearest]) + 1.0
-    return _gather(flat, nearest, sizes) * weight.unsqueeze(1)
+    values, _ = _gather(flat, nearest, sizes)
+    return values * weight.unsqueeze(1)
 
 
 def _bicubic(
@@ -266,7 +428,10 @@ def _bicubic(
     would move ``floor`` and every tap with it.  Each tap is padded on
     its own instead, as the reference's ``get_value_bounded`` does, and
     the weights come from the unpadded fraction.  The grid gradient
-    flows through the weights only; the taps are integral.
+    flows through the weights only; the taps are integral.  As in the
+    reference, the four taps of each row are blended first and the rows
+    after, and a tap off the image is a zero that still multiplies its
+    weight (a NaN weight makes the sample NaN) but takes no gradient.
 
     Parameters
     ----------
@@ -287,23 +452,23 @@ def _bicubic(
         ``(N, C, P)`` samples.
     """
     taps: list[list[Tensor]] = []
-    weights: list[tuple[Tensor, Tensor, Tensor, Tensor]] = []
+    weights: list[list[Tensor]] = []
     for coord, size in zip(coords, sizes, strict=True):
         base = coord.floor()
-        weights.append(cubic_coefficients(coord - base))
+        weights.append([w.unsqueeze(1) for w in cubic_coefficients(coord - base)])
         taps.append(
             [
-                _pad(base + float(offset), size, padding_mode, align_corners)
+                _index_of(
+                    _pad(base + float(offset), size, padding_mode, align_corners, False)
+                )
                 for offset in (-1, 0, 1, 2)
             ]
         )
-    terms = [
-        _gather(flat, [taps[0][i], taps[1][j]], sizes)
-        * (weights[0][i] * weights[1][j]).unsqueeze(1)
-        for j in range(4)
-        for i in range(4)
-    ]
-    return _total(terms)
+    rows = []
+    for j in range(4):
+        reads = [_gather(flat, [taps[0][i], taps[1][j]], sizes)[0] for i in range(4)]
+        rows.append(_total([w * v for w, v in zip(weights[0], reads, strict=True)]))
+    return _total([w * row for w, row in zip(weights[1], rows, strict=True)])
 
 
 _MODES = ("bilinear", "nearest", "bicubic")
@@ -433,24 +598,100 @@ def composite_grid_sample(
     out_spatial = [int(s) for s in grid.shape[1:-1]]
     points = math.prod(out_spatial)
     flat = x.reshape(n, c, math.prod(spatial))
+    volumetric = x.ndim == 5
     # Grid components are (x, y[, z]) — fastest axis first, the reverse
     # of the input's (D, H, W).
     sizes = spatial[::-1]
     components = _lucid.unbind(grid.reshape(n, points, len(sizes)), -1)
     coords = [
-        _unnormalize(component, size, align_corners)
+        _unnormalize(component, size, align_corners, volumetric)
         for component, size in zip(components, sizes, strict=True)
     ]
     if mode == "bicubic":
         out = _bicubic(flat, coords, sizes, padding_mode, align_corners)
     else:
         coords = [
-            _pad(coord, size, padding_mode, align_corners)
+            _pad(coord, size, padding_mode, align_corners, volumetric)
             for coord, size in zip(coords, sizes, strict=True)
         ]
         sample = _nearest if mode == "nearest" else _linear
         out = sample(flat, coords, sizes)
     return out.reshape(n, c, *out_spatial)
+
+
+def _normalize(position: Tensor, size: int, align_corners: bool) -> Tensor:
+    """The grid coordinate whose pixel position along an axis is ``position``.
+
+    Parameters
+    ----------
+    position : Tensor
+        Pixel positions in ``[0, size - 1]``.
+    size : int
+        Length of the axis.
+    align_corners : bool
+        Corner convention.
+
+    Returns
+    -------
+    Tensor
+        Normalised coordinates, same shape.
+    """
+    if not align_corners:
+        return (position + 0.5) * (2.0 / size) - 1.0
+    if size > 1:
+        return position * (2.0 / (size - 1)) - 1.0
+    # Every coordinate reads the one pixel; 0 is the finite one to hand over.
+    return _constant_zero(position)
+
+
+def reflect_grid(x: Tensor, grid: Tensor, align_corners: bool, nearest: bool) -> Tensor:
+    """The grid the 4-D kernel reads with border padding to sample with reflection.
+
+    Each coordinate is unnormalised, reflected and clipped in pixel space
+    with the reference's 4-D arithmetic, so a coordinate far outside the
+    image lands where the reference's does, and is then handed back in
+    normalised form.  A coordinate the padding leaves where it was is
+    handed over untouched, so the kernel reads it exactly; one the padding
+    moved goes through :func:`_normalize`, whose round trip can be a unit
+    in the last place off — so under ``nearest`` it is rounded to its
+    pixel first, and the kernel's own rounding cannot tip it.
+
+    The grid gradient is the chain the reference applies: the unnormalise
+    slope, the reflection's ``±1`` (``+1`` at NaN) and the clip's ``0`` /
+    ``1``.
+
+    Parameters
+    ----------
+    x : Tensor
+        The ``(N, C, H, W)`` input; only its spatial size is read.
+    grid : Tensor
+        ``(N, H_out, W_out, 2)`` grid; an integral one is promoted to
+        float32.
+    align_corners : bool
+        Corner convention.
+    nearest : bool
+        The kernel will round the positions rather than blend them.
+
+    Returns
+    -------
+    Tensor
+        A grid of the same shape whose coordinates all read inside the image;
+        a grid of any other shape is returned as it is, for the kernel to
+        refuse by name.
+    """
+    grid = _as_real(grid)
+    if x.ndim != 4 or grid.ndim != 4 or int(grid.shape[-1]) != 2:
+        return grid
+    sizes = (int(x.shape[3]), int(x.shape[2]))
+    reflected = []
+    for coord, size in zip(_lucid.unbind(grid, -1), sizes, strict=True):
+        position = _unnormalize(coord, size, align_corners, False)
+        padded = _pad(position, size, "reflection", align_corners, False)
+        if nearest:
+            padded = padded.round()
+        moved = _normalize(padded, size, align_corners)
+        reflected.append(_lucid.where(padded == position, coord, moved))
+    return _lucid.stack(reflected, -1)
 
 
 def _base_axis(steps: int, align_corners: bool, like: Tensor) -> Tensor:
