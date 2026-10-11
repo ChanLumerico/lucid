@@ -12,10 +12,13 @@ Today this module ships:
 """
 
 from abc import ABC, abstractmethod
-from typing import override
+from array import array
+from collections.abc import Callable
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike
 from lucid.models._utils._generative import extract_into_tensor, make_beta_schedule
 
 __all__ = ["DiffusionScheduler", "DDPMScheduler"]
@@ -44,13 +47,55 @@ class DiffusionScheduler(ABC):
     The interface a sampler is written against — ``add_noise`` for
     training, ``set_timesteps`` and ``step`` for inference — so a model
     does not know which schedule it is being run with.
+
+    The schedule's tables live on one device, :attr:`device`.  They start
+    where the scheduler was built and move with :meth:`to`; a scheduler is
+    not a :class:`lucid.nn.Module` (it holds no weights, and its tables do
+    not belong in a checkpoint), so a model that keeps one forwards its own
+    device moves through :meth:`_apply`.
     """
 
     num_train_timesteps: int
     timesteps: Tensor
 
+    @property
+    def device(self) -> DeviceLike:
+        """Where the schedule's tables live."""
+        return self.timesteps.device
+
+    def to(self, device: DeviceLike) -> Self:
+        """Move every schedule table to ``device``; returns ``self``.
+
+        Examples
+        --------
+        >>> from lucid.models.generative._common._schedulers import DDPMScheduler
+        >>> scheduler = DDPMScheduler(num_train_timesteps=10).to("cpu")
+        >>> scheduler.alphas_cumprod.device.type
+        'cpu'
+        """
+        self._apply(lambda table: table.to(device))
+        return self
+
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> None:
+        """Map every tensor table through ``fn`` — a model's ``_apply`` hook."""
+        for name, value in list(vars(self).items()):
+            if isinstance(value, Tensor):
+                setattr(self, name, fn(value))
+
+    def _follow(self, sample: Tensor) -> None:
+        """Move the tables to ``sample``'s device, once, if they are elsewhere.
+
+        A scheduler built on the CPU and handed Metal samples used to copy
+        its whole table across on every call; now the first such call moves
+        it and the rest find it in place.
+        """
+        if self.timesteps.device != sample.device:
+            self.to(sample.device)
+
     @abstractmethod
-    def set_timesteps(self, num_inference_steps: int, *, device: str = "cpu") -> None:
+    def set_timesteps(
+        self, num_inference_steps: int, *, device: DeviceLike = None
+    ) -> None:
         """Populate :attr:`timesteps` for the requested inference schedule.
 
         Most schedulers sub-sample the training schedule uniformly when
@@ -63,9 +108,9 @@ class DiffusionScheduler(ABC):
             How many denoising steps the sampler will perform.  Must be
             positive and (for sub-sampling schedulers) ``<=
             num_train_timesteps``.
-        device : str, optional
+        device : DeviceLike, optional
             Placement of the materialised :attr:`timesteps` tensor.
-            Default ``"cpu"``.
+            ``None`` (the default) keeps it with the rest of the schedule.
 
         Examples
         --------
@@ -105,6 +150,9 @@ class DDPMScheduler(DiffusionScheduler):
             :func:`make_beta_schedule`.
         prediction_type: ``"epsilon"`` (the noise, default) or ``"sample"``
             (predict x_0 directly).  Both parameterisations are supported.
+        device: Where the schedule's tables are built; :meth:`to` moves
+            them later, and ``add_noise`` / ``step`` move them to their
+            sample's device on first use.
 
     Notes:
         The scheduler is *stateless w.r.t. weights* — it only owns the noise
@@ -147,6 +195,7 @@ class DDPMScheduler(DiffusionScheduler):
         beta_schedule: str = "linear",
         prediction_type: str = "epsilon",
         clip_denoised: bool = True,
+        device: DeviceLike = "cpu",
     ) -> None:
         if prediction_type not in ("epsilon", "sample"):
             raise ValueError(
@@ -176,6 +225,14 @@ class DDPMScheduler(DiffusionScheduler):
             acc *= a
             cum.append(acc)
         self.alphas_cumprod = lucid.tensor(cum)
+        # ``step`` takes a Python-int timestep, so its coefficients are read
+        # from host floats rather than from a table that may sit on Metal —
+        # a device read per step would stall the sampling loop.
+        self._alphas_cumprod_host = array("f", cum).tolist()  # float32, as stored
+        # add_noise's two coefficients per timestep, computed once rather
+        # than on every training step.
+        self._signal_scale = self.alphas_cumprod**0.5
+        self._noise_scale = (1.0 - self.alphas_cumprod) ** 0.5
 
         # Inference schedule defaults to the full training one.
         self.timesteps = lucid.arange(num_train_timesteps - 1, -1, -1).long()
@@ -184,9 +241,13 @@ class DDPMScheduler(DiffusionScheduler):
         # ``t - step_ratio``, not ``t - 1``, and the per-step α/β must be the
         # ratio across that whole interval.
         self._step_ratio = 1
+        if device is not None:
+            self.to(device)
 
     @override
-    def set_timesteps(self, num_inference_steps: int, *, device: str = "cpu") -> None:
+    def set_timesteps(
+        self, num_inference_steps: int, *, device: DeviceLike = None
+    ) -> None:
         """Uniform-subsample the training schedule into ``num_inference_steps``."""
         if num_inference_steps <= 0:
             raise ValueError(
@@ -207,7 +268,8 @@ class DDPMScheduler(DiffusionScheduler):
         # final step noiseless for every ``n``, which is Algorithm 2 line 3
         # ("z = 0 if t == 1").
         idx = [i * step for i in range(num_inference_steps)][::-1]
-        self.timesteps = lucid.tensor(idx, device=device).long()
+        where = self.device if device is None else device
+        self.timesteps = lucid.tensor(idx, device=where).long()
         self._step_ratio = step
 
     @override
@@ -222,11 +284,10 @@ class DDPMScheduler(DiffusionScheduler):
         Returns:
             Noisy images ``x_t`` of the same shape as ``original``.
         """
-        sqrt_ab = extract_into_tensor(
-            self.alphas_cumprod**0.5, timesteps, original.shape
-        )
+        self._follow(original)
+        sqrt_ab = extract_into_tensor(self._signal_scale, timesteps, original.shape)
         sqrt_one_minus_ab = extract_into_tensor(
-            (1.0 - self.alphas_cumprod) ** 0.5, timesteps, original.shape
+            self._noise_scale, timesteps, original.shape
         )
         return sqrt_ab * original + sqrt_one_minus_ab * noise
 
@@ -256,8 +317,8 @@ class DDPMScheduler(DiffusionScheduler):
         # interval — using ``self.alphas[t]`` / ``self.betas[t]`` there would
         # under-denoise by the stride factor and return near-pure noise.
         prev_t = t - self._step_ratio
-        ab_t = float(self.alphas_cumprod[t].item())
-        ab_prev = float(self.alphas_cumprod[prev_t].item()) if prev_t >= 0 else 1.0
+        ab_t = self._alphas_cumprod_host[t]
+        ab_prev = self._alphas_cumprod_host[prev_t] if prev_t >= 0 else 1.0
 
         alpha_t = ab_t / ab_prev
         beta_t = 1.0 - alpha_t

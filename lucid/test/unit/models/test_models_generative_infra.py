@@ -18,6 +18,7 @@ from lucid.models import (
 )
 from lucid.models._mixins import DiffusionMixin
 from lucid.models.generative import DDPMScheduler, DiffusionScheduler
+from lucid.test._fixtures.devices import metal_available
 from lucid.models._base import PretrainedModel
 from lucid.models.generative._common._rssm import RSSM, rssm_kl
 from lucid.models._utils import (
@@ -245,6 +246,55 @@ class TestDDPMScheduler:
     def test_prediction_type_validation(self) -> None:
         with pytest.raises(ValueError, match="prediction_type"):
             DDPMScheduler(prediction_type="bogus")
+
+    def test_step_reads_the_stored_float32_schedule(self) -> None:
+        """The host copy ``step`` reads is the table, value for value."""
+        sched = DDPMScheduler(num_train_timesteps=50)
+        assert sched._alphas_cumprod_host == sched.alphas_cumprod.tolist()
+
+
+_METAL = ["cpu", "metal"] if metal_available() else ["cpu"]
+
+
+class TestDDPMSchedulerDevice:
+    """LCD-383: the schedule had no device — every table stayed on the CPU."""
+
+    def _tables(self, sched: DDPMScheduler) -> set[str]:
+        return {
+            t.device.type for t in vars(sched).values() if isinstance(t, lucid.Tensor)
+        }
+
+    @pytest.mark.parametrize("device", _METAL)
+    def test_built_on_a_device(self, device: str) -> None:
+        sched = DDPMScheduler(num_train_timesteps=20, device=device)
+        assert self._tables(sched) == {device}
+        sched.set_timesteps(5)
+        assert sched.timesteps.device.type == device
+
+    @pytest.mark.parametrize("device", _METAL)
+    def test_to_moves_every_table(self, device: str) -> None:
+        sched = DDPMScheduler(num_train_timesteps=20).to(device)
+        assert self._tables(sched) == {device}
+        assert sched.to("cpu") is sched and self._tables(sched) == {"cpu"}
+
+    @pytest.mark.parametrize("device", _METAL)
+    def test_add_noise_follows_the_sample_once(self, device: str) -> None:
+        sched = DDPMScheduler(num_train_timesteps=20)
+        x0 = lucid.randn((2, 1, 4, 4), device=device)
+        t = lucid.tensor([3, 17], device=device).long()
+        first = sched.add_noise(x0, lucid.zeros_like(x0), t)
+        assert first.device.type == device
+        assert self._tables(sched) == {device}
+        ref = DDPMScheduler(num_train_timesteps=20)
+        want = ref.add_noise(x0.to("cpu"), lucid.zeros((2, 1, 4, 4)), t.to("cpu"))
+        assert float((first.to("cpu") - want).abs().max().item()) < 1e-6
+
+    @pytest.mark.parametrize("device", _METAL)
+    def test_step_stays_on_the_sample_device(self, device: str) -> None:
+        sched = DDPMScheduler(num_train_timesteps=20).to(device)
+        sample = lucid.randn((1, 1, 4, 4), device=device)
+        out = sched.step(lucid.zeros_like(sample), 7, sample)
+        assert out.device.type == device
 
 
 # ─────────────────────────────────────────────────────────────────────────────

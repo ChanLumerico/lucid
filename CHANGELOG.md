@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generator gets manual_seed/initial_seed/get_state/set_state
 
+- diffusion schedulers carry a device
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
