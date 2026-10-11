@@ -1508,14 +1508,14 @@ public:
         auto values = ::mlx::core::take_along_axis(*ga.arr, idx, axis);
         return {
             Storage{gpu::wrap_mlx_array(std::move(values), dt)},
-            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(idx), Dtype::I32)},
+            Storage{gpu::wrap_mlx_array(::mlx::core::astype(idx, ::mlx::core::int64), Dtype::I64)},
         };
     }
 
     Storage argsort(const Storage& a, const Shape&, int axis, Dtype) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto out = sort_order(*ga.arr, axis);
-        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)};
+        auto out = ::mlx::core::astype(sort_order(*ga.arr, axis), ::mlx::core::int64);
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I64)};
     }
 
     Storage arg_reduce_index(

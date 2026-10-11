@@ -13,6 +13,7 @@
 
 #include <mlx/array.h>
 
+#include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -96,35 +97,21 @@ inline void check_dtype_device_match(const std::vector<TensorImplPtr>& xs, const
     }
 }
 
-// Normalise a possibly negative axis to a non-negative index.
+// Normalise a possibly negative axis of a tensor of rank >= 1.
 //
-// Wraps negative ``axis`` by adding ``ndim`` (Python semantics) and verifies
-// the result lies in ``[0, ndim)``.  Used by every ops/utils function that
-// accepts an axis parameter.
-//
-// Parameters
-// ----------
-// axis : int
-//     Signed axis index; negative values count from the end.
-// ndim : int
-//     Number of dimensions of the target tensor.  Must be > 0.
-//
-// Returns
-// -------
-// int
-//     A non-negative axis in ``[0, ndim)``.
+// The rule is :func:`wrap_dim`'s, the one every dim argument follows.  The
+// ops/utils callers index ``shape()[axis]``, so a 0-d tensor, whose one axis
+// is notional, is refused here; an op that accepts a 0-d input routes it
+// through :func:`on_scalar_axis` (ScalarAxis.h) before it wraps.
 //
 // Raises
 // ------
-// ErrorBuilder
-//     If the wrapped axis falls outside ``[0, ndim)``.
+// IndexError
+//     ``ndim`` is 0, or ``axis`` falls outside ``[-ndim, ndim)``.
 inline int wrap_axis(int axis, int ndim) {
-    int a = axis;
-    if (a < 0)
-        a += ndim;
-    if (a < 0 || a >= ndim)
-        ErrorBuilder("axis").index_error("out of range");
-    return a;
+    if (ndim == 0)
+        ErrorBuilder("axis").index_error("out of range: the op needs a tensor of rank >= 1");
+    return wrap_dim(axis, ndim, "axis");
 }
 
 }  // namespace lucid::utils_detail

@@ -443,6 +443,17 @@ std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>
 // Shape / axis helpers for reduction backward passes.
 // -------------------------------------------------------------------------
 
+int wrap_dim(int dim, int ndim, const char* op) {
+    const int extent = std::max(ndim, 1);
+    const int wrapped = dim < 0 ? dim + extent : dim;
+    if (wrapped < 0 || wrapped >= extent)
+        ErrorBuilder(op).index_error("axis out of range: got " + std::to_string(dim) +
+                                     ", expected [" + std::to_string(-extent) + ", " +
+                                     std::to_string(extent - 1) + "] for a tensor of rank " +
+                                     std::to_string(ndim));
+    return wrapped;
+}
+
 // Resolve axis indices to a sorted, deduplicated list of non-negative values.
 // Negative indices are wrapped by adding ndim.  An empty input axes list is
 // interpreted as "all axes".
@@ -454,14 +465,13 @@ std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
             out.push_back(i);
         return out;
     }
-    std::vector<bool> seen(ndim, false);
+    std::vector<bool> seen(std::max(ndim, 1), false);
     for (int a : axes) {
-        int wrapped = a < 0 ? a + ndim : a;
-        if (wrapped < 0 || wrapped >= ndim) {
-            ErrorBuilder("normalize_axes")
-                .index_error(std::string("axis out of range: ") + std::to_string(a) +
-                             " for ndim=" + std::to_string(ndim));
-        }
+        const int wrapped = wrap_dim(a, ndim, "normalize_axes");
+        // A 0-d tensor's one axis is notional: reducing over it is the
+        // identity, which is the empty axis list of rank 0.
+        if (ndim == 0)
+            continue;
         if (!seen[wrapped]) {
             seen[wrapped] = true;
             out.push_back(wrapped);

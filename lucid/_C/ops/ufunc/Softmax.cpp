@@ -24,6 +24,7 @@
 #include "../bfunc/Sub.h"
 #include "../bfunc/_BinaryOp.h"
 #include "../utils/Promote.h"
+#include "../utils/ScalarAxis.h"
 #include "Reductions.h"
 
 namespace lucid {
@@ -38,12 +39,10 @@ const OpSchema SoftmaxBackward::schema_v1{"softmax", 1, AmpPolicy::ForceFP32, tr
 // set_flops(*5): each element needs roughly exp + div + two adds + a compare.
 TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     Validator::input(a, "softmax.a").non_null();
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "softmax", softmax_op);
 
-    const int ndim = static_cast<int>(a->shape().size());
-    // Normalise negative axis to a canonical non-negative index.
-    const int wrapped = axis < 0 ? axis + ndim : axis;
-    if (wrapped < 0 || wrapped >= ndim)
-        ErrorBuilder("softmax").index_error("axis out of range");
+    const int wrapped = wrap_dim(axis, static_cast<int>(a->shape().size()), "softmax");
 
     // Assembles its own forward, so it asks for the schema dtype the
     // kernel templates would have applied.  Without it an integer input
@@ -103,11 +102,10 @@ const OpSchema LogSoftmaxBackward::schema_v1{"log_softmax", 1, AmpPolicy::ForceF
 // save the log_softmax output for use in the backward pass.
 TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     Validator::input(a, "log_softmax.a").non_null();
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "log_softmax", log_softmax_op);
 
-    const int ndim = static_cast<int>(a->shape().size());
-    const int wrapped = axis < 0 ? axis + ndim : axis;
-    if (wrapped < 0 || wrapped >= ndim)
-        ErrorBuilder("log_softmax").index_error("axis out of range");
+    const int wrapped = wrap_dim(axis, static_cast<int>(a->shape().size()), "log_softmax");
 
     // Assembles its own forward, so it asks for the schema dtype the
     // kernel templates would have applied.  Without it an integer input

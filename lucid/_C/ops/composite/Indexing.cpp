@@ -26,6 +26,7 @@
 #include "../ufunc/Astype.h"
 #include "../utils/Concat.h"
 #include "../utils/Layout.h"
+#include "../utils/ScalarAxis.h"
 #include "../utils/Select.h"
 #include "../utils/Sort.h"
 #include "../utils/View.h"
@@ -34,13 +35,13 @@ namespace lucid {
 
 namespace {
 
-// Resolve a possibly-negative ``dim`` against ``a``'s rank.
-int wrap_dim(const TensorImplPtr& a, int dim, const char* op) {
+// Resolve a possibly-negative ``dim`` against ``a``'s rank, which must be at
+// least 1: these ops index ``shape()[dim]``.  The rule is :func:`wrap_dim`'s.
+int wrap_axis_of(const TensorImplPtr& a, int dim, const char* op) {
     const int ndim = static_cast<int>(a->shape().size());
-    int d = dim < 0 ? dim + ndim : dim;
-    if (d < 0 || d >= ndim)
-        ErrorBuilder(op).index_error("dim out of range");
-    return d;
+    if (ndim == 0)
+        ErrorBuilder(op).index_error("dim out of range: the op needs a tensor of rank >= 1");
+    return wrap_dim(dim, ndim, op);
 }
 
 // ``gather_op`` requires int32/int64 indices; we surface a per-op error so
@@ -73,7 +74,7 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
     if (indices->shape().size() != 1)
         ErrorBuilder("index_select").fail("indices must be 1-D");
 
-    const int d = wrap_dim(a, dim, "index_select");
+    const int d = wrap_axis_of(a, dim, "index_select");
     const int ndim = static_cast<int>(a->shape().size());
     const std::int64_t k = indices->shape()[0];
 
@@ -96,7 +97,7 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
 TensorImplPtr narrow_op(const TensorImplPtr& a, int dim, std::int64_t start, std::int64_t length) {
     if (!a)
         ErrorBuilder("narrow").fail("null input");
-    const int d = wrap_dim(a, dim, "narrow");
+    const int d = wrap_axis_of(a, dim, "narrow");
     const std::int64_t size = a->shape()[static_cast<std::size_t>(d)];
     if (start < 0 || length < 0 || start + length > size)
         ErrorBuilder("narrow").index_error("range out of bounds");
@@ -191,7 +192,7 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
         return base->shape().empty() ? reshape_op(out, Shape{}) : out;
     }
 
-    const int d = wrap_dim(base, dim, "scatter");
+    const int d = wrap_axis_of(base, dim, "scatter");
     const int ndim = static_cast<int>(base->shape().size());
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
@@ -275,7 +276,11 @@ TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool 
     if (a->dtype() == Dtype::Bool)
         ErrorBuilder("kthvalue")
             .not_implemented("kthvalue does not accept bool — cast to an integer dtype");
-    const int d = wrap_dim(a, dim, "kthvalue");
+    if (a->shape().empty())
+        return on_scalar_axis(a, dim, "kthvalue", [&](const TensorImplPtr& v, int ax) {
+            return kthvalue_op(v, k, ax, keepdim);
+        });
+    const int d = wrap_axis_of(a, dim, "kthvalue");
     const std::int64_t size = a->shape()[static_cast<std::size_t>(d)];
     if (k < 1 || k > size)
         ErrorBuilder("kthvalue").invalid_argument("k out of range");

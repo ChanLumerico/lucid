@@ -46,6 +46,7 @@
 #include "../composite/Logical.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
+#include "../utils/ScalarAxis.h"
 #include "../utils/Select.h"
 #include "Astype.h"
 #include "Reductions.h"
@@ -211,13 +212,8 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
     const Dtype dt = a->dtype();
     const Device device = a->device();
     auto sh = a->shape();
-    if (sh.empty())
-        ErrorBuilder(name).fail("input is scalar");
-    int ax = axis;
-    if (ax < 0)
-        ax += static_cast<int>(sh.size());
-    if (ax < 0 || ax >= (int)sh.size())
-        ErrorBuilder(name).index_error("axis out of range");
+    // The public ops route a 0-d input through on_scalar_axis first.
+    const int ax = wrap_dim(axis, static_cast<int>(sh.size()), name);
     OpScopeFull scope{name, device, dt, sh};
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
 
@@ -232,6 +228,8 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 // Dispatch cumsum, then wire CumsumBackward.  The axis is re-normalised here
 // (after scan_dispatch validated it) so that bwd->axis_ is always non-negative.
 TensorImplPtr cumsum_op(const TensorImplPtr& a_in, int axis) {
+    if (a_in->shape().empty())
+        return on_scalar_axis(a_in, axis, "cumsum", cumsum_op);
     const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
     auto out = scan_dispatch(a, axis, false, "cumsum");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
@@ -244,6 +242,8 @@ TensorImplPtr cumsum_op(const TensorImplPtr& a_in, int axis) {
 
 // Dispatch cumprod, then wire CumprodBackward with both input and output saved.
 TensorImplPtr cumprod_op(const TensorImplPtr& a_in, int axis) {
+    if (a_in->shape().empty())
+        return on_scalar_axis(a_in, axis, "cumprod", cumprod_op);
     const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
     auto out = scan_dispatch(a, axis, true, "cumprod");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
@@ -277,13 +277,8 @@ TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis, bool is_max, c
     const Dtype dt = a->dtype();
     const Device device = a->device();
     auto sh = a->shape();
-    if (sh.empty())
-        ErrorBuilder(name).fail("input is scalar");
-    int ax = axis;
-    if (ax < 0)
-        ax += static_cast<int>(sh.size());
-    if (ax < 0 || ax >= (int)sh.size())
-        ErrorBuilder(name).index_error("axis out of range");
+    // The public ops route a 0-d input through on_scalar_axis first.
+    const int ax = wrap_dim(axis, static_cast<int>(sh.size()), name);
     OpScopeFull scope{name, device, dt, sh};
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
 
@@ -559,6 +554,8 @@ const OpSchema CumminBackward::schema_v1{"cummin", 1, AmpPolicy::KeepInput, true
 }  // anonymous namespace
 
 TensorImplPtr cummax_op(const TensorImplPtr& a, int axis) {
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "cummax", cummax_op);
     auto out = scan_ext_dispatch(a, axis, true, "cummax");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CummaxBackward>();
@@ -570,6 +567,8 @@ TensorImplPtr cummax_op(const TensorImplPtr& a, int axis) {
 }
 
 TensorImplPtr cummin_op(const TensorImplPtr& a, int axis) {
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "cummin", cummin_op);
     auto out = scan_ext_dispatch(a, axis, false, "cummin");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumminBackward>();

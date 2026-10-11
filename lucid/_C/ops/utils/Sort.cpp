@@ -41,6 +41,7 @@
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
+#include "ScalarAxis.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -148,6 +149,8 @@ attach_index_scatter_grad(const TensorImplPtr& a, TensorImplPtr out, Storage ind
 // scatter the incoming gradient back to the original positions.
 TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "sort.a").non_null();
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "sort", sort_op);
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"sort", device, dt, a->shape()};
@@ -162,17 +165,19 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
 }
 
 // Compute the permutation indices that would sort `a` along `axis` in
-// ascending order.  The output always has dtype I32 and carries no gradient
-// because index tensors are discrete and non-differentiable.
+// ascending order.  The output is int64, as every index-returning op's is,
+// and carries no gradient.
 TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "argsort.a").non_null();
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, "argsort", argsort_op);
     const Device device = a->device();
     OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     Storage out =
         backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax, a->dtype());
-    auto result = fresh(std::move(out), a->shape(), Dtype::I32, device);
+    auto result = fresh(std::move(out), a->shape(), Dtype::I64, device);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, result);
     }
@@ -186,6 +191,10 @@ namespace {
 TensorImplPtr
 argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
+    if (a->shape().empty())
+        return on_scalar_axis(a, axis, name, [&](const TensorImplPtr& v, int ax) {
+            return argext_dispatch(v, ax, keepdims, is_min, name);
+        });
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
@@ -327,7 +336,7 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
 // Return the k largest values and their original positions along `axis`.
 // Calls sort_select(topk=true), which returns exactly the k greatest elements
 // and their sort-indices.  The values output receives IndexScatterBackward for
-// differentiable dtypes; the indices output (dtype I32) carries no gradient.
+// differentiable dtypes; the indices output (int64) carries no gradient.
 //
 // The indices_out is constructed first so its storage can be shared by
 // attach_index_scatter_grad without an extra allocation.
@@ -341,6 +350,16 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     if (dt == Dtype::Bool)
         ErrorBuilder("topk").not_implemented(
             "topk does not accept bool — cast to an integer dtype");
+    // A 0-d input answers k = 0 with the scalar itself, as k = 1: the
+    // reference's choice, since a 0-d result cannot hold zero elements.
+    if (a->shape().empty()) {
+        if (k < 0 || k > 1)
+            ErrorBuilder("topk").fail("selected index k out of range: k must be in [0, 1] for a "
+                                      "0-d input, got " +
+                                      std::to_string(k));
+        return on_scalar_axis(a, axis, "topk",
+                              [](const TensorImplPtr& v, int ax) { return topk_op(v, 1, ax); });
+    }
     OpScopeFull scope{"topk", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (k <= 0 || k > a->shape()[static_cast<std::size_t>(ax)])
@@ -354,13 +373,13 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
         a->storage(), a->shape(), out_shape, ax, dt, true);
     // Build indices_out before values_out so that its storage pointer remains
     // valid when it is borrowed by attach_index_scatter_grad below.
-    auto indices_out = fresh(std::move(indices), out_shape, Dtype::I32, device);
+    auto indices_out = fresh(std::move(indices), out_shape, Dtype::I64, device);
     auto values_out = fresh(std::move(values), out_shape, dt, device);
     values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
     // Trace-side: register the indices_out as a second output of this
     // op.  ``attach_index_scatter_grad`` already wired ``values_out``
     // through ``wire_autograd``; ``indices_out`` is non-differentiable
-    // (I32) so we hand-roll the trace hook so the compile-path
+    // (I64) so we hand-roll the trace hook so the compile-path
     // TopKEmitter sees a 2-output op.  The Tracer's first-vs-
     // subsequent-call detection (added 2026-05-23, see
     // [[engine-compile-multi-output-2026-05]]) handles the append.

@@ -941,12 +941,26 @@ Storage random_randint_storage(const Shape& shape,
                                Device device,
                                Generator& gen);
 
+// Resolve one signed ``dim`` against a tensor of rank ``ndim``.
+//
+// The rule every dim argument follows.  A 0-d tensor answers to ``dim`` 0
+// and -1 as if it had one axis, as the reference does; the result is then 0
+// and names no real axis, so an op that indexes ``shape()[dim]`` must take
+// the 0-d case apart first (``ops/utils/ScalarAxis.h``).
+//
+// Raises
+// ------
+// IndexError
+//     ``dim`` falls outside ``[-max(ndim, 1), max(ndim, 1))``.
+int wrap_dim(int dim, int ndim, const char* op);
+
 // Canonicalise a list of axis indices for an ``ndim``-rank tensor.
 //
-// Wraps each negative axis to its positive counterpart, deduplicates the
-// result, sorts ascending, and returns the canonical list.  When ``axes``
-// is empty the function treats the call as "reduce over everything" and
-// returns ``[0, ndim)``.
+// Wraps each axis through :func:`wrap_dim`, deduplicates the result, sorts
+// ascending, and returns the canonical list.  When ``axes`` is empty the
+// function treats the call as "reduce over everything" and returns
+// ``[0, ndim)``.  A 0-d tensor has no axis to reduce, so any accepted axis
+// list comes back empty.
 //
 // Parameters
 // ----------
@@ -963,7 +977,7 @@ Storage random_randint_storage(const Shape& shape,
 // Raises
 // ------
 // IndexError
-//     Some entry of ``axes`` falls outside ``[-ndim, ndim)``.
+//     Some entry of ``axes`` is refused by :func:`wrap_dim`.
 std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
 // Compute the output shape of a reduction over selected axes.

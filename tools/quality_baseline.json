@@ -188,7 +188,7 @@
     "lucid/utils/transforms/_presets.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 11515,
+    "lucid/_C/backend/cpu/CpuBackend.h": 11414,
     "lucid/_C/backend/gpu/GpuBackend.h": 5274,
     "lucid/_ops/composite/elementwise.py": 235,
     "lucid/_tensor/_dunders.py": 251,
@@ -507,7 +507,6 @@
     "lucid/_C/ops/ufunc/Predicate.cpp": 1,
     "lucid/_C/ops/ufunc/Reductions.cpp": 3,
     "lucid/_C/ops/ufunc/Scan.cpp": 6,
-    "lucid/_C/ops/ufunc/Softmax.cpp": 1,
     "lucid/_C/ops/utils/Concat.cpp": 3,
     "lucid/_C/ops/utils/Histogram.cpp": 1,
     "lucid/_C/optim/Ada.cpp": 10,

@@ -96,6 +96,7 @@
 #include "ScatterReduce.h"
 #include "SdpaMask.h"
 #include "Shape.h"
+#include "SortSelect.h"
 #include "Vdsp.h"
 #include "Vforce.h"
 
@@ -4401,9 +4402,8 @@ public:
         // int64 — every narrow value fits, and comparing the widened values
         // gives the same order — and Metal answered these already.
         //
-        // Only the values come back narrowed.  The second half of the pair
-        // is the index tensor, which is int64 by contract whatever the
-        // operand's dtype was.  Bool takes the same road — false < true is
+        // Only the values come back narrowed; the second half of the pair is
+        // the int64 index whatever the operand's dtype.  Bool takes the same road — false < true is
         // 0 < 1 — and was excluded for no reason the code recorded: sorting a
         // bool tensor raised on the CPU and answered on Metal.
         if (detail::is_narrow_int(dt)) {
@@ -4425,16 +4425,16 @@ public:
         CpuStorage indices;
         if (dt == Dtype::F32) {
             std::tie(values, indices) =
-                sort_select_cpu<float>(ca, input_shape, output_shape, axis, dt, descending);
+                cpu::sort_select_cpu<float>(ca, input_shape, output_shape, axis, dt, descending);
         } else if (dt == Dtype::F64) {
             std::tie(values, indices) =
-                sort_select_cpu<double>(ca, input_shape, output_shape, axis, dt, descending);
+                cpu::sort_select_cpu<double>(ca, input_shape, output_shape, axis, dt, descending);
         } else if (dt == Dtype::I32) {
-            std::tie(values, indices) =
-                sort_select_cpu<std::int32_t>(ca, input_shape, output_shape, axis, dt, descending);
+            std::tie(values, indices) = cpu::sort_select_cpu<std::int32_t>(
+                ca, input_shape, output_shape, axis, dt, descending);
         } else if (dt == Dtype::I64) {
-            std::tie(values, indices) =
-                sort_select_cpu<std::int64_t>(ca, input_shape, output_shape, axis, dt, descending);
+            std::tie(values, indices) = cpu::sort_select_cpu<std::int64_t>(
+                ca, input_shape, output_shape, axis, dt, descending);
         } else {
             ErrorBuilder("cpu_backend::sort_select").not_implemented("dtype not supported");
         }
@@ -4583,32 +4583,8 @@ public:
         const std::size_t nbytes = shape_numel(output_shape) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
         std::memset(ptr.get(), 0, nbytes);
-
-        std::size_t outer = 1;
-        std::size_t inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(output_shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < output_shape.size(); ++d)
-            inner *= static_cast<std::size_t>(output_shape[d]);
-        const std::size_t L =
-            static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t K = static_cast<std::size_t>(grad_shape[static_cast<std::size_t>(axis)]);
-        const auto* idx = reinterpret_cast<const std::int32_t*>(idx_storage.ptr.get());
-
         auto run = [&](auto* dst, const auto* gp) {
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t j = 0; j < inner; ++j) {
-                    for (std::size_t k = 0; k < K; ++k) {
-                        const std::size_t grad_flat = (o * K + k) * inner + j;
-                        std::int32_t src_k = idx[grad_flat];
-                        if (src_k < 0)
-                            src_k += static_cast<std::int32_t>(L);
-                        const std::size_t dst_flat =
-                            (o * L + static_cast<std::size_t>(src_k)) * inner + j;
-                        dst[dst_flat] += gp[grad_flat];
-                    }
-                }
-            }
+            cpu::scatter_add_axis_any_index(dst, gp, idx_storage, output_shape, grad_shape, axis);
         };
 
         if (dt == Dtype::F32) {
@@ -11725,83 +11701,6 @@ private:
                                   const int* dilation,
                                   int N) {
         conv_nd_col2im_f64(cols, dx, C, S, K, O, stride, pad, dilation, N);
-    }
-
-    template <typename T>
-    static std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
-                                                             const Shape& input_shape,
-                                                             const Shape& output_shape,
-                                                             int axis,
-                                                             Dtype dt,
-                                                             bool descending) {
-        const std::size_t value_nbytes = shape_numel(output_shape) * dtype_size(dt);
-        CpuStorage values{allocate_aligned_bytes(value_nbytes, Device::CPU), value_nbytes, dt};
-        const std::size_t index_nbytes = shape_numel(output_shape) * dtype_size(Dtype::I32);
-        CpuStorage indices{allocate_aligned_bytes(index_nbytes, Device::CPU), index_nbytes,
-                           Dtype::I32};
-
-        const auto* src = reinterpret_cast<const T*>(input.ptr.get());
-        auto* dst = reinterpret_cast<T*>(values.ptr.get());
-        auto* idx_dst = reinterpret_cast<std::int32_t*>(indices.ptr.get());
-
-        std::size_t outer = 1;
-        std::size_t inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(input_shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < input_shape.size(); ++d)
-            inner *= static_cast<std::size_t>(input_shape[d]);
-        const std::size_t L = static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t K =
-            static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
-
-        std::vector<std::int32_t> order(L);
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t j = 0; j < inner; ++j) {
-                std::iota(order.begin(), order.end(), 0);
-                // NaN sorts as the largest value, so ascending puts it last
-                // and descending puts it first — the reference framework's
-                // convention.
-                //
-                // This is not only about where the NaN lands.  ``lv < rv``
-                // is false in *both* directions when either side is NaN,
-                // which means the comparator is not a strict weak ordering,
-                // which means ``std::sort`` has undefined behaviour: sorting
-                // ``[1, nan, 3, -1]`` returned ``[1, nan, -1, 3]``, not
-                // sorted at all, and a longer array can walk the pivot off
-                // the end of the buffer.  Ordering NaN definitely makes the
-                // comparator valid again.
-                auto cmp = [&](std::int32_t lhs, std::int32_t rhs) {
-                    const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
-                    const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
-                    if constexpr (std::is_floating_point_v<T>) {
-                        const bool ln = std::isnan(lv);
-                        const bool rn = std::isnan(rv);
-                        if (ln || rn) {
-                            if (ln && rn)
-                                return false;  // equivalent, so neither precedes
-                            return descending ? ln : rn;
-                        }
-                    }
-                    return descending ? (lv > rv) : (lv < rv);
-                };
-                if (K == L) {
-                    // Stable, so equal keys keep their input order — what
-                    // sort / argsort document, and what the GPU path does.
-                    std::stable_sort(order.begin(), order.end(), cmp);
-                } else {
-                    std::partial_sort(order.begin(), order.begin() + K, order.end(), cmp);
-                }
-                for (std::size_t k = 0; k < K; ++k) {
-                    const std::int32_t src_k = order[k];
-                    const std::size_t out_flat = (o * K + k) * inner + j;
-                    const std::size_t src_flat =
-                        (o * L + static_cast<std::size_t>(src_k)) * inner + j;
-                    dst[out_flat] = src[src_flat];
-                    idx_dst[out_flat] = src_k;
-                }
-            }
-        }
-        return {std::move(values), std::move(indices)};
     }
 
     void compute_mse_loss_values(
