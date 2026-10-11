@@ -3,11 +3,14 @@
 ``ldl_factor(A, hermitian=True)`` took ``hermitian`` by position and
 refused ``False``; the reference's is ``(A, *, hermitian=False)``, and for
 a real ``A`` the flag changes nothing.  ``cholesky_ex`` zero-filled a
-matrix that failed, where the reference returns LAPACK's partial factor.
+matrix that failed, where LAPACK defines its leading factor: the factor of
+the ``(k-1)``-square minor that succeeded.  Only that block is held to the
+reference — what ``potrf`` leaves outside it depends on its blocking.
 """
 
 import inspect
 import warnings
+from collections.abc import Sequence
 from types import ModuleType
 
 import pytest
@@ -37,16 +40,40 @@ _FAILING = [
 ]
 
 
+def _broken(n: int, order: int) -> list[list[float]]:
+    """An SPD ``n``-square matrix whose leading minor ``order`` fails."""
+    a = [
+        [float(n if i == j else 1.0 / (1 + abs(i - j))) for j in range(n)]
+        for i in range(n)
+    ]
+    a[order - 1][order - 1] = -5.0
+    return a
+
+
+_FAILING += [_broken(n, k) for n in (5, 6, 8) for k in (2, 3, 4)]
+
+
+def _assert_leading_factor(
+    ref: ModuleType, got: Sequence[object], want: Sequence[object], order: int
+) -> None:
+    """The ``(order - 1)``-square block LAPACK defines, and zeros elsewhere."""
+    done = order - 1
+    got_t, want_t = ref.tensor(got), ref.tensor(want)
+    assert ref.allclose(got_t[:done, :done], want_t[:done, :done], atol=1e-5)
+    got_t[:done, :done] = 0
+    assert (got_t == 0).all()
+
+
 @pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
 @pytest.mark.parametrize("index", range(len(_FAILING)))
-def test_cholesky_ex_returns_the_partial_factor(
+def test_cholesky_ex_returns_the_leading_factor(
     ref: ModuleType, device: str, upper: bool, index: int
 ) -> None:
     a = _FAILING[index]
     got, info = LA.cholesky_ex(lucid.tensor(a, device=device), upper=upper)
     want, rinfo = ref.linalg.cholesky_ex(ref.tensor(a), upper=upper)
     assert int(info.item()) == int(rinfo.item()) != 0
-    assert ref.allclose(ref.tensor(got.tolist()), want, atol=1e-5, equal_nan=True)
+    _assert_leading_factor(ref, got.tolist(), want.tolist(), int(rinfo.item()))
 
 
 @pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
@@ -58,7 +85,11 @@ def test_a_batch_mixes_full_and_partial_factors(
     got, info = LA.cholesky_ex(lucid.tensor(a, device=device), upper=upper)
     want, rinfo = ref.linalg.cholesky_ex(ref.tensor(a), upper=upper)
     assert info.tolist() == rinfo.tolist() == [0, 2, 0, 1]
-    assert ref.allclose(ref.tensor(got.tolist()), want, atol=1e-5)
+    for b, code in enumerate(rinfo.tolist()):
+        if code:
+            _assert_leading_factor(ref, got[b].tolist(), want[b].tolist(), code)
+        else:
+            assert ref.allclose(ref.tensor(got[b].tolist()), want[b], atol=1e-5)
 
 
 def test_ldl_hermitian_is_keyword_only_and_off_by_default(ref: ModuleType) -> None:

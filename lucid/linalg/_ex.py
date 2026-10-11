@@ -22,7 +22,6 @@ from lucid.linalg import (
     cholesky,
     inv,
     solve,
-    solve_triangular,
 )
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
@@ -183,30 +182,22 @@ def _on_the_rest(fn: Callable[[Tensor], Tensor], A: Tensor, info: Tensor) -> Ten
 
 
 def _partial_cholesky(M: Tensor, order: int, upper: bool) -> Tensor:
-    """LAPACK's partial factor of the matrix ``M`` whose minor ``order`` failed.
+    """The defined part of the factor of ``M``, whose minor ``order`` failed.
 
-    The columns before the failed minor (rows, for ``upper``) hold the
-    factor of the leading block that succeeded; the rest of the triangle is
-    ``M``'s own entries, untouched — except that the upper routine writes
-    the reduced, non-positive pivot over the failed diagonal, as LAPACK's
-    upper ``potrf`` does and the lower one does not.  Real input only, as
-    :func:`cholesky` is.
+    LAPACK defines only the leading ``(order - 1)``-square block: the factor
+    of the minor that succeeded.  What ``potrf`` leaves outside it depends
+    on its blocking — partly factored, partly the input's own — so it is
+    not reproduced; it is zero here.  Real input only, as :func:`cholesky`.
     """
     done = order - 1
-    if upper:
-        U = _partial_cholesky(M.mT, order, False).mT
-        U[done, done] = M[done, done] - (U[:done, done] * U[:done, done]).sum()
-        return U
-    lower = lucid.tril(M)
-    if done == 0:
-        return lower
-    L11 = cholesky(M[:done, :done])
-    L21 = solve_triangular(L11, M[done:, :done].mT, upper=False).mT
-    return lucid.cat([lucid.cat([L11, L21]), lower[:, done:]], dim=1)
+    out = lucid.zeros_like(M)
+    if done:
+        out[:done, :done] = cholesky(M[:done, :done], upper=upper)
+    return out
 
 
 def _with_partial_factors(out: Tensor, A: Tensor, info: Tensor, upper: bool) -> Tensor:
-    """``out`` with each failed matrix's zeros replaced by its partial factor.
+    """``out`` with each failed matrix's leading factor put back.
 
     Taken without a gradient: the failed matrices received none before, and
     a partial factor is not a function the caller asked to differentiate.
@@ -239,7 +230,8 @@ def cholesky_ex(
 
     * ``info == 0`` — success; :math:`L` (or :math:`U`) is meaningful.
     * ``info == k > 0`` — the leading minor of order :math:`k` is not
-      positive-definite; that matrix's factor is LAPACK's partial one.
+      positive-definite; that matrix's factor holds only the part LAPACK
+      defines, below.
 
     Parameters
     ----------
@@ -256,9 +248,9 @@ def cholesky_ex(
     -------
     L : Tensor
         Cholesky factor of shape ``(*, n, n)``.  For a matrix that failed
-        at order :math:`k`, the first :math:`k - 1` columns (rows, for
-        ``upper``) are the factor of its leading block that succeeded, and
-        the rest of the triangle is the input's own, as LAPACK leaves it.
+        at order :math:`k`, the leading :math:`(k-1) \times (k-1)` block is
+        the factor of the minor that succeeded, the one part LAPACK
+        defines; the rest is zero (LAPACK leaves it to its blocking).
     info : Tensor
         ``int32`` status, scalar or shape ``(*,)`` matching the batch
         of ``A``.
