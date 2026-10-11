@@ -603,6 +603,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
+  - `F.local_response_norm` and `nn.LocalResponseNorm` divide the window sum by `size` (a mean of x², as the reference does) and reach `size // 2` channels below and `(size - 1) // 2` above. Every LRN output changes (about 1e-3 at the default alpha), ZFNet included. `nn.LocalResponseNorm` no longer raises for an even `size` and promotes integer input (LCD-440).
   - `lucid.argsort`, `Tensor.argsort` and the indices of `lucid.topk` are int64 on CPU and Metal; they were int32 (LCD-249).
   - `linalg.vector_norm` / `matrix_norm` / `norm`, `cdist` and `F.normalize` refuse integer and bool input with `DtypeMismatch`. Before, the result dtype depended on `ord`, or the call raised NotImplementedError (LCD-384).
   - `linalg.ldl_factor` / `ldl_factor_ex` take `hermitian` keyword-only, defaulting to False. Passing it by position is deprecated until 3.18 (LCD-395). Reading `Generator.seed` as a property is deprecated in favour of `initial_seed()`; in 3.18 `seed()` becomes the reseeding method (LCD-374). A variance divisor ≤ 0 now warns "degrees of freedom is <= 0".
