@@ -922,7 +922,8 @@ _PROMOTING_LAYER_OPS = {
     "leaky_relu": F.leaky_relu,
     "hardsigmoid": F.hardsigmoid,
     "hardswish": F.hardswish,
-    "normalize": F.normalize,
+    # ``normalize`` is not here: an integer norm is refused, as the
+    # reference refuses it (LCD-384).
     "var": lucid.var,
     "std": lucid.std,
 }

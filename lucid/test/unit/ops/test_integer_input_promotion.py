@@ -11,6 +11,7 @@ import math
 import pytest
 
 import lucid
+from lucid._C import engine as _C_engine
 
 _DEVICES = [
     "cpu",
@@ -35,9 +36,11 @@ def test_mean_of_integers_is_floating(device: str) -> None:
 
 
 @pytest.mark.parametrize("device", _DEVICES)
-def test_norm_of_integers_is_floating(device: str) -> None:
-    out = lucid.linalg.norm(_ints(1, 1, device=device))
-    assert out.item() == pytest.approx(math.sqrt(2))
+def test_norm_of_integers_is_refused(device: str) -> None:
+    # Not promoted: the reference refuses an integer norm, and so does
+    # Lucid now (LCD-384), for every order.
+    with pytest.raises(_C_engine.DtypeMismatch):
+        lucid.linalg.norm(_ints(1, 1, device=device))
 
 
 @pytest.mark.parametrize("device", _DEVICES)

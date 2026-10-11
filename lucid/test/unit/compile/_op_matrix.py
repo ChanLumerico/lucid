@@ -712,7 +712,6 @@ _SCATTER = "MPSGraph scatters int64 in 32 bits and bool as false, so it declines
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("square", "i64"): _NO_I64_SQUARE,
-    ("vector_norm", "i64"): _NO_I64_SQUARE,
     ("astype_f32", "f32"): _NO_OPS,
     ("astype_i64", "i64"): _NO_OPS,
     ("astype_bool", "bool"): _NO_OPS,
@@ -799,6 +798,13 @@ EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
     **_each("hypot", _NON_FLOAT, _both(_NOT_IMPL, "hypot takes floating tensors")),
     **_each(
         "logaddexp", _NON_FLOAT, _both(_NOT_IMPL, "logaddexp takes floating tensors")
+    ),
+    # A norm has no integer form; the reference refuses every order (LCD-384).
+    **_each("norm", _NON_FLOAT, _both(_C_engine.DtypeMismatch, "a norm takes floats")),
+    **_each(
+        "vector_norm",
+        _NON_FLOAT,
+        _both(_C_engine.DtypeMismatch, "a norm takes floats"),
     ),
 }
 
