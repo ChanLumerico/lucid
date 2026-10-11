@@ -412,6 +412,68 @@ def test_the_pretrained_doc_check_can_fail() -> None:
     assert not _SAYS_REFUSED.search(doc)
 
 
+_DOC_SECTION = re.compile(r"^(\w[\w ]*)\n-{3,}\n", re.MULTILINE)
+
+
+def _undocumented_params(factory: Callable[..., object]) -> list[str]:
+    """Signature parameters with no entry in the Parameters section.
+
+    ``*args`` / ``**kwargs`` are written with their stars, as numpydoc
+    does.  A factory with no Parameters section misses all of them.
+    """
+    doc = inspect.getdoc(factory) or ""
+    heads = list(_DOC_SECTION.finditer(doc))
+    section = ""
+    for i, head in enumerate(heads):
+        if head.group(1) == "Parameters":
+            stop = heads[i + 1].start() if i + 1 < len(heads) else len(doc)
+            section = doc[head.end() : stop]
+            break
+    stars = {inspect.Parameter.VAR_POSITIONAL: "*", inspect.Parameter.VAR_KEYWORD: "**"}
+    missing: list[str] = []
+    for param in inspect.signature(factory).parameters.values():
+        entry = stars.get(param.kind, "") + param.name
+        if not re.search(rf"^{re.escape(entry)}\s*(:|$)", section, re.MULTILINE):
+            missing.append(entry)
+    return missing
+
+
+@pytest.mark.parametrize("name", sorted(list_models()))
+def test_factory_documents_every_parameter(name: str) -> None:
+    """LCD-411: 23 factories had no Parameters section, so what
+    ``pretrained=True`` does — refuse, or load a checkpoint — was written
+    nowhere a reader of the docs site could see it."""
+    missing = _undocumented_params(model_entrypoint(name))
+    assert not missing, f"{name}'s docstring has no Parameters entry for {missing}"
+
+
+def test_the_param_doc_check_can_fail() -> None:
+    def bare(pretrained: bool = False, **overrides: object) -> None:
+        """Build.
+
+        Examples
+        --------
+        >>> pretrained = True
+        """
+
+    def partial(pretrained: bool = False, *, weights: object = None) -> None:
+        """Build.
+
+        Parameters
+        ----------
+        pretrained : bool, optional
+            Refused.
+
+        Returns
+        -------
+        weights : object
+            Mentioned outside Parameters, which does not count.
+        """
+
+    assert _undocumented_params(bare) == ["pretrained", "**overrides"]
+    assert _undocumented_params(partial) == ["weights"]
+
+
 def test_rejection_type_is_the_helpers() -> None:
     with pytest.raises(_REJECTION):
         reject_unavailable_pretrained("probe")

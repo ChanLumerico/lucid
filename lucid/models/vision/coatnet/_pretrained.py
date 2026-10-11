@@ -247,6 +247,16 @@ def coatnet_1(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``stem_width=64``, ``attn_heads=(12, 24)``.  Approximately **42M
     parameters**.
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_1``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-1
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Notes
     -----
     Reaches **83.3% ImageNet-1k top-1** at 224×224 (Table 5, NeurIPS
@@ -284,6 +294,16 @@ def coatnet_1_cls(
     classifier).  Approximately **42M parameters**, 83.3% ImageNet-1k
     top-1 at 224x224 (Table 5).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_1_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-1
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
+
     Examples
     --------
     >>> import lucid
@@ -320,6 +340,16 @@ def coatnet_2(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``attn_heads=(16, 32)``.  Approximately **75M parameters**, **84.1%
     ImageNet-1k top-1** at 224×224 (Table 5).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_2``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-2
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -351,6 +381,16 @@ def coatnet_2_cls(
     Wider variant — ``dims=(128, 256, 512, 1024)`` — with the standard
     CoAtNet head.  Approximately **75M parameters**, 84.1% ImageNet-1k
     top-1 at 224x224 (Table 5).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_2_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-2
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------
@@ -389,6 +429,16 @@ def coatnet_3(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ImageNet-1k top-1** at 224×224 (Table 5).  With ImageNet-21k or
     JFT-3B pretraining the paper reports 86.5% / 87.8% at 384x384.
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_3``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-3
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -420,6 +470,16 @@ def coatnet_3_cls(
     Larger variant — ``dims=(192, 384, 768, 1536)`` — with the standard
     CoAtNet head.  Approximately **168M parameters**, 84.5% ImageNet-1k
     top-1 at 224x224 (Table 5).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_3_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-3
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------
@@ -458,6 +518,16 @@ def coatnet_4(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ImageNet-1k top-1** at 224×224 (Table 5).  Paper headline with
     JFT-3B pretrain reaches 88.4% at 512x512.
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_4``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-4
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -489,6 +559,16 @@ def coatnet_4_cls(
     Deepest of the CoAtNet-0..4 series — same dims as CoAtNet-3 but with
     ``blocks_per_stage=(2, 12, 28, 2)``.  Approximately **275M
     parameters**, 85.0% ImageNet-1k top-1 at 224x224 (Table 5).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_4_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-4
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------
@@ -523,9 +603,19 @@ def coatnet_5(pretrained: bool = False, **overrides: object) -> CoAtNet:
 
     Widest paper-cited variant: ``blocks_per_stage=(2, 12, 28, 2)``,
     ``dims=(256, 512, 1280, 2048)``, ``stem_width=192``,
-    ``attn_heads=(40, 64)``.  Approximately **688M parameters**, **85.8%
+    ``attn_heads=(20, 32)``.  Approximately **688M parameters**, **85.8%
     ImageNet-1k top-1** at 224×224 (Table 5).  With JFT-3B pretraining
     the paper reports 89.0% at 512x512.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_5``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-5
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
 
     Notes
     -----
@@ -566,6 +656,16 @@ def coatnet_5_cls(
     Widest paper-cited variant — ``dims=(256, 512, 1280, 2048)`` — with
     the standard CoAtNet head.  Approximately **688M parameters**,
     85.8% ImageNet-1k top-1 at 224x224 (Table 5).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_5_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-5
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------
@@ -612,6 +712,16 @@ def coatnet_6(pretrained: bool = False, **overrides: object) -> CoAtNet:
     pretraining (the paper's headline 88.4-89.0% ImageNet numbers come
     from JFT-3B pretraining + 512×512 finetune).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_6``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-6
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Notes
     -----
     Footprint at default ``image_size=224`` exceeds what a 16 GB host
@@ -648,6 +758,16 @@ def coatnet_6_cls(
     r"""CoAtNet-6 image classifier (Dai et al., 2021).
 
     Mixed-S3 variant.  Approximately **1.5B parameters**.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_6_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-6
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------
@@ -692,6 +812,16 @@ def coatnet_7(pretrained: bool = False, **overrides: object) -> CoAtNet:
     CoAtNet, only usable with JFT-3B pretraining.  Not buildable on a
     16 GB host (param footprint alone is ≈ 9.7 GB before activations).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_7``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-7
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``image_size=384``, ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -724,6 +854,16 @@ def coatnet_7_cls(
     r"""CoAtNet-7 image classifier (Dai et al., 2021).
 
     Widest mixed-S3 variant.  Approximately **2.4B parameters**.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``coatnet_7_cls``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+    **overrides : object
+        Keyword overrides applied on top of the canonical CoAtNet-7
+        config; each must name a field of :class:`CoAtNetConfig` (e.g.
+        ``num_classes=10`` to retarget the head).
 
     Examples
     --------

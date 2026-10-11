@@ -101,6 +101,16 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``cspresnet_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cspresnet_50_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CSPNetConfig` to change from the CSPResNet-50
+        defaults (e.g. ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -132,6 +142,16 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
 
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``cspresnext_50``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cspresnext_50_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CSPNetConfig` to change from the CSPResNeXt-50
+        defaults (e.g. ``in_channels=1``).
 
     Examples
     --------
@@ -165,6 +185,16 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
 
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``cspdarknet_53``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``cspdarknet_53_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CSPNetConfig` to change from the CSPDarknet-53
+        defaults (e.g. ``in_channels=1``).
 
     Examples
     --------

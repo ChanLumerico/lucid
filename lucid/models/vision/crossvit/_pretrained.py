@@ -96,6 +96,16 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-Ti backbone — ``embed_dims=(96, 192)``, depths
     ``((1, 4, 0))×3``, 3 heads.  ~7M params (paper Table 2).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_tiny``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_tiny_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-Ti
+        defaults (e.g. ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -121,6 +131,16 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
 def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-S backbone — ``embed_dims=(192, 384)``, depths
     ``((1, 4, 0))×3``, 6 heads.  ~26.7M params (paper Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_small``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_small_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-S
+        defaults (e.g. ``in_channels=1``).
 
     Examples
     --------
@@ -150,6 +170,16 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-B backbone — ``embed_dims=(384, 768)``, depths
     ``((1, 4, 0))×3``, 12 heads.  ~105M params (paper Table 2).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_base``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_base_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-B
+        defaults (e.g. ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -175,6 +205,16 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
 def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-9 backbone — ``embed_dims=(128, 256)``, depths
     ``((1, 3, 0))×3``, 4 heads.  ~8.6M params (paper Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_9``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_9_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-9
+        defaults (e.g. ``in_channels=1``).
 
     Examples
     --------
@@ -205,6 +245,16 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-15 backbone — ``embed_dims=(192, 384)``, depths
     ``((1, 5, 0))×3``, 6 heads.  ~27.4M params (paper Table 2).
 
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_15``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_15_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-15
+        defaults (e.g. ``in_channels=1``).
+
     Examples
     --------
     >>> import lucid
@@ -230,6 +280,16 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
 def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-18 backbone — ``embed_dims=(224, 448)``, depths
     ``((1, 6, 0))×3``, 7 heads.  ~43.3M params (paper Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        No checkpoint is published for ``crossvit_18``, so ``True`` raises
+        ``NotImplementedError`` rather than return randomly initialised weights.
+        ``crossvit_18_cls`` is the checkpointed variant.
+    **overrides : object
+        Fields of :class:`CrossViTConfig` to change from the CrossViT-18
+        defaults (e.g. ``in_channels=1``).
 
     Examples
     --------
