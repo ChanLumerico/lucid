@@ -1,6 +1,7 @@
 """Helpers the convolution and transposed-convolution modules share."""
 
 import math
+from collections.abc import Sequence
 from typing import ClassVar, override
 
 from lucid._factories.creation import empty
@@ -12,12 +13,24 @@ from lucid.nn.modules._lazy import fill as _fill
 from lucid.nn.parameter import Parameter, UninitializedParameter
 
 
-def _pair(v: _Size2d) -> tuple[int, int]:
-    return (v, v) if isinstance(v, int) else (v[0], v[1])
+def _ntuple(v: int | Sequence[int], n: int, name: str) -> tuple[int, ...]:
+    """``v`` as ``n`` ints: one int is repeated, a sequence must have ``n``."""
+    if isinstance(v, int):
+        return (v,) * n
+    values = tuple(v)
+    if len(values) != n:
+        raise ValueError(f"{name} must be an int or {n} ints, got {values!r}")
+    return values
 
 
-def _triple(v: _Size3d) -> tuple[int, int, int]:
-    return (v, v, v) if isinstance(v, int) else (v[0], v[1], v[2])
+def _pair(v: _Size2d, name: str) -> tuple[int, int]:
+    a, b = _ntuple(v, 2, name)
+    return a, b
+
+
+def _triple(v: _Size3d, name: str) -> tuple[int, int, int]:
+    a, b, c = _ntuple(v, 3, name)
+    return a, b, c
 
 
 def _in_channels(x: Tensor, n: int) -> int:
@@ -179,6 +192,9 @@ class _LazyConvMixin(Module):
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
             f"padding={padding}"
         )
-        if self.padding_mode != "zeros":
-            s += f", padding_mode={self.padding_mode!r}"
+        # A layer pickled before transposed convolutions had ``padding_mode``
+        # has none; it was ``"zeros"``.
+        mode = getattr(self, "padding_mode", "zeros")
+        if mode != "zeros":
+            s += f", padding_mode={mode!r}"
         return s

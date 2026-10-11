@@ -14,7 +14,6 @@ from lucid.nn.parameter import Parameter
 from lucid.nn.modules._conv_common import (
     _conv_parameters,
     _LazyConvMixin,
-    _init_conv_weights,
     _pair,
     _triple,
 )
@@ -73,10 +72,6 @@ class _ConvNd(Module):
     _padding_str: str | None
     weight: Parameter
     bias: Parameter | None
-
-    def _init_weights(self) -> None:
-        """Initialise ``weight`` and ``bias`` as the reference does."""
-        _init_conv_weights(self.weight, self.bias)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -456,19 +451,19 @@ class Conv2d(_ConvNd):
     ) -> None:
         """Initialise the Conv2d module. See the class docstring for parameter semantics."""
         super().__init__()
-        kh, kw = _pair(kernel_size)
+        kh, kw = _pair(kernel_size, "kernel_size")
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size: tuple[int, int] = _pair(kernel_size)
-        self.stride: tuple[int, int] = _pair(stride)
-        self.dilation: tuple[int, int] = _pair(dilation)
+        self.kernel_size: tuple[int, int] = _pair(kernel_size, "kernel_size")
+        self.stride: tuple[int, int] = _pair(stride, "stride")
+        self.dilation: tuple[int, int] = _pair(dilation, "dilation")
         self.groups = groups
         self.padding_mode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None = _string_padding(
             padding, self.stride, type(self).__name__
         )
         self.padding: tuple[int, int] = (
-            (0, 0) if isinstance(padding, str) else _pair(padding)
+            (0, 0) if isinstance(padding, str) else _pair(padding, "padding")
         )
         self.weight, self.bias = _conv_parameters(
             (out_channels, in_channels // groups, kh, kw),
@@ -613,19 +608,19 @@ class Conv3d(_ConvNd):
     ) -> None:
         """Initialise the Conv3d module. See the class docstring for parameter semantics."""
         super().__init__()
-        kd, kh, kw = _triple(kernel_size)
+        kd, kh, kw = _triple(kernel_size, "kernel_size")
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
-        self.stride: tuple[int, int, int] = _triple(stride)
-        self.dilation: tuple[int, int, int] = _triple(dilation)
+        self.kernel_size: tuple[int, int, int] = _triple(kernel_size, "kernel_size")
+        self.stride: tuple[int, int, int] = _triple(stride, "stride")
+        self.dilation: tuple[int, int, int] = _triple(dilation, "dilation")
         self.groups = groups
         self.padding_mode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None = _string_padding(
             padding, self.stride, type(self).__name__
         )
         self.padding: tuple[int, int, int] = (
-            (0, 0, 0) if isinstance(padding, str) else _triple(padding)
+            (0, 0, 0) if isinstance(padding, str) else _triple(padding, "padding")
         )
         self.weight, self.bias = _conv_parameters(
             (out_channels, in_channels // groups, kd, kh, kw),
@@ -892,15 +887,15 @@ class LazyConv2d(_LazyConvMixin, Conv2d):
         """Initialise the LazyConv2d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.out_channels: int = out_channels
-        self.kernel_size: tuple[int, int] = _pair(kernel_size)
-        self.stride: tuple[int, int] = _pair(stride)
-        self.dilation: tuple[int, int] = _pair(dilation)
+        self.kernel_size: tuple[int, int] = _pair(kernel_size, "kernel_size")
+        self.stride: tuple[int, int] = _pair(stride, "stride")
+        self.dilation: tuple[int, int] = _pair(dilation, "dilation")
         self.groups: int = groups
         self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
         self._padding_str = _string_padding(padding, self.stride, type(self).__name__)
         self.padding: tuple[int, int] = (
-            (0, 0) if isinstance(padding, str) else _pair(padding)
+            (0, 0) if isinstance(padding, str) else _pair(padding, "padding")
         )
         self._defer(bias, device, dtype)
 
@@ -1018,15 +1013,15 @@ class LazyConv3d(_LazyConvMixin, Conv3d):
         """Initialise the LazyConv3d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.out_channels: int = out_channels
-        self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
-        self.stride: tuple[int, int, int] = _triple(stride)
-        self.dilation: tuple[int, int, int] = _triple(dilation)
+        self.kernel_size: tuple[int, int, int] = _triple(kernel_size, "kernel_size")
+        self.stride: tuple[int, int, int] = _triple(stride, "stride")
+        self.dilation: tuple[int, int, int] = _triple(dilation, "dilation")
         self.groups: int = groups
         self.padding_mode: PaddingMode = _validate_padding_mode(padding_mode)
         self._padding_str: str | None
         self._padding_str = _string_padding(padding, self.stride, type(self).__name__)
         self.padding: tuple[int, int, int] = (
-            (0, 0, 0) if isinstance(padding, str) else _triple(padding)
+            (0, 0, 0) if isinstance(padding, str) else _triple(padding, "padding")
         )
         self._defer(bias, device, dtype)
 

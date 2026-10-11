@@ -170,7 +170,7 @@ _REFERENCE_OPERANDS: dict[str, tuple[str, ...]] = {
 
 
 def _rename_leading_tensor_params(
-    sig: inspect.Signature, n_tensor_args: int, op: str = ""
+    sig: inspect.Signature, n_tensor_args: int, op: str
 ) -> inspect.Signature:
     """Rewrite the first ``n_tensor_args`` parameters from their internal /
     single-letter names (``a``, ``b``, ``x_impl``) to their user-facing

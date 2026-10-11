@@ -653,18 +653,15 @@ def _shape_with_args(name: str, domain: str) -> Iterator[Call]:
         yield Call([_f((1, 3), domain), (2, 3)], {}, 0, "broadcast_to(x, shape)")
     elif name in ("expand",):
         yield Call([_f((1, 3), domain), (2, 3)], {}, 0, "expand(x, shape)")
-        yield Call([_f((1, 3), domain), 2, 3], {}, 0, "expand(x, *shape)")
     elif name in ("as_strided",):
         # Positions 0, 1, 3, 4 of the six elements.
         yield Call([flat, (2, 2), (3, 1)], {}, 0, "as_strided(x, size, stride)")
     elif name in ("permute",):
         yield Call([x, (2, 0, 1)], {}, 0, "permute(x, dims)")
-        yield Call([x, 2, 0, 1], {}, 0, "permute(x, *dims)")
     elif name in ("moveaxis", "movedim", "swapaxes", "swapdims", "transpose"):
         yield Call([x, 0, 2], {}, 0, "moveaxis(x, src, dst)")
     elif name in ("tile", "repeat"):
         yield Call([flat, (2, 2)], {}, 0, "tile(x, reps)")
-        yield Call([flat, 2, 2], {}, 0, "tile(x, *reps)")
     elif name in ("roll",):
         # The binding takes sequences, not bare ints.
         yield Call([flat, (1,), (0,)], {}, 0, "roll(x, shifts, dims)")

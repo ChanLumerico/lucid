@@ -10,7 +10,6 @@ from lucid.nn.parameter import Parameter
 from lucid.nn.modules._conv_common import (
     _conv_parameters,
     _LazyConvMixin,
-    _init_conv_weights,
     _pair,
     _triple,
 )
@@ -55,10 +54,6 @@ class _ConvTransposeNd(Module):
     padding_mode: str
     weight: Parameter
     bias: Parameter | None
-
-    def _init_weights(self) -> None:
-        """Initialise ``weight`` and ``bias`` as the reference does."""
-        _init_conv_weights(self.weight, self.bias)
 
     @override
     def extra_repr(self) -> str:
@@ -377,15 +372,15 @@ class ConvTranspose2d(_ConvTransposeNd):
         """Initialise the ConvTranspose2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
-        kh, kw = _pair(kernel_size)
+        kh, kw = _pair(kernel_size, "kernel_size")
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = _pair(kernel_size)
-        self.stride = _pair(stride)
-        self.padding = _pair(padding)
-        self.output_padding = _pair(output_padding)
+        self.kernel_size = _pair(kernel_size, "kernel_size")
+        self.stride = _pair(stride, "stride")
+        self.padding = _pair(padding, "padding")
+        self.output_padding = _pair(output_padding, "output_padding")
         self.groups = groups
-        self.dilation = _pair(dilation)
+        self.dilation = _pair(dilation, "dilation")
         self.weight, self.bias = _conv_parameters(
             (in_channels, out_channels // groups, kh, kw),
             out_channels,
@@ -527,15 +522,15 @@ class ConvTranspose3d(_ConvTransposeNd):
         """Initialise the ConvTranspose3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
-        kd, kh, kw = _triple(kernel_size)
+        kd, kh, kw = _triple(kernel_size, "kernel_size")
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = _triple(kernel_size)
-        self.stride = _triple(stride)
-        self.padding = _triple(padding)
-        self.output_padding = _triple(output_padding)
+        self.kernel_size = _triple(kernel_size, "kernel_size")
+        self.stride = _triple(stride, "stride")
+        self.padding = _triple(padding, "padding")
+        self.output_padding = _triple(output_padding, "output_padding")
         self.groups = groups
-        self.dilation = _triple(dilation)
+        self.dilation = _triple(dilation, "dilation")
         self.weight, self.bias = _conv_parameters(
             (in_channels, out_channels // groups, kd, kh, kw),
             out_channels,
@@ -802,12 +797,12 @@ class LazyConvTranspose2d(_LazyConvMixin, ConvTranspose2d):
         Module.__init__(self)
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
         self.out_channels: int = out_channels
-        self.kernel_size: tuple[int, int] = _pair(kernel_size)
-        self.stride: tuple[int, int] = _pair(stride)
-        self.padding: tuple[int, int] = _pair(padding)
-        self.output_padding: tuple[int, int] = _pair(output_padding)
+        self.kernel_size: tuple[int, int] = _pair(kernel_size, "kernel_size")
+        self.stride: tuple[int, int] = _pair(stride, "stride")
+        self.padding: tuple[int, int] = _pair(padding, "padding")
+        self.output_padding: tuple[int, int] = _pair(output_padding, "output_padding")
         self.groups: int = groups
-        self.dilation: tuple[int, int] = _pair(dilation)
+        self.dilation: tuple[int, int] = _pair(dilation, "dilation")
         self._defer(bias, device, dtype)
 
     @override
@@ -936,12 +931,14 @@ class LazyConvTranspose3d(_LazyConvMixin, ConvTranspose3d):
         Module.__init__(self)
         self.padding_mode = _transpose_padding(self, padding, padding_mode)
         self.out_channels: int = out_channels
-        self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
-        self.stride: tuple[int, int, int] = _triple(stride)
-        self.padding: tuple[int, int, int] = _triple(padding)
-        self.output_padding: tuple[int, int, int] = _triple(output_padding)
+        self.kernel_size: tuple[int, int, int] = _triple(kernel_size, "kernel_size")
+        self.stride: tuple[int, int, int] = _triple(stride, "stride")
+        self.padding: tuple[int, int, int] = _triple(padding, "padding")
+        self.output_padding: tuple[int, int, int] = _triple(
+            output_padding, "output_padding"
+        )
         self.groups: int = groups
-        self.dilation: tuple[int, int, int] = _triple(dilation)
+        self.dilation: tuple[int, int, int] = _triple(dilation, "dilation")
         self._defer(bias, device, dtype)
 
     @override

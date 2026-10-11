@@ -29,6 +29,36 @@ _STR_TO_DEVICE_ENUM: dict[str, _C_engine.Device] = {
 }
 
 
+def _split_to_args(
+    args: tuple[object, ...],
+) -> tuple[tuple[object, ...], tuple[bool, ...]]:
+    """``(targets, flags)`` of a positional ``.to(...)`` call, as the reference reads it.
+
+    The targets — a device, a dtype, both, or a tensor — come first, then at
+    most ``(non_blocking, copy)``.  A flag with no target before it
+    (``x.to(True)``), a third flag, or a target after a flag is refused: a
+    ``bool`` used to be ignored wherever it stood, so ``x.to(True)`` was a
+    silent no-op.
+    """
+    first_flag = next(
+        (i for i, a in enumerate(args) if isinstance(a, _builtin_bool)), len(args)
+    )
+    targets, flags = args[:first_flag], args[first_flag:]
+    if flags and not targets:
+        raise TypeError(
+            "to() takes a device, dtype or tensor before non_blocking and copy"
+        )
+    if len(targets) > 2 or len(flags) > 2:
+        raise TypeError(
+            "to() takes at most a device, a dtype, non_blocking and copy "
+            f"positionally, got {len(args)} arguments"
+        )
+    bools = tuple(f for f in flags if isinstance(f, _builtin_bool))
+    if len(bools) != len(flags):
+        raise TypeError("to(): non_blocking and copy follow the device and dtype")
+    return targets, bools
+
+
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
     # These methods are annotated ``self: Tensor`` and ``-> Tensor`` while
@@ -102,12 +132,11 @@ def _inject_to(cls: type) -> None:
 
         target_device = self._impl.device
         target_dtype = self._impl.dtype
-        # The reference's positional tail is ``(non_blocking, copy)``; a
-        # transfer here is synchronous, so only ``copy`` is read.
-        flags = [a for a in args if isinstance(a, _builtin_bool)]
+        targets, flags = _split_to_args(args)
+        # A transfer here is synchronous, so only ``copy`` is read.
         copy = _builtin_bool(kwargs.get("copy", flags[1] if len(flags) > 1 else False))
 
-        for a in args:
+        for a in targets:
             if isinstance(a, cls):
                 # See the note in composite/elementwise.float_power:
                 # ``Tensor`` is TYPE_CHECKING-only here, so the bare name

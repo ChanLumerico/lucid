@@ -178,8 +178,8 @@ def test_tile_takes_a_single_count(ref: ModuleType, device: str) -> None:
 def test_methods_spread_an_int_list_and_free_functions_take_it_whole(
     device: str, spread: Callable[..., object], listed: Callable[..., object]
 ) -> None:
-    # As in the reference: ``x.permute(1, 0)`` and ``torch.permute(x, (1, 0))``,
-    # while ``torch.permute(x, 1, 0)`` is refused.
+    # As in the reference: ``x.permute(1, 0)`` and the free function with
+    # ``(x, (1, 0))``, while the free function refuses ``(x, 1, 0)``.
     x = lucid.arange(6.0, device=device).reshape(2, 3)
     assert spread(x).tolist() == listed(lucid, x).tolist()  # type: ignore[attr-defined]
     name = listed.__code__.co_names[0]
@@ -238,3 +238,39 @@ def test_to_reads_non_blocking_then_copy_by_position() -> None:
     x = lucid.zeros(3)
     assert x.to("cpu", lucid.float32, False, False) is x
     assert x.to("cpu", lucid.float32, False, True) is not x
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda x: x.to(True),
+        lambda x: x.to("cpu", lucid.float32, False, True, False),
+        lambda x: x.to("cpu", False, lucid.float32),
+        lambda x: x.to("cpu", lucid.float32, lucid.float64),
+    ],
+    ids=["flag-alone", "third-flag", "target-after-flag", "third-target"],
+)
+def test_to_refuses_positionals_the_reference_refuses(
+    call: Callable[[lucid.Tensor], object],
+) -> None:
+    # A ``bool`` used to be ignored wherever it stood.
+    with pytest.raises(TypeError):
+        call(lucid.zeros(3))
+
+
+def test_conv_sizes_of_the_wrong_length_are_refused() -> None:
+    import lucid.nn as nn
+
+    # A 3-tuple kernel for a 2-D convolution used to lose its third entry.
+    with pytest.raises(ValueError, match="kernel_size"):
+        nn.Conv2d(2, 2, (3, 3, 3))
+    with pytest.raises(ValueError, match="stride"):
+        nn.ConvTranspose3d(2, 2, 3, stride=(1, 2))
+
+
+def test_a_lazy_transposed_conv_pickled_without_padding_mode_still_reprs() -> None:
+    import lucid.nn as nn
+
+    layer = nn.LazyConvTranspose2d(4, 3)
+    del layer.__dict__["padding_mode"]
+    assert "padding_mode" not in repr(layer)
