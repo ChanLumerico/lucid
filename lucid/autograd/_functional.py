@@ -78,6 +78,27 @@ def _or_zeros(grads: Sequence[Tensor | None], like: Sequence[Tensor]) -> list[Te
     ]
 
 
+def _seeds(
+    v: Tensor | Sequence[Tensor] | None,
+    like: tuple[Tensor, ...],
+    single: bool,
+    subject: str,
+) -> list[Tensor]:
+    """``v`` as a list, or ones for a ``like`` that is one single-element tensor.
+
+    The reference lets ``v`` be left out exactly there — a scalar loss, a
+    scalar input — where a vector of ones is the only seed that makes sense.
+    """
+    if v is not None:
+        return list(_as_tuple(v)[0])
+    if not single or like[0].numel() != 1:
+        raise RuntimeError(
+            f"The vector v can only be None if {subject} a single Tensor with "
+            "a single element."
+        )
+    return [lucid.ones_like(like[0])]
+
+
 def _jacobian_blocks(
     output: Tensor, xs: Sequence[Tensor], create_graph: bool
 ) -> list[Tensor]:
@@ -298,7 +319,7 @@ def hessian(
 def vjp(
     func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
-    v: Tensor | tuple[Tensor, ...],
+    v: Tensor | tuple[Tensor, ...] | None = None,
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple[Tensor, tuple[Tensor | None, ...]]:
@@ -331,10 +352,11 @@ def vjp(
     inputs : Tensor or tuple of Tensor
         Primal point :math:`x` at which :math:`J` is evaluated. Left as
         it is: the product is taken at copies that require grad.
-    v : Tensor or tuple of Tensor
+    v : Tensor or tuple of Tensor, optional
         Cotangent vector(s), one per output of ``func``, each of its
         output's shape and device — the seed rules of
-        :func:`lucid.autograd.grad`.
+        :func:`lucid.autograd.grad`.  May be left out when ``func``
+        returns one single-element tensor, which is then seeded with 1.
     create_graph : bool, optional
         If ``True`` the returned VJP is itself differentiable,
         enabling double-backward. Defaults to ``False``.
@@ -353,7 +375,8 @@ def vjp(
     ------
     RuntimeError
         The number of entries of ``v`` differs from the number of
-        outputs.
+        outputs, or ``v`` is left out and ``func`` does not return one
+        single-element tensor.
     ShapeMismatch, DeviceMismatch
         An entry of ``v`` does not have its output's shape or device.
 
@@ -376,15 +399,15 @@ def vjp(
     """
     _require_differentiable(inputs, "vjp")
     inputs_t, _ = _as_tuple(inputs)
-    v_t, _ = _as_tuple(v)
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         outputs = func(*xs)
-        outs, _ = _as_tuple(outputs)
+        outs, one_output = _as_tuple(outputs)
+        seeds = _seeds(v, outs, one_output, "the user-provided function returns")
         grads = _grad(
             list(outs),
             xs,
-            grad_outputs=list(v_t),
+            grad_outputs=seeds,
             retain_graph=create_graph,
             create_graph=create_graph,
             allow_unused=True,
@@ -420,7 +443,7 @@ def _detach_outputs(outputs: Any) -> Any:
 def jvp(
     func: Callable[..., Tensor],
     inputs: Tensor | tuple[Tensor, ...],
-    v: Tensor | tuple[Tensor, ...],
+    v: Tensor | tuple[Tensor, ...] | None = None,
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
@@ -453,9 +476,10 @@ def jvp(
     inputs : Tensor or tuple of Tensor
         Primal point :math:`x`.  Left as it is: the product is taken at
         copies that require grad.
-    v : Tensor or tuple of Tensor
+    v : Tensor or tuple of Tensor, optional
         Tangent vector(s), one per input, each of its input's shape and
-        device.
+        device.  May be left out when ``inputs`` is one single-element
+        tensor, which is then seeded with 1.
     create_graph : bool, optional
         If ``True`` the returned outputs and tangents are differentiable
         with respect to the inputs that require grad (and ``v``).
@@ -476,7 +500,8 @@ def jvp(
     ------
     RuntimeError
         The number of entries of ``v`` differs from the number of
-        inputs, or an op on the path has no differentiable backward
+        inputs, ``v`` is left out and ``inputs`` is not one single-element
+        tensor, or an op on the path has no differentiable backward
         (the second pass differentiates the first).
     ShapeMismatch, DeviceMismatch
         An entry of ``v`` does not have its input's shape or device.
@@ -499,8 +524,8 @@ def jvp(
     tensor([2., 0., 0.])
     """
     _require_differentiable(inputs, "jvp")
-    inputs_t, _ = _as_tuple(inputs)
-    v_t, _ = _as_tuple(v)
+    inputs_t, one_input = _as_tuple(inputs)
+    v_t = _seeds(v, inputs_t, one_input, "the input to the user-provided function is")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         outputs = func(*xs)
@@ -514,7 +539,7 @@ def jvp(
         tangents = _grad(
             _or_zeros(firsts, xs),
             us,
-            grad_outputs=list(v_t),
+            grad_outputs=v_t,
             create_graph=create_graph,
             allow_unused=True,
         )
