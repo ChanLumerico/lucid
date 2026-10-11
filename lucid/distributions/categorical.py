@@ -9,7 +9,7 @@ from lucid.distributions.constraints import (
     Constraint,
     integer_interval,
     one_hot,
-    real,
+    real_vector,
     simplex,
 )
 from lucid.distributions.distribution import Distribution
@@ -120,7 +120,7 @@ class Categorical(Distribution):
     ((2,), ())
     """
 
-    arg_constraints = {"probs": simplex, "logits": real}
+    arg_constraints = {"probs": simplex, "logits": real_vector}
     has_enumerate_support = True
 
     def __init__(
@@ -468,7 +468,7 @@ class OneHotCategorical(Distribution):
     tensor(1.)
     """
 
-    arg_constraints = {"probs": simplex, "logits": real}
+    arg_constraints = {"probs": simplex, "logits": real_vector}
 
     def __init__(
         self,

@@ -28,6 +28,7 @@ from lucid.distributions.constraints import (
     Constraint,
     positive,
     real,
+    real_vector,
     simplex,
     unit_interval,
 )
@@ -375,7 +376,7 @@ class RelaxedOneHotCategorical(Distribution):
     arg_constraints = {
         "temperature": positive,
         "probs": simplex,
-        "logits": real,
+        "logits": real_vector,
     }
     support: Constraint | None = simplex
     has_rsample = True

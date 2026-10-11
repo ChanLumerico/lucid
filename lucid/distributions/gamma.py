@@ -12,6 +12,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (
     Constraint,
+    independent,
     nonnegative,
     positive,
     simplex,
@@ -851,7 +852,7 @@ class Dirichlet(ExponentialFamily):
     (4, 3)
     """
 
-    arg_constraints = {"concentration": positive}
+    arg_constraints = {"concentration": independent(positive, 1)}
     support: Constraint | None = simplex
 
     def __init__(

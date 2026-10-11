@@ -583,3 +583,60 @@ def test_own_samples_pass_validation(name: str, device: str) -> None:
     except NotImplementedError:
         pytest.skip(f"{name} has no sampler")
     dist.log_prob(draws)
+
+
+# ── parameters one axis short of their event (LCD-414) ───────────────────────
+
+# Each event-shaped family's parameters, given with fewer axes than the
+# event they describe: a scalar where a probability vector belongs, a vector
+# where a matrix does.  The reference refuses every one with ``ValueError``
+# in its constructor, validation or not; ``LKJCholesky``'s concentration is
+# per batch element, so a scalar is a batch of one and both accept it.
+_SUB_RANK: list[tuple[str, str, Any]] = [
+    ("Dirichlet", "concentration", 0.5),
+    *(
+        (family, param, 0.5)
+        for family in (
+            "Categorical",
+            "OneHotCategorical",
+            "RelaxedOneHotCategorical",
+            "Multinomial",
+        )
+        for param in ("probs", "logits")
+    ),
+    ("MultivariateNormal", "loc", 0.0),
+    *(
+        (family, param, [2.0, 1.0])
+        for family in ("MultivariateNormal", "Wishart")
+        for param in ("covariance_matrix", "precision_matrix", "scale_tril")
+    ),
+    ("LKJCholesky", "concentration", 0.5),
+]
+
+
+def _construction(build: Callable[[], Any]) -> str:
+    """``"ok"``, or the name of the exception the constructor raised."""
+    try:
+        build()
+    except Exception as e:  # noqa: BLE001 — the exception class is the verdict
+        return type(e).__name__
+    return "ok"
+
+
+@pytest.mark.parametrize("validate", [True, False], ids=["validate", "no-validate"])
+@pytest.mark.parametrize(
+    "name,param,value", _SUB_RANK, ids=[f"{n}.{p}" for n, p, _ in _SUB_RANK]
+)
+def test_sub_rank_parameter(
+    name: str, param: str, value: Any, validate: bool, ref: Any
+) -> None:
+    case = CASES[name]
+    ours = _construction(
+        lambda: case.build(D, _lucid_tensor, validate, **{param: value})
+    )
+    theirs = _construction(
+        lambda: case.build(
+            ref.distributions, _ref_tensor(ref), validate, **{param: value}
+        )
+    )
+    assert ours == theirs

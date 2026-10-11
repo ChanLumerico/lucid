@@ -218,6 +218,40 @@ class Distribution:
             if inspect.isfunction(method) and not _is_validated(method):
                 setattr(cls, name, _validated(method, probability=probability))
 
+    @override
+    def __setattr__(self, name: str, value: object) -> None:
+        """Refuse a parameter with fewer axes than its constraint's event.
+
+        A parameter whose constraint reads ``event_dim`` trailing axes as one
+        event — a probability vector, a covariance matrix — has no event
+        without them, and a family reads ``shape[-1]`` from it before
+        anything else.  A 0-d ``Dirichlet`` concentration constructed and
+        then raised ``IndexError`` from ``entropy``; a 0-d ``Categorical``
+        raised it from the constructor.  The rank is a shape requirement, not
+        a value check, so it holds with validation off too, as the reference
+        framework's constructors hold it.  It is checked here, where every
+        family stores its parameters, rather than in each constructor.
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is constrained and ``value`` is a tensor with fewer
+            than the constraint's ``event_dim`` axes.
+        """
+        constraint = type(self).arg_constraints.get(name)
+        if (
+            constraint is not None
+            and isinstance(value, lucid.Tensor)
+            and value.ndim < constraint.event_dim
+        ):
+            rank = {1: "one", 2: "two"}.get(constraint.event_dim, str(constraint.event_dim))
+            raise ValueError(
+                f"{type(self).__name__}: `{name}` parameter must be at least "
+                f"{rank}-dimensional, with optional leading batch dimensions; "
+                f"got shape {tuple(value.shape)}."
+            )
+        super().__setattr__(name, value)
+
     @staticmethod
     def set_default_validate_args(value: bool) -> None:
         """Turn argument validation on or off for every distribution.
