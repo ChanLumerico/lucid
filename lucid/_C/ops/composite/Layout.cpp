@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "../../autograd/Helpers.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/TensorImpl.h"
 #include "../ufunc/Transpose.h"
@@ -26,12 +27,7 @@ TensorImplPtr movedim_op(const TensorImplPtr& a,
     if (source.size() != destination.size())
         ErrorBuilder("movedim").fail("source and destination size mismatch");
 
-    auto wrap = [&](int v) {
-        int w = v < 0 ? v + ndim : v;
-        if (w < 0 || w >= ndim)
-            ErrorBuilder("movedim").index_error("dim out of range");
-        return w;
-    };
+    auto wrap = [&](int v) { return wrap_dim(v, ndim, "movedim"); };
     std::vector<int> src;
     std::vector<int> dst;
     src.reserve(source.size());
@@ -50,6 +46,10 @@ TensorImplPtr movedim_op(const TensorImplPtr& a,
     std::sort(sorted_dst.begin(), sorted_dst.end());
     if (std::adjacent_find(sorted_dst.begin(), sorted_dst.end()) != sorted_dst.end())
         ErrorBuilder("movedim").fail("destination dims must be unique");
+
+    // A 0-d tensor moves its notional axis onto itself: the empty permutation.
+    if (ndim == 0)
+        return permute_op(a, {});
 
     // Axes not mentioned in ``source`` keep their relative order; they fill
     // the destination slots not claimed by ``dst``.

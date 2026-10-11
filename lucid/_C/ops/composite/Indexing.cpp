@@ -71,12 +71,23 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
         ErrorBuilder("index_select").fail("null input");
     Validator::pair(a, indices, "index_select").same_device();
     require_index_dtype(indices, "index_select");
-    if (indices->shape().size() != 1)
-        ErrorBuilder("index_select").fail("indices must be 1-D");
+    // A 0-d index is one position, as in the reference.
+    if (indices->shape().size() > 1)
+        ErrorBuilder("index_select").fail("indices must be 0-D or 1-D");
+    if (a->shape().empty()) {
+        if (indices->numel() != 1)
+            ErrorBuilder("index_select")
+                .fail("Index to scalar can have only 1 value, got " +
+                      std::to_string(indices->numel()) + " value(s)");
+        return on_scalar_axis(a, dim, "index_select", [&](const TensorImplPtr& v, int ax) {
+            return index_select_op(v, ax, scalar_as_1d(indices));
+        });
+    }
+    const TensorImplPtr index = scalar_as_1d(indices);
 
     const int d = wrap_axis_of(a, dim, "index_select");
     const int ndim = static_cast<int>(a->shape().size());
-    const std::int64_t k = indices->shape()[0];
+    const std::int64_t k = index->shape()[0];
 
     // Reshape the 1-D index list to rank ``a`` with size ``k`` along ``d``
     // and 1 elsewhere; broadcast it to the source shape so ``gather_op``'s
@@ -87,7 +98,7 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
     // runs.  The index carries no gradient, so nothing is lost.
     Shape idx_reshaped(static_cast<std::size_t>(ndim), 1);
     idx_reshaped[static_cast<std::size_t>(d)] = k;
-    auto idx_r = reshape_op(indices, idx_reshaped);
+    auto idx_r = reshape_op(index, idx_reshaped);
     Shape idx_target = a->shape();
     idx_target[static_cast<std::size_t>(d)] = k;
     auto idx_full = broadcast_to_op(idx_r, idx_target);
@@ -179,18 +190,11 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
     Validator::pair(base, src, "scatter").same_device();
     require_index_dtype(indices, "scatter");
 
-    // A 0-d operand counts as one element along a single axis, as in the
-    // reference: a 0-d tensor scatters, and a 1-d one takes a 0-d index.
-    const bool scalar = base->shape().empty() || indices->shape().empty() || src->shape().empty();
-    if (scalar && base->shape().size() <= 1) {
-        if (dim < -1 || dim > 0)
-            ErrorBuilder("scatter").index_error("dim out of range");
-        const auto one = [](const TensorImplPtr& t) {
-            return t->shape().empty() ? reshape_op(t, Shape{1}) : t;
-        };
-        auto out = scatter_op(one(base), 0, one(indices), one(src));
-        return base->shape().empty() ? reshape_op(out, Shape{}) : out;
-    }
+    if (auto out = on_scalar_scatter("scatter", base, indices, src, dim,
+                                     [](const TensorImplPtr& b, const TensorImplPtr& i,
+                                        const TensorImplPtr& s,
+                                        int ax) { return scatter_op(b, ax, i, s); }))
+        return out;
 
     const int d = wrap_axis_of(base, dim, "scatter");
     const int ndim = static_cast<int>(base->shape().size());

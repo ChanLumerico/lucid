@@ -21,6 +21,11 @@
 
 namespace lucid {
 
+// ``t`` viewed as shape (1,) when it is 0-d, else ``t`` itself.
+inline TensorImplPtr scalar_as_1d(const TensorImplPtr& t) {
+    return t->shape().empty() ? reshape_op(t, {1}) : t;
+}
+
 // ``run(a viewed as (1,), 0)`` for a 0-d ``a`` whose ``dim`` names its one
 // notional axis, with every result viewed back to 0-d.  ``run`` returns a
 // tensor or a vector of tensors.
@@ -35,6 +40,28 @@ auto on_scalar_axis(const TensorImplPtr& a, int dim, const char* op, Run&& run) 
     } else {
         return reshape_op(out, {});
     }
+}
+
+// The scatters' form of the rule: a 0-d operand counts as one element along
+// a single axis, so a 0-d base scatters, and a 1-d base takes a 0-d index
+// and src.  Runs ``run(base, index, src, 0)`` on the (1,) views and gives a
+// 0-d base its 0-d result back.  Returns null when the rule does not apply
+// (no 0-d operand, or a base of rank >= 2, which the op's rank check refuses).
+template <class Run>
+TensorImplPtr on_scalar_scatter(const char* op,
+                                const TensorImplPtr& base,
+                                const TensorImplPtr& indices,
+                                const TensorImplPtr& src,
+                                int dim,
+                                Run&& run) {
+    if (!base || !indices || !src || base->shape().size() > 1)
+        return nullptr;
+    if (!base->shape().empty() && !indices->shape().empty() && !src->shape().empty())
+        return nullptr;
+    wrap_dim(dim, static_cast<int>(base->shape().size()), op);
+    auto out =
+        std::forward<Run>(run)(scalar_as_1d(base), scalar_as_1d(indices), scalar_as_1d(src), 0);
+    return base->shape().empty() ? reshape_op(out, {}) : out;
 }
 
 }  // namespace lucid

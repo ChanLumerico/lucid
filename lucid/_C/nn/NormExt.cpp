@@ -47,6 +47,7 @@
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/utils/Layout.h"
 #include "../ops/utils/Promote.h"
+#include "../ops/utils/ScalarAxis.h"
 #include "../ops/utils/Select.h"
 
 namespace lucid {
@@ -146,15 +147,15 @@ const OpSchema LpNormalizeBackward::schema_v1{"lp_normalize", 1, AmpPolicy::Forc
 TensorImplPtr
 LpNormalizeBackward::forward(const TensorImplPtr& x0, double ord, int axis, double eps) {
     Validator::input(x0, "lp_normalize.x").non_null();
+    if (x0->shape().empty())
+        return on_scalar_axis(x0, axis, "lp_normalize", [&](const TensorImplPtr& v, int ax) {
+            return forward(v, ord, ax, eps);
+        });
     // Builds its own forward, so it asks for the schema dtype the kernel
     // templates would have applied.  See promote_for_schema.
     const TensorImplPtr x = promote_for_schema(schema_v1, x0);
     const int rank = static_cast<int>(x->shape().size());
-    // Resolve negative axis to a non-negative index.
-    if (axis < 0)
-        axis += rank;
-    if (axis < 0 || axis >= rank)
-        ErrorBuilder("lp_normalize").index_error("axis out of range");
+    axis = wrap_dim(axis, rank, "lp_normalize");
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     scope.set_attr("ord", ord);

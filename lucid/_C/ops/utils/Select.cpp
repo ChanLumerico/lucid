@@ -576,6 +576,22 @@ roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<in
     return attach_unary_grad(a, std::move(result), std::move(bwd));
 }
 
+namespace {
+
+// A 0-d source has one notional axis.  The result takes the index's shape,
+// as on any rank: 0-d for a 0-d index, (n,) for a 1-d one.  Null when ``a``
+// is not 0-d or the index is of rank >= 2, which gather_op's rank check
+// refuses.
+TensorImplPtr gather_from_scalar(const TensorImplPtr& a, const TensorImplPtr& indices, int axis) {
+    if (!a->shape().empty() || indices->shape().size() > 1)
+        return nullptr;
+    wrap_dim(axis, 0, "gather");
+    auto out = gather_op(reshape_op(a, {1}), scalar_as_1d(indices), 0);
+    return indices->shape().empty() ? reshape_op(out, {}) : out;
+}
+
+}  // namespace
+
 // Gather values from `a` at positions given by `indices` along `axis`.  Both
 // tensors must have the same rank.  The output shape equals indices.shape.
 // Attaches GatherBackward (a scatter-add over indices) only when `a` requires
@@ -586,6 +602,8 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     // Checked, not assumed: a CPU index beside a metal source reached a
     // backend that read the wrong storage kind and threw bad_variant_access.
     Validator::pair(a, indices, "gather").same_device();
+    if (auto out = gather_from_scalar(a, indices, axis))
+        return out;
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"gather", device, dt, indices->shape()};

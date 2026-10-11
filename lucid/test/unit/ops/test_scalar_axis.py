@@ -3,15 +3,20 @@
 The reference gives a 0-d tensor one notional axis: ``dim`` 0 and -1 name
 it, and the answer is 0-d again, with or without ``keepdim``.  Every
 reduction refused it ("normalize_axes: axis out of range: 0 for ndim=0"),
-and so did sort, argsort, topk, kthvalue, the cumulative scans, softmax
-and flip, each through its own copy of the axis rule.  The rule now has
-one owner (``wrap_dim`` in the engine), and the ops that need a real axis
-run on the scalar viewed as shape (1,).
+and so did sort, argsort, topk, kthvalue, the cumulative scans, softmax,
+flip, transpose, movedim, gather, index_select, the scatters and
+``F.normalize``, each through its own copy of the axis rule.  The rule
+now has one owner (``wrap_dim`` in the engine), and the ops that need a
+real axis run on the scalar viewed as shape (1,).  ``narrow`` is not here:
+the reference refuses a 0-d input to it too.
 
 Every op that takes a dim is held here to the reference on a 0-d input:
 each dim spelling, with and without ``keepdim``, value, dtype and shape,
 and the gradient where the op has one.  A spelling the reference refuses
-by signature (a tuple where it takes an int) is not compared.
+by signature (a tuple where it takes an int) is not compared.  A dim past
+the notional axis must be refused by the engine's rule, not by a wrapper
+that happens to index past a shape.  Cells a Python wrapper still gets
+wrong are pinned in ``_PYTHON_SIDE`` / ``_PENDING``.
 """
 
 import numpy as np
@@ -23,6 +28,12 @@ import lucid.linalg
 
 def _first(out):
     return out[0] if isinstance(out, tuple) else out
+
+
+def _like(lib, t, value):
+    """An index or src operand on ``t``'s device."""
+    dtype = lib.int64 if isinstance(value, (int, list)) else t.dtype
+    return lib.tensor(value, dtype=dtype, device=t.device)
 
 
 def _reduce(name):
@@ -69,12 +80,54 @@ _OPS = {
     "softmax": (_along("softmax"), True),
     "log_softmax": (_along("log_softmax"), True),
     "flip": (lambda lib, t, d, k: lib.flip(t, dims=(d,) if isinstance(d, int) else d), True),
+    "argsort_descending": (lambda lib, t, d, k: lib.argsort(t, dim=d, descending=True), False),
+    "topk_smallest": (lambda lib, t, d, k: lib.topk(t, 1, dim=d, largest=False)[0], True),
+    "quantile": (lambda lib, t, d, k: lib.quantile(t, 0.5, dim=d, keepdim=k), True),
+    "transpose": (lambda lib, t, d, k: t.transpose(d, -1), True),
+    "swapaxes": (lambda lib, t, d, k: lib.swapaxes(t, d, 0), True),
+    "movedim": (lambda lib, t, d, k: lib.movedim(t, d, 0), True),
+    "gather": (lambda lib, t, d, k: lib.gather(t, d, _like(lib, t, 0)), True),
+    "index_select": (lambda lib, t, d, k: lib.index_select(t, d, _like(lib, t, [0])), True),
+    "index_select_0d_index": (lambda lib, t, d, k: lib.index_select(t, d, _like(lib, t, 0)), True),
+    "scatter": (lambda lib, t, d, k: lib.scatter(t, d, _like(lib, t, 0), _like(lib, t, 2.0)), True),
+    "scatter_add": (
+        lambda lib, t, d, k: lib.scatter_add(t, d, _like(lib, t, 0), _like(lib, t, 2.0)),
+        True,
+    ),
+    "scatter_reduce_amax": (
+        lambda lib, t, d, k: lib.scatter_reduce(t, d, _like(lib, t, 0), _like(lib, t, 2.0), "amax"),
+        True,
+    ),
+    "normalize": (lambda lib, t, d, k: lib.nn.functional.normalize(t, dim=d), True),
+}
+
+# A 0-d input the engine now answers, refused by a Python wrapper above it.
+_PYTHON_SIDE = {
+    "quantile": "LCD-406: _reduce 0-d axes (var/std/quantile)",
+    "argsort_descending": "LCD-406: _adapters 0-d branch",
+    "topk_smallest": "LCD-406: _adapters 0-d branch",
+    "swapaxes": "LCD-406: _shared._swap_dims 0-d branch",
+}
+# Fixed on the API batch-F branch, in review; strict once it lands.
+_PENDING = {
+    "var": "fixed by batch-F _reduction_axes; unpin after it lands",
+    "std": "fixed by batch-F _reduction_axes; unpin after it lands",
 }
 
 _DIMS = [0, -1, (0,), None]
 
-# The Python wrapper computes the Bessel count from ``shape[dim]``.
-_PYTHON_SIDE = {"var", "std"}
+
+def _pin(request, op, dim):
+    """Mark the cells a wrapper outside the engine still gets wrong."""
+    if op == "normalize" and not isinstance(dim, int):
+        # Not a 0-d gap: the binding takes one int dim on every rank.
+        request.applymarker(
+            pytest.mark.xfail(strict=True, reason="F.normalize takes only an int dim on any rank")
+        )
+    elif dim is not None and op in _PYTHON_SIDE:
+        request.applymarker(pytest.mark.xfail(strict=True, reason=_PYTHON_SIDE[op]))
+    elif dim is not None and op in _PENDING:
+        request.applymarker(pytest.mark.xfail(strict=False, reason=_PENDING[op]))
 
 
 def _signature_refuses(ref, call, d, k):
@@ -92,13 +145,7 @@ def test_matches_reference(ref, device, op, dim, keepdim, request):
     call, differentiable = _OPS[op]
     if _signature_refuses(ref, call, dim, keepdim):
         pytest.skip("the reference's signature does not take this dim spelling")
-    if op in _PYTHON_SIDE and dim is not None:
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="LCD-249 follow-up: _reduce._bessel_correct 0-d axes",
-            )
-        )
+    _pin(request, op, dim)
     x = lucid.tensor(1.5, device=device, requires_grad=differentiable)
     xr = ref.tensor(1.5, requires_grad=differentiable)
     got = call(lucid, x, dim, keepdim)
@@ -115,11 +162,14 @@ def test_matches_reference(ref, device, op, dim, keepdim, request):
 
 @pytest.mark.parametrize("dim", [1, -2])
 @pytest.mark.parametrize("op", list(_OPS))
-def test_an_axis_past_the_notional_one_is_refused(ref, device, op, dim):
+def test_an_axis_past_the_notional_one_is_refused(ref, device, op, dim, request):
+    """Refused by the engine's axis rule, not by a wrapper tripping over it."""
     call, _ = _OPS[op]
     with pytest.raises(IndexError):
         call(ref, ref.tensor(1.5), dim, False)
-    with pytest.raises(IndexError):
+    if op == "swapaxes":
+        request.applymarker(pytest.mark.xfail(strict=True, reason=_PYTHON_SIDE[op]))
+    with pytest.raises(IndexError, match=r"axis out of range: got -?\d"):
         call(lucid, lucid.tensor(1.5, device=device), dim, False)
 
 

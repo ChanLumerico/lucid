@@ -48,13 +48,10 @@ std::vector<int> validate_perm(const std::vector<int>& perm, int ndim) {
     }
     std::vector<int> normalized;
     normalized.reserve(ndim);
-    for (int p : perm) {
-        const int wrapped = p < 0 ? p + ndim : p;
-        if (wrapped < 0 || wrapped >= ndim) {
-            ErrorBuilder("permute").index_error("axis out of range");
-        }
-        normalized.push_back(wrapped);
-    }
+    // A 0-d tensor takes only the empty permutation (its length check above),
+    // as in the reference, so no entry reaches its notional axis.
+    for (int p : perm)
+        normalized.push_back(wrap_dim(p, ndim, "permute"));
     // Sort a copy and check for 0..ndim-1 to detect duplicates and gaps.
     std::vector<int> sorted = normalized;
     std::sort(sorted.begin(), sorted.end());
@@ -179,18 +176,14 @@ TensorImplPtr mT_op(const TensorImplPtr& a) {
 TensorImplPtr swapaxes_op(const TensorImplPtr& a, int axis1, int axis2) {
     Validator::input(a, "swapaxes.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
-    auto wrap = [&](int x) {
-        const int w = x < 0 ? x + ndim : x;
-        if (w < 0 || w >= ndim)
-            ErrorBuilder("swapaxes").index_error("axis out of range");
-        return w;
-    };
-    const int w1 = wrap(axis1);
-    const int w2 = wrap(axis2);
+    const int w1 = wrap_dim(axis1, ndim, "swapaxes");
+    const int w2 = wrap_dim(axis2, ndim, "swapaxes");
     std::vector<int> perm(ndim);
     for (int i = 0; i < ndim; ++i)
         perm[i] = i;
-    std::swap(perm[w1], perm[w2]);
+    // A 0-d tensor swaps its notional axis with itself: the empty permutation.
+    if (ndim > 0)
+        std::swap(perm[w1], perm[w2]);
     return PermuteBackward::forward(a, perm);
 }
 

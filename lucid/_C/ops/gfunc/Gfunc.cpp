@@ -61,6 +61,7 @@
 #include "../../ops/composite/Indexing.h"
 #include "../../ops/composite/Logical.h"
 #include "../../ops/ufunc/Transpose.h"
+#include "../../ops/utils/ScalarAxis.h"
 #include "../../ops/utils/Select.h"
 #include "../../ops/utils/View.h"
 
@@ -480,7 +481,6 @@ AxisScatterOperands axis_scatter_operands(const char* op,
     const Shape& is = indices->shape();
     const Shape& ss = src->shape();
     const int ndim = static_cast<int>(bs.size());
-    const int d = dim < 0 ? dim + ndim : dim;
     auto shape_str = [](const Shape& sh) {
         std::string out = "[";
         for (std::size_t i = 0; i < sh.size(); ++i)
@@ -490,8 +490,8 @@ AxisScatterOperands axis_scatter_operands(const char* op,
     if (is.size() != bs.size() || ss.size() != bs.size())
         ErrorBuilder(op).fail("index " + shape_str(is) + ", self " + shape_str(bs) + " and src " +
                               shape_str(ss) + " must have the same number of dimensions");
-    if (d < 0 || d >= ndim)
-        ErrorBuilder(op).index_error("dim " + std::to_string(dim) + " out of range");
+    // A 0-d base never reaches here: on_scalar_scatter takes it first.
+    const int d = wrap_dim(dim, ndim, op);
     // The index walks src and lands in base, so it may be no larger than src
     // on any axis, nor than base on any but ``dim``.  Unchecked, a larger
     // index read src and wrote base past their ends.
@@ -529,6 +529,8 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
                              const TensorImplPtr& indices,
                              const TensorImplPtr& src,
                              int dim) {
+    if (auto out = on_scalar_scatter("scatter_add", base, indices, src, dim, scatter_add_op))
+        return out;
     auto [d, values] = axis_scatter_operands("scatter_add", base, indices, src, dim);
     const Dtype dt = base->dtype();
     const Device dv = base->device();
@@ -762,6 +764,8 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
                               const TensorImplPtr& src_in,
                               int dim) {
+    if (auto out = on_scalar_scatter("scatter_amax", base, indices, src_in, dim, scatter_amax_op))
+        return out;
     auto [d, values] = axis_scatter_operands("scatter_amax", base, indices, src_in, dim);
     const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();
@@ -827,6 +831,8 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
                               const TensorImplPtr& src_in,
                               int dim) {
+    if (auto out = on_scalar_scatter("scatter_amin", base, indices, src_in, dim, scatter_amin_op))
+        return out;
     auto [d, values] = axis_scatter_operands("scatter_amin", base, indices, src_in, dim);
     const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();
@@ -879,6 +885,8 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
                               const TensorImplPtr& indices,
                               const TensorImplPtr& src_in,
                               int dim) {
+    if (auto out = on_scalar_scatter("scatter_prod", base, indices, src_in, dim, scatter_prod_op))
+        return out;
     auto [d, values] = axis_scatter_operands("scatter_prod", base, indices, src_in, dim);
     const TensorImplPtr& src = values;
     const Dtype dt = base->dtype();

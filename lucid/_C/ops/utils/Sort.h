@@ -61,7 +61,7 @@ LUCID_API TensorImplPtr sort_op(const TensorImplPtr& a, int axis);
 // Returns
 // -------
 // TensorImplPtr
-//     Integer tensor of the same shape as ``a`` and dtype I32, such that
+//     Integer tensor of the same shape as ``a`` and dtype I64, such that
 //     ``a.take_along_axis(out, axis)`` equals ``sort_op(a, axis)``.
 //
 // Notes
@@ -181,7 +181,7 @@ LUCID_API TensorImplPtr unique_op(const TensorImplPtr& a);
 // vector<TensorImplPtr>
 //     ``[values, indices]`` where both have shape equal to ``a.shape``
 //     with ``axis`` reduced to ``k``.  ``values`` has the dtype of ``a``;
-//     ``indices`` has dtype I32.
+//     ``indices`` has dtype I64.
 //
 // Notes
 // -----
