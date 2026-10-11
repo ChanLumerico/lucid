@@ -98,7 +98,6 @@ def test_fused_causal_forward_is_memory_linear() -> None:
     """
     if not metal_available():
         pytest.skip("metal backend unavailable")
-    import mlx.core as mx
 
     Bt, Ht, Tt, Dt = 1, 4, 1024, 32
     n = Bt * Ht * Tt * Dt
@@ -108,17 +107,17 @@ def test_fused_causal_forward_is_memory_linear() -> None:
     q.sum().item(), k.sum().item(), v.sum().item()  # force-eval inputs
 
     # Fused causal path.
-    mx.reset_peak_memory()
+    _C_engine.metal_reset_peak_memory()
     F.scaled_dot_product_attention(q, k, v, is_causal=True).sum().item()
-    fused_peak = mx.get_peak_memory()
+    fused_peak = _C_engine.metal_peak_memory()
 
     # Explicit O(T²) reference: materializes the (B,H,T,T) score matrix.
-    mx.reset_peak_memory()
+    _C_engine.metal_reset_peak_memory()
     scores = lucid.matmul(q, k.permute([0, 1, 3, 2])) * (1.0 / math.sqrt(Dt))
     from lucid.nn.functional.activations import softmax as _softmax
 
     (lucid.matmul(_softmax(scores, dim=-1), v)).sum().item()
-    manual_peak = mx.get_peak_memory()
+    manual_peak = _C_engine.metal_peak_memory()
 
     score_bytes = Bt * Ht * Tt * Tt * 4  # one (B,H,T,T) fp32 buffer
     # Fused must save at least a full score matrix vs the manual path.

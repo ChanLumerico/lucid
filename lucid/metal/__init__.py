@@ -9,8 +9,6 @@ the GPU from Python with Lucid tensors as inputs/outputs.
 import time
 from typing import TYPE_CHECKING
 
-import mlx.core as _mx
-
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._factories import random as _random
@@ -73,7 +71,7 @@ def empty_cache() -> None:
     Cached buffers are otherwise freed automatically under memory
     pressure; manual eviction is a hint, not a requirement.
     """
-    _mx.clear_cache()
+    _C_engine.metal_clear_cache()
 
 
 def manual_seed(seed: int) -> None:
@@ -110,7 +108,7 @@ def memory_allocated() -> int:
     """Return bytes currently allocated on the Metal GPU.
 
     Reflects live ``MTLBuffer`` storage owned by the engine — cached /
-    pooled buffers held by MLX are *not* counted (see
+    pooled buffers held by the engine's MLX are *not* counted (see
     :func:`get_cache_memory`).
 
     Returns
@@ -160,7 +158,7 @@ def get_cache_memory() -> int:
         Bytes in the MLX cache pool (not counted by
         :func:`memory_allocated`).
     """
-    return int(_mx.metal.get_cache_memory())
+    return int(_C_engine.metal_cache_memory())
 
 
 def get_device_name() -> str:
@@ -176,7 +174,7 @@ def get_device_name() -> str:
     str
         Marketing name of the GPU.
     """
-    info = _mx.metal.device_info()
+    info = _C_engine.metal_device_info()
     return str(info.get("device_name", "Apple Silicon Metal GPU"))
 
 
@@ -210,7 +208,6 @@ class MetalStream:
     def __init__(self, priority: int = 0) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
         self._priority = priority
-        self._stream = _mx.default_stream(_mx.gpu)
 
     def __enter__(self) -> MetalStream:
         """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
@@ -223,7 +220,6 @@ class MetalStream:
     def synchronize(self) -> None:
         """Run pending work, then wait for this stream's commands to complete."""
         _C_engine.synchronize_gpu()
-        _mx.synchronize(self._stream)
 
 
 class MetalEvent:
@@ -252,10 +248,10 @@ class MetalEvent:
     def record(self, stream: MetalStream | None = None) -> None:
         """Mark this event on the current stream (and snapshot wall clock)."""
         # Pending lazy work runs first, or the event would mark a point
-        # before work that has not started.
+        # before work that has not started.  The wait is device-wide, so it
+        # already covers *stream*: Lucid submits everything to one stream.
+        del stream
         _C_engine.synchronize_gpu()
-        if stream is not None:
-            _mx.synchronize(stream._stream)
         if self._enable_timing:
             self._t = time.perf_counter()
 

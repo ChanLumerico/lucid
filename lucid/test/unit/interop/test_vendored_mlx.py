@@ -13,6 +13,7 @@ The no-``mlx``-installed case is covered by the packaging gate, which builds
 an environment without it.
 """
 
+import gc
 import shutil
 import subprocess
 import sys
@@ -57,11 +58,28 @@ def test_the_engine_links_only_the_renamed_library() -> None:
 
 @_requires_metal
 def test_metal_cache_queries_answer_for_the_engines_mlx() -> None:
-    x = lucid.ones(1024, 1024, device="metal")
-    float((x * 2.0).sum().item())
+    x = lucid.randn(512, 512, device="metal")
+    float((x @ x).relu().sum().item())
     del x
+    gc.collect()
+    _C_engine.synchronize_gpu()
+    # Freed buffers land in the engine's cache, so a read of 0 here would
+    # mean the query looks at another MLX instance.
+    assert _C_engine.metal_cache_memory() > 0
     _C_engine.metal_clear_cache()
     assert _C_engine.metal_cache_memory() == 0
+
+
+@_requires_metal
+def test_metal_memory_counters_track_the_engines_allocations() -> None:
+    _C_engine.synchronize_gpu()
+    _C_engine.metal_reset_peak_memory()
+    before = _C_engine.metal_active_memory()
+    x = lucid.randn(1024, 1024, device="metal")
+    float(x.sum().item())
+    assert _C_engine.metal_active_memory() >= before + 4 * 1024 * 1024
+    assert _C_engine.metal_peak_memory() >= _C_engine.metal_active_memory()
+    del x
 
 
 @_requires_metal

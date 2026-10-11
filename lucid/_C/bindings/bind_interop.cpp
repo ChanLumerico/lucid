@@ -111,6 +111,23 @@ void register_interop(py::module_& m) {
         "Bytes held in the engine's MLX buffer cache: reserved, not backing a "
         "live array.");
 
+    // MLX's allocator counters, unlike MemoryTracker's (memory_stats), also
+    // see buffers MLX allocates internally: graph intermediates, kernel
+    // scratch, arrays held only by a lazy graph.
+    m.def(
+        "metal_active_memory", [] { return mlx::core::get_active_memory(); },
+        "Bytes the engine's MLX allocator has handed out and not yet freed "
+        "(excludes its cache).");
+
+    m.def(
+        "metal_peak_memory", [] { return mlx::core::get_peak_memory(); },
+        "Highest metal_active_memory() since the process started or the last "
+        "metal_reset_peak_memory().");
+
+    m.def(
+        "metal_reset_peak_memory", [] { mlx::core::reset_peak_memory(); },
+        "Restart metal_peak_memory() from the current active memory.");
+
     m.def(
         "metal_device_info",
         [] { return mlx::core::device_info(mlx::core::Device(mlx::core::Device::gpu)); },

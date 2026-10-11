@@ -9,6 +9,7 @@ import pytest
 
 import lucid
 import lucid.optim as optim
+from lucid.test._fixtures.devices import metal_available
 
 
 def _quadratic_problem() -> tuple[lucid.Tensor, callable]:
@@ -96,7 +97,7 @@ class TestLRScheduler:
 
 _LEAK_PROBE = """
 import gc, sys, lucid, lucid.nn as nn, lucid.optim as optim
-import mlx.core as mx
+from lucid._C import engine as _C_engine
 
 retain = sys.argv[1] == "1"
 model = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)).to("metal")
@@ -117,21 +118,22 @@ def step():
 
 for _ in range(20):     # warm up — lazy alloc / first-step state settles
     step()
-mx.synchronize()
-base = mx.get_active_memory()
+_C_engine.synchronize_gpu()
+base = _C_engine.metal_active_memory()
 
 marks = []
 for _ in range(12):
     for _ in range(100):
         step()
-    mx.synchronize()
-    marks.append(mx.get_active_memory() - base)
+    _C_engine.synchronize_gpu()
+    marks.append(_C_engine.metal_active_memory() - base)
 
 half = len(marks) // 2
 print("DRIFT", min(marks[half:]) - min(marks[:half]))
 """
 
 
+@pytest.mark.skipif(not metal_available(), reason="the probe measures Metal memory")
 class TestOptimizerGpuMemory:
     """Regression: the GPU optimizer step must not leak active MLX memory.
 
@@ -183,7 +185,6 @@ class TestOptimizerGpuMemory:
             ``min(second half) - min(first half)`` in bytes, over twelve
             windows of a hundred steps.
         """
-        pytest.importorskip("mlx.core")
         completed = subprocess.run(
             [sys.executable, "-c", _LEAK_PROBE, "1" if retain else "0"],
             capture_output=True,
