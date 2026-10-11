@@ -29,6 +29,7 @@ The Cephes coefficient tables are those of the Cephes Mathematical Library
 """
 
 import math
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import lucid
@@ -123,6 +124,25 @@ def _positive(x: Tensor, edge: float) -> Tensor:
     return lucid.where(x > 0.0, _below(x, edge), lucid.ones_like(x))
 
 
+def _half_line_split(
+    x: Tensor,
+    edge: float,
+    small: Callable[[Tensor], Tensor],
+    large: Callable[[Tensor], Tensor],
+    at_zero: float,
+) -> Tensor:
+    """A ``Y`` / ``K`` function: ``small`` on ``(0, edge]``, ``large`` beyond.
+
+    Each branch runs on ``x`` clamped into its own interval, so neither
+    divides by zero or takes the log of a non-positive number — the unused
+    branch's ``nan`` would reach the gradient through ``where`` — and the
+    domain edge is :func:`_on_half_line`'s.  Both dtype paths of all six
+    functions go through here, so they share one domain rule.
+    """
+    value = lucid.where(x <= edge, small(_positive(x, edge)), large(_above(x, edge)))
+    return _on_half_line(x, value, at_zero)
+
+
 # ── I0 / I1 ──────────────────────────────────────────────────────────────────
 
 
@@ -210,26 +230,40 @@ def _j1(x: Tensor) -> Tensor:
     return lucid.where(ax <= 5.0, _j1_small(lucid.clip(x, -5.0, 5.0)), large)
 
 
-def _y0(x: Tensor) -> Tensor:
-    """``Y0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 5.0)
+def _y0_small(s: Tensor) -> Tensor:
     z = s * s
-    small = _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(
+    return _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(
         s
     )
-    large = _hankel(_above(x, 5.0), _PIO4, _J0_HANKEL, second_kind=True)
-    return _on_half_line(x, lucid.where(x <= 5.0, small, large), -math.inf)
+
+
+def _y1_small(s: Tensor) -> Tensor:
+    z = s * s
+    return s * (_polevl(z, _Y1_YP) / _p1evl(z, _Y1_YQ)) + _TWOOPI * (
+        _j1_small(s) * lucid.log(s) - 1.0 / s
+    )
+
+
+def _y0(x: Tensor) -> Tensor:
+    """``Y0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
+    return _half_line_split(
+        x,
+        5.0,
+        _y0_small,
+        lambda big: _hankel(big, _PIO4, _J0_HANKEL, second_kind=True),
+        -math.inf,
+    )
 
 
 def _y1(x: Tensor) -> Tensor:
     """``Y1(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 5.0)
-    z = s * s
-    small = s * (_polevl(z, _Y1_YP) / _p1evl(z, _Y1_YQ)) + _TWOOPI * (
-        _j1_small(s) * lucid.log(s) - 1.0 / s
+    return _half_line_split(
+        x,
+        5.0,
+        _y1_small,
+        lambda big: _hankel(big, _THPIO4, _J1_HANKEL, second_kind=True),
+        -math.inf,
     )
-    large = _hankel(_above(x, 5.0), _THPIO4, _J1_HANKEL, second_kind=True)
-    return _on_half_line(x, lucid.where(x <= 5.0, small, large), -math.inf)
 
 
 # ── K0 / K1 ──────────────────────────────────────────────────────────────────
@@ -250,36 +284,46 @@ def _k_large_scaled(big: Tensor, coeffs: tuple[float, ...]) -> Tensor:
 
 def _k0e(x: Tensor) -> Tensor:
     """``exp(x) K0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 2.0)
-    large = _k_large_scaled(_above(x, 2.0), _K0_B)
-    return _on_half_line(
-        x, lucid.where(x <= 2.0, _k0_small(s) * lucid.exp(s), large), math.inf
+    return _half_line_split(
+        x,
+        2.0,
+        lambda s: _k0_small(s) * lucid.exp(s),
+        lambda big: _k_large_scaled(big, _K0_B),
+        math.inf,
     )
 
 
 def _k0(x: Tensor) -> Tensor:
     """``K0(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 2.0)
-    big = _above(x, 2.0)
-    large = _k_large_scaled(big, _K0_B) * lucid.exp(-big)
-    return _on_half_line(x, lucid.where(x <= 2.0, _k0_small(s), large), math.inf)
+    return _half_line_split(
+        x,
+        2.0,
+        _k0_small,
+        lambda big: _k_large_scaled(big, _K0_B) * lucid.exp(-big),
+        math.inf,
+    )
 
 
 def _k1e(x: Tensor) -> Tensor:
     """``exp(x) K1(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 2.0)
-    large = _k_large_scaled(_above(x, 2.0), _K1_B)
-    return _on_half_line(
-        x, lucid.where(x <= 2.0, _k1_small(s) * lucid.exp(s), large), math.inf
+    return _half_line_split(
+        x,
+        2.0,
+        lambda s: _k1_small(s) * lucid.exp(s),
+        lambda big: _k_large_scaled(big, _K1_B),
+        math.inf,
     )
 
 
 def _k1(x: Tensor) -> Tensor:
     """``K1(x)`` on ``x > 0``; ``x <= 0`` as the module says."""
-    s = _positive(x, 2.0)
-    big = _above(x, 2.0)
-    large = _k_large_scaled(big, _K1_B) * lucid.exp(-big)
-    return _on_half_line(x, lucid.where(x <= 2.0, _k1_small(s), large), math.inf)
+    return _half_line_split(
+        x,
+        2.0,
+        _k1_small,
+        lambda big: _k_large_scaled(big, _K1_B) * lucid.exp(-big),
+        math.inf,
+    )
 
 
 # ── Cephes coefficient tables ────────────────────────────────────────────────

@@ -211,7 +211,7 @@
     "lucid/nn/modules/pooling.py": 808,
     "lucid/nn/modules/rnn.py": 87,
     "lucid/optim/lr_scheduler.py": 442,
-    "lucid/special/__init__.py": 1080,
+    "lucid/special/__init__.py": 1079,
     "lucid/utils/transforms/_color.py": 274
    },
    "noqa[ANN401]": {

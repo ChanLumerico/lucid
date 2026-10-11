@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Callable
 
 import lucid
 from lucid._ops.composite import _bessel
+from lucid._ops.composite._bessel import _half_line_split
 from lucid._ops.composite._gamma import _polygamma
 from lucid._ops.composite.elementwise import _x_times_log
 
@@ -300,16 +301,17 @@ def i1(x: Tensor) -> Tensor:
     if x.dtype == lucid.float64:
         return _bessel._i1(x)
     ax = lucid.abs(x)
-    ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
+    ax_safe = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    xs = lucid.clip(x, -3.75, 3.75)
 
     # Small-argument branch: x · poly((x / 3.75)²)
-    t_small = (x * (1.0 / 3.75)) ** 2
+    t_small = (xs * (1.0 / 3.75)) ** 2
     val_small = lucid.full_like(x, _I1_SMALL_COEFFS[0])
     t_pow = lucid.ones_like(x)
     for c in _I1_SMALL_COEFFS[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
-    val_small = val_small * x  # I₁ is odd
+    val_small = val_small * xs  # I₁ is odd
 
     # Large-argument branch: sign(x) · exp(|x|)/√|x| · poly(3.75/|x|)
     y_large = 3.75 / ax_safe
@@ -1547,7 +1549,8 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
 # polynomial branch and a large-|x| asymptotic-with-trig branch.  Their
 # eight-digit coefficients are accurate to ≈ 1e-7 — float32's own rounding
 # level, and no further.  float64 therefore takes the Cephes
-# double-precision series in ``lucid._ops.composite._bessel``.
+# double-precision series in ``lucid._ops.composite._bessel``.  Y and K
+# share ``_half_line_split``'s domain rule (±inf at 0, NaN below) in either dtype.
 
 
 # A&S 9.8.6 — ``e^x √x K(x)`` for x > 2: ``_modified_bessel_k{0,1}_large``
@@ -1582,11 +1585,10 @@ def _split(
     small_fn: Callable[[Tensor], Tensor],
     large_fn: Callable[[Tensor], Tensor],
 ) -> Tensor:
-    """``where(|x| <= threshold, small_fn(x), large_fn(x))`` evaluated
-    safely on both branches by always running both.  Branches are
-    expected to be regular (no NaN / inf) on their respective domains."""
-    mask = lucid.abs(x) <= threshold
-    return lucid.where(mask, small_fn(x), large_fn(x))
+    """``where(|x| <= threshold, small_fn(x), large_fn(x))``, each branch on
+    its own interval (``large_fn`` clamps ``|x|``), as in ``_half_line_split``."""
+    small = small_fn(lucid.clip(x, -threshold, threshold))
+    return lucid.where(lucid.abs(x) <= threshold, small, large_fn(x))
 
 
 def _bessel_j0_small(x: Tensor) -> Tensor:
@@ -1779,7 +1781,6 @@ _TWO_OVER_PI = 2.0 / math.pi
 
 
 def _bessel_y0_small(x: Tensor) -> Tensor:
-    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
     y = x * x
     num = -2957821389.0 + y * (
         7062834065.0
@@ -1789,7 +1790,7 @@ def _bessel_y0_small(x: Tensor) -> Tensor:
         745249964.8
         + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y * 1.0)))
     )
-    return num / den + _TWO_OVER_PI * lucid.log(safe_x) * bessel_j0(x)
+    return num / den + _TWO_OVER_PI * lucid.log(x) * bessel_j0(x)
 
 
 def _bessel_y0_large(x: Tensor) -> Tensor:
@@ -1856,11 +1857,10 @@ def bessel_y0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._y0(x)
-    return _split(x, 8.0, _bessel_y0_small, _bessel_y0_large)
+    return _half_line_split(x, 8.0, _bessel_y0_small, _bessel_y0_large, -math.inf)
 
 
 def _bessel_y1_small(x: Tensor) -> Tensor:
-    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
     y = x * x
     num = x * (
         -0.4900604943e13
@@ -1883,7 +1883,7 @@ def _bessel_y1_small(x: Tensor) -> Tensor:
             * (0.2245904002e8 + y * (0.1020426050e6 + y * (0.3549632885e3 + y * 1.0)))
         )
     )
-    return num / den + _TWO_OVER_PI * (lucid.log(safe_x) * bessel_j1(x) - 1.0 / safe_x)
+    return num / den + _TWO_OVER_PI * (lucid.log(x) * bessel_j1(x) - 1.0 / x)
 
 
 def _bessel_y1_large(x: Tensor) -> Tensor:
@@ -1945,13 +1945,12 @@ def bessel_y1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._y1(x)
-    return _split(x, 8.0, _bessel_y1_small, _bessel_y1_large)
+    return _half_line_split(x, 8.0, _bessel_y1_small, _bessel_y1_large, -math.inf)
 
 
 def _modified_bessel_k0_small(x: Tensor) -> Tensor:
     # A&S 9.8.5 — polynomial fit for 0 < x <= 2.
     y = (x / 2.0) ** 2
-    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
     poly = (
         -0.57721566
         + 0.42278420 * y
@@ -1961,7 +1960,7 @@ def _modified_bessel_k0_small(x: Tensor) -> Tensor:
         + 0.00010750 * y**5
         + 0.00000740 * y**6
     )
-    return -lucid.log(safe_x / 2.0) * lucid.i0(x) + poly
+    return -lucid.log(x / 2.0) * lucid.i0(x) + poly
 
 
 def _modified_bessel_k0_large(x: Tensor) -> Tensor:
@@ -2014,7 +2013,9 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k0(x)
-    return _split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large)
+    return _half_line_split(
+        x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf
+    )
 
 
 def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
@@ -2050,20 +2051,18 @@ def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k0e(x)
-    # ``_modified_bessel_k0_large`` is ``poly(2/x) · exp(-x) / √x``, so the
-    # scaled value is the polynomial over the square root.  Under the
-    # split the direct product is safe — ``exp(2)`` is an ordinary number.
-    safe_small = lucid.minimum(x, lucid.full_like(x, 2.0))
-    small = _modified_bessel_k0_small(safe_small) * lucid.exp(safe_small)
-    big = lucid.maximum(x, lucid.full_like(x, 2.0))
-    z = 2.0 / big
-    poly = _K0E_LARGE(z)
-    return lucid.where(lucid.abs(x) <= 2.0, small, poly / lucid.sqrt(big))
+    # The large branch is ``_modified_bessel_k0_large`` without ``exp(-x)``.
+    return _half_line_split(
+        x,
+        2.0,
+        lambda s: _modified_bessel_k0_small(s) * lucid.exp(s),
+        lambda big: _K0E_LARGE(2.0 / big) / lucid.sqrt(big),
+        math.inf,
+    )
 
 
 def _modified_bessel_k1_small(x: Tensor) -> Tensor:
     y = (x / 2.0) ** 2
-    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
     poly = (
         1.0
         + 0.15443144 * y
@@ -2073,7 +2072,7 @@ def _modified_bessel_k1_small(x: Tensor) -> Tensor:
         - 0.00110404 * y**5
         - 0.00004686 * y**6
     )
-    return lucid.log(safe_x / 2.0) * i1(x) + poly / safe_x
+    return lucid.log(x / 2.0) * i1(x) + poly / x
 
 
 def _modified_bessel_k1_large(x: Tensor) -> Tensor:
@@ -2123,7 +2122,9 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k1(x)
-    return _split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large)
+    return _half_line_split(
+        x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf
+    )
 
 
 def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
@@ -2157,15 +2158,13 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k1e(x)
-    # ``_modified_bessel_k1_large`` is ``poly(2/x) · exp(-x) / √x``, so the
-    # scaled value is the polynomial over the square root.  Under the
-    # split the direct product is safe — ``exp(2)`` is an ordinary number.
-    safe_small = lucid.minimum(x, lucid.full_like(x, 2.0))
-    small = _modified_bessel_k1_small(safe_small) * lucid.exp(safe_small)
-    big = lucid.maximum(x, lucid.full_like(x, 2.0))
-    z = 2.0 / big
-    poly = _K1E_LARGE(z)
-    return lucid.where(lucid.abs(x) <= 2.0, small, poly / lucid.sqrt(big))
+    return _half_line_split(
+        x,
+        2.0,
+        lambda s: _modified_bessel_k1_small(s) * lucid.exp(s),
+        lambda big: _K1E_LARGE(2.0 / big) / lucid.sqrt(big),
+        math.inf,
+    )
 
 
 # ── Hurwitz zeta ───────────────────────────────────────────────────────────

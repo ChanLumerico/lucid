@@ -1485,7 +1485,8 @@ def i0(x: Tensor) -> Tensor:
     * ``|x| >  3.75`` — polynomial series in :math:`3.75 / |x|`, multiplied
       by :math:`e^{|x|} / \sqrt{|x|}` to recover the exponential growth.
 
-    Differentiable through both branches (engine primitives only).
+    Each branch runs on ``x`` clamped into its own interval, so the one
+    ``where`` does not pick contributes no ``nan`` to the gradient.
 
     A ``float64`` input takes the Cephes double-precision series instead.
 
@@ -1502,11 +1503,10 @@ def i0(x: Tensor) -> Tensor:
     if x.dtype == lucid.float64:
         return _bessel._i0(x)
     ax = lucid.abs(x)
-    # Guard: avoid division by zero in large-argument branch (ax == 0 → use small branch)
-    ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
+    ax_safe = lucid.maximum(ax, lucid.full_like(ax, 3.75))
 
     # Small-argument branch: polynomial in t = (x / 3.75)²
-    t_small = (x * (1.0 / 3.75)) ** 2
+    t_small = (lucid.clip(x, -3.75, 3.75) * (1.0 / 3.75)) ** 2
     val_small = lucid.full_like(x, _bessel._AS_I0_SMALL[0])
     t_pow = lucid.ones_like(x)
     for c in _bessel._AS_I0_SMALL[1:]:
