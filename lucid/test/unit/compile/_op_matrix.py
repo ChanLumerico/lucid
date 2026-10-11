@@ -708,17 +708,14 @@ CASE_BY_NAME = {c.name: c for c in CASES}
 #: not listed fails the matrix, so a new one is seen the day it appears.
 _NO_I64_SQUARE = "MPSGraph has no int64 square kernel (``x * x`` is folded into it)"
 _INT_MATMUL = "MPSGraph's matmul aborts on integers, so the emitter declines"
-_SCATTER = "MPSGraph scatters int64 in 32 bits and bool as false, so it declines"
+_BOOL_SUM = "MPSGraph cannot sum bool exactly (_DataMovement.h), so it declines"
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("square", "i64"): _NO_I64_SQUARE,
     ("astype_f32", "f32"): _NO_OPS,
     ("astype_i64", "i64"): _NO_OPS,
     ("astype_bool", "bool"): _NO_OPS,
-    ("scatter_add", "i64"): _SCATTER,
-    ("scatter_add", "bool"): _SCATTER,
-    ("scatter", "i64"): _SCATTER,
-    ("scatter", "bool"): _SCATTER,
+    ("scatter_add", "bool"): _BOOL_SUM,
     ("matmul", "i64"): _INT_MATMUL,
     ("matmul", "i32"): _INT_MATMUL,
     ("matrix_power", "i64"): _INT_MATMUL,
