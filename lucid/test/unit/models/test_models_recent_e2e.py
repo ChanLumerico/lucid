@@ -51,10 +51,28 @@ def _grads(module: nn.Module) -> tuple[int, int]:
     return sum(1 for p in params if p.grad is not None), len(params)
 
 
-def _assert_trained(module: nn.Module) -> None:
-    """Assert a backward pass reached every parameter of ``module``."""
+def _assert_finite_grads(named: list[tuple[str, lucid.Tensor]]) -> None:
+    """Assert every gradient that landed holds no NaN or infinity.
+
+    ``grad is not None`` alone passed RealNVP with a NaN log-likelihood
+    (LCD-205): a NaN loss still backpropagates, it just carries NaN into
+    every gradient, and a training step on it ruins the weights.
+    """
+    bad = [
+        n
+        for n, p in named
+        if p.grad is not None and not bool(p.grad.isfinite().all().item())
+    ]
+    assert not bad, f"non-finite gradient in {len(bad)} parameter(s): {bad[:5]}"
+
+
+def _assert_trained(module: nn.Module, loss: lucid.Tensor) -> None:
+    """Assert the loss is finite and its backward pass reached every parameter
+    of ``module`` with a finite gradient."""
+    assert bool(loss.isfinite().all().item()), f"loss is not finite: {loss}"
     got, total = _grads(module)
     assert got == total, f"{total - got} of {total} parameters got no gradient"
+    _assert_finite_grads(list(module.named_parameters()))
 
 
 def _assert_finite(x: lucid.Tensor, shape: tuple[int, ...]) -> None:
@@ -81,8 +99,9 @@ class TestNICE:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.nice_mnist(**self.CONFIG)  # type: ignore[arg-type]
         out = model(lucid.randn((2, 64)))
-        (-out.log_prob.mean()).backward()
-        _assert_trained(model)
+        loss = -out.log_prob.mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.nice_mnist_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -96,9 +115,10 @@ class TestRealNVP:
 
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.realnvp_cifar(**self.CONFIG)  # type: ignore[arg-type]
-        out = model(lucid.randn((2, 3, 8, 8)))
-        (-out.log_prob.mean()).backward()
-        _assert_trained(model)
+        out = model(lucid.rand((2, 3, 8, 8)))  # RealNVP's data lives in [0, 1]
+        loss = -out.log_prob.mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.realnvp_cifar_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -123,8 +143,9 @@ class TestNeuralODE:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.neural_ode(**self.CONFIG)  # type: ignore[arg-type]
         out = model(lucid.randn((2, 1, 8, 8)))
-        (-out.log_prob.mean()).backward()
-        _assert_trained(model)
+        loss = -out.log_prob.mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.neural_ode_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -151,8 +172,9 @@ class TestFlowMatching:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.flow_matching_cifar(**self.CONFIG)  # type: ignore[arg-type]
         out = model(lucid.randn((2, 3, 8, 8)), lucid.rand((2,)))
-        out.sample.square().mean().backward()
-        _assert_trained(model)
+        loss = out.sample.square().mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.flow_matching_cifar_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -173,8 +195,9 @@ class TestRectifiedFlow:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.rectified_flow_cifar(**self.CONFIG)  # type: ignore[arg-type]
         out = model(lucid.randn((2, 3, 8, 8)), lucid.rand((2,)))
-        out.sample.square().mean().backward()
-        _assert_trained(model)
+        loss = out.sample.square().mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.rectified_flow_cifar_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -196,8 +219,9 @@ class TestScoreSDE:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.score_sde_vp(**self.CONFIG)  # type: ignore[arg-type]
         out = model(lucid.randn((2, 3, 8, 8)), lucid.rand((2,)))
-        out.score.square().mean().backward()
-        _assert_trained(model)
+        loss = out.score.square().mean()
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.score_sde_vp_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -212,8 +236,9 @@ class TestMeanFlow:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.mean_flow_base_2_gen(**self.CONFIG)  # type: ignore[arg-type]
         labels = lucid.tensor([0, 1], dtype=lucid.int64)
-        model(lucid.randn((2, 4, 8, 8)), labels).loss.backward()
-        _assert_trained(model)
+        loss = model(lucid.randn((2, 4, 8, 8)), labels).loss
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.mean_flow_base_2_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -228,8 +253,9 @@ class TestDiT:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         model = models.dit_small_2_gen(**self.CONFIG)  # type: ignore[arg-type]
         labels = lucid.tensor([0, 1], dtype=lucid.int64)
-        model(lucid.randn((2, 4, 8, 8)), labels).loss.backward()
-        _assert_trained(model)
+        loss = model(lucid.randn((2, 4, 8, 8)), labels).loss
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.dit_small_2_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -259,8 +285,9 @@ class TestVQVAE:
     def test_a_training_step_reaches_every_parameter(self) -> None:
         """The bare model is the architecture; the wrapper owns the loss."""
         model = models.vqvae_gen(**self.CONFIG)  # type: ignore[arg-type]
-        model(lucid.randn((2, 3, 8, 8))).loss.backward()
-        _assert_trained(model)
+        loss = model(lucid.randn((2, 3, 8, 8))).loss
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_reconstruction_runs(self) -> None:
         model = models.vqvae_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -294,8 +321,9 @@ class TestCLIP:
         model = models.clip_vit_base_32(**self.CONFIG)  # type: ignore[arg-type]
         pixels = lucid.randn((2, 3, 16, 16))
         ids = lucid.zeros((2, 8), dtype=lucid.int64)
-        model(pixels, ids, return_loss=True).loss.backward()
-        _assert_trained(model)
+        loss = model(pixels, ids, return_loss=True).loss
+        loss.backward()
+        _assert_trained(model, loss)
 
     def test_zero_shot_classification_runs(self) -> None:
         """Two images against three prompts, so the logits are (2, 3)."""
@@ -329,7 +357,7 @@ class TestStableDiffusion:
             lucid.randn((1, 3, 32, 32)), lucid.randn((1, 8, 16)), return_loss=True
         )
         out.loss.backward()
-        _assert_trained(model.unet)
+        _assert_trained(model.unet, out.loss)
 
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.stable_diffusion_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -395,6 +423,7 @@ class _DreamerCase:
         ]
         assert not unexpected, f"no gradient: {unexpected}"
         assert bool(out.loss.isfinite().item())
+        _assert_finite_grads(list(inner.named_parameters()))
 
     def test_the_slow_target_is_the_only_thing_left_untrained(self) -> None:
         """A generation with an EMA critic has exactly that ungradiented; one
@@ -465,7 +494,7 @@ class TestDIAMONDAtari:
         frames, actions = self._batch()
         out = model(frames, actions, lucid.randn((2, 3, 16, 16)))
         out.loss.backward()
-        _assert_trained(model.denoiser)
+        _assert_trained(model.denoiser, out.loss)
 
     def test_the_reward_and_termination_model_trains(self) -> None:
         model = models.diamond_world_model(**self.CONFIG)  # type: ignore[arg-type]
@@ -474,14 +503,15 @@ class TestDIAMONDAtari:
             frames, actions, lucid.randn((2, 4)), lucid.zeros((2, 4))
         )
         loss.backward()
-        _assert_trained(model.diamond.reward_end)
+        _assert_trained(model.diamond.reward_end, loss)
 
     def test_the_actor_critic_trains_in_imagination(self) -> None:
         model = models.diamond_world_model(**self.CONFIG)  # type: ignore[arg-type]
         frames, actions = self._batch()
         out = model(frames, actions)
-        (out.policy_loss + out.value_loss).backward()
-        _assert_trained(model.diamond.actor_critic)
+        loss = out.policy_loss + out.value_loss
+        loss.backward()
+        _assert_trained(model.diamond.actor_critic, loss)
 
     def test_acting_and_imagining_run(self) -> None:
         model = models.diamond_world_model(**self.CONFIG).eval()  # type: ignore[arg-type]
@@ -515,7 +545,7 @@ class TestDIAMONDCSGO:
             lucid.randn((1, 3, 30, 56)),
         )
         out.loss.backward()
-        _assert_trained(model.denoiser)
+        _assert_trained(model.denoiser, out.loss)
 
     def test_a_rollout_reaches_full_resolution(self) -> None:
         """30x56 out of the world model, 150x280 out of the upsampler.
@@ -549,8 +579,9 @@ class TestDIAMONDCSGO:
         target = lucid.randn((1, 3, 150, 280))
 
         out = model.upsample(noised, lucid.tensor([1.0]), low, previous, quantize=False)
-        (out - target).square().mean().backward()
-        _assert_trained(model.upsampler)
+        loss = (out - target).square().mean()
+        loss.backward()
+        _assert_trained(model.upsampler, loss)
 
     def test_a_sampled_frame_lands_on_the_8_bit_grid(self) -> None:
         """Every frame fed back into the rollout has been through a byte.
