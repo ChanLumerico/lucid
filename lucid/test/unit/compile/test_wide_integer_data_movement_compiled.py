@@ -13,6 +13,7 @@ model through the same emitters against eager.
 """
 
 import json
+import random
 import re
 import subprocess
 import sys
@@ -207,6 +208,47 @@ def test_int64_sum_over_a_long_update_axis_runs_eagerly() -> None:
     assert _ints(got) == _ints(fn(x))
 
 
+def _random_int64(n: int, seed: int) -> list[int]:
+    rng = random.Random(seed)
+    return [rng.getrandbits(64) - 2**63 for _ in range(n)]
+
+
+def _assign(t: lucid.Tensor, i: lucid.Tensor) -> lucid.Tensor:
+    out = lucid.zeros_like(t[:3])
+    out[i] = t
+    return out + 0
+
+
+COLLIDING: dict[str, Callable[[lucid.Tensor, lucid.Tensor], lucid.Tensor]] = {
+    "scatter": lambda t, i: lucid.zeros_like(t[:3]).scatter(0, i, t) + 0,
+    "index_put": lambda t, i: lucid.zeros_like(t[:3]).index_put((i,), t) + 0,
+    "setitem": _assign,
+}
+
+
+@pytest.mark.parametrize("n", [64, 4096, 65536])
+@pytest.mark.parametrize("spread", ["one_slot", "three_slots"])
+@pytest.mark.parametrize("op", list(COLLIDING))
+def test_colliding_int64_overwrites_keep_one_whole_update(op: str, spread: str, n: int) -> None:
+    """Where several updates aim at one slot the winner is unspecified, but it
+    is one of them, whole.  Scattered as int16 lanes, each lane picked its own
+    winner and the slot held a mix of two updates (0xcb4a0d781cc5675 from
+    updates 0 and 32); the winner is now chosen once, on its position."""
+    slots = [0] * n if spread == "one_slot" else [k % 3 for k in range(n)]
+    idx = _index(slots)
+    fn = COLLIDING[op]
+    _C_engine.compile.session_cache_clear()
+    c = lucid.compile(fn)
+    for run in range(4):
+        vals = _random_int64(n, seed=1000 * n + run)
+        got = c(lucid.tensor(vals, dtype=lucid.int64).to(COMPILE_DEVICE), idx).to("cpu").tolist()
+        for slot, value in enumerate(got):
+            landed = {v for v, k in zip(vals, slots, strict=True) if k == slot}
+            assert value in (landed or {0}), (slot, hex(value))
+    info = c.cache_info()
+    assert info["entries"] == 1 and not info["eager_only"], info
+
+
 def test_int64_scatter_drops_an_out_of_range_update() -> None:
     """Policy B (``_IndexBounds.h``) holds on the carried path: the graph is
     built on in-range indices, and a later call's stray one is dropped."""
@@ -315,10 +357,12 @@ def test_float_training_through_the_wrapped_emitters_matches_eager() -> None:
 
 _EMITTERS = Path(lucid.__file__).parent / "_C" / "compile" / "OpEmitters"
 _RAW_MOVE = re.compile(
-    r"\b(gatherAlongAxis|gatherWithUpdatesTensor|gatherNDWithUpdatesTensor|scatterAlongAxis"
-    r"|scatterWithDataTensor|scatterWithUpdatesTensor|scatterNDWithDataTensor"
-    r"|scatterNDWithUpdatesTensor)\s*:"
+    r"\b(gatherAlongAxis(?:Tensor)?|gatherWithUpdatesTensor|gatherNDWithUpdatesTensor"
+    r"|scatterAlongAxis(?:Tensor)?|scatterWithDataTensor|scatterWithUpdatesTensor"
+    r"|scatterNDWithDataTensor|scatterNDWithUpdatesTensor)\s*:"
 )
+# ``@selector(scatterAlongAxis:...)`` asks whether the method exists; it moves nothing.
+_SELECTOR = re.compile(r"@selector\([^)]*\)")
 
 
 @pytest.mark.skipif(not _EMITTERS.is_dir(), reason="engine sources not in this install")
@@ -333,10 +377,8 @@ def test_forward_emitters_move_data_only_through_the_helper() -> None:
         if path.suffix not in {".h", ".mm"}:
             continue
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
-            code = line.split("//", 1)[0]
+            code = _SELECTOR.sub("", line.split("//", 1)[0])
             for m in _RAW_MOVE.finditer(code):
-                if "respondsToSelector" in code:
-                    continue
                 ok = allowed.get(path.name, set())
                 if ok is None or m.group(1) in ok:
                     continue

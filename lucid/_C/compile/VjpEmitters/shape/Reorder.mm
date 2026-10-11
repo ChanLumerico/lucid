@@ -210,6 +210,8 @@ public:
                 return false;
             MPSGraphTensor* zeros = [g constantWithScalar:0.0 shape:idx.shape dataType:go.dataType];
             MPSGraphTensor* ds = graph_scatter_set_dropping(g, go, ix, zeros, axis, extent);
+            if (ds == nil)
+                return false;
             bctx.accumulate_grad(node.inputs[0], from_tensor(ds));
         }
         if (node.inputs[2] >= 0) {

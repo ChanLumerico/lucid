@@ -179,11 +179,14 @@ inline MPSGraphTensor* graph_scatter_set_dropping(MPSGraph* g,
     // of ``base`` has its shape even where the batch is symbolic, which a
     // constant does not ("shape[0] (-1) should be a strictly positive value
     // for constant operation" aborted a dynamic-batch scatter).
-    MPSGraphTensor* padded =
-        [g concatTensor:base
-             withTensor:[g sliceTensor:base dimension:axis start:0 length:1 name:nil]
-              dimension:axis
-                   name:nil];
+    MPSGraphTensor* padded = [g concatTensor:base
+                                  withTensor:[g sliceTensor:base
+                                                  dimension:axis
+                                                      start:0
+                                                     length:1
+                                                       name:nil]
+                                   dimension:axis
+                                        name:nil];
     MPSGraphTensor* past_end = [g constantWithScalar:static_cast<double>(extent)
                                             dataType:ix.safe.dataType];
     MPSGraphTensor* sink = [g selectWithPredicateTensor:ix.in_range

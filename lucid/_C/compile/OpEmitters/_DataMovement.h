@@ -22,6 +22,12 @@
 // by broadcasting, an axis gather needs none.  Every other dtype goes to
 // MPSGraph untouched, so float graphs are the graphs they were.
 //
+// An overwrite cannot run on lanes either: each lane is its own scatter
+// element, so where two updates aim at one slot each lane picked its own
+// winner and the slot held half of one update and half of another.  It
+// scatters the update's int32 position instead (one element, one winner),
+// gathers the winning update whole and keeps ``data`` where nothing landed.
+//
 // A scatter that sums cannot run on lanes.  An int64 sum splits each update
 // into its high word and two low half-words, sums each in int32 and adds
 // them back with int64 arithmetic, which is exact: the high word is needed
@@ -107,6 +113,14 @@ inline MPSGraphTensor* lane_index(MPSGraph* g, MPSGraphTensor* idx, NSUInteger l
                                    name:nil];
 }
 
+// An int32 tensor of ``like``'s shape holding ``value``; the shape is read
+// from the graph, so a symbolic batch is fine.
+inline MPSGraphTensor* int32_filled(MPSGraph* g, MPSGraphTensor* like, double value) {
+    return [g broadcastTensor:[g constantWithScalar:value dataType:MPSDataTypeInt32]
+                toShapeTensor:[g shapeOfTensor:like name:nil]
+                         name:nil];
+}
+
 // The most updates one slot of an int32 half-word sum may take.
 constexpr std::int64_t kMaxHalfWordUpdates = std::int64_t{1} << 15;
 
@@ -144,10 +158,7 @@ inline MPSGraphTensor* scatter_add_int64(MPSGraph* g,
                                                  name:nil]
                        secondaryTensor:mask
                                   name:nil];
-    MPSGraphTensor* zeros =
-        [g multiplicationWithPrimaryTensor:[g castTensor:data toType:MPSDataTypeInt32 name:nil]
-                           secondaryTensor:[g constantWithScalar:0.0 dataType:MPSDataTypeInt32]
-                                      name:nil];
+    MPSGraphTensor* zeros = int32_filled(g, data, 0.0);
     const auto sum = [&](MPSGraphTensor* part, double scale) {
         MPSGraphTensor* s = [g scatterAlongAxis:axis
                                  withDataTensor:zeros
@@ -200,6 +211,43 @@ inline MPSGraphTensor* graph_gather(
     return src == data ? out : d::uncarry(g, out, dt);
 }
 
+namespace data_movement_detail {
+
+// An overwrite of a multi-lane dtype: which update wins each slot is
+// decided once, on its int32 position along ``axis``, and that update is
+// then read whole.
+inline MPSGraphTensor* scatter_set_whole(MPSGraph* g,
+                                         NSInteger axis,
+                                         MPSGraphTensor* data,
+                                         MPSGraphTensor* updates,
+                                         MPSGraphTensor* idx,
+                                         NSString* name) {
+    MPSGraphTensor* position = [g coordinateAlongAxis:axis
+                                      withShapeTensor:[g shapeOfTensor:updates name:nil]
+                                                 name:nil];
+    if (position.dataType != MPSDataTypeInt32)
+        position = [g castTensor:position toType:MPSDataTypeInt32 name:nil];
+    MPSGraphTensor* winner = [g scatterAlongAxis:axis
+                                  withDataTensor:int32_filled(g, data, -1.0)
+                                   updatesTensor:position
+                                   indicesTensor:idx
+                                            mode:MPSGraphScatterModeSet
+                                            name:name];
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:MPSDataTypeInt32];
+    MPSGraphTensor* read_at = [g maximumWithPrimaryTensor:winner secondaryTensor:zero name:nil];
+    MPSGraphTensor* written = graph_gather_along_axis(g, axis, updates, read_at);
+    if (written == nil)
+        return nil;
+    return [g selectWithPredicateTensor:[g greaterThanOrEqualToWithPrimaryTensor:winner
+                                                                 secondaryTensor:zero
+                                                                            name:nil]
+                    truePredicateTensor:written
+                   falsePredicateTensor:data
+                                   name:@"scatter_set_whole"];
+}
+
+}  // namespace data_movement_detail
+
 // ``scatterAlongAxis`` of ``updates`` into ``data`` (one dtype), exact for
 // every dtype it answers.  nil when MPSGraph cannot apply ``mode`` to the
 // dtype exactly; the emitter declines then.
@@ -225,16 +273,18 @@ inline MPSGraphTensor* graph_scatter_along_axis(MPSGraph* g,
         return d::scatter_add_int64(g, axis, data, updates, idx);
     if (mode != MPSGraphScatterModeSet)
         return nil;
+    if (d::lanes_of(dt) > 0)
+        return d::scatter_set_whole(g, axis, data, updates, idx, name);
+    // bool: one int8 element per value, so a slot cannot be torn.
     MPSGraphTensor* c = d::carry(g, data);
     MPSGraphTensor* u = d::carry(g, updates);
-    MPSGraphTensor* i = d::lane_index(g, idx, d::lanes_of(dt));
-    if (c == nil || u == nil || i == nil)
+    if (c == nil || u == nil)
         return nil;
     return d::uncarry(g,
                       [g scatterAlongAxis:axis
                            withDataTensor:c
                             updatesTensor:u
-                            indicesTensor:i
+                            indicesTensor:idx
                                      mode:mode
                                      name:name],
                       dt);
