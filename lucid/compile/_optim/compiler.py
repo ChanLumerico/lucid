@@ -187,6 +187,8 @@ def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
     if isinstance(opt, NAdam):
         return _CompiledNAdam(opt)
     if isinstance(opt, SparseAdam):
+        from lucid.compile._optim.sparse_adam import _CompiledSparseAdam
+
         return _CompiledSparseAdam(opt)
     if isinstance(opt, Rprop):
         return _CompiledRprop(opt)
@@ -239,6 +241,11 @@ _Slot = tuple[str, int, str]
 
 # A trace-time scalar lookup: name → 0-D tensor in the parameter's dtype.
 _ScalarFn = Callable[[str], Tensor]
+
+# One parameter's state buffers by name, and what an ``_update`` hook
+# returns: the new parameter and the new state.
+_State = dict[str, Tensor]
+_Update = tuple[Tensor, _State]
 
 _STRUCT_FORMAT: dict[_C_engine.Dtype, str] = {
     _C_engine.Dtype.F16: "e",
@@ -503,8 +510,11 @@ class _CompiledStepBase:
             return
         from lucid.optim.optimizer import Optimizer as _Optimizer
 
-        if opt._engines_built:
-            self.load_state_dict(_Optimizer.state_dict(opt))
+        # Keyed on the state itself, not on how the class keeps it: an
+        # optimizer with Python-side state (SparseAdam) never builds engines.
+        eager = _Optimizer.state_dict(opt)
+        if eager["state"]:
+            self.load_state_dict(eager)
         for name in _STATE_ENTRY_POINTS:
             opt.__dict__[name] = getattr(self, name)
 
@@ -584,9 +594,7 @@ class _CompiledStepBase:
                 continue
             entry: dict[str, object] = {}
             if self._EXPORTS_STEP:
-                entry["step"] = _lucid.tensor(
-                    self._steps[i], dtype=_lucid.int64
-                ).numpy()
+                entry["step"] = self._step_entry(i)
             scalar_dt = _lucid.float64 if p.dtype == _lucid.float64 else _lucid.float32
             for name in self._PSTATE_NAMES:
                 value = self._pstate[i].get(name)
@@ -622,8 +630,8 @@ class _CompiledStepBase:
             When the group count differs, or a saved buffer's shape does
             not match its parameter.
         """
-        import lucid as _lucid
         from lucid.autograd._grad_mode import no_grad
+        from lucid.optim.optimizer import _from_host
 
         loaded_groups = cast(list[dict[str, object]], sd["param_groups"])
         if len(loaded_groups) != len(self._opt.param_groups):
@@ -665,7 +673,10 @@ class _CompiledStepBase:
                         buf = self._state[i][name] = self._init_state(
                             i, name, groups[gi]
                         )
-                    src = _lucid.tensor(value, dtype=buf.dtype, device=buf.device)
+                    # The eager loader's host-array door: it keeps a 0-d
+                    # entry 0-d.
+                    host = _from_host(value, buf._impl.device)
+                    src = _wrap(_C_engine.astype(host, buf._impl.dtype))
                     if tuple(src.shape) != tuple(buf.shape):
                         raise ValueError(
                             f"load_state_dict: state {name!r} of parameter {i} has "
@@ -1147,6 +1158,12 @@ class _CompiledStepBase:
         """Update parameter ``i``'s scalar state after its ``step``-th step."""
         return None
 
+    def _step_entry(self, i: int) -> object:
+        """Parameter ``i``'s ``step`` as the eager checkpoint holds it: 0-d int64."""
+        import lucid as _lucid
+
+        return _lucid.tensor(self._steps[i], dtype=_lucid.int64).numpy()
+
     def _exports_state(self, i: int, name: str) -> bool:
         """Whether parameter ``i``'s buffer ``name`` goes into a checkpoint."""
         return True
@@ -1159,11 +1176,11 @@ class _CompiledStepBase:
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         """Emit one parameter's update; returns the new parameter and state."""
         raise NotImplementedError
 
@@ -1286,11 +1303,11 @@ class _CompiledSGD(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         wd_on, mom_on, nesterov = flags
@@ -1396,11 +1413,11 @@ class _CompiledAdam(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         wd_on, amsgrad = flags
@@ -1436,75 +1453,6 @@ class _CompiledAdamW(_CompiledAdam):
 
     _DECOUPLED = True
     _DEFAULT_WD = 1e-2
-
-
-# ── SparseAdam ──────────────────────────────────────────────────────
-
-
-@final
-class _CompiledSparseAdam(_CompiledStepBase):
-    r"""Compiled :class:`~lucid.optim.SparseAdam`.
-
-    The eager rule: dense moments, and a step of
-    :math:`\eta\sqrt{1-\beta_2^t}/(1-\beta_1^t) \cdot m / (\sqrt v + \varepsilon)`
-    — ``eps`` is not bias-corrected, unlike Adam.  Parameters without a
-    gradient are skipped, which the base class does for every optimizer.
-
-    See Also
-    --------
-    :class:`lucid.optim.SparseAdam` : eager counterpart.
-    """
-
-    @override
-    def _state_names(self, flags: _Flags) -> tuple[str, ...]:
-        return ("exp_avg", "exp_avg_sq")
-
-    @override
-    def _group_scalar_names(self, flags: _Flags) -> tuple[str, ...]:
-        return ("beta1", "one_minus_beta1", "beta2", "one_minus_beta2", "eps")
-
-    @override
-    def _param_scalar_names(self, flags: _Flags) -> tuple[str, ...]:
-        return ("step_size",)
-
-    @override
-    def _group_values(
-        self, group: dict[str, object], flags: _Flags
-    ) -> dict[str, float]:
-        betas = cast(Sequence[float], group.get("betas", (0.9, 0.999)))
-        b1, b2 = float(betas[0]), float(betas[1])
-        return {
-            "lr": _hp(group, "lr", 1e-3),
-            "eps": _hp(group, "eps", 1e-8),
-            "beta1": b1,
-            "one_minus_beta1": 1.0 - b1,
-            "beta2": b2,
-            "one_minus_beta2": 1.0 - b2,
-        }
-
-    @override
-    def _param_values(
-        self, i: int, step: int, gv: dict[str, float], flags: _Flags
-    ) -> dict[str, float]:
-        bc1 = 1.0 - gv["beta1"] ** step
-        bc2 = 1.0 - gv["beta2"] ** step
-        return {"step_size": gv["lr"] * (bc2**0.5) / bc1}
-
-    @override
-    def _update(
-        self,
-        p: Tensor,
-        g: Tensor,
-        state: dict[str, Tensor],
-        flags: _Flags,
-        gs: _ScalarFn,
-        ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
-        m = state["exp_avg"] * gs("beta1") + g * gs("one_minus_beta1")
-        v = state["exp_avg_sq"] * gs("beta2") + (g * g) * gs("one_minus_beta2")
-        denom = v.sqrt() + gs("eps")
-        new_p = p - (m / denom) * ps("step_size")
-        return new_p, {"exp_avg": m, "exp_avg_sq": v}
 
 
 # ── RMSprop ─────────────────────────────────────────────────────────
@@ -1582,11 +1530,11 @@ class _CompiledRMSprop(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         wd_on, mom_on, centered, small_w = flags
         if wd_on:
             g = g + gs("weight_decay") * p
@@ -1674,11 +1622,11 @@ class _CompiledAdagrad(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         if flags[0]:
             g = g + gs("weight_decay") * p
         s = state["sum"] + g * g
@@ -1736,11 +1684,11 @@ class _CompiledAdadelta(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         if flags[0]:
             g = g + gs("weight_decay") * p
         eps = gs("eps")
@@ -1812,11 +1760,11 @@ class _CompiledAdamax(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         if flags[0]:
@@ -1928,11 +1876,11 @@ class _CompiledNAdam(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         if flags[0]:
             g = g + gs("weight_decay") * p
         m = gs("beta1") * state["exp_avg"] + gs("one_minus_beta1") * g
@@ -2031,11 +1979,11 @@ class _CompiledRAdam(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         if flags[0]:
@@ -2142,11 +2090,11 @@ class _CompiledASGD(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         if flags[0]:
             g = g + gs("weight_decay") * p
         new_p = p * ps("decay") + ps("neg_eta") * g
@@ -2204,11 +2152,11 @@ class _CompiledRprop(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         ss = state["step_size"]
@@ -2289,11 +2237,11 @@ class _CompiledLBFGS(_CompiledStepBase):
         self,
         p: Tensor,
         g: Tensor,
-        state: dict[str, Tensor],
+        state: _State,
         flags: _Flags,
         gs: _ScalarFn,
         ps: _ScalarFn,
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    ) -> _Update:
         import lucid as _lucid
 
         s = p - state["prev_param"]

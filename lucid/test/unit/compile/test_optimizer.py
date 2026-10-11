@@ -101,9 +101,9 @@ OPTIMIZER_FACTORIES = [
 
 # Y-series closed the previous rejection list — every Lucid optimizer
 # *class* now compiles.  The few cases that retain caveats (LBFGS only
-# without closure / line search; SparseAdam runs dense Adam math without
-# the zero-grad-skip shortcut) are still listed in the supported set
-# because the fused-step usage doesn't exercise those caveats.
+# without closure / line search) are still listed in the supported set
+# because the fused-step usage doesn't exercise those caveats.  SparseAdam
+# compiles its lazy per-row rule (LCD-427, test_compiled_sparse_adam.py).
 # RMSprop(centered=True), the last refused configuration, compiles since
 # CHA-64.
 
