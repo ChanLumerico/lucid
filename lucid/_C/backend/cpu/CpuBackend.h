@@ -2075,7 +2075,7 @@ public:
             const float fa = static_cast<float>(alpha);
             for (std::size_t i = 0; i < n; ++i) {
                 const float x = xp[i];
-                qp[i] = (x >= 0.f ? 1.f : fa * std::exp(x)) * gp[i];
+                qp[i] = (x <= 0.f ? fa * std::exp(x) : 1.f) * gp[i];
             }
         } else if (dt == Dtype::F64) {
             const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
@@ -2083,7 +2083,7 @@ public:
             double* qp = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
                 const double x = xp[i];
-                qp[i] = (x >= 0.0 ? 1.0 : alpha * std::exp(x)) * gp[i];
+                qp[i] = (x <= 0.0 ? alpha * std::exp(x) : 1.0) * gp[i];
             }
         } else {
             ErrorBuilder("cpu_backend::elu_backward").not_implemented("dtype not supported");
@@ -2148,13 +2148,13 @@ public:
             const float s = static_cast<float>(kScale);
             const float sa = static_cast<float>(kScale * kAlpha);
             for (std::size_t i = 0; i < n; ++i)
-                qp[i] = (xp[i] >= 0.f ? s : sa * std::exp(xp[i])) * gp[i];
+                qp[i] = (xp[i] <= 0.f ? sa * std::exp(xp[i]) : s) * gp[i];
         } else if (dt == Dtype::F64) {
             const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
             const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
             double* qp = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
-                const double dx = xp[i] >= 0.0 ? kScale : kScale * kAlpha * std::exp(xp[i]);
+                const double dx = xp[i] <= 0.0 ? kScale * kAlpha * std::exp(xp[i]) : kScale;
                 qp[i] = dx * gp[i];
             }
         } else {
@@ -2358,10 +2358,10 @@ public:
                 float dx;
                 if (x <= -3.f)
                     dx = 0.f;
-                else if (x >= 3.f)
-                    dx = 1.f;
-                else
+                else if (x < 3.f)
                     dx = x / 3.f + 0.5f;
+                else
+                    dx = 1.f;
                 qp[i] = dx * gp[i];
             }
         } else if (dt == Dtype::F64) {
@@ -2373,10 +2373,10 @@ public:
                 double dx;
                 if (x <= -3.0)
                     dx = 0.0;
-                else if (x >= 3.0)
-                    dx = 1.0;
-                else
+                else if (x < 3.0)
                     dx = x / 3.0 + 0.5;
+                else
+                    dx = 1.0;
                 qp[i] = dx * gp[i];
             }
         } else {
@@ -12713,15 +12713,15 @@ private:
             auto* q = reinterpret_cast<float*>(ptr.get());
             const auto flo = static_cast<float>(lo), fhi = static_cast<float>(hi);
             for (std::size_t i = 0; i < n; ++i)
-                q[i] = (inclusive ? (p[i] >= flo && p[i] <= fhi) : (p[i] > flo && p[i] < fhi))
+                q[i] = (inclusive ? (p[i] >= flo && p[i] <= fhi) : !(p[i] <= flo || p[i] >= fhi))
                            ? 1.f
                            : 0.f;
         } else if (dt == Dtype::F64) {
             const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
             auto* q = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
-                q[i] =
-                    (inclusive ? (p[i] >= lo && p[i] <= hi) : (p[i] > lo && p[i] < hi)) ? 1.0 : 0.0;
+                q[i] = (inclusive ? (p[i] >= lo && p[i] <= hi) : !(p[i] <= lo || p[i] >= hi)) ? 1.0
+                                                                                              : 0.0;
         } else {
             ErrorBuilder("cpu_backend::in_range_mask").not_implemented("dtype not supported");
         }
@@ -12744,12 +12744,12 @@ private:
             auto* q = reinterpret_cast<float*>(ptr.get());
             const float fs = static_cast<float>(slope);
             for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= 0.f) ? 1.f : fs;
+                q[i] = (p[i] > 0.f) ? 1.f : fs;
         } else if (dt == Dtype::F64) {
             const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
             auto* q = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= 0.0) ? 1.0 : slope;
+                q[i] = (p[i] > 0.0) ? 1.0 : slope;
         } else {
             ErrorBuilder("cpu_backend::leaky_mask").not_implemented("dtype not supported");
         }
@@ -12811,7 +12811,7 @@ private:
             float* __restrict op = reinterpret_cast<float*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
                 const float g = gp[i];
-                op[i] = xp[i] > 0.f ? g : 0.f;
+                op[i] = xp[i] <= 0.f ? 0.f : g;
             }
         } else if (dt == Dtype::F64) {
             const double* __restrict gp = reinterpret_cast<const double*>(cg.ptr.get());
@@ -12819,7 +12819,7 @@ private:
             double* __restrict op = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i) {
                 const double g = gp[i];
-                op[i] = xp[i] > 0.0 ? g : 0.0;
+                op[i] = xp[i] <= 0.0 ? 0.0 : g;
             }
         } else {
             ErrorBuilder("cpu_backend::relu_backward").not_implemented("dtype not supported");

@@ -38,7 +38,8 @@ namespace lucid {
 // relu — AmpPolicy::KeepInput: ReLU is valid on integer types.
 const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 
-// dL/dx = (x > 0) * dL/dy: zero out gradient where x was non-positive.
+// dL/dx = 0 where x <= 0, else dL/dy.  The reference tests ``x <= 0``, so
+// a NaN input passes its gradient; testing ``x > 0`` dropped it.
 //
 // 3.4+ Phase A.1: dispatch to a single fused backend kernel rather than
 // composing positive_mask + multiply at the Storage layer.  The prior path
@@ -46,7 +47,7 @@ const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 // Storage boundaries, which MLX did not fuse into a single kernel — leaving
 // ~0.79 ms / step of overhead on ResNet-18 vs the reference framework.  The
 // backend now exposes :func:`IBackend::relu_backward` which on GPU lowers
-// to one ``where(greater(x, 0), g, 0)`` call and on CPU to one tight loop.
+// to one ``where(less_equal(x, 0), 0, g)`` call and on CPU to one tight loop.
 Storage ReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Shape flat{static_cast<std::int64_t>(n)};
@@ -57,9 +58,7 @@ Storage ReluBackward::grad_formula(const Storage& g) {
 TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
                                               const TensorImplPtr& x,
                                               const TensorImplPtr&) {
-    // mask = (x > 0): sign(relu(x)) gives 0 for x<=0 and 1 for x>0
-    auto mask = sign_op(relu_op(x));
-    return mul_op(g, mask);
+    return where_op(less_equal_op(x, zeros_like_op(x)), zeros_like_op(g), g);
 }
 
 // ── graph-mode derivatives ───────────────────────────────────────────────────
@@ -69,6 +68,11 @@ TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
 // with "Implement grad_formula_impl() to add support".  Each is built
 // from ops that are themselves differentiable, which is what makes the
 // gradient differentiable in turn.
+//
+// Every branch tests the condition the reference's backward tests, and
+// the other side is its ``else``.  That decides a NaN input, which no
+// comparison holds for: relu, relu6, elu, selu and hard_swish pass it the
+// gradient, leaky_relu gives it the slope.
 
 // leaky_relu'(x) = 1 where x > 0, slope elsewhere.
 TensorImplPtr LeakyReluBackward::grad_formula_impl(const TensorImplPtr& g,
@@ -87,8 +91,7 @@ TensorImplPtr SoftplusBackward::grad_formula_impl(const TensorImplPtr& g,
     return mul_op(g, sigmoid_op(x));
 }
 
-// elu'(x) = 1 for x > 0, and alpha*exp(x) = y + alpha below — written
-// through the saved output so the branch matches the forward exactly.
+// elu'(x) = alpha*exp(x) for x <= 0, and 1 elsewhere.
 TensorImplPtr EluBackward::grad_formula_impl(const TensorImplPtr& g,
                                              const TensorImplPtr& x,
                                              const TensorImplPtr& out) {
@@ -96,22 +99,22 @@ TensorImplPtr EluBackward::grad_formula_impl(const TensorImplPtr& g,
     // hand its output to the graph-mode formula, and reading it gave
     // "add: null input tensor".
     (void)out;
-    auto positive = greater_op(x, zeros_like_op(x));
+    auto negative = less_equal_op(x, zeros_like_op(x));
     auto negative_side = mul_op(full_like_op(x, alpha_), exp_op(x));
-    return mul_op(g, where_op(positive, ones_like_op(x), negative_side));
+    return mul_op(g, where_op(negative, negative_side, ones_like_op(x)));
 }
 
-// selu'(x) = scale for x > 0, and scale*alpha*exp(x) below.  The two
+// selu'(x) = scale*alpha*exp(x) for x <= 0, and scale elsewhere.  The two
 // constants are the paper's, and the forward holds them as literals.
 TensorImplPtr SeluBackward::grad_formula_impl(const TensorImplPtr& g,
                                               const TensorImplPtr& x,
                                               const TensorImplPtr&) {
     constexpr double kAlpha = 1.6732632423543772;
     constexpr double kScale = 1.0507009873554805;
-    auto positive = greater_op(x, zeros_like_op(x));
+    auto negative = less_equal_op(x, zeros_like_op(x));
     auto upper = full_like_op(x, kScale);
     auto lower = mul_op(full_like_op(x, kScale * kAlpha), exp_op(x));
-    return mul_op(g, where_op(positive, upper, lower));
+    return mul_op(g, where_op(negative, lower, upper));
 }
 
 // mish(x) = x * tanh(softplus(x)).  Product rule, with sigmoid the
@@ -141,26 +144,27 @@ TensorImplPtr HardSigmoidBackward::grad_formula_impl(const TensorImplPtr& g,
 }
 
 // hard_swish(x) = x * hard_sigmoid(x), so inside the band the derivative
-// is (2x + 3)/6; it is 0 below -3 and 1 above 3.
+// is (2x + 3)/6; it is 0 at and below -3 and 1 from 3 up, as the eager
+// kernel has it.  This one said ``x < -3`` and ``x > 3``, so the two
+// paths disagreed at the bounds.
 TensorImplPtr HardSwishBackward::grad_formula_impl(const TensorImplPtr& g,
                                                    const TensorImplPtr& x,
                                                    const TensorImplPtr&) {
-    auto below = less_op(x, full_like_op(x, -3.0));
-    auto above = greater_op(x, full_like_op(x, 3.0));
+    auto low = less_equal_op(x, full_like_op(x, -3.0));
+    auto inside = less_op(x, full_like_op(x, 3.0));
     auto inside_value = mul_op(add_op(mul_op(x, full_like_op(x, 2.0)), full_like_op(x, 3.0)),
                                full_like_op(x, 1.0 / 6.0));
-    auto slope = where_op(above, ones_like_op(x), where_op(below, zeros_like_op(x), inside_value));
+    auto slope = where_op(low, zeros_like_op(x), where_op(inside, inside_value, ones_like_op(x)));
     return mul_op(g, slope);
 }
 
-// relu6'(x) = 1 strictly inside (0, 6), 0 at and beyond both clamps.
+// relu6'(x) = 0 at and beyond both clamps, 1 elsewhere.
 TensorImplPtr Relu6Backward::grad_formula_impl(const TensorImplPtr& g,
                                                const TensorImplPtr& x,
                                                const TensorImplPtr&) {
-    auto above_low = greater_op(x, zeros_like_op(x));
-    auto below_high = less_op(x, full_like_op(x, 6.0));
-    auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zeros_like_op(x)),
-                          zeros_like_op(x));
+    auto low = less_equal_op(x, zeros_like_op(x));
+    auto high = greater_equal_op(x, full_like_op(x, 6.0));
+    auto slope = where_op(low, zeros_like_op(x), where_op(high, zeros_like_op(x), ones_like_op(x)));
     return mul_op(g, slope);
 }
 

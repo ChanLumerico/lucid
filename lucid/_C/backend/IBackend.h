@@ -1943,17 +1943,22 @@ public:
     // ``inclusive``, open when not.  Both are needed: the reference's
     // ``clamp`` backward passes the gradient at the bound and its
     // ``hardtanh``/``relu6`` backward does not, so the two ops that share
-    // this primitive want opposite ends of the same interval.
+    // this primitive want opposite ends of the same interval.  Each mode
+    // tests what its reference backward tests, which decides NaN: clamp's
+    // ``lo <= x <= hi`` is false (mask 0), hardtanh's ``x <= lo || x >= hi``
+    // is false too, so its open mask is 1.
     virtual Storage in_range_mask(
         const Storage& a, const Shape& shape, Dtype dt, double lo, double hi, bool inclusive) = 0;
 
-    // Returns slope*a[i] when a[i]<0, else a[i].  Used inside leaky-relu backward.
+    // Returns 1 where a[i] > 0, else slope — 0 and NaN included, as the
+    // reference's leaky-relu backward has it.
     virtual Storage leaky_mask(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;
 
     // Returns 1.0 where a[i] > 0, else 0.0.  Used in relu backward.
     virtual Storage positive_mask(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
-    // Fused ReLU backward: returns ``g`` where ``x > 0``, else ``0``.  Single-
+    // Fused ReLU backward: returns ``0`` where ``x <= 0``, else ``g`` — the
+    // reference's test, so a NaN input passes its gradient.  Single-
     // kernel alternative to ``multiply(g, positive_mask(x))`` — collapses the
     // 3-op chain (greater + astype + multiply) into one MLX expression that
     // MLX can fuse natively (or that GPU dispatches as ``where``).  Falls back
