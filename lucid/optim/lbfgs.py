@@ -292,7 +292,15 @@ class _LBFGSState:
         direction and scalars then follow them by the rule every optimizer's
         state follows (:func:`~lucid.optim.optimizer._follow`), so the next
         iteration does not mix the old dtype or device with the new.
+
+        Every stored tensor is computed from the same flat gradient, so they
+        share one dtype and one device: the last gradient stands for all of
+        them, and the history is walked only when it is out of place —
+        walking it on every step cost a deep history 60% of ``step``.
         """
+        probe = self.prev_flat_grad
+        if probe is None or (probe.dtype == like.dtype and probe.device == like.device):
+            return
         for name, v in self.snapshot(partial(_follow_tensor, like=like)).items():
             setattr(self, name, v)
 

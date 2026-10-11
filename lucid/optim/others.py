@@ -1009,6 +1009,8 @@ class SparseAdam(Optimizer):
         self._step: list[int] = [0] * self._n_params()
         self._exp_avg: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
         self._exp_avg_sq: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
+        # The parameter impl each pair of buffers was last made ready for.
+        self._moments_for: list[_C_engine.TensorImpl | None] = [None] * self._n_params()
 
     def _n_params(self) -> int:
         return sum(len(g["params"]) for g in self.param_groups)  # type: ignore[arg-type, misc]
@@ -1040,10 +1042,15 @@ class SparseAdam(Optimizer):
         ``.double()``, ``.half()``) by the rule every optimizer's state
         follows (:func:`~lucid.optim.optimizer._state_like`).  A parameter
         with no buffers yet, or whose shape no longer matches them, starts
-        from zero moments and a zero step count.
+        from zero moments and a zero step count.  A conversion gives the
+        parameter a new impl, so an unchanged impl skips the check — one
+        identity test per parameter, as the engine optimizers rebind.
         """
         m = self._exp_avg[idx]
         v = self._exp_avg_sq[idx]
+        if self._moments_for[idx] is param and m is not None and v is not None:
+            return m, v
+        self._moments_for[idx] = param
         if m is not None and v is not None:
             m = _state_like(m, param)
             v = _state_like(v, param)

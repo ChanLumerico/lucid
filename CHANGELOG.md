@@ -86,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - YOLO losses match on device; detectors return int64 labels
 
+- check one tensor before re-homing optimizer state (LCD-77)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
