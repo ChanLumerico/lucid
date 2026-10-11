@@ -7,9 +7,11 @@ graph bakes the batch dimension into a constant shape MPSGraph cannot infer:
   shape carries the batch);
 * a ``concatenate`` / ``stack`` on the **batch axis** (dim 0) — the joined dim
   is ``2*B``, which the dim-0 symbolic machinery can't represent;
-* a **batch-shaped factory** (``zeros`` / ``ones`` / ``full`` / ``arange`` /
-  ``eye`` sized like the input, e.g. ``zeros_like(x)`` or an RNN's zero hidden
-  init) — a constant with the batch in its shape;
+* a **batch-shaped constant** — anything the call builds out of nothing that
+  is sized like the input (``zeros_like(x)``, an RNN's zero hidden init,
+  ``arange(x.shape[0])``).  The trace folds such a constant into one feed
+  (``Tracer.fold_constants``) holding the trace-time value, so the gate is
+  given the feeds' shapes rather than the ops that built them;
 * a **permutation that moves the batch axis** off dim 0 (``x.T``,
   ``permute(1, 0)``) — the symbolic machinery assumes the batch stays at
   dim 0, and the executable answered a traced-batch-shaped result for every
@@ -34,14 +36,12 @@ static.  Only the ops above, which abort uncatchably or corrupt silently, need
 the up-front gate.
 """
 
+from collections.abc import Iterable, Sequence
+
 # Ops whose target shape carries the batch dimension verbatim.
 _BROADCAST_OPS: frozenset[str] = frozenset({"broadcast_to", "expand", "repeat", "tile"})
 # Concatenate / stack: unsafe only when the join axis IS the batch axis (dim 0).
 _JOIN_OPS: frozenset[str] = frozenset({"concatenate", "concat", "cat", "stack"})
-# Factory ops: unsafe only when the produced shape's leading dim is the batch.
-_FACTORY_OPS: frozenset[str] = frozenset(
-    {"zeros", "ones", "full", "arange", "eye", "linspace"}
-)
 
 # Ops whose answer depends on the length of the axis they act along, so the
 # batch axis may not be that axis.  (``embedding`` is its own op, and a table
@@ -86,7 +86,10 @@ def _out_shape(op: object) -> tuple[int, ...]:
 
 
 def graph_symbolic_safe(
-    graph: object, trace_batch: int, batch_ids: set[int] | None = None
+    graph: object,
+    trace_batch: int,
+    batch_ids: set[int] | None = None,
+    constants: Iterable[Sequence[int]] = (),
 ) -> bool:
     """Return ``True`` if ``graph`` can be compiled with a symbolic batch axis.
 
@@ -96,7 +99,7 @@ def graph_symbolic_safe(
         The recorded trace (its ``ops`` are scanned by name + attrs + shape).
     trace_batch : int
         The leading (batch) size of the user input at trace time — used to tell a
-        batch-shaped factory (``zeros_like(x)`` → leading dim == ``trace_batch``)
+        batch-shaped constant (``zeros_like(x)`` → an axis of ``trace_batch``)
         from a concrete-shaped one (a fixed positional-encoding table, say).
     batch_ids : set of int, optional
         Trace ids of the inputs that carry the batch.  The axis rules —
@@ -104,6 +107,11 @@ def graph_symbolic_safe(
         however indirectly, by one of them: splitting a fused q/k/v weight
         along its axis 0 has nothing to do with the batch.  ``None`` treats
         every op as fed by the batch.
+    constants : iterable of sequence of int, optional
+        Shapes of the feeds the call built itself — neither an argument nor
+        the model's state.  One with an axis as long as ``trace_batch`` is
+        taken for a constant sized from the batch: its trace-time value would
+        be fed to every batch size.
 
     Returns
     -------
@@ -111,6 +119,8 @@ def graph_symbolic_safe(
         ``False`` if any op would bake the batch into a constant MPSGraph can't
         symbolicise; ``True`` otherwise.
     """
+    if any(trace_batch in tuple(shape) for shape in constants):
+        return False
     carrying = set(batch_ids) if batch_ids is not None else None
     for op in getattr(graph, "ops", []):
         name = getattr(op, "name", "")
@@ -127,10 +137,6 @@ def graph_symbolic_safe(
                     return False
             else:
                 return False  # unknown axis → conservatively unsafe
-        if name in _FACTORY_OPS:
-            shape = _out_shape(op)
-            if shape and shape[0] == trace_batch:
-                return False
         inputs = list(getattr(op, "inputs", []))
         fed = carrying is None or any(i in carrying for i in inputs)
         if carrying is not None and fed:

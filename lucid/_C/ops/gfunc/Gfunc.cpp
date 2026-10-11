@@ -82,6 +82,13 @@ finalize(Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_
                                         requires_grad);
 }
 
+// A factory's result, declared to an active compile trace as made from
+// nothing (``compile::traced_factory``) — a constant to it.
+inline TensorImplPtr made_from_nothing(TensorImplPtr out) {
+    compile::traced_factory(out);
+    return out;
+}
+
 }  // namespace
 
 // Create a zero-filled tensor on the requested device.
@@ -97,6 +104,7 @@ TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool require
     // consumers see a fresh impl pointer and mint a duplicate trace
     // id, breaking the MPSGraph DAG.
     if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_factory(out);
         trc->on_op_io({}, out);
     }
     return out;
@@ -111,6 +119,7 @@ TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires
     auto s = make_ones_storage(shape, dt, device);
     auto out = finalize(std::move(s), shape, dt, device, requires_grad);
     if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_factory(out);
         trc->on_op_io({}, out);
     }
     return out;
@@ -135,6 +144,7 @@ full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool req
     // the MPSGraph DAG (which then disconnects every other param's
     // backward path through it).
     if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_factory(out);
         trc->on_op_io({}, out);
     }
     return out;
@@ -148,7 +158,7 @@ full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool req
 TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"empty", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
-    return finalize(std::move(s), shape, dt, device, requires_grad);
+    return made_from_nothing(finalize(std::move(s), shape, dt, device, requires_grad));
 }
 
 // Create an N×M matrix with ones on diagonal k.
@@ -167,7 +177,7 @@ TensorImplPtr eye_op(
     Shape shape{N, M};
     OpScopeFull scope{"eye", device, dt, shape};
     auto s = backend::Dispatcher::for_device(device).eye(N, M, k, dt);
-    return finalize(std::move(s), shape, dt, device, requires_grad);
+    return made_from_nothing(finalize(std::move(s), shape, dt, device, requires_grad));
 }
 
 namespace {
@@ -264,8 +274,8 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
         compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
         break;
     }
-    return finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device), shape, dt, device,
-                    requires_grad);
+    return made_from_nothing(finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device),
+                                      shape, dt, device, requires_grad));
 }
 
 // Create a 1-D tensor with num evenly spaced values between start and stop
@@ -322,8 +332,8 @@ TensorImplPtr linspace_op(
         compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
         break;
     }
-    return finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device), shape, dt, device,
-                    requires_grad);
+    return made_from_nothing(finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device),
+                                      shape, dt, device, requires_grad));
 }
 
 // Extract a diagonal from a 2-D matrix, or construct a 2-D matrix from a
@@ -426,8 +436,9 @@ TensorImplPtr logspace_op(double start,
     default:
         ErrorBuilder("logspace").not_implemented("dtype not supported");
     }
-    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
-                    dt, device, requires_grad);
+    return made_from_nothing(
+        finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape, dt,
+                 device, requires_grad));
 }
 
 // ── axis-scatter operands ─────────────────────────────────────────────────────

@@ -362,7 +362,10 @@ def __getattr__(name: str) -> object:
 
 @contextmanager
 def _tracing(
-    watch: Iterable[object] = (), module: _Module | None = None
+    watch: Iterable[object] = (),
+    module: _Module | None = None,
+    *,
+    fold_constants: bool = False,
 ) -> Iterator[Tracer]:
     """Install a fresh :class:`Tracer` for the calling thread.
 
@@ -387,6 +390,16 @@ def _tracing(
         value read from one would go stale once it changes (an optimizer
         step, ``load_state_dict``). Core ML export leaves it out — its
         weights are constants of the package anyway.
+    fold_constants : bool, optional, keyword-only, default=False
+        Leave out of the recording every op that reads nothing the trace
+        sees, so a constant built on the spot (``lucid.tensor([...])
+        .to(x.device)``, ``lucid.arange(n).float()``) reaches the first
+        recorded op as one feed instead of as ops — on another device,
+        those made the trace mixed-device and the call eager. Only for a
+        caller whose ``watch`` and ``module`` cover every live tensor the
+        call reads: anything left unwatched would be folded into its
+        trace-time value. Tensors from outside the trace that a folded
+        value was computed from are listed in ``tracer.folded_roots``.
 
     Yields
     ------
@@ -422,6 +435,7 @@ def _tracing(
     from lucid.compile._core.signature import leaf_tensors
 
     tracer = _C_engine.compile.Tracer()
+    tracer.fold_constants = fold_constants
     state = () if module is None else (*module.parameters(), *module.buffers())
     for argument in leaf_tensors((watch, state), {}):
         tracer.watch(argument._impl)

@@ -192,6 +192,28 @@ void register_compile(py::module_& m) {
         .def_property("redraw_rng", &Tracer::redraw_rng, &Tracer::set_redraw_rng,
                       "Whether default-generator draws become feeds drawn again on "
                       "every run (compile) or stay ops in the recording (Core ML).")
+        .def_property("fold_constants", &Tracer::fold_constants, &Tracer::set_fold_constants,
+                      "Whether an op that reads nothing the trace sees is left out, its "
+                      "output a constant feed (compile, which watches every live tensor) "
+                      "or recorded (every other tracer).")
+        .def_property_readonly(
+            "folded_roots",
+            [](const Tracer& t) {
+                py::list out;
+                for (const auto& impl : t.folded_roots())
+                    out.append(impl);
+                return out;
+            },
+            "Tensors from outside the trace that a left-out op read; a folded "
+            "value is stale once one of them is written.")
+        .def(
+            "made_here",
+            [](const Tracer& t, const lucid::TensorImplPtr& impl) {
+                return t.made_here(impl.get());
+            },
+            py::arg("impl"),
+            "Whether ``impl`` is a constant the trace made itself, shared with "
+            "nothing outside it.")
         .def(
             "outside_writes",
             [](const Tracer& t) {

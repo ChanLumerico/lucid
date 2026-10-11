@@ -1,0 +1,66 @@
+{
+ "cpu-coreml": {
+  "ops": [
+   ["arange", [], [[0, [4], "Dtype.I64", "Device.CPU"]], [["start", "0.0"], ["step", "1.0"]]],
+   ["astype", [2], [[1, [4], "Dtype.F32", "Device.CPU"]], [["dst_dtype", "6"]]],
+   ["eye", [], [[3, [4, 4], "Dtype.F32", "Device.CPU"]], []],
+   ["split_at", [5], [[4, [1, 4], "Dtype.F32", "Device.CPU"], [6, [1, 4], "Dtype.F32", "Device.CPU"], [7, [2, 4], "Dtype.F32", "Device.CPU"]], [["axis", "0"], ["indices", "[1, 2]"]]],
+   ["squeeze", [6], [[8, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["full", [], [[9, [4], "Dtype.F32", "Device.CPU"]], [["fill_value", "2.0"]]],
+   ["add", [11, 1], [[10, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["mul", [10, 8], [[12, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["add", [12, 9], [[13, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["add", [13, 15], [[14, [4], "Dtype.F32", "Device.CPU"]], []]
+  ],
+  "feeds": [[2, [4]], [5, [4, 4]], [11, [4]], [15, [4]]]
+ },
+ "cpu-optimizer": {
+  "ops": [
+   ["arange", [], [[0, [4], "Dtype.I64", "Device.CPU"]], [["start", "0.0"], ["step", "1.0"]]],
+   ["astype", [2], [[1, [4], "Dtype.F32", "Device.CPU"]], [["dst_dtype", "6"]]],
+   ["eye", [], [[3, [4, 4], "Dtype.F32", "Device.CPU"]], []],
+   ["split_at", [5], [[4, [1, 4], "Dtype.F32", "Device.CPU"], [6, [1, 4], "Dtype.F32", "Device.CPU"], [7, [2, 4], "Dtype.F32", "Device.CPU"]], [["axis", "0"], ["indices", "[1, 2]"]]],
+   ["squeeze", [6], [[8, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["full", [], [[9, [4], "Dtype.F32", "Device.CPU"]], [["fill_value", "2.0"]]],
+   ["add", [11, 1], [[10, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["mul", [10, 8], [[12, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["add", [12, 9], [[13, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["add", [13, 15], [[14, [4], "Dtype.F32", "Device.CPU"]], []]
+  ],
+  "feeds": [[2, [4]], [5, [4, 4]], [11, [4]], [15, [4]]]
+ },
+ "metal-coreml": {
+  "ops": [
+   ["arange", [], [[0, [4], "Dtype.I64", "Device.GPU"]], [["start", "0.0"], ["step", "1.0"]]],
+   ["astype", [2], [[1, [4], "Dtype.F32", "Device.GPU"]], [["dst_dtype", "6"]]],
+   ["eye", [], [[3, [4, 4], "Dtype.F32", "Device.GPU"]], []],
+   ["split_at", [5], [[4, [1, 4], "Dtype.F32", "Device.GPU"], [6, [1, 4], "Dtype.F32", "Device.GPU"], [7, [2, 4], "Dtype.F32", "Device.GPU"]], [["axis", "0"], ["indices", "[1, 2]"]]],
+   ["squeeze", [6], [[8, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["full", [], [[9, [4], "Dtype.F32", "Device.GPU"]], [["fill_value", "2.0"]]],
+   ["add", [11, 1], [[10, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["mul", [10, 8], [[12, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["add", [12, 9], [[13, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["contiguous", [15], [[14, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["to_device", [14], [[16, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["add", [13, 16], [[17, [4], "Dtype.F32", "Device.GPU"]], []]
+  ],
+  "feeds": [[2, [4]], [5, [4, 4]], [11, [4]], [15, [4]]]
+ },
+ "metal-optimizer": {
+  "ops": [
+   ["arange", [], [[0, [4], "Dtype.I64", "Device.GPU"]], [["start", "0.0"], ["step", "1.0"]]],
+   ["astype", [2], [[1, [4], "Dtype.F32", "Device.GPU"]], [["dst_dtype", "6"]]],
+   ["eye", [], [[3, [4, 4], "Dtype.F32", "Device.GPU"]], []],
+   ["split_at", [5], [[4, [1, 4], "Dtype.F32", "Device.GPU"], [6, [1, 4], "Dtype.F32", "Device.GPU"], [7, [2, 4], "Dtype.F32", "Device.GPU"]], [["axis", "0"], ["indices", "[1, 2]"]]],
+   ["squeeze", [6], [[8, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["full", [], [[9, [4], "Dtype.F32", "Device.GPU"]], [["fill_value", "2.0"]]],
+   ["add", [11, 1], [[10, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["mul", [10, 8], [[12, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["add", [12, 9], [[13, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["contiguous", [15], [[14, [4], "Dtype.F32", "Device.CPU"]], []],
+   ["to_device", [14], [[16, [4], "Dtype.F32", "Device.GPU"]], []],
+   ["add", [13, 16], [[17, [4], "Dtype.F32", "Device.GPU"]], []]
+  ],
+  "feeds": [[2, [4]], [5, [4, 4]], [11, [4]], [15, [4]]]
+ }
+}

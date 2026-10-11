@@ -41,6 +41,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -211,6 +212,38 @@ public:
     bool redraw_rng() const { return redraw_rng_; }
     void set_redraw_rng(bool on) { redraw_rng_ = on; }
 
+    // Whether an op that reads nothing the trace sees is left out of the
+    // recording: its output stays unseen, and an op that the trace does
+    // record reads it as one constant feed, already on that op's device.
+    // ``lucid.tensor([...]).to(x.device)`` then costs a feed, not a CPU op
+    // in a Metal trace (which ran the whole call eagerly).  Off by default,
+    // because "unseen" means "constant" only to a consumer that watches
+    // every live tensor the call reads — its arguments and its model's
+    // state.  The optimizer, decode and segmented tracers do not, and an
+    // op on their state would be frozen at its trace-time value; Core ML
+    // export folds on its own, knowing which shapes follow a flexible
+    // input.  ``lucid.compile.compile`` turns it on.
+    bool fold_constants() const { return fold_constants_; }
+    void set_fold_constants(bool on) { fold_constants_ = on; }
+
+    // ``out`` was made from nothing by the op now recording — a factory
+    // (``zeros`` / ``arange`` / ``eye`` …), never a random draw.  With
+    // folding on, the op is left out and ``out`` is a constant; otherwise
+    // nothing changes.
+    void on_factory(const TensorImplPtr& out);
+
+    // The tensors from outside the trace that a left-out op read — a
+    // literal, a captured tensor.  A folded value holds what they held at
+    // trace time, so a consumer that keeps the folded value must notice
+    // when one of them is written (its ``version`` moves) and trace again.
+    const std::vector<TensorImplPtr>& folded_roots() const { return folded_roots_; }
+
+    // Whether ``impl`` is a constant the trace made itself — a factory's
+    // output, or a left-out op's — which no tensor outside the trace shares.
+    bool made_here(const TensorImpl* impl) const {
+        return made_.count(const_cast<TensorImpl*>(impl)) != 0;
+    }
+
     // A value the trace knows — an op's output, an input, a parameter or a
     // random draw — read on the host (``item`` / ``tolist`` / ``numpy``,
     // and so ``float(t)`` or ``if t > 0``).  What the host does with it is
@@ -341,6 +374,18 @@ private:
     // An op's output, a feed, or an argument of the traced call.
     bool sees(const TensorImpl* impl) const;
 
+    // ``on_op_io`` for an op the recording keeps.
+    void record_io(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
+    // With folding on, whether this ``on_op_io`` call is absorbed: the op
+    // has read nothing the trace sees, so it is held out of the recording.
+    bool fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
+    // Notes what a held-out op read and made.
+    void keep(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
+    // ``on_inplace_write`` for a target the trace made itself.
+    void write_made(const TensorImplPtr& target, const TensorImplPtr& value);
+    // ``impl``'s id, minting a feed for it when the trace has not seen it.
+    TensorId feed_id(const TensorImplPtr& impl);
+
     TraceGraph graph_;
     // Maps the raw :class:`TensorImpl` pointer of every traced tensor
     // (op output *or* external feed) back to the :type:`TensorId` it
@@ -372,6 +417,15 @@ private:
     // Owning: the call's arguments (``watch``), keyed by raw pointer.
     std::unordered_map<TensorImpl*, TensorImplPtr> watched_;
     bool redraw_rng_ = true;
+    bool fold_constants_ = false;
+    // The open op's node while it is held out of the recording; it goes
+    // back in if a later ``on_op_io`` of the same op names a traced input
+    // (an op that re-records its full input list), and is dropped at the
+    // next op.
+    std::optional<OpNode> held_;
+    // Owning: every constant the trace made itself (see ``made_here``).
+    std::unordered_map<TensorImpl*, TensorImplPtr> made_;
+    std::vector<TensorImplPtr> folded_roots_;
 };
 
 // Returns the :class:`Tracer` currently installed on the calling
@@ -434,6 +488,14 @@ traced_derive(std::string_view name, const TensorImplPtr& src, TensorImplPtr out
     if (auto* trc = current_tracer())
         trc->on_derived(name, {src}, out);
     return out;
+}
+
+// The hook every factory owes the active tracer, if one is installed:
+// ``out`` was made from nothing.  A random draw is not a factory — its value
+// differs per call — and does not call this.
+inline void traced_factory(const TensorImplPtr& out) {
+    if (auto* trc = current_tracer())
+        trc->on_factory(out);
 }
 
 }  // namespace lucid::compile

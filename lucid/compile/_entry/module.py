@@ -44,9 +44,11 @@ from typing import (
 # stubs, so we name the surface we actually use here.
 class _TracerLike(Protocol):
     graph: object
-    external_feeds: dict[int, object]
+    external_feeds: dict[int, _C_engine.TensorImpl]
 
     def lookup_id(self, impl: object) -> int | None: ...
+
+    def made_here(self, impl: object) -> bool: ...
 
 
 class _ExecutableLike(Protocol):
@@ -120,6 +122,10 @@ def _extract_return_impls(
         if isinstance(v, Tensor):
             impl = _unwrap(v)
             tid = tracer.lookup_id(impl)
+            if tid is None and tracer.made_here(impl):
+                # A constant the trace made and folded: eager answers a new
+                # tensor on every call, and so does the compiled call.
+                return ("constant", v)
             if tid is None:
                 # Tensor that flows out untouched (external feed
                 # returned as-is, or a host-precomputed factory the
@@ -166,6 +172,11 @@ def _repack_outputs(spec: object, outs_wrapped: list[object]) -> object:
         return outs_wrapped[spec[1]]
     if tag == "passthrough":
         return spec[1]
+    if tag == "constant":
+        from lucid._tensor.tensor import Tensor
+
+        constant = spec[1]
+        return constant.clone() if isinstance(constant, Tensor) else constant
     if tag == "scalar":
         return spec[1]
     if tag == "tuple":
@@ -225,6 +236,15 @@ class _CacheEntry:
     # buffer's EMA, a counter).  Their new values trail the returned ones;
     # each run copies them back.  See ``_core/buffer_writes``.
     written: list[object] = field(default_factory=list)
+    # ``(tensor, version)`` for each tensor from outside the trace that a
+    # folded constant was computed from (``Tracer.folded_roots``).  The
+    # constant holds what they held at trace time; once one is written, the
+    # entry is stale and the call traces again.
+    roots: tuple[tuple[_C_engine.TensorImpl, int], ...] = ()
+
+    def stale(self) -> bool:
+        """Whether a tensor a folded constant was computed from has been written."""
+        return any(impl.version != version for impl, version in self.roots)
 
 
 class CompiledModule[**P, R](_ModuleWrapper):
@@ -863,6 +883,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
             return run_eager(self._model, args, kwargs)
 
         entry = self._cache.get(key)
+        if entry is not None and entry.stale():
+            del self._cache[key]
+            entry = None
         if entry is None:
             entry = self._compile_for(key, args, kwargs)
             # The first trace may have downgraded symbolic → static (gate
@@ -903,14 +926,18 @@ class CompiledModule[**P, R](_ModuleWrapper):
     # ── Internals ────────────────────────────────────────────────
 
     def _want_symbolic(
-        self, graph: object, args: tuple[object, ...], tracer: object = None
+        self,
+        graph: object,
+        args: tuple[object, ...],
+        tracer: _TracerLike | None = None,
+        kwargs: dict[str, object] | None = None,
     ) -> bool:
         """Whether to attempt a symbolic-batch lowering for this traced graph.
 
         Returns the cached ``_symbolic_resolved`` once resolved; on the first
         trace, ``True`` only if ``dynamic=True`` was requested AND the safety
         gate (:func:`graph_symbolic_safe`) clears the graph of batch-baking ops
-        (broadcast / batch-axis join / batch-shaped factory).  Otherwise the
+        (broadcast / batch-axis join / batch-shaped constant).  Otherwise the
         compile uses per-shape static caching.
         """
         if self._symbolic_resolved is not None:
@@ -934,7 +961,27 @@ class CompiledModule[**P, R](_ModuleWrapper):
                     tid = lookup(a._impl)
                     if tid is not None:
                         batch_ids.add(int(tid))
-        return graph_symbolic_safe(graph, int(first.shape[0]), batch_ids)
+        constants = self._built_in_call(tracer, args, kwargs or {})
+        return graph_symbolic_safe(graph, int(first.shape[0]), batch_ids, constants)
+
+    def _built_in_call(
+        self,
+        tracer: _TracerLike | None,
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+    ) -> list[tuple[int, ...]]:
+        """Shapes of the feeds the call built itself — a folded constant, a
+        literal — rather than took as an argument or the model's state.  One
+        sized from the batch holds the trace-time batch's value."""
+        if tracer is None:
+            return []
+        state = (*self._model.parameters(), *self._model.buffers())
+        given = {id(t._impl) for t in (*leaf_tensors(args, kwargs), *state)}
+        return [
+            tuple(impl.shape)
+            for impl in tracer.external_feeds.values()
+            if id(impl) not in given
+        ]
 
     def _emit(
         self,
@@ -1035,7 +1082,12 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # autograd-on path, minus the (unused) backward wiring.
         t_compile_start = time.perf_counter()
         with no_grad():
-            with _tracing(watch=(args, kwargs), module=self._model) as tracer:
+            # Every live tensor the call reads is watched — its arguments,
+            # the model's parameters and buffers — so what the trace does not
+            # see is a constant, folded into one feed (``Tracer.fold_constants``).
+            with _tracing(
+                watch=(args, kwargs), module=self._model, fold_constants=True
+            ) as tracer:
                 # Module.__call__ wants Tensor positionals; the runtime
                 # may receive non-Tensor extras (CompileModule preserves
                 # whatever the user passed).  Cast each at the boundary.
@@ -1089,7 +1141,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # The decision is cached in ``_symbolic_resolved`` so later input shapes
         # key consistently (the model's symbolic-safety is graph-structural, the
         # same across batch sizes).
-        use_dynamic = self._want_symbolic(graph, args, tracer)
+        use_dynamic = self._want_symbolic(graph, args, tracer, kwargs)
         exe = self._emit(graph, ext, use_dynamic, explicit_outputs)
         if exe is None and use_dynamic:
             use_dynamic = False  # symbolic lowering failed → per-shape static
@@ -1131,6 +1183,8 @@ class CompiledModule[**P, R](_ModuleWrapper):
             graph_json=trace_to_json(graph),
             compile_ms=(time.perf_counter() - t_compile_start) * 1000.0,
             written=written,
+            # Read after ``outside_writes`` put the written tensors back.
+            roots=tuple((impl, impl.version) for impl in tracer.folded_roots),
         )
         return entry
 

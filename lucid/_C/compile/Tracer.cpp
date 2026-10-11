@@ -26,6 +26,14 @@ namespace {
 // Per-thread active Tracer.  nullptr means "no tracing" for this thread —
 // the OpScopeFull hook does nothing.
 thread_local Tracer* g_current = nullptr;
+
+// A copy of ``impl``'s current values, owned by no one else.
+TensorImplPtr snapshot(const TensorImplPtr& impl) {
+    Storage copy = backend::Dispatcher::for_device(impl->device())
+                       .clone(impl->storage(), impl->shape(), impl->dtype());
+    return std::make_shared<TensorImpl>(std::move(copy), impl->shape(), impl->dtype(),
+                                        impl->device(), false);
+}
 }  // namespace
 
 Tracer* current_tracer() {
@@ -37,6 +45,15 @@ void set_current_tracer(Tracer* t) {
 }
 
 void Tracer::on_op_enter(std::string_view name, Device device, Dtype dtype, Shape shape) {
+    // The op before this one is over; if it was held out, it stays out, and
+    // the id it drew goes back when nothing drew one since.  A trace then
+    // numbers its values as if the folded ops had never run, so two calls
+    // that differ only in how they build a constant draw the same ids.
+    if (held_) {
+        if (!held_->outputs.empty() && held_->outputs[0].id + 1 == graph_.next_id)
+            graph_.next_id = held_->outputs[0].id;
+        held_.reset();
+    }
     // Mint a fresh TensorId for the (single, Phase-1.1) output.  Phase 1.2 will
     // append additional TensorMeta entries here for multi-output ops; the
     // append-after-mint pattern keeps ids monotone within one TraceGraph.
@@ -50,6 +67,12 @@ void Tracer::on_op_enter(std::string_view name, Device device, Dtype dtype, Shap
 }
 
 void Tracer::on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
+    // First, since a held-out op has no node in ``graph_.ops``.
+    if (!fold_constants_ || !fold(inputs, output))
+        record_io(inputs, output);
+}
+
+void Tracer::record_io(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
     // Defensive: if on_op_enter never ran for this op (e.g. an unexpected
     // hook ordering), there is no node to attach I/O to.  Drop silently
     // rather than corrupting the IR.
@@ -208,31 +231,52 @@ void Tracer::on_rng_feed(std::string_view name, const TensorImplPtr& output) {
 void Tracer::on_inplace_write(const TensorImplPtr& target, const TensorImplPtr& value) {
     if (!target || !value || target.get() == value.get())
         return;
+    if (made_here(target.get())) {
+        write_made(target, value);
+        return;
+    }
     // From outside the trace — never seen, or seen only as a feed — and not
     // written yet in this trace: keep its current value to put back later.
     const auto seen = impl_to_id_.find(target.get());
     const bool outside = seen == impl_to_id_.end() || external_feeds_.count(seen->second) != 0;
     const bool first = std::none_of(outside_originals_.begin(), outside_originals_.end(),
                                     [&](const auto& kv) { return kv.first.get() == target.get(); });
-    if (outside && first) {
-        Storage copy = backend::Dispatcher::for_device(target->device())
-                           .clone(target->storage(), target->shape(), target->dtype());
-        outside_originals_.emplace_back(
-            target, std::make_shared<TensorImpl>(std::move(copy), target->shape(), target->dtype(),
-                                                 target->device(), false));
+    if (outside && first)
+        outside_originals_.emplace_back(target, snapshot(target));
+    feed_id(target);
+    impl_to_id_[target.get()] = feed_id(value);
+}
+
+TensorId Tracer::feed_id(const TensorImplPtr& impl) {
+    const auto it = impl_to_id_.find(impl.get());
+    if (it != impl_to_id_.end())
+        return it->second;
+    const TensorId fresh = graph_.next_id++;
+    impl_to_id_[impl.get()] = fresh;
+    external_feeds_[fresh] = impl;
+    live_refs_.push_back(impl);
+    return fresh;
+}
+
+void Tracer::write_made(const TensorImplPtr& target, const TensorImplPtr& value) {
+    // Nothing outside the trace shares ``target``, so the write is not one a
+    // compiled call carries back: it is the next value of a constant.
+    const auto it = impl_to_id_.find(target.get());
+    if (it == impl_to_id_.end() && !sees(value.get())) {
+        // A constant written with a constant is still one.  A value from
+        // outside the trace is copied in, frozen like any folded read of it.
+        if (!made_here(value.get()))
+            keep({value}, nullptr);
+        return;
     }
-    auto feed = [this](const TensorImplPtr& impl) {
-        const auto it = impl_to_id_.find(impl.get());
-        if (it != impl_to_id_.end())
-            return it->second;
-        const TensorId fresh = graph_.next_id++;
-        impl_to_id_[impl.get()] = fresh;
-        external_feeds_[fresh] = impl;
-        live_refs_.push_back(impl);
-        return fresh;
-    };
-    feed(target);
-    impl_to_id_[target.get()] = feed(value);
+    if (it != impl_to_id_.end()) {
+        // Already read as a feed, by ops recorded before this write: they
+        // keep the value from before it, which the buffer is about to lose.
+        const auto feed = external_feeds_.find(it->second);
+        if (feed != external_feeds_.end() && feed->second.get() == target.get())
+            feed->second = snapshot(target);
+    }
+    impl_to_id_[target.get()] = feed_id(value);
 }
 
 void Tracer::restore_outside_writes() {
@@ -274,8 +318,15 @@ void Tracer::on_derived(std::string_view name,
         return;
     const auto is = [&](const TensorImplPtr& src) { return src.get() == out.get(); };
     const auto seen = [&](const TensorImplPtr& src) { return sees(src.get()); };
-    if (std::any_of(srcs.begin(), srcs.end(), is) || std::none_of(srcs.begin(), srcs.end(), seen))
+    if (std::any_of(srcs.begin(), srcs.end(), is))
         return;
+    if (std::none_of(srcs.begin(), srcs.end(), seen)) {
+        // Made from the trace's own constants only, ``out`` is one too.
+        const auto made = [&](const TensorImplPtr& src) { return !src || made_here(src.get()); };
+        if (fold_constants_ && std::all_of(srcs.begin(), srcs.end(), made))
+            made_.emplace(out.get(), out);
+        return;
+    }
     on_op_enter(name, out->device(), out->dtype(), out->shape());
     on_op_io(srcs, out);
 }
@@ -286,9 +337,69 @@ void Tracer::mark_unsupported(std::string why) {
 }
 
 void Tracer::on_op_attr(std::string_view key, AttributeValue value) {
-    if (graph_.ops.empty())
+    OpNode* node = held_ ? &*held_ : (graph_.ops.empty() ? nullptr : &graph_.ops.back());
+    if (node != nullptr)
+        node->attrs.insert_or_assign(std::string(key), std::move(value));
+}
+
+void Tracer::on_factory(const TensorImplPtr& out) {
+    if (!fold_constants_ || !out)
         return;
-    graph_.ops.back().attrs.insert_or_assign(std::string(key), std::move(value));
+    if (!held_ && !graph_.ops.empty()) {
+        held_ = std::move(graph_.ops.back());
+        graph_.ops.pop_back();
+    }
+    made_.emplace(out.get(), out);
+}
+
+bool Tracer::fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
+    const auto traced = [&](const TensorImplPtr& in) { return in && sees(in.get()); };
+    const bool reads_traced = std::any_of(inputs.begin(), inputs.end(), traced);
+    if (held_) {
+        if (!reads_traced) {
+            keep(inputs, output);
+            return true;
+        }
+        // A later call names a traced input (an op re-recording its full
+        // input list): the op is recorded after all.
+        graph_.ops.push_back(std::move(*held_));
+        held_.reset();
+        if (output)
+            made_.erase(output.get());
+        return false;
+    }
+    // Only an op's first wiring decides; a node that already has inputs was
+    // recorded.  An op with no tensor input at all is a random draw kept as
+    // an op, or the extra output of a recorded one — never a constant here
+    // (factories say so through ``on_factory``).
+    if (reads_traced || graph_.ops.empty() || !graph_.ops.back().inputs.empty())
+        return false;
+    const auto tensor = [](const TensorImplPtr& in) { return in != nullptr; };
+    const auto aliases = [&](const TensorImplPtr& in) { return in.get() == output.get(); };
+    if (std::none_of(inputs.begin(), inputs.end(), tensor) ||
+        (output && std::any_of(inputs.begin(), inputs.end(), aliases)))
+        return false;
+    held_ = std::move(graph_.ops.back());
+    graph_.ops.pop_back();
+    keep(inputs, output);
+    return true;
+}
+
+void Tracer::keep(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
+    bool pure = true;
+    for (const auto& in : inputs) {
+        if (!in || made_here(in.get()))
+            continue;
+        pure = false;
+        const auto same = [&](const TensorImplPtr& r) { return r.get() == in.get(); };
+        if (std::none_of(folded_roots_.begin(), folded_roots_.end(), same))
+            folded_roots_.push_back(in);
+    }
+    // A view of a tensor from outside the trace is that tensor: a write
+    // through it has to reach the tensor, so it is not a constant of ours.
+    // It stays unseen all the same, and a recorded op reads it as a feed.
+    if (output && (pure || !output->is_aliased()))
+        made_.emplace(output.get(), output);
 }
 
 }  // namespace lucid::compile
