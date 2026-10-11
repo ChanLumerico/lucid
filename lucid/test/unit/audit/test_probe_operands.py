@@ -311,3 +311,24 @@ def test_a_quantisation_layer_gets_the_qconfig_it_demands() -> None:
     module = _try_construct(qat.Linear)
     assert module is not None
     assert getattr(module, "qconfig", None) is not None
+
+
+def test_probe_factories_keep_the_callers_shape() -> None:
+    """LCD-391: every ``as_*`` turned a 0-d array into shape ``(1,)`` —
+    ``np.ascontiguousarray`` adds a dimension, and so does the converter
+    given ``dtype=`` / ``device=`` (LCD-399)."""
+    factories = (
+        _probe.as_f32,
+        _probe.as_f64,
+        _probe.as_int,
+        _probe.as_complex,
+        _probe.as_complex64,
+    )
+    for factory in factories:
+        for shape in ((), (1,), (2, 3)):
+            got = factory(np.full(shape, 2.0))
+            assert tuple(got.shape) == shape, (factory.__name__, shape)
+    assert tuple(_probe.as_f32(np.array(2.0), device="metal").shape) == ()
+    assert tuple(_probe.as_int(np.array(2), device="metal").shape) == ()
+    assert tuple(_probe.tensor_of(np.array(3), dtype=lucid.int32).shape) == ()
+    assert tuple(_probe.tensor_of(np.array(3.0), lucid.float32, "metal").shape) == ()

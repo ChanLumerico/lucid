@@ -35,6 +35,7 @@ import lucid
 import lucid.optim.lr_scheduler
 import lucid.utils.cache
 import lucid.utils.data
+from lucid.test.audit import _probe
 from lucid.test.audit._axes import Axis, Context
 from lucid.test.audit._result import Finding, Status
 
@@ -200,7 +201,7 @@ _BUILD_BY_NAME: dict[str, Any] = {
     "activation": lambda: lucid.quantization.MinMaxObserver,
     "weight": lambda: lucid.quantization.MinMaxObserver,
     "scale": lambda: lucid.tensor(np.array(0.02, dtype=np.float32)),
-    "zero_point": lambda: lucid.tensor(np.array(0), dtype=lucid.int64),
+    "zero_point": lambda: _probe.tensor_of(np.array(0), dtype=lucid.int64),
     "qscheme": lambda: lucid.quantization.QScheme.PER_TENSOR_AFFINE,
     "qdtype": lambda: lucid.quantization.quint8,
     "self_attention_cache": lucid.utils.cache.DynamicCache,

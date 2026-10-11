@@ -96,44 +96,45 @@ def dtype_of(name: str) -> Any:
 # ── tensor factories ─────────────────────────────────────────────────────────
 
 
+def tensor_of(array: Any, dtype: Any = None, device: str = "cpu") -> Any:
+    """``lucid.tensor(array, dtype=, device=)`` from a contiguous copy, shape kept.
+
+    Every audit tensor built from an array goes through here.  Two things
+    turned a 0-d probe into a 1-element one (LCD-391): ``np.ascontiguousarray``
+    always returns at least one dimension, and ``lucid.tensor`` given a 0-d
+    ndarray together with ``dtype=`` or ``device=`` returns shape ``(1,)`` as
+    well (LCD-399, the converter's bug).  The caller's shape is restored here,
+    so a finding is about the op under test, not the converter.
+    """
+    host = np.asarray(array)
+    out = lucid.tensor(np.ascontiguousarray(host), dtype=dtype, device=device)
+    return out.reshape(()) if host.ndim == 0 and out.ndim != 0 else out
+
+
+def _as(array: Any, np_dtype: Any, dtype: Any, device: str) -> Any:
+    return tensor_of(np.asarray(array, dtype=np_dtype), dtype, device)
+
+
 def as_f64(array: Any, device: str = "cpu") -> Any:
     """A float64 tensor — the working precision for every numeric check."""
-    return lucid.tensor(
-        np.ascontiguousarray(np.asarray(array, dtype=np.float64)),
-        dtype=lucid.float64,
-        device=device,
-    )
+    return _as(array, np.float64, lucid.float64, device)
 
 
 def as_f32(array: Any, device: str = "cpu") -> Any:
-    return lucid.tensor(
-        np.ascontiguousarray(np.asarray(array, dtype=np.float32)), device=device
-    )
+    return _as(array, np.float32, lucid.float32, device)
 
 
 def as_complex64(array: Any, device: str = "cpu") -> Any:
     """A complex64 tensor — what the fft family accepts."""
-    return lucid.tensor(
-        np.ascontiguousarray(np.asarray(array, dtype=np.complex64)),
-        dtype=lucid.complex64,
-        device=device,
-    )
+    return _as(array, np.complex64, lucid.complex64, device)
 
 
 def as_complex(array: Any, device: str = "cpu") -> Any:
-    return lucid.tensor(
-        np.ascontiguousarray(np.asarray(array, dtype=np.complex128)),
-        dtype=lucid.complex128,
-        device=device,
-    )
+    return _as(array, np.complex128, lucid.complex128, device)
 
 
 def as_int(array: Any, device: str = "cpu") -> Any:
-    return lucid.tensor(
-        np.ascontiguousarray(np.asarray(array, dtype=np.int64)),
-        dtype=lucid.int64,
-        device=device,
-    )
+    return _as(array, np.int64, lucid.int64, device)
 
 
 def covector(n: int, seed: int = SEED_A) -> np.ndarray:

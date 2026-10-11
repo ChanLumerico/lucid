@@ -46,7 +46,7 @@ def _rebuild(original: Any, array: Any, *, keep_integer: bool = False) -> Any:
     if "float32" in text or "float16" in text:
         return _probe.as_f32(array)
     if keep_integer and "int" in text:
-        return lucid.tensor(np.asarray(array, dtype=np.int64), dtype=dtype)
+        return _probe.tensor_of(np.asarray(array, dtype=np.int64), dtype)
     return _probe.as_f64(array)
 
 

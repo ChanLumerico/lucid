@@ -2126,7 +2126,7 @@ class DtypeAxis(Axis):
                 continue
 
             def build(array: Any, follow: bool, _dtype: Any = dtype) -> Any:
-                return lucid.tensor(
+                return _probe.tensor_of(
                     np.asarray(array, dtype=complex if follow else None),
                     dtype=_dtype if follow else None,
                 )
@@ -2215,13 +2215,9 @@ class DtypeAxis(Axis):
 
                 def build(array: Any, follow: bool, _d: str = device) -> Any:
                     if not follow:
-                        return lucid.tensor(
-                            np.ascontiguousarray(array), dtype=None, device=_d
-                        )
-                    return lucid.tensor(
-                        np.ascontiguousarray(array.astype(_probe.numpy_of(name))),
-                        dtype=dt,
-                        device=_d,
+                        return _probe.tensor_of(array, device=_d)
+                    return _probe.tensor_of(
+                        array.astype(_probe.numpy_of(name)), dtype=dt, device=_d
                     )
 
                 try:
@@ -2610,10 +2606,9 @@ def _produces_float64(fn: Any, call: Call) -> bool:
     """
 
     def build(array: np.ndarray, follow: bool) -> Any:
-        return lucid.tensor(
-            np.ascontiguousarray(array.astype(np.float32) if follow else array),
+        return _probe.tensor_of(
+            array.astype(np.float32) if follow else array,
             dtype=lucid.float32 if follow else None,
-            device="cpu",
         )
 
     try:
