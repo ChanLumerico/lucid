@@ -30,7 +30,11 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._output import GenerationOutput, ModelOutput
+from lucid.models._output import (
+    DiffusionModelOutput,
+    GenerationOutput,
+    ModelOutput,
+)
 from lucid.models._tasks import ImageGenerationModel
 from lucid.models._utils._generative import resolve_generation_device
 from lucid.models.generative._common._transformers import (
@@ -155,7 +159,7 @@ class MeanFlowModel(PretrainedModel):
     >>> z = lucid.randn((1, 4, 8, 8))
     >>> t = lucid.tensor([1.0])
     >>> r = lucid.tensor([0.0])
-    >>> model(z, r, t).shape
+    >>> model(z, r, t).sample.shape
     (1, 4, 8, 8)
     """
 
@@ -262,7 +266,7 @@ class MeanFlowModel(PretrainedModel):
         r: Tensor,
         t: Tensor,
         labels: Tensor | None = None,
-    ) -> Tensor:
+    ) -> DiffusionModelOutput:
         r"""Evaluate the average-velocity field.
 
         Parameters
@@ -279,8 +283,10 @@ class MeanFlowModel(PretrainedModel):
 
         Returns
         -------
-        Tensor
-            ``(B, out_channels, H, W)`` — :math:`u_\theta(z, r, t)`.
+        DiffusionModelOutput
+            ``sample`` of shape ``(B, out_channels, H, W)`` —
+            :math:`u_\theta(z, r, t)`.  ``loss`` stays ``None``: the
+            objective lives in :class:`MeanFlowForImageGeneration`.
         """
         tokens = self.patch_embed(z)
         tokens = tokens.reshape(tokens.shape[0], tokens.shape[1], -1).permute(0, 2, 1)
@@ -301,7 +307,7 @@ class MeanFlowModel(PretrainedModel):
 
         for block in self.blocks:
             tokens = cast(Tensor, block(tokens, cond))
-        return self._unpatchify(self.final(tokens, cond))
+        return DiffusionModelOutput(sample=self._unpatchify(self.final(tokens, cond)))
 
 
 class MeanFlowForImageGeneration(ImageGenerationModel):
@@ -394,9 +400,9 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         inside = ((t >= low) & (t <= high)).float().reshape(-1, 1, 1, 1)
 
         with lucid.no_grad():
-            uncond = self.mean_flow.forward(z, t, t, None)
+            uncond = self.mean_flow.forward(z, t, t, None).sample
             cond = (
-                self.mean_flow.forward(z, t, t, labels)
+                self.mean_flow.forward(z, t, t, labels).sample
                 if labels is not None
                 else uncond
             )
@@ -454,8 +460,10 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
 
         v = self._velocity_target(z, t, noise, images, labels)
 
+        # ``jvp`` differentiates a function of tensors to a tensor, so the
+        # field hands it the prediction, not the output record around it.
         def field(z_: Tensor, r_: Tensor, t_: Tensor) -> Tensor:
-            return self.mean_flow.forward(z_, r_, t_, labels)
+            return self.mean_flow.forward(z_, r_, t_, labels).sample
 
         u, dudt = lucid.func.jvp(
             field,
@@ -558,6 +566,6 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
                 r_value = 1.0 - (index + 1) / steps
                 t = lucid.full((n_samples,), t_value, device=device, dtype=z.dtype)
                 r = lucid.full((n_samples,), r_value, device=device, dtype=z.dtype)
-                u = self.mean_flow.forward(z, r, t, labels)
+                u = self.mean_flow.forward(z, r, t, labels).sample
                 z = z - (t_value - r_value) * u
         return GenerationOutput(samples=z)

@@ -648,6 +648,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - diag_embed puts the matrix at dim1 / dim2
 
+- DiT, MeanFlow and SD forwards return ModelOutputs
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

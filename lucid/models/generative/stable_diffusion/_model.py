@@ -37,13 +37,13 @@ two costs very nearly twice a batch of one at 512 pixels.
 
 from dataclasses import dataclass
 from collections.abc import Callable
-from typing import ClassVar, Self, cast, override
+from typing import ClassVar, Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageGenerationModel
-from lucid.models._output import ModelOutput
+from lucid.models._output import GenerationOutput, ModelOutput
 from lucid.models.generative.stable_diffusion._autoencoder import AutoencoderKL
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 from lucid.models.generative.stable_diffusion._scheduler import (
@@ -297,22 +297,28 @@ class StableDiffusionModel(PretrainedModel):
 
 
 class StableDiffusionForImageGeneration(ImageGenerationModel):
-    """Stable Diffusion posed as a sampler.
+    """Stable Diffusion posed as a diffusion model: the objective and a sampler.
 
     Parameters
     ----------
     config : StableDiffusionConfig
         The variant to build.
 
+    Attributes
+    ----------
+    stable_diffusion : StableDiffusionModel
+        The autoencoder, U-Net and noising schedule.
+
     Notes
     -----
     Reference: Rombach et al., CVPR 2022 (arXiv:2112.10752), §4.3.
 
-    :meth:`generate` runs the reverse process and decodes; nothing is
-    trained. Conditioning arrives already encoded, and for
-    classifier-free guidance the caller supplies the unconditional
-    sequence too — usually the text encoder's output for the empty
-    string, which is not the same thing as zeros.
+    :meth:`forward` is one training step of the denoising objective, as
+    in every other image-generation family; :meth:`generate` runs the
+    reverse process and decodes. Conditioning arrives already encoded,
+    and for classifier-free guidance the caller supplies the
+    unconditional sequence too — usually the text encoder's output for
+    the empty string, which is not the same thing as zeros.
 
     Examples
     --------
@@ -325,9 +331,15 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
     ...                                attention_head_dim=32,
     ...                                cross_attention_dim=16, context_length=4)
     >>> model = StableDiffusionForImageGeneration(config).eval()
-    >>> image = model.generate(lucid.randn((1, 4, 16)), num_inference_steps=2)
-    >>> image.shape
+    >>> context = lucid.randn((1, 4, 16))
+    >>> model.generate(context, num_inference_steps=2).samples.shape
     (1, 3, 32, 32)
+
+    Calling the model trains it — the loss is always reported:
+
+    >>> out = model(lucid.randn((1, 3, 32, 32)), context)
+    >>> out.loss.shape, out.noise_pred.shape
+    ((), (1, 4, 8, 8))
     """
 
     config_class: ClassVar[type[StableDiffusionConfig]] = StableDiffusionConfig
@@ -348,7 +360,7 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
         eta: float = 0.0,
         latent: Tensor | None = None,
         sampler: str = "pndm",
-    ) -> Tensor:
+    ) -> GenerationOutput:
         r"""Sample an image from the conditioning.
 
         Parameters
@@ -375,8 +387,9 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
 
         Returns
         -------
-        Tensor
-            ``(B, out_channels, sample_size, sample_size)``.
+        GenerationOutput
+            ``samples`` of shape ``(B, out_channels, sample_size,
+            sample_size)`` — decoded pixels, not the latent.
 
         Raises
         ------
@@ -397,14 +410,16 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
         >>> model = StableDiffusionForImageGeneration(config).eval()
         >>> context = lucid.randn((1, 4, 16))
         >>> start = lucid.randn((1, 4, 8, 8))
-        >>> image = model.generate(context, num_inference_steps=2, latent=start)
+        >>> image = model.generate(
+        ...     context, num_inference_steps=2, latent=start).samples
         >>> image.shape
         (1, 3, 32, 32)
 
         PNDM draws no noise of its own, so the starting latent is the whole
         seed: pass the same one and the same image comes back.
 
-        >>> again = model.generate(context, num_inference_steps=2, latent=start)
+        >>> again = model.generate(
+        ...     context, num_inference_steps=2, latent=start).samples
         >>> bool((again == image).all())
         True
 
@@ -414,11 +429,11 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
 
         >>> uncond = lucid.randn((1, 4, 16))  # stands in for the empty caption
         >>> unguided = model.generate(context, uncond, num_inference_steps=2,
-        ...                           guidance_scale=1.0, latent=start)
+        ...                           guidance_scale=1.0, latent=start).samples
         >>> bool((unguided == image).all())
         True
         >>> guided = model.generate(context, uncond, num_inference_steps=2,
-        ...                         latent=start)
+        ...                         latent=start).samples
         >>> bool((guided == image).all())
         False
         """
@@ -476,25 +491,35 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
                 previous = steps[index + 1] if index + 1 < len(steps) else -1
                 latent = inner.scheduler.step(prediction, step, previous, latent, eta)
 
-        return inner.decode_latent(latent)
+        return GenerationOutput(samples=inner.decode_latent(latent))
 
     @override
-    def forward(self, context: Tensor, num_inference_steps: int = 50) -> Tensor:
-        """Alias for :meth:`generate` with default guidance disabled.
+    def forward(
+        self,
+        images: Tensor,
+        context: Tensor,
+        timestep: Tensor | None = None,
+    ) -> StableDiffusionOutput:
+        r"""One training step of the denoising objective.
 
         Parameters
         ----------
+        images : Tensor
+            ``(B, in_channels, H, W)`` — pixels; the frozen first stage
+            encodes them.
         context : Tensor
-            ``(B, L, cross_attention_dim)``.
-        num_inference_steps : int, default=50
-            Network evaluations.
+            ``(B, L, cross_attention_dim)`` — :math:`\tau_\theta(y)`.
+        timestep : Tensor or None, optional
+            ``(B,)``.  Drawn uniformly when omitted, which is what
+            training does.
 
         Returns
         -------
-        Tensor
-            ``(B, out_channels, sample_size, sample_size)``.
+        StableDiffusionOutput
+            The prediction, the noised latent, and the loss
+            :math:`\|\epsilon - \epsilon_\theta\|_2^2` — always present,
+            since a task model is called to be trained.
         """
-        return cast(
-            Tensor,
-            self.generate(context, num_inference_steps=num_inference_steps),
+        return self.stable_diffusion.forward(
+            images, context, timestep, return_loss=True
         )

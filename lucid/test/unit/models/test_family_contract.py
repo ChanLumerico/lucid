@@ -536,16 +536,6 @@ _TASK_OUTPUTS: dict[str, tuple[type[ModelOutput], ...]] = {
     "language-modeling": (CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput),
 }
 
-# Classes whose forward still returns a bare tensor.  Pinned strict so each
-# one surfaces the moment it is fixed.
-_BARE_TENSOR_FORWARD = {
-    "DiTModel": "LCD-203 sweep: the denoiser returns its prediction tensor",
-    "MeanFlowModel": "LCD-203 sweep: the velocity network returns a tensor",
-    "StableDiffusionForImageGeneration": (
-        "LCD-203 sweep: forward aliases generate() and returns the images"
-    ),
-}
-
 
 def _output_violation(task: str, model_class: type) -> str | None:
     """Why ``model_class.forward`` breaks its task's output contract."""
@@ -569,14 +559,9 @@ def _registered_classes() -> list[tuple[str, type]]:
     return [seen[k] for k in sorted(seen)]
 
 
-def _task_param(task: str, cls: type) -> object:
-    reason = _BARE_TENSOR_FORWARD.get(cls.__name__)
-    marks = [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
-    return pytest.param(task, cls, id=cls.__name__, marks=marks)
-
-
 @pytest.mark.parametrize(
-    "task,model_class", [_task_param(t, c) for t, c in _registered_classes()]
+    "task,model_class",
+    [pytest.param(t, c, id=c.__name__) for t, c in _registered_classes()],
 )
 def test_forward_returns_the_task_output(task: str, model_class: type) -> None:
     violation = _output_violation(task, model_class)

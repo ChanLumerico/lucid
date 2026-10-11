@@ -52,7 +52,7 @@ class TestBackbone:
             lucid.tensor([10.0, 500.0]),
             lucid.tensor([1, 3], dtype=lucid.int64),
         )
-        assert float(out.abs().max().item()) == 0.0
+        assert float(out.sample.abs().max().item()) == 0.0
 
     def test_the_gate_is_what_separates_adaln_from_adaln_zero(self) -> None:
         """Only the gated block is the identity at initialisation.
@@ -169,7 +169,7 @@ class TestBackbone:
             lucid.tensor([100.0]),
             lucid.tensor([2], dtype=lucid.int64),
         )
-        assert out.shape == (1, 8, 8, 8)
+        assert out.sample.shape == (1, 8, 8, 8)
 
     def test_in_context_conditioning_strips_its_extra_tokens(self) -> None:
         """The two conditioning tokens must not reach the decoder.
@@ -181,19 +181,19 @@ class TestBackbone:
         """
         model = DiTModel(_tiny(conditioning="in_context")).eval()
         out = model(lucid.randn((1, 4, 8, 8)), lucid.tensor([50.0]))
-        assert out.shape == (1, 8, 8, 8)
+        assert out.sample.shape == (1, 8, 8, 8)
 
     def test_the_decoder_emits_two_channels_per_input_channel(self) -> None:
         """A noise *and* a diagonal covariance, per ADM's parameterisation."""
         model = DiTModel(_tiny()).eval()
         out = model(lucid.randn((1, 4, 8, 8)), lucid.tensor([1.0]))
-        assert out.shape[1] == 8 == 2 * 4
+        assert out.sample.shape[1] == 8 == 2 * 4
 
     def test_a_fixed_variance_model_emits_one(self) -> None:
         """With ``learn_sigma`` off the decoder is back to ``C`` channels."""
         model = DiTModel(_tiny(learn_sigma=False, out_channels=4)).eval()
         out = model(lucid.randn((1, 4, 8, 8)), lucid.tensor([1.0]))
-        assert out.shape[1] == 4
+        assert out.sample.shape[1] == 4
 
 
 class TestScaling:

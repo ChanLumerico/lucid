@@ -20,7 +20,11 @@ import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._output import GenerationOutput, ModelOutput
+from lucid.models._output import (
+    DiffusionModelOutput,
+    GenerationOutput,
+    ModelOutput,
+)
 from lucid.models._tasks import ImageGenerationModel
 from lucid.models._utils._generative import (
     make_beta_schedule,
@@ -201,7 +205,8 @@ class DiTModel(PretrainedModel):
     ...                    depth=2, num_heads=4, num_classes=10)
     >>> model = DiTModel(config).eval()
     >>> latent = lucid.randn((1, 4, 8, 8))
-    >>> model(latent, lucid.tensor([10.0]), lucid.tensor([3], dtype=lucid.int64)).shape
+    >>> labels = lucid.tensor([3], dtype=lucid.int64)
+    >>> model(latent, lucid.tensor([10.0]), labels).sample.shape
     (1, 8, 8, 8)
     """
 
@@ -315,7 +320,7 @@ class DiTModel(PretrainedModel):
         latent: Tensor,
         timesteps: Tensor,
         labels: Tensor | None = None,
-    ) -> Tensor:
+    ) -> DiffusionModelOutput:
         r"""Predict the noise (and covariance) in a noised latent.
 
         Parameters
@@ -329,9 +334,11 @@ class DiTModel(PretrainedModel):
 
         Returns
         -------
-        Tensor
-            ``(B, out_channels, H, W)`` — noise, and the covariance
-            beside it when ``learn_sigma``.
+        DiffusionModelOutput
+            ``sample`` of shape ``(B, out_channels, H, W)`` — noise, and
+            the covariance beside it when ``learn_sigma``.  ``loss`` stays
+            ``None``: the objective lives in
+            :class:`DiTForImageGeneration`.
         """
         tokens = self.patch_embed(latent)
         tokens = tokens.reshape(tokens.shape[0], tokens.shape[1], -1).permute(0, 2, 1)
@@ -358,7 +365,7 @@ class DiTModel(PretrainedModel):
             for block in self.blocks:
                 tokens = cast(DiTBlock, block)(tokens, cond)
 
-        return self._unpatchify(self.final(tokens, cond))
+        return DiffusionModelOutput(sample=self._unpatchify(self.final(tokens, cond)))
 
 
 class DiTForImageGeneration(ImageGenerationModel):
@@ -464,7 +471,7 @@ class DiTForImageGeneration(ImageGenerationModel):
                 labels,
             )
 
-        prediction = self.dit.forward(noised, steps.float(), labels)
+        prediction = self.dit.forward(noised, steps.float(), labels).sample
         noise_pred, variance = self._split(prediction)
         loss = ((noise_pred - noise) ** 2).mean()
         return DiTOutput(loss=loss, noise_pred=noise_pred, variance_pred=variance)
@@ -552,7 +559,7 @@ class DiTForImageGeneration(ImageGenerationModel):
             for index, step in enumerate(grid):
                 t = min(step, total - 1)
                 ts = lucid.full((n_samples,), float(t), device=device, dtype=z.dtype)
-                eps, _ = self._split(self.dit.forward(z, ts, labels))
+                eps, _ = self._split(self.dit.forward(z, ts, labels).sample)
 
                 alpha_bar = self.alphas_cumprod[t]
                 previous = grid[index + 1] if index + 1 < len(grid) else 0

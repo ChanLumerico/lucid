@@ -87,7 +87,7 @@ import numpy as np
 import lucid
 import lucid.models  # noqa: F401 — populates the registry
 import lucid.weights as weights_mod
-from lucid.models import create_model
+from lucid.models import DiffusionModelOutput, create_model
 from lucid.models._registry import _REGISTRY
 from lucid.nn._shadow import shadow_alloc
 from lucid.weights import WeightsEnum
@@ -676,9 +676,9 @@ def _compare_latent_diffusion(model_name: str, kind: str, identifier: str) -> di
                     class_labels=ref.from_numpy(labels),
                 ).sample.numpy()
                 answer = denoiser(lucid.from_numpy(values.copy()), lucid.from_numpy(steps), lucid.from_numpy(labels))
-                if not isinstance(answer, lucid.Tensor):
-                    return {"error": "DiT denoiser did not return a tensor"}
-                got = answer.numpy()
+                if not isinstance(answer, DiffusionModelOutput):
+                    return {"error": "DiT denoiser did not return a DiffusionModelOutput"}
+                got = answer.sample.numpy()
                 export_comparison = _compare_fields([("noise_and_variance", wanted, got)])
                 _dit_original_frequencies(theirs)
                 wanted = theirs(

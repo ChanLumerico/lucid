@@ -15,6 +15,7 @@ Each is paired with the mis-wiring it would catch.
 import pytest
 
 import lucid
+from lucid.models import DiffusionModelOutput
 from lucid.models.generative.mean_flow import (
     MeanFlowConfig,
     MeanFlowForImageGeneration,
@@ -68,7 +69,8 @@ class TestField:
             lucid.tensor([0.0, 0.2]),
             lucid.tensor([1.0, 0.7]),
         )
-        assert float(out.abs().max().item()) == 0.0
+        assert isinstance(out, DiffusionModelOutput) and out.loss is None
+        assert float(out.sample.abs().max().item()) == 0.0
 
     def test_the_field_reads_both_times(self) -> None:
         """u depends on r and on t separately, not on one of them.
@@ -84,8 +86,8 @@ class TestField:
         _wake(model)
         z = lucid.randn((1, 4, 8, 8))
         t = lucid.tensor([0.9])
-        a = model(z, lucid.tensor([0.1]), t)
-        b = model(z, lucid.tensor([0.5]), t)
+        a = model(z, lucid.tensor([0.1]), t).sample
+        b = model(z, lucid.tensor([0.5]), t).sample
         assert float((a - b).abs().max().item()) > 1e-6, "u ignores r"
 
     @pytest.mark.parametrize("mode", ["t_interval", "t_r", "t_r_interval", "interval"])
@@ -97,7 +99,7 @@ class TestField:
         """
         model = MeanFlowModel(_tiny(time_conditioning=mode)).eval()
         out = model(lucid.randn((1, 4, 8, 8)), lucid.tensor([0.2]), lucid.tensor([0.8]))
-        assert out.shape == (1, 4, 8, 8)
+        assert out.sample.shape == (1, 4, 8, 8)
 
 
 class TestObjective:
@@ -165,7 +167,7 @@ class TestObjective:
         v = lucid.randn((2, 4, 8, 8))
 
         def field(z_: lucid.Tensor, r_: lucid.Tensor, t_: lucid.Tensor) -> lucid.Tensor:
-            return model.forward(z_, r_, t_, None)
+            return model.forward(z_, r_, t_, None).sample
 
         zeros_r, ones_t = lucid.zeros_like(r), lucid.ones_like(t)
         _, both = lucid.func.jvp(field, (z, r, t), (v, zeros_r, ones_t))
@@ -192,14 +194,15 @@ class TestObjective:
         class _TimeRamp(MeanFlowModel):
             """``u = 1000 t`` — no dependence on ``z``, a large ∂_t u."""
 
-            def forward(  # type: ignore[override]
+            def forward(
                 self,
                 z: lucid.Tensor,
                 r: lucid.Tensor,
                 t: lucid.Tensor,
                 labels: lucid.Tensor | None = None,
-            ) -> lucid.Tensor:
-                return lucid.ones_like(z) * 1000.0 * t.reshape(-1, 1, 1, 1)
+            ) -> DiffusionModelOutput:
+                ramp = lucid.ones_like(z) * 1000.0 * t.reshape(-1, 1, 1, 1)
+                return DiffusionModelOutput(sample=ramp)
 
         model = MeanFlowForImageGeneration(config)
         model.mean_flow = _TimeRamp(config)
@@ -242,14 +245,14 @@ class TestSampling:
         config = _tiny()
 
         class _Ones(MeanFlowModel):
-            def forward(  # type: ignore[override]
+            def forward(
                 self,
                 z: lucid.Tensor,
                 r: lucid.Tensor,
                 t: lucid.Tensor,
                 labels: lucid.Tensor | None = None,
-            ) -> lucid.Tensor:
-                return lucid.ones_like(z)
+            ) -> DiffusionModelOutput:
+                return DiffusionModelOutput(sample=lucid.ones_like(z))
 
         model = MeanFlowForImageGeneration(config)
         model.mean_flow = _Ones(config)
@@ -271,14 +274,14 @@ class TestSampling:
         config = _tiny()
 
         class _Ones(MeanFlowModel):
-            def forward(  # type: ignore[override]
+            def forward(
                 self,
                 z: lucid.Tensor,
                 r: lucid.Tensor,
                 t: lucid.Tensor,
                 labels: lucid.Tensor | None = None,
-            ) -> lucid.Tensor:
-                return lucid.ones_like(z)
+            ) -> DiffusionModelOutput:
+                return DiffusionModelOutput(sample=lucid.ones_like(z))
 
         model = MeanFlowForImageGeneration(config)
         model.mean_flow = _Ones(config)

@@ -112,7 +112,7 @@ def stable_diffusion(
 def stable_diffusion_gen(
     pretrained: bool = False, **overrides: object
 ) -> StableDiffusionForImageGeneration:
-    """v1 posed as a sampler.
+    """v1 as a task model: the denoising objective and the sampler.
 
     Parameters
     ----------
@@ -127,7 +127,9 @@ def stable_diffusion_gen(
     Returns
     -------
     StableDiffusionForImageGeneration
-        Exposes :meth:`generate` with classifier-free guidance.
+        Calling it is one training step, returning a
+        :class:`StableDiffusionOutput` with the loss; :meth:`generate`
+        samples with classifier-free guidance.
 
     Notes
     -----

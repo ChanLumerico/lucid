@@ -362,8 +362,8 @@ class TestStableDiffusion:
     def test_generation_returns_a_finite_sample(self) -> None:
         model = models.stable_diffusion_gen(**self.CONFIG).eval()  # type: ignore[arg-type]
         with lucid.no_grad():
-            sample = model.generate(lucid.randn((1, 8, 16)), num_inference_steps=2)
-        _assert_finite(sample, (1, 3, 32, 32))
+            out = model.generate(lucid.randn((1, 8, 16)), num_inference_steps=2)
+        _assert_finite(out.samples, (1, 3, 32, 32))
 
 
 # ---------------------------------------------------------------------------

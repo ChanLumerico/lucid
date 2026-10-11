@@ -327,8 +327,8 @@ class TestGuidance:
         start = lucid.zeros((1, 4, 8, 8))
         guided = model.generate(
             context, lucid.randn((1, 4, 16)), 3, guidance_scale=1.0, latent=start
-        )
-        plain = model.generate(context, None, 3, latent=start)
+        ).samples
+        plain = model.generate(context, None, 3, latent=start).samples
         assert float((guided - plain).abs().max().item()) < 1e-5
 
     def test_a_larger_scale_changes_the_result(self) -> None:
@@ -350,9 +350,15 @@ class TestGuidance:
         model = StableDiffusionForImageGeneration(_tiny()).eval()
         context, uncond = lucid.randn((1, 4, 16)), lucid.randn((1, 4, 16))
         start = lucid.zeros((1, 4, 8, 8))
-        one = model.generate(context, uncond, 3, guidance_scale=1.0, latent=start)
-        two = model.generate(context, uncond, 3, guidance_scale=2.0, latent=start)
-        seven = model.generate(context, uncond, 3, guidance_scale=7.5, latent=start)
+        one = model.generate(
+            context, uncond, 3, guidance_scale=1.0, latent=start
+        ).samples
+        two = model.generate(
+            context, uncond, 3, guidance_scale=2.0, latent=start
+        ).samples
+        seven = model.generate(
+            context, uncond, 3, guidance_scale=7.5, latent=start
+        ).samples
         assert float((one - seven).abs().max().item()) > 1e-2
         assert float((two - seven).abs().max().item()) > 1e-2
 
@@ -377,9 +383,9 @@ class TestGuidance:
 
         guided = model.generate(
             context, uncond, 3, guidance_scale=1.0 + 1e-4, latent=start
-        )
-        conditional = model.generate(context, None, 3, latent=start)
-        unconditional = model.generate(uncond, None, 3, latent=start)
+        ).samples
+        conditional = model.generate(context, None, 3, latent=start).samples
+        unconditional = model.generate(uncond, None, 3, latent=start).samples
 
         to_conditional = float((guided - conditional).abs().max().item())
         to_unconditional = float((guided - unconditional).abs().max().item())
@@ -405,7 +411,9 @@ class TestGuidance:
         uncond = lucid.randn((2, 4, 16))
         start = lucid.randn((2, 4, 8, 8))
 
-        together = model.generate(context, uncond, 3, guidance_scale=7.5, latent=start)
+        together = model.generate(
+            context, uncond, 3, guidance_scale=7.5, latent=start
+        ).samples
         for row in range(2):
             alone = model.generate(
                 context[row : row + 1],
@@ -413,7 +421,7 @@ class TestGuidance:
                 3,
                 guidance_scale=7.5,
                 latent=start[row : row + 1],
-            )
+            ).samples
             gap = float((together[row : row + 1] - alone).abs().max().item())
             assert gap < 1e-4, f"row {row} differs by {gap}"
 
@@ -465,8 +473,29 @@ class TestTheAssembledModel:
     def test_generation_returns_an_image(self) -> None:
         lucid.manual_seed(0)
         model = StableDiffusionForImageGeneration(_tiny()).eval()
-        image = model.generate(lucid.randn((2, 4, 16)), num_inference_steps=2)
-        assert image.shape == (2, 3, 32, 32)
+        out = model.generate(lucid.randn((2, 4, 16)), num_inference_steps=2)
+        assert isinstance(out, M.GenerationOutput)
+        assert out.samples.shape == (2, 3, 32, 32)
+
+    def test_the_task_forward_is_a_training_step(self) -> None:
+        """Calling the generation model trains it, as in every other
+        image-generation family; sampling is :meth:`generate` alone.
+
+        It once aliased ``generate`` and returned pixels, so a training
+        loop written against the family contract got images and no loss.
+        """
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny())
+        before = model.stable_diffusion.unet.conv_in.weight.detach().clone()
+        out = model(lucid.randn((2, 3, 32, 32)), lucid.randn((2, 4, 16)))
+        assert isinstance(out, M.ModelOutput)
+        assert out.noise_pred.shape == (2, 4, 8, 8)
+        assert out.loss is not None and out.loss.shape == ()
+        optimizer = lucid.optim.SGD(model.parameters(), lr=1.0)
+        out.loss.backward()
+        optimizer.step()
+        after = model.stable_diffusion.unet.conv_in.weight
+        assert float((after - before).abs().max().item()) > 0.0
 
     @pytest.mark.parametrize("device", ["cpu", "metal"])
     def test_it_runs_on_both_devices(self, device: str) -> None:
@@ -888,14 +917,14 @@ class TestPNDMIsWhatTheReleaseShips:
         latent = lucid.randn((1, 4, 8, 8))
         default = model.generate(
             context, num_inference_steps=3, guidance_scale=1.0, latent=latent
-        )
+        ).samples
         pndm = model.generate(
             context,
             num_inference_steps=3,
             guidance_scale=1.0,
             latent=latent,
             sampler="pndm",
-        )
+        ).samples
         assert float((default - pndm).abs().max().item()) == 0.0
 
     def test_ddim_remains_reachable(self) -> None:
@@ -909,14 +938,14 @@ class TestPNDMIsWhatTheReleaseShips:
             guidance_scale=1.0,
             latent=latent,
             sampler="pndm",
-        )
+        ).samples
         ddim = model.generate(
             context,
             num_inference_steps=3,
             guidance_scale=1.0,
             latent=latent,
             sampler="ddim",
-        )
+        ).samples
         assert pndm.shape == ddim.shape
         assert float((pndm - ddim).abs().max().item()) > 0.0
 
@@ -942,6 +971,6 @@ class TestPNDMIsWhatTheReleaseShips:
             num_inference_steps=3,
             guidance_scale=1.0,
             latent=lucid.randn((1, 4, 8, 8), device=device),
-        )
+        ).samples
         assert str(image.device) == f"device('{device}')"
         assert image.shape == (1, 3, 32, 32)
