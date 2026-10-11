@@ -78,6 +78,12 @@ Storage RPowScalarBackward::grad_formula(const Storage& g) {
     return multiply_storages(scaled_out, g, n, dtype_, device_);
 }
 
+TensorImplPtr RPowScalarBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                    const TensorImplPtr&,
+                                                    const TensorImplPtr& out) {
+    return mul_op(g, mul_op(out, full_like_op(out, std::log(base_))));
+}
+
 // Manually saves the output in bwd->saved_output_ because the standard
 // wire_autograd helper (called with save_output=false) does not do so.
 TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {

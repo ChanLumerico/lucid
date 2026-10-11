@@ -108,7 +108,9 @@ class LUCID_API ComplexAbsBackward : public FuncOp<ComplexAbsBackward, 1> {
 public:
     static const OpSchema schema_v1;
     // ``z`` itself, for ``z / |z|``, is saved by value in ``saved_inputs_[0]``.
-    std::vector<Storage> apply(Storage grad_out);
+    std::vector<Storage> apply(Storage grad_out) override;
+    // The same ``g * z / |z|`` from tracked ops, for ``create_graph=True``.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 class LUCID_API AbsBackward : public UnaryOp<AbsBackward> {
@@ -274,6 +276,9 @@ public:
     }
     // Backward — $\partial y/\partial x = 3x^2$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+    // Graph-mode backward: $3x^2 \cdot g$ kept inside the autograd graph.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Public entry points.  Each thin wrapper delegates to the corresponding

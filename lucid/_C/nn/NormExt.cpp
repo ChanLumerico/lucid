@@ -16,14 +16,12 @@
 #include "NormExt.h"
 
 #include <cmath>
-#include <cstring>
 #include <vector>
 
-#include "../autograd/AccumulateGrad.h"
+#include "../autograd/Engine.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
-#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -36,7 +34,6 @@
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Compare.h"
 #include "../ops/bfunc/Div.h"
-#include "../ops/bfunc/Maximum.h"
 #include "../ops/bfunc/Mul.h"
 #include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
@@ -49,6 +46,7 @@
 #include "../ops/utils/Promote.h"
 #include "../ops/utils/ScalarAxis.h"
 #include "../ops/utils/Select.h"
+#include "../ops/utils/View.h"
 
 namespace lucid {
 
@@ -131,6 +129,53 @@ std::vector<Storage> BatchNormEvalBackward::apply(Storage grad_out) {
                                        spatial, this->dtype_);
 }
 
+std::vector<TensorImplPtr> BatchNormEvalBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // y = (x - mean) * rstd * gamma + beta with rstd fixed at forward.
+    // dx is affine in nothing but gamma, so a second derivative through x
+    // is zero; the reference still keeps dx (and dbeta) in the graph — its
+    // backward is an op of x — so both carry a zero derivative.
+    const auto& edges = this->next_edges();
+    auto needs = [&](std::size_t i) { return i < edges.size() && edges[i].is_valid(); };
+    if (needs(2))
+        ErrorBuilder("batch_norm_eval")
+            .not_implemented("create_graph=True through a running_var that requires grad: the "
+                             "node keeps only rstd, and the reference does not differentiate "
+                             "running statistics either");
+    const auto& x = this->saved_impl_inputs_[0];
+    const auto& mean = this->saved_impl_inputs_[1];
+    const auto& gamma = this->saved_impl_inputs_[3];
+    if (!x || !mean || !gamma)
+        ErrorBuilder("batch_norm_eval").fail("graph-mode backward is missing a saved input");
+
+    const Shape& xs = this->input_shapes_[0];
+    Shape per_channel(xs.size(), 1);
+    per_channel[1] = xs[1];
+    std::vector<int> axes;
+    for (std::size_t i = 0; i < xs.size(); ++i)
+        if (i != 1)
+            axes.push_back(static_cast<int>(i));
+
+    auto rstd =
+        std::make_shared<TensorImpl>(this->rstd_, Shape{xs[1]}, this->dtype_, this->device_, false);
+    auto scale = mul_op(gamma, rstd);
+    auto sum_g = sum_op(grad_out, axes, false);
+    std::vector<TensorImplPtr> grads(5);
+    if (needs(0))
+        grads[0] =
+            zero_derivative_through(mul_op(grad_out, reshape_op(scale, per_channel)), edges[0]);
+    if (needs(1))
+        grads[1] = neg_op(mul_op(scale, sum_g));
+    if (needs(3)) {
+        auto centered = sub_op(x, reshape_op(mean, per_channel));
+        grads[3] = mul_op(sum_op(mul_op(grad_out, centered), axes, false), rstd);
+    }
+    // The zero derivative goes back along beta's own edge: it has to have
+    // the gradient's shape, and x's is (N, C, *) where dbeta is (C,).
+    if (needs(4))
+        grads[4] = zero_derivative_through(sum_g, edges[4]);
+    return grads;
+}
+
 TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
                                  const TensorImplPtr& mean,
                                  const TensorImplPtr& var,
@@ -204,8 +249,11 @@ std::vector<TensorImplPtr> LpNormalizeBackward::apply_for_graph(const TensorImpl
     auto magnitude = abs_op(x);
     auto norm = pow_scalar_op(sum_op(pow_scalar_op(magnitude, ord_), axis, true), 1.0 / ord_);
     auto floor = full_like_op(norm, eps_);
-    auto denom = maximum_op(norm, floor);
-    auto active = greater_op(norm, floor);
+    // The reference's floor is a clamp_min: a norm equal to eps keeps its
+    // derivative, a NaN norm passes through the forward and gets none.
+    // maximum_op would halve the derivative at the tie.
+    auto denom = where_op(less_op(norm, floor), floor, norm);
+    auto active = greater_equal_op(norm, floor);
     auto dnorm = div_op(mul_op(sign_op(x), pow_scalar_op(magnitude, ord_ - 1.0)),
                         pow_scalar_op(norm, ord_ - 1.0));
     dnorm = where_op(broadcast_to_op(active, x->shape()), dnorm, zeros_like_op(dnorm));

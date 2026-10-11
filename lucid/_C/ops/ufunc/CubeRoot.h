@@ -79,6 +79,9 @@ public:
     //     saved output is zero (division by zero); callers must avoid
     //     differentiating through $x = 0$.
     Storage grad_formula(const Storage& g);
+    // Graph-mode backward: $g / (3y^2)$ from the tracked output.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 // Element-wise cube root — returns $\sqrt[3]{a}$ with a fully wired

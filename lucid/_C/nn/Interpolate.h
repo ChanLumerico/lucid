@@ -305,6 +305,10 @@ public:
     // Backward pass: scatter-adds ``grad_out`` onto the source voxels using
     // the same floor coordinate mapping as the forward.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // Graph-mode backward for an integer scale factor: block sums, as in
+    // :class:`InterpolateNearestBackward2D`.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public 2-D bilinear resize with autograd.

@@ -116,6 +116,7 @@ public:
     // Returns ``{grad_out * mask_}`` when a mask is stored; otherwise
     // (pass-through case) returns ``{clone(grad_out)}``.
     std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for channel-wise Dropout.
@@ -179,6 +180,7 @@ public:
 
     // Backward: multiply ``grad_out`` by the saved full-resolution mask.
     std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for alpha-dropout — element-wise dropout that preserves
@@ -245,6 +247,7 @@ public:
     // Returns ``{grad_out * (mask_ * a_coef_)}`` when a mask is stored;
     // otherwise (pass-through case) returns ``{clone(grad_out)}``.
     std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for DropBlock — structured spatial dropout for 4-D
@@ -307,6 +310,7 @@ public:
 
     // Backward: multiply ``grad_out`` by the saved keep mask.
     std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Autograd node for DropPath — per-sample stochastic depth (Huang,
@@ -363,6 +367,7 @@ public:
 
     // Backward: multiply ``grad_out`` by the saved per-sample mask.
     std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Element-wise inverted dropout — free-function entry point.

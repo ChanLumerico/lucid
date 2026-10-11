@@ -12,7 +12,7 @@
 //   ord=1: ∂L/∂A = sign(A) ⊙ expand(∂L/∂N)
 //          Derived from d/dA [sum |Aᵢ|] = sign(Aᵢ).
 //
-// The expand_back lambda inside apply() handles the general case of
+// The expand_back lambda inside grad_from() handles the general case of
 // re-expanding the reduced gradient to the original shape regardless of
 // whether keepdims was true/false or the reduction was partial/full.
 //
@@ -28,6 +28,7 @@
 #include <variant>
 #include <vector>
 
+#include "../../autograd/Engine.h"
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
 #include "../../compile/Tracer.h"
@@ -66,14 +67,10 @@ const OpSchema NormBackward::schema_v1{"norm", 1, AmpPolicy::KeepInput, true, ""
 //     axes.  Indices are normalised (negative -> positive) and sorted ascending
 //     so that each unsqueeze_op call inserts at the right logical position even
 //     as previously inserted axes shift subsequent dimension indices.
-std::vector<Storage> NormBackward::apply(Storage grad_out) {
-    NoGradGuard ng;
-    using ::lucid::helpers::fresh;
+TensorImplPtr NormBackward::grad_from(const TensorImplPtr& A,
+                                      const TensorImplPtr& N,
+                                      const TensorImplPtr& dN) const {
     const int ndim = static_cast<int>(input_shapes_[0].size());
-
-    auto A = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
-    auto N = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
-    auto dN = fresh(std::move(grad_out), out_shape_, dtype_, device_);
 
     // Lambda: expand a reduced-shaped tensor back to the full input shape.
     auto expand_back = [&](const TensorImplPtr& t) -> TensorImplPtr {
@@ -95,22 +92,40 @@ std::vector<Storage> NormBackward::apply(Storage grad_out) {
         return broadcast_to_op(result, input_shapes_[0]);
     };
 
-    TensorImplPtr dA;
     if (ord_ == 2.0) {
         // L2 gradient: dA = (A / clip(N, ε)) * expand(dN)
         // The clip prevents NaN when A = 0 (‖A‖ = 0 means the gradient of ‖A‖
         // is technically undefined; we follow reference framework in returning 0 there).
         auto N_exp = expand_back(clip_op(N, 1e-12, 1e30));
         auto dN_exp = expand_back(dN);
-        dA = mul_op(div_op(A, N_exp), dN_exp);
-    } else if (ord_ == 1.0) {
-        // L1 gradient: dA = sign(A) * expand(dN)
-        dA = mul_op(sign_op(A), expand_back(dN));
-    } else {
-        ErrorBuilder("norm_backward")
-            .not_implemented("gradient only implemented for ord=1 and ord=2");
+        return mul_op(div_op(A, N_exp), dN_exp);
     }
-    return {dA->storage()};
+    if (ord_ == 1.0) {
+        // L1 gradient: dA = sign(A) * expand(dN)
+        return mul_op(sign_op(A), expand_back(dN));
+    }
+    ErrorBuilder("norm_backward").not_implemented("gradient only implemented for ord=1 and ord=2");
+    return nullptr;
+}
+
+std::vector<Storage> NormBackward::apply(Storage grad_out) {
+    NoGradGuard ng;
+    using ::lucid::helpers::fresh;
+    auto A = fresh(Storage{saved_inputs_[0]}, input_shapes_[0], dtype_, device_);
+    auto N = fresh(Storage{saved_output_}, out_shape_, dtype_, device_);
+    auto dN = fresh(std::move(grad_out), out_shape_, dtype_, device_);
+    return {grad_from(A, N, dN)->storage()};
+}
+
+std::vector<TensorImplPtr> NormBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The norm is recomputed from the tracked input so ord=2's A / N carries
+    // N's own dependence on A into the second derivative; ord=1's sign(A)
+    // has derivative zero but stays in the graph, as sign is an op of A.
+    const auto& A = saved_impl_inputs_[0];
+    if (!A)
+        ErrorBuilder("norm").fail("graph-mode backward is missing its saved input");
+    auto N = norm_op(A, ord_, axis_, keepdims_);
+    return {zero_derivative_through(grad_from(A, N, grad_out), next_edges()[0])};
 }
 
 // Register NormBackward in the global op registry.

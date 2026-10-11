@@ -233,6 +233,10 @@ public:
     // std::vector<Storage>
     //     Single-element ``{grad_in}`` of the same shape.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same rotation by $-\theta$ from tracked ops, for
+    // ``create_graph=True``; the saved tables are constants.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Integer-index embedding lookup — free-function entry point.

@@ -138,6 +138,12 @@ public:
     // std::vector<Storage>
     //     Five-element vector ``{dx, d_mean, d_var, d_gamma, d_beta}``.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradients from tracked ops, for ``create_graph=True``.
+    // ``var`` reaches the node only as ``rstd_`` — it is not saved — so a
+    // running variance that itself requires grad is refused here, as the
+    // reference refuses differentiating running statistics at all.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
 // Public free-function entry point for inference-mode Batch Normalization.

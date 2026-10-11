@@ -137,6 +137,15 @@ public:
     // NotImplementedError
     //     If ``ord_`` is not 1.0 or 2.0.
     std::vector<Storage> apply(Storage grad_out) override;
+
+    // The same gradient from tracked ops, for ``create_graph=True``.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+private:
+    // ``dA`` from the input, the norm and its gradient — eager mode passes
+    // detached tensors, graph mode tracked ones.
+    TensorImplPtr
+    grad_from(const TensorImplPtr& A, const TensorImplPtr& N, const TensorImplPtr& dN) const;
 };
 
 // Compute the p-norm of a float tensor over the specified axes.

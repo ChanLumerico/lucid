@@ -37,11 +37,15 @@
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Compare.h"
 #include "../ops/bfunc/Mul.h"
+#include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/composite/Indexing.h"
 #include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/utils/Concat.h"
 #include "../ops/utils/Layout.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
@@ -200,6 +204,34 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
 std::vector<Storage> RotaryPosEmbeddingBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.rope_backward(grad_out, saved_cos_, saved_sin_, orig_shape_, interleaved_, dtype_)};
+}
+
+std::vector<TensorImplPtr>
+RotaryPosEmbeddingBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    // Each pair (u, v) went to (u cos - v sin, v cos + u sin); the
+    // transpose sends (gu, gv) to (gu cos + gv sin, gv cos - gu sin).
+    const int last = static_cast<int>(orig_shape_.size()) - 1;
+    const std::int64_t half = orig_shape_.back() / 2;
+    const Shape table{orig_shape_[orig_shape_.size() - 2], half};
+    auto cos_t = std::make_shared<TensorImpl>(saved_cos_, table, dtype_, device_, false);
+    auto sin_t = std::make_shared<TensorImpl>(saved_sin_, table, dtype_, device_, false);
+    auto rotate_back = [&](const TensorImplPtr& gu, const TensorImplPtr& gv) {
+        return std::pair{add_op(mul_op(gu, cos_t), mul_op(gv, sin_t)),
+                         sub_op(mul_op(gv, cos_t), mul_op(gu, sin_t))};
+    };
+    if (!interleaved_) {
+        auto [du, dv] =
+            rotate_back(narrow_op(grad_out, last, 0, half), narrow_op(grad_out, last, half, half));
+        return {concatenate_op({du, dv}, last)};
+    }
+    Shape halves = orig_shape_;
+    halves.back() = half;
+    Shape pairs = halves;
+    pairs.push_back(2);
+    auto paired = reshape_op(grad_out, pairs);
+    auto [du, dv] = rotate_back(reshape_op(narrow_op(paired, last + 1, 0, 1), halves),
+                                reshape_op(narrow_op(paired, last + 1, 1, 1), halves));
+    return {reshape_op(stack_op({du, dv}, last + 1), orig_shape_)};
 }
 
 TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,

@@ -9,6 +9,9 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Div.h"
+#include "../bfunc/Mul.h"
+#include "../gfunc/Gfunc.h"
 
 namespace lucid {
 
@@ -23,6 +26,12 @@ Storage CubeRootBackward::grad_formula(const Storage& g) {
     Storage y_sq = square_storage(saved_output_, n, dtype_, device_);
     Storage denom = mul_scalar_storage(y_sq, 3.0, n, dtype_, device_);
     return divide_storages(g, denom, n, dtype_, device_);
+}
+
+TensorImplPtr CubeRootBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                  const TensorImplPtr&,
+                                                  const TensorImplPtr& out) {
+    return div_op(g, mul_op(full_like_op(out, 3.0), mul_op(out, out)));
 }
 
 TensorImplPtr cube_root_op(const TensorImplPtr& a) {

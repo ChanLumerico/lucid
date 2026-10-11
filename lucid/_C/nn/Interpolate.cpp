@@ -358,6 +358,22 @@ std::vector<Storage> InterpolateNearestBackward3D::apply(Storage grad_out) {
         be.interpolate_nearest_3d_backward(grad_out, orig_shape_, D_out_, H_out_, W_out_, dtype_)};
 }
 
+std::vector<TensorImplPtr>
+InterpolateNearestBackward3D::apply_for_graph(const TensorImplPtr& grad_out) {
+    // The 2-D rule one axis deeper: each voxel was repeated over a
+    // kd x kh x kw block, so the adjoint sums the blocks.
+    if (D_out_ % D_in_ != 0 || H_out_ % H_in_ != 0 || W_out_ % W_in_ != 0)
+        ErrorBuilder("interpolate")
+            .not_implemented("create_graph=True needs an integer scale factor for nearest mode");
+    const std::int64_t kd = D_out_ / D_in_;
+    const std::int64_t kh = H_out_ / H_in_;
+    const std::int64_t kw = W_out_ / W_in_;
+    auto split =
+        reshape_op(grad_out, {orig_shape_[0], orig_shape_[1], D_in_, kd, H_in_, kh, W_in_, kw});
+    auto summed = sum_op(split, std::vector<int>{3, 5, 7}, /*keepdims=*/false);
+    return {reshape_op(summed, orig_shape_)};
+}
+
 TensorImplPtr
 interpolate_nearest_3d_op(const TensorImplPtr& input, int D_out, int H_out, int W_out) {
     return InterpolateNearestBackward3D::forward(input, D_out, H_out, W_out);

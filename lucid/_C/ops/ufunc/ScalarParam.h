@@ -207,6 +207,10 @@ public:
     // Storage
     //     Gradient with respect to ``x``.
     Storage grad_formula(const Storage& g);
+    // Graph-mode backward: $\ln(\text{base}) \cdot y \cdot g$ from the
+    // tracked output, so the second derivative sees $y$'s dependence on $x$.
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 // Autograd node for element-wise clip (clamp):

@@ -172,6 +172,35 @@ _CASES = {
         mode="bilinear",
         align_corners=False,
     ),
+    "interp_nearest3d": lambda e, x: e.F.interpolate(
+        x.reshape(1, 1, 2, 2, 4), scale_factor=2, mode="nearest"
+    ),
+    # LCD-436: eval dropout is the identity and p=0 training dropout a
+    # pass-through, so their gradient is a constant; eval batch_norm is
+    # affine in x with frozen statistics, and the reference still keeps its
+    # gradient in the graph (derivative zero).
+    "dropout_eval": lambda e, x: e.F.dropout(x, 0.5, training=False),
+    "dropout_p0": lambda e, x: e.F.dropout(x, 0.0, training=True),
+    "dropout2d_eval": lambda e, x: e.F.dropout2d(x.reshape(1, 4, 2, 2), 0.5, training=False),
+    "alpha_dropout_eval": lambda e, x: e.F.alpha_dropout(x, 0.5, training=False),
+    "batch_norm_eval": lambda e, x: e.F.batch_norm(
+        x.reshape(4, 4), e.t([0.5, -1.0, 0.0, 2.0]), e.t([1.0, 0.5, 2.0, 4.0]), training=False
+    ),
+    "batch_norm_eval_affine": lambda e, x: e.F.batch_norm(
+        x.reshape(2, 4, 2),
+        e.t([0.5, -1.0, 0.0, 2.0]),
+        e.t([1.0, 0.5, 2.0, 4.0]),
+        e.t([2.0, -1.0, 0.5, 1.0]),
+        e.t([0.1, 0.2, 0.3, 0.4]),
+        training=False,
+    ),
+    "batch_norm_eval_squared": lambda e, x: (
+        e.F.batch_norm(
+            x.reshape(4, 4), e.t([0.5, -1.0, 0.0, 2.0]), e.t([1.0, 0.5, 2.0, 4.0]), training=False
+        )
+        ** 2
+    ),
+    "hypot": lambda e, x: e.L.hypot(x, e.t([1.0, -0.25, 3.0, 5.0] * 4)),
     "layer_norm": lambda e, x: e.F.layer_norm(x.reshape(4, 4), (4,)),
     "group_norm": lambda e, x: e.F.group_norm(x.reshape(1, 4, 4), 2),
     "local_response_norm": lambda e, x: e.F.local_response_norm(x.reshape(1, 4, 4), 2),

@@ -139,15 +139,12 @@ TensorImplPtr complex_abs_forward(const TensorImplPtr& a) {
     return magnitude;
 }
 
-std::vector<Storage> ComplexAbsBackward::apply(Storage grad_out) {
-    NoGradGuard nograd;
-    const auto z =
-        std::make_shared<TensorImpl>(saved_inputs_[0], input_shapes_[0], dtype_, device_, false);
-    auto g = std::make_shared<TensorImpl>(std::move(grad_out), z->shape(), real_lane_of(z->dtype()),
-                                          z->device(), false);
-    // ``g * z / |z|``, lane by lane, with the quotient forced to zero
-    // where the magnitude is — the direction of a zero vector is not
-    // defined and the reference reports 0.
+namespace {
+
+// ``g * z / |z|``, lane by lane, with the quotient forced to zero where the
+// magnitude is — the direction of a zero vector is not defined and the
+// reference reports 0.  Built from ops so graph mode can record it.
+TensorImplPtr complex_abs_grad(const TensorImplPtr& g, const TensorImplPtr& z) {
     auto re = real_op(z);
     auto im = imag_op(z);
     auto mag = complex_abs_forward(z);
@@ -155,7 +152,25 @@ std::vector<Storage> ComplexAbsBackward::apply(Storage grad_out) {
     auto nonzero = greater_op(mag, zero);
     auto safe = where_op(nonzero, mag, ones_like_op(mag));
     auto scale = where_op(nonzero, div_op(g, safe), zero);
-    return {complex_op(mul_op(re, scale), mul_op(im, scale))->storage()};
+    return complex_op(mul_op(re, scale), mul_op(im, scale));
+}
+
+}  // namespace
+
+std::vector<Storage> ComplexAbsBackward::apply(Storage grad_out) {
+    NoGradGuard nograd;
+    const auto z =
+        std::make_shared<TensorImpl>(saved_inputs_[0], input_shapes_[0], dtype_, device_, false);
+    auto g = std::make_shared<TensorImpl>(std::move(grad_out), z->shape(), real_lane_of(z->dtype()),
+                                          z->device(), false);
+    return {complex_abs_grad(g, z)->storage()};
+}
+
+std::vector<TensorImplPtr> ComplexAbsBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    const auto& z = saved_impl_inputs_[0];
+    if (!z)
+        ErrorBuilder("abs").fail("graph-mode backward is missing its saved input");
+    return {complex_abs_grad(grad_out, z)};
 }
 
 LUCID_REGISTER_OP(ComplexAbsBackward)
@@ -251,6 +266,12 @@ Storage CubeBackward::grad_formula(const Storage& g) {
     Storage x_sq = square_storage(saved_inputs_[0], n, dtype_, device_);
     Storage three_xsq = mul_scalar_storage(x_sq, 3.0, n, dtype_, device_);
     return multiply_storages(three_xsq, g, n, dtype_, device_);
+}
+
+TensorImplPtr CubeBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
+    return mul_op(g, mul_op(full_like_op(x, 3.0), mul_op(x, x)));
 }
 
 TensorImplPtr cube_op(const TensorImplPtr& a) {

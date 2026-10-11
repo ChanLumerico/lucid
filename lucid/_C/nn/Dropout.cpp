@@ -44,6 +44,34 @@
 
 namespace lucid {
 
+namespace {
+
+// A node built on the pass-through path (``training=false`` or ``p == 0``)
+// holds no mask, and its gradient is the incoming one unchanged.
+bool mask_absent(const Storage& mask) {
+    if (const auto* cpu = std::get_if<CpuStorage>(&mask))
+        return cpu->nbytes == 0;
+    const auto* gpu = std::get_if<GpuStorage>(&mask);
+    return gpu == nullptr || !gpu->arr;
+}
+
+// Graph-mode gradient of ``y = x * mask``: the saved mask is a constant
+// of the forward draw, so the gradient is ``grad_out * mask`` — detached
+// when ``grad_out`` is, as the reference's ``MulBackward`` leaves it — and
+// the pass-through case hands ``grad_out`` straight back.
+TensorImplPtr masked_grad_for_graph(const TensorImplPtr& grad_out,
+                                    const Storage& mask,
+                                    const Shape& shape,
+                                    Dtype dt,
+                                    Device device) {
+    if (mask_absent(mask))
+        return grad_out;
+    auto m = std::make_shared<TensorImpl>(mask, shape, dt, device, false);
+    return mul_op(grad_out, m);
+}
+
+}  // namespace
+
 const OpSchema DropoutBackward::schema_v1{
     "dropout", 1, AmpPolicy::KeepInput, false,
     "uses Generator-driven Bernoulli mask; reproducible only with explicit seed"};
@@ -126,20 +154,13 @@ DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Genera
 
 std::vector<Storage> DropoutBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
-
-    // An empty mask means p==0 or inference; pass the gradient through.
-    if (device_ == Device::CPU) {
-        auto* mask_cpu = std::get_if<CpuStorage>(&mask_);
-        if (!mask_cpu || mask_cpu->nbytes == 0) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    } else {
-        auto* mask_gpu = std::get_if<GpuStorage>(&mask_);
-        if (!mask_gpu || !mask_gpu->arr) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    }
+    if (mask_absent(mask_))
+        return {clone_storage(grad_out, numel, dtype_, device_)};
     return {multiply_storages(grad_out, mask_, numel, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> DropoutBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {masked_grad_for_graph(grad_out, mask_, input_shapes_[0], dtype_, device_)};
 }
 
 TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool training, Generator* gen) {
@@ -313,18 +334,13 @@ DropoutNdBackward::forward(const TensorImplPtr& a, double p, bool training, Gene
 
 std::vector<Storage> DropoutNdBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
-    if (device_ == Device::CPU) {
-        auto* mask_cpu = std::get_if<CpuStorage>(&mask_);
-        if (!mask_cpu || mask_cpu->nbytes == 0) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    } else {
-        auto* mask_gpu = std::get_if<GpuStorage>(&mask_);
-        if (!mask_gpu || !mask_gpu->arr) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    }
+    if (mask_absent(mask_))
+        return {clone_storage(grad_out, numel, dtype_, device_)};
     return {multiply_storages(grad_out, mask_, numel, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> DropoutNdBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {masked_grad_for_graph(grad_out, mask_, input_shapes_[0], dtype_, device_)};
 }
 
 TensorImplPtr dropoutnd_op(const TensorImplPtr& a, double p, bool training, Generator* gen) {
@@ -410,21 +426,21 @@ AlphaDropoutBackward::forward(const TensorImplPtr& a, double p, bool training, G
 
 std::vector<Storage> AlphaDropoutBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
-    if (device_ == Device::CPU) {
-        auto* mask_cpu = std::get_if<CpuStorage>(&mask_);
-        if (!mask_cpu || mask_cpu->nbytes == 0) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    } else {
-        auto* mask_gpu = std::get_if<GpuStorage>(&mask_);
-        if (!mask_gpu || !mask_gpu->arr) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    }
+    if (mask_absent(mask_))
+        return {clone_storage(grad_out, numel, dtype_, device_)};
 
     // Chain rule: d/dx[a*x + b] = a; mask selects which x were kept.
     Storage scaled_mask = mul_scalar_storage(mask_, a_coef_, numel, dtype_, device_);
     return {multiply_storages(grad_out, scaled_mask, numel, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> AlphaDropoutBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    if (mask_absent(mask_))
+        return {grad_out};
+    const std::size_t numel = shape_numel(input_shapes_[0]);
+    return {masked_grad_for_graph(grad_out,
+                                  mul_scalar_storage(mask_, a_coef_, numel, dtype_, device_),
+                                  input_shapes_[0], dtype_, device_)};
 }
 
 TensorImplPtr alpha_dropout_op(const TensorImplPtr& a, double p, bool training, Generator* gen) {
@@ -483,6 +499,10 @@ TensorImplPtr DropBlockBackward::forward(
 std::vector<Storage> DropBlockBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
     return {multiply_storages(grad_out, mask_, numel, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> DropBlockBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {masked_grad_for_graph(grad_out, mask_, input_shapes_[0], dtype_, device_)};
 }
 
 TensorImplPtr drop_block_op(
@@ -547,18 +567,13 @@ DropPathBackward::forward(const TensorImplPtr& a, double p, bool scale_by_keep, 
 
 std::vector<Storage> DropPathBackward::apply(Storage grad_out) {
     const std::size_t numel = shape_numel(input_shapes_[0]);
-    if (device_ == Device::CPU) {
-        auto* mask_cpu = std::get_if<CpuStorage>(&mask_);
-        if (!mask_cpu || mask_cpu->nbytes == 0) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    } else {
-        auto* mask_gpu = std::get_if<GpuStorage>(&mask_);
-        if (!mask_gpu || !mask_gpu->arr) {
-            return {clone_storage(grad_out, numel, dtype_, device_)};
-        }
-    }
+    if (mask_absent(mask_))
+        return {clone_storage(grad_out, numel, dtype_, device_)};
     return {multiply_storages(grad_out, mask_, numel, dtype_, device_)};
+}
+
+std::vector<TensorImplPtr> DropPathBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {masked_grad_for_graph(grad_out, mask_, input_shapes_[0], dtype_, device_)};
 }
 
 TensorImplPtr drop_path_op(const TensorImplPtr& a, double p, bool scale_by_keep, Generator* gen) {
