@@ -71,13 +71,14 @@ TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
 // from ops that are themselves differentiable, which is what makes the
 // gradient differentiable in turn.
 //
-// Every branch tests the condition the reference's backward tests, and
-// the other side is its ``else``.  That decides a NaN input, which no
-// comparison holds for: relu, relu6, elu, selu and hard_swish pass it the
-// gradient, leaky_relu gives it the slope.  A formula that reads ``x``
-// only through those comparisons keeps its result in the graph with
-// derivative zero (zero_derivative_through), as the reference's own
-// backward op does.
+// Each branch is chosen as the reference's vectorised kernels choose it,
+// the path any real input takes, and the eager kernels match: a NaN fails
+// every comparison, so the comparison decides where it lands.  relu passes
+// it the gradient and leaky_relu the slope; relu6 gives it 0, and elu,
+// selu and hard_swish take the side whose value is NaN.  At 0, elu and
+// selu take the negative side.  A formula that reads ``x`` only through
+// those comparisons keeps its result in the graph with derivative zero
+// (zero_derivative_through), as the reference's own backward op does.
 
 // leaky_relu'(x) = 1 where x > 0, slope elsewhere.
 TensorImplPtr LeakyReluBackward::grad_formula_impl(const TensorImplPtr& g,
@@ -96,7 +97,7 @@ TensorImplPtr SoftplusBackward::grad_formula_impl(const TensorImplPtr& g,
     return mul_op(g, sigmoid_op(x));
 }
 
-// elu'(x) = alpha*exp(x) for x <= 0, and 1 elsewhere.
+// elu'(x) = 1 for x > 0, and alpha*exp(x) elsewhere.
 TensorImplPtr EluBackward::grad_formula_impl(const TensorImplPtr& g,
                                              const TensorImplPtr& x,
                                              const TensorImplPtr& out) {
@@ -104,22 +105,22 @@ TensorImplPtr EluBackward::grad_formula_impl(const TensorImplPtr& g,
     // hand its output to the graph-mode formula, and reading it gave
     // "add: null input tensor".
     (void)out;
-    auto negative = less_equal_op(x, zeros_like_op(x));
+    auto positive = greater_op(x, zeros_like_op(x));
     auto negative_side = mul_op(full_like_op(x, alpha_), exp_op(x));
-    return mul_op(g, where_op(negative, negative_side, ones_like_op(x)));
+    return mul_op(g, where_op(positive, ones_like_op(x), negative_side));
 }
 
-// selu'(x) = scale*alpha*exp(x) for x <= 0, and scale elsewhere.  The two
+// selu'(x) = scale for x > 0, and scale*alpha*exp(x) elsewhere.  The two
 // constants are the paper's, and the forward holds them as literals.
 TensorImplPtr SeluBackward::grad_formula_impl(const TensorImplPtr& g,
                                               const TensorImplPtr& x,
                                               const TensorImplPtr&) {
     constexpr double kAlpha = 1.6732632423543772;
     constexpr double kScale = 1.0507009873554805;
-    auto negative = less_equal_op(x, zeros_like_op(x));
+    auto positive = greater_op(x, zeros_like_op(x));
     auto upper = full_like_op(x, kScale);
     auto lower = mul_op(full_like_op(x, kScale * kAlpha), exp_op(x));
-    return mul_op(g, where_op(negative, lower, upper));
+    return mul_op(g, where_op(positive, upper, lower));
 }
 
 // mish(x) = x * tanh(softplus(x)).  Product rule, with sigmoid the
@@ -156,20 +157,21 @@ TensorImplPtr HardSwishBackward::grad_formula_impl(const TensorImplPtr& g,
                                                    const TensorImplPtr& x,
                                                    const TensorImplPtr&) {
     auto low = less_equal_op(x, full_like_op(x, -3.0));
-    auto inside = less_op(x, full_like_op(x, 3.0));
+    auto high = greater_equal_op(x, full_like_op(x, 3.0));
     auto inside_value = mul_op(add_op(mul_op(x, full_like_op(x, 2.0)), full_like_op(x, 3.0)),
                                full_like_op(x, 1.0 / 6.0));
-    auto slope = where_op(low, zeros_like_op(x), where_op(inside, inside_value, ones_like_op(x)));
+    auto slope = where_op(low, zeros_like_op(x), where_op(high, ones_like_op(x), inside_value));
     return mul_op(g, slope);
 }
 
-// relu6'(x) = 0 at and beyond both clamps, 1 elsewhere.
+// relu6'(x) = 1 strictly inside (0, 6), 0 elsewhere — NaN included.
 TensorImplPtr Relu6Backward::grad_formula_impl(const TensorImplPtr& g,
                                                const TensorImplPtr& x,
                                                const TensorImplPtr&) {
-    auto low = less_equal_op(x, zeros_like_op(x));
-    auto high = greater_equal_op(x, full_like_op(x, 6.0));
-    auto slope = where_op(low, zeros_like_op(x), where_op(high, zeros_like_op(x), ones_like_op(x)));
+    auto above_low = greater_op(x, zeros_like_op(x));
+    auto below_high = less_op(x, full_like_op(x, 6.0));
+    auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zeros_like_op(x)),
+                          zeros_like_op(x));
     return zero_derivative_through(mul_op(g, slope), x);
 }
 

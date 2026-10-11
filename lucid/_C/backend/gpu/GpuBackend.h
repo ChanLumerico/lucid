@@ -766,9 +766,9 @@ public:
             ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
             ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));  // scalar — no full-tensor alloc
             ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(dt));
-            auto neg_mask = ::mlx::core::less_equal(x, zero);
+            auto pos_mask = ::mlx::core::greater(x, zero);
             auto neg_branch = ::mlx::core::multiply(alpha_arr, ::mlx::core::exp(x));
-            auto deriv = ::mlx::core::where(neg_mask, neg_branch, one);
+            auto deriv = ::mlx::core::where(pos_mask, one, neg_branch);
             return ::mlx::core::multiply(deriv, g);
         });
     }
@@ -799,10 +799,10 @@ public:
                 ::mlx::core::array zero(0.0, d);
                 ::mlx::core::array s_arr(kS, d);
                 ::mlx::core::array sa_arr(kS * kA, d);
-                auto neg_mask = ::mlx::core::less_equal(x, zero);
+                auto pos_mask = ::mlx::core::greater(x, zero);
                 auto pos_branch = ::mlx::core::broadcast_to(s_arr, x.shape());
                 auto neg_branch = ::mlx::core::multiply(sa_arr, ::mlx::core::exp(x));
-                auto deriv = ::mlx::core::where(neg_mask, neg_branch, pos_branch);
+                auto deriv = ::mlx::core::where(pos_mask, pos_branch, neg_branch);
                 return ::mlx::core::multiply(deriv, g);
             });
     }
@@ -888,10 +888,10 @@ public:
             ::mlx::core::array third(1.0 / 3.0, gpu::to_mlx_dtype(dt));
             auto mid_branch = ::mlx::core::add(::mlx::core::multiply(x, third), half);
             auto le_m3 = ::mlx::core::less_equal(x, m3);
-            auto lt_p3 = ::mlx::core::less(x, p3);
+            auto ge_p3 = ::mlx::core::greater_equal(x, p3);
             auto z_b = ::mlx::core::broadcast_to(zero, x.shape());
             auto o_b = ::mlx::core::broadcast_to(one, x.shape());
-            auto step1 = ::mlx::core::where(lt_p3, mid_branch, o_b);
+            auto step1 = ::mlx::core::where(ge_p3, o_b, mid_branch);
             auto deriv = ::mlx::core::where(le_m3, z_b, step1);
             return ::mlx::core::multiply(deriv, g);
         });
@@ -7257,8 +7257,8 @@ private:
             ::mlx::core::array lo_arr(lo, gpu::to_mlx_dtype(dt));
             ::mlx::core::array hi_arr(hi, gpu::to_mlx_dtype(dt));
             using namespace ::mlx::core;
-            auto above = inclusive ? greater_equal(x, lo_arr) : logical_not(less_equal(x, lo_arr));
-            auto below = inclusive ? less_equal(x, hi_arr) : logical_not(greater_equal(x, hi_arr));
+            auto above = inclusive ? greater_equal(x, lo_arr) : greater(x, lo_arr);
+            auto below = inclusive ? less_equal(x, hi_arr) : less(x, hi_arr);
             auto in_range = logical_and(above, below);
             return ::mlx::core::astype(in_range, gpu::to_mlx_dtype(dt));
         });

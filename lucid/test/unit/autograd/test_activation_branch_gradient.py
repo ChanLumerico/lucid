@@ -1,14 +1,17 @@
 """Activation gradients at NaN, signed zero, infinity and the bounds (LCD-428).
 
 A piecewise backward picks its branch by a comparison on the input, and a
-NaN fails every comparison.  So which side a NaN lands on is decided by
-which comparison the backward makes, and the reference's choice is its
-specification: relu's ``threshold_backward`` tests ``x <= 0`` and passes
-a NaN its gradient, where Lucid's ``x > 0`` dropped it.  The same choice
-decides the bounds — leaky_relu at 0 takes the slope, selu at 0 the
-negative side — and Lucid had several of those backwards on the other
-side.  Each activation is held to the reference here, through
-``backward()`` and through ``grad(create_graph=True)``, on both devices.
+NaN fails every comparison, so which side a NaN lands on is decided by the
+comparison the backward makes.  The reference answers with its vectorised
+kernels on any real input and with a scalar loop on a tensor too short to
+fill a vector, and the two disagree at NaN (relu6: 0 against 1, elu: NaN
+against 1).  The oracle is the vectorised path — what training hits — so
+the reference's gradient is read off a tensor of ``_WIDTH`` elements.
+Lucid's relu dropped a NaN's gradient where both paths pass it, leaky_relu
+gave 1 at 0 where the reference gives the slope, and selu and elu with
+alpha != 1 took the positive side at 0.  Each activation is held to the
+reference through ``backward()`` and ``grad(create_graph=True)`` on both
+devices.
 """
 
 import math
@@ -33,8 +36,8 @@ _VALUES = [
     -0.5,
 ]
 
-# name -> call(F-like module, x); the reference's ``torch.nn.functional``
-# and Lucid's take the same arguments for every entry.
+# name -> call(F-like module, x); the reference's functional module and
+# Lucid's take the same arguments for every entry.
 _ACTIVATIONS = {
     "relu": lambda f, x: f.relu(x),
     "relu6": lambda f, x: f.relu6(x),
@@ -66,20 +69,14 @@ _TENSOR_OPS = {
 
 _PYTHON_SIDE = {
     "hardtanh": "LCD-428 follow-up (api): F.hardtanh is lucid.clamp, whose backward "
-    "passes the bound; the reference's hardtanh backward tests x <= min || x >= max",
+    "passes the gradient at the bound; the reference's hardtanh backward gives 0 there",
     "celu": "LCD-428 follow-up (api): F.celu is a relu + minimum composite; the "
-    "reference differentiates it as elu (x <= 0 branch, NaN and inf pass)",
-    "hardshrink": "LCD-428 follow-up (api): F.hardshrink's where-composite drops a "
-    "NaN's gradient; the reference tests -l <= x <= l",
-    "softshrink": "LCD-428 follow-up (api): F.softshrink's where-composite drops a "
-    "NaN's gradient; the reference tests -l <= x <= l",
+    "reference differentiates it as elu, so 0 takes the negative side and +inf gives 1",
 }
 # The cells each Python-side composite gets wrong today, by input value.
 _KNOWN_WRONG = {
-    "hardtanh": lambda v: math.isnan(v) or v in (-1.0, 1.0),
-    "celu": lambda v: math.isnan(v) or v == 0.0 or v == float("inf"),
-    "hardshrink": math.isnan,
-    "softshrink": math.isnan,
+    "hardtanh": lambda v: v in (-1.0, 1.0),
+    "celu": lambda v: v == 0.0 or v == float("inf"),
 }
 _TIE_RULE = (
     "LCD-428 follow-up (engine): maximum/minimum send a tie's gradient to the "
@@ -98,19 +95,24 @@ def _same(got, want):
     return got == pytest.approx(want, rel=1e-5, abs=1e-6)
 
 
+# Wide enough that the reference runs its vectorised kernel, not the
+# scalar loop it keeps for the tail of a short tensor.
+_WIDTH = 32
+
+
 def _reference_grad(ref, call, value, dtype):
-    x = ref.tensor([value], dtype=dtype, requires_grad=True)
+    x = ref.tensor([value] * _WIDTH, dtype=dtype, requires_grad=True)
     call(x).sum().backward()
-    return float(x.grad.item())
+    return float(x.grad[0].item())
 
 
 def _lucid_grads(call, value, device, dtype):
-    x = lucid.tensor([value], dtype=dtype, device=device, requires_grad=True)
+    x = lucid.tensor([value] * _WIDTH, dtype=dtype, device=device, requires_grad=True)
     call(x).sum().backward()
-    eager = float(x.grad.item())
-    x2 = lucid.tensor([value], dtype=dtype, device=device, requires_grad=True)
+    eager = float(x.grad[0].item())
+    x2 = lucid.tensor([value] * _WIDTH, dtype=dtype, device=device, requires_grad=True)
     (g,) = lucid.autograd.grad(call(x2).sum(), x2, create_graph=True)
-    return eager, float(g.item())
+    return eager, float(g[0].item())
 
 
 def _check(ref, device, dtype_name, value, lucid_call, ref_call):

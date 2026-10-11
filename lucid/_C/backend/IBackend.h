@@ -1943,10 +1943,8 @@ public:
     // ``inclusive``, open when not.  Both are needed: the reference's
     // ``clamp`` backward passes the gradient at the bound and its
     // ``hardtanh``/``relu6`` backward does not, so the two ops that share
-    // this primitive want opposite ends of the same interval.  Each mode
-    // tests what its reference backward tests, which decides NaN: clamp's
-    // ``lo <= x <= hi`` is false (mask 0), hardtanh's ``x <= lo || x >= hi``
-    // is false too, so its open mask is 1.
+    // this primitive want opposite ends of the same interval.  A NaN is
+    // outside both (mask 0), as in the reference's vectorised kernels.
     virtual Storage in_range_mask(
         const Storage& a, const Shape& shape, Dtype dt, double lo, double hi, bool inclusive) = 0;
 
