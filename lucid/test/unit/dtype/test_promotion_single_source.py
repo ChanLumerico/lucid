@@ -154,7 +154,12 @@ _OPS: dict[str, _Op] = {
         "floor_divide",
         lambda d: d is not lucid.bool_ and d not in _COMPLEX,
     ),
-    "%": _Op(operator.mod, lucid.remainder, "remainder", _any),
+    "%": _Op(
+        operator.mod,
+        lucid.remainder,
+        "remainder",
+        lambda d: d is not lucid.bool_ and d not in _COMPLEX,
+    ),
     "&": _Op(operator.and_, lucid.bitwise_and, "bitwise_and", _integral),
     "|": _Op(operator.or_, lucid.bitwise_or, "bitwise_or", _integral),
     "^": _Op(operator.xor, lucid.bitwise_xor, "bitwise_xor", _integral),

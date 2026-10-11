@@ -11,6 +11,7 @@
 
 #include "../core/TensorImpl.h"
 #include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Floordiv.h"
 #include "../ops/bfunc/Matmul.h"
 #include "../ops/composite/Indexing.h"
 #include "../ops/composite/Layout.h"

@@ -75,35 +75,15 @@ _DEPARTURES = {
 #
 # LCD-433: the reference's 5-D unnormalise ``((g + 1) * size - 1) / 2`` is
 # one fused multiply-add on arm64; Lucid rounds twice, so far out the
-# reflected position can sit a whole sample away.  Some such cells agree
-# today only because lucid.fmod's rounding (LCD-159) cancels the missing
-# FMA — the card's own repro, nearest at 1e10 on a 3x3x3 input, is one.
-# Landing LCD-159 alone flips those to failing; LCD-433 and LCD-159
-# together make every cell agree.
+# reflected position can sit a whole sample away.  Until LCD-159 made
+# ``lucid.fmod`` exact, its rounding cancelled the missing FMA in some
+# cells and added to it in others; with the exact ``fmod`` these four are
+# the ones left, and LCD-433 alone decides them.
 _FMA = "LCD-433: 5-D reflection unnormalise needs a fused multiply-add"
-# LCD-159: the 5-D reference reflects with an exact ``fmod``; lucid.fmod
-# rounds once the quotient passes 2**24.  A span of 3 (the 4-high axis with
-# align_corners) is the one in this matrix that shows it.
-_FMOD = "LCD-159: engine fmod is inexact for |a/b| >= 2^24"
 _PINNED = {
-    **{
-        f"3d-3x4x5-{mode}-reflection-edges-{cell}": _FMA
-        # The cells left out (bilinear 1e10-y, nearest 1e10-z, ...) agree
-        # today by the LCD-159 cancellation described above.
-        for mode, cells in (
-            ("bilinear", ("1e10-x", "1e10-z", "1e10-all")),
-            ("nearest", ("1e10-x", "1e10-all")),
-            ("bilinear", ("-1e10-x", "-1e10-z", "-1e10-all")),
-            ("nearest", ("-1e10-x", "-1e10-z", "-1e10-all")),
-        )
-        for cell in cells
-    },
-    **{
-        f"3d-3x4x5-{mode}-reflection-corners-{sign}1e10-{axis}": _FMOD
-        for mode in ("bilinear", "nearest")
-        for sign in ("", "-")
-        for axis in ("y", "all")
-    },
+    f"3d-3x4x5-{mode}-reflection-edges-1e10-{axis}": _FMA
+    for mode in ("bilinear", "nearest")
+    for axis in ("z", "all")
 }
 
 

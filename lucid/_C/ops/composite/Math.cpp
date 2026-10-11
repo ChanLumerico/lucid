@@ -18,7 +18,6 @@
 #include "../bfunc/Add.h"
 #include "../bfunc/Compare.h"
 #include "../bfunc/Div.h"
-#include "../bfunc/Floordiv.h"
 #include "../bfunc/Maximum.h"
 #include "../bfunc/Minimum.h"
 #include "../bfunc/Mul.h"
@@ -139,35 +138,6 @@ TensorImplPtr atan2_op(const TensorImplPtr& y, const TensorImplPtr& x) {
     auto x0_branch = where_op(y_zero, zero_out, by_y_pos);
 
     return where_op(x_is_zero, x0_branch, by_x);
-}
-
-// ``fmod(a, b) = a − trunc(a / b) · b``.  C-style modulo: result has the
-// sign of ``a`` because ``trunc`` rounds toward zero.
-TensorImplPtr fmod_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    auto q = div_op(a, b);
-    auto k = trunc_op(q);
-    return sub_op(a, mul_op(k, b));
-}
-
-// ``remainder(a, b) = a − floor(a / b) · b``.  Python-style modulo: result
-// has the sign of ``b`` because ``floor`` rounds toward −∞.
-TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    if (!is_floating_point(a->dtype()) && !is_floating_point(b->dtype())) {
-        // Integer division truncates toward zero, so ``floor_op(div_op(...))``
-        // collapses to fmod (the sign of ``a``) instead of the floored modulo.
-        // Route through the integer-correct floored-division primitive so the
-        // remainder keeps the sign of ``b`` (and ``(a // b) * b + r == a``).  Do
-        // the arithmetic entirely in I64 (floordiv already yields I64; mul/sub
-        // require matching operand dtypes), then cast back to preserve the
-        // caller's integer dtype.
-        const auto a64 = astype_op(a, Dtype::I64);
-        const auto b64 = astype_op(b, Dtype::I64);
-        const auto k = floordiv_op(a64, b64);
-        return astype_op(sub_op(a64, mul_op(k, b64)), a->dtype());
-    }
-    auto q = div_op(a, b);
-    auto k = floor_op(q);
-    return sub_op(a, mul_op(k, b));
 }
 
 namespace {

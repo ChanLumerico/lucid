@@ -9,10 +9,10 @@ The operator, ``lucid.<op>`` and ``Tensor.<op>`` must all reach the same
 values.
 
 The reference's CPU backend applies op-math only with the number on the
-right; with the number on the left (``s / t``) and for floor division (its
-CPU floor is ``fmod``-based) the expected values come from the reference's
-own float32 arithmetic rounded once, which is what its Metal backend and
-Lucid's both do.
+right; with the number on the left (``s / t``) and for floor division the
+expected values come from the reference's own float32 arithmetic rounded
+once, which is what Lucid does.  For floor division that is the exact
+float32 floor (LCD-159), so f16 ``1.0 // 0.1`` is 9.
 
 The last group pins integer and complex numbers: an integer past 2**53
 reaches an int64 tensor exactly, and a complex number reaches a complex
@@ -64,7 +64,7 @@ def _expected(ref: ModuleType, half: str, op: str, s: float | int) -> list[float
     if op == "rdiv":
         out = (ref.tensor(float(s), dtype=ref.float32) / rt.float()).to(rt.dtype)
     elif op == "//":
-        out = ref.floor(rt.float() / ref.tensor(float(s), dtype=ref.float32))
+        out = rt.float() // ref.tensor(float(s), dtype=ref.float32)
         out = out.to(rt.dtype)
     else:
         try:

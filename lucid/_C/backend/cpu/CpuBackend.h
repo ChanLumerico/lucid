@@ -81,6 +81,7 @@
 #include "../IBackend.h"
 #include "../LapackInfo.h"
 #include "Blas.h"
+#include "DivMod.h"
 #include "ErfPoly.h"
 #include "GeluGrad.h"
 #include "GridSample.h"
@@ -13240,45 +13241,12 @@ private:
     }
 
     Storage floordiv(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
+        // Exact, in ``dt`` (DivMod.h).  floordiv_op no longer calls this.
         if (detail::is_half_like(dt))
             return detail::back_to_f16(
                 floordiv(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * sizeof(std::int64_t);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto* dst = reinterpret_cast<std::int64_t*>(ptr.get());
-        auto run = [&](const auto* p, const auto* q) {
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = static_cast<std::int64_t>(
-                    std::floor(static_cast<double>(p[i]) / static_cast<double>(q[i])));
-        };
-        switch (dt) {
-        case Dtype::F32:
-            run(reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-            break;
-        case Dtype::F64:
-            run(reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-            break;
-        case Dtype::I32:
-            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
-            break;
-        case Dtype::I64:
-            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("cpu_backend::floordiv").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, Dtype::I64}};
+        return Storage{cpu::divmod(DivMod::FloorDiv, std::get<CpuStorage>(a),
+                                   std::get<CpuStorage>(b), shape_numel(shape), dt)};
     }
 
     Storage inner(const Storage& a,

@@ -12,13 +12,15 @@
 //   log10  = log(x) / log(10)
 //   log1p  = log(1 + x)
 //   exp2   = exp(x · log(2))
-//   (trunc, which frac and fmod use, is a step function of its own — ufunc/Discrete.h)
+//   (trunc, which frac uses, is a step function of its own — ufunc/Discrete.h)
 //   frac   = x − trunc(x)
 //   atan2  = quadrant-aware arctangent (where + arctan + ±π corrections)
-//   fmod   = a − trunc(a / b) · b                       [C-style modulo]
-//   remainder = a − floor(a / b) · b                    [Python-style modulo]
 //   hypot  = sqrt(a² + b²)
 //   logaddexp = m + log(exp(a − m) + exp(b − m))        [stable; m = max(a,b)]
+//
+// ``fmod`` and ``remainder`` were here as ``a − trunc(a / b) · b`` and
+// ``a − floor(a / b) · b``; the rounded quotient made them inexact, so they
+// are kernels now (bfunc/Floordiv.h).
 
 #pragma once
 
@@ -187,60 +189,6 @@ LUCID_API TensorImplPtr frac_op(const TensorImplPtr& a);
 // --------
 // :func:`arctan_op`.
 LUCID_API TensorImplPtr atan2_op(const TensorImplPtr& y, const TensorImplPtr& x);
-
-// C-style floating modulo: $y = a - \mathrm{trunc}(a/b) \cdot b$.
-//
-// Composite over :func:`div_op` + :func:`trunc_op` + :func:`mul_op` +
-// :func:`sub_op`.  Result has the sign of ``a`` because ``trunc`` rounds
-// toward zero.  Gradient flows through the primitives.
-//
-// Math
-// ----
-// $$
-//   y = a - \mathrm{trunc}(a/b) \cdot b
-// $$
-//
-// Parameters
-// ----------
-// a, b : TensorImplPtr
-//     Broadcastable operands.  ``b`` must be non-zero where evaluated.
-//
-// Returns
-// -------
-// TensorImplPtr
-//     Tensor on the broadcast shape with the sign of ``a``.
-//
-// See Also
-// --------
-// :func:`remainder_op` — Python-style sign convention.
-LUCID_API TensorImplPtr fmod_op(const TensorImplPtr& a, const TensorImplPtr& b);
-
-// Python-style modulo: $y = a - \lfloor a/b \rfloor \cdot b$.
-//
-// Composite over :func:`div_op` + :func:`floor_op` + :func:`mul_op` +
-// :func:`sub_op`.  Result has the sign of ``b`` because ``floor`` rounds
-// toward $-\infty$.
-//
-// Math
-// ----
-// $$
-//   y = a - \lfloor a/b \rfloor \cdot b
-// $$
-//
-// Parameters
-// ----------
-// a, b : TensorImplPtr
-//     Broadcastable operands.  ``b`` must be non-zero where evaluated.
-//
-// Returns
-// -------
-// TensorImplPtr
-//     Tensor on the broadcast shape with the sign of ``b``.
-//
-// See Also
-// --------
-// :func:`fmod_op` — C-style sign convention.
-LUCID_API TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 // Pythagorean length: $y = \sqrt{a^2 + b^2}$.
 //

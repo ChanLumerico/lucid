@@ -94,6 +94,7 @@
 #include "../IBackend.h"
 #include "AxisIndex.h"
 #include "Conversion.h"
+#include "DivMod.h"
 #include "HalfAccumulation.h"
 #include "Interpolate.h"
 #include "LinalgStatus.h"
@@ -7425,16 +7426,12 @@ private:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
-    Storage floordiv(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        const auto& ga = std::get<GpuStorage>(a);
-        const auto& gb = std::get<GpuStorage>(b);
-        (void)shape;
-        (void)dt;
-        auto a_f = ::mlx::core::astype(*ga.arr, ::mlx::core::float32);
-        auto b_f = ::mlx::core::astype(*gb.arr, ::mlx::core::float32);
-        auto q = ::mlx::core::floor(::mlx::core::divide(a_f, b_f));
-        auto out_i = ::mlx::core::astype(q, ::mlx::core::int64);
-        return Storage{gpu::wrap_mlx_array(std::move(out_i), Dtype::I64)};
+    // Exact, in ``dt`` (DivMod.h).  floordiv_op no longer calls this.
+    Storage floordiv(const Storage& a, const Storage& b, const Shape&, Dtype dt) override {
+        return Storage{
+            gpu::wrap_mlx_array(gpu_divmod(DivMod::FloorDiv, *std::get<GpuStorage>(a).arr,
+                                           *std::get<GpuStorage>(b).arr),
+                                dt)};
     }
 
     Storage inner(const Storage& a,

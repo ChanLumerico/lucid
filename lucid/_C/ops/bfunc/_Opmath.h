@@ -14,9 +14,8 @@
 // op-math to a scalar operand of mul, div and floor_divide and rounds it first
 // for every other binary op, which Lucid already does.
 //
-// Floor division is ``floor`` of the float32 quotient, rounded once — the
-// same rule as every other floating-point ``//`` in Lucid (``floor_op`` over
-// ``div_op``).
+// Floor division is the exact float32 floor quotient, rounded once — the
+// same rule as every other floating-point ``//`` in Lucid (backend/DivMod.h).
 //
 // The 0-d operand must not require grad: its gradient would be a reduction
 // over ``T`` in float32, which nothing sends yet.  Under autocast, when the
@@ -42,6 +41,9 @@
 
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
+#include "../../backend/DivMod.h"
+#include "../../backend/cpu/DivMod.h"
+#include "../../backend/gpu/DivMod.h"
 #include "../../backend/gpu/HalfAccumulation.h"
 #include "../../backend/gpu/MlxBridge.h"
 #include "../../core/Device.h"
@@ -115,11 +117,14 @@ struct Forward {
     std::vector<mx::array> operator()(const std::vector<mx::array>& in) const {
         const mx::array t = backend::widen_half(in[0]);
         const mx::array& s = in[1];
-        mx::array r = K == Op::Mul  ? mx::multiply(t, s)
-                      : ScalarFirst ? mx::divide(s, t)
-                                    : mx::divide(t, s);
-        if constexpr (K == Op::FloorDiv)
-            r = mx::floor(r);
+        mx::array r = s;
+        if constexpr (K == Op::Mul)
+            r = mx::multiply(t, s);
+        else if constexpr (K == Op::Div)
+            r = ScalarFirst ? mx::divide(s, t) : mx::divide(t, s);
+        else
+            r = ScalarFirst ? backend::gpu_floor_divide_float32(s, t)
+                            : backend::gpu_floor_divide_float32(t, s);
         return {backend::narrow_to(r, in[0].dtype())};
     }
 };
@@ -143,8 +148,10 @@ inline mx::array fused(Op op, bool scalar_first, const std::vector<mx::array>& i
         return scalar_first ? backend::mlx_fused(ins, Forward<Op::Div, true>{})[0]
                             : backend::mlx_fused(ins, Forward<Op::Div, false>{})[0];
     case Op::FloorDiv:
-        return scalar_first ? backend::mlx_fused(ins, Forward<Op::FloorDiv, true>{})[0]
-                            : backend::mlx_fused(ins, Forward<Op::FloorDiv, false>{})[0];
+        // Unfused: a fused kernel is built for fast math, which loses the
+        // infinities floor division answers by (backend/gpu/DivMod.h).
+        return scalar_first ? Forward<Op::FloorDiv, true>{}(ins)[0]
+                            : Forward<Op::FloorDiv, false>{}(ins)[0];
     }
     return backend::mlx_fused(ins, Forward<Op::Mul, false>{})[0];
 }
@@ -192,10 +199,13 @@ inline Storage compute(Op op,
     const Storage s32 = s_dt == Dtype::F32 ? s : be.astype(s, Shape{}, s_dt, Dtype::F32);
     const Storage s_full{
         detail::broadcast_cpu(std::get<CpuStorage>(s32), Shape{}, shape, Dtype::F32)};
-    Storage q = scalar_first ? be.div(s_full, x32, shape, Dtype::F32)
-                             : be.div(x32, s_full, shape, Dtype::F32);
-    if (op == Op::FloorDiv)
-        q = be.floor(q, shape, Dtype::F32);
+    const Storage& num = scalar_first ? s_full : x32;
+    const Storage& den = scalar_first ? x32 : s_full;
+    const Storage q = op == Op::FloorDiv
+                          ? Storage{backend::cpu::divmod(
+                                backend::DivMod::FloorDiv, std::get<CpuStorage>(num),
+                                std::get<CpuStorage>(den), shape_numel(shape), Dtype::F32)}
+                          : be.div(num, den, shape, Dtype::F32);
     return be.astype(q, shape, Dtype::F32, h);
 }
 

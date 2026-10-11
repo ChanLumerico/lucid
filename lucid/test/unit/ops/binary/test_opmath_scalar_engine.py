@@ -10,16 +10,15 @@ The oracle is the float32 op of the widened operands, rounded to the half
 dtype by a separate cast. Equality is exact: there is exactly one rounding
 on each side.
 
-Two places where the reference framework disagrees with itself, and with
-this contract, so they are not pinned against it:
+Floor division is the exact float32 floor (LCD-159): f16 ``1.0 // 0.1``
+is 9, as on the reference's CPU backend, although ``1.0 / 0.1`` rounds to
+exactly 10 in float32.
 
-* Order. Its CPU backend applies op-math only when the scalar is the right
-  operand. ``S * T`` and ``S / T`` round ``S`` to the half dtype first, so
-  CPU ``1e5 * f16(0.5)`` is inf. Its Metal backend, like Lucid, is
-  symmetric.
-* Floor division. Its CPU backend uses a Python-exact ``fmod``-based floor,
-  so f16 ``1.0 // 0.1`` is 9. Its Metal backend, like every floating-point
-  ``//`` in Lucid, floors the float32 quotient, which rounds to exactly 10.
+Order is where the reference framework disagrees with itself, and with
+this contract, so it is not pinned against it: its CPU backend applies
+op-math only when the scalar is the right operand. ``S * T`` and ``S / T``
+round ``S`` to the half dtype first, so CPU ``1e5 * f16(0.5)`` is inf. Its
+Metal backend, like Lucid, is symmetric.
 """
 
 from typing import Any
@@ -71,7 +70,7 @@ def _oracle(
     elif op == "div":
         r = x / y
     else:
-        r = lucid.floor(x / y)
+        r = x // y
     return r.to(t.dtype)
 
 
@@ -111,14 +110,15 @@ class TestReferenceValues:
         t = lucid.full((2,), 1e-3, dtype=lucid.float16, device=device)
         assert _call("mul", t, _scalar(1e5, device)).tolist() == [100.0625, 100.0625]
 
-    def test_floor_division_floors_the_float32_quotient(self, device: str) -> None:
-        # float32(1.0) / float32(0.1) rounds to exactly 10.0 (the reference
-        # CPU backend's fmod-based floor says 9; see the module docstring).
+    def test_floor_division_is_the_exact_float32_floor(self, device: str) -> None:
+        # float32(1.0) / float32(0.1) rounds to exactly 10.0, but 0.1 in
+        # float32 is a little over a tenth, so the floor is 9, as the
+        # reference says.
         t = _half([1.0, -1.0, 7.0], lucid.float16, device)
         assert _call("floordiv", t, _scalar(0.1, device)).tolist() == [
-            10.0,
+            9.0,
             -10.0,
-            70.0,
+            69.0,
         ]
         # f16(1e-3) // 1e-5 is floor(100.04) = 100; with 1e-5 rounded to
         # float16 first it would be floor(99.9) = 99.

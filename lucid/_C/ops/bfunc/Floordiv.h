@@ -1,67 +1,89 @@
 // lucid/_C/ops/bfunc/Floordiv.h
 //
-// Declares floordiv_op, the entry point for element-wise integer floor
-// division.  The operation requires equal-shape operands and always returns an
-// I64 tensor.  No gradient is defined because floor division is not
-// differentiable.
+// The floor-division family: floor division (``//``), the floored
+// remainder (``%``) and the truncated remainder (``fmod``).  One kernel
+// per op computes each element exactly, in the operands' dtype, on both
+// streams (backend/DivMod.h has the rule).  They used to divide in float,
+// which rounded every integer past 2**24 on Metal and 2**53 on the CPU and
+// every float quotient past 2**24.
+//
+// Integer operands refuse a zero divisor anywhere in ``b`` with
+// ``RuntimeError: ZeroDivisionError``, as the reference does; floats
+// follow IEEE.  Bool and complex operands are refused.
 
 #pragma once
 
+#include <utility>
+
 #include "../../api.h"
+#include "../../core/AmpPolicy.h"
+#include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
+#include "_BinaryOp.h"
 
 namespace lucid {
 
-// Compute the elementwise floor division $y = \lfloor a / b \rfloor$.
-//
-// Floor division is **non-differentiable** (piecewise constant with jumps at
-// every integer crossing), so no autograd node is registered: the returned
-// tensor never carries a ``grad_fn`` and the result effectively detaches its
-// inputs from the graph.
-//
-// Parameters
-// ----------
-// a : TensorImplPtr
-//     Numerator tensor.
-// b : TensorImplPtr
-//     Denominator tensor.  Must have the **same shape and dtype** as ``a`` —
-//     no broadcasting and no implicit dtype promotion is performed.
-//
-// Returns
-// -------
-// TensorImplPtr
-//     Tensor of shape ``a.shape`` and dtype :enum:`Dtype::I64` holding
-//     $\lfloor a / b \rfloor$.  The cast to I64 is unconditional regardless
-//     of the input dtype, matching Python's ``//`` operator semantics.
-//
-// Math
-// ----
-// $$
-//   y_i = \left\lfloor \frac{a_i}{b_i} \right\rfloor
-// $$
-//
-// Shape
-// -----
-// ``a.shape == b.shape``.  The result is the same shape.  Integer operands
-// give an I64 result; floating-point operands keep their own dtype, which
-// is what Python's ``//`` and the reference framework both do.
-//
-// Raises
-// ------
-// LucidError
-//     If ``a.shape != b.shape`` or ``a.dtype != b.dtype``.
-//
-// Notes
-// -----
-// Behaviour on division by zero is delegated to the backend primitive
-// (``backend.floordiv``) for integers.  The float path is ``floor(a / b)``,
-// so ``NaN`` and ``Inf`` propagate as they do everywhere else rather than
-// collapsing to platform-defined integers.
-//
-// See Also
-// --------
-// div_op : True (real-valued) elementwise division, fully differentiable.
+// ``floor(a / b)``.  Piecewise constant: both gradients are zero.
+class LUCID_API FloordivBackward : public BinaryOp<FloordivBackward> {
+public:
+    static const OpSchema schema_v1;
+    static constexpr bool kSavesInputs = false;
+
+    static CpuStorage
+    cpu_kernel(const CpuStorage& a, const CpuStorage& b, const Shape& shape, Dtype dt);
+    static GpuStorage
+    gpu_kernel(const GpuStorage& a, const GpuStorage& b, const Shape& shape, Dtype dt);
+
+    std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
+};
+
+// ``a - trunc(a / b) * b``, with the sign of ``a``.  ``da = g``,
+// ``db = -g * trunc(a / b)``.
+class LUCID_API FmodBackward : public BinaryOp<FmodBackward> {
+public:
+    static const OpSchema schema_v1;
+
+    static CpuStorage
+    cpu_kernel(const CpuStorage& a, const CpuStorage& b, const Shape& shape, Dtype dt);
+    static GpuStorage
+    gpu_kernel(const GpuStorage& a, const GpuStorage& b, const Shape& shape, Dtype dt);
+
+    std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
+};
+
+// ``a - floor(a / b) * b``, with the sign of ``b``.  ``da = g``,
+// ``db = -g * (a // b)``.
+class LUCID_API RemainderBackward : public BinaryOp<RemainderBackward> {
+public:
+    static const OpSchema schema_v1;
+
+    static CpuStorage
+    cpu_kernel(const CpuStorage& a, const CpuStorage& b, const Shape& shape, Dtype dt);
+    static GpuStorage
+    gpu_kernel(const GpuStorage& a, const GpuStorage& b, const Shape& shape, Dtype dt);
+
+    std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
+};
+
+// Element-wise floor division, broadcast, in the operands' dtype.  A
+// float16 / bfloat16 tensor with a 0-d float32 operand computes in float32
+// and rounds once (ops/bfunc/_Opmath.h).
 LUCID_API TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b);
+
+// Element-wise C remainder: the result has the sign of ``a``.
+LUCID_API TensorImplPtr fmod_op(const TensorImplPtr& a, const TensorImplPtr& b);
+
+// Element-wise Python remainder: the result has the sign of ``b``.
+LUCID_API TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid
