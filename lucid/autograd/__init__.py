@@ -11,10 +11,10 @@ Grad modes: ``no_grad``, ``enable_grad``, ``inference_mode``, and the
 context manager — using it in a ``with`` statement turns grad off globally
 and never restores it, which then affects every later computation.
 
-Higher-order and verification: ``jacobian``, ``hessian``, ``vjp`` and ``jvp``
-for derivatives of derivatives, and ``gradcheck`` / ``gradgradcheck`` to
-verify a hand-written backward against finite differences — worth running on
-any new ``Function``, since a wrong backward produces plausible numbers
+Higher-order and verification: ``jacobian``, ``hessian``, ``vjp``, ``jvp``,
+``hvp`` and ``vhp`` for derivatives of derivatives, and ``gradcheck`` /
+``gradgradcheck`` to verify a hand-written backward against finite
+differences — worth running on any new ``Function``, since a wrong backward produces plausible numbers
 rather than an error.  ``checkpoint`` trades recomputation for activation
 memory, and ``detect_anomaly`` traces the op that first produced a NaN.
 """
@@ -34,7 +34,7 @@ from lucid.autograd._anomaly import (
     is_anomaly_enabled,
     set_detect_anomaly,
 )
-from lucid.autograd._functional import jacobian, hessian, vjp, jvp
+from lucid.autograd._functional import jacobian, hessian, vjp, jvp, hvp, vhp
 from lucid.autograd.checkpoint import checkpoint
 from lucid.autograd._hooks import RemovableHandle
 from lucid.autograd import profiler as profiler
@@ -59,6 +59,8 @@ __all__ = [
     "hessian",
     "vjp",
     "jvp",
+    "hvp",
+    "vhp",
     "checkpoint",
     "RemovableHandle",
     "profiler",

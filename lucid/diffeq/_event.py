@@ -435,14 +435,9 @@ class _EventTimeGradient(Function):
                 lucid.ones((), dtype=state_t.dtype),
             )
 
+        # A partial ``g`` does not depend on comes back as zeros: ignoring
+        # the state entirely routes nothing to the trajectory.
         dg_dt, dg_dy = grads
-        if dg_dy is None:
-            # ``g`` ignores the state entirely, so the event time does not
-            # depend on the trajectory and there is nothing to route.
-            return lucid.zeros_like(state_t)
-        if dg_dt is None:
-            dg_dt = lucid.zeros((), dtype=state_t.dtype)
-
         dcdt = dg_dt + (dg_dy * f_val).sum()
         return dg_dy * (-grad_t.reshape(()) / (dcdt + _EVENT_DENOM_FLOOR))
 

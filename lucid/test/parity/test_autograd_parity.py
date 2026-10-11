@@ -147,10 +147,9 @@ class TestSecondOrderParity:
 
         _, vjp_l = lucid.autograd.vjp(lambda x: x * x, x_l, v_l)
         _, vjp_r = ref.autograd.functional.vjp(lambda x: x * x, x_r, v_r)
-        # Lucid returns a tuple of grads; reference returns a single tensor.
-        vjp_l_val = vjp_l[0] if isinstance(vjp_l, tuple) else vjp_l
-        vjp_r_val = vjp_r[0] if isinstance(vjp_r, tuple) else vjp_r
-        assert_close(vjp_l_val, vjp_r_val, atol=1e-5)
+        # A bare tensor in, a bare tensor out — on both sides.
+        assert not isinstance(vjp_l, tuple) and not isinstance(vjp_r, tuple)
+        assert_close(vjp_l, vjp_r, atol=1e-5)
 
     def test_jvp_matches(self, ref: Any) -> None:
         x_np = np.array([1.0, 2.0, 3.0], dtype=np.float32)

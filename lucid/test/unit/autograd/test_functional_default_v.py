@@ -26,7 +26,7 @@ def test_vjp_seeds_a_single_element_output(
         s = (x * x * x).sum()
         return s.reshape(1) if keep else s
 
-    out, (grad,) = vjp(cube_sum, lucid.tensor(_DATA, device=device))
+    out, grad = vjp(cube_sum, lucid.tensor(_DATA, device=device))
     want_out, want_grad = ref.autograd.functional.vjp(cube_sum, ref.tensor(_DATA))
     assert out.shape == tuple(want_out.shape)
     assert out.tolist() == pytest.approx(want_out.tolist())
@@ -68,7 +68,7 @@ def test_v_left_out_elsewhere_is_refused(
 
 def test_the_default_seed_under_create_graph(device: str) -> None:
     x = lucid.tensor(_DATA, device=device, requires_grad=True)
-    _, (grad,) = vjp(lambda t: (t * t * t).sum(), x, create_graph=True)
+    _, grad = vjp(lambda t: (t * t * t).sum(), x, create_graph=True)
     (second,) = lucid.autograd.grad(grad.sum(), x)
     assert second.tolist() == pytest.approx([6.0 * v for v in _DATA])
 
@@ -78,7 +78,7 @@ def test_one_tensor_in_a_tuple_is_seeded_too(ref: ModuleType, device: str) -> No
     # does; the reference seeds both.
     data = [2.0]
     x = lucid.tensor(data, device=device)
-    _, (grad,) = vjp(lambda a: ((a * a).sum(),), x)
+    _, grad = vjp(lambda a: ((a * a).sum(),), x)
     _, want = ref.autograd.functional.vjp(lambda a: ((a * a).sum(),), ref.tensor(data))
     assert grad.tolist() == want.tolist()
     _, tangent = jvp(lambda a: a * 3, (x,))
