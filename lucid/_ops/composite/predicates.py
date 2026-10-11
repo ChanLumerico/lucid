@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def numel(x: Tensor) -> int:
+def numel(input: Tensor) -> int:
     r"""Return the total number of elements in a tensor.
 
     Equivalent to the product of the shape dimensions, returned as a
@@ -19,7 +19,7 @@ def numel(x: Tensor) -> int:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
 
     Returns
@@ -46,10 +46,10 @@ def numel(x: Tensor) -> int:
     >>> lucid.numel(x)
     24
     """
-    return int(x.numel())
+    return int(input.numel())
 
 
-def is_storage(x: Tensor) -> bool:
+def is_storage(obj: object, /) -> bool:
     r"""Predicate: is the object a separate Storage container?
 
     Lucid does not expose a distinct Storage type — tensor data ownership
@@ -59,7 +59,7 @@ def is_storage(x: Tensor) -> bool:
 
     Parameters
     ----------
-    x : Tensor
+    obj : object
         Object to test.
 
     Returns
@@ -82,7 +82,7 @@ def is_storage(x: Tensor) -> bool:
     return False
 
 
-def is_nonzero(x: Tensor) -> bool:
+def is_nonzero(input: Tensor) -> bool:
     r"""Predicate: is a single-element tensor non-zero?
 
     Reduces a scalar (one-element) tensor to a Python ``bool``. Raises if
@@ -92,7 +92,7 @@ def is_nonzero(x: Tensor) -> bool:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Single-element tensor (i.e. ``x.numel() == 1``).
 
     Returns
@@ -126,12 +126,12 @@ def is_nonzero(x: Tensor) -> bool:
     >>> lucid.is_nonzero(lucid.tensor(3.5))
     True
     """
-    if x.numel() != 1:
+    if input.numel() != 1:
         raise RuntimeError("is_nonzero is defined only for scalar tensors (numel == 1)")
-    return bool(x.item() != 0)
+    return bool(input.item() != 0)
 
 
-def is_same_size(a: Tensor, b: Tensor) -> bool:
+def is_same_size(input: Tensor, other: Tensor) -> bool:
     r"""Predicate: do two tensors have identical shapes?
 
     Compares the shape tuples exactly — no broadcasting compatibility is
@@ -140,9 +140,9 @@ def is_same_size(a: Tensor, b: Tensor) -> bool:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         First tensor.
-    b : Tensor
+    other : Tensor
         Second tensor.
 
     Returns
@@ -169,10 +169,10 @@ def is_same_size(a: Tensor, b: Tensor) -> bool:
     >>> lucid.is_same_size(a, b)
     True
     """
-    return tuple(a.shape) == tuple(b.shape)
+    return tuple(input.shape) == tuple(other.shape)
 
 
-def is_neg(x: Tensor) -> bool:
+def is_neg(input: Tensor) -> bool:
     r"""Predicate: does the tensor carry a lazy "negated" flag?
 
     Some reference frameworks track negation as a lazy view flag that is
@@ -181,7 +181,7 @@ def is_neg(x: Tensor) -> bool:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Tensor to query.
 
     Returns
@@ -205,7 +205,7 @@ def is_neg(x: Tensor) -> bool:
     return False
 
 
-def is_conj(x: Tensor) -> bool:
+def is_conj(input: Tensor) -> bool:
     r"""Predicate: does the tensor carry a lazy "conjugated" flag?
 
     Some reference frameworks track complex conjugation as a lazy view
@@ -214,7 +214,7 @@ def is_conj(x: Tensor) -> bool:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Tensor to query.
 
     Returns
@@ -302,7 +302,7 @@ def isin(
     return ~out if invert else out
 
 
-def isneginf(x: Tensor) -> Tensor:
+def isneginf(input: Tensor) -> Tensor:
     r"""Element-wise test for negative infinity.
 
     Identifies entries that are exactly :math:`-\infty` in the IEEE 754
@@ -311,13 +311,13 @@ def isneginf(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Floating-point input tensor.
 
     Returns
     -------
     Tensor
-        Boolean tensor of the same shape as ``x``.
+        Boolean tensor of the same shape as ``input``.
 
     Notes
     -----
@@ -339,10 +339,10 @@ def isneginf(x: Tensor) -> Tensor:
     >>> lucid.isneginf(x)
     tensor([True, False, False, False], dtype=lucid.bool)
     """
-    return lucid.logical_and(lucid.isinf(x), x < 0.0)
+    return lucid.logical_and(lucid.isinf(input), input < 0.0)
 
 
-def isposinf(x: Tensor) -> Tensor:
+def isposinf(input: Tensor) -> Tensor:
     r"""Element-wise test for positive infinity.
 
     Identifies entries that are exactly :math:`+\infty` in the IEEE 754
@@ -351,13 +351,13 @@ def isposinf(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Floating-point input tensor.
 
     Returns
     -------
     Tensor
-        Boolean tensor of the same shape as ``x``.
+        Boolean tensor of the same shape as ``input``.
 
     Notes
     -----
@@ -378,10 +378,10 @@ def isposinf(x: Tensor) -> Tensor:
     >>> lucid.isposinf(x)
     tensor([False, False, False, True], dtype=lucid.bool)
     """
-    return lucid.logical_and(lucid.isinf(x), x > 0.0)
+    return lucid.logical_and(lucid.isinf(input), input > 0.0)
 
 
-def isreal(x: Tensor) -> Tensor:
+def isreal(input: Tensor) -> Tensor:
     r"""Element-wise test for real-valued entries.
 
     Lucid currently supports only real-valued floating dtypes (and
@@ -391,13 +391,13 @@ def isreal(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
 
     Returns
     -------
     Tensor
-        Boolean tensor of the same shape as ``x``; every entry is
+        Boolean tensor of the same shape as ``input``; every entry is
         ``True`` for real-valued inputs.
 
     Notes
@@ -420,10 +420,10 @@ def isreal(x: Tensor) -> Tensor:
     >>> lucid.isreal(x)
     tensor([True, True, True], dtype=lucid.bool)
     """
-    return lucid.isfinite(x) | lucid.isnan(x) | lucid.isinf(x)
+    return lucid.isfinite(input) | lucid.isnan(input) | lucid.isinf(input)
 
 
-def conj_physical(x: Tensor) -> Tensor:
+def conj_physical(input: Tensor) -> Tensor:
     r"""Eagerly materialised complex conjugate.
 
     Some reference frameworks distinguish ``conj`` (which may set a lazy
@@ -435,14 +435,14 @@ def conj_physical(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.  Typically ``complex64``; for real dtypes the
         conjugate is the identity.
 
     Returns
     -------
     Tensor
-        Element-wise complex conjugate of ``x``, same shape and dtype.
+        Element-wise complex conjugate of ``input``, same shape and dtype.
 
     Notes
     -----
@@ -464,10 +464,10 @@ def conj_physical(x: Tensor) -> Tensor:
     >>> lucid.conj_physical(z)
     tensor([(1.-2.j), (3.+4.j)], dtype=lucid.complex64)
     """
-    return lucid.conj(x)
+    return lucid.conj(input)
 
 
-def resolve_conj(x: Tensor) -> Tensor:
+def resolve_conj(input: Tensor) -> Tensor:
     r"""Materialise any pending lazy conjugation — no-op in Lucid.
 
     Reference frameworks that maintain a lazy "is_conj" flag on complex
@@ -479,13 +479,13 @@ def resolve_conj(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
 
     Returns
     -------
     Tensor
-        The input ``x`` returned unchanged (no copy, no autograd op
+        The input ``input`` returned unchanged (no copy, no autograd op
         inserted).
 
     Notes
@@ -506,10 +506,10 @@ def resolve_conj(x: Tensor) -> Tensor:
     >>> lucid.resolve_conj(z) is z
     True
     """
-    return x
+    return input
 
 
-def resolve_neg(x: Tensor) -> Tensor:
+def resolve_neg(input: Tensor) -> Tensor:
     r"""Materialise any pending lazy negation — no-op in Lucid.
 
     Reference frameworks that maintain a lazy-negation flag use this op
@@ -519,13 +519,13 @@ def resolve_neg(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
 
     Returns
     -------
     Tensor
-        The input ``x``, returned unchanged.
+        The input ``input``, returned unchanged.
 
     Notes
     -----
@@ -545,7 +545,7 @@ def resolve_neg(x: Tensor) -> Tensor:
     >>> lucid.resolve_neg(x) is x
     True
     """
-    return x
+    return input
 
 
 def allclose(

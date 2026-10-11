@@ -438,29 +438,29 @@ def _load_predicates() -> dict[str, object]:
         e for e, k in _KINDS.items() if k in ("float", "complex", "int")
     )
 
-    def is_tensor(obj: object) -> bool:  # type: ignore
+    def is_tensor(obj: object, /) -> bool:  # type: ignore
         """Return True if *obj* is a lucid Tensor."""
         from lucid._tensor.tensor import Tensor as _T
 
         return isinstance(obj, _T)
 
-    def is_floating_point(t: object) -> bool:  # type: ignore
-        """Return True if *t* has a floating-point dtype."""
+    def is_floating_point(input: object) -> bool:  # type: ignore
+        """Return True if *input* has a floating-point dtype."""
         from lucid._dispatch import _unwrap
 
-        return _unwrap(t).dtype in _FLOAT_DTYPES  # type: ignore[arg-type]
+        return _unwrap(input).dtype in _FLOAT_DTYPES  # type: ignore[arg-type]
 
-    def is_complex(t: object) -> bool:  # type: ignore
-        """Return True if *t* has a complex dtype."""
+    def is_complex(input: object) -> bool:  # type: ignore
+        """Return True if *input* has a complex dtype."""
         from lucid._dispatch import _unwrap
 
-        return _unwrap(t).dtype in _COMPLEX_DTYPES  # type: ignore[arg-type]
+        return _unwrap(input).dtype in _COMPLEX_DTYPES  # type: ignore[arg-type]
 
-    def is_signed(t: object) -> bool:  # type: ignore
-        """Return True if *t* has a signed numeric dtype."""
+    def is_signed(input: object) -> bool:  # type: ignore
+        """Return True if *input* has a signed numeric dtype."""
         from lucid._dispatch import _unwrap
 
-        return _unwrap(t).dtype in _SIGNED_DTYPES  # type: ignore[arg-type]
+        return _unwrap(input).dtype in _SIGNED_DTYPES  # type: ignore[arg-type]
 
     return dict(
         is_tensor=is_tensor,
@@ -512,6 +512,8 @@ def _load_method_aliases() -> dict[str, object]:
     ``lerp(a, b, w)`` etc. are commonly used standalone — we wrap each
     method so the call ``lucid.lerp(a, b, w)`` dispatches to ``a.lerp(b, w)``.
     """
+    import inspect
+
     from lucid._tensor.tensor import Tensor as _T
 
     def _make(method_name: str) -> Callable[..., object]:
@@ -531,6 +533,13 @@ def _load_method_aliases() -> dict[str, object]:
         _fn.__doc__ = (
             f"Free-function alias for ``Tensor.{method_name}``. "
             f"Equivalent to ``input.{method_name}(*args, **kwargs)``."
+        )
+        # The method's parameters, ``self`` read as ``input``: what the
+        # forwarding body accepts, for ``inspect`` and ``help()``.
+        own = inspect.signature(getattr(_T, method_name))
+        first, *rest = own.parameters.values()
+        _fn.__dict__["__signature__"] = own.replace(
+            parameters=[first.replace(name="input"), *rest]
         )
         return _fn
 

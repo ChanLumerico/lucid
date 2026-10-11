@@ -298,8 +298,8 @@ def addr(
 
 def addcmul(
     input: Tensor,
-    t1: Tensor,
-    t2: Tensor,
+    tensor1: Tensor,
+    tensor2: Tensor,
     *,
     value: float = 1.0,
 ) -> Tensor:
@@ -315,12 +315,12 @@ def addcmul(
     ----------
     input : Tensor
         Tensor that is added to the scaled element-wise product.
-    t1 : Tensor
+    tensor1 : Tensor
         Left operand of the element-wise product.  Must broadcast with
-        ``input`` and ``t2``.
-    t2 : Tensor
+        ``input`` and ``tensor2``.
+    tensor2 : Tensor
         Right operand of the element-wise product.  Must broadcast with
-        ``input`` and ``t1``.
+        ``input`` and ``tensor1``.
     value : float, optional
         Scalar multiplier applied to the product ``t1 * t2`` before
         addition.  Defaults to ``1.0`` (plain multiply-and-add).
@@ -353,13 +353,13 @@ def addcmul(
     >>> lucid.addcmul(a, b, c, value=2.0)
     tensor([5., 7., 9.])
     """
-    return input + (t1 * t2) * value
+    return input + (tensor1 * tensor2) * value
 
 
 def addcdiv(
     input: Tensor,
-    t1: Tensor,
-    t2: Tensor,
+    tensor1: Tensor,
+    tensor2: Tensor,
     *,
     value: float = 1.0,
 ) -> Tensor:
@@ -373,10 +373,10 @@ def addcdiv(
     ----------
     input : Tensor
         Accumulator tensor.
-    t1 : Tensor
-        Numerator. Must broadcast with ``input`` and ``t2``.
-    t2 : Tensor
-        Denominator. Must broadcast with ``input`` and ``t1``.
+    tensor1 : Tensor
+        Numerator. Must broadcast with ``input`` and ``tensor2``.
+    tensor2 : Tensor
+        Denominator. Must broadcast with ``input`` and ``tensor1``.
     value : float, optional
         Scalar multiplier on the quotient. Defaults to ``1.0``.
 
@@ -406,10 +406,10 @@ def addcdiv(
     >>> lucid.addcdiv(a, t1, t2, value=0.5)
     tensor([2., 3.5])
     """
-    return input + (t1 / t2) * value
+    return input + (tensor1 / tensor2) * value
 
 
-def mv(mat: Tensor, vec: Tensor) -> Tensor:
+def mv(input: Tensor, vec: Tensor) -> Tensor:
     r"""Matrix-vector product.
 
     Computes the standard matrix-vector product
@@ -417,7 +417,7 @@ def mv(mat: Tensor, vec: Tensor) -> Tensor:
 
     Parameters
     ----------
-    mat : Tensor
+    input : Tensor
         2-D matrix of shape ``(M, N)``.
     vec : Tensor
         1-D vector of shape ``(N,)``.
@@ -448,10 +448,10 @@ def mv(mat: Tensor, vec: Tensor) -> Tensor:
     >>> lucid.mv(M, v)
     tensor([17., 39.])
     """
-    return lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
+    return lucid.matmul(input, vec.unsqueeze(-1)).squeeze(-1)
 
 
-def ger(vec1: Tensor, vec2: Tensor) -> Tensor:
+def ger(input: Tensor, vec2: Tensor) -> Tensor:
     r"""Outer product of two 1-D tensors.
 
     Forwards to :func:`lucid.linalg.outer`. Provided under the legacy BLAS
@@ -459,7 +459,7 @@ def ger(vec1: Tensor, vec2: Tensor) -> Tensor:
 
     Parameters
     ----------
-    vec1 : Tensor
+    input : Tensor
         1-D tensor of length ``M``.
     vec2 : Tensor
         1-D tensor of length ``N``.
@@ -488,10 +488,10 @@ def ger(vec1: Tensor, vec2: Tensor) -> Tensor:
     >>> lucid.ger(u, v)
     tensor([[4., 5.], [8., 10.], [12., 15.]])
     """
-    return lucid.linalg.outer(vec1, vec2)
+    return lucid.linalg.outer(input, vec2)
 
 
-def vdot(a: Tensor, b: Tensor) -> Tensor:
+def vdot(input: Tensor, other: Tensor) -> Tensor:
     r"""Vector dot product (complex-conjugating on the first argument).
 
     Forwards to :func:`lucid.linalg.dot`. For real tensors this is the
@@ -500,10 +500,10 @@ def vdot(a: Tensor, b: Tensor) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         1-D tensor.
-    b : Tensor
-        1-D tensor of the same length as ``a``.
+    other : Tensor
+        1-D tensor of the same length as ``input``.
 
     Returns
     -------
@@ -518,7 +518,7 @@ def vdot(a: Tensor, b: Tensor) -> Tensor:
 
         \text{out} = \sum_{i = 0}^{N - 1} \overline{a_i} \cdot b_i.
 
-    For real ``a`` this reduces to the standard inner product
+    For real ``input`` this reduces to the standard inner product
     :math:`\sum_i a_i b_i`. Tensors must be 1-D and of equal length.
 
     Examples
@@ -529,7 +529,7 @@ def vdot(a: Tensor, b: Tensor) -> Tensor:
     >>> lucid.vdot(a, b)
     tensor(32.)
     """
-    return lucid.linalg.dot(a, b)
+    return lucid.linalg.dot(input, other)
 
 
 def block_diag(*tensors: Tensor) -> Tensor:

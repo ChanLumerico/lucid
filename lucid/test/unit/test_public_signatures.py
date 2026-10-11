@@ -97,7 +97,7 @@ def test_from_numpy_is_unreadable_only_through_its_numpy_annotation() -> None:
     signature = inspect.signature(
         lucid.from_numpy, annotation_format=annotationlib.Format.FORWARDREF
     )
-    assert list(signature.parameters) == ["arr"]
+    assert list(signature.parameters) == ["ndarray"]
 
 
 def test_the_tensor_constructor_is_readable() -> None:

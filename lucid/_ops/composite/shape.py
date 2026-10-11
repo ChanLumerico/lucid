@@ -19,15 +19,15 @@ if TYPE_CHECKING:
 # ── Axis swaps ─────────────────────────────────────────────────────────────
 
 
-def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
-    r"""Return ``x`` with axes ``axis0`` and ``axis1`` exchanged.
+def swapaxes(input: Tensor, axis0: int, axis1: int) -> Tensor:
+    r"""Return ``input`` with axes ``axis0`` and ``axis1`` exchanged.
 
     NumPy-style spelling of pairwise axis transposition.  Verbose alias of
     :func:`swapdims`; both names refer to the same composite.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     axis0 : int
         First axis to swap.  Negative values count from the end.
@@ -37,9 +37,9 @@ def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
     Returns
     -------
     Tensor
-        Tensor with the same data as ``x`` but with ``axis0`` and
-        ``axis1`` exchanged — a view of ``x``'s buffer on the CPU, so a
-        write through it reaches ``x``; a copy on metal.
+        Tensor with the same data as ``input`` but with ``axis0`` and
+        ``axis1`` exchanged — a view of ``input``'s buffer on the CPU, so a
+        write through it reaches ``input``; a copy on metal.
 
     Notes
     -----
@@ -65,10 +65,10 @@ def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
     >>> lucid.swapaxes(x, 0, 2).shape
     (4, 3, 2)
     """
-    return _swap_dims(x, axis0, axis1)
+    return _swap_dims(input, axis0, axis1)
 
 
-def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
+def swapdims(input: Tensor, dim0: int, dim1: int) -> Tensor:
     r"""Swap two named dimensions of a tensor.
 
     Returns a tensor whose dimensions ``dim0`` and ``dim1`` have been
@@ -77,7 +77,7 @@ def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     dim0 : int
         First dimension to swap. Negative values count from the end.
@@ -87,7 +87,7 @@ def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
     Returns
     -------
     Tensor
-        Tensor with the same data as ``x`` but with axes ``dim0`` and
+        Tensor with the same data as ``input`` but with axes ``dim0`` and
         ``dim1`` exchanged.
 
     Notes
@@ -114,11 +114,11 @@ def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
     >>> lucid.swapdims(x, 0, 2).shape
     (4, 3, 2)
     """
-    return _swap_dims(x, dim0, dim1)
+    return _swap_dims(input, dim0, dim1)
 
 
 def moveaxis(
-    x: Tensor,
+    input: Tensor,
     source: int | Sequence[int],
     destination: int | Sequence[int],
 ) -> Tensor:
@@ -132,7 +132,7 @@ def moveaxis(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     source : int | Sequence[int]
         Original position(s) of the axes to move.  Negative values count
@@ -166,10 +166,10 @@ def moveaxis(
     """
     _src = list(source) if not isinstance(source, int) else source
     _dst = list(destination) if not isinstance(destination, int) else destination
-    return lucid.movedim(x, _src, _dst)
+    return lucid.movedim(input, _src, _dst)
 
 
-def adjoint(x: Tensor) -> Tensor:
+def adjoint(input: Tensor) -> Tensor:
     r"""Conjugate (Hermitian) transpose of the trailing two dimensions.
 
     For real-valued tensors this is identical to a plain transpose of the
@@ -178,7 +178,7 @@ def adjoint(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with at least 2 dimensions.
 
     Returns
@@ -210,17 +210,17 @@ def adjoint(x: Tensor) -> Tensor:
     >>> lucid.adjoint(A)
     tensor([[1., 4.], [2., 5.], [3., 6.]])
     """
-    if x.ndim < 2:
+    if input.ndim < 2:
         raise ValueError("adjoint requires at least 2 dimensions")
-    swapped = _swap_dims(x, x.ndim - 2, x.ndim - 1)
+    swapped = _swap_dims(input, input.ndim - 2, input.ndim - 1)
     # The conjugation the definition promises.  It was never applied: a
     # complex transpose used to be refused, so this returned nothing wrong —
     # until transposes read every dtype, and a complex input came back only
     # transposed.
-    return lucid.conj(swapped) if lucid.is_complex(x) else swapped
+    return lucid.conj(swapped) if lucid.is_complex(input) else swapped
 
 
-def t(x: Tensor) -> Tensor:
+def t(input: Tensor) -> Tensor:
     r"""Short-form transpose for tensors of rank at most 2.
 
     A convenience analogue of MATLAB's ``A'`` or the reference
@@ -229,19 +229,19 @@ def t(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with at most 2 dimensions.
 
     Returns
     -------
     Tensor
-        For ``ndim <= 1``, returns ``x`` unchanged.
+        For ``ndim <= 1``, returns ``input`` unchanged.
         For ``ndim == 2``, returns the 2-D transpose.
 
     Raises
     ------
     RuntimeError
-        If ``x`` has 3 or more dimensions.
+        If ``input`` has 3 or more dimensions.
 
     Notes
     -----
@@ -265,11 +265,11 @@ def t(x: Tensor) -> Tensor:
     >>> lucid.t(A).shape
     (2, 3)
     """
-    if x.ndim < 2:
-        return x
-    if x.ndim != 2:
+    if input.ndim < 2:
+        return input
+    if input.ndim != 2:
         raise RuntimeError("t() expects a tensor with <= 2 dimensions")
-    return _swap_dims(x, 0, 1)
+    return _swap_dims(input, 0, 1)
 
 
 # ── Stacks ─────────────────────────────────────────────────────────────────
@@ -587,7 +587,7 @@ def _split_along(
     return lucid.split(x, split_sizes, dim)
 
 
-def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+def vsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     r"""Split a tensor along its first (vertical) axis.
 
     NumPy-style vertical split: cuts the input into pieces along axis 0.
@@ -596,7 +596,7 @@ def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with at least 1 dimension.
     indices_or_sections : int | Sequence[int]
         - ``int``: number of equal-sized splits. If the axis length is
@@ -607,7 +607,7 @@ def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     Returns
     -------
     list[Tensor]
-        Sub-tensors whose stacking along axis 0 reproduces ``x``.
+        Sub-tensors whose stacking along axis 0 reproduces ``input``.
 
     Raises
     ------
@@ -627,12 +627,12 @@ def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     >>> [s.shape for s in lucid.vsplit(x, 2)]
     [(2, 3), (2, 3)]
     """
-    if x.ndim < 1:
+    if input.ndim < 1:
         raise ValueError("vsplit requires at least 1-D input")
-    return _split_along(x, indices_or_sections, 0)
+    return _split_along(input, indices_or_sections, 0)
 
 
-def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+def hsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     r"""Split a tensor horizontally (along axis 1 for rank :math:`\geq 2`).
 
     NumPy-style horizontal split: cuts the input column-wise along axis 1
@@ -641,7 +641,7 @@ def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.  At least 1-D.
     indices_or_sections : int | Sequence[int]
         - ``int``: number of (near-)equal-sized splits.  If the axis
@@ -654,7 +654,7 @@ def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     -------
     list[Tensor]
         Sub-tensors whose concatenation along the split axis reproduces
-        ``x``.
+        ``input``.
 
     Notes
     -----
@@ -682,10 +682,10 @@ def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     >>> [s.shape for s in lucid.hsplit(v, 3)]
     [(2,), (2,), (2,)]
     """
-    return _split_along(x, indices_or_sections, 0 if x.ndim == 1 else 1)
+    return _split_along(input, indices_or_sections, 0 if input.ndim == 1 else 1)
 
 
-def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+def dsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     r"""Split a tensor along its third (depth) axis.
 
     NumPy-style depth-wise split: cuts the input into pieces along axis 2.
@@ -693,7 +693,7 @@ def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with at least 3 dimensions.
     indices_or_sections : int | Sequence[int]
         - ``int``: number of equal-sized splits along axis 2.
@@ -702,7 +702,7 @@ def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     Returns
     -------
     list[Tensor]
-        Sub-tensors whose concatenation along axis 2 reproduces ``x``.
+        Sub-tensors whose concatenation along axis 2 reproduces ``input``.
 
     Raises
     ------
@@ -722,13 +722,13 @@ def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     >>> [s.shape for s in lucid.dsplit(x, 2)]
     [(2, 3, 2), (2, 3, 2)]
     """
-    if x.ndim < 3:
+    if input.ndim < 3:
         raise ValueError("dsplit requires at least 3-D input")
-    return _split_along(x, indices_or_sections, 2)
+    return _split_along(input, indices_or_sections, 2)
 
 
 def tensor_split(
-    x: Tensor,
+    input: Tensor,
     indices_or_sections: int | Sequence[int],
     dim: int = 0,
 ) -> list[Tensor]:
@@ -744,7 +744,7 @@ def tensor_split(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     indices_or_sections : int | Sequence[int]
         - ``int``: number of (near-)equal-sized splits.  The first
@@ -756,7 +756,7 @@ def tensor_split(
     Returns
     -------
     list[Tensor]
-        Sub-tensors whose concatenation along ``dim`` reproduces ``x``.
+        Sub-tensors whose concatenation along ``dim`` reproduces ``input``.
 
     Notes
     -----
@@ -781,46 +781,46 @@ def tensor_split(
     >>> [s.shape for s in lucid.tensor_split(x, [2, 5])]
     [(2,), (3,), (5,)]
     """
-    return _split_along(x, indices_or_sections, dim)
+    return _split_along(input, indices_or_sections, dim)
 
 
 # ── Misc ───────────────────────────────────────────────────────────────────
 
 
-def take_along_dim(x: Tensor, indices: Tensor, dim: int | None = None) -> Tensor:
-    r"""Gather elements from ``x`` at positions ``indices`` along ``dim``.
+def take_along_dim(input: Tensor, indices: Tensor, dim: int | None = None) -> Tensor:
+    r"""Gather elements from ``input`` at positions ``indices`` along ``dim``.
 
     Advanced indexing primitive analogous to ``np.take_along_axis``:
-    selects one element from ``x`` for every entry in ``indices``,
+    selects one element from ``input`` for every entry in ``indices``,
     broadcasting the remaining (non-``dim``) axes between the two
     tensors — :func:`lucid.gather` after that broadcast, which ``gather``
     itself does not do.  With ``dim=None`` both are read flattened.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Source tensor.
     indices : Tensor
         Integer tensor of positions along ``dim``, with as many dims as
-        ``x``.  Its shape must be broadcast-compatible with ``x`` on every
+        ``input``.  Its shape must be broadcast-compatible with ``input`` on every
         axis other than ``dim``; the size along ``dim`` controls the size
         of the output along that axis.  A negative position counts from
         the end.
     dim : int, optional
         Axis along which to gather.  Negative values count from the end.
-        ``None`` (default) reads ``x`` and ``indices`` flattened.
+        ``None`` (default) reads ``input`` and ``indices`` flattened.
 
     Returns
     -------
     Tensor
-        Tensor with the broadcast shape of ``x`` and ``indices`` (with
+        Tensor with the broadcast shape of ``input`` and ``indices`` (with
         the size along ``dim`` taken from ``indices``), 1-D when ``dim``
-        is ``None``.  Dtype matches ``x``.
+        is ``None``.  Dtype matches ``input``.
 
     Raises
     ------
     lucid._C.engine.ShapeMismatch
-        ``indices`` has another number of dims than ``x``.
+        ``indices`` has another number of dims than ``input``.
     IndexError
         The shapes do not broadcast on an axis other than ``dim``.
 
@@ -849,25 +849,25 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int | None = None) -> Tensor
     tensor([[3., 1.], [5., 6.]])
     """
     if dim is None:
-        return lucid.gather(x.reshape(-1), 0, indices.reshape(-1))
-    if indices.ndim != x.ndim:
+        return lucid.gather(input.reshape(-1), 0, indices.reshape(-1))
+    if indices.ndim != input.ndim:
         raise _C_engine.ShapeMismatch(
             f"take_along_dim: input and indices should have the same number of "
-            f"dims, got {x.ndim} and {indices.ndim}"
+            f"dims, got {input.ndim} and {indices.ndim}"
         )
-    dim = _wrap_dim(dim, x.ndim, "take_along_dim")
-    if x.ndim == 0:
-        return lucid.gather(x.reshape(1), 0, indices.reshape(1)).reshape(())
-    x_shape = list(x.shape)
+    dim = _wrap_dim(dim, input.ndim, "take_along_dim")
+    if input.ndim == 0:
+        return lucid.gather(input.reshape(1), 0, indices.reshape(1)).reshape(())
+    x_shape = list(input.shape)
     i_shape = list(indices.shape)
     x_shape[dim] = i_shape[dim] = 1
     shape = _broadcast_shape([x_shape, i_shape])
     x_to = list(shape)
-    x_to[dim] = int(x.shape[dim])
+    x_to[dim] = int(input.shape[dim])
     i_to = list(shape)
     i_to[dim] = int(indices.shape[dim])
     return lucid.gather(
-        x.broadcast_to(tuple(x_to)), dim, indices.broadcast_to(tuple(i_to))
+        input.broadcast_to(tuple(x_to)), dim, indices.broadcast_to(tuple(i_to))
     )
 
 
@@ -1050,7 +1050,7 @@ def _combination_indices(n: int, r: int, with_replacement: bool) -> Tensor:
     return combos
 
 
-def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
+def rot90(input: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     r"""Rotate a tensor by 90° in a chosen plane.
 
     Applies ``k`` successive 90° rotations in the plane spanned by the
@@ -1060,7 +1060,7 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor (any rank :math:`\geq 2`).
     k : int, optional
         Number of 90° rotations to apply. Negative values rotate in the
@@ -1073,7 +1073,7 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     Returns
     -------
     Tensor
-        Tensor of the same rank as ``x``; the two axes in ``dims`` are
+        Tensor of the same rank as ``input``; the two axes in ``dims`` are
         permuted and one of them is flipped (their lengths swap when
         ``k`` is odd).
 
@@ -1103,12 +1103,12 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     d0, d1 = dims[0], dims[1]
     k = k % 4
     if k == 0:
-        return x
+        return input
     if k == 1:
-        return _swap_dims(lucid.flip(x, [d1]), d0, d1)
+        return _swap_dims(lucid.flip(input, [d1]), d0, d1)
     if k == 2:
-        return lucid.flip(x, list(dims))
-    return _swap_dims(lucid.flip(x, [d0]), d0, d1)
+        return lucid.flip(input, list(dims))
+    return _swap_dims(lucid.flip(input, [d0]), d0, d1)
 
 
 __all__ = [

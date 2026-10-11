@@ -664,13 +664,13 @@ def linspace(
 
 
 def zeros_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return a zero-filled tensor with the same shape, dtype, and device as ``t``.
+    r"""Return a zero-filled tensor with the same shape, dtype, and device as ``input``.
 
     Equivalent to ``lucid.zeros(t.shape, dtype=t.dtype, device=t.device)``,
     but infers the metadata from an existing tensor so the caller need not
@@ -685,7 +685,7 @@ def zeros_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor.  Its ``shape``, ``dtype``, and ``device`` are
         used as defaults for the output.
     dtype : lucid.dtype, optional
@@ -701,7 +701,7 @@ def zeros_like(
     Returns
     -------
     Tensor
-        Zero tensor with the same shape (and optionally dtype/device) as ``t``.
+        Zero tensor with the same shape (and optionally dtype/device) as ``input``.
 
     Notes
     -----
@@ -728,23 +728,23 @@ def zeros_like(
     >>> mask = lucid.zeros_like(w, dtype=lucid.bool_)
     """
     _dt, _dev, _rg = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
         requires_grad,
     )
-    impl = _unwrap(t)
+    impl = _unwrap(input)
     out = _C_engine.zeros(list(impl.shape), _dt, _dev)
     return _wrap(_leaf(out, _rg))
 
 
 def ones_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return an all-ones tensor with the same shape, dtype, and device as ``t``.
+    r"""Return an all-ones tensor with the same shape, dtype, and device as ``input``.
 
     Equivalent to ``lucid.ones(t.shape, dtype=t.dtype, device=t.device)``,
     but infers metadata from an existing tensor.  Every element satisfies
@@ -756,7 +756,7 @@ def ones_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor whose ``shape``, ``dtype``, and ``device`` are
         used as defaults.
     dtype : lucid.dtype, optional
@@ -769,7 +769,7 @@ def ones_like(
     Returns
     -------
     Tensor
-        All-ones tensor shaped like ``t``.
+        All-ones tensor shaped like ``input``.
 
     Notes
     -----
@@ -796,25 +796,25 @@ def ones_like(
     >>> weight = lucid.ones_like(x, requires_grad=True)
     """
     _dt, _dev, _rg = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
         requires_grad,
     )
-    impl = _unwrap(t)
+    impl = _unwrap(input)
     out = _C_engine.ones(list(impl.shape), _dt, _dev)
     return _wrap(_leaf(out, _rg))
 
 
 def empty_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return an uninitialised tensor with the same shape, dtype, and device as ``t``.
+    r"""Return an uninitialised tensor with the same shape, dtype, and device as ``input``.
 
-    Allocates backing memory matching ``t``'s metadata but performs no
+    Allocates backing memory matching ``input``'s metadata but performs no
     initialisation write.  Reading elements before overwriting them is
     undefined behaviour.  The typical use is to pre-allocate an output
     buffer for an in-place kernel call:
@@ -826,7 +826,7 @@ def empty_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor whose ``shape``, ``dtype``, and ``device`` are
         inherited by the output.
     dtype : lucid.dtype, optional
@@ -839,7 +839,7 @@ def empty_like(
     Returns
     -------
     Tensor
-        Uninitialised tensor shaped like ``t``.
+        Uninitialised tensor shaped like ``input``.
 
     Notes
     -----
@@ -858,24 +858,24 @@ def empty_like(
     (1024, 1024)
     """
     _dt, _dev, _rg = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
         requires_grad,
     )
-    impl = _unwrap(t)
+    impl = _unwrap(input)
     out = _C_engine.empty(list(impl.shape), _dt, _dev)
     return _wrap(_leaf(out, _rg))
 
 
 def full_like(
-    t: Tensor,
+    input: Tensor,
     fill_value: complex,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return a constant-filled tensor with the same shape, dtype, and device as ``t``.
+    r"""Return a constant-filled tensor with the same shape, dtype, and device as ``input``.
 
     Every element of the output equals ``fill_value``:
 
@@ -889,7 +889,7 @@ def full_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor.  Shape, dtype, and device are inherited unless
         overridden by the keyword arguments.
     fill_value : bool, int, float or complex
@@ -908,7 +908,7 @@ def full_like(
     Returns
     -------
     Tensor
-        Constant tensor shaped like ``t``.
+        Constant tensor shaped like ``input``.
 
     Notes
     -----
@@ -941,11 +941,11 @@ def full_like(
     >>> padded = lucid.full_like(x, -1.0)
     """
     _dt, _dev, _rg = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
         requires_grad,
     )
-    return _wrap(_leaf(_fill(list(t.shape), fill_value, _dt, _dev), _rg))
+    return _wrap(_leaf(_fill(list(input.shape), fill_value, _dt, _dev), _rg))
 
 
 def logspace(

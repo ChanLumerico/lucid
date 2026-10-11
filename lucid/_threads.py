@@ -24,7 +24,7 @@ _intra_op_threads: int = 0
 _inter_op_threads: int = 0
 
 
-def set_num_threads(n: int) -> None:
+def set_num_threads(n: int, /) -> None:
     """Record the desired number of intra-op threads.  Advisory only —
     Accelerate threading is configured via ``VECLIB_MAXIMUM_THREADS`` at
     process start, not via runtime API.
@@ -48,7 +48,7 @@ def get_num_threads() -> int:
     return _intra_op_threads
 
 
-def set_num_interop_threads(n: int) -> None:
+def set_num_interop_threads(n: int, /) -> None:
     """Record the desired inter-op thread count.  Advisory only — Lucid
     does not maintain a separate inter-op pool.
 

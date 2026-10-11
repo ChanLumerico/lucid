@@ -7,7 +7,7 @@ _default_dtype: dtype = _f32
 _default_device_str: str = "cpu"
 
 
-def set_default_dtype(d: dtype) -> None:
+def set_default_dtype(d: dtype, /) -> None:
     """Set the dtype used by factory functions when none is supplied.
 
     Affects ``lucid.tensor``, ``lucid.zeros``, ``lucid.ones``,

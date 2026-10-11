@@ -453,6 +453,7 @@ def tensor(
 
 def as_tensor(
     data: object,
+    *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor:
@@ -544,7 +545,7 @@ def _widen_unsigned(arr: np.ndarray) -> np.ndarray:
     return arr.astype(target)
 
 
-def from_numpy(arr: np.ndarray) -> Tensor:
+def from_numpy(ndarray: np.ndarray, /) -> Tensor:
     r"""Copy a NumPy ``ndarray`` into an owned Lucid tensor.
 
     The returned tensor owns a copy and inherits the array's dtype according
@@ -556,7 +557,7 @@ def from_numpy(arr: np.ndarray) -> Tensor:
 
     Parameters
     ----------
-    arr : numpy.ndarray
+    ndarray : numpy.ndarray
         Source array.  Must reside in CPU memory.  Any layout (C / Fortran /
         strided) is accepted and copied to contiguous owned storage.
 
@@ -597,7 +598,7 @@ def from_numpy(arr: np.ndarray) -> Tensor:
     >>> t[0, 0].item()            # the owned copy is unchanged
     1.0
     """
-    return tensor(arr)
+    return tensor(ndarray)
 
 
 # ── DLPack interop ─────────────────────────────────────────────────────────
@@ -663,8 +664,8 @@ def from_dlpack(ext_tensor: object) -> Tensor:
     return tensor(arr)
 
 
-def to_dlpack(t: Tensor) -> object:
-    """Export ``t`` as a DLPack PyCapsule.
+def to_dlpack(tensor: Tensor) -> object:
+    """Export ``tensor`` as a DLPack PyCapsule.
 
     A Metal tensor exports natively — the capsule carries its
     ``MTLBuffer``, so an MLX consumer reads the same pages rather than a
@@ -674,7 +675,7 @@ def to_dlpack(t: Tensor) -> object:
     Requires numpy for the host dialect — install via
     ``pip install lucid[numpy]`` if missing.
     """
-    if t.is_metal:
-        return t.__dlpack__()
+    if tensor.is_metal:
+        return tensor.__dlpack__()
     _require_numpy("lucid.to_dlpack")
-    return t.numpy().__dlpack__()
+    return tensor.numpy().__dlpack__()

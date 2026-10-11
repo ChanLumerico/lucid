@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 def nansum(
-    x: Tensor,
+    input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
@@ -23,7 +23,7 @@ def nansum(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor (any floating-point dtype).
     dim : int | Sequence[int] | None, optional
         Axis or axes along which to sum. ``None`` (default) reduces over
@@ -60,15 +60,15 @@ def nansum(
     >>> lucid.nansum(x)
     tensor(4.)
     """
-    safe = lucid.where(lucid.isnan(x), lucid.full_like(x, 0.0), x)
+    safe = lucid.where(lucid.isnan(input), lucid.full_like(input, 0.0), input)
     if dim is None:
         return lucid.sum(safe)
-    _dim = _reduction_axes(x._impl, dim, "nansum")
+    _dim = _reduction_axes(input._impl, dim, "nansum")
     return lucid.sum(safe, _dim, keepdim)
 
 
 def nanmean(
-    x: Tensor,
+    input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
@@ -80,7 +80,7 @@ def nanmean(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor (any floating-point dtype).
     dim : int | Sequence[int] | None, optional
         Axis or axes along which to take the mean. ``None`` (default)
@@ -116,18 +116,20 @@ def nanmean(
     >>> lucid.nanmean(x)
     tensor(2.)
     """
-    mask = lucid.isnan(x)
-    safe = lucid.where(mask, lucid.full_like(x, 0.0), x)
+    mask = lucid.isnan(input)
+    safe = lucid.where(mask, lucid.full_like(input, 0.0), input)
     # Count non-NaN via where: 1.0 where not NaN, 0.0 where NaN
-    not_nan = lucid.where(mask, lucid.full_like(x, 0.0), lucid.full_like(x, 1.0))
+    not_nan = lucid.where(
+        mask, lucid.full_like(input, 0.0), lucid.full_like(input, 1.0)
+    )
     if dim is None:
         return lucid.sum(safe) / lucid.sum(not_nan)
-    _dim = _reduction_axes(x._impl, dim, "nanmean")
+    _dim = _reduction_axes(input._impl, dim, "nanmean")
     return lucid.sum(safe, _dim, keepdim) / lucid.sum(not_nan, _dim, keepdim)
 
 
 def nanmedian(
-    x: Tensor,
+    input: Tensor,
     dim: int | None = None,
     keepdim: bool = False,
 ) -> Tensor | tuple[Tensor, Tensor]:
@@ -140,10 +142,10 @@ def nanmedian(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of a floating or integer dtype.
     dim : int | None, optional
-        Reduction axis.  ``None`` (default) flattens ``x`` first.
+        Reduction axis.  ``None`` (default) flattens ``input`` first.
     keepdim : bool, optional
         If ``True``, retain the reduced axis as a singleton in the
         output shape.  Ignored when ``dim is None``.  Defaults to
@@ -155,7 +157,7 @@ def nanmedian(
         With ``dim is None``, the scalar median of the non-NaN entries.
         With ``dim`` given, ``(values, indices)``: the median of every
         slice along ``dim`` and the ``int64`` position of that median in
-        ``x``, both the input shape with ``dim`` removed (or kept as
+        ``input``, both the input shape with ``dim`` removed (or kept as
         size 1 if ``keepdim=True``).
 
     Raises
@@ -194,15 +196,15 @@ def nanmedian(
     >>> indices
     tensor([0, 1], dtype=lucid.int64)
     """
-    if x.dtype == lucid.bool_:
+    if input.dtype == lucid.bool_:
         # As the reference does: a median of booleans is not defined here,
         # and the sort underneath accepts bool, so it has to be said.
         raise NotImplementedError(
             "nanmedian does not accept bool — cast to an integer dtype"
         )
     if dim is None:
-        return _nanmedian_all(x)
-    return _nanmedian_along(x, dim, keepdim)
+        return _nanmedian_all(input)
+    return _nanmedian_along(input, dim, keepdim)
 
 
 def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor]:

@@ -246,13 +246,13 @@ def get_rng_state() -> Tensor:
     return _state_tensor(_active_default_gen())
 
 
-def set_rng_state(state: Tensor) -> None:
+def set_rng_state(new_state: Tensor) -> None:
     r"""Restore the default random generator to a previously captured state.
 
     Rewinds (or fast-forwards) the Philox generator to the exact
-    ``(seed, counter)`` pair encoded in ``state``, so that the next
+    ``(seed, counter)`` pair encoded in ``new_state``, so that the next
     sample call produces exactly the same value as it did immediately
-    after the `get_rng_state` call that created ``state``.
+    after the `get_rng_state` call that created ``new_state``.
 
     Formally, after ``set_rng_state(state)`` the generator satisfies:
 
@@ -265,7 +265,7 @@ def set_rng_state(state: Tensor) -> None:
 
     Parameters
     ----------
-    state : Tensor
+    new_state : Tensor
         Length-2 ``int64`` tensor ``[seed, counter]`` as returned by
         `get_rng_state`.  Passing a tensor of any other shape or dtype
         raises ``ValueError``.
@@ -273,7 +273,7 @@ def set_rng_state(state: Tensor) -> None:
     Raises
     ------
     ValueError
-        If ``state`` does not have exactly 2 elements.
+        If ``new_state`` does not have exactly 2 elements.
 
     Notes
     -----
@@ -306,7 +306,7 @@ def set_rng_state(state: Tensor) -> None:
     0.0
     """
     global _default_generator
-    s_seed, s_counter = _unpack_state(state, "set_rng_state")
+    s_seed, s_counter = _unpack_state(new_state, "set_rng_state")
     # Build a fresh generator at the captured (seed, counter) pair — Philox is
     # counter-based so this exactly recovers the prior sampling stream.
     g = Generator(s_seed)
@@ -588,7 +588,7 @@ def randint(
 
 
 def bernoulli(
-    p: float,
+    input: float,
     *,
     size: list[int] | tuple[int, ...] | None = None,
     dtype: DTypeLike = None,
@@ -596,7 +596,7 @@ def bernoulli(
     requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
-    r"""Return a tensor of independent Bernoulli trials with success probability ``p``.
+    r"""Return a tensor of independent Bernoulli trials with success probability ``input``.
 
     Each element is drawn from the Bernoulli distribution:
 
@@ -610,7 +610,7 @@ def bernoulli(
 
     Parameters
     ----------
-    p : float
+    input : float
         Success probability.  Must satisfy $0 \le p \le 1$.
     size : list[int] or tuple[int, ...], optional
         Shape of the output tensor.  Defaults to ``(1,)`` when ``None``.
@@ -663,7 +663,7 @@ def bernoulli(
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size) if size is not None else [1]
-    impl = _C_engine.bernoulli(shape, p, _dt, _dev, _get_gen(generator))
+    impl = _C_engine.bernoulli(shape, input, _dt, _dev, _get_gen(generator))
     return _wrap(_leaf(impl, requires_grad))
 
 
@@ -756,13 +756,13 @@ def normal(
 
 
 def rand_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return a $U[0,1)$ random tensor with the same shape, dtype, and device as ``t``.
+    r"""Return a $U[0,1)$ random tensor with the same shape, dtype, and device as ``input``.
 
     Equivalent to ``lucid.rand(t.shape, dtype=t.dtype, device=t.device)``,
     but infers metadata from an existing tensor so the caller need not
@@ -776,7 +776,7 @@ def rand_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor.  Its ``shape``, ``dtype``, and ``device`` are
         inherited by the output unless overridden.
     dtype : lucid.dtype, optional
@@ -789,7 +789,7 @@ def rand_like(
     Returns
     -------
     Tensor
-        Uniform random tensor shaped like ``t``.
+        Uniform random tensor shaped like ``input``.
 
     Examples
     --------
@@ -801,7 +801,7 @@ def rand_like(
 
     Notes
     -----
-    The returned tensor mirrors ``t``'s ``shape``, ``dtype``, and
+    The returned tensor mirrors ``input``'s ``shape``, ``dtype``, and
     ``device`` exactly unless overridden via the corresponding keyword
     arguments.  Sampling follows the same dtype-default rule as
     :func:`lucid.rand`: only floating-point dtypes are supported.  Calling
@@ -810,21 +810,21 @@ def rand_like(
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
     )
-    impl = _C_engine.rand(list(t.shape), _dt, _dev, None)
+    impl = _C_engine.rand(list(input.shape), _dt, _dev, None)
     return _wrap(_leaf(impl, requires_grad))
 
 
 def randn_like(
-    t: Tensor,
+    input: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    r"""Return a $\mathcal{N}(0,1)$ random tensor with the same shape, dtype, and device as ``t``.
+    r"""Return a $\mathcal{N}(0,1)$ random tensor with the same shape, dtype, and device as ``input``.
 
     Equivalent to ``lucid.randn(t.shape, dtype=t.dtype, device=t.device)``,
     inferring all metadata from an existing tensor.
@@ -838,7 +838,7 @@ def randn_like(
 
     Parameters
     ----------
-    t : Tensor
+    input : Tensor
         Reference tensor whose ``shape``, ``dtype``, and ``device`` are
         inherited unless overridden.
     dtype : lucid.dtype, optional
@@ -851,7 +851,7 @@ def randn_like(
     Returns
     -------
     Tensor
-        Standard-normal random tensor shaped like ``t``.
+        Standard-normal random tensor shaped like ``input``.
 
     Notes
     -----
@@ -879,10 +879,10 @@ def randn_like(
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
+        dtype if dtype is not None else input.dtype,
+        device if device is not None else input.device,
     )
-    impl = _C_engine.randn(list(t.shape), _dt, _dev, None)
+    impl = _C_engine.randn(list(input.shape), _dt, _dev, None)
     return _wrap(_leaf(impl, requires_grad))
 
 

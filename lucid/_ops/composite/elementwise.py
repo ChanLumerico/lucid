@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 # ── Aliases ────────────────────────────────────────────────────────────────
 
 
-def absolute(x: Tensor) -> Tensor:
+def absolute(input: Tensor) -> Tensor:
     r"""Element-wise absolute value.
 
     Verbose alias of :func:`lucid.abs`, exposed for parity with reference
@@ -40,13 +40,13 @@ def absolute(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Any numeric dtype.
 
     Returns
     -------
     Tensor
-        Tensor of the same shape and dtype as ``x`` containing
+        Tensor of the same shape and dtype as ``input`` containing
         :math:`|x_i|` element-wise.
 
     Notes
@@ -67,10 +67,10 @@ def absolute(x: Tensor) -> Tensor:
     >>> lucid.absolute(x)
     tensor([1.5, 0., 2.])
     """
-    return lucid.abs(x)
+    return lucid.abs(input)
 
 
-def negative(x: Tensor) -> Tensor:
+def negative(input: Tensor) -> Tensor:
     r"""Element-wise negation.
 
     Verbose alias of :func:`lucid.neg`. Equivalent to the unary ``-`` operator
@@ -78,13 +78,13 @@ def negative(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Any numeric dtype.
 
     Returns
     -------
     Tensor
-        Tensor of the same shape and dtype as ``x`` whose entries are
+        Tensor of the same shape and dtype as ``input`` whose entries are
         :math:`-x_i`.
 
     Notes
@@ -95,7 +95,7 @@ def negative(x: Tensor) -> Tensor:
 
         \text{out}_i = -x_i
 
-    The gradient with respect to ``x`` is :math:`-1` everywhere.
+    The gradient with respect to ``input`` is :math:`-1` everywhere.
 
     Examples
     --------
@@ -104,10 +104,10 @@ def negative(x: Tensor) -> Tensor:
     >>> lucid.negative(x)
     tensor([-1., 2., -3.5])
     """
-    return lucid.neg(x)
+    return lucid.neg(input)
 
 
-def positive(x: Tensor) -> Tensor:
+def positive(input: Tensor) -> Tensor:
     r"""Element-wise identity — returns the input unchanged.
 
     Provided as the unary-``+`` counterpart of :func:`negative`, matching
@@ -115,13 +115,13 @@ def positive(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
 
     Returns
     -------
     Tensor
-        The input ``x``, returned without modification (no copy, no
+        ``input`` itself, returned without modification (no copy, no
         autograd op inserted).
 
     Notes
@@ -142,30 +142,30 @@ def positive(x: Tensor) -> Tensor:
     >>> lucid.positive(x) is x
     True
     """
-    return x
+    return input
 
 
-def subtract(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
+def subtract(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     r"""Element-wise subtraction with an optional scalar multiplier.
 
-    Computes :math:`a - \alpha \cdot b` element-wise, broadcasting ``a``
-    and ``b`` to a common shape and following the standard dtype-promotion
+    Computes :math:`a - \alpha \cdot b` element-wise, broadcasting ``input``
+    and ``other`` to a common shape and following the standard dtype-promotion
     rules.
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         Minuend.
-    b : Tensor | Scalar
-        Subtrahend. Python scalars are broadcast against ``a``.
+    other : Tensor | Scalar
+        Subtrahend. Python scalars are broadcast against ``input``.
     alpha : float, optional
-        Scalar multiplier applied to ``b`` before subtraction.
+        Scalar multiplier applied to ``other`` before subtraction.
         Defaults to ``1.0`` (plain subtraction).
 
     Returns
     -------
     Tensor
-        Element-wise difference of the broadcast shape of ``a`` and ``b``.
+        Element-wise difference of the broadcast shape of ``input`` and ``other``.
 
     Notes
     -----
@@ -188,27 +188,27 @@ def subtract(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     tensor([2., 1.])
     """
     if alpha == 1.0:
-        return a - b
-    return a - (b * alpha)
+        return input - other
+    return input - (other * alpha)
 
 
-def multiply(a: Tensor, b: Tensor | Scalar) -> Tensor:
+def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise product.
 
-    Verbose alias of the ``*`` operator. Broadcasts ``a`` and ``b`` and
+    Verbose alias of the ``*`` operator. Broadcasts ``input`` and ``other`` and
     applies the standard dtype-promotion rules.
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         First operand.
-    b : Tensor | Scalar
+    other : Tensor | Scalar
         Second operand.
 
     Returns
     -------
     Tensor
-        Element-wise product of the broadcast shape of ``a`` and ``b``.
+        Element-wise product of the broadcast shape of ``input`` and ``other``.
 
     Notes
     -----
@@ -228,10 +228,10 @@ def multiply(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> lucid.multiply(a, 2.0)
     tensor([2., 4., 6.])
     """
-    return a * b
+    return input * other
 
 
-def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
+def divide(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise true division.
 
     Verbose alias of the ``/`` operator. Always performs floating-point
@@ -240,15 +240,15 @@ def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         Numerator.
-    b : Tensor | Scalar
+    other : Tensor | Scalar
         Denominator.
 
     Returns
     -------
     Tensor
-        Element-wise quotient of the broadcast shape of ``a`` and ``b``,
+        Element-wise quotient of the broadcast shape of ``input`` and ``other``,
         in a floating-point dtype.
 
     Notes
@@ -271,10 +271,10 @@ def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> lucid.divide(a, 3.0)
     tensor([2., 3.])
     """
-    return a / b
+    return input / other
 
 
-def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
+def true_divide(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise true (floating-point) division.
 
     Equivalent to :func:`divide`; named ``true_divide`` for parity with
@@ -283,9 +283,9 @@ def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         Numerator.
-    b : Tensor | Scalar
+    other : Tensor | Scalar
         Denominator.
 
     Returns
@@ -312,28 +312,28 @@ def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> lucid.true_divide(a, 2)
     tensor([3.5, 4.])
     """
-    return a / b
+    return input / other
 
 
-def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
+def rsub(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     r"""Reverse subtraction: :math:`b - \alpha \cdot a`.
 
-    Useful when ``b`` is a Python scalar that cannot left-bind the ``-``
+    Useful when ``other`` is a Python scalar that cannot left-bind the ``-``
     operator against a tensor in a particular calling convention.
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         Right operand (subtrahend, multiplied by ``alpha``).
-    b : Tensor | Scalar
+    other : Tensor | Scalar
         Left operand (minuend).
     alpha : float, optional
-        Scalar multiplier applied to ``a``. Defaults to ``1.0``.
+        Scalar multiplier applied to ``input``. Defaults to ``1.0``.
 
     Returns
     -------
     Tensor
-        Element-wise difference of the broadcast shape of ``a`` and ``b``.
+        Element-wise difference of the broadcast shape of ``input`` and ``other``.
 
     Notes
     -----
@@ -344,8 +344,8 @@ def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
         \text{out}_i = b_i - \alpha \cdot a_i
 
     Equivalent to :func:`subtract` with the operands reversed (and ``alpha``
-    re-attached to the new second argument). Gradient w.r.t. ``a`` is
-    :math:`-\alpha`; w.r.t. ``b`` is :math:`1`.
+    re-attached to the new second argument). Gradient w.r.t. ``input`` is
+    :math:`-\alpha`; w.r.t. ``other`` is :math:`1`.
 
     Examples
     --------
@@ -355,11 +355,11 @@ def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     tensor([9., 8.])
     """
     if alpha == 1.0:
-        return b - a
-    return b - (a * alpha)
+        return other - input
+    return other - (input * alpha)
 
 
-def arctan2(y: Tensor, x: Tensor) -> Tensor:
+def arctan2(input: Tensor, other: Tensor) -> Tensor:
     r"""Quadrant-correct two-argument arctangent.
 
     Verbose alias of :func:`lucid.atan2`.  Returns the polar angle
@@ -368,16 +368,16 @@ def arctan2(y: Tensor, x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    y : Tensor
-        Ordinate (imaginary / y-coordinate). Must broadcast with ``x``.
-    x : Tensor
-        Abscissa (real / x-coordinate). Must broadcast with ``y``.
+    input : Tensor
+        Ordinate (imaginary / y-coordinate). Must broadcast with ``other``.
+    other : Tensor
+        Abscissa (real / x-coordinate). Must broadcast with ``input``.
 
     Returns
     -------
     Tensor
         Element-wise angle in radians on :math:`[-\pi, \pi]`, with the
-        broadcast shape of ``y`` and ``x``.
+        broadcast shape of ``input`` and ``other``.
 
     Notes
     -----
@@ -408,13 +408,13 @@ def arctan2(y: Tensor, x: Tensor) -> Tensor:
     >>> lucid.arctan2(y, x)
     tensor([0.7854, 2.356, -2.356, -0.7854])
     """
-    return lucid.atan2(y, x)
+    return lucid.atan2(input, other)
 
 
 # ── Inverse hyperbolic (composed) ──────────────────────────────────────────
 
 
-def arccosh(x: Tensor) -> Tensor:
+def arccosh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic cosine.
 
     Verbose alias of :func:`acosh`.  Computes the principal branch
@@ -423,14 +423,14 @@ def arccosh(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; element-wise values must satisfy :math:`x \geq 1`
         for a real result.
 
     Returns
     -------
     Tensor
-        Element-wise inverse hyperbolic cosine, same shape as ``x``.
+        Element-wise inverse hyperbolic cosine, same shape as ``input``.
 
     Notes
     -----
@@ -454,10 +454,10 @@ def arccosh(x: Tensor) -> Tensor:
     >>> lucid.arccosh(x)
     tensor([0., 1.317, 2.993])
     """
-    return lucid.log(x + lucid.sqrt(x * x - 1.0))
+    return lucid.log(input + lucid.sqrt(input * input - 1.0))
 
 
-def acosh(x: Tensor) -> Tensor:
+def acosh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic cosine.
 
     Short-name alias of :func:`arccosh`. Computes the principal branch of
@@ -465,7 +465,7 @@ def acosh(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with values in the domain :math:`x \geq 1`.
 
     Returns
@@ -492,25 +492,25 @@ def acosh(x: Tensor) -> Tensor:
     >>> lucid.acosh(x)
     tensor([0., 1.317, 2.993])
     """
-    return arccosh(x)
+    return arccosh(input)
 
 
-def arcsinh(x: Tensor) -> Tensor:
+def arcsinh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic sine.
 
     Verbose alias of :func:`asinh`.  Computes
     :math:`\operatorname{arcsinh}(x) = \log\!\bigl(x + \sqrt{x^{2} + 1}\bigr)`,
-    defined for all real ``x``.
+    defined for all real ``input``.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; domain is all of :math:`\mathbb{R}`.
 
     Returns
     -------
     Tensor
-        Element-wise inverse hyperbolic sine, same shape as ``x``.
+        Element-wise inverse hyperbolic sine, same shape as ``input``.
 
     Notes
     -----
@@ -532,17 +532,17 @@ def arcsinh(x: Tensor) -> Tensor:
     >>> lucid.arcsinh(x)
     tensor([-0.8814, 0., 0.8814])
     """
-    return lucid.log(x + lucid.sqrt(x * x + 1.0))
+    return lucid.log(input + lucid.sqrt(input * input + 1.0))
 
 
-def asinh(x: Tensor) -> Tensor:
+def asinh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic sine.
 
     Short-name alias of :func:`arcsinh`. Defined for all real inputs.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Domain is all of :math:`\mathbb{R}`.
 
     Returns
@@ -568,10 +568,10 @@ def asinh(x: Tensor) -> Tensor:
     >>> lucid.asinh(x)
     tensor([-0.8814, 0., 0.8814])
     """
-    return arcsinh(x)
+    return arcsinh(input)
 
 
-def arctanh(x: Tensor) -> Tensor:
+def arctanh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic tangent.
 
     Verbose alias of :func:`atanh`.  Computes
@@ -581,14 +581,14 @@ def arctanh(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; element-wise values must satisfy :math:`|x| < 1`
         for a finite real result.
 
     Returns
     -------
     Tensor
-        Element-wise inverse hyperbolic tangent, same shape as ``x``.
+        Element-wise inverse hyperbolic tangent, same shape as ``input``.
 
     Notes
     -----
@@ -611,10 +611,10 @@ def arctanh(x: Tensor) -> Tensor:
     >>> lucid.arctanh(x)
     tensor([-0.5493, 0., 0.5493])
     """
-    return lucid.log((1.0 + x) / (1.0 - x)) * 0.5
+    return lucid.log((1.0 + input) / (1.0 - input)) * 0.5
 
 
-def atanh(x: Tensor) -> Tensor:
+def atanh(input: Tensor) -> Tensor:
     r"""Inverse hyperbolic tangent.
 
     Short-name alias of :func:`arctanh`. Domain is the open interval
@@ -622,7 +622,7 @@ def atanh(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with values in :math:`|x| < 1`.
 
     Returns
@@ -650,13 +650,13 @@ def atanh(x: Tensor) -> Tensor:
     >>> lucid.atanh(x)
     tensor([-0.5493, 0., 0.5493])
     """
-    return arctanh(x)
+    return arctanh(input)
 
 
 # ── Specials ───────────────────────────────────────────────────────────────
 
 
-def expm1(x: Tensor) -> Tensor:
+def expm1(input: Tensor) -> Tensor:
     r"""Element-wise :math:`e^{x} - 1`.
 
     Computes the exponential-minus-one function to full relative precision,
@@ -666,7 +666,7 @@ def expm1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Any floating-point dtype.
 
     Returns
@@ -697,7 +697,7 @@ def expm1(x: Tensor) -> Tensor:
     # of u against the same rounding in log(u), so it keeps full relative
     # precision near 0.  The guards take u == 1 (x underflowed), u == 0 and
     # u == inf, where the ratio is 0/0 or inf/inf.
-    xd = x.detach()
+    xd = input.detach()
     u = lucid.exp(xd)
     accurate = lucid.where(u == 1.0, xd, (u - 1.0) * xd / lucid.log(u))
     # Kahan's second guard: once u - 1 rounds to -1, -1 is the answer.  The
@@ -707,7 +707,7 @@ def expm1(x: Tensor) -> Tensor:
     accurate = lucid.where((u == 0.0) | ~lucid.isfinite(u), u - 1.0, accurate)
     # The value is the accurate one; the gradient is exp(x)'s, carried by the
     # naive form under it, so the guards' 0/0 branches never reach backward.
-    naive = lucid.exp(x) - 1.0
+    naive = lucid.exp(input) - 1.0
     correction = lucid.where(
         lucid.isfinite(naive.detach()),
         accurate - naive.detach(),
@@ -716,10 +716,10 @@ def expm1(x: Tensor) -> Tensor:
     # Where exp(x) rounds to 1, x itself is the answer and its gradient is
     # exp(x) to within an ulp; taking it directly also keeps expm1(-0) = -0,
     # which ``0 + (-0)`` would turn into +0.
-    return lucid.where(u == 1.0, x, naive + correction.detach())
+    return lucid.where(u == 1.0, input, naive + correction.detach())
 
 
-def sinc(x: Tensor) -> Tensor:
+def sinc(input: Tensor) -> Tensor:
     r"""Normalised sinc function with the standard removable singularity at 0.
 
     The "normalised" sinc carries a factor of :math:`\pi` inside the sine,
@@ -728,7 +728,7 @@ def sinc(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Any floating-point dtype.
 
     Returns
@@ -759,14 +759,14 @@ def sinc(x: Tensor) -> Tensor:
     >>> lucid.sinc(x)
     tensor([1., 0.6366, -0.2122])
     """
-    px = x * math.pi
-    is_zero = x == 0.0
-    safe_px = lucid.where(is_zero, lucid.full_like(x, 1.0), px)
+    px = input * math.pi
+    is_zero = input == 0.0
+    safe_px = lucid.where(is_zero, lucid.full_like(input, 1.0), px)
     val = lucid.sin(safe_px) / safe_px
-    return lucid.where(is_zero, lucid.full_like(x, 1.0), val)
+    return lucid.where(is_zero, lucid.full_like(input, 1.0), val)
 
 
-def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
+def heaviside(input: Tensor, values: Tensor | Scalar) -> Tensor:
     r"""Heaviside step function with a user-selectable value at :math:`x = 0`.
 
     Produces ``0`` for negative inputs and ``1`` for positive inputs; the
@@ -775,11 +775,11 @@ def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     values : Tensor | Scalar
         Value(s) used wherever ``x == 0``. If a scalar, it is broadcast to
-        the shape of ``x``; if a tensor, it must broadcast against ``x``.
+        the shape of ``input``; if a tensor, it must broadcast against ``input``.
 
     Returns
     -------
@@ -810,11 +810,11 @@ def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
     tensor([0., 0.5, 1.])
     """
     if not _is_tensor(values):
-        values = lucid.full_like(x, float(cast(float, values)))
+        values = lucid.full_like(input, float(cast(float, values)))
     return lucid.where(
-        x == 0.0,
+        input == 0.0,
         values,
-        lucid.where(x > 0.0, lucid.full_like(x, 1.0), lucid.full_like(x, 0.0)),
+        lucid.where(input > 0.0, lucid.ones_like(input), lucid.zeros_like(input)),
     )
 
 
@@ -877,7 +877,7 @@ def _x_times_log(
     return x * log(lucid.where(degenerate, root, y))
 
 
-def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
+def xlogy(input: Tensor | Scalar, other: Tensor | Scalar) -> Tensor:
     r"""Compute :math:`x \log y` with the convention :math:`0 \cdot \log y = 0`.
 
     Frequently used to compute cross-entropy losses and log-densities
@@ -887,9 +887,9 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor | Scalar
+    input : Tensor | Scalar
         Left operand (multiplier).
-    y : Tensor | Scalar
+    other : Tensor | Scalar
         Argument of the logarithm. Must be non-negative for a real result.
 
     Returns
@@ -913,16 +913,16 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
 
     The convention covers only ``x == 0``: with ``x != 0`` the plain
     definition applies, so ``xlogy(2, 0)`` is ``-inf`` and a negative
-    ``y`` gives NaN.
+    ``other`` gives NaN.
 
     Gradients are :math:`\partial/\partial x = \log y` and
     :math:`\partial/\partial y = x / y`, except where ``x == 0`` and
-    :math:`\log y` is not finite (``y <= 0`` or ``y`` infinite): there
+    :math:`\log y` is not finite (``y <= 0`` or ``other`` infinite): there
     both are ``0``, so the backward never forms ``0 \cdot \infty``.  At
-    ``x == 0`` with ``0 < y < \infty`` the ``x`` gradient stays
+    ``x == 0`` with ``0 < y < \infty`` the ``input`` gradient stays
     :math:`\log y`.  Two cells differ from the reference framework on
-    purpose: at ``(0, 0)`` its ``y`` gradient is ``0 / 0 = NaN`` and
-    Lucid's is ``0``, and at ``(0, +\infty)`` its ``x`` gradient is
+    purpose: at ``(0, 0)`` its ``other`` gradient is ``0 / 0 = NaN`` and
+    Lucid's is ``0``, and at ``(0, +\infty)`` its ``input`` gradient is
     :math:`+\infty` and Lucid's is ``0`` (a composite cannot give a
     value of 0 a gradient of :math:`+\infty` without forming
     ``0 \cdot \infty`` in the forward pass).
@@ -937,10 +937,10 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     >>> lucid.xlogy(2.0, 0.0)
     tensor(-inf)
     """
-    return _x_times_log(x, y, lucid.log, pole=0.0, root=1.0)
+    return _x_times_log(input, other, lucid.log, pole=0.0, root=1.0)
 
 
-def logit(x: Tensor, eps: float | None = None) -> Tensor:
+def logit(input: Tensor, eps: float | None = None) -> Tensor:
     r"""Logit function — inverse of the logistic sigmoid.
 
     Maps a probability in :math:`(0, 1)` to a log-odds value in
@@ -950,10 +950,10 @@ def logit(x: Tensor, eps: float | None = None) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor with values in :math:`(0, 1)`.
     eps : float | None, optional
-        If provided, ``x`` is clamped to ``[eps, 1 - eps]`` before the
+        If provided, ``input`` is clamped to ``[eps, 1 - eps]`` before the
         log-ratio is taken, preventing infinities. Defaults to ``None``
         (no clamping).
 
@@ -983,27 +983,27 @@ def logit(x: Tensor, eps: float | None = None) -> Tensor:
     tensor([-2.197, 0., 2.197])
     """
     if eps is not None:
-        x = lucid.clamp(x, eps, 1.0 - eps)
-    return lucid.log(x / (1.0 - x))
+        input = lucid.clamp(input, eps, 1.0 - eps)
+    return lucid.log(input / (1.0 - input))
 
 
-def signbit(x: Tensor) -> Tensor:
+def signbit(input: Tensor) -> Tensor:
     r"""Element-wise sign-bit predicate.
 
-    Returns a boolean tensor that is ``True`` wherever ``x`` is strictly
+    Returns a boolean tensor that is ``True`` wherever ``input`` is strictly
     negative. The current implementation uses the strict inequality
     ``x < 0``, so ``-0.0`` reports ``False`` (i.e. the value is treated
     as zero rather than tested via IEEE 754 sign-bit inspection).
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor. Any numeric dtype.
 
     Returns
     -------
     Tensor
-        Boolean tensor of the same shape as ``x``.
+        Boolean tensor of the same shape as ``input``.
 
     Notes
     -----
@@ -1027,10 +1027,10 @@ def signbit(x: Tensor) -> Tensor:
     >>> lucid.signbit(x)
     tensor([True, False, False], dtype=lucid.bool)
     """
-    return x < 0.0
+    return input < 0.0
 
 
-def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
+def float_power(input: Tensor | Scalar, exponent: Tensor | Scalar) -> Tensor:
     r"""Element-wise power that always promotes operands to ``float64``.
 
     Unlike the regular :func:`lucid.pow`, ``float_power`` upcasts both
@@ -1040,9 +1040,9 @@ def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor | Scalar
+    input : Tensor | Scalar
         Base.
-    y : Tensor | Scalar
+    exponent : Tensor | Scalar
         Exponent.
 
     Returns
@@ -1068,19 +1068,19 @@ def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     >>> lucid.float_power(x, 0.5).dtype
     lucid.float64
     """
-    if _is_tensor(x):
-        x = x.to(dtype=lucid.float64)
-    if _is_tensor(y):
-        y = y.to(dtype=lucid.float64)
-    if not _is_tensor(x) and _is_tensor(y):
-        x = lucid.tensor(float(cast(float, x)), dtype=lucid.float64, device=y.device)
-    if not _is_tensor(y) and _is_tensor(x):
-        y = lucid.tensor(float(cast(float, y)), dtype=lucid.float64, device=x.device)
+    if _is_tensor(input):
+        input = input.to(dtype=lucid.float64)
+    if _is_tensor(exponent):
+        exponent = exponent.to(dtype=lucid.float64)
+    if not _is_tensor(input) and _is_tensor(exponent):
+        input = exponent.new_full((), float(cast(float, input)))
+    if not _is_tensor(exponent) and _is_tensor(input):
+        exponent = input.new_full((), float(cast(float, exponent)))
     # ``cast`` evaluates its first argument at run time, and ``Tensor``
     # is imported here only under ``TYPE_CHECKING`` — so the bare name
     # raised ``NameError`` on **every** call and float_power had never
     # worked.  The string form is what the rest of the codebase uses.
-    return lucid.pow(cast("Tensor", x), cast("Tensor", y))
+    return lucid.pow(cast("Tensor", input), cast("Tensor", exponent))
 
 
 def _promote_pair(a: TensorOrScalar, b: TensorOrScalar) -> tuple[Tensor, Tensor]:
@@ -1098,7 +1098,7 @@ def _promote_pair(a: TensorOrScalar, b: TensorOrScalar) -> tuple[Tensor, Tensor]
     return _wrap(_unwrap_or_scalar(a, ref)), _wrap(_unwrap_or_scalar(b, ref))
 
 
-def fmax(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
+def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     r"""Element-wise NaN-quiet maximum.
 
     Like :func:`lucid.maximum`, but treats NaN as missing data: if exactly
@@ -1107,10 +1107,10 @@ def fmax(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         First operand.
-    b : Tensor
-        Second operand. Must broadcast with ``a``.
+    other : Tensor
+        Second operand. Must broadcast with ``input``.
 
     Returns
     -------
@@ -1141,16 +1141,16 @@ def fmax(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     >>> lucid.fmax(a, b)
     tensor([2., 2., 3.])
     """
-    a, b = _promote_pair(a, b)
-    a_is_nan = lucid.isnan(a)
-    b_is_nan = lucid.isnan(b)
-    m = lucid.maximum(a, b)
-    m = lucid.where(a_is_nan, b, m)
-    m = lucid.where(b_is_nan, a, m)
+    input, other = _promote_pair(input, other)
+    a_is_nan = lucid.isnan(input)
+    b_is_nan = lucid.isnan(other)
+    m = lucid.maximum(input, other)
+    m = lucid.where(a_is_nan, other, m)
+    m = lucid.where(b_is_nan, input, m)
     return m
 
 
-def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
+def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     r"""Element-wise NaN-quiet minimum.
 
     Like :func:`lucid.minimum`, but treats NaN as missing data: if exactly
@@ -1159,10 +1159,10 @@ def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         First operand.
-    b : Tensor
-        Second operand. Must broadcast with ``a``.
+    other : Tensor
+        Second operand. Must broadcast with ``input``.
 
     Returns
     -------
@@ -1193,12 +1193,12 @@ def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     >>> lucid.fmin(a, b)
     tensor([1., 2., 3.])
     """
-    a, b = _promote_pair(a, b)
-    a_is_nan = lucid.isnan(a)
-    b_is_nan = lucid.isnan(b)
-    m = lucid.minimum(a, b)
-    m = lucid.where(a_is_nan, b, m)
-    m = lucid.where(b_is_nan, a, m)
+    input, other = _promote_pair(input, other)
+    a_is_nan = lucid.isnan(input)
+    b_is_nan = lucid.isnan(other)
+    m = lucid.minimum(input, other)
+    m = lucid.where(a_is_nan, other, m)
+    m = lucid.where(b_is_nan, input, m)
     return m
 
 
