@@ -11,10 +11,11 @@ reads the binaries instead of loading them:
 * every MLX symbol the engine imports is exported by the ``liblucid_mlx``
   its rpath resolves to, and none is left to flat lookup, where it could bind
   to a Python ``mlx``'s library instead;
-* the engine and ``liblucid_mlx`` are both built for the pinned macOS floor
-  (``[tool.lucid.mlx] macos``) — the floor ``lucid._C`` enforces at import;
-* with ``--wheel``, the engine's only rpath is ``@loader_path`` and the MLX
-  runtime files sit beside it.  A build-machine path in a wheel passes every
+* ``liblucid_mlx`` is built for the pinned macOS floor (``[tool.lucid.mlx]
+  macos``), the floor ``lucid._C`` enforces at import, and the engine for
+  that floor or a newer macOS (a developer's own deployment target);
+* with ``--wheel``, the engine targets exactly the floor, its only rpath is
+  ``@loader_path`` and the MLX runtime files sit beside it.  A build-machine path in a wheel passes every
   smoke test on the build machine and nowhere else, as in the 3.0.0 release.
 
 Usage::
@@ -27,7 +28,6 @@ Exits 1 with one line per problem, 0 when the link is sound.
 
 import argparse
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,8 +41,8 @@ LOADER_PATH = "@loader_path"
 _UNDEFINED = re.compile(r"\(undefined\) (?:weak )?external (\S+) \((?:from )?([^)]*)\)")
 
 
-class LinkCheckError(RuntimeError):
-    """Raised when a binary cannot be inspected at all."""
+# Seconds an otool / nm / c++filt run may take; the engine's nm is ~1 s.
+TIMEOUT = 120.0
 
 
 @dataclass(frozen=True)
@@ -51,39 +51,32 @@ class LoadCommands:
     minos: str
 
 
-def _run(*command: str, stdin: str | None = None) -> str:
-    try:
-        proc = subprocess.run(
-            command, input=stdin, capture_output=True, text=True, check=False
-        )
-    except FileNotFoundError as exc:
-        raise LinkCheckError(
-            f"{command[0]} not found: install the Xcode command line tools"
-        ) from exc
-    if proc.returncode != 0:
-        raise LinkCheckError(f"{' '.join(command)} failed:\n{proc.stderr.strip()}")
-    return proc.stdout
+def _tool(*command: str, stdin: str | None = None) -> str:
+    return fetch_mlx.run(*command, stdin=stdin, timeout=TIMEOUT)
 
 
 def load_commands(binary: Path) -> LoadCommands:
-    text = _run("otool", "-l", str(binary))
+    text = _tool("otool", "-l", str(binary))
     rpaths = re.findall(r"cmd LC_RPATH\n\s+cmdsize \d+\n\s+path (.+?) \(offset", text)
-    minos = re.search(r"cmd LC_BUILD_VERSION.*?minos (\S+)", text, re.S)
-    return LoadCommands(rpaths, minos.group(1) if minos else "")
+    return LoadCommands(rpaths, fetch_mlx.minos(binary, timeout=TIMEOUT))
+
+
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
 
 
 def linked_libraries(binary: Path) -> list[str]:
     """The install names *binary* loads (``otool -L``), its own id excluded."""
-    lines = _run("otool", "-L", str(binary)).splitlines()[1:]
+    lines = _tool("otool", "-L", str(binary)).splitlines()[1:]
     names = [line.strip().split(" (compatibility")[0] for line in lines]
-    own = _run("otool", "-D", str(binary)).splitlines()[1:]
+    own = _tool("otool", "-D", str(binary)).splitlines()[1:]
     return [n for n in names if n and n not in own]
 
 
 def undefined_symbols(binary: Path) -> dict[str, str]:
     """Each symbol *binary* imports -> the library it is bound to (``nm -m``)."""
     found = {}
-    for line in _run("nm", "-m", "-u", str(binary)).splitlines():
+    for line in _tool("nm", "-m", "-u", str(binary)).splitlines():
         match = _UNDEFINED.search(line)
         if match:
             found[match.group(1)] = match.group(2)
@@ -91,13 +84,13 @@ def undefined_symbols(binary: Path) -> dict[str, str]:
 
 
 def exported_symbols(dylib: Path) -> set[str]:
-    return set(_run("nm", "-gUj", str(dylib)).split())
+    return set(_tool("nm", "-gUj", str(dylib)).split())
 
 
 def demangle(symbols: list[str]) -> list[str]:
-    out = _run("c++filt", stdin="\n".join(symbols) + "\n").splitlines()
+    out = _tool("c++filt", stdin="\n".join(symbols) + "\n").splitlines()
     if len(out) != len(symbols):
-        raise LinkCheckError(f"c++filt returned {len(out)} names for {len(symbols)} symbols")
+        raise fetch_mlx.FetchError(f"c++filt returned {len(out)} names for {len(symbols)} symbols")
     return out
 
 
@@ -165,8 +158,12 @@ def check(engine: Path, floor: str, wheel: bool = False) -> list[str]:
         if Path(lib).name in ("libmlx.dylib", "libjaccl.dylib")
     ]
     commands = load_commands(engine)
-    if commands.minos != floor:
-        problems.append(f"{engine.name}: minos {commands.minos or '?'}, pinned floor {floor}")
+    # A release must target exactly the floor lucid._C enforces; a developer's
+    # own build may target a newer macOS than that.
+    if wheel and commands.minos != floor:
+        problems.append(f"{engine.name}: minos {commands.minos}, a wheel's must be {floor}")
+    elif _version(commands.minos) < _version(floor):
+        problems.append(f"{engine.name}: minos {commands.minos}, below the pinned floor {floor}")
     if wheel:
         problems += _check_wheel_layout(engine, commands)
     mlx = resolve_mlx(engine, commands.rpaths)
@@ -176,9 +173,10 @@ def check(engine: Path, floor: str, wheel: bool = False) -> list[str]:
             "(python3 tools/fetch_mlx.py stages it)"
         )
         return problems
-    mlx_minos = load_commands(mlx).minos
+    # The floor is defined as this binary's minos (fetch_mlx --bump records it).
+    mlx_minos = fetch_mlx.minos(mlx, timeout=TIMEOUT)
     if mlx_minos != floor:
-        problems.append(f"{mlx}: minos {mlx_minos or '?'}, pinned floor {floor}")
+        problems.append(f"{mlx}: minos {mlx_minos}, pinned floor {floor}")
     return problems + _check_symbols(engine, mlx)
 
 
@@ -199,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         problems = check(engine.resolve(), fetch_mlx.read_pin().macos, wheel=args.wheel)
-    except (LinkCheckError, fetch_mlx.FetchError) as exc:
+    except fetch_mlx.FetchError as exc:
         problems = [str(exc)]
     for problem in problems:
         print(f"check_engine_link: {problem}", file=sys.stderr)

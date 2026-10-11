@@ -132,14 +132,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _run(*command: str) -> str:
+def run(*command: str, stdin: str | None = None, timeout: float | None = None) -> str:
+    """Run an Xcode command line tool; its stdout, or a FetchError naming the remedy."""
     try:
-        proc = subprocess.run(command, capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            command, input=stdin, capture_output=True, text=True, check=False, timeout=timeout
+        )
     except FileNotFoundError as exc:
         raise FetchError(
             f"{command[0]} not found: install the Xcode command line tools "
             "(xcode-select --install)"
         ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise FetchError(f"{' '.join(command)} did not finish in {timeout} s") from exc
     if proc.returncode != 0:
         raise FetchError(f"{' '.join(command)} failed:\n{proc.stderr.strip()}")
     return proc.stdout
@@ -269,8 +274,8 @@ def _copy_dist(root: Path, stage: Path) -> None:
 def _relink(lib: Path) -> None:
     """Give the libraries Lucid's install names, then re-sign them."""
     mlx, jaccl = lib / MLX_LIB, lib / JACCL_LIB
-    _run("install_name_tool", "-id", f"@rpath/{JACCL_LIB}", str(jaccl))
-    _run(
+    run("install_name_tool", "-id", f"@rpath/{JACCL_LIB}", str(jaccl))
+    run(
         "install_name_tool",
         "-id",
         f"@rpath/{MLX_LIB}",
@@ -280,8 +285,8 @@ def _relink(lib: Path) -> None:
         str(mlx),
     )
     for dylib in (mlx, jaccl):
-        _run("codesign", "--force", "--sign", "-", str(dylib))
-    linked = _run("otool", "-L", str(mlx))
+        run("codesign", "--force", "--sign", "-", str(dylib))
+    linked = run("otool", "-L", str(mlx))
     if "@rpath/libmlx.dylib" in linked or "@rpath/libjaccl.dylib" in linked:
         raise FetchError(f"{mlx}: install names were not rewritten:\n{linked}")
 
@@ -335,8 +340,10 @@ def stage(pin: Pin | None = None) -> Path:
             shutil.rmtree(work, ignore_errors=True)
 
 
-def _minos(dylib: Path) -> str:
-    match = re.search(r"cmd LC_BUILD_VERSION.*?minos (\S+)", _run("otool", "-l", str(dylib)), re.S)
+def minos(dylib: Path, timeout: float | None = None) -> str:
+    """The macOS version *dylib* was built for (its LC_BUILD_VERSION minos)."""
+    text = run("otool", "-l", str(dylib), timeout=timeout)
+    match = re.search(r"cmd LC_BUILD_VERSION.*?minos (\S+)", text, re.S)
     if match is None:
         raise FetchError(f"{dylib}: no LC_BUILD_VERSION")
     return match.group(1)
@@ -419,7 +426,7 @@ def bump(version: str) -> Pin:
         resolved.wheel,
         resolved.sha256,
         resolved.url,
-        _minos(entry / "lib" / MLX_LIB),
+        minos(entry / "lib" / MLX_LIB),
     )
     _rewrite_pin(PYPROJECT, pin)
     _rewrite_notices(NOTICES, previous, pin)

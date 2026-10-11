@@ -678,6 +678,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the graph-mode resample matrix reads the shared taps
 - interpolate's dtype door is a free function
 - channel_shuffle permutes through the Tensor method
+- one copy of the Xcode-tool runner and minos reader
 
 ---
 

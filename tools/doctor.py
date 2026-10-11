@@ -172,8 +172,9 @@ def _vendored_mlx_checks(pin: fetch_mlx.Pin) -> list[Check]:
         return checks  # the runtime check reports the missing engine
     try:
         problems = check_engine_link.check(engine, pin.macos)
-    # The inspection runs otool / nm; a missing or hung tool is a finding, not a crash.
-    except (check_engine_link.LinkCheckError, subprocess.SubprocessError) as exc:
+    # FetchError: a tool missing, failing or timing out; OSError: an unreadable
+    # engine or library.  Either is a finding to report, not a doctor crash.
+    except (fetch_mlx.FetchError, OSError) as exc:
         problems = [str(exc)]
     if problems:
         detail = "\n".join(problems) + f"\nRestage: {RESTAGE}; or rebuild: {REBUILD}"

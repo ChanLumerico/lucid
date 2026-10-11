@@ -69,9 +69,27 @@ def test_a_library_missing_the_engines_symbols_is_reported(
     assert any("lacks" in p and "MLX symbols" in p for p in problems), problems
 
 
-def test_a_floor_the_binaries_were_not_built_for_is_reported(engine: Path) -> None:
-    problems = check_engine_link.check(engine, "99.0")
-    assert any(p.startswith(f"{engine.name}: minos") for p in problems), problems
+def _engine_minos_problems(engine: Path, floor: str, wheel: bool) -> list[str]:
+    problems = check_engine_link.check(engine, floor, wheel=wheel)
+    return [p for p in problems if p.startswith(f"{engine.name}: minos")]
+
+
+def test_an_engine_below_the_floor_is_reported(engine: Path) -> None:
+    assert _engine_minos_problems(engine, "99.0", wheel=False)
+
+
+def test_a_developer_build_may_target_a_newer_macos(engine: Path) -> None:
+    # MACOSX_DEPLOYMENT_TARGET=27.0 on a dev machine: above the floor is fine.
+    older = check_engine_link.load_commands(engine).minos.split(".")[0] + ".0"
+    assert _engine_minos_problems(engine, older, wheel=False) == []
+
+
+def test_a_wheel_must_target_exactly_the_floor(engine: Path) -> None:
+    older = check_engine_link.load_commands(engine).minos.split(".")[0] + ".0"
+    if older == check_engine_link.load_commands(engine).minos:
+        pytest.skip("the engine targets X.0: no lower floor of the same major to test")
+    problems = _engine_minos_problems(engine, older, wheel=True)
+    assert any("a wheel's must be" in p for p in problems), problems
 
 
 def test_a_wheel_must_not_name_a_build_machine_path(engine: Path, floor: str) -> None:

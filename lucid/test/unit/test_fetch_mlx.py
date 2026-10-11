@@ -38,7 +38,7 @@ def test_a_corrupt_download_is_refused(tmp_path: Path) -> None:
 def test_a_missing_xcode_tool_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", "")
     with pytest.raises(fetch_mlx.FetchError, match="Xcode command line tools"):
-        fetch_mlx._run("install_name_tool", "-id", "x", "y")
+        fetch_mlx.run("install_name_tool", "-id", "x", "y")
 
 
 def _dist(root: Path, skip: str | None = None) -> Path:
