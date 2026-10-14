@@ -15,15 +15,17 @@
 //      know which aspect of the op is non-reproducible.
 //
 //   2. Effective dtype resolution — if AMP is active on the current
-//      thread (:func:`amp::is_active` returns true), the input dtype is
-//      transformed according to the schema's :enum:`AmpPolicy`:
+//      thread (:func:`amp::is_active` returns true) and ``input_dtype``
+//      is autocast-eligible (``F16``, ``BF16``, or ``F32``), the input
+//      dtype is transformed according to the schema's :enum:`AmpPolicy`:
 //        Promote   — switch to the autocast dtype, except that
 //                    ``(CPU, F16)`` is clamped to F32 because Apple
 //                    Accelerate has no native F16 BLAS path.
 //        KeepInput — return ``input_dtype`` unchanged.
 //        ForceFP32 — always return :class:`Dtype::F32`.
-//      When AMP is not active the guard short-circuits and
-//      :func:`effective_dtype` simply returns ``input_dtype``.
+//      Non-eligible dtypes (``F64``, ``C64``, ``C128``, integers, ``Bool``)
+//      and calls outside AMP return ``input_dtype`` unchanged (or ``F32``
+//      when an integral/bool input enters a real-valued / ``ForceFP32`` op).
 //
 // :func:`check_schema_determinism` exposes the determinism gate as a
 // standalone function for callers (e.g. custom-function wrappers,

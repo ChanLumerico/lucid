@@ -13,9 +13,9 @@
 
 namespace lucid {
 
-// ForceFP32 prevents log() and fractional-exponent instability in half/bfloat
-// precision.  All intermediate backward computations therefore run in FP32.
-const OpSchema PowBackward::schema_v1{"pow", 1, AmpPolicy::ForceFP32, true};
+// Promote keeps integer operands in their integer dtype (outside and inside
+// autocast) while allowing autocast-eligible floating operands to promote.
+const OpSchema PowBackward::schema_v1{"pow", 1, AmpPolicy::Promote, true};
 
 // Gradient of element-wise power (a ^ b).
 //

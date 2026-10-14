@@ -49,9 +49,7 @@ namespace lucid {
 // Attributes
 // ----------
 // schema_v1 : OpSchema
-//     ``"pow"``, version ``1``, :enum:`AmpPolicy::ForceFP32`, deterministic.
-//     FP32 is forced because ``log()`` and fractional exponentiation are
-//     numerically unstable in half/bfloat precision.
+//     ``"pow"``, version ``1``, :enum:`AmpPolicy::Promote`, deterministic.
 //
 // Notes
 // -----
@@ -66,8 +64,8 @@ namespace lucid {
 // log_op : Natural logarithm (used by the $\partial L/\partial b$ branch).
 class LUCID_API PowBackward : public BinaryOp<PowBackward> {
 public:
-    // Op registration metadata: name "pow", schema version 1, always computed
-    // in FP32 regardless of input dtype, deterministic.
+    // Op registration metadata: name "pow", schema version 1, Promote under
+    // AMP (keeping integer inputs in their integer dtype), deterministic.
     static const OpSchema schema_v1;
 
     // Route the forward computation through the backend's pow primitive.
@@ -125,8 +123,9 @@ public:
 //
 // Notes
 // -----
-// Always computed in FP32 (see :class:`PowBackward` schema).  When grad-tracking
-// is on, registers a :class:`PowBackward` node which saves both inputs.
+// Integer inputs stay in their integer dtype; floating inputs follow
+// :class:`PowBackward` schema under AMP.  When grad-tracking is on, registers
+// a :class:`PowBackward` node which saves both inputs.
 //
 // Examples
 // --------

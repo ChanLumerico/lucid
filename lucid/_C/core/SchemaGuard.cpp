@@ -31,6 +31,17 @@ void check_schema_determinism(const OpSchema& schema) {
     }
 }
 
+namespace {
+
+// Only floating-point types narrower than float64 participate in autocast.
+// float64, complex, integer, and boolean tensors keep their own dtype
+// (subject to the real-valued / ForceFP32 integer-to-float32 promotion below).
+constexpr bool is_autocast_eligible(Dtype dt) noexcept {
+    return dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32;
+}
+
+}  // namespace
+
 // Performs the determinism check first (cheapest path — no memory reads beyond
 // the atomic flag) and then resolves the effective dtype under AMP.
 SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device device) {
@@ -44,9 +55,10 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
         ErrorBuilder(schema.name).fail(msg);
     }
 
-    // Fast path: no AMP active — use the tensor's own dtype unchanged,
-    // unless the op cannot express its answer in that dtype at all.
-    if (!amp::is_active()) {
+    // Fast path: no AMP active, or input dtype is not autocast-eligible — use
+    // the tensor's own dtype unchanged, unless the op cannot express its
+    // answer in that dtype at all.
+    if (!amp::is_active() || !is_autocast_eligible(input_dtype)) {
         // ``ForceFP32`` says this op needs real numbers: exp, log, sqrt,
         // tanh, sigmoid, erfinv.  It was only consulted inside an autocast
         // scope, so outside one an integer input took two different wrong

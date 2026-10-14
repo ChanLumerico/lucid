@@ -87,6 +87,7 @@
 #include "GridSample.h"
 #include "Im2Col.h"
 #include "IndexBounds.h"
+#include "IntPow.h"
 #include "Interpolate.h"
 #include "Lapack.h"
 #include "LinalgFactor.h"
@@ -823,14 +824,7 @@ public:
                     cpu::vpow_f64(ap + lo, bp + lo, op + lo, hi - lo);
                 });
             },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = static_cast<std::int32_t>(std::pow(ap[i], bp[i]));
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = static_cast<std::int64_t>(std::pow(ap[i], bp[i]));
-            });
+            cpu::ipow_vec<std::int32_t>, cpu::ipow_vec<std::int64_t>);
     }
 
     Storage bitwise_binary(
