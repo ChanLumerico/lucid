@@ -82,8 +82,8 @@ def _lgamma_wide(x: Tensor) -> Tensor:
     reflect = x < half
 
     big = x == math.inf
-    right = _lgamma_lanczos(lucid.maximum(lucid.where(big, half, x), half))
-    mirror = _lgamma_lanczos(lucid.maximum(1.0 - x, half))
+    right = _lgamma_lanczos(lucid.clamp(lucid.where(big, half, x), min=0.5))
+    mirror = _lgamma_lanczos(lucid.clamp(1.0 - x, min=0.5))
     # ``sin(πx)`` is zero at every integer, where Γ has its poles and the
     # answer is +inf.  Only the reflected side may see it: elsewhere it is
     # replaced by 1, so ``log`` never meets a zero it was not asked about.
@@ -118,9 +118,7 @@ def _lgamma_lanczos(x: Tensor) -> Tensor:
     series = lucid.full_like(x, _LANCZOS_P[0])
     for k in range(1, len(_LANCZOS_P)):
         series = series + _LANCZOS_P[k] / (z + float(k))
-    return (
-        0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
-    )
+    return 0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
 
 
 # B_2, B_4, ..., B_12.  Every odd Bernoulli number past B_1 is zero, which
@@ -344,9 +342,7 @@ def _lanczos_sum_expg_scaled(a: Tensor) -> Tensor:
     num_low = tuple(reversed(_LANCZOS13_NUM))
     den_low = tuple(reversed(_LANCZOS13_DEN))
     small = _horner_float(num_low, y_small) / _horner_float(den_low, y_small)
-    large = _horner_float(_LANCZOS13_NUM, y_big) / _horner_float(
-        _LANCZOS13_DEN, y_big
-    )
+    large = _horner_float(_LANCZOS13_NUM, y_big) / _horner_float(_LANCZOS13_DEN, y_big)
     return lucid.where(big, large, small)
 
 
@@ -364,9 +360,7 @@ def _igam_fac(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
     # flushes the subnormal — P(174.49, 105.92) came out 0 for 6.7e-10.
     direct = lucid.exp(a - x + a * lucid.log(x / fac))
     numfac = (x - a - _LANCZOS13_G + 0.5) / fac
-    scaled = lucid.exp(
-        a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac
-    )
+    scaled = lucid.exp(a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac)
     near_value = res * lucid.where(moderate, direct, scaled)
     return lucid.where(far, far_value, near_value)
 
@@ -530,12 +524,7 @@ def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P or Q off the edges of the domain, by the branch ``igam`` picks."""
     k = _IgamConstants(a.dtype)
     edge = (
-        lucid.isnan(a)
-        | lucid.isnan(x)
-        | lucid.isinf(a)
-        | lucid.isinf(x)
-        | (a <= 0.0)
-        | (x <= 0.0)
+        lucid.isnan(a) | lucid.isnan(x) | lucid.isinf(a) | lucid.isinf(x) | (a <= 0.0) | (x <= 0.0)
     )
     rel = lucid.abs(x - a) / a
     asym = ~edge & (

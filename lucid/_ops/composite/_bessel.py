@@ -105,19 +105,17 @@ def _chbevl(y: Tensor, coeffs: tuple[float, ...]) -> Tensor:
 
 def _below(ax: Tensor, edge: float) -> Tensor:
     """``ax`` clamped into a lower branch ``[·, edge]``."""
-    return lucid.minimum(ax, lucid.full_like(ax, edge))
+    return lucid.clamp(ax, max=edge)
 
 
 def _above(ax: Tensor, edge: float) -> Tensor:
     """``ax`` clamped into an upper branch ``[edge, ∞)``."""
-    return lucid.maximum(ax, lucid.full_like(ax, edge))
+    return lucid.clamp(ax, min=edge)
 
 
 def _on_half_line(x: Tensor, value: Tensor, at_zero: float) -> Tensor:
     """``value`` where ``x > 0``, ``at_zero`` at 0 and NaN below."""
-    edge = lucid.where(
-        x == 0.0, lucid.full_like(x, at_zero), lucid.full_like(x, math.nan)
-    )
+    edge = lucid.where(x == 0.0, lucid.full_like(x, at_zero), lucid.full_like(x, math.nan))
     return lucid.where(x > 0.0, value, edge)
 
 
@@ -232,17 +230,13 @@ def _j0(x: Tensor) -> Tensor:
 def _j1(x: Tensor) -> Tensor:
     """``J1(x)``; odd in ``x``."""
     ax = lucid.abs(x)
-    large = lucid.sign(x) * _hankel(
-        _above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False
-    )
+    large = lucid.sign(x) * _hankel(_above(ax, 5.0), _THPIO4, _J1_HANKEL, second_kind=False)
     return lucid.where(ax <= 5.0, _j1_small(lucid.clip(x, -5.0, 5.0)), large)
 
 
 def _y0_small(s: Tensor) -> Tensor:
     z = s * s
-    return _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(
-        s
-    )
+    return _polevl(z, _Y0_YP) / _p1evl(z, _Y0_YQ) + _TWOOPI * lucid.log(s) * _j0_small(s)
 
 
 def _y1_small(s: Tensor) -> Tensor:

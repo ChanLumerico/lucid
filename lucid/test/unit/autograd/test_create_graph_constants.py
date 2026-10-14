@@ -257,7 +257,7 @@ _PINS = {
 }
 # Lucid's F.hardtanh is clamp, and the reference keeps hardtanh's gradient in
 # the graph, so clamp keeps it too — and the losses built on clamp with it.
-_CLAMP_FAMILY = {"clamp", "hinge", "margin_rank"}
+_CLAMP_FAMILY = {"clamp", "clamp_min", "clamp_max", "hinge", "margin_rank"}
 
 
 def _first_and_second(env, call):

@@ -135,10 +135,9 @@ def _erfcx_stable(x: Tensor) -> Tensor:
     which is how a where-guarded formula usually goes wrong.
     """
     cutoff = 2.0
-    small = lucid.exp(lucid.minimum(x, lucid.full_like(x, cutoff)) ** 2) * lucid.erfc(
-        lucid.minimum(x, lucid.full_like(x, cutoff))
-    )
-    big = lucid.maximum(x, lucid.full_like(x, cutoff))
+    xs = lucid.clamp(x, max=cutoff)
+    small = lucid.exp(xs * xs) * lucid.erfc(xs)
+    big = lucid.clamp(x, min=cutoff)
     frac = lucid.zeros_like(big)
     for k in range(24, 0, -1):
         frac = (0.5 * k) / (big + frac)
@@ -199,10 +198,9 @@ def i0e(x: Tensor) -> Tensor:
     # scaled value is that polynomial over the square root and the
     # exponential never appears.  Below the split the direct form is safe:
     # ``exp(-|x|)`` is at most 1 and ``i0`` is at most ``i0(3.75)``.
-    small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * lucid.i0(
-        lucid.minimum(ax, lucid.full_like(ax, 3.75))
-    )
-    big = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    xs = lucid.clamp(ax, max=3.75)
+    small = lucid.exp(-xs) * lucid.i0(xs)
+    big = lucid.clamp(ax, min=3.75)
     y = 3.75 / big
     poly = lucid.full_like(x, _bessel._AS_I0_LARGE[0])
     y_pow = lucid.ones_like(x)
@@ -290,7 +288,7 @@ def _i1_as_fit(x: Tensor) -> Tensor:
     from ``|x| = 11.1`` although ``I1(12) = 18141`` is representable.
     """
     ax = lucid.abs(x)
-    ax_safe = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    ax_safe = lucid.clamp(ax, min=3.75)
     xs = lucid.clip(x, -3.75, 3.75)
 
     # Small-argument branch: x · poly((x / 3.75)²)
@@ -358,10 +356,8 @@ def i1e(x: Tensor) -> Tensor:
     if x.dtype == lucid.float64:
         return _bessel._i1e(x)
     ax = lucid.abs(x)
-    small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * i1(
-        lucid.where(ax <= 3.75, x, lucid.sign(x) * 3.75)
-    )
-    big = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    small = lucid.exp(-lucid.clamp(ax, max=3.75)) * i1(lucid.clip(x, -3.75, 3.75))
+    big = lucid.clamp(ax, min=3.75)
     y = 3.75 / big
     poly = lucid.full_like(x, _I1_LARGE_COEFFS[0])
     y_pow = lucid.ones_like(x)
@@ -493,10 +489,10 @@ def log_ndtr(x: Tensor) -> Tensor:
     # Each branch sees only its own stretch of the line: ``where``
     # evaluates all three, and a -inf in a branch that loses is a NaN in
     # the gradient.
-    direct = lucid.log(ndtr(lucid.minimum(lucid.maximum(x, lo), hi)))
-    t = -lucid.minimum(x, lo) * _INV_SQRT2
+    direct = lucid.log(ndtr(lucid.clip(x, -1.0, _LOG_NDTR_UPPER)))
+    t = -lucid.clamp(x, max=-1.0) * _INV_SQRT2
     tail = lucid.log(0.5 * _erfcx_stable(t)) - t * t
-    u = lucid.maximum(x, hi) * _INV_SQRT2
+    u = lucid.clamp(x, min=_LOG_NDTR_UPPER) * _INV_SQRT2
     upper = lucid.log1p(-0.5 * _erfcx_stable(u) * lucid.exp(-u * u))
     return lucid.where(x < lo, tail, lucid.where(x > hi, upper, direct))
 
@@ -593,8 +589,7 @@ def ndtri(p: Tensor) -> Tensor:
     r_central = q * q
     num_c = (
         (
-            ((_NDTRI_A[0] * r_central + _NDTRI_A[1]) * r_central + _NDTRI_A[2])
-            * r_central
+            ((_NDTRI_A[0] * r_central + _NDTRI_A[1]) * r_central + _NDTRI_A[2]) * r_central
             + _NDTRI_A[3]
         )
         * r_central
@@ -602,8 +597,7 @@ def ndtri(p: Tensor) -> Tensor:
     ) * r_central + _NDTRI_A[5]
     den_c = (
         (
-            ((_NDTRI_B[0] * r_central + _NDTRI_B[1]) * r_central + _NDTRI_B[2])
-            * r_central
+            ((_NDTRI_B[0] * r_central + _NDTRI_B[1]) * r_central + _NDTRI_B[2]) * r_central
             + _NDTRI_B[3]
         )
         * r_central
@@ -622,16 +616,12 @@ def ndtri(p: Tensor) -> Tensor:
     p_tail_safe = lucid.clip(p_tail_in, 1e-300, 1.0)
     r_tail = lucid.sqrt(-2.0 * lucid.log(p_tail_safe))
     num_t = (
-        (
-            ((_NDTRI_C[0] * r_tail + _NDTRI_C[1]) * r_tail + _NDTRI_C[2]) * r_tail
-            + _NDTRI_C[3]
-        )
+        (((_NDTRI_C[0] * r_tail + _NDTRI_C[1]) * r_tail + _NDTRI_C[2]) * r_tail + _NDTRI_C[3])
         * r_tail
         + _NDTRI_C[4]
     ) * r_tail + _NDTRI_C[5]
     den_t = (
-        ((_NDTRI_D[0] * r_tail + _NDTRI_D[1]) * r_tail + _NDTRI_D[2]) * r_tail
-        + _NDTRI_D[3]
+        ((_NDTRI_D[0] * r_tail + _NDTRI_D[1]) * r_tail + _NDTRI_D[2]) * r_tail + _NDTRI_D[3]
     ) * r_tail + 1.0
     tail_low = num_t / den_t
     tail = lucid.where(p < lucid.full_like(p, 0.5), tail_low, -tail_low)
@@ -1601,7 +1591,7 @@ def _bessel_j0_small(x: Tensor) -> Tensor:
 
 def _bessel_j0_large(x: Tensor) -> Tensor:
     # A&S 9.4.3 on |x| > 3; clamped, as ``_split`` runs it at 0 too (3/0: NaN grad).
-    ax = lucid.maximum(lucid.abs(x), lucid.full_like(x, 3.0))
+    ax = lucid.clamp(lucid.abs(x), min=3.0)
     z = 3.0 / ax
     f0 = (
         0.79788456
@@ -1691,7 +1681,7 @@ def _bessel_j1_small(x: Tensor) -> Tensor:
 
 
 def _bessel_j1_large(x: Tensor) -> Tensor:
-    ax = lucid.maximum(lucid.abs(x), lucid.full_like(x, 3.0))  # see _bessel_j0_large
+    ax = lucid.clamp(lucid.abs(x), min=3.0)  # see _bessel_j0_large
     z = 3.0 / ax
     f1 = (
         0.79788456
@@ -1777,12 +1767,10 @@ _TWO_OVER_PI = 2.0 / math.pi
 def _bessel_y0_small(x: Tensor) -> Tensor:
     y = x * x
     num = -2957821389.0 + y * (
-        7062834065.0
-        + y * (-512359803.6 + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733)))
+        7062834065.0 + y * (-512359803.6 + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733)))
     )
     den = 40076544269.0 + y * (
-        745249964.8
-        + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y * 1.0)))
+        745249964.8 + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y * 1.0)))
     )
     return num / den + _TWO_OVER_PI * lucid.log(x) * bessel_j0(x)
 
@@ -1791,12 +1779,10 @@ def _bessel_y0_large(x: Tensor) -> Tensor:
     z = 8.0 / x
     y = z * z
     p = 1.0 + y * (
-        -0.1098628627e-2
-        + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6))
+        -0.1098628627e-2 + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6))
     )
     q = -0.1562499995e-1 + y * (
-        0.1430488765e-3
-        + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * (-0.934935152e-7)))
+        0.1430488765e-3 + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * (-0.934935152e-7)))
     )
     xx = x - 0.785398164
     return lucid.sqrt(0.636619772 / x) * (lucid.sin(xx) * p + z * lucid.cos(xx) * q)
@@ -1862,10 +1848,7 @@ def _bessel_y1_small(x: Tensor) -> Tensor:
         * (
             0.1275274390e13
             + y
-            * (
-                -0.5153438139e11
-                + y * (0.7349264551e9 + y * (-0.4237922726e7 + y * 0.8511937935e4))
-            )
+            * (-0.5153438139e11 + y * (0.7349264551e9 + y * (-0.4237922726e7 + y * 0.8511937935e4)))
         )
     )
     den = 0.2499580570e14 + y * (
@@ -1873,8 +1856,7 @@ def _bessel_y1_small(x: Tensor) -> Tensor:
         + y
         * (
             0.3733650367e10
-            + y
-            * (0.2245904002e8 + y * (0.1020426050e6 + y * (0.3549632885e3 + y * 1.0)))
+            + y * (0.2245904002e8 + y * (0.1020426050e6 + y * (0.3549632885e3 + y * 1.0)))
         )
     )
     return num / den + _TWO_OVER_PI * (lucid.log(x) * bessel_j1(x) - 1.0 / x)
@@ -1884,12 +1866,10 @@ def _bessel_y1_large(x: Tensor) -> Tensor:
     z = 8.0 / x
     y = z * z
     p = 1.0 + y * (
-        0.183105e-2
-        + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * (-0.240337019e-6)))
+        0.183105e-2 + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * (-0.240337019e-6)))
     )
     q = 0.04687499995 + y * (
-        -0.2002690873e-3
-        + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6))
+        -0.2002690873e-3 + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6))
     )
     xx = x - 2.356194491
     return lucid.sqrt(0.636619772 / x) * (lucid.sin(xx) * p + z * lucid.cos(xx) * q)
@@ -2007,9 +1987,7 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k0(x)
-    return _half_line_split(
-        x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf
-    )
+    return _half_line_split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf)
 
 
 def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
@@ -2116,9 +2094,7 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k1(x)
-    return _half_line_split(
-        x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf
-    )
+    return _half_line_split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf)
 
 
 def scaled_modified_bessel_k1(x: Tensor) -> Tensor:

@@ -1142,12 +1142,7 @@ def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     tensor([2., 2., 3.])
     """
     input, other = _promote_pair(input, other)
-    a_is_nan = lucid.isnan(input)
-    b_is_nan = lucid.isnan(other)
-    m = lucid.maximum(input, other)
-    m = lucid.where(a_is_nan, other, m)
-    m = lucid.where(b_is_nan, input, m)
-    return m
+    return lucid.where(lucid.logical_or(input >= other, lucid.isnan(other)), input, other)
 
 
 def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
@@ -1194,12 +1189,7 @@ def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     tensor([1., 2., 3.])
     """
     input, other = _promote_pair(input, other)
-    a_is_nan = lucid.isnan(input)
-    b_is_nan = lucid.isnan(other)
-    m = lucid.minimum(input, other)
-    m = lucid.where(a_is_nan, other, m)
-    m = lucid.where(b_is_nan, input, m)
-    return m
+    return lucid.where(lucid.logical_or(input <= other, lucid.isnan(other)), input, other)
 
 
 # ── Special math functions ─────────────────────────────────────────────────
@@ -1265,8 +1255,8 @@ def _erfc_double(x: Tensor) -> Tensor:
     side first, keeping the losing one finite for the gradient.
     """
     z = lucid.where(x >= 0.0, x, -x)
-    head = 1.0 - lucid.erf(lucid.minimum(z, lucid.full_like(z, 3.0)))
-    far = lucid.maximum(z, lucid.full_like(z, 3.0))
+    head = 1.0 - lucid.erf(lucid.clamp(z, max=3.0))
+    far = lucid.clamp(z, min=3.0)
     frac = lucid.zeros_like(far)
     for k in range(60, 0, -1):
         frac = (0.5 * k) / (far + frac)
@@ -1364,9 +1354,7 @@ def _per_element(fn: Callable[[int, int], int], input: Tensor, other: Tensor) ->
     """``fn`` of each pair of same-shape integer elements, through Python."""
     a, b = input.reshape(-1), other.reshape(-1)
     result = [fn(int(a[i].item()), int(b[i].item())) for i in range(int(a.shape[0]))]
-    return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(
-        input.shape
-    )
+    return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(input.shape)
 
 
 def gcd(input: Tensor, other: Tensor) -> Tensor:
@@ -1504,7 +1492,7 @@ def i0(input: Tensor) -> Tensor:
     if input.dtype == lucid.float64:
         return _bessel._i0(input)
     ax = lucid.abs(input)
-    ax_safe = lucid.maximum(ax, lucid.full_like(ax, 3.75))
+    ax_safe = lucid.clamp(ax, min=3.75)
 
     # Small-argument branch: polynomial in t = (x / 3.75)²
     t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2

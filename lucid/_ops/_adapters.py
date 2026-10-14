@@ -243,9 +243,7 @@ def _as_dim(value: object) -> int:
     try:
         return operator.index(value)  # type: ignore[arg-type]  # refused below
     except TypeError:
-        raise TypeError(
-            f"gather(): dim must be an int, got {type(value).__name__}"
-        ) from None
+        raise TypeError(f"gather(): dim must be an int, got {type(value).__name__}") from None
 
 
 def _gather_adapter(input: _Impl, dim: int, index: Tensor) -> _Impl:
@@ -304,9 +302,7 @@ def _scatter_adapter(
     """
     idx_impl = _unwrap(index)
     if isinstance(src, _promotion.NUMBER):
-        src_impl = _C_engine.full(
-            list(idx_impl.shape), src, x_impl.dtype, x_impl.device
-        )
+        src_impl = _C_engine.full(list(idx_impl.shape), src, x_impl.dtype, x_impl.device)
     else:
         src_impl = _unwrap(src)
         if src_impl.dtype != x_impl.dtype:
@@ -367,9 +363,7 @@ def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
         from lucid._dispatch import _wrap
 
         return _unwrap(_wrap(a_impl)[_wrap(mask)])
-    return _C_engine.masked_select(
-        _C_engine.contiguous(a_impl), _C_engine.contiguous(mask)
-    )
+    return _C_engine.masked_select(_C_engine.contiguous(a_impl), _C_engine.contiguous(mask))
 
 
 def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
@@ -451,9 +445,7 @@ def _kthvalue_adapter(
 
 def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     """narrow(a, dim, start, length)."""
-    return _own_impl(
-        _C_engine.narrow(a_impl, int(dim), int(start), int(length)), a_impl
-    )
+    return _own_impl(_C_engine.narrow(a_impl, int(dim), int(start), int(length)), a_impl)
 
 
 def _as_strided_adapter(
@@ -481,11 +473,7 @@ def _movedim_adapter(
 ) -> _Impl:
     """movedim(a, source, destination) — accept int or list for either arg."""
     src = [int(source)] if isinstance(source, int) else [int(s) for s in source]
-    dst = (
-        [int(destination)]
-        if isinstance(destination, int)
-        else [int(d) for d in destination]
-    )
+    dst = [int(destination)] if isinstance(destination, int) else [int(d) for d in destination]
     return _C_engine.movedim(a_impl, src, dst)
 
 
@@ -520,9 +508,7 @@ def _reshape_adapter(x_impl: _Impl, shape: int | Sequence[int]) -> _Impl:
     return _C_engine.reshape(x_impl, _int_list(shape))
 
 
-def _transpose_adapter(
-    x_impl: _Impl, dim0: int | None = None, dim1: int | None = None
-) -> _Impl:
+def _transpose_adapter(x_impl: _Impl, dim0: int | None = None, dim1: int | None = None) -> _Impl:
     """transpose(x) swaps the last two axes; transpose(x, dim0, dim1) swaps those.
 
     The two-axis form is the reference framework's, and code written for it
@@ -584,17 +570,14 @@ def _roll_adapter(
     steps = _to_axes(shifts, "roll", "shifts")
     if dims is None:
         if len(steps) != 1:
-            raise ValueError(
-                f"roll: without dims, shifts must be a single int, got {shifts!r}"
-            )
+            raise ValueError(f"roll: without dims, shifts must be a single int, got {shifts!r}")
         flat = _C_engine.reshape(a_impl, [a_impl.numel()])
         rolled = _C_engine.roll(flat, steps, [0])
         return _C_engine.reshape(rolled, list(a_impl.shape))
     axes = _to_axes(dims, "roll")
     if len(steps) != len(axes):
         raise ValueError(
-            f"roll: shifts and dims must align, got {len(steps)} shift(s) "
-            f"and {len(axes)} dim(s)"
+            f"roll: shifts and dims must align, got {len(steps)} shift(s) and {len(axes)} dim(s)"
         )
     return _C_engine.roll(a_impl, steps, axes)
 
@@ -602,18 +585,14 @@ def _roll_adapter(
 def _fliplr_adapter(x_impl: _Impl) -> _Impl:
     """fliplr(x) — flip along axis 1.  ``x`` must be at least 2-D."""
     if len(x_impl.shape) < 2:
-        raise ValueError(
-            f"fliplr: input must be at least 2-D, got shape {tuple(x_impl.shape)}"
-        )
+        raise ValueError(f"fliplr: input must be at least 2-D, got shape {tuple(x_impl.shape)}")
     return _C_engine.flip(x_impl, [1])
 
 
 def _flipud_adapter(x_impl: _Impl) -> _Impl:
     """flipud(x) — flip along axis 0.  ``x`` must be at least 1-D."""
     if len(x_impl.shape) < 1:
-        raise ValueError(
-            f"flipud: input must be at least 1-D, got shape {tuple(x_impl.shape)}"
-        )
+        raise ValueError(f"flipud: input must be at least 1-D, got shape {tuple(x_impl.shape)}")
     return _C_engine.flip(x_impl, [0])
 
 
@@ -941,48 +920,119 @@ def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     return _C_engine.meshgrid(impls, indexing == "xy")
 
 
+def _clip_bound_impl(
+    bound: TensorOrScalar | None, x_impl: _Impl, tgt: _C_engine.Dtype
+) -> _Impl | None:
+    """Unwrap an optional bound and cast to ``tgt``."""
+    if bound is None:
+        return None
+    b = _unwrap_or_scalar(bound, x_impl)
+    return _C_engine.astype(b, tgt) if b.dtype != tgt else b
+
+
+def _clip_with_nan(out: _Impl, any_nan: _Impl, is_float: bool) -> _Impl:
+    """Propagate NaN onto ``out`` when ``is_float`` holds."""
+    if not is_float:
+        return out
+    nan_c = _C_engine.full([], math.nan, out.dtype, out.device)
+    return _C_engine.where(any_nan, nan_c, out)
+
+
+def _clip_both_impls(x_impl: _Impl, lo_impl: _Impl, hi_impl: _Impl, is_float: bool) -> _Impl:
+    """Two-sided tensor-bound clamp matching the reference's tie and NaN rules."""
+    use_x = _C_engine.logical_and(
+        _C_engine.greater_equal(x_impl, lo_impl),
+        _C_engine.less_equal(x_impl, hi_impl),
+    )
+    use_lo = _C_engine.logical_and(
+        _C_engine.less(x_impl, lo_impl),
+        _C_engine.less(lo_impl, hi_impl),
+    )
+    use_hi = _C_engine.logical_or(
+        _C_engine.greater(x_impl, hi_impl),
+        _C_engine.greater(lo_impl, hi_impl),
+    )
+    out = _C_engine.where(
+        use_x,
+        x_impl,
+        _C_engine.where(
+            use_lo,
+            lo_impl,
+            _C_engine.where(use_hi, hi_impl, hi_impl.data_alias()),
+        ),
+    )
+    if not is_float:
+        return out
+    any_nan = _C_engine.logical_or(
+        _C_engine.logical_or(_C_engine.isnan(x_impl), _C_engine.isnan(lo_impl)),
+        _C_engine.isnan(hi_impl),
+    )
+    return _clip_with_nan(out, any_nan, True)
+
+
+def _clip_scalar_bounds(
+    x_impl: _Impl,
+    min: TensorOrScalar | None,
+    max: TensorOrScalar | None,
+    is_float: bool,
+) -> _Impl | None:
+    """Fast path when ``min`` and ``max`` are Python numbers or ``None``."""
+    if not isinstance(min, (int, float, type(None))) or not isinstance(
+        max, (int, float, type(None))
+    ):
+        return None
+    if is_float:
+        lo_f = -math.inf if min is None else float(min)
+        hi_f = math.inf if max is None else float(max)
+        return _C_engine.clip(x_impl, lo_f, hi_f)
+    if min is not None and max is not None:
+        return _C_engine.clip(x_impl, float(min), float(max))
+    return None
+
+
 def _clip_adapter(
     x_impl: _Impl,
-    min: Scalar | None = None,
-    max: Scalar | None = None,
+    min: TensorOrScalar | None = None,
+    max: TensorOrScalar | None = None,
 ) -> _Impl:
-    """clip(x, min, max) — either bound may be omitted.
+    """clip(x, min, max) — either bound may be omitted or a tensor.
 
-    The engine primitive wants both ends, so a one-sided clamp used to
-    raise a pybind argument error rather than doing the obvious thing.
-    Substituting an infinity would have been wrong for integer dtypes,
-    where it has no representable value; routing a single bound through
-    ``maximum`` / ``minimum`` instead needs no stand-in value at all.
-
-    A bound promotes the result as it would in ``x + bound``, so a float
-    bound on an integer tensor answers in float, as the reference's does.
-    Taking the tensor's dtype instead truncated ``clamp(ints, 0.5, 2.5)`` to
-    whole numbers and made the one-sided form raise ``DtypeMismatch``.  A
-    Python number is weak here as everywhere: it can change the kind but
-    never the width, so a ``float16`` tensor stays ``float16``.
+    Scalar bounds on floating-point tensors route through ``_C_engine.clip``
+    (with ``-inf`` / ``+inf`` stand-ins for omitted ends) so the tie gradient
+    at the boundary is asymmetric (0 at ``x == min`` or ``x == max``) rather
+    than the 0.5/0.5 tie split of ``maximum`` / ``minimum``.  Tensor bounds
+    and integer one-sided bounds use asymmetric ``where`` comparisons (and
+    propagate NaN across floating-point operands) to match the reference
+    framework's ``clamp(Tensor, min=Tensor, max=Tensor)`` overload.
     """
     if min is None and max is None:
         raise ValueError("clip: at least one of min or max must be given")
-    # A number is promoted as it stands, without building its 0-d constant,
-    # so a clamp whose bounds already fit allocates nothing extra.
-    bounds: list[_promotion.Operand] = []
-    for bound in (min, max):
-        if bound is None:
-            continue
-        if isinstance(bound, _promotion.NUMBER):
-            bounds.append(bound)
-        else:  # a tensor bound, which the annotation does not admit but callers pass
-            bounds.append(_unwrap(bound))
+    bounds: list[_promotion.Operand] = [
+        b if isinstance(b, _promotion.NUMBER) else _unwrap(b) for b in (min, max) if b is not None
+    ]
     tgt = _promotion.result_type(x_impl, *bounds)
     if tgt != x_impl.dtype:
         x_impl = _C_engine.astype(x_impl, tgt)
-    if min is None or max is None:
-        bound_impl = _unwrap_or_scalar(max if min is None else min, x_impl)
-        if bound_impl.dtype != tgt:
-            bound_impl = _C_engine.astype(bound_impl, tgt)
-        one_sided = _C_engine.minimum if min is None else _C_engine.maximum
-        return one_sided(x_impl, bound_impl)
-    return _C_engine.clip(x_impl, float(min), float(max))
+
+    is_float = tgt in _REAL_FLOATS
+    fast = _clip_scalar_bounds(x_impl, min, max, is_float)
+    if fast is not None:
+        return fast
+
+    lo_impl = _clip_bound_impl(min, x_impl, tgt)
+    hi_impl = _clip_bound_impl(max, x_impl, tgt)
+    if lo_impl is not None and hi_impl is None:
+        out = _C_engine.where(_C_engine.less(x_impl, lo_impl), lo_impl, x_impl)
+        return _clip_with_nan(
+            out, _C_engine.logical_or(_C_engine.isnan(x_impl), _C_engine.isnan(lo_impl)), is_float
+        )
+    if hi_impl is not None and lo_impl is None:
+        out = _C_engine.where(_C_engine.greater(x_impl, hi_impl), hi_impl, x_impl)
+        return _clip_with_nan(
+            out, _C_engine.logical_or(_C_engine.isnan(x_impl), _C_engine.isnan(hi_impl)), is_float
+        )
+    assert lo_impl is not None and hi_impl is not None
+    return _clip_both_impls(x_impl, lo_impl, hi_impl, is_float)
 
 
 def _where_adapter(
@@ -1025,9 +1075,7 @@ def _where_adapter(
     return _C_engine.where(c, x_impl, y_impl)
 
 
-def _nonzero_adapter(
-    a_impl: _Impl, *, as_tuple: bool = False
-) -> _Impl | tuple[_Impl, ...]:
+def _nonzero_adapter(a_impl: _Impl, *, as_tuple: bool = False) -> _Impl | tuple[_Impl, ...]:
     """nonzero(a, *, as_tuple=False) — the indices of ``a``'s nonzero elements.
 
     ``as_tuple`` returns one 1-D index tensor per dim rather than one
@@ -1078,9 +1126,7 @@ def _pad_adapter(
 ) -> _Impl:
     """pad(x, padding, mode, value) — reference flat (last-dim-first) convention."""
     if mode != "constant":
-        raise NotImplementedError(
-            f"pad: mode={mode!r} not supported; only 'constant' is wired"
-        )
+        raise NotImplementedError(f"pad: mode={mode!r} not supported; only 'constant' is wired")
     ndim = len(x_impl.shape)
     n_pad_dims = len(padding) // 2
     pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
