@@ -82,17 +82,35 @@ def _zero_safe_root(s: _Impl, p: float) -> _Impl:
 #: A set rather than a tuple: the membership test is on every norm's path.
 _HALF = frozenset({_C_engine.F16, _C_engine.BF16})
 
-#: The dtypes a norm is defined on.
-_NORMABLE = frozenset(
+#: The dtypes a real-valued distance or similarity is defined on.
+_FLOATING = frozenset(
     {
         _C_engine.F16,
         _C_engine.BF16,
         _C_engine.F32,
         _C_engine.F64,
-        _C_engine.C64,
-        _C_engine.C128,
     }
 )
+
+#: The dtypes a norm is defined on.
+_NORMABLE = _FLOATING | frozenset({_C_engine.C64, _C_engine.C128})
+
+
+def _require_floating(impl: _Impl, op: str) -> _Impl:
+    """``impl``, or a refusal if it is not a real floating-point input to ``op``.
+
+    ``cdist``, ``pdist`` and ``cosine_similarity`` are defined on real
+    vectors only; the reference refuses both integer/bool and complex
+    inputs.  On Metal ``cdist`` and ``cosine_similarity`` used to run
+    their real formulas on complex entries and return complex numbers,
+    while the CPU failed later inside ``matmul`` or ``lp_normalize``.
+    """
+    if impl.dtype not in _FLOATING:
+        raise _C_engine.DtypeMismatch(
+            f"{op}: expected a floating point tensor as input, "
+            f"got {_ENGINE_TO_DTYPE[impl.dtype]}"
+        )
+    return impl
 
 
 def _require_normable(impl: _Impl, op: str) -> _Impl:

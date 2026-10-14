@@ -205,7 +205,7 @@
     "lucid/models/generative/diamond/_model.py": 741,
     "lucid/models/generative/rectified_flow/_model.py": 289,
     "lucid/models/vision/mask2former/_model.py": 83,
-    "lucid/nn/functional/activations.py": 444,
+    "lucid/nn/functional/activations.py": 441,
     "lucid/nn/functional/loss.py": 828,
     "lucid/nn/functional/pooling.py": 61,
     "lucid/nn/modules/activation.py": 727,

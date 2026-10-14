@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._reduce import _require_floating
 from lucid.nn.functional._grid_sampling import (
     affine_grid_3d,
     check_options,
@@ -1289,6 +1290,7 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     """
     if x.ndim != 2:
         raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(x.shape)}")
+    _require_floating(_unwrap(x), "pdist")
     n = int(x.shape[0])
     if n < 2:
         return _lucid.zeros(0, dtype=x.dtype, device=x.device)

@@ -67,9 +67,7 @@ def test_every_norm_refuses_a_discrete_input(
     with pytest.raises(RuntimeError):
         ref_call(ref.tensor(_DATA, dtype=getattr(ref, dtype)))
     x = lucid.tensor(_DATA, dtype=getattr(lucid, dtype), device=device)
-    with pytest.raises(
-        _C_engine.DtypeMismatch, match="floating point or complex"
-    ) as err:
+    with pytest.raises(_C_engine.DtypeMismatch, match="floating point") as err:
         call(x)
     assert isinstance(err.value, TypeError) and isinstance(err.value, RuntimeError)
 

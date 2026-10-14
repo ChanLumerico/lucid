@@ -16,6 +16,7 @@
 #include "NormExt.h"
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "../autograd/Engine.h"
@@ -40,6 +41,7 @@
 #include "../ops/gfunc/Gfunc.h"
 #include "../ops/ufunc/Arith.h"
 #include "../ops/ufunc/Astype.h"
+#include "../ops/ufunc/Exponential.h"
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/utils/Layout.h"
@@ -189,6 +191,50 @@ LUCID_REGISTER_OP(BatchNormEvalBackward)
 
 const OpSchema LpNormalizeBackward::schema_v1{"lp_normalize", 1, AmpPolicy::ForceFP32, true};
 
+namespace {
+
+TensorImplPtr real_non_trivial_p_norm(const TensorImplPtr& r, double ord, int axis) {
+    const std::vector<int> axes{axis};
+    TensorImplPtr powered;
+    if (ord == 2.0) {
+        powered = mul_op(r, r);
+    } else if (ord > 1.0 || !r->requires_grad()) {
+        powered = pow_scalar_op(r, ord);
+    } else {
+        auto nz = not_equal_op(r, zeros_like_op(r));
+        auto safe = where_op(nz, r, ones_like_op(r));
+        auto raised = pow_scalar_op(safe, ord);
+        auto fill = full_like_op(raised, ord > 0.0 ? 0.0 : std::numeric_limits<double>::infinity());
+        powered = where_op(nz, raised, fill);
+    }
+    auto s = sum_op(powered, axes, true);
+    if (ord <= 0.0)
+        return pow_scalar_op(s, 1.0 / ord);
+    if (!s->requires_grad())
+        return (ord == 2.0) ? sqrt_op(s) : pow_scalar_op(s, 1.0 / ord);
+    auto at_zero = equal_op(s, zeros_like_op(s));
+    auto safe_s = where_op(at_zero, ones_like_op(s), s);
+    auto root = (ord == 2.0) ? sqrt_op(safe_s) : pow_scalar_op(safe_s, 1.0 / ord);
+    return where_op(at_zero, zeros_like_op(root), root);
+}
+
+TensorImplPtr real_p_norm_keepdim(const TensorImplPtr& r, double ord, int axis) {
+    const std::vector<int> axes{axis};
+    if (ord == 0.0) {
+        auto nz = not_equal_op(r, zeros_like_op(r));
+        return astype_op(sum_op(nz, axes, true), r->dtype());
+    }
+    if (ord == std::numeric_limits<double>::infinity())
+        return max_op(r, axes, true);
+    if (ord == -std::numeric_limits<double>::infinity())
+        return min_op(r, axes, true);
+    if (ord == 1.0)
+        return sum_op(r, axes, true);
+    return real_non_trivial_p_norm(r, ord, axis);
+}
+
+}  // namespace
+
 TensorImplPtr
 LpNormalizeBackward::forward(const TensorImplPtr& x0, double ord, int axis, double eps) {
     Validator::input(x0, "lp_normalize.x").non_null();
@@ -201,6 +247,18 @@ LpNormalizeBackward::forward(const TensorImplPtr& x0, double ord, int axis, doub
     const TensorImplPtr x = promote_for_schema(schema_v1, x0);
     const int rank = static_cast<int>(x->shape().size());
     axis = wrap_dim(axis, rank, "lp_normalize");
+
+    if (is_complex(x->dtype()) || !std::isfinite(ord)) {
+        // A complex Lp norm is a real reduction of the magnitudes |x_i|
+        // (ComplexAbsBackward owns their Wirtinger derivative), and the
+        // normalised output divides the input by the clamped norm — the same
+        // graph multi-axis F.normalize builds via vector_norm, which also
+        // handles +/-inf orders where pow(|x|, inf)^(1/inf) would yield 1.
+        auto norm = real_p_norm_keepdim(abs_op(x), ord, axis);
+        auto floor = full_like_op(norm, eps);
+        auto denom = where_op(less_op(norm, floor), floor, norm);
+        return div_op(x, astype_op(denom, x->dtype()));
+    }
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
     scope.set_attr("ord", ord);
