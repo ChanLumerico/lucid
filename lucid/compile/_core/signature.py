@@ -185,6 +185,152 @@ class CacheKey:
     param_fingerprint: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     # Which arguments are the same tensor; see ``alias`` above.
     alias: tuple[int, ...] = field(default_factory=tuple)
+    # Per-submodule ``(training, scalar_attrs)`` snapshot across ``model.modules()``.
+    module_state: tuple[object, ...] = field(default_factory=tuple)
+
+
+def _closure_modules(model: object) -> list[Module]:
+    """Extract :class:`Module` objects closed over by ``model._fn``."""
+    from lucid.nn.module import Module
+
+    fn = getattr(model, "_fn", None)
+    closure = getattr(fn, "__closure__", None) or ()
+    out: list[Module] = []
+    for cell in closure:
+        contents = getattr(cell, "cell_contents", None)
+        if isinstance(contents, Module):
+            out.append(contents)
+    return out
+
+
+def _parametrization_modules(mod: Module) -> list[Module]:
+    """Return any :class:`Module` containers stored in ``mod.parametrizations``."""
+    from lucid.nn.module import Module
+
+    param_d = getattr(mod, "parametrizations", None)
+    if not isinstance(param_d, dict):
+        return []
+    return [c for c in param_d.values() if isinstance(c, Module)]
+
+
+def _iter_modules(model: object) -> list[Module]:
+    """Return ``model`` and every reachable submodule in deterministic order."""
+    from lucid.nn.module import Module
+
+    roots: list[Module] = [model] if isinstance(model, Module) else []
+    roots.extend(_closure_modules(model))
+    seen: set[int] = set()
+    out: list[Module] = []
+    for root in roots:
+        for sub in root.modules():
+            if id(sub) not in seen:
+                seen.add(id(sub))
+                out.append(sub)
+            for pmod in _parametrization_modules(sub):
+                for psub in pmod.modules():
+                    if id(psub) not in seen:
+                        seen.add(id(psub))
+                        out.append(psub)
+    return out
+
+
+def _scalar_attr_sig(value: object) -> object | None:
+    """Hashable signature for a scalar (or scalar-tuple) attribute, else ``None``."""
+    if isinstance(value, (int, float, bool, str, bytes, type(None))):
+        return _atom_sig(value)
+    if isinstance(value, tuple):
+        items: list[object] = []
+        for item in value:
+            sig = _scalar_attr_sig(item)
+            if sig is None:
+                return None
+            items.append(sig)
+        return tuple(items)
+    return None
+
+
+def _dict_scalar_attrs(obj: object) -> tuple[tuple[str, object], ...]:
+    """Sorted ``(name, sig)`` pairs for public scalar attributes in ``obj.__dict__``."""
+    d = getattr(obj, "__dict__", None)
+    if not isinstance(d, dict):
+        return ()
+    attrs: list[tuple[str, object]] = []
+    for k, v in d.items():
+        if isinstance(k, str) and not k.startswith("_"):
+            sig = _scalar_attr_sig(v)
+            if sig is not None:
+                attrs.append((k, sig))
+    attrs.sort(key=lambda item: item[0])
+    return tuple(attrs)
+
+
+def _module_state(model: object) -> tuple[object, ...]:
+    """Snapshot every submodule's ``training`` flag and public scalar attributes."""
+    if model is None:
+        return ()
+    states: list[object] = [
+        (bool(getattr(sub, "training", False)), _dict_scalar_attrs(sub))
+        for sub in _iter_modules(model)
+    ]
+    fn = getattr(model, "_fn", None)
+    if fn is not None:
+        fn_attrs = _dict_scalar_attrs(fn)
+        if fn_attrs:
+            states.append(("fn", fn_attrs))
+    return tuple(states)
+
+
+def _handle_key(handle: object) -> int | None:
+    """Return integer hook handle key if ``handle`` is a hook handle."""
+    key = getattr(handle, "_key", None)
+    return key if isinstance(key, int) else None
+
+
+def _internal_pre_hook_keys(mod: Module) -> set[int]:
+    """Hook ids installed by ``nn.utils`` reparametrisations (traced in-graph)."""
+    handles: list[object] = []
+    for attr in ("_weight_norm_hooks", "_spectral_norm_hooks"):
+        d = getattr(mod, attr, None)
+        if isinstance(d, dict):
+            handles.extend(e[0] for e in d.values() if isinstance(e, tuple) and e)
+    prune_d = getattr(mod, "_prune_hooks", None)
+    if isinstance(prune_d, dict):
+        handles.extend(prune_d.values())
+    param_d = getattr(mod, "parametrizations", None)
+    if isinstance(param_d, dict):
+        handles.extend(getattr(c, "_hook_handle", None) for c in param_d.values())
+    return {k for h in handles if (k := _handle_key(h)) is not None}
+
+
+def _sub_has_active_hooks(sub: Module) -> bool:
+    """Return ``True`` if single module ``sub`` has user forward or backward hooks."""
+    if (
+        getattr(sub, "_forward_hooks", None)
+        or getattr(sub, "_backward_pre_hooks", None)
+        or getattr(sub, "_backward_hooks", None)
+    ):
+        return True
+    pre_hooks = getattr(sub, "_forward_pre_hooks", None)
+    return bool(pre_hooks and (set(pre_hooks) - _internal_pre_hook_keys(sub)))
+
+
+def model_has_active_hooks(model: object) -> bool:
+    """Return ``True`` if ``model`` or any submodule has active forward/backward hooks."""
+    from lucid.nn.hooks import (
+        _GLOBAL_BACKWARD_HOOKS,
+        _GLOBAL_BACKWARD_PRE_HOOKS,
+        _GLOBAL_FORWARD_HOOKS,
+        _GLOBAL_FORWARD_PRE_HOOKS,
+    )
+
+    if (
+        _GLOBAL_FORWARD_PRE_HOOKS
+        or _GLOBAL_FORWARD_HOOKS
+        or _GLOBAL_BACKWARD_PRE_HOOKS
+        or _GLOBAL_BACKWARD_HOOKS
+    ):
+        return True
+    return any(_sub_has_active_hooks(sub) for sub in _iter_modules(model))
 
 
 def leaf_tensors(args: Iterable[object], kwargs: dict[str, object]) -> list[Tensor]:
@@ -397,6 +543,7 @@ def signature_of(
         if param_fingerprint is not None
         else _param_fingerprint(model)
     )
+    module_state = _module_state(model)
     return CacheKey(
         args=arg_sigs,
         kwargs=kwarg_sigs,
@@ -404,4 +551,5 @@ def signature_of(
         dynamic=bool(dynamic),
         param_fingerprint=fp,
         alias=_alias_pattern(arg_list, kwargs),
+        module_state=module_state,
     )

@@ -206,7 +206,11 @@ def make_step(
         model_has_cumulative_bn,
     )
     from lucid.compile._core.fallback import EagerFallbackSet, _fallback_notice
-    from lucid.compile._core.signature import leaf_tensors, signature_of
+    from lucid.compile._core.signature import (
+        leaf_tensors,
+        model_has_active_hooks,
+        signature_of,
+    )
 
     # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
     # forward-only path (see :class:`CompiledModule`, where conv is the single
@@ -539,7 +543,7 @@ def make_step(
         except (TypeError, AttributeError):  # fmt: skip
             key = None  # un-hashable → fresh per-call compile only
 
-        if key is not None and key in eager_only:
+        if (key is not None and key in eager_only) or model_has_active_hooks(model):
             out = model(*x_args[:1])
             return loss_fn(out, *x_args[1:])
 

@@ -680,6 +680,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - exact integer pow and autocast dtype gate (LCD-43, 78)
 
+- key cache on submodule state and honor hooks (LCD-178)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

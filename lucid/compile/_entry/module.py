@@ -65,7 +65,12 @@ from lucid.compile._core.fallback import (
     _narrate,
     run_eager,
 )
-from lucid.compile._core.signature import CacheKey, leaf_tensors, signature_of
+from lucid.compile._core.signature import (
+    CacheKey,
+    leaf_tensors,
+    model_has_active_hooks,
+    signature_of,
+)
 from lucid.nn.module import Module, _ModuleWrapper, _watch_tensors
 from lucid.nn.parameter import Parameter
 
@@ -862,7 +867,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
         self._call_counter[key] = self._call_counter.get(key, 0) + 1
 
-        if key in self._eager_only:
+        if key in self._eager_only or model_has_active_hooks(self._model):
             return run_eager(self._model, args, kwargs)
 
         entry = self._cache.get(key)
@@ -1047,7 +1052,10 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # BN dispatches the distinct ``batch_norm_eval`` op (no running-stats
         # update), so it compiles normally; track_running_stats=False BN keeps no
         # stats and is likewise unaffected.
-        if self._model.training and model_has_tracking_bn(self._model):
+        if model_has_tracking_bn(self._model) and any(
+            getattr(m, "training", False) and getattr(m, "track_running_stats", False)
+            for m in self._model.modules()
+        ):
             return None
 
         # kwargs are traced as-is (line below) and their tensor values are
