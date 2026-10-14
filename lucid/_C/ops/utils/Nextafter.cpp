@@ -119,25 +119,25 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
     Validator::input(a_in, "nextafter.a").non_null();
     Validator::input(b_in, "nextafter.b").non_null();
 
+    if (a_in->dtype() != b_in->dtype())
+        throw DtypeMismatch(std::string(dtype_name(a_in->dtype())),
+                            std::string(dtype_name(b_in->dtype())), "nextafter");
+
+    auto [a, b] = detail::align_binary_devices(a_in, b_in, "nextafter");
+    if (a->dtype() != Dtype::F32 && a->dtype() != Dtype::F64)
+        ErrorBuilder("nextafter").fail("dtype must be F32 or F64");
+
     // Broadcast like every other elementwise op.  Only materialised when
     // the shapes actually differ, so a same-shape call — which is every
     // call that worked before — reaches the kernel untouched on either
     // device and adds nothing to a compile trace.
-    TensorImplPtr a = a_in;
-    TensorImplPtr b = b_in;
-    if (a_in->shape() != b_in->shape()) {
-        const Shape out = detail::broadcast_shapes(a_in->shape(), b_in->shape());
-        if (a_in->shape() != out)
-            a = broadcast_to_op(a_in, out);
-        if (b_in->shape() != out)
-            b = broadcast_to_op(b_in, out);
+    if (a->shape() != b->shape()) {
+        const Shape out = detail::broadcast_shapes(a->shape(), b->shape());
+        if (a->shape() != out)
+            a = broadcast_to_op(a, out);
+        if (b->shape() != out)
+            b = broadcast_to_op(b, out);
     }
-
-    if (a->dtype() != b->dtype())
-        throw DtypeMismatch(std::string(dtype_name(a->dtype())),
-                            std::string(dtype_name(b->dtype())), "nextafter");
-    if (a->dtype() != Dtype::F32 && a->dtype() != Dtype::F64)
-        ErrorBuilder("nextafter").fail("dtype must be F32 or F64");
 
     OpScopeFull scope{"nextafter", a->device(), a->dtype(), a->shape()};
 

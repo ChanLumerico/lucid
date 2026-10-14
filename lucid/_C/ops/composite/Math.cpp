@@ -106,8 +106,11 @@ TensorImplPtr frac_op(const TensorImplPtr& a) {
 // Quadrant-aware arctangent.  Patches ``arctan(y / x)`` with ±π/zero/±π/2
 // branches via ``where`` based on the signs of the operands; the divide is
 // guarded by substituting 1 for x = 0 so the safe branch is always defined.
-TensorImplPtr atan2_op(const TensorImplPtr& y, const TensorImplPtr& x) {
+TensorImplPtr atan2_op(const TensorImplPtr& y_in, const TensorImplPtr& x_in) {
     constexpr double pi = 3.14159265358979323846;
+    if (!y_in || !x_in)
+        ErrorBuilder("atan2").fail("null input");
+    const auto [y, x] = detail::align_binary_devices(y_in, x_in, "atan2");
 
     auto zero_x = full_like_op(x, 0.0);
     auto zero_y = full_like_op(y, 0.0);
@@ -172,8 +175,11 @@ void require_floating(const char* op, const TensorImplPtr& a, const TensorImplPt
 // ``m == 0`` means both operands are zero and the answer is zero; the
 // division would be 0/0, so the ratio is taken against a max with the
 // smallest normal and the result multiplied by ``m`` puts it back.
-TensorImplPtr hypot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    require_floating("hypot", a, b);
+TensorImplPtr hypot_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    if (!a_in || !b_in)
+        ErrorBuilder("hypot").fail("null input");
+    require_floating("hypot", a_in, b_in);
+    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "hypot");
     auto abs_a = abs_op(a);
     auto abs_b = abs_op(b);
     auto big = maximum_op(abs_a, abs_b);
@@ -186,8 +192,11 @@ TensorImplPtr hypot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
 // Numerically-stable ``log(exp(a) + exp(b))``.  Factor out the per-pair max
 // so only the smaller-magnitude exponential sees rounding error.
-TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    require_floating("logaddexp", a, b);
+TensorImplPtr logaddexp_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    if (!a_in || !b_in)
+        ErrorBuilder("logaddexp").fail("null input");
+    require_floating("logaddexp", a_in, b_in);
+    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "logaddexp");
     auto m = maximum_op(a, b);
     auto exp_a = exp_op(sub_op(a, m));
     auto exp_b = exp_op(sub_op(b, m));
@@ -197,7 +206,11 @@ TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // Tolerance check via the standard formula.  We materialise the ``rtol``
 // scalar as a same-shape constant tensor so the multiply doesn't depend on
 // any scalar-broadcast support in the binary ops.
-TensorImplPtr isclose_op(const TensorImplPtr& a, const TensorImplPtr& b, double rtol, double atol) {
+TensorImplPtr
+isclose_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in, double rtol, double atol) {
+    if (!a_in || !b_in)
+        ErrorBuilder("isclose").fail("null input");
+    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "isclose");
     TensorImplPtr diff;
     TensorImplPtr abs_b;
     if (!is_floating_point(a->dtype()) && !is_floating_point(b->dtype())) {

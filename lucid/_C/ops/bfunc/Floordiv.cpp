@@ -61,17 +61,19 @@ Storage divmod_storage(
 // integer divisor is refused here on the CPU, as the reference's CPU does.
 // Metal is not asked: it would have to read ``b`` back, a host stall on
 // every integer ``//``; it answers the defined value in backend/DivMod.h.
-void check_operands(const char* op, const TensorImplPtr& a, const TensorImplPtr& b) {
-    bfunc_detail::validate_pair(a, b, op);
+std::pair<TensorImplPtr, TensorImplPtr>
+check_operands(const char* op, const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    auto [a, b] = bfunc_detail::align_pair(a_in, b_in, op);
     const Dtype dt = a->dtype();
     if (!is_integral(dt) && !is_floating_point(dt))
         ErrorBuilder(op).not_implemented(std::string("dtype ") + std::string(dtype_name(dt)) +
                                          " is not supported; " + op +
                                          " takes integer or real floating-point operands");
-    if (!is_integral(dt) || b->device() != Device::CPU)
-        return;
-    if (backend::cpu::any_zero_integer(std::get<CpuStorage>(b->storage()), b->numel(), dt))
-        ErrorBuilder(op).fail("ZeroDivisionError: integer division by zero");
+    if (is_integral(dt) && b->device() == Device::CPU) {
+        if (backend::cpu::any_zero_integer(std::get<CpuStorage>(b->storage()), b->numel(), dt))
+            ErrorBuilder(op).fail("ZeroDivisionError: integer division by zero");
+    }
+    return {std::move(a), std::move(b)};
 }
 
 }  // namespace
@@ -105,8 +107,8 @@ std::pair<TensorImplPtr, TensorImplPtr> FloordivBackward::grad_formula_impl(
 TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (auto r = opmath::try_scalar<opmath::Op::FloorDiv>(a, b, &floordiv_op))
         return r;
-    check_operands("floordiv", a, b);
-    return FloordivBackward::forward(a, b);
+    const auto [a_dev, b_dev] = check_operands("floordiv", a, b);
+    return FloordivBackward::forward(a_dev, b_dev);
 }
 
 LUCID_REGISTER_OP(FloordivBackward)
@@ -146,8 +148,8 @@ std::pair<TensorImplPtr, TensorImplPtr> FmodBackward::grad_formula_impl(
 }
 
 TensorImplPtr fmod_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    check_operands("fmod", a, b);
-    return FmodBackward::forward(a, b);
+    const auto [a_dev, b_dev] = check_operands("fmod", a, b);
+    return FmodBackward::forward(a_dev, b_dev);
 }
 
 LUCID_REGISTER_OP(FmodBackward)
@@ -184,8 +186,8 @@ std::pair<TensorImplPtr, TensorImplPtr> RemainderBackward::grad_formula_impl(
 }
 
 TensorImplPtr remainder_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    check_operands("remainder", a, b);
-    return RemainderBackward::forward(a, b);
+    const auto [a_dev, b_dev] = check_operands("remainder", a, b);
+    return RemainderBackward::forward(a_dev, b_dev);
 }
 
 LUCID_REGISTER_OP(RemainderBackward)

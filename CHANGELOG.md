@@ -692,6 +692,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - drop Metal host read in embedding index check (LCD-283)
 
+- allow 0-d CPU scalar tensors with Metal operands (LCD-243)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

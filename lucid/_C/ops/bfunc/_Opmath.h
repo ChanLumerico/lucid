@@ -97,11 +97,15 @@ inline bool is_wide_scalar(const TensorImplPtr& s) {
 // ``(a, b)`` as an op-math pair, or nothing — every other mixed pair is left
 // to BinaryKernel, which rejects it as before.
 inline std::optional<Pair> match(const TensorImplPtr& a, const TensorImplPtr& b) {
-    if (!a || !b || a->device() != b->device() || a->dtype() == b->dtype())
+    if (!a || !b || a->dtype() == b->dtype())
         return std::nullopt;
-    if (is_half_float(a->dtype()) && is_wide_scalar(b))
+    auto dev_ok = [](const TensorImplPtr& t, const TensorImplPtr& s) {
+        return t->device() == s->device() ||
+               (t->device() == Device::GPU && s->device() == Device::CPU);
+    };
+    if (is_half_float(a->dtype()) && is_wide_scalar(b) && dev_ok(a, b))
         return Pair{a, b, false};
-    if (is_half_float(b->dtype()) && is_wide_scalar(a))
+    if (is_half_float(b->dtype()) && is_wide_scalar(a) && dev_ok(b, a))
         return Pair{b, a, true};
     return std::nullopt;
 }
@@ -318,16 +322,27 @@ using SameDtypeOp = TensorImplPtr (*)(const TensorImplPtr&, const TensorImplPtr&
 // ``same_dtype`` is the public op, reused when autocast moves the dtype.
 template <Op K>
 TensorImplPtr try_scalar(const TensorImplPtr& a, const TensorImplPtr& b, SameDtypeOp same_dtype) {
-    const std::optional<Pair> p = match(a, b);
+    std::optional<Pair> p = match(a, b);
     if (!p)
         return nullptr;
     if (p->s->requires_grad())
         ErrorBuilder(std::string(op_name(K))).fail("op-math scalar operand cannot require grad");
+    TensorImplPtr a_use = a;
+    TensorImplPtr b_use = b;
+    if (p->t->device() == Device::GPU && p->s->device() == Device::CPU) {
+        TensorImplPtr s_gpu = p->s->dtype() == Dtype::F64 ? astype_op(p->s, Dtype::F32) : p->s;
+        s_gpu = to_device_op(s_gpu, Device::GPU);
+        p->s = s_gpu;
+        if (p->scalar_first)
+            a_use = s_gpu;
+        else
+            b_use = s_gpu;
+    }
     const SchemaGuard sg{amp_schema(K), p->t->dtype(), p->t->device()};
     const Dtype eff = sg.effective_dtype();
     if (eff != p->t->dtype())
-        return same_dtype(astype_op(a, eff), astype_op(b, eff));
-    return forward<K>(*p, a, b);
+        return same_dtype(astype_op(a_use, eff), astype_op(b_use, eff));
+    return forward<K>(*p, a_use, b_use);
 }
 
 }  // namespace lucid::opmath

@@ -63,7 +63,28 @@ namespace lucid {
 // AMP helpers below need a differentiable cast and kernel/ sits below ops/.
 LUCID_API TensorImplPtr astype_op(const TensorImplPtr& a, Dtype dst_dtype);
 
+// Defined in ops/ufunc/ToDevice.cpp.  Declared here so binary/ternary ops can
+// promote a 0-d CPU scalar operand to the peer's device while keeping the
+// ToDeviceBackward edge on the autograd graph.
+LUCID_API TensorImplPtr to_device_op(const TensorImplPtr& a, Device target);
+
 namespace detail {
+
+// Align a pair of operands onto a common device, allowing a 0-d CPU tensor to
+// follow a Metal (GPU) peer via :func:`to_device_op`.  Any other cross-device
+// combination — shaped CPU with GPU, or 0-d GPU with shaped CPU — raises
+// :class:`DeviceMismatch`.
+inline std::pair<TensorImplPtr, TensorImplPtr>
+align_binary_devices(const TensorImplPtr& a, const TensorImplPtr& b, std::string_view op) {
+    if (a->device() == b->device())
+        return {a, b};
+    if (a->device() == Device::CPU && a->shape().empty() && b->device() == Device::GPU)
+        return {to_device_op(a, Device::GPU), b};
+    if (b->device() == Device::CPU && b->shape().empty() && a->device() == Device::GPU)
+        return {a, to_device_op(b, Device::GPU)};
+    throw DeviceMismatch(std::string(device_name(a->device())),
+                         std::string(device_name(b->device())), std::string(op));
+}
 
 // Concept satisfied when ``Derived`` exposes a typed binary GPU kernel.
 //
@@ -630,19 +651,17 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         throw DtypeMismatch(std::string(dtype_name(a->dtype())),
                             std::string(dtype_name(b->dtype())),
                             std::string(Derived::schema_v1.name));
-    // Cross-device binary ops are never silently moved; callers must migrate.
-    if (a->device() != b->device())
-        throw DeviceMismatch(std::string(device_name(a->device())),
-                             std::string(device_name(b->device())),
-                             std::string(Derived::schema_v1.name));
+    // Cross-device binary ops promote a 0-d CPU scalar to its GPU peer via
+    // to_device_op; any other cross-device pair raises DeviceMismatch.
+    const auto [a_dev, b_dev] = detail::align_binary_devices(a, b, Derived::schema_v1.name);
 
-    SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
+    SchemaGuard sg{Derived::schema_v1, a_dev->dtype(), a_dev->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
     // A strided CPU input needs no copy here — ``storage()`` hands the
     // backend its elements packed — see UnaryKernel.
-    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
-    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b, eff_dt);
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_dev, eff_dt);
+    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b_dev, eff_dt);
 
     Shape out_shape = (a_ptr->shape() == b_ptr->shape())
                           ? a_ptr->shape()
@@ -722,8 +741,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
         out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, eff_dt)};
     }
 
-    auto out =
-        std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
+                                            a_dev->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
 
     // 3.5 Phase 1.2 step 2: trace I/O wiring at the forward boundary.
@@ -731,24 +750,26 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     // hook here keeps elementwise binary ops in the trace IR.  Outside
     // any _tracing() scope this is one TLS load + null check.
     if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({a, b}, out);
+        trc->on_op_io({a_dev, b_dev}, out);
     }
 
-    const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());
+    const bool needs_grad =
+        GradMode::is_enabled() && (a_dev->requires_grad() || b_dev->requires_grad());
     if (!needs_grad)
         return out;
 
     // Install AccumulateGrad sinks for leaf parameters before recording edges.
-    auto a_edge = detail::ensure_grad_fn(a);
-    auto b_edge = detail::ensure_grad_fn(b);
+    auto a_edge = detail::ensure_grad_fn(a_dev);
+    auto b_edge = detail::ensure_grad_fn(b_dev);
 
     auto bwd = std::make_shared<Derived>();
-    bwd->input_shapes_ = {a->shape(), b->shape()};
+    bwd->input_shapes_ = {a_dev->shape(), b_dev->shape()};
     bwd->out_shape_ = out->shape();
     bwd->dtype_ = eff_dt;
-    bwd->device_ = a->device();
-    bwd->grad_dtypes_ = {detail::grad_dtype_for(a, a_ptr), detail::grad_dtype_for(b, b_ptr)};
-    bwd->input_tensors_ = {a, b};
+    bwd->device_ = a_dev->device();
+    bwd->grad_dtypes_ = {detail::grad_dtype_for(a_dev, a_ptr),
+                         detail::grad_dtype_for(b_dev, b_ptr)};
+    bwd->input_tensors_ = {a_dev, b_dev};
     // saved_inputs_ holds the (possibly cast) pre-broadcast input storages
     // so that grad_formula can inspect the original per-element values.
     if constexpr (Derived::kSavesInputs)
@@ -756,14 +777,14 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     // Always save the original TensorImpl pointers (before any dtype cast) so
     // that apply_for_graph() can invoke forward ops on them and trace the
     // gradient computation back through the original computation graph.
-    bwd->saved_impl_inputs_ = {a, b};
+    bwd->saved_impl_inputs_ = {a_dev, b_dev};
 
     std::vector<Edge> edges;
-    edges.emplace_back(a_edge, a->grad_output_nr());
-    edges.emplace_back(b_edge, b->grad_output_nr());
+    edges.emplace_back(a_edge, a_dev->grad_output_nr());
+    edges.emplace_back(b_edge, b_dev->grad_output_nr());
     bwd->set_next_edges(std::move(edges));
     // Both input versions are captured to detect in-place mutations.
-    bwd->set_saved_versions({a->version(), b->version()});
+    bwd->set_saved_versions({a_dev->version(), b_dev->version()});
 
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);

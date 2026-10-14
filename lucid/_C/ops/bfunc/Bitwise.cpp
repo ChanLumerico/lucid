@@ -18,10 +18,10 @@ namespace lucid {
 
 namespace {
 
+using bfunc_detail::align_pair;
 using bfunc_detail::allocate_cpu;
 using bfunc_detail::broadcast_pair;
 using bfunc_detail::fresh;
-using bfunc_detail::validate_pair;
 
 // Return true for dtypes that support bitwise operations.  Floating-point
 // types are excluded because their bit patterns are not meaningful as bitmasks.
@@ -62,8 +62,8 @@ bool is_integer(Dtype dt) {
 // The output dtype matches the input dtype.  No autograd node is attached
 // because bitwise operations on integers have no meaningful gradient.
 TensorImplPtr
-bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
-    validate_pair(a, b, name);
+bit_dispatch(const TensorImplPtr& a_in, const TensorImplPtr& b_in, const char* name, int op) {
+    const auto [a, b] = align_pair(a_in, b_in, name);
     if (!is_integer_or_bool(a->dtype()))
         ErrorBuilder(name).fail("dtype must be integer or bool");
     auto bc = broadcast_pair(a, b);
@@ -103,8 +103,8 @@ namespace {
 // the dtype guard (Bool not allowed) — kept as its own helper to keep the
 // error messages tight.
 TensorImplPtr
-shift_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
-    validate_pair(a, b, name);
+shift_dispatch(const TensorImplPtr& a_in, const TensorImplPtr& b_in, const char* name, int op) {
+    const auto [a, b] = align_pair(a_in, b_in, name);
     if (!is_integer(a->dtype()))
         ErrorBuilder(name).fail("dtype must be a signed integer (I8/I16/I32/I64)");
     auto bc = broadcast_pair(a, b);

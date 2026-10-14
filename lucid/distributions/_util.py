@@ -81,32 +81,27 @@ def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
     # This is the single point where the two meet, so reconcile here rather
     # than threading a device through all ~67 ``_as_tensor`` call sites.
     if a.device != b.device:
-        if a.numel() == 1 and b.numel() != 1:
+        if a.ndim == 0 and a.device.type == "cpu":
             a = a.to(b.device.type)
-        elif b.numel() == 1 and a.numel() != 1:
+        elif b.ndim == 0 and b.device.type == "cpu":
             b = b.to(a.device.type)
-        else:
-            # Neither is a lone scalar: prefer the non-CPU side so the
-            # distribution keeps living where the user put it.
-            target = a.device if a.device.type != "cpu" else b.device
-            a = a.to(target.type)
-            b = b.to(target.type)
-    if tuple(a.shape) == tuple(b.shape):
+    if tuple(a.shape) == tuple(b.shape) and a.device == b.device:
         return a, b
     z = a * 0 + b * 0
     return a + z, b + z
 
 
 def _align_device(t: Tensor, ref: Tensor) -> Tensor:
-    """``t`` on ``ref``'s device when ``t`` is a 0-dim tensor living elsewhere.
+    """``t`` on ``ref``'s device when ``t`` is a 0-dim CPU tensor.
 
     A transform or a parameter given as a Python number is held as a 0-dim
     host tensor (:func:`_as_tensor` cannot know the device the values will
     arrive on), and combining it with a Metal tensor raised
-    ``DeviceMismatch``.  A 0-dim tensor is a scalar in every other sense,
+    ``DeviceMismatch``.  A 0-dim CPU tensor is a scalar in every other sense,
     so it follows the operand it meets — the allowance the reference
-    framework makes for 0-dim tensors.  Anything with a shape is left
-    alone: a real mismatch between two arrays still raises.
+    framework makes for 0-dim CPU tensors.  Anything with a shape (or a
+    0-dim Metal tensor against a CPU operand) is left alone: a real mismatch
+    between two arrays still raises.
 
     Parameters
     ----------
@@ -118,9 +113,10 @@ def _align_device(t: Tensor, ref: Tensor) -> Tensor:
     Returns
     -------
     Tensor
-        ``t``, moved to ``ref.device`` if it is 0-dim and elsewhere.
+        ``t``, moved to ``ref.device`` if it is a 0-dim CPU tensor and
+        ``ref`` is elsewhere.
     """
-    if t.ndim == 0 and t.device != ref.device:
+    if t.ndim == 0 and t.device.type == "cpu" and t.device != ref.device:
         return t.to(ref.device.type)
     return t
 

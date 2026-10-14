@@ -450,6 +450,19 @@ LUCID_REGISTER_OP(GatherBackward)
 LUCID_REGISTER_OP(DiagonalBackward)
 // FlipBackward register lives after the class definition near flip_op below.
 
+std::tuple<TensorImplPtr, TensorImplPtr, TensorImplPtr>
+align_where_devices(const TensorImplPtr& cond, const TensorImplPtr& x, const TensorImplPtr& y) {
+    if (cond->device() == x->device() && x->device() == y->device())
+        return {cond, x, y};
+    for (const auto& t : {cond, x, y}) {
+        if (t->device() == Device::CPU && !t->shape().empty())
+            throw DeviceMismatch(std::string(device_name(Device::CPU)),
+                                 std::string(device_name(Device::GPU)), "where");
+    }
+    return {to_device_op(cond, Device::GPU), to_device_op(x, Device::GPU),
+            to_device_op(y, Device::GPU)};
+}
+
 }  // namespace
 
 // Select elements from `x` (where cond is true) or `y` (where cond is false).
@@ -458,15 +471,14 @@ LUCID_REGISTER_OP(DiagonalBackward)
 // on the GPU backend the MLX backend handles implicit broadcasting, and the
 // actual output shape is read back from the MLX array after execution.
 // Attaches WhereBackward only when x or y requires a gradient.
-TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const TensorImplPtr& y) {
-    if (!cond || !x || !y)
+TensorImplPtr
+where_op(const TensorImplPtr& cond_in, const TensorImplPtr& x_in, const TensorImplPtr& y_in) {
+    if (!cond_in || !x_in || !y_in)
         ErrorBuilder("where").fail("null input");
-    if (x->dtype() != y->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(y->dtype())), "where");
-    if (x->device() != y->device() || cond->device() != x->device())
-        throw DeviceMismatch(std::string(device_name(x->device())),
-                             std::string(device_name(y->device())), "where");
+    if (x_in->dtype() != y_in->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x_in->dtype())),
+                            std::string(dtype_name(y_in->dtype())), "where");
+    const auto [cond, x, y] = align_where_devices(cond_in, x_in, y_in);
     const Dtype dt = x->dtype();
     const Device device = x->device();
 

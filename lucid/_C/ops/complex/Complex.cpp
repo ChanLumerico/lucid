@@ -28,22 +28,18 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
     complex_detail::require_real_float(re_in->dtype(), "complex.re");
     complex_detail::require_real_float(im_in->dtype(), "complex.im");
 
+    auto [re, im] = detail::align_binary_devices(re_in, im_in, "complex");
+
     // The two parts broadcast against each other, so building a complex
     // tensor from a real field and one scalar imaginary part is spelled
     // the obvious way.  Materialised only when the shapes differ.
-    TensorImplPtr re = re_in;
-    TensorImplPtr im = im_in;
-    if (re_in->shape() != im_in->shape()) {
-        const Shape out = detail::broadcast_shapes(re_in->shape(), im_in->shape());
-        if (re_in->shape() != out)
-            re = broadcast_to_op(re_in, out);
-        if (im_in->shape() != out)
-            im = broadcast_to_op(im_in, out);
+    if (re->shape() != im->shape()) {
+        const Shape out = detail::broadcast_shapes(re->shape(), im->shape());
+        if (re->shape() != out)
+            re = broadcast_to_op(re, out);
+        if (im->shape() != out)
+            im = broadcast_to_op(im, out);
     }
-
-    if (re->device() != im->device())
-        ErrorBuilder("complex").device_mismatch(re->device(), im->device(),
-                                                "real and imag must live on the same device");
 
     // There is no half-precision complex, so the half formats widen here
     // rather than in the backend — which used to read their bytes as

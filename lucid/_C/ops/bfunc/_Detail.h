@@ -38,6 +38,7 @@
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/fwd.h"
+#include "../../kernel/BinaryKernel.h"
 
 namespace lucid::bfunc_detail {
 
@@ -81,6 +82,18 @@ inline void validate_pair(const TensorImplPtr& a, const TensorImplPtr& b, const 
     if (a->device() != b->device())
         throw DeviceMismatch(std::string(device_name(a->device())),
                              std::string(device_name(b->device())), std::string(op));
+}
+
+// Validate non-null and matching dtype, then align devices by promoting a 0-d
+// CPU scalar operand to a GPU peer via :func:`detail::align_binary_devices`.
+inline std::pair<TensorImplPtr, TensorImplPtr>
+align_pair(const TensorImplPtr& a, const TensorImplPtr& b, const char* op) {
+    if (!a || !b)
+        ErrorBuilder(op).fail("null input");
+    if (a->dtype() != b->dtype())
+        throw DtypeMismatch(std::string(dtype_name(a->dtype())),
+                            std::string(dtype_name(b->dtype())), std::string(op));
+    return detail::align_binary_devices(a, b, op);
 }
 
 }  // namespace lucid::bfunc_detail

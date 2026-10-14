@@ -53,6 +53,11 @@ TensorImplPtr
 inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const char* name) {
     if (!a || !b)
         ErrorBuilder(name).fail("null input");
+    // In-place binary ops may promote a 0-d CPU rhs onto a GPU target, but
+    // never move ``a`` itself onto ``b``'s device.
+    if (a->device() == Device::CPU && b->device() == Device::GPU)
+        throw DeviceMismatch(std::string(device_name(a->device())),
+                             std::string(device_name(b->device())), name);
     if (a->storage_is_shared() && !a->is_aliased())
         ErrorBuilder(name).fail("in-place op on a tensor that shares storage with something "
                                 "other than its views (a tensor saved for backward, a NumPy "

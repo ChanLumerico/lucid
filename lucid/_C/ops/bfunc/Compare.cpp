@@ -19,10 +19,10 @@ namespace lucid {
 
 namespace {
 
+using bfunc_detail::align_pair;
 using bfunc_detail::allocate_cpu;
 using bfunc_detail::broadcast_pair;
 using bfunc_detail::fresh;
-using bfunc_detail::validate_pair;
 
 // Shared implementation for all binary comparisons.
 //
@@ -37,14 +37,14 @@ using bfunc_detail::validate_pair;
 // The output dtype is always Bool regardless of the input dtype.  No autograd
 // node is attached because comparisons are not differentiable.
 TensorImplPtr
-cmp_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
+cmp_dispatch(const TensorImplPtr& a_in, const TensorImplPtr& b_in, const char* name, int op) {
     // dtype / device only — comparisons broadcast NumPy-style (matches the
     // arithmetic ops + MLX / reference-framework semantics), so the shapes need
     // not be identical.  Previously this required equal shapes, which forced
     // ``x < scalar`` to materialise a full-shape constant; broadcasting lets a
     // 0-dim scalar ride through (and is what the symbolic-batch compile path
     // needs, since a full-shape scalar pins the batch).
-    validate_pair(a, b, name);
+    const auto [a, b] = align_pair(a_in, b_in, name);
     auto bc = broadcast_pair(a, b);
     OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
