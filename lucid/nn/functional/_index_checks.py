@@ -54,15 +54,9 @@ Two consumers read on Metal anyway, each for its own reason:
   boundaries (starting at 0 and never decreasing) that its backward walks
   on the CPU.
 
-``ctc_loss`` is stricter than the reference in two places:
-
-- The reference accepts a label outside ``[0, C)`` and reads past the
-  class axis. The loss it gives is meaningless, so such a label is refused
-  here.
-- An ``input_lengths`` entry of 0 is refused for now. The reference takes
-  an empty sequence (its loss is 0 for an empty target, inf otherwise),
-  but Lucid's kernel would write outside its buffer for one. This is
-  temporary, until the kernel handles empty sequences.
+``ctc_loss`` is stricter than the reference in one place: the reference
+accepts a label outside ``[0, C)`` and reads past the class axis. The loss
+it gives is meaningless, so such a label is refused here.
 """
 
 from collections.abc import Callable
@@ -71,7 +65,6 @@ from typing import TYPE_CHECKING, NamedTuple, cast, overload
 
 import lucid as _lucid
 from lucid._dtype import dtype as _dtype
-from lucid._unsupported import unsupported_if
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -487,9 +480,7 @@ def _check_ctc(
     - ``log_probs`` must be ``(T, N, C)``.
     - ``blank`` must lie in ``[0, C)``.
     - ``input_lengths`` must hold one length per sequence, each in
-      ``[1, T]``.  A length of 0 is valid in the reference and raises
-      ``NotImplementedError`` here for now: the kernel cannot run an
-      empty sequence yet.
+      ``[0, T]``.
     - ``targets`` must be padded ``(N, S)`` with each ``target_lengths``
       entry in ``[0, S]``, or concatenated ``(sum(target_lengths),)``.
     - Every label the kernel reads must lie in ``[0, C)``. The padding past
@@ -527,17 +518,7 @@ def _check_ctc(
             f"{op}: padded targets must hold one row per sequence ({batch}), "
             f"got {int(targets.shape[0])}"
         )
-    frames = _check_lengths(input_lengths, "input_lengths", batch, time, op)
-    # Temporary, and stricter than the reference: an empty sequence is
-    # valid (its loss is 0 for an empty target, inf otherwise), but the
-    # kernel writes before its buffer for one.  Lift once it handles them.
-    unsupported_if(
-        0 in frames,
-        op,
-        "input_lengths",
-        0,
-        detail="An empty input sequence is not supported yet (LCD-257).",
-    )
+    _check_lengths(input_lengths, "input_lengths", batch, time, op)
     width = int(targets.shape[1]) if padded else None
     lengths = _check_lengths(target_lengths, "target_lengths", batch, width, op)
     if not padded and sum(lengths) != int(targets.numel()):

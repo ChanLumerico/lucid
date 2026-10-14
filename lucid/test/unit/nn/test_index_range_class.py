@@ -653,11 +653,17 @@ def test_ctc_refuses_a_shape_it_would_read_past(
         )
 
 
-def test_ctc_refuses_an_empty_input_sequence_for_now(device: str) -> None:
-    # Temporary (LCD-257): the reference takes it, but the kernel wrote
-    # outside its buffer for one and took the process down.
-    with pytest.raises(NotImplementedError, match="LCD-257"):
-        F.ctc_loss(_log_probs(device), _ids([[1, 2], [2, 3]], device), [0, T], [0, 2])
+def test_ctc_accepts_an_empty_input_sequence(device: str) -> None:
+    losses = _flat(
+        F.ctc_loss(
+            _log_probs(device),
+            _ids([[1, 2], [2, 3]], device),
+            [0, T],
+            [0, 2],
+            reduction="none",
+        ).tolist()
+    )
+    assert losses[0] == 0.0 and math.isfinite(losses[1])
 
 
 # ── one owner ──────────────────────────────────────────────────────────────
@@ -771,11 +777,6 @@ def test_ctc_at_the_ends_of_its_axes_matches_the_reference(
 
 
 @pytest.mark.parity
-@pytest.mark.xfail(
-    strict=True,
-    raises=NotImplementedError,
-    reason="LCD-257: the ctc kernel cannot run an empty input sequence yet",
-)
 def test_ctc_takes_an_empty_input_sequence_as_the_reference_does(
     ref: ModuleType,
 ) -> None:
