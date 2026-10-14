@@ -30,15 +30,20 @@
 // lucid/test/unit/ops/test_index_bounds_contract.py.
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <sstream>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <mlx/array.h>
 #include <mlx/compile.h>
+#include <mlx/fast.h>
 #include <mlx/ops.h>
 #include <mlx/utils.h>
 
@@ -95,6 +100,16 @@ namespace axis_index_detail {
 using Fused =
     std::function<std::vector<::mlx::core::array>(const std::vector<::mlx::core::array>&)>;
 
+inline void validate_index_dtype(const ::mlx::core::array& idx) {
+    namespace mx = ::mlx::core;
+    if (!mx::issubdtype(idx.dtype(), mx::integer) && idx.dtype() != mx::bool_) {
+        std::ostringstream got;
+        got << idx.dtype();
+        throw DtypeMismatch("an integer dtype", got.str(),
+                            "gpu_axis_index: indices must be an integer tensor");
+    }
+}
+
 // The integer width an index is checked at.  It must hold every value of
 // the index and ``extent`` as well.  A narrower index is widened first,
 // because ``idx + extent`` wraps in int8.  An int64 index is never narrowed,
@@ -142,6 +157,122 @@ inline const Fused& fused(NegativeIndex negative, bool narrow) {
     return narrow ? strict32 : strict;
 }
 
+template <bool Narrow>
+std::vector<::mlx::core::array> sink_check(const std::vector<::mlx::core::array>& in) {
+    namespace mx = ::mlx::core;
+    auto c = check<true, Narrow>(in);
+    auto ext = Narrow && in[1].dtype() != mx::int32 ? mx::astype(in[1], mx::int32) : in[1];
+    return {mx::where(c[1], c[0], ext)};
+}
+
+inline const Fused& fused_sink(bool narrow) {
+    static const Fused wide = ::mlx::core::compile(&sink_check<false>, /*shapeless=*/true);
+    static const Fused narrow32 = ::mlx::core::compile(&sink_check<true>, /*shapeless=*/true);
+    return narrow ? narrow32 : wide;
+}
+
+// Single-pass bounds-checked gather on `(Pre, Extent, Post) -> (Pre, K, Post)`.
+// When `SLICE` is true (`gpu_take`), `idx` is 1-D `(K,)` and indexed by `k`.
+// When `SLICE` is false (`gpu_take_along_axis`), `idx` is 3-D `(Pre, K, Post)`
+// and indexed by `out_elem`.
+inline const ::mlx::core::fast::CustomKernelFunction& gather_kernel() {
+    static const auto kernel =
+        ::mlx::core::fast::metal_kernel("lucid_bounds_gather_3d", {"src", "idx"}, {"out"},
+                                        R"(
+        uint post = thread_position_in_grid.x;
+        uint k = thread_position_in_grid.y;
+        uint pre = thread_position_in_grid.z;
+        uint Post = threads_per_grid.x;
+        uint K = threads_per_grid.y;
+        int64_t extent = static_cast<int64_t>(src_shape[1]);
+        size_t out_elem = (static_cast<size_t>(pre) * K + k) * Post + post;
+        IdxT raw_val = idx[SLICE ? static_cast<size_t>(k) : out_elem];
+        bool valid;
+        int64_t resolved = 0;
+        if (metal::is_signed_v<IdxT>) {
+            int64_t v = static_cast<int64_t>(raw_val);
+            if (WRAP && v < 0) {
+                v += extent;
+            }
+            valid = (v >= 0 && v < extent);
+            resolved = v;
+        } else {
+            uint64_t u = static_cast<uint64_t>(raw_val);
+            valid = (u < static_cast<uint64_t>(extent));
+            resolved = static_cast<int64_t>(u);
+        }
+        if (valid) {
+            size_t src_elem =
+                (static_cast<size_t>(pre) * static_cast<size_t>(extent) +
+                 static_cast<size_t>(resolved)) *
+                    Post +
+                post;
+            out[out_elem] = src[src_elem];
+        } else {
+            out[out_elem] = lucid_oob_fill<T>();
+        }
+        )",
+                                        R"(
+        template <typename U>
+        METAL_FUNC U lucid_oob_fill() { return U(0); }
+        template <>
+        METAL_FUNC float lucid_oob_fill<float>() { return NAN; }
+        template <>
+        METAL_FUNC half lucid_oob_fill<half>() { return half(NAN); }
+        template <>
+        METAL_FUNC bfloat16_t lucid_oob_fill<bfloat16_t>() { return bfloat16_t(NAN); }
+        template <>
+        METAL_FUNC complex64_t lucid_oob_fill<complex64_t>() { return complex64_t(NAN, NAN); }
+        )");
+    return kernel;
+}
+
+inline ::mlx::core::array dispatch_gather_3d(const ::mlx::core::array& src,
+                                             const ::mlx::core::array& idx,
+                                             const ::mlx::core::Shape& out_shape,
+                                             int ax,
+                                             NegativeIndex negative,
+                                             bool slice) {
+    namespace mx = ::mlx::core;
+    const int ndim = static_cast<int>(src.ndim());
+    std::int64_t pre = 1;
+    for (int d = 0; d < ax; ++d)
+        pre *= static_cast<std::int64_t>(src.shape(d));
+    const std::int64_t extent = static_cast<std::int64_t>(src.shape(ax));
+    std::int64_t post = 1;
+    for (int d = ax + 1; d < ndim; ++d)
+        post *= static_cast<std::int64_t>(src.shape(d));
+    const std::int64_t k =
+        slice ? static_cast<std::int64_t>(idx.size()) : static_cast<std::int64_t>(idx.shape(ax));
+    if (pre == 0 || k == 0 || post == 0)
+        return mx::zeros(out_shape, src.dtype());
+
+    const int ipre = static_cast<int>(pre);
+    const int iext = static_cast<int>(extent);
+    const int ik = static_cast<int>(k);
+    const int ipost = static_cast<int>(post);
+
+    mx::Shape src_3d_shape{ipre, iext, ipost};
+    auto src_3d = src.shape() == src_3d_shape ? src : mx::reshape(src, src_3d_shape);
+    mx::Shape idx_target = slice ? mx::Shape{ik} : mx::Shape{ipre, ik, ipost};
+    auto idx_in = idx.shape() == idx_target ? idx : mx::reshape(idx, idx_target);
+
+    const int max_tg = ipost >= 512 ? 512 : 256;
+    const int tg_x = std::min(ipost, max_tg);
+    const int tg_y = std::min(ik, std::max(1, max_tg / tg_x));
+    const int tg_z = tg_x * tg_y < 64 ? std::min(ipre, std::max(1, 64 / (tg_x * tg_y))) : 1;
+
+    mx::Shape out_3d_shape{ipre, ik, ipost};
+    auto out_3d = gather_kernel()({std::move(src_3d), std::move(idx_in)}, {out_3d_shape},
+                                  {src.dtype()}, {ipost, ik, ipre}, {tg_x, tg_y, tg_z},
+                                  {{"T", src.dtype()},
+                                   {"IdxT", idx.dtype()},
+                                   {"WRAP", negative == NegativeIndex::Wrap},
+                                   {"SLICE", slice}},
+                                  std::nullopt, false, {})[0];
+    return out_3d.shape() == out_shape ? out_3d : mx::reshape(out_3d, out_shape);
+}
+
 }  // namespace axis_index_detail
 
 // ``idx`` checked against an axis of ``extent`` positions.  ``extent`` must
@@ -152,12 +283,7 @@ inline AxisIndex gpu_axis_index(const ::mlx::core::array& idx,
                                 std::int64_t extent,
                                 NegativeIndex negative = NegativeIndex::Wrap) {
     namespace mx = ::mlx::core;
-    if (!mx::issubdtype(idx.dtype(), mx::integer) && idx.dtype() != mx::bool_) {
-        std::ostringstream got;
-        got << idx.dtype();
-        throw DtypeMismatch("an integer dtype", got.str(),
-                            "gpu_axis_index: indices must be an integer tensor");
-    }
+    axis_index_detail::validate_index_dtype(idx);
     if (extent <= 0)
         ErrorBuilder("gpu_axis_index").fail("an empty axis has no position to index");
     const auto work = axis_index_detail::work_dtype(idx.dtype(), extent);
@@ -187,7 +313,7 @@ inline ::mlx::core::array fill_out_of_range(const ::mlx::core::array& gathered,
     return ::mlx::core::where(in_range, gathered, out_of_range_fill(gathered.dtype()));
 }
 
-// ``take_along_axis`` under policy B.
+// ``take_along_axis`` under policy B, fused into one Metal pass.
 inline ::mlx::core::array gpu_take_along_axis(const ::mlx::core::array& src,
                                               const ::mlx::core::array& idx,
                                               int axis,
@@ -195,18 +321,27 @@ inline ::mlx::core::array gpu_take_along_axis(const ::mlx::core::array& src,
     namespace mx = ::mlx::core;
     const int ax = axis < 0 ? axis + static_cast<int>(src.ndim()) : axis;
     const auto extent = static_cast<std::int64_t>(src.shape(ax));
-    if (extent == 0) {
-        auto shape = src.shape();
-        shape[static_cast<std::size_t>(ax)] = idx.shape(ax);
-        return mx::full(mx::broadcast_shapes(shape, idx.shape()), out_of_range_fill(src.dtype()));
+    auto shape = src.shape();
+    shape[static_cast<std::size_t>(ax)] = idx.shape(ax);
+    auto out_shape = mx::broadcast_shapes(shape, idx.shape());
+    if (extent == 0)
+        return mx::full(out_shape, out_of_range_fill(src.dtype()));
+    axis_index_detail::validate_index_dtype(idx);
+    if (out_shape != idx.shape() || shape != out_shape) {
+        auto src_target = out_shape;
+        src_target[static_cast<std::size_t>(ax)] = src.shape(ax);
+        auto src_b = src.shape() == src_target ? src : mx::broadcast_to(src, src_target);
+        auto idx_b = idx.shape() == out_shape ? idx : mx::broadcast_to(idx, out_shape);
+        return axis_index_detail::dispatch_gather_3d(src_b, idx_b, out_shape, ax, negative,
+                                                     /*slice=*/false);
     }
-    auto ix = gpu_axis_index(idx, extent, negative);
-    return fill_out_of_range(mx::take_along_axis(src, ix.safe, ax), ix.in_range);
+    return axis_index_detail::dispatch_gather_3d(src, idx, out_shape, ax, negative,
+                                                 /*slice=*/false);
 }
 
 // ``take(src, idx, axis)`` under policy B: whole slices of ``src`` picked
-// along ``axis``.  The result is ``src.shape[:axis] + idx.shape +
-// src.shape[axis + 1:]``.
+// along ``axis`` in a single Metal pass.  The result is
+// ``src.shape[:axis] + idx.shape + src.shape[axis + 1:]``.
 inline ::mlx::core::array gpu_take(const ::mlx::core::array& src,
                                    const ::mlx::core::array& idx,
                                    int axis,
@@ -215,20 +350,16 @@ inline ::mlx::core::array gpu_take(const ::mlx::core::array& src,
     const int ndim = static_cast<int>(src.ndim());
     const int ax = axis < 0 ? axis + ndim : axis;
     mx::Shape out_shape(src.shape().begin(), src.shape().begin() + ax);
-    mx::Shape mask_shape(static_cast<std::size_t>(ax), 1);
-    for (auto s : idx.shape()) {
+    for (auto s : idx.shape())
         out_shape.push_back(s);
-        mask_shape.push_back(s);
-    }
-    for (int d = ax + 1; d < ndim; ++d) {
+    for (int d = ax + 1; d < ndim; ++d)
         out_shape.push_back(src.shape(d));
-        mask_shape.push_back(1);
-    }
     const auto extent = static_cast<std::int64_t>(src.shape(ax));
     if (extent == 0)
         return mx::full(out_shape, out_of_range_fill(src.dtype()));
-    auto ix = gpu_axis_index(idx, extent, negative);
-    return fill_out_of_range(mx::take(src, ix.safe, ax), mx::reshape(ix.in_range, mask_shape));
+    axis_index_detail::validate_index_dtype(idx);
+    return axis_index_detail::dispatch_gather_3d(src, idx, out_shape, ax, negative,
+                                                 /*slice=*/true);
 }
 
 // The reductions a scatter can apply.
@@ -315,8 +446,15 @@ template <class Scatter>
 // value aimed at a real position overwrites it.  So an out-of-range write
 // gets a position of its own.
 inline ::mlx::core::array gpu_sink_index(const ::mlx::core::array& idx, std::int64_t extent) {
-    auto ix = gpu_axis_index(idx, extent);
-    return ::mlx::core::where(ix.in_range, ix.safe, ::mlx::core::array(extent, ix.safe.dtype()));
+    namespace mx = ::mlx::core;
+    axis_index_detail::validate_index_dtype(idx);
+    if (extent <= 0)
+        ErrorBuilder("gpu_axis_index").fail("an empty axis has no position to index");
+    const auto work = axis_index_detail::work_dtype(idx.dtype(), extent);
+    auto i = idx.dtype() == work ? idx : mx::astype(idx, work);
+    const bool narrow = extent <= std::numeric_limits<std::int32_t>::max();
+    return std::move(
+        axis_index_detail::fused_sink(narrow)({std::move(i), mx::array(extent, work)})[0]);
 }
 
 // ``base`` with the one-wide sink slab appended along ``dim``.

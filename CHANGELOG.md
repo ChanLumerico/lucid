@@ -112,6 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - read device tensors back once, not one element at a time
 
+- fuse Metal bounds-checked gather in AxisIndex.h (LCD-277)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
