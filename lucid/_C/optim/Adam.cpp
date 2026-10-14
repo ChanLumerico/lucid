@@ -302,28 +302,9 @@ void Adam::update_one(std::size_t slot_idx,
     pc.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> Adam::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("exp_avg", clone_state_slots(m_));
-    out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    // Kept after AMSGrad is switched off, as the reference's state keeps it.
-    if (auto vmax = clone_held_slots(vmax_); !vmax.empty())
-        out.emplace_back("max_exp_avg_sq", std::move(vmax));
-    return out;
-}
-
-void Adam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "exp_avg")
-            load_state_slots(m_, tensors);
-        else if (name == "exp_avg_sq")
-            load_state_slots(v_, tensors);
-        else if (name == "max_exp_avg_sq")
-            load_state_slots(vmax_, tensors);
-    }
+std::vector<Optimizer::StateSlot> Adam::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("exp_avg", m_),
+            StateSlot::buffer("exp_avg_sq", v_), StateSlot::held_buffer("max_exp_avg_sq", vmax_)};
 }
 
 AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
@@ -430,28 +411,9 @@ void AdamW::update_one(std::size_t slot_idx,
     pc.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> AdamW::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("exp_avg", clone_state_slots(m_));
-    out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    // Kept after AMSGrad is switched off, as the reference's state keeps it.
-    if (auto vmax = clone_held_slots(vmax_); !vmax.empty())
-        out.emplace_back("max_exp_avg_sq", std::move(vmax));
-    return out;
-}
-
-void AdamW::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "exp_avg")
-            load_state_slots(m_, tensors);
-        else if (name == "exp_avg_sq")
-            load_state_slots(v_, tensors);
-        else if (name == "max_exp_avg_sq")
-            load_state_slots(vmax_, tensors);
-    }
+std::vector<Optimizer::StateSlot> AdamW::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("exp_avg", m_),
+            StateSlot::buffer("exp_avg_sq", v_), StateSlot::held_buffer("max_exp_avg_sq", vmax_)};
 }
 
 NAdam::NAdam(std::vector<std::shared_ptr<TensorImpl>> p,
@@ -584,38 +546,9 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> NAdam::state_buffers() const {
-    std::vector<std::shared_ptr<TensorImpl>> mu_prod(params_.size());
-    for (std::size_t i = 0; i < params_.size(); ++i) {
-        if (slot_has_state(i) && i < mu_product_.size())
-            mu_prod[i] = make_state_scalar(mu_product_[i], state_scalar_dtype(params_[i]->dtype()));
-    }
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("mu_product", std::move(mu_prod));
-    out.emplace_back("exp_avg", clone_state_slots(m_));
-    out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    return out;
-}
-
-void NAdam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step") {
-            load_step_slots(tensors);
-        } else if (name == "mu_product") {
-            for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
-                if (!tensors[i] || !params_[i])
-                    continue;
-                ensure_state_slot(i);
-                mu_product_[i] =
-                    round_to_state_scalar(read_state_scalar(*tensors[i]), params_[i]->dtype());
-            }
-        } else if (name == "exp_avg") {
-            load_state_slots(m_, tensors);
-        } else if (name == "exp_avg_sq") {
-            load_state_slots(v_, tensors);
-        }
-    }
+std::vector<Optimizer::StateSlot> NAdam::state_slots() {
+    return {StateSlot::step(), StateSlot::scalar("mu_product", mu_product_),
+            StateSlot::buffer("exp_avg", m_), StateSlot::buffer("exp_avg_sq", v_)};
 }
 
 RAdam::RAdam(std::vector<std::shared_ptr<TensorImpl>> p,
@@ -748,23 +681,9 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> RAdam::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("exp_avg", clone_state_slots(m_));
-    out.emplace_back("exp_avg_sq", clone_state_slots(v_));
-    return out;
-}
-
-void RAdam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "exp_avg")
-            load_state_slots(m_, tensors);
-        else if (name == "exp_avg_sq")
-            load_state_slots(v_, tensors);
-    }
+std::vector<Optimizer::StateSlot> RAdam::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("exp_avg", m_),
+            StateSlot::buffer("exp_avg_sq", v_)};
 }
 
 }  // namespace lucid

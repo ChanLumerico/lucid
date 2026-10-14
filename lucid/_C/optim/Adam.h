@@ -263,34 +263,8 @@ public:
     //     ``"adam_v1"``.
     std::string state_dict_id() const override { return "adam_v1"; }
 
-    // Export per-parameter state.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``exp_avg`` ($m$) and
-    //     ``exp_avg_sq`` ($v$), plus ``max_exp_avg_sq`` while a slot holds
-    //     one — with AMSGrad on, and after it is switched off, as the
-    //     reference framework's state keeps it.  Each list runs parallel to
-    //     the parameters; slots that have not stepped contribute null
-    //     entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore per-parameter state from a previous ``state_buffers``.
-    //
-    // Parameters
-    // ----------
-    // bufs : vector of NamedBuffers
-    //     Entries named as ``state_buffers`` names them; unknown names
-    //     are ignored.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply the standard Adam update to a single parameter.
     //
     // Parameters
@@ -457,13 +431,8 @@ public:
     //     ``"adamw_v1"``.
     std::string state_dict_id() const override { return "adamw_v1"; }
 
-    // Export per-parameter state.  See ``Adam::state_buffers``.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore per-parameter state.  See ``Adam::load_state_buffers``.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply the decoupled-weight-decay Adam update.
     //
     // Notes
@@ -625,24 +594,8 @@ public:
     //     ``"nadam_v1"``.
     std::string state_dict_id() const override { return "nadam_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``mu_product`` (0-d, F32 — F64
-    //     for an F64 parameter), ``exp_avg`` and ``exp_avg_sq``.  Slots that have not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Compute per-step $\mu_t$ and $\mu_{t+1}$, advance ``mu_product_``,
     // then apply the two-term Nesterov update.
     //
@@ -780,23 +733,8 @@ public:
     //     ``"radam_v1"``.
     std::string state_dict_id() const override { return "radam_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``exp_avg`` and ``exp_avg_sq``.  Slots that have not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Compute $\rho_t$ and $r_t$; apply the rectified adaptive update
     // when $\rho_t > 5$, else fall back to a plain momentum update.
     //

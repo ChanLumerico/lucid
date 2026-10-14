@@ -194,30 +194,10 @@ void RMSprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> RMSprop::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("square_avg", clone_state_slots(square_avg_));
-    // Kept after momentum or centering is switched off, as the reference's
-    // state keeps them.
-    if (auto mom = clone_held_slots(moment_buf_); !mom.empty())
-        out.emplace_back("momentum_buffer", std::move(mom));
-    if (auto avg = clone_held_slots(grad_avg_); !avg.empty())
-        out.emplace_back("grad_avg", std::move(avg));
-    return out;
-}
-
-void RMSprop::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "square_avg")
-            load_state_slots(square_avg_, tensors);
-        else if (name == "momentum_buffer")
-            load_state_slots(moment_buf_, tensors);
-        else if (name == "grad_avg")
-            load_state_slots(grad_avg_, tensors);
-    }
+std::vector<Optimizer::StateSlot> RMSprop::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("square_avg", square_avg_),
+            StateSlot::held_buffer("momentum_buffer", moment_buf_),
+            StateSlot::held_buffer("grad_avg", grad_avg_)};
 }
 
 Rprop::Rprop(std::vector<std::shared_ptr<TensorImpl>> p,
@@ -358,23 +338,9 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> Rprop::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("prev", clone_state_slots(prev_grad_));
-    out.emplace_back("step_size", clone_state_slots(step_size_));
-    return out;
-}
-
-void Rprop::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "prev")
-            load_state_slots(prev_grad_, tensors);
-        else if (name == "step_size")
-            load_state_slots(step_size_, tensors);
-    }
+std::vector<Optimizer::StateSlot> Rprop::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("prev", prev_grad_),
+            StateSlot::buffer("step_size", step_size_)};
 }
 
 }  // namespace lucid

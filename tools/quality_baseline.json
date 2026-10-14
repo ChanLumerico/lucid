@@ -495,7 +495,7 @@
     "lucid/_C/ops/utils/Concat.cpp": 3,
     "lucid/_C/ops/utils/Histogram.cpp": 1,
     "lucid/_C/optim/Ada.cpp": 10,
-    "lucid/_C/optim/Adam.cpp": 17,
+    "lucid/_C/optim/Adam.cpp": 15,
     "lucid/_C/optim/Prop.cpp": 4,
     "lucid/_C/optim/SGD.cpp": 1,
     "lucid/_C/utils/tokenizer/BPE.cpp": 12,

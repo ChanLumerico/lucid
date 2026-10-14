@@ -119,23 +119,8 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> Adamax::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("exp_avg", clone_state_slots(m_));
-    out.emplace_back("exp_inf", clone_state_slots(u_));
-    return out;
-}
-
-void Adamax::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "exp_avg")
-            load_state_slots(m_, tensors);
-        else if (name == "exp_inf")
-            load_state_slots(u_, tensors);
-    }
+std::vector<Optimizer::StateSlot> Adamax::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("exp_avg", m_), StateSlot::buffer("exp_inf", u_)};
 }
 
 void Adagrad::check_hyperparams(
@@ -248,20 +233,8 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> Adagrad::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("sum", clone_state_slots(sum_sq_grad_));
-    return out;
-}
-
-void Adagrad::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "sum")
-            load_state_slots(sum_sq_grad_, tensors);
-    }
+std::vector<Optimizer::StateSlot> Adagrad::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("sum", sum_sq_grad_)};
 }
 
 void Adadelta::check_hyperparams(double lr, double rho, double eps, double weight_decay) {
@@ -364,23 +337,9 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
     p_cpu.bump_version();
 }
 
-std::vector<Optimizer::NamedBuffers> Adadelta::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("square_avg", clone_state_slots(sq_avg_));
-    out.emplace_back("acc_delta", clone_state_slots(accumulated_update_));
-    return out;
-}
-
-void Adadelta::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "square_avg")
-            load_state_slots(sq_avg_, tensors);
-        else if (name == "acc_delta")
-            load_state_slots(accumulated_update_, tensors);
-    }
+std::vector<Optimizer::StateSlot> Adadelta::state_slots() {
+    return {StateSlot::step(), StateSlot::buffer("square_avg", sq_avg_),
+            StateSlot::buffer("acc_delta", accumulated_update_)};
 }
 
 }  // namespace lucid

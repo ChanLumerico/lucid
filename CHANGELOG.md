@@ -786,6 +786,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - pooling and conv follow the reference's signatures
 - drop the reference-parity deprecation shims
 - the rest of lucid.* takes the reference's names
+- declarative state_slots and atomic load_state_buffers (LCD-239)
 
 ---
 

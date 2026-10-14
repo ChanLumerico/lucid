@@ -205,8 +205,7 @@ Optimizer::clone_held_slots(const std::vector<Storage>& bufs) const {
     return out;
 }
 
-void Optimizer::load_state_slots(std::vector<Storage>& bufs,
-                                 const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+void Optimizer::validate_state_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) const {
     for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
         if (!saved[i] || !params_[i])
             continue;
@@ -218,6 +217,40 @@ void Optimizer::load_state_slots(std::vector<Storage>& bufs,
             ErrorBuilder("load_state_buffers").dtype_mismatch(p->dtype(), s->dtype());
         if (s->device() != p->device())
             ErrorBuilder("load_state_buffers").device_mismatch(p->device(), s->device());
+        if (p->device() == Device::CPU) {
+            const auto* sc = std::get_if<CpuStorage>(&s->storage());
+            if (sc == nullptr)
+                ErrorBuilder("load_state_buffers")
+                    .fail("device mismatch between live and saved state");
+            if (sc->nbytes != p->numel() * dtype_size(p->dtype()))
+                ErrorBuilder("load_state_buffers").fail("byte size mismatch");
+        } else if (p->device() == Device::GPU) {
+            const auto* sg = std::get_if<GpuStorage>(&s->storage());
+            if (sg == nullptr || !sg->arr)
+                ErrorBuilder("load_state_buffers")
+                    .fail("device mismatch between live and saved state");
+        } else {
+            ErrorBuilder("load_state_buffers").fail("device mismatch between live and saved state");
+        }
+    }
+}
+
+void Optimizer::validate_scalar_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) const {
+    for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+        if (!saved[i] || !params_[i])
+            continue;
+        (void)read_state_scalar(*saved[i]);
+    }
+}
+
+void Optimizer::load_state_slots(std::vector<Storage>& bufs,
+                                 const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+    validate_state_slots(saved);
+    for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+        if (!saved[i] || !params_[i])
+            continue;
+        const auto& p = params_[i];
+        const auto& s = saved[i];
         ensure_state_slot(i);
         // A slot can hold state without this buffer: SGD makes its momentum
         // buffer at the first momentum step, not when the slot starts.
@@ -239,11 +272,108 @@ std::vector<std::shared_ptr<TensorImpl>> Optimizer::clone_step_slots() const {
 }
 
 void Optimizer::load_step_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+    validate_scalar_slots(saved);
     for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
         if (!saved[i] || !params_[i])
             continue;
         ensure_state_slot(i);
         steps_[i] = static_cast<std::int64_t>(read_state_scalar(*saved[i]));
+    }
+}
+
+std::vector<std::shared_ptr<TensorImpl>>
+Optimizer::clone_scalar_slots(const std::vector<double>& scalars) const {
+    std::vector<std::shared_ptr<TensorImpl>> out(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (slot_has_state(i) && i < scalars.size()) {
+            out[i] = make_state_scalar(scalars[i],
+                                       optim_detail::state_scalar_dtype(params_[i]->dtype()));
+        }
+    }
+    return out;
+}
+
+void Optimizer::load_scalar_slots(std::vector<double>& scalars,
+                                  const std::vector<std::shared_ptr<TensorImpl>>& saved) {
+    validate_scalar_slots(saved);
+    for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
+        if (!saved[i] || !params_[i])
+            continue;
+        ensure_state_slot(i);
+        if (scalars.size() < params_.size())
+            scalars.resize(params_.size(), 0.0);
+        scalars[i] =
+            optim_detail::round_to_state_scalar(read_state_scalar(*saved[i]), params_[i]->dtype());
+    }
+}
+
+std::vector<Optimizer::NamedBuffers> Optimizer::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    for (const auto& slot : const_cast<Optimizer*>(this)->state_slots()) {
+        switch (slot.kind) {
+        case StateSlot::Kind::Step:
+            out.emplace_back(slot.name, clone_step_slots());
+            break;
+        case StateSlot::Kind::Scalar:
+            out.emplace_back(slot.name, clone_scalar_slots(*slot.scalars));
+            break;
+        case StateSlot::Kind::Buffer:
+            out.emplace_back(slot.name, clone_state_slots(*slot.buffers));
+            break;
+        case StateSlot::Kind::HeldBuffer:
+            if (auto held = clone_held_slots(*slot.buffers); !held.empty())
+                out.emplace_back(slot.name, std::move(held));
+            break;
+        }
+    }
+    return out;
+}
+
+void Optimizer::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    const auto slots = state_slots();
+    auto find_slot = [&slots](const std::string& name) -> const StateSlot* {
+        for (const auto& slot : slots) {
+            if (name == slot.name)
+                return &slot;
+        }
+        return nullptr;
+    };
+
+    // Phase 1: validate every parameter and every recognized slot across the
+    // incoming state before allocating or overwriting any live state.
+    for (const auto& [name, tensors] : bufs) {
+        const StateSlot* slot = find_slot(name);
+        if (slot == nullptr)
+            continue;
+        switch (slot->kind) {
+        case StateSlot::Kind::Step:
+        case StateSlot::Kind::Scalar:
+            validate_scalar_slots(tensors);
+            break;
+        case StateSlot::Kind::Buffer:
+        case StateSlot::Kind::HeldBuffer:
+            validate_state_slots(tensors);
+            break;
+        }
+    }
+
+    // Phase 2: commit the validated state in place.
+    for (const auto& [name, tensors] : bufs) {
+        const StateSlot* slot = find_slot(name);
+        if (slot == nullptr)
+            continue;
+        switch (slot->kind) {
+        case StateSlot::Kind::Step:
+            load_step_slots(tensors);
+            break;
+        case StateSlot::Kind::Scalar:
+            load_scalar_slots(*slot->scalars, tensors);
+            break;
+        case StateSlot::Kind::Buffer:
+        case StateSlot::Kind::HeldBuffer:
+            load_state_slots(*slot->buffers, tensors);
+            break;
+        }
     }
 }
 

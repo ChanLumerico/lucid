@@ -178,27 +178,8 @@ public:
     //     ``"rmsprop_v1"``.
     std::string state_dict_id() const override { return "rmsprop_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot) and ``square_avg``, plus
-    //     ``momentum_buffer`` and ``grad_avg`` while a slot holds one —
-    //     with momentum / ``centered`` on, and after it is switched off,
-    //     as the reference framework's state keeps them.  Slots that have
-    //     not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply one RMSprop update to parameter ``i``.
     //
     // Parameters
@@ -380,25 +361,8 @@ public:
     //     ``"rprop_v1"``.
     std::string state_dict_id() const override { return "rprop_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``prev`` (the previous effective
-    //     gradient) and ``step_size``.  Slots that have not stepped
-    //     contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply one Rprop update to parameter ``i``.
     //
     // Parameters

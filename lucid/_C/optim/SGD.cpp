@@ -225,18 +225,8 @@ void SGD::update_one(std::size_t slot_idx,
 
 // Every buffer a slot holds is exported, including one kept after momentum
 // was set to zero; slots without one contribute null.
-std::vector<Optimizer::NamedBuffers> SGD::state_buffers() const {
-    std::vector<NamedBuffers> out;
-    if (auto mom = clone_held_slots(moment_); !mom.empty())
-        out.emplace_back("momentum_buffer", std::move(mom));
-    return out;
-}
-
-void SGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "momentum_buffer")
-            load_state_slots(moment_, tensors);
-    }
+std::vector<Optimizer::StateSlot> SGD::state_slots() {
+    return {StateSlot::held_buffer("momentum_buffer", moment_)};
 }
 
 void ASGD::check_hyperparams(double lr, double weight_decay) {
@@ -351,45 +341,13 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
     mu_[i] = round_to_state_scalar(1.0 / std::max(1.0, t - t0_), dt);
 }
 
-std::vector<Optimizer::NamedBuffers> ASGD::state_buffers() const {
-    std::vector<std::shared_ptr<TensorImpl>> eta(params_.size());
-    std::vector<std::shared_ptr<TensorImpl>> mu(params_.size());
-    for (std::size_t i = 0; i < params_.size(); ++i) {
-        if (!slot_has_state(i) || i >= eta_.size() || i >= mu_.size())
-            continue;
-        const Dtype sdt = state_scalar_dtype(params_[i]->dtype());
-        eta[i] = make_state_scalar(eta_[i], sdt);
-        mu[i] = make_state_scalar(mu_[i], sdt);
-    }
-    std::vector<NamedBuffers> out;
-    out.emplace_back("step", clone_step_slots());
-    out.emplace_back("eta", std::move(eta));
-    out.emplace_back("mu", std::move(mu));
-    out.emplace_back("ax", clone_state_slots(ax_));
-    return out;
-}
-
-void ASGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
-    // eta and mu are one number per parameter, read wherever they live.
-    auto load_scalars = [this](std::vector<double>& dst,
-                               const std::vector<std::shared_ptr<TensorImpl>>& saved) {
-        for (std::size_t i = 0; i < saved.size() && i < params_.size(); ++i) {
-            if (!saved[i] || !params_[i])
-                continue;
-            ensure_state_slot(i);
-            dst[i] = round_to_state_scalar(read_state_scalar(*saved[i]), params_[i]->dtype());
-        }
+std::vector<Optimizer::StateSlot> ASGD::state_slots() {
+    return {
+        StateSlot::step(),
+        StateSlot::scalar("eta", eta_),
+        StateSlot::scalar("mu", mu_),
+        StateSlot::buffer("ax", ax_),
     };
-    for (const auto& [name, tensors] : bufs) {
-        if (name == "step")
-            load_step_slots(tensors);
-        else if (name == "eta")
-            load_scalars(eta_, tensors);
-        else if (name == "mu")
-            load_scalars(mu_, tensors);
-        else if (name == "ax")
-            load_state_slots(ax_, tensors);
-    }
 }
 
 }  // namespace lucid

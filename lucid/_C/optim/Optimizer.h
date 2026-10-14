@@ -211,11 +211,11 @@ LUCID_API double read_state_scalar(const TensorImpl& t);
 // -------------------------
 // Concrete optimizers must override ``update_one``, ``init_state_slot``,
 // ``set_lr`` / ``lr``, and ``state_dict_id``.  Optimizers with
-// Python-visible per-parameter state must override ``state_buffers`` /
-// ``load_state_buffers``, building them from ``clone_state_slots`` /
-// ``load_state_slots`` (tensor state) and ``clone_step_slots`` /
-// ``load_step_slots`` (the per-slot step, for optimizers whose
-// reference-framework state carries ``"step"``).
+// Python-visible per-parameter state override ``state_slots`` to return
+// a declarative list of ``StateSlot`` descriptors; the base class
+// ``state_buffers`` and ``load_state_buffers`` use that table to
+// snapshot and atomically restore state (validating every slot and
+// parameter before mutating any live buffer).
 //
 // Attributes
 // ----------
@@ -336,25 +336,18 @@ public:
     // Returns
     // -------
     // std::vector<NamedBuffers>
-    //     A list of ``(name, tensors)`` pairs.  ``name`` identifies the
-    //     buffer kind (e.g. ``"momentum_buffer"``); ``tensors`` runs
-    //     parallel to ``params_`` with one entry per parameter slot
-    //     (or a null entry if no state was allocated for that slot).
-    //     Entries are *clones* — callers may keep them after the
-    //     optimizer is destroyed.  Optimizers with no Python-visible
+    //     A list of ``(name, tensors)`` pairs driven by ``state_slots()``.
+    //     ``name`` identifies the buffer kind (e.g. ``"momentum_buffer"``);
+    //     ``tensors`` runs parallel to ``params_`` with one entry per
+    //     parameter slot (or a null entry if no state was allocated for
+    //     that slot).  Entries are *clones* — callers may keep them after
+    //     the optimizer is destroyed.  Optimizers with no Python-visible
     //     state return an empty vector.
-    //
-    // Notes
-    // -----
-    // Implementations typically call ``clone_state_storage`` for each
-    // active slot.  Slots whose state was never allocated (e.g. SGD
-    // with ``momentum == 0``) should contribute a null pointer rather
-    // than a synthetic zero buffer.
     //
     // See Also
     // --------
     // load_state_buffers : the inverse operation.
-    virtual std::vector<NamedBuffers> state_buffers() const { return {}; }
+    std::vector<NamedBuffers> state_buffers() const;
 
     // Restore the per-parameter state in place from a snapshot.
     //
@@ -362,25 +355,28 @@ public:
     // ----------
     // bufs : const std::vector<NamedBuffers>&
     //     Must match the layout returned by ``state_buffers`` for this
-    //     optimizer: same buffer names, same length, same per-slot
-    //     shapes / dtypes.  Mismatches raise.
+    //     optimizer: recognized buffer names must have per-slot shapes,
+    //     dtypes, and devices matching ``params_``.  Unknown buffer names
+    //     are ignored.
     //
     // Notes
     // -----
-    // After this returns, every state slot is treated as initialised so
-    // ``step()`` will not re-zero it on the next call.  Implementations
-    // typically delegate the byte copy to ``overwrite_state_storage``.
+    // Restoration is two-phase (validate then commit): every recognized
+    // slot and every parameter entry in ``bufs`` is validated before any
+    // state slot is initialised or any live buffer / scalar is mutated.
+    // If validation fails, the optimizer's existing state is left
+    // unchanged.
     //
     // Raises
     // ------
     // std::runtime_error
-    //     If the buffer count, names, shapes, dtypes, or devices do not
-    //     match the live optimizer state.
+    //     If any saved tensor's shape, dtype, device, or scalar element
+    //     count does not match the live parameter slot.
     //
     // See Also
     // --------
     // state_buffers : the inverse operation.
-    virtual void load_state_buffers(const std::vector<NamedBuffers>& bufs) { (void)bufs; }
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs);
 
     // Global step counter — always 0, since steps are counted per slot.
     //
@@ -415,6 +411,35 @@ public:
     virtual void set_step_count(std::int64_t count);
 
 protected:
+    // Declarative descriptor for one named per-parameter state entry.
+    struct StateSlot {
+        enum class Kind {
+            Step,        // Optimizer::steps_ (0-d I64 tensor per active slot)
+            Scalar,      // std::vector<double> (0-d F32/F64 tensor per active slot)
+            Buffer,      // std::vector<Storage> (always exported)
+            HeldBuffer,  // std::vector<Storage> (exported while any slot holds a buffer)
+        };
+
+        const char* name;
+        Kind kind;
+        std::vector<Storage>* buffers = nullptr;
+        std::vector<double>* scalars = nullptr;
+
+        static StateSlot step() { return {"step", Kind::Step, nullptr, nullptr}; }
+        static StateSlot scalar(const char* n, std::vector<double>& s) {
+            return {n, Kind::Scalar, nullptr, &s};
+        }
+        static StateSlot buffer(const char* n, std::vector<Storage>& b) {
+            return {n, Kind::Buffer, &b, nullptr};
+        }
+        static StateSlot held_buffer(const char* n, std::vector<Storage>& b) {
+            return {n, Kind::HeldBuffer, &b, nullptr};
+        }
+    };
+
+    // Declarative table of per-parameter state entries for checkpointing.
+    virtual std::vector<StateSlot> state_slots() { return {}; }
+
     // Apply the optimizer's update rule for a single parameter.
     //
     // Parameters
@@ -546,6 +571,14 @@ protected:
     // Restore the per-slot step counters from a ``"step"`` entry.
     void load_step_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved);
 
+    // Snapshot one per-slot scalar vector as 0-d F32/F64 CPU tensors.
+    std::vector<std::shared_ptr<TensorImpl>>
+    clone_scalar_slots(const std::vector<double>& scalars) const;
+
+    // Restore one per-slot scalar vector from 0-d tensors.
+    void load_scalar_slots(std::vector<double>& scalars,
+                           const std::vector<std::shared_ptr<TensorImpl>>& saved);
+
     // Flat list of trainable parameters; indexed by ``slot_idx``.
     std::vector<std::shared_ptr<TensorImpl>> params_;
 
@@ -559,6 +592,14 @@ protected:
 private:
     // Size ``state_initialized_`` and ``steps_`` to ``params_``.
     void sync_slot_vectors();
+
+    // Validate all non-null entries in ``saved`` against ``params_`` without
+    // mutating any state slot.
+    void validate_state_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) const;
+
+    // Validate all non-null scalar entries in ``saved`` without mutating any
+    // state slot.
+    void validate_scalar_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) const;
 };
 
 }  // namespace lucid

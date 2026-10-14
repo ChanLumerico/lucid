@@ -155,24 +155,8 @@ public:
     //     ``"adamax_v1"`` — used by serialisation to validate state-dict layout.
     std::string state_dict_id() const override { return "adamax_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``exp_avg`` ($m$) and
-    //     ``exp_inf`` ($u$).  Slots that have not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply one Adamax update to parameter ``i``.
     //
     // Parameters
@@ -354,24 +338,8 @@ public:
     //     ``"adagrad_v1"``.
     std::string state_dict_id() const override { return "adagrad_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot) and ``sum`` (the squared-gradient
-    //     accumulator $G$).  Slots that have not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply one Adagrad update to parameter ``i``.
     //
     // Parameters
@@ -531,24 +499,8 @@ public:
     //     ``"adadelta_v1"``.
     std::string state_dict_id() const override { return "adadelta_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // vector of NamedBuffers
-    //     ``step`` (0-d I64 per slot), ``square_avg`` and ``acc_delta``
-    //     (the running average of squared updates).  Slots that have not stepped contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply one Adadelta update to parameter ``i``.
     //
     // Parameters

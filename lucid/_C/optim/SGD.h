@@ -198,38 +198,8 @@ public:
     // Checkpoint identifier (``"sgd_v1"``).
     std::string state_dict_id() const override { return "sgd_v1"; }
 
-    // Snapshot the per-parameter velocity buffers for checkpointing.
-    //
-    // Returns
-    // -------
-    // std::vector<NamedBuffers>
-    //     Single-entry list ``[("momentum_buffer", tensors)]`` whose
-    //     ``tensors`` runs parallel to ``params_``, or an empty list when no
-    //     slot holds a buffer.  A slot contributes a null pointer until its
-    //     first momentum step.  A buffer stays after momentum is set to
-    //     zero, as the reference framework's state keeps it.
-    //
-    // See Also
-    // --------
-    // load_state_buffers : the inverse operation.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the velocity buffers from a checkpoint snapshot.
-    //
-    // Parameters
-    // ----------
-    // bufs : const std::vector<NamedBuffers>&
-    //     The ``"momentum_buffer"`` entry, laid out as ``state_buffers``
-    //     lays it out; other names are ignored.  It is restored whatever
-    //     the current momentum, as the reference framework restores it.
-    //
-    // Raises
-    // ------
-    // std::runtime_error
-    //     On any name / shape / dtype / device mismatch.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply the SGD update for one parameter slot.
     //
     // Dispatches to either the CPU scalar loop or the MLX GPU path based
@@ -395,25 +365,8 @@ public:
     // Checkpoint identifier (``"asgd_v1"``).
     std::string state_dict_id() const override { return "asgd_v1"; }
 
-    // Snapshot the per-slot state for checkpointing.
-    //
-    // Returns
-    // -------
-    // std::vector<NamedBuffers>
-    //     ``step`` (0-d I64 per slot), ``eta`` and ``mu`` (0-d, F32 — F64
-    //     for an F64 parameter) and ``ax``.  Slots that have not stepped
-    //     contribute null entries.
-    std::vector<NamedBuffers> state_buffers() const override;
-
-    // Restore the state captured by ``state_buffers``.
-    //
-    // Raises
-    // ------
-    // std::runtime_error
-    //     On a shape / dtype / device mismatch with the live parameters.
-    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
-
 protected:
+    std::vector<StateSlot> state_slots() override;
     // Apply the ASGD update for one parameter slot.
     //
     // Decays and steps $\theta$ with the slot's current $\eta_t$, folds
