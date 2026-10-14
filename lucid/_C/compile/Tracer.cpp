@@ -274,15 +274,11 @@ TensorId Tracer::feed_id(const TensorImplPtr& impl) {
 
 void Tracer::write_made(const TensorImplPtr& target, const TensorImplPtr& value) {
     // Nothing outside the trace shares ``target``, so the write is not one a
-    // compiled call carries back: it is the next value of a constant.
+    // compiled call carries back: it is the next value of a constant when
+    // ``value`` was also made here.
     const auto it = impl_to_id_.find(target.get());
-    if (it == impl_to_id_.end() && !sees(value.get())) {
-        // A constant written with a constant is still one.  A value from
-        // outside the trace is copied in, frozen like any folded read of it.
-        if (!made_here(value.get()))
-            keep({value}, nullptr);
+    if (it == impl_to_id_.end() && made_here(value.get()) && !sees(value.get()))
         return;
-    }
     if (it != impl_to_id_.end()) {
         // Already read as a feed, by ops recorded before this write: they
         // keep the value from before it, which the buffer is about to lose.
@@ -370,15 +366,16 @@ void Tracer::on_factory(const TensorImplPtr& out) {
 }
 
 bool Tracer::fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
-    const auto traced = [&](const TensorImplPtr& in) { return in && sees(in.get()); };
-    const bool reads_traced = std::any_of(inputs.begin(), inputs.end(), traced);
+    const auto all_made = std::all_of(inputs.begin(), inputs.end(), [&](const TensorImplPtr& in) {
+        return !in || (made_here(in.get()) && !sees(in.get()));
+    });
     if (held_) {
-        if (!reads_traced) {
-            keep(inputs, output);
+        if (all_made) {
+            keep(output);
             return true;
         }
-        // A later call names a traced input (an op re-recording its full
-        // input list): the op is recorded after all.
+        // A later call names an input from outside or already in the graph
+        // (an op re-recording its full input list): the op is recorded after all.
         graph_.ops.push_back(std::move(*held_));
         held_.reset();
         if (output)
@@ -389,7 +386,7 @@ bool Tracer::fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr&
     // recorded.  An op with no tensor input at all is a random draw kept as
     // an op, or the extra output of a recorded one — never a constant here
     // (factories say so through ``on_factory``).
-    if (reads_traced || graph_.ops.empty() || !graph_.ops.back().inputs.empty())
+    if (!all_made || graph_.ops.empty() || !graph_.ops.back().inputs.empty())
         return false;
     const auto tensor = [](const TensorImplPtr& in) { return in != nullptr; };
     const auto aliases = [&](const TensorImplPtr& in) { return in.get() == output.get(); };
@@ -398,24 +395,12 @@ bool Tracer::fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr&
         return false;
     held_ = std::move(graph_.ops.back());
     graph_.ops.pop_back();
-    keep(inputs, output);
+    keep(output);
     return true;
 }
 
-void Tracer::keep(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output) {
-    bool pure = true;
-    for (const auto& in : inputs) {
-        if (!in || made_here(in.get()))
-            continue;
-        pure = false;
-        const auto same = [&](const TensorImplPtr& r) { return r.get() == in.get(); };
-        if (std::none_of(folded_roots_.begin(), folded_roots_.end(), same))
-            folded_roots_.push_back(in);
-    }
-    // A view of a tensor from outside the trace is that tensor: a write
-    // through it has to reach the tensor, so it is not a constant of ours.
-    // It stays unseen all the same, and a recorded op reads it as a feed.
-    if (output && (pure || !output->is_aliased()))
+void Tracer::keep(const TensorImplPtr& output) {
+    if (output)
         made_.emplace(output.get(), output);
 }
 

@@ -208,11 +208,6 @@ def test_a_metal_kernel_is_recorded() -> None:
     assert "_run_metal_kernel" in [op.name for op in tracer.graph.ops]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-345 follow-up: Tensor.to(device) runs contiguous on a CPU constant "
-    "first, which records a CPU op, so the Metal trace is mixed-device and eager",
-)
 def test_a_cpu_constant_moved_to_metal_stays_compiled() -> None:
     def fn(x: lucid.Tensor) -> lucid.Tensor:
         return x * lucid.tensor([2.0]).to(x.device)

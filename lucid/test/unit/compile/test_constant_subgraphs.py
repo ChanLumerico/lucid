@@ -3,17 +3,15 @@
 ``x + lucid.tensor([1., 2.]).to(x.device)`` used to record the literal's CPU
 ``contiguous`` and the transfer, so a Metal trace became mixed-device and the
 whole call ran eagerly. ``lucid.compile`` now traces with
-``Tracer.fold_constants``: an op that reads nothing the trace sees is left
-out, and the first recorded op that reads its result takes it as a feed,
-already on that op's device.
+``Tracer.fold_constants``: an op whose inputs were all created inside the
+current trace (``made_here``) is left out, and the first recorded op that reads
+its result takes it as a feed, already on that op's device.
 
-"Nothing the trace sees" is a constant only because the compile path watches
-every live tensor the call reads. The rest of this file holds the edges of
-that claim: a tensor from outside the call that a folded value was computed
-from is guarded by its version, a constant written in place is not carried
-back as an outside write, a random draw is never folded, a constant sized
-from the batch keeps ``dynamic=True`` per-shape, and every other tracer
-records exactly what it did before.
+Only tensors built inside the trace call (CPU factories, ``lucid.tensor(...)``
+literals, ``from_bytes``) start in ``made_here``. Pre-existing closure or
+module tensors stay normal external feeds — ops on them are recorded in the
+graph, so mutating a captured Metal tensor updates the result on the next call
+without re-tracing.
 """
 
 import json
@@ -73,28 +71,16 @@ CONSTANTS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
     "zeros": lambda x: x + lucid.zeros(4).to(x.device),
     "full": lambda x: x * lucid.full((4,), 3.0).to(x.device),
     "eye-row": lambda x: x + lucid.eye(4)[2].to(x.device),
-    "float-of-int-literal": lambda x: x
-    + lucid.tensor([1, 2, 3, 4]).float().to(x.device),
+    "float-of-int-literal": lambda x: x + lucid.tensor([1, 2, 3, 4]).float().to(x.device),
     "metal-factory-chain": lambda x: x + lucid.ones(4, device=x.device) * 2,
     "metal-arange": lambda x: x + lucid.arange(4, device=x.device).float(),
     "constant-returned-too": lambda x: (x * 2, lucid.arange(4).float().to(x.device)),
 }
 
-_TABLE = lucid.arange(4).float()
-
-
-def _built_once(x: lucid.Tensor) -> lucid.Tensor:
-    return x + _TABLE.to(x.device) * 2
-
-
-CONSTANTS["built-once-reused"] = _built_once
-
 
 def _compiled_twice(
     fn: Callable[[lucid.Tensor], object],
-) -> tuple[
-    CompiledModule[[lucid.Tensor], object], list[str], list[tuple[object, object]]
-]:
+) -> tuple[CompiledModule[[lucid.Tensor], object], list[str], list[tuple[object, object]]]:
     compiled = lucid.compile.compile(fn)
     pairs: list[tuple[object, object]] = []
     with warnings.catch_warnings(record=True) as caught:
@@ -181,17 +167,32 @@ def test_a_captured_weight_updated_by_an_optimizer_is_followed(grad_mode: str) -
     _assert_follows(compiled, fn, step, calls)
 
 
-def test_a_captured_weight_written_in_place_is_followed() -> None:
+def test_a_captured_weight_written_in_place_is_followed_without_recompiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lucid.manual_seed(0)
     w = lucid.randn(3, 4).to(COMPILE_DEVICE)
 
     def fn(x: lucid.Tensor) -> lucid.Tensor:
         return x @ w.T
 
+    compiled = lucid.compile.compile(fn)
+    compiles = 0
+    orig_compile_for = compiled._compile_for
+
+    def spy_compile_for(*args: object, **kwargs: object) -> object:
+        nonlocal compiles
+        compiles += 1
+        return orig_compile_for(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(compiled, "_compile_for", spy_compile_for)
+
     def update() -> None:
         w.mul_(-2.0)
 
-    _assert_follows(lucid.compile.compile(fn), fn, update)
+    _assert_follows(compiled, fn, update)
+    assert compiles == 1
+    assert not compiled.cache_info()["eager_only"]
 
 
 def test_a_captured_cpu_tensor_moved_in_the_call_is_followed() -> None:
@@ -203,7 +204,9 @@ def test_a_captured_cpu_tensor_moved_in_the_call_is_followed() -> None:
     def update() -> None:
         table.add_(10.0)
 
-    _assert_follows(lucid.compile.compile(fn), fn, update)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _assert_follows(lucid.compile.compile(fn), fn, update)
 
 
 class _PlainAttribute(nn.Module):
@@ -212,21 +215,35 @@ class _PlainAttribute(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.lin = nn.Linear(4, 3)
-        self.scale = lucid.ones(3)
+        self.scale = lucid.ones(3, device=COMPILE_DEVICE)
 
     def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-        return self.lin(x) * self.scale.to(x.device).exp()
+        return self.lin(x) * self.scale.exp()
 
 
-def test_a_module_attribute_that_is_not_state_is_followed() -> None:
+def test_a_module_attribute_that_is_not_state_is_followed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lucid.manual_seed(0)
     model = _PlainAttribute().to(COMPILE_DEVICE)
     assert "scale" not in dict(model.named_buffers())
+    compiled = lucid.compile.compile(model)
+    compiles = 0
+    orig_compile_for = compiled._compile_for
+
+    def spy_compile_for(*args: object, **kwargs: object) -> object:
+        nonlocal compiles
+        compiles += 1
+        return orig_compile_for(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(compiled, "_compile_for", spy_compile_for)
 
     def update() -> None:
         model.scale.fill_(0.5)
 
-    _assert_follows(lucid.compile.compile(model), model, update)
+    _assert_follows(compiled, model, update)
+    assert compiles == 1
+    assert not compiled.cache_info()["eager_only"]
 
 
 # ── a constant written in place ───────────────────────────────────────────────
@@ -251,9 +268,7 @@ def _constant_onto_constant(x: lucid.Tensor) -> lucid.Tensor:
     return x + c
 
 
-@pytest.mark.parametrize(
-    "fn", [_written_constant, _read_then_written, _constant_onto_constant]
-)
+@pytest.mark.parametrize("fn", [_written_constant, _read_then_written, _constant_onto_constant])
 def test_a_constant_written_in_place_is_right_on_every_call(
     fn: Callable[[lucid.Tensor], lucid.Tensor],
 ) -> None:
@@ -308,8 +323,9 @@ def test_a_constant_written_in_place_is_no_outside_write() -> None:
 DRAWS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
     "randn": lambda x: x + lucid.randn(4, device=x.device),
     "rand": lambda x: x * lucid.rand(4, device=x.device),
-    "dropout-of-a-constant": lambda x: x
-    + F.dropout(lucid.ones(4, device=x.device), p=0.5, training=True),
+    "dropout-of-a-constant": lambda x: (
+        x + F.dropout(lucid.ones(4, device=x.device), p=0.5, training=True)
+    ),
     "randn-on-cpu-moved": lambda x: x + lucid.randn(4).to(x.device),
 }
 
@@ -432,13 +448,9 @@ def test_the_decode_tracer_does_not_fold(installed: dict[str, set[bool]]) -> Non
 
 def test_the_segmented_tracers_do_not_fold(installed: dict[str, set[bool]]) -> None:
     lucid.manual_seed(0)
-    model = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 3)).to(
-        COMPILE_DEVICE
-    )
+    model = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 3)).to(COMPILE_DEVICE)
     target = lucid.tensor([0, 2]).to(COMPILE_DEVICE)
-    step = lucid.compile.make_step(
-        model, lambda out: F.cross_entropy(out, target), segments=2
-    )
+    step = lucid.compile.make_step(model, lambda out: F.cross_entropy(out, target), segments=2)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         step(_x(0, 2, 4))
@@ -478,17 +490,12 @@ def test_a_tracer_without_folding_records_what_main_did(device: str, mode: str) 
         [
             op.name,
             [int(i) for i in op.inputs],
-            [
-                [int(o.id), list(o.shape), str(o.dtype), str(o.device)]
-                for o in op.outputs
-            ],
+            [[int(o.id), list(o.shape), str(o.dtype), str(o.device)] for o in op.outputs],
             [list(kv) for kv in sorted((k, repr(v)) for k, v in op.attrs.items())],
         ]
         for op in tracer.graph.ops
     ]
     feeds = sorted([int(k), list(v.shape)] for k, v in tracer.external_feeds.items())
-    want = json.loads(_RECORDINGS.read_text())[
-        f"{'cpu' if device == 'cpu' else 'metal'}-{mode}"
-    ]
+    want = json.loads(_RECORDINGS.read_text())[f"{'cpu' if device == 'cpu' else 'metal'}-{mode}"]
     assert ops == want["ops"]
     assert feeds == want["feeds"]

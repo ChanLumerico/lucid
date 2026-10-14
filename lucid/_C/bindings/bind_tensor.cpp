@@ -40,9 +40,11 @@ namespace py = pybind11;
 namespace {
 // Every binding below that hands Python a tensor's values calls
 // ``note_host_read``; every one that returns a new TensorImpl made from an
-// existing one returns it through ``traced_derive`` (see Tracer.h).
+// existing one returns it through ``traced_derive``, and one that builds a
+// fresh tensor from host data calls ``traced_factory`` (see Tracer.h).
 using lucid::compile::note_host_read;
 using lucid::compile::traced_derive;
+using lucid::compile::traced_factory;
 
 // Run a GPU tensor's pending work without holding the GIL.  The wait is the
 // GPU's; holding the GIL through it stalled every other Python thread in the
@@ -145,7 +147,9 @@ void register_tensor_impl(py::module_& m) {
     // array data into a managed Storage buffer.
     py::class_<TensorImpl, std::shared_ptr<TensorImpl>>(m, "TensorImpl")
         .def(py::init([](py::array arr, Device device, bool requires_grad) {
-                 return TensorImpl::from_numpy(std::move(arr), device, requires_grad);
+                 auto out = TensorImpl::from_numpy(std::move(arr), device, requires_grad);
+                 traced_factory(out);
+                 return out;
              }),
              py::arg("data"), py::arg("device") = Device::CPU, py::arg("requires_grad") = false)
         // Shape and stride are returned as Python lists via py::cast.
@@ -263,12 +267,20 @@ void register_tensor_impl(py::module_& m) {
             },
             "Return the tensor data as a contiguous bytes blob "
             "(row-major).  GPU tensors are downloaded to CPU first.")
-        .def_static("from_bytes", &TensorImpl::from_bytes, py::arg("data"), py::arg("shape"),
-                    py::arg("dtype"), py::arg("device") = Device::CPU,
-                    py::arg("requires_grad") = false,
-                    "Reconstruct a TensorImpl from a raw bytes blob + "
-                    "metadata.  ``len(data)`` must equal "
-                    "``prod(shape) * dtype_size(dtype)``.")
+        .def_static(
+            "from_bytes",
+            [](py::bytes data, const std::vector<std::int64_t>& shape, Dtype dtype, Device device,
+               bool requires_grad) {
+                auto out =
+                    TensorImpl::from_bytes(std::move(data), shape, dtype, device, requires_grad);
+                traced_factory(out);
+                return out;
+            },
+            py::arg("data"), py::arg("shape"), py::arg("dtype"), py::arg("device") = Device::CPU,
+            py::arg("requires_grad") = false,
+            "Reconstruct a TensorImpl from a raw bytes blob + "
+            "metadata.  ``len(data)`` must equal "
+            "``prod(shape) * dtype_size(dtype)``.")
         .def(
             "transfer_to_device",
             [](const std::shared_ptr<TensorImpl>& self, Device target,

@@ -233,12 +233,6 @@ public:
     // nothing changes.
     void on_factory(const TensorImplPtr& out);
 
-    // The tensors from outside the trace that a left-out op read — a
-    // literal, a captured tensor.  A folded value holds what they held at
-    // trace time, so a consumer that keeps the folded value must notice
-    // when one of them is written (its ``version`` moves) and trace again.
-    const std::vector<TensorImplPtr>& folded_roots() const { return folded_roots_; }
-
     // Whether ``impl`` is a constant the trace made itself — a factory's
     // output, or a left-out op's — which no tensor outside the trace shares.
     bool made_here(const TensorImpl* impl) const {
@@ -377,11 +371,11 @@ private:
 
     // ``on_op_io`` for an op the recording keeps.
     void record_io(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
-    // With folding on, whether this ``on_op_io`` call is absorbed: the op
-    // has read nothing the trace sees, so it is held out of the recording.
+    // With folding on, whether this ``on_op_io`` call is absorbed: every
+    // input is a constant made inside this trace, so the op is held out.
     bool fold(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
-    // Notes what a held-out op read and made.
-    void keep(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
+    // Notes what a held-out op made.
+    void keep(const TensorImplPtr& output);
     // ``on_inplace_write`` for a target the trace made itself.
     void write_made(const TensorImplPtr& target, const TensorImplPtr& value);
     // ``impl``'s id, minting a feed for it when the trace has not seen it.
@@ -422,13 +416,12 @@ private:
     bool redraw_rng_ = true;
     bool fold_constants_ = false;
     // The open op's node while it is held out of the recording; it goes
-    // back in if a later ``on_op_io`` of the same op names a traced input
-    // (an op that re-records its full input list), and is dropped at the
-    // next op.
+    // back in if a later ``on_op_io`` of the same op names a non-constant
+    // input (an op that re-records its full input list), and is dropped at
+    // the next op.
     std::optional<OpNode> held_;
     // Owning: every constant the trace made itself (see ``made_here``).
     std::unordered_map<TensorImpl*, TensorImplPtr> made_;
-    std::vector<TensorImplPtr> folded_roots_;
 };
 
 // Returns the :class:`Tracer` currently installed on the calling
