@@ -328,7 +328,7 @@ REFS: dict[str, Ref] = {
     "floordiv": lambda x, c: np.floor_divide(x, np.abs(_flip0(x)) + 1),
     "remainder": lambda x, c: np.mod(x, 4),
     "fmod": lambda x, c: np.fmod(x, 4),
-    "pow": lambda x, c: np.power(np.abs(x) + 1, np.abs(_flip0(x)) % 3),
+    "pow": lambda x, c: np.power(np.abs(x) + 1, np.minimum(np.abs(_flip0(x)), 2)),
     "maximum": lambda x, c: np.maximum(x, _flip0(x)),
     "minimum": lambda x, c: np.minimum(x, _flip0(x)),
     "eq": lambda x, c: x == _flip0(x),
