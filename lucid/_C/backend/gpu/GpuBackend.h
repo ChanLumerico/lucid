@@ -1274,11 +1274,10 @@ public:
         // The forward answered NaN where the index was out of range; nothing
         // was read there, so nothing flows back (policy B, gpu_axis_index).
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
-        auto result =
-            gpu_scatter_reduce_axis(base, *gi.arr, *gg.arr, axis, ScatterReduce::Add,
-                                    [axis](const auto& b, const auto& i, const auto& v) {
-                                        return ::mlx::core::scatter_add_axis(b, i, v, axis);
-                                    });
+        auto result = gpu_scatter_reduce_axis(base, *gi.arr, *gg.arr, axis, ScatterReduce::Add,
+                                              [axis](const auto& b, const auto& i, const auto& v) {
+                                                  return scatter_add_axis_widened(b, i, v, axis);
+                                              });
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
@@ -1571,7 +1570,7 @@ public:
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(output_shape), gpu::to_mlx_dtype(dt));
         auto out = gpu_scatter_reduce_axis(base, *idx.arr, *g.arr, axis, ScatterReduce::Add,
                                            [axis](const auto& b, const auto& i, const auto& v) {
-                                               return ::mlx::core::scatter_add_axis(b, i, v, axis);
+                                               return scatter_add_axis_widened(b, i, v, axis);
                                            });
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
@@ -1619,7 +1618,7 @@ public:
         }
         auto out = gpu_scatter_reduce_axis(*gb.arr, *gi.arr, *gs.arr, d, ScatterReduce::Add,
                                            [d](const auto& b, const auto& i, const auto& v) {
-                                               return ::mlx::core::scatter_add_axis(b, i, v, d);
+                                               return scatter_add_axis_widened(b, i, v, d);
                                            });
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
@@ -1824,7 +1823,7 @@ public:
             base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Prod,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd,
-               const std::vector<int>& axes) { return gpu_scatter_prod(a, idxs, upd, axes); });
+               const std::vector<int>& axes) { return scatter_prod_widened(a, idxs, upd, axes); });
     }
 
     // Sliding-window unfold along ``dim`` producing rank+1 windows of ``size``.
@@ -3108,7 +3107,7 @@ public:
         auto idx_bc = mx::reshape(idx_mlx, mx::Shape{1, 1, M});
         idx_bc = mx::broadcast_to(idx_bc, mx::Shape{N, C, M});
 
-        auto folded = mx::scatter_add_axis(base, idx_bc, x_masked, /*axis=*/2);
+        auto folded = scatter_add_axis_widened(base, idx_bc, x_masked, /*axis=*/2);
 
         // Reshape (N, C, outH * outW) → (N, C, outH, outW).
         auto out = mx::reshape(folded, mx::Shape{N, C, outH, outW});
@@ -3295,17 +3294,7 @@ public:
             // never touches the others, so a value outside the bag cannot
             // reach the result at all.  Rows excluded by ``padding_idx`` are
             // *selected* to zero first, for the same reason.
-            auto keep_row = mx::broadcast_to(
-                mx::reshape(mx::greater(valid, mx::array(0.0f, mdt)), {n_idx, 1}), {n_idx, D});
-            auto contributions = mx::where(keep_row, emb, mx::zeros({n_idx, D}, mdt));
-            auto seg_col = mx::broadcast_to(mx::reshape(seg, {n_idx, 1}), {n_idx, D});
-            out = mx::scatter_add_axis(mx::zeros({B, D}, mdt), mx::astype(seg_col, mx::int32),
-                                       contributions, 0);
-            if (mode == 1) {  // mean
-                auto sizes = mx::reshape(mx::sum(oh, std::vector<int>{1}, false), {B, 1});
-                auto denom = mx::broadcast_to(mx::maximum(sizes, mx::array(1.0f, mdt)), {B, D});
-                out = mx::divide(out, denom);
-            }
+            out = embedding_bag_sum_or_mean(emb, seg, valid, oh, B, D, n_idx, mode);
         }
         return Storage{gpu::wrap_mlx_array(mx::contiguous(out), dt)};
     }
@@ -4471,7 +4460,7 @@ public:
         auto idx_bcast =
             ::mlx::core::broadcast_to(::mlx::core::reshape(ix.safe, {static_cast<int>(M_total), 1}),
                                       {static_cast<int>(M_total), static_cast<int>(D)});
-        auto dW = ::mlx::core::scatter_add_axis(base, idx_bcast, grad_flat, /*axis=*/0);
+        auto dW = scatter_add_axis_widened(base, idx_bcast, grad_flat, /*axis=*/0);
         return Storage{gpu::wrap_mlx_array(std::move(dW), dt)};
     }
 
@@ -4864,7 +4853,7 @@ public:
             O_total *= O[i];
         auto idx_2d_flat = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(O_total)});
         auto g_2d_flat = ::mlx::core::reshape(*gG.arr, {BC, static_cast<SE>(O_total)});
-        auto dx_pad_2d = ::mlx::core::scatter_add_axis(zero_pad, idx_2d_flat, g_2d_flat, 1);
+        auto dx_pad_2d = scatter_add_axis_widened(zero_pad, idx_2d_flat, g_2d_flat, 1);
         ::mlx::core::Shape full_Sp;
         full_Sp.push_back(B);
         full_Sp.push_back(C);
@@ -4996,7 +4985,7 @@ public:
         auto idx_2d = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(O_total * K_total)});
         auto upd_2d = ::mlx::core::reshape(updates, {BC, static_cast<SE>(O_total * K_total)});
         auto zero_pad = ::mlx::core::zeros({BC, static_cast<SE>(Sp_total)}, gpu::to_mlx_dtype(dt));
-        auto dx_pad_2d = ::mlx::core::scatter_add_axis(zero_pad, idx_2d, upd_2d, 1);
+        auto dx_pad_2d = scatter_add_axis_widened(zero_pad, idx_2d, upd_2d, 1);
         ::mlx::core::Shape full_Sp;
         full_Sp.push_back(B);
         full_Sp.push_back(C);
@@ -5498,7 +5487,7 @@ public:
         auto g_flat = ::mlx::core::reshape(g_comp, {B * C * K_total * O_total});
         auto dx_flat = ::mlx::core::zeros({B * C * S_total}, gpu::to_mlx_dtype(dt));
         auto flat_1d_i64 = ::mlx::core::astype(flat_1d, ::mlx::core::int64);
-        dx_flat = ::mlx::core::scatter_add_axis(dx_flat, flat_1d_i64, g_flat, 0);
+        dx_flat = scatter_add_axis_widened(dx_flat, flat_1d_i64, g_flat, 0);
         auto dx = ::mlx::core::reshape(dx_flat, {B, C, S_total});
 
         ::mlx::core::Shape s_shape;
@@ -6876,7 +6865,8 @@ private:
             return ::mlx::core::logical_and(in_y, in_x);
         };
 
-        auto dinput_flat = ::mlx::core::zeros({static_cast<int>(total_in)}, mlx_dt);
+        auto dinput_flat =
+            ::mlx::core::zeros({static_cast<int>(total_in)}, accumulation_dtype(mlx_dt));
         ::mlx::core::array dgrid_x = zero;
         ::mlx::core::array dgrid_y = zero;
         dgrid_x = ::mlx::core::broadcast_to(dgrid_x, gx_n.shape());
@@ -6902,7 +6892,7 @@ private:
                                              contrib, zero);
             auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
             auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
-            dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
+            dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, widen_half(contrib_2d), 0);
         } else {
             // As in the forward: weights from the floored positions.
             auto x0_f = ::mlx::core::floor(ix), y0_f = ::mlx::core::floor(iy);
@@ -6949,7 +6939,7 @@ private:
                         ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), contrib, zero);
                 auto flat_idx_1d = ::mlx::core::reshape(flat_idx, {N * C * H_out * W_out});
                 auto contrib_2d = ::mlx::core::reshape(contrib, {N * C * H_out * W_out, 1});
-                dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, contrib_2d, 0);
+                dinput_flat = gpu_scatter_add(dinput_flat, flat_idx_1d, widen_half(contrib_2d), 0);
             };
             scatter_one_corner(y0c, x0c, wa, in00);
             scatter_one_corner(y1c, x0c, wb, in10);
@@ -7005,7 +6995,8 @@ private:
             }
         }
 
-        auto dx_arr = ::mlx::core::reshape(dinput_flat, gpu::to_mlx_shape(in_shape));
+        auto dx_arr =
+            ::mlx::core::reshape(narrow_half(dinput_flat, mlx_dt), gpu::to_mlx_shape(in_shape));
         auto dgx_e = ::mlx::core::expand_dims(dgrid_x, -1);
         auto dgy_e = ::mlx::core::expand_dims(dgrid_y, -1);
         auto dg_arr = ::mlx::core::concatenate(std::vector<::mlx::core::array>{dgx_e, dgy_e}, -1);

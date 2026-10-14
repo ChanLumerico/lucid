@@ -714,6 +714,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - handle zero input_lengths in ctc_loss without OOB (LCD-257)
 
+- widen Metal half scatter-add and embedding_bag to f32
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

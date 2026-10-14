@@ -228,5 +228,60 @@ inline ::mlx::core::array normalized_input_grad(const ::mlx::core::array& g,
         })[0];
 }
 
+// ``scatter_add_axis`` accumulated in float32 for a half input, returned in
+// ``base``'s dtype.  MLX's scatter-add kernel accumulates in its operand
+// dtype, so 1000 duplicate updates of 1.0 in bfloat16 stalled at 256.0
+// (``256.0 + 1.0 == 256.0`` at 7-bit mantissa) and 3000 in float16 stalled at
+// 2048.0.
+inline ::mlx::core::array scatter_add_axis_widened(const ::mlx::core::array& base,
+                                                   const ::mlx::core::array& idx,
+                                                   const ::mlx::core::array& updates,
+                                                   int axis) {
+    return narrow_half(
+        ::mlx::core::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
+        base.dtype());
+}
+
+// Multi-axis ``scatter_prod`` accumulated in float32 for a half input,
+// returned in ``base``'s dtype.
+inline ::mlx::core::array scatter_prod_widened(const ::mlx::core::array& base,
+                                               const std::vector<::mlx::core::array>& idx,
+                                               const ::mlx::core::array& updates,
+                                               const std::vector<int>& axes) {
+    if (base.size() == 0 || updates.size() == 0)
+        return base;
+    return narrow_half(::mlx::core::scatter_prod(widen_half(base), idx, widen_half(updates), axes),
+                       base.dtype());
+}
+
+// Pooled bag ``sum`` (``mode == 0``) or ``mean`` (``mode == 1``) for
+// ``embedding_bag_forward``, accumulated (and, for ``mean``, divided by the
+// widened bag count) in float32 when ``emb`` is a half dtype, then rounded
+// back to ``emb``'s dtype once.
+inline ::mlx::core::array embedding_bag_sum_or_mean(const ::mlx::core::array& emb,
+                                                    const ::mlx::core::array& seg,
+                                                    const ::mlx::core::array& valid,
+                                                    const ::mlx::core::array& oh,
+                                                    int B,
+                                                    int D,
+                                                    int n_idx,
+                                                    int mode) {
+    namespace mx = ::mlx::core;
+    const auto mdt = emb.dtype();
+    const auto acc_dt = accumulation_dtype(mdt);
+    auto keep_row = mx::broadcast_to(
+        mx::reshape(mx::greater(valid, mx::array(0.0f, mdt)), {n_idx, 1}), {n_idx, D});
+    auto contributions = mx::where(keep_row, widen_half(emb), mx::zeros({n_idx, D}, acc_dt));
+    auto seg_col = mx::broadcast_to(mx::reshape(seg, {n_idx, 1}), {n_idx, D});
+    auto out = mx::scatter_add_axis(mx::zeros({B, D}, acc_dt), mx::astype(seg_col, mx::int32),
+                                    contributions, 0);
+    if (mode == 1) {
+        auto sizes = mx::reshape(mx::sum(widen_half(oh), std::vector<int>{1}, false), {B, 1});
+        auto denom = mx::broadcast_to(mx::maximum(sizes, mx::array(1.0f, acc_dt)), {B, D});
+        out = mx::divide(out, denom);
+    }
+    return narrow_half(out, mdt);
+}
+
 }  // namespace backend
 }  // namespace lucid
