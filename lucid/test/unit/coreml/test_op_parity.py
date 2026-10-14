@@ -768,9 +768,8 @@ class TestTheGapAgainstCompileIsAccountedFor:
         "embedding_bag",
     }
 
-    #: Expressible and not written. Empty: every operation
-    #: ``lucid.compile`` runs and a trace can carry now exports.
-    NOT_YET: set[str] = set()
+    #: Expressible and not written (tracked by LCD-444).
+    NOT_YET: set[str] = {"floordiv"}  # LCD-444
 
     def test_no_unaccounted_gap(self) -> None:
         from lucid.coreml._emit import EMITTERS

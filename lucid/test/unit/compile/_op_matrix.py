@@ -275,7 +275,7 @@ def _cases() -> list[Case]:
         "floordiv": lambda t: t // (t.flip([0]).abs() + 1),
         "remainder": lambda t: t % 4,
         "fmod": lambda t: lucid.fmod(t, 4),
-        "pow": lambda t: lucid.pow(t.abs() + 1, t.flip([0]).abs() % 3),
+        "pow": lambda t: lucid.pow(t.abs() + 1, t.flip([0]).abs().clamp(max=2)),
         "maximum": lambda t: lucid.maximum(t, t.flip([0])),
         "minimum": lambda t: lucid.minimum(t, t.flip([0])),
         "eq": lambda t: t == t.flip([0]),
