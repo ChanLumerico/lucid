@@ -10,26 +10,14 @@ from collections.abc import Callable
 
 from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional.loss import (
-    mse_loss,
-    l1_loss,
-    cross_entropy,
-    nll_loss,
-    binary_cross_entropy,
-    binary_cross_entropy_with_logits,
-    huber_loss,
-    smooth_l1_loss,
-    kl_div,
-    triplet_margin_loss,
-    cosine_embedding_loss,
-    margin_ranking_loss,
-    hinge_embedding_loss,
-    poisson_nll_loss,
-    gaussian_nll_loss,
-    ctc_loss,
-    multi_margin_loss,
-    multilabel_margin_loss,
-    soft_margin_loss,
-    multilabel_soft_margin_loss,
+    _check_beta, _check_delta, _check_label_smoothing, _check_multi_margin,
+    _check_reduction, _check_triplet_margin, binary_cross_entropy,
+    binary_cross_entropy_with_logits, cosine_embedding_loss, cross_entropy,
+    ctc_loss, gaussian_nll_loss, hinge_embedding_loss, huber_loss, kl_div,
+    l1_loss, margin_ranking_loss, mse_loss, multi_margin_loss,
+    multilabel_margin_loss, multilabel_soft_margin_loss, nll_loss,
+    poisson_nll_loss, smooth_l1_loss, soft_margin_loss, triplet_margin_loss,
+    triplet_margin_with_distance_loss,
 )
 
 
@@ -99,6 +87,7 @@ class MSELoss(Module):
     def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the MSELoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "MSELoss")
         self.reduction = reduction
 
     @override
@@ -193,6 +182,7 @@ class L1Loss(Module):
     def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the L1Loss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "L1Loss")
         self.reduction = reduction
 
     @override
@@ -313,7 +303,7 @@ class CrossEntropyLoss(_WeightedLoss):
     reduction : str, optional
         ``'none'`` | ``'mean'`` (default) | ``'sum'``.
     label_smoothing : float, optional
-        Smoothing parameter :math:`\varepsilon \in [0, 1)`.  Default ``0.0``
+        Smoothing parameter :math:`\varepsilon \in [0, 1]`.  Default ``0.0``
         (no smoothing).
 
     Attributes
@@ -379,6 +369,9 @@ class CrossEntropyLoss(_WeightedLoss):
     ) -> None:
         """Initialise the CrossEntropyLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "CrossEntropyLoss")
+        _check_label_smoothing(label_smoothing, "CrossEntropyLoss")
+        _check_multi_margin(1, weight, "CrossEntropyLoss")
         self.register_buffer("weight", weight)
         self.ignore_index = ignore_index
         self.reduction = reduction
@@ -403,10 +396,10 @@ class CrossEntropyLoss(_WeightedLoss):
         return cross_entropy(
             x,
             target,
-            weight=self.weight,
-            ignore_index=self.ignore_index,
-            reduction=self.reduction,
-            label_smoothing=self.label_smoothing,
+            self.weight,
+            self.ignore_index,
+            self.reduction,
+            self.label_smoothing,
         )
 
     @override
@@ -505,6 +498,8 @@ class NLLLoss(_WeightedLoss):
     ) -> None:
         """Initialise the NLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "NLLLoss")
+        _check_multi_margin(1, weight, "NLLLoss")
         self.register_buffer("weight", weight)
         self.ignore_index: int = ignore_index
         self.reduction: Reduction = reduction
@@ -525,13 +520,7 @@ class NLLLoss(_WeightedLoss):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return nll_loss(
-            x,
-            target,
-            weight=self.weight,
-            ignore_index=self.ignore_index,
-            reduction=self.reduction,
-        )
+        return nll_loss(x, target, self.weight, self.ignore_index, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -618,6 +607,7 @@ class BCELoss(_WeightedLoss):
     ) -> None:
         """Initialise the BCELoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "BCELoss")
         self.register_buffer("weight", weight)
         self.reduction: Reduction = reduction
 
@@ -748,6 +738,7 @@ class BCEWithLogitsLoss(_WeightedLoss):
     ) -> None:
         """Initialise the BCEWithLogitsLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "BCEWithLogitsLoss")
         self.register_buffer("weight", weight)
         self.reduction: Reduction = reduction
         self.register_buffer("pos_weight", pos_weight)
@@ -859,6 +850,8 @@ class HuberLoss(Module):
     def __init__(self, reduction: Reduction = "mean", delta: float = 1.0) -> None:
         """Initialise the HuberLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "HuberLoss")
+        _check_delta(delta, "HuberLoss")
         self.reduction = reduction
         self.delta = delta
 
@@ -959,6 +952,8 @@ class SmoothL1Loss(Module):
     def __init__(self, reduction: Reduction = "mean", beta: float = 1.0) -> None:
         """Initialise the SmoothL1Loss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "SmoothL1Loss")
+        _check_beta(beta, "SmoothL1Loss")
         self.reduction = reduction
         self.beta = beta
 
@@ -1071,6 +1066,7 @@ class KLDivLoss(Module):
     ) -> None:
         """Initialise the KLDivLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "KLDivLoss", batchmean=True)
         self.reduction = reduction
         self.log_target = log_target
 
@@ -1199,6 +1195,8 @@ class TripletMarginLoss(Module):
     ) -> None:
         """Initialise the TripletMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "TripletMarginLoss")
+        _check_triplet_margin(margin, "TripletMarginLoss")
         self.margin = margin
         self.p = p
         self.eps = eps
@@ -1227,11 +1225,11 @@ class TripletMarginLoss(Module):
             anchor,
             positive,
             negative,
-            margin=self.margin,
-            p=self.p,
-            eps=self.eps,
-            swap=self.swap,
-            reduction=self.reduction,
+            self.margin,
+            self.p,
+            self.eps,
+            self.swap,
+            self.reduction,
         )
 
     @override
@@ -1316,6 +1314,7 @@ class CosineEmbeddingLoss(Module):
     def __init__(self, margin: float = 0.0, reduction: Reduction = "mean") -> None:
         """Initialise the CosineEmbeddingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "CosineEmbeddingLoss")
         self.margin = margin
         self.reduction = reduction
 
@@ -1418,6 +1417,7 @@ class MarginRankingLoss(Module):
     def __init__(self, margin: float = 0.0, reduction: Reduction = "mean") -> None:
         """Initialise the MarginRankingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "MarginRankingLoss")
         self.margin = margin
         self.reduction = reduction
 
@@ -1523,6 +1523,7 @@ class HingeEmbeddingLoss(Module):
     def __init__(self, margin: float = 1.0, reduction: Reduction = "mean") -> None:
         """Initialise the HingeEmbeddingLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "HingeEmbeddingLoss")
         self.margin = margin
         self.reduction = reduction
 
@@ -1645,6 +1646,7 @@ class PoissonNLLLoss(Module):
     ) -> None:
         """Initialise the PoissonNLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "PoissonNLLLoss")
         self.log_input = log_input
         self.full = full
         self.eps = eps
@@ -1667,12 +1669,7 @@ class PoissonNLLLoss(Module):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return poisson_nll_loss(
-            x,
-            target,
-            log_input=self.log_input,
-            full=self.full,
-            eps=self.eps,
-            reduction=self.reduction,
+            x, target, self.log_input, self.full, self.eps, self.reduction
         )
 
     @override
@@ -1769,6 +1766,7 @@ class GaussianNLLLoss(Module):
     ) -> None:
         """Initialise the GaussianNLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "GaussianNLLLoss")
         self.full = full
         self.eps = eps
         self.reduction = reduction
@@ -1792,9 +1790,7 @@ class GaussianNLLLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return gaussian_nll_loss(
-            x, target, var, full=self.full, eps=self.eps, reduction=self.reduction
-        )
+        return gaussian_nll_loss(x, target, var, self.full, self.eps, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -1898,6 +1894,7 @@ class CTCLoss(Module):
     ) -> None:
         """Initialise the CTCLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "CTCLoss")
         self.blank = blank
         self.reduction = reduction
         self.zero_infinity = zero_infinity
@@ -1933,9 +1930,9 @@ class CTCLoss(Module):
             targets,
             input_lengths,
             target_lengths,
-            blank=self.blank,
-            reduction=self.reduction,
-            zero_infinity=self.zero_infinity,
+            self.blank,
+            self.reduction,
+            self.zero_infinity,
         )
 
     @override
@@ -2033,6 +2030,8 @@ class MultiMarginLoss(_WeightedLoss):
     ) -> None:
         """Initialise the MultiMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "MultiMarginLoss")
+        _check_multi_margin(p, weight, "MultiMarginLoss")
         self.p = p
         self.margin = margin
         self.register_buffer("weight", weight)
@@ -2137,6 +2136,7 @@ class MultilabelMarginLoss(Module):
     def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the MultilabelMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, self.__class__.__name__)
         self.reduction = reduction
 
     @override
@@ -2281,6 +2281,7 @@ class SoftMarginLoss(Module):
     def __init__(self, reduction: Reduction = "mean") -> None:
         """Initialise the SoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "SoftMarginLoss")
         self.reduction = reduction
 
     @override
@@ -2388,6 +2389,7 @@ class MultiLabelSoftMarginLoss(_WeightedLoss):
     ) -> None:
         """Initialise the MultiLabelSoftMarginLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "MultiLabelSoftMarginLoss")
         self.register_buffer("weight", weight)
         self.reduction = reduction
 
@@ -2518,6 +2520,8 @@ class TripletMarginWithDistanceLoss(Module):
     ) -> None:
         """Initialise the TripletMarginWithDistanceLoss module. See the class docstring for parameter semantics."""
         super().__init__()
+        _check_reduction(reduction, "TripletMarginWithDistanceLoss")
+        _check_triplet_margin(margin, "TripletMarginWithDistanceLoss")
         if distance_function is None:
             from lucid.nn.functional.activations import pairwise_distance
 
@@ -2551,21 +2555,17 @@ class TripletMarginWithDistanceLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        from lucid.nn.functional.loss import triplet_margin_with_distance_loss
-
         return triplet_margin_with_distance_loss(
             anchor,
             positive,
             negative,
-            distance_function=self.distance_function,
-            margin=self.margin,
-            swap=self.swap,
-            reduction=self.reduction,
+            self.distance_function,
+            self.margin,
+            self.swap,
+            self.reduction,
         )
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return (
-            f"margin={self.margin}, swap={self.swap}, " f"reduction={self.reduction!r}"
-        )
+        return f"margin={self.margin}, swap={self.swap}, reduction={self.reduction!r}"

@@ -25,32 +25,14 @@ from lucid._dtype import float16 as _float16
 from lucid._dtype import float32 as _float32
 from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional._loss_checks import (
-    _REDUCTIONS,
-    _broadcast_operands,
-    _broadcast_shape,
-    _cast,
-    _check_broadcasts_to,
-    _check_class_target,
-    _check_class_weight,
-    _check_dtypes,
-    _check_kind,
-    _check_reduction,
-    _check_same_rank,
-    _check_target,
-    _check_unit_interval,
-    _loss_dtype,
-    _num_classes,
-    _operands,
-    _pair_operands,
-    _shape,
+    _REDUCTIONS, _broadcast_operands, _broadcast_shape, _cast, _check_broadcasts_to,
+    _check_class_target, _check_class_weight, _check_dtypes, _check_kind,
+    _check_reduction as _check_reduction, _check_same_rank, _check_target, _check_unit_interval,
+    _loss_dtype, _num_classes, _operands, _pair_operands, _shape,
 )
 from lucid.nn.functional._index_checks import (
-    _check_ctc,
-    _class_index,
-    _class_targets,
-    _ClassTargets,
-    _host_read,
-    _poison,
+    _ClassTargets, _check_ctc, _class_index, _class_targets,
+    _host_read, _poison,
 )
 
 if TYPE_CHECKING:
@@ -286,6 +268,35 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     return _reduce(_wrap(diff), reduction)
 
 
+def _check_beta(beta: float, op: str = "smooth_l1_loss") -> None:
+    if isinstance(beta, bool) or not beta >= 0.0:
+        raise ValueError(f"{op}: beta must be non-negative, got {beta!r}")
+
+
+def _check_delta(delta: float, op: str = "huber_loss") -> None:
+    if isinstance(delta, bool) or not isinstance(delta, (int, float)):
+        raise TypeError(f"{op}: delta must be a float or int, got {type(delta).__name__}")
+    if not delta > 0.0:
+        raise ValueError(f"{op}: delta must be positive, got {delta!r}")
+
+
+def _check_label_smoothing(label_smoothing: float, op: str = "cross_entropy") -> None:
+    if isinstance(label_smoothing, bool) or not 0.0 <= label_smoothing <= 1.0:
+        raise ValueError(f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}")
+
+
+def _check_multi_margin(p: int, weight: Tensor | None, op: str = "multi_margin_loss") -> None:
+    if isinstance(p, bool) or (p != 1 and p != 2):
+        raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
+    if weight is not None and weight.ndim != 1:
+        raise ValueError(f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D")
+
+
+def _check_triplet_margin(margin: float, op: str) -> None:
+    if isinstance(margin, bool) or not margin > 0.0:
+        raise ValueError(f"{op}: expected margin to be greater than 0, got {margin!r}")
+
+
 def smooth_l1_loss(
     x: Tensor, target: Tensor, beta: float = 1.0, reduction: Reduction = "mean"
 ) -> Tensor:
@@ -360,8 +371,7 @@ def smooth_l1_loss(
     _check_reduction(reduction, op)
     # A negative beta reached huber_loss as its delta, whose refusal named
     # the wrong function and the wrong argument.  Written so NaN fails too.
-    if not beta >= 0.0:
-        raise ValueError(f"{op}: beta must be non-negative, got {beta!r}")
+    _check_beta(beta, op)
     x, target = _operands(op, x, target)
     # Broadcast here, once, so the loss below sees operands of one shape
     # (and warns about the caller's shapes, not its own).
@@ -439,6 +449,7 @@ def huber_loss(
     """
     op = "huber_loss"
     _check_reduction(reduction, op)
+    _check_delta(delta, op)
     # The loss keeps the input's dtype, as the reference's does.
     x, target = _operands(op, x, target, promote=False)
     x, target = _broadcast_operands(x, target, _check_target(x, target, op))
@@ -631,8 +642,7 @@ def cross_entropy(
     op = "cross_entropy"
     _check_reduction(reduction, op)
     # 1.0 is a uniform target, which the reference takes; it was refused.
-    if not 0.0 <= label_smoothing <= 1.0:
-        raise ValueError(f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}")
+    _check_label_smoothing(label_smoothing, op)
     num_classes: int = _num_classes(x, op)
     _check_class_weight(weight, num_classes, op)
     # A target of the input's own shape holds class probabilities, as in
@@ -1381,17 +1391,12 @@ def cosine_embedding_loss(
             f"{op}: target of shape {_shape(y)} does not broadcast with the "
             f"inputs' batch shape {pair[:-1]}"
         )
-    cos = _unwrap(cosine_similarity(x1, x2, dim=-1))
-    ones = _C_engine.full(cos.shape, 1.0, cos.dtype, cos.device)
-    zeros = _C_engine.zeros(cos.shape, cos.dtype, cos.device)
-    margin_t = _C_engine.full(cos.shape, margin, cos.dtype, cos.device)
-    yi = _unwrap(y)
-    loss_pos = _C_engine.sub(ones, cos)  # y=1
-    loss_neg = _C_engine.relu(_C_engine.sub(cos, margin_t))  # y=-1
-    # select by sign of y: y==1 → loss_pos, else → loss_neg
-    mask = _C_engine.greater(yi, zeros)
-    loss = _C_engine.where(mask, loss_pos, loss_neg)
-    return _reduce(_wrap(loss), reduction)
+    cos: Tensor = cosine_similarity(x1, x2, dim=-1)
+    zero: Tensor = _lucid.zeros_like(cos)
+    loss: Tensor = _lucid.where(
+        y == 1, 1.0 - cos, _lucid.where(y == -1, (cos - margin).clamp(min=0.0), zero)
+    )
+    return _reduce(loss, reduction)
 
 
 def margin_ranking_loss(
@@ -1527,15 +1532,11 @@ def hinge_embedding_loss(
     _check_reduction(reduction, "hinge_embedding_loss")
     x, y = _operands("hinge_embedding_loss", x, y, promote=False)
     _check_target(x, y, "hinge_embedding_loss")
-    xi = _unwrap(x)
-    yi = _unwrap(y)
-    zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
-    margin_t = _C_engine.full(xi.shape, margin, xi.dtype, xi.device)
-    loss_pos = xi  # y=1
-    loss_neg = _C_engine.relu(_C_engine.sub(margin_t, xi))  # y=-1
-    mask = _C_engine.greater(yi, zeros)
-    loss = _C_engine.where(mask, loss_pos, loss_neg)
-    return _reduce(_wrap(loss), reduction)
+    zero: Tensor = _lucid.zeros_like(x)
+    loss: Tensor = _lucid.where(y != -1, x, zero) + _lucid.where(
+        y != 1, (margin - x).clamp(min=0.0), zero
+    )
+    return _reduce(loss, reduction)
 
 
 def poisson_nll_loss(
@@ -2034,8 +2035,7 @@ def multi_margin_loss(
     _check_dtypes(op, target, input=x)
     # Any other power was computed as written; the reference defines these
     # two.
-    if p != 1 and p != 2:
-        raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
+    _check_multi_margin(p, weight, op)
     num_classes: int = _num_classes(x, op, max_ndim=2)
     _check_class_weight(weight, num_classes, op)
     _check_class_target(x, target, op)
