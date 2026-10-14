@@ -140,7 +140,7 @@ def _fused_linear(x: lucid.Tensor, fused: Callable[..., lucid.Tensor]) -> lucid.
 #: A tensor made outside the op dispatcher that reaches the result through an
 #: op, not a host read. Unrecorded, it was a feed pinned at its trace-time
 #: value. A compiled call holding one runs eagerly: no executable spans two
-#: devices, hands out a shared buffer, or runs a fused or custom kernel.
+#: devices, hands out a shared buffer, or runs a custom Metal kernel.
 DERIVED_VALUES: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "moved-result": lambda m, x: (x * 3).to(_elsewhere(x)),
     "moved-twice": lambda m, x: x.to(_elsewhere(x)).to(x.device) * 3,
@@ -148,9 +148,10 @@ DERIVED_VALUES: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "metal-kernel": lambda m, x: _metal_kernel(x),
 }
 
-#: The fused inference kernels (``nn.FusedLinear``), CPU only. Their output
-#: was a tensor the trace had never seen, so a Core ML package kept the
-#: example's result for every input. Export refuses them now.
+#: The fused inference kernels (``nn.FusedLinear``). Their output was a
+#: tensor the trace had never seen, so a Core ML package kept the example's
+#: result for every input (LCD-345). The trace records them now, and both the
+#: compile and the Core ML emitters translate them (LCD-450).
 FUSED_KERNELS: dict[str, Callable[[Apply, lucid.Tensor], lucid.Tensor]] = {
     "fused-linear-relu": lambda m, x: _fused_linear(x, F.fused_linear_relu),
     "fused-linear-gelu": lambda m, x: _fused_linear(x, F.fused_linear_gelu),

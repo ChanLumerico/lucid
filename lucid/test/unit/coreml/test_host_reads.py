@@ -54,10 +54,15 @@ def test_a_read_of_a_constant_exports(name: str, tmp_path: object) -> None:
 
 
 @pytest.mark.parametrize("name", sorted(FUSED_KERNELS))
-def test_a_fused_kernel_is_refused(name: str, tmp_path: object) -> None:
+def test_a_fused_kernel_exports_and_follows_the_input(name: str, tmp_path: object) -> None:
     """``F.fused_linear_relu(x, w, b) * 2 + x.sum()`` exported with the
     example's kernel output baked in, off from eager by about 4 on another
-    input (LCD-345). The kernel is now recorded, and has no translation."""
-    first, _second = inputs()
-    with pytest.raises(cml.UnsupportedOp, match="_fused_linear"):
-        cml.export(Apply(FUSED_KERNELS[name]).eval(), first, f"{tmp_path}/{name}.mlpackage")
+    input (LCD-345). The kernel is recorded, and translates to MIL's linear
+    and activation (LCD-450), so the package answers a new input as eager."""
+    first, second = inputs()
+    model = Apply(FUSED_KERNELS[name]).eval()
+    exported = cml.export(model, first, f"{tmp_path}/{name}.mlpackage")
+    want = model(second)
+    got = exported.predict(second)
+    assert isinstance(got, lucid.Tensor)
+    assert float((got - want).abs().max().item()) <= 1e-4 * float(want.abs().max().item())

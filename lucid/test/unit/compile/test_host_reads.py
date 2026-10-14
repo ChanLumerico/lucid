@@ -182,19 +182,23 @@ def test_a_copy_of_a_constant_records_nothing() -> None:
     assert not tracer.graph.unsupported
 
 
+@pytest.mark.parametrize("device", ["metal", "cpu"])
 @pytest.mark.parametrize("name", sorted(FUSED_KERNELS))
-def test_a_fused_kernel_is_recorded_and_follows_the_input(name: str) -> None:
-    """The fused kernels run on the CPU only, where a compiled call is eager.
-
-    What matters is that the trace records them: a Core ML export and a
-    compile trace see the kernel's output as computed from the input.
-    """
-    x = inputs()[0]
+def test_a_fused_kernel_is_recorded_and_follows_the_input(name: str, device: str) -> None:
+    """The trace records the fused kernels: a Core ML export and a compile
+    trace see the kernel's output as computed from the input. On Metal the
+    compile emitter translates them (LCD-450); on the CPU every compiled call
+    is eager."""
+    x = inputs()[0].to(device)
     with lucid.compile._tracing(watch=((x,), {})) as tracer:
         FUSED_KERNELS[name](Apply(FUSED_KERNELS[name]), x)
     assert any(op.name.startswith("_fused_linear") for op in tracer.graph.ops)
-    _said, compiled = _follows_the_input(FUSED_KERNELS[name], "cpu")
-    assert compiled.cache_info()["eager_only"]
+    said, compiled = _follows_the_input(FUSED_KERNELS[name], device)
+    if device == "metal":
+        assert not said, said
+        assert not compiled.cache_info()["eager_only"]
+    else:
+        assert compiled.cache_info()["eager_only"]
 
 
 def test_a_metal_kernel_is_recorded() -> None:
