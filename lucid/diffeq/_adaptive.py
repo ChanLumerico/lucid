@@ -145,7 +145,7 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
     def _real(key: str, default: float) -> float:
         raw = options.get(key, default)
         if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-            raise ValueError(
+            raise TypeError(
                 f"option {key!r} must be a real number, got {type(raw).__name__}"
             )
         return float(raw)
@@ -153,7 +153,7 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
     def _count(key: str, default: int) -> int:
         raw = options.get(key, default)
         if isinstance(raw, bool) or not isinstance(raw, int):
-            raise ValueError(f"option {key!r} must be an int, got {type(raw).__name__}")
+            raise TypeError(f"option {key!r} must be an int, got {type(raw).__name__}")
         return raw
 
     def _times(key: str) -> tuple[float, ...]:
@@ -165,7 +165,7 @@ def parse_options(options: dict[str, object] | None) -> AdaptiveOptions:
         elif isinstance(raw, (list, tuple)):
             values = [float(cast(SupportsFloat, v)) for v in raw]
         else:
-            raise ValueError(
+            raise TypeError(
                 f"option {key!r} must be a sequence of times or a 1-D tensor, "
                 f"got {type(raw).__name__}"
             )

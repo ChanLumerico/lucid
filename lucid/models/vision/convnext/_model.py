@@ -140,7 +140,7 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
         dp_rates = [cfg.dropout] * total_blocks
     block_cursor = 0
 
-    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
+    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims, strict=True)):
         stage_blocks: list[nn.Module] = []
         for _ in range(depth):
             stage_blocks.append(

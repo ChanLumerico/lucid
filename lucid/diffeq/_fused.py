@@ -50,7 +50,7 @@ def _promote(terms: Sequence[Tensor]) -> tuple[Tensor, ...]:
 
     for d in dtypes[1:]:
         target = lucid.promote_types(target, d)
-    return tuple(t if d == target else t.to(target) for t, d in zip(terms, dtypes))
+    return tuple(t if d == target else t.to(target) for t, d in zip(terms, dtypes, strict=True))
 
 
 def combine(

@@ -181,11 +181,11 @@ def make_step(
     make_segmented_step : the ``segments > 1`` implementation (executable
         splitting for memory-bounded deep training).
     """
-    if segments == "auto":
-        from lucid.compile._entry.segmented_step import make_autoseg_step
-
-        return make_autoseg_step(model, loss_fn, dynamic=dynamic)
     if isinstance(segments, str):
+        if segments == "auto":
+            from lucid.compile._entry.segmented_step import make_autoseg_step
+
+            return make_autoseg_step(model, loss_fn, dynamic=dynamic)
         raise ValueError(
             f"make_step: segments must be an int or 'auto', got {segments!r}"
         )
@@ -397,7 +397,7 @@ def make_step(
         """
         feed_impls: list[object] = []
         exe = cast(_ExecutableLike, entry.exe)
-        for tid, src in zip(exe.input_ids, entry.input_source):
+        for tid, src in zip(exe.input_ids, entry.input_source, strict=True):
             if src is None:
                 feed_impls.append(entry.external_feeds[tid])
             else:

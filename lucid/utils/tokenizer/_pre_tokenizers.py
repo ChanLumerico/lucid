@@ -260,8 +260,8 @@ class ByteLevel(PreTokenizer):
                 bs.append(b)
                 cs.append(256 + n)
                 n += 1
-        cls._byte_encoder = {b: chr(c) for b, c in zip(bs, cs)}
-        cls._byte_decoder = {chr(c): b for b, c in zip(bs, cs)}
+        cls._byte_encoder = {b: chr(c) for b, c in zip(bs, cs, strict=True)}
+        cls._byte_decoder = {chr(c): b for b, c in zip(bs, cs, strict=True)}
 
     @classmethod
     def encode_bytes(cls, raw: bytes) -> str:

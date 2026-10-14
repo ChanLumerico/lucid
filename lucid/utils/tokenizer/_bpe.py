@@ -57,7 +57,7 @@ def _load_vocab_json(path: str) -> dict[str, int]:
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     if not isinstance(raw, dict):
-        raise ValueError(
+        raise TypeError(
             f"_load_vocab_json: expected a JSON object at {path}, "
             f"got {type(raw).__name__}"
         )

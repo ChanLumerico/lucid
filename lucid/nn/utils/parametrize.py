@@ -346,8 +346,5 @@ def remove_parametrizations(
     module.register_parameter(tensor_name, Parameter(final_value.detach()))
 
     if not container_dict:
-        try:
-            object.__delattr__(module, _PARAM_HOOK_ATTR)
-        except AttributeError:
-            pass
+        object.__delattr__(module, _PARAM_HOOK_ATTR)
     return module

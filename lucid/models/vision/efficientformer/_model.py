@@ -450,7 +450,7 @@ def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
     fi: list[FeatureInfo] = []
     cursor = 0
     prev_dim = cfg.embed_dims[0]
-    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.embed_dims)):
+    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.embed_dims, strict=True)):
         dp_rates = flat[cursor : cursor + depth]
         cursor += depth
         stages.append(

@@ -301,10 +301,7 @@ def remove(module: Module, name: str = "weight") -> Module:
     module.register_parameter(name, Parameter(final))
 
     if not hooks:
-        try:
-            object.__delattr__(module, _PRUNE_HOOK_ATTR)
-        except AttributeError:
-            pass
+        object.__delattr__(module, _PRUNE_HOOK_ATTR)
     return module
 
 

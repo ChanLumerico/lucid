@@ -639,7 +639,7 @@ class _CompiledStepBase:
                 f"loaded state_dict has {len(loaded_groups)} param_groups but "
                 f"optimizer has {len(self._opt.param_groups)}"
             )
-        for g_new, g_old in zip(self._opt.param_groups, loaded_groups):
+        for g_new, g_old in zip(self._opt.param_groups, loaded_groups, strict=True):
             for k, v in g_old.items():
                 if k != "params":
                     g_new[k] = v
@@ -983,9 +983,9 @@ class _CompiledStepBase:
         from lucid._dispatch import _unwrap
 
         classes = tuple(range(len(members))) if masked else self._partition(members)
-        param_class = dict(zip(members, classes))
+        param_class = dict(zip(members, classes, strict=True))
         class_reps: list[int] = []
-        for i, c in zip(members, classes):
+        for i, c in zip(members, classes, strict=True):
             if c == len(class_reps):
                 class_reps.append(i)
         entries: list[_Entry] = []

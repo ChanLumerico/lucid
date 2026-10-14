@@ -44,7 +44,7 @@ def _make_block(
 def _build_features(cfg: VGGConfig) -> nn.Sequential:
     layers: list[nn.Module] = []
     in_ch = cfg.in_channels
-    for out_ch, n in zip(_CHANNELS, cfg.arch):
+    for out_ch, n in zip(_CHANNELS, cfg.arch, strict=True):
         layers.extend(_make_block(in_ch, out_ch, n, cfg.batch_norm))
         in_ch = out_ch
     return nn.Sequential(*layers)

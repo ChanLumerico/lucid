@@ -623,12 +623,14 @@ class Sequence(PostProcessor):
 def _token_and_id(value: object, where: str) -> tuple[str, int]:
     """Decode a ``["[SEP]", 102]`` pair."""
     items = as_list(value, where)
-    if len(items) != 2 or not isinstance(items[0], str):
+    if (
+        len(items) != 2
+        or not isinstance(items[0], str)
+        or not isinstance(items[1], int)
+        or isinstance(items[1], bool)
+    ):
         raise ValueError(f"{where}: expected [token, id], got {value!r}")
-    tid = items[1]
-    if not isinstance(tid, int) or isinstance(tid, bool):
-        raise ValueError(f"{where}: expected [token, id], got {value!r}")
-    return items[0], tid
+    return items[0], items[1]
 
 
 def _pieces_from_config(value: object, where: str) -> list[_Piece]:
@@ -716,7 +718,7 @@ def post_processor_from_config(config: object) -> PostProcessor:
             clean: list[int] = []
             for i in ids:
                 if not isinstance(i, int) or isinstance(i, bool):
-                    raise ValueError(f"{where}: special token id {i!r} is not an int")
+                    raise TypeError(f"{where}: special token id {i!r} is not an int")
                 clean.append(i)
             specials[get_str(entry, "id", where, name)] = clean
         return TemplateProcessing._from_pieces(single, pair, specials)

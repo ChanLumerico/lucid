@@ -99,7 +99,7 @@ class _VAEEncoder(nn.Module):
             mus: list[nn.Module] = []
             logs: list[nn.Module] = []
             for stage_ch, lat_dim in zip(
-                config.down_block_channels, config.latent_dims
+                config.down_block_channels, config.latent_dims, strict=True
             ):
                 mus.append(nn.Linear(stage_ch, lat_dim))
                 logs.append(nn.Linear(stage_ch, lat_dim))
@@ -124,7 +124,7 @@ class _VAEEncoder(nn.Module):
             mus: list[Tensor] = []
             logvars: list[Tensor] = []
             for blk, fc_mu, fc_logvar in zip(
-                self.down_blocks, self.fc_mus, self.fc_logvars
+                self.down_blocks, self.fc_mus, self.fc_logvars, strict=True
             ):
                 h = cast(Tensor, blk(h))
                 h = generative_activation(self._act_name, h)
@@ -381,7 +381,7 @@ class VAEModel(PretrainedModel):
     def forward(self, x: Tensor) -> VAEOutput:
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.encode(x))
-            zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars)]
+            zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars, strict=True)]
             recon = self.decode(zs)
             # Pack per-level tensors into a flat (B, sum(D)) blob so the
             # VAEOutput contract (single mu / logvar / latent) holds for
@@ -517,14 +517,14 @@ class VAEForImageGeneration(ImageGenerationModel):
     def forward(self, x: Tensor) -> VAEOutput:
         if self._is_hierarchical:
             mus, logvars = cast(tuple[list[Tensor], list[Tensor]], self.vae.encode(x))
-            zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars)]
+            zs = [reparameterize(m, lv) for m, lv in zip(mus, logvars, strict=True)]
             recon = self.vae.decode(zs)
 
             recon_l = self._reconstruction_loss(recon, x)
             # Sum closed-form KL across levels.
             kl_terms = [
                 gaussian_kl_divergence(m, lv, reduction="mean")
-                for m, lv in zip(mus, logvars)
+                for m, lv in zip(mus, logvars, strict=True)
             ]
             kl_l = kl_terms[0]
             for term in kl_terms[1:]:

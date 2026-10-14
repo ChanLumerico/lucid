@@ -1117,7 +1117,7 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
             # it the N−M unmatched queries (N=100 against a handful of
             # segments) dominate the term and push every query to no-object.
             cls_tgt_data: list[int] = [K] * N
-            for pi, gi in zip(pred_idx, gt_idx):
+            for pi, gi in zip(pred_idx, gt_idx, strict=True):
                 cls_tgt_data[pi] = unique_classes[gi]
             cls_tgt: Tensor = lucid.tensor(cls_tgt_data, device=dev)
             cls_weight: Tensor = lucid.tensor(

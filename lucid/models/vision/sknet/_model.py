@@ -197,7 +197,7 @@ class _SelectiveKernel(nn.Module):
                     dilation=d,
                     groups=effective_groups,
                 )
-                for k, d, p in zip(kernel_sizes, dilations, paddings)
+                for k, d, p in zip(kernel_sizes, dilations, paddings, strict=True)
             ]
         )
 
@@ -472,7 +472,7 @@ def _build_body(
     feature_info: list[FeatureInfo] = []
     reductions = [4, 8, 16, 32]
 
-    for stage_idx, (planes, stride) in enumerate(zip(planes_per_stage, strides)):
+    for stage_idx, (planes, stride) in enumerate(zip(planes_per_stage, strides, strict=True)):
         layer, cur = _make_stage(
             cur,
             planes,

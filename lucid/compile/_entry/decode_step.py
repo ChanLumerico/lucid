@@ -242,7 +242,7 @@ def compiled_decode_step(
         exe = cast(_ExecutableLike, entry.exe)
         ids_impl, cp_impl = _unwrap(input_ids), _unwrap(cache_position)
         feed_impls: list[object] = []
-        for tid, src in zip(exe.input_ids, entry.input_source):
+        for tid, src in zip(exe.input_ids, entry.input_source, strict=True):
             if src == 0:
                 feed_impls.append(ids_impl)
             elif src == 1:

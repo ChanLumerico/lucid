@@ -164,7 +164,7 @@ def checkpoint(
             outputs = output if isinstance(output, tuple) else (output,)
             roots: list[Tensor] = []
             seeds: list[Tensor] = []
-            for out, seed in zip(outputs, grad_outputs):
+            for out, seed in zip(outputs, grad_outputs, strict=True):
                 if seed is None or not out.requires_grad:
                     continue
                 if tuple(seed.shape) != tuple(out.shape):

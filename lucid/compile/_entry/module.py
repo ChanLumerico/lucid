@@ -1204,7 +1204,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         feed_impls: list[object] = []
         exe = cast(_ExecutableLike, entry.exe)
         leaves = leaf_tensors(args, kwargs)
-        for tid, src in zip(exe.input_ids, entry.input_source):
+        for tid, src in zip(exe.input_ids, entry.input_source, strict=True):
             if src is None:
                 # Pinned parameter / constant — use the trace-time impl.
                 feed_impls.append(entry.external_feeds[tid])

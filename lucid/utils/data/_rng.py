@@ -49,6 +49,7 @@ def _as_generator(generator: object, owner: str) -> Generator | None:
         try:
             seed = random.Random(generator).getrandbits(63)  # type: ignore[arg-type]
         except TypeError:
+            # Unhashable seed candidates fall through to the TypeError below.
             pass
         else:
             return Generator(seed)

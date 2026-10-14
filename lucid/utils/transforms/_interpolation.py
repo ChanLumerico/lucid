@@ -90,9 +90,7 @@ def as_interpolation(mode: str | int | Interpolation) -> Interpolation:
     """
     if isinstance(mode, Interpolation):
         return mode
-    if isinstance(mode, bool):  # guard: bool is an int subclass
-        raise ValueError(f"invalid interpolation {mode!r}")
-    if isinstance(mode, int):
+    if isinstance(mode, int) and not isinstance(mode, bool):
         if mode not in _CV2_CODES:
             raise ValueError(
                 f"unknown OpenCV interpolation code {mode}; "

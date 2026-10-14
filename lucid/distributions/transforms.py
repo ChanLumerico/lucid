@@ -1645,7 +1645,7 @@ class StackTransform(Transform):
                 f"{len(self.transforms)} transforms."
             )
         return lucid.stack(
-            [t(s) for t, s in zip(self.transforms, slices)], dim=self.dim
+            [t(s) for t, s in zip(self.transforms, slices, strict=True)], dim=self.dim
         )
 
     @override
@@ -1653,7 +1653,7 @@ class StackTransform(Transform):
         """Unbind ``y`` along ``dim`` and apply each transform's inverse per slice."""
         slices = y.unbind(self.dim)
         return lucid.stack(
-            [t._inverse(s) for t, s in zip(self.transforms, slices)], dim=self.dim
+            [t._inverse(s) for t, s in zip(self.transforms, slices, strict=True)], dim=self.dim
         )
 
     @override
@@ -1662,7 +1662,7 @@ class StackTransform(Transform):
         xs = x.unbind(self.dim)
         ys = y.unbind(self.dim)
         ladjs = [
-            t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys)
+            t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
         ]
         return lucid.stack(ladjs, dim=self.dim)
 
@@ -1772,14 +1772,14 @@ class CatTransform(Transform):
     def _call(self, x: Tensor) -> Tensor:
         """Split ``x`` along ``dim``, apply each transform, and concatenate."""
         parts = self._split(x)
-        return lucid.cat([t(p) for t, p in zip(self.transforms, parts)], dim=self.dim)
+        return lucid.cat([t(p) for t, p in zip(self.transforms, parts, strict=True)], dim=self.dim)
 
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Split ``y`` along ``dim``, apply each inverse, and concatenate."""
         parts = self._split(y)
         return lucid.cat(
-            [t._inverse(p) for t, p in zip(self.transforms, parts)], dim=self.dim
+            [t._inverse(p) for t, p in zip(self.transforms, parts, strict=True)], dim=self.dim
         )
 
     @override
@@ -1788,7 +1788,7 @@ class CatTransform(Transform):
         xs = self._split(x)
         ys = self._split(y)
         ladjs = [
-            t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys)
+            t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
         ]
         return lucid.cat(ladjs, dim=self.dim)
 

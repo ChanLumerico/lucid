@@ -232,7 +232,7 @@ class _RelPosBias(nn.Module):
         self.register_buffer(
             "_flat_index",
             lucid.tensor(
-                [r * table_size + c for r, c in zip(row_flat, col_flat)]
+                [r * table_size + c for r, c in zip(row_flat, col_flat, strict=True)]
             ).long(),
             persistent=False,
         )
@@ -729,7 +729,7 @@ def _build_maxvit(
         cfg.drop_path_rate * k / max(total_blocks - 1, 1) for k in range(total_blocks)
     ]
     cursor = 0
-    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
+    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims, strict=True)):
         num_heads = dim // cfg.head_dim
         stages_list.append(
             _MaxViTStage(

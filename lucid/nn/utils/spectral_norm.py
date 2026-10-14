@@ -271,8 +271,5 @@ def remove_spectral_norm(module: Module, name: str = "weight") -> Module:
             del module._buffers[full_name]
 
     if not hooks:
-        try:
-            object.__delattr__(module, _SN_HOOK_ATTR)
-        except AttributeError:
-            pass
+        object.__delattr__(module, _SN_HOOK_ATTR)
     return module

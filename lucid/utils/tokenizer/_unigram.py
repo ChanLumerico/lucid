@@ -167,7 +167,7 @@ def _pieces_from_model(model: dict[str, object], path: str) -> list[tuple[str, f
     """Read ``[(piece, log_prob), ...]`` out of a parsed ``model`` block."""
     vocab = model.get("vocab", [])
     if not isinstance(vocab, list):
-        raise ValueError(
+        raise TypeError(
             f"_load_unigram_pieces_json: model.vocab is not a list in {path}"
         )
     out: list[tuple[str, float]] = []
@@ -226,7 +226,7 @@ def _read_json_object(path: str) -> dict[str, object]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
-        raise ValueError(f"{path}: expected a JSON object at the top level")
+        raise TypeError(f"{path}: expected a JSON object at the top level")
     return {str(k): v for k, v in data.items()}
 
 
@@ -262,7 +262,7 @@ def _read_unigram_config(directory: str, who: str) -> _UnigramFileConfig:
     data = _read_json_object(path)
     raw_model = data.get("model", {})
     if not isinstance(raw_model, dict):
-        raise ValueError(f"{who}.from_file: 'model' is not an object in {path}")
+        raise TypeError(f"{who}.from_file: 'model' is not an object in {path}")
     model: dict[str, object] = {str(k): v for k, v in raw_model.items()}
     pieces = _pieces_from_model(model, path)
     lucid_dialect = "unk_log_prob" in model

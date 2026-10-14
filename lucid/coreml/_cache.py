@@ -321,7 +321,7 @@ def _identify(package: str) -> tuple[str, int]:
     size = 0
     chunk = bytearray(8 << 20)
     view = memoryview(chunk)
-    for (relative, full), (_r, length, _m, _c, _i) in zip(files, signature):
+    for (relative, full), (_r, length, _m, _c, _i) in zip(files, signature, strict=True):
         size += length
         digest.update(f"\0{relative}\0{length}\0".encode())
         with open(full, "rb") as handle:
@@ -449,6 +449,7 @@ def _tree_bytes(path: str) -> int:
             try:
                 total += os.lstat(os.path.join(here, name)).st_size
             except OSError:
+                # Concurrent eviction may unlink an entry while walking its tree.
                 pass
     return total
 
@@ -458,6 +459,7 @@ def _unlink(*paths: str) -> None:
         try:
             os.unlink(path)
         except FileNotFoundError:
+            # Best-effort cleanup: path may already have been unlinked.
             pass
 
 

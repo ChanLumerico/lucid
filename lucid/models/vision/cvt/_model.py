@@ -381,7 +381,7 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
     # own linspace(0, drop_path_rate, depth), rather than one schedule spanning
     # the whole trunk.
     for i, (dim, depth, heads, stride) in enumerate(
-        zip(config.dims, config.depths, config.num_heads, config.embed_strides)
+        zip(config.dims, config.depths, config.num_heads, config.embed_strides, strict=True)
     ):
         with_cls = bool(config.cls_token[i]) if i < len(config.cls_token) else False
         if depth > 1:

@@ -111,11 +111,11 @@ def _csgo_tag(pretrained: bool | str) -> bool | str:
     """
     if pretrained is True:
         return "CSGO"
-    if isinstance(pretrained, str) and pretrained.upper() == "CSGO":
-        # Not via ``_tag``: that one refuses CSGO, which is right for the
-        # Atari factories and exactly wrong here.
-        return "CSGO"
     if isinstance(pretrained, str):
+        if pretrained.upper() == "CSGO":
+            # Not via ``_tag``: that one refuses CSGO, which is right for the
+            # Atari factories and exactly wrong here.
+            return "CSGO"
         # The mirror of the refusal in ``_tag``: an Atari agent named
         # explicitly here would be 13M of weights against a 382M model.
         raise ValueError(

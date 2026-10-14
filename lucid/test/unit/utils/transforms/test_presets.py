@@ -107,7 +107,7 @@ class TestAutoResolver:
             T.AutoTransformsPreset.from_dict({"init_kwargs": {}})
 
     def test_non_dict_init_kwargs_raises(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             T.AutoTransformsPreset.from_dict(
                 {"preprocessor_type": "ImageClassification", "init_kwargs": []}
             )

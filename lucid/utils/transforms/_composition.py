@@ -89,7 +89,7 @@ class OneOf(_Container):
         acc = 0.0
         chosen = self.transforms[-1]
         weights = self._weights or [1.0 / len(self.transforms)] * len(self.transforms)
-        for tf, w in zip(self.transforms, weights):
+        for tf, w in zip(self.transforms, weights, strict=True):
             acc += w
             if r <= acc:
                 chosen = tf

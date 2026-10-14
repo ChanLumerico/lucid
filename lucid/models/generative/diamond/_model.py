@@ -421,7 +421,7 @@ class _UNet(nn.Module):
         self.d_blocks = nn.ModuleList()
         self.downsamples = nn.ModuleList()
         width = channels[0]
-        for stage, (out_ch, count) in enumerate(zip(channels, layers)):
+        for stage, (out_ch, count) in enumerate(zip(channels, layers, strict=True)):
             self.downsamples.append(nn.Identity() if stage == 0 else _Downsample(width))
             self.d_blocks.append(
                 _ResBlocks(
@@ -449,7 +449,7 @@ class _UNet(nn.Module):
         # the blocks when the widths differ per stage, as CS:GO's do.
         pushes: list[int] = [channels[0]]
         width = channels[0]
-        for stage, (out_ch, count) in enumerate(zip(channels, layers)):
+        for stage, (out_ch, count) in enumerate(zip(channels, layers, strict=True)):
             if stage > 0:
                 pushes.append(width)
             pushes.extend([out_ch] * count)
@@ -757,7 +757,7 @@ class _Encoder(nn.Module):
         self.blocks = nn.ModuleList()
         self.downsamples = nn.ModuleList()
         width = channels[0]
-        for stage, (out_ch, count) in enumerate(zip(channels, layers)):
+        for stage, (out_ch, count) in enumerate(zip(channels, layers, strict=True)):
             self.downsamples.append(nn.Identity() if stage == 0 else _Downsample(width))
             self.blocks.append(
                 _ResBlocks(
@@ -945,7 +945,7 @@ class _ActorCritic(nn.Module):
             nn.Conv2d(config.in_channels, config.actor_channels[0], 3, padding=1)
         ]
         width = config.actor_channels[0]
-        for out_ch, count in zip(config.actor_channels, config.actor_layers):
+        for out_ch, count in zip(config.actor_channels, config.actor_layers, strict=True):
             for _ in range(count):
                 layers.append(_SimpleResBlock(width, out_ch))
                 width = out_ch

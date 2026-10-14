@@ -219,7 +219,7 @@ class RefineNetScoreNet(nn.Module):
         widths = [base_channels * m for m in channel_mult]
         encoders: list[nn.Module] = []
         prev = base_channels
-        for w, d in zip(widths, dilations):
+        for w, d in zip(widths, dilations, strict=True):
             encoders.append(_CondResBlock(prev, w, num_classes, dilation=d))
             prev = w
         self.encoders = nn.ModuleList(encoders)
@@ -246,14 +246,14 @@ class RefineNetScoreNet(nn.Module):
         h = self.stem(sample)
 
         skips: list[Tensor] = []
-        for enc, pool in zip(self.encoders, self.pools):
+        for enc, pool in zip(self.encoders, self.pools, strict=True):
             h = cast(Tensor, enc(h, labels))
             skips.append(h)
             h = cast(Tensor, pool(h))
 
         # Decode from the coarsest cascade back up, fusing each skip.
         h = skips[-1]
-        for refine, skip in zip(self.refines, reversed(skips[:-1])):
+        for refine, skip in zip(self.refines, reversed(skips[:-1]), strict=True):
             h = cast(Tensor, refine(h, skip, labels))
 
         h = F.elu(self.out_norm(h, labels))

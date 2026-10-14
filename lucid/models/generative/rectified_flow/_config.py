@@ -329,25 +329,20 @@ class RectifiedFlowConfig(GenerativeModelConfig):
         # ``bool`` is a subtype of ``int``, so a stray ``True`` would sail
         # through an ``isinstance(..., int)`` test and silently mean k = 1.
         schedule = self.t_schedule
-        if isinstance(schedule, bool) or not isinstance(schedule, (str, int)):
+        if isinstance(schedule, int) and not isinstance(schedule, bool):
+            if schedule <= 1:
+                # k = 1 would put every draw at t = time_eps, which is what
+                # ``"t0"`` already names; refusing it keeps one meaning per
+                # value instead of two spellings for the same thing.
+                raise ValueError(
+                    f"an integer t_schedule is the k of k-step distillation and "
+                    f"must exceed 1; for one-step distillation use 't0', got "
+                    f"{schedule}"
+                )
+        elif schedule not in ("uniform", "t0", "t1"):
             raise ValueError(
                 f"t_schedule must be 'uniform', 't0', 't1' or an integer "
                 f"k > 1, got {schedule!r}"
-            )
-        if isinstance(schedule, str):
-            if schedule not in ("uniform", "t0", "t1"):
-                raise ValueError(
-                    f"t_schedule must be 'uniform', 't0', 't1' or an integer "
-                    f"k > 1, got {schedule!r}"
-                )
-        elif schedule <= 1:
-            # k = 1 would put every draw at t = time_eps, which is what
-            # ``"t0"`` already names; refusing it keeps one meaning per
-            # value instead of two spellings for the same thing.
-            raise ValueError(
-                f"an integer t_schedule is the k of k-step distillation and "
-                f"must exceed 1; for one-step distillation use 't0', got "
-                f"{schedule}"
             )
         if not 0.0 <= self.time_eps < 1.0:
             raise ValueError(f"time_eps must lie in [0, 1), got {self.time_eps}")

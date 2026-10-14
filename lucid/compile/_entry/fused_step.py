@@ -707,7 +707,7 @@ class _FusedStep:
                             # state on an overflow step (eager skips
                             # ``optimizer.step()``).
                             final_outputs: list[Tensor] = []
-                            for slot, new in zip(slots, opt_outputs):
+                            for slot, new in zip(slots, opt_outputs, strict=True):
                                 old = copt._slot_tensor(slot)
                                 if old.dtype != new.dtype:
                                     old = old.to(new.dtype)
@@ -952,7 +952,7 @@ class _FusedStep:
         for _n in graph.ops:
             for _m in _n.outputs:
                 _id_to_shape[int(_m.id)] = tuple(_m.shape)
-        for _slot, (_oid, _tgt) in enumerate(zip(output_target_ids, output_targets)):
+        for _slot, (_oid, _tgt) in enumerate(zip(output_target_ids, output_targets, strict=True)):
             _exp = _id_to_shape.get(int(_oid))
             if _exp is not None and tuple(_tgt.shape) != _exp:
                 raise RuntimeError(

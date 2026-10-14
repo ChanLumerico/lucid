@@ -917,7 +917,7 @@ def perspective_matrix(
     """
     rows: list[list[float]] = []
     rhs: list[float] = []
-    for (sx, sy), (dx, dy) in zip(src, dst):
+    for (sx, sy), (dx, dy) in zip(src, dst, strict=True):
         rows.append([sx, sy, 1.0, 0.0, 0.0, 0.0, -dx * sx, -dx * sy])
         rhs.append(dx)
         rows.append([0.0, 0.0, 0.0, sx, sy, 1.0, -dy * sx, -dy * sy])

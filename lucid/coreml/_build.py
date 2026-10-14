@@ -374,7 +374,7 @@ def _activation_quantization_paused(model: Module) -> Any:
     try:
         yield
     finally:
-        for module, on in zip(paused, was_on):
+        for module, on in zip(paused, was_on, strict=True):
             if on:
                 module.enable_fake_quant()
 
@@ -421,7 +421,7 @@ def _observers_paused(model: Module) -> Any:
     try:
         yield
     finally:
-        for module, on in zip(paused, was_on):
+        for module, on in zip(paused, was_on, strict=True):
             if on:
                 module.enable_observer()
 
@@ -514,7 +514,7 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         if tracer is not None:
             tracer.restore_outside_writes()
         replaced: list[tuple[str, bool]] = []
-        for (name, tensor), impl in zip(examples, held):
+        for (name, tensor), impl in zip(examples, held, strict=True):
             if _unwrap(tensor) is not impl:
                 replaced.append((name, bool(impl.requires_grad)))
                 tensor._impl = impl
@@ -533,7 +533,7 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     feeds = tracer.external_feeds
     feed_of = {id(impl): int(tid) for tid, impl in feeds.items()}
     inputs: list[tuple[str, int, Tensor]] = []
-    for (name, tensor), impl in zip(examples, held):
+    for (name, tensor), impl in zip(examples, held, strict=True):
         if id(impl) in written:
             # Written in place: the tensor now resolves to the value the
             # write produced, and the value it arrived with is the feed it
@@ -3036,7 +3036,7 @@ def build_package(
         if isinstance(result, Bound):
             # The emitter already appended whatever it needed; these are
             # the values its results are.
-            for out, bound in zip(op.outputs, result.names):
+            for out, bound in zip(op.outputs, result.names, strict=True):
                 names[out.id] = bound
             continue
         multi = isinstance(result, MultiOutput)
@@ -3068,7 +3068,7 @@ def build_package(
             program.add_op_multi(mil_type, bindings, produced)
         else:
             program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
-        for (out_name, (out_dtype, shape)), o in zip(produced, op.outputs):
+        for (out_name, (out_dtype, shape)), o in zip(produced, op.outputs, strict=True):
             names[o.id] = out_name
             builder.declare(out_name, shape)
             builder.dtypes[out_name] = out_dtype

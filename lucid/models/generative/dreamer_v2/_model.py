@@ -742,7 +742,7 @@ class DreamerV2ForWorldModeling(WorldModelingModel):
             live = self.dreamer_v2.value_head.parameters()
             frozen = self.dreamer_v2.target_value_head.parameters()
             with lucid.no_grad():
-                for source, destination in zip(live, frozen):
+                for source, destination in zip(live, frozen, strict=True):
                     # `destination[:] = ...`, not `destination.data[:] = ...`:
                     # the latter writes to a copy and silently does nothing.
                     destination[:] = mix * source + (1.0 - mix) * destination
@@ -973,9 +973,9 @@ class DreamerV2ForWorldModeling(WorldModelingModel):
         self.zero_grad()
         output.loss.backward()
 
-        for param, grad in zip(self.actor_parameters(), actor_grads):
+        for param, grad in zip(self.actor_parameters(), actor_grads, strict=True):
             param.grad = grad
-        for param, grad in zip(self.value_parameters(), value_grads):
+        for param, grad in zip(self.value_parameters(), value_grads, strict=True):
             param.grad = grad
 
     @override

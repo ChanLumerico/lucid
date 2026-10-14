@@ -490,7 +490,7 @@ class IJEPAModel(PretrainedModel, BackboneMixin):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum}")
         with lucid.no_grad():
             for live, averaged in zip(
-                self.encoder.parameters(), self.target_encoder.parameters()
+                self.encoder.parameters(), self.target_encoder.parameters(), strict=True
             ):
                 # ``averaged[:] = ...``, not ``averaged.data[:] = ...``: the
                 # latter writes to a copy and silently does nothing.

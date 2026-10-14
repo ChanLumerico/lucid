@@ -204,7 +204,7 @@ class StableDiffusionConfig(DiffusionModelConfig):
                 f"stride-2 stages, so f must be {expected}"
             )
         if not isinstance(self.sample_size, int):
-            raise ValueError(
+            raise TypeError(
                 f"sample_size must be a square int for this family, got "
                 f"{self.sample_size}"
             )

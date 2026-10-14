@@ -271,7 +271,7 @@ def load_compiled(path: str) -> object:
             """One line per feed slot: what shape and dtype it expects."""
             return "\n".join(
                 f"  slot {i}: shape {tuple(sh)} dtype {dt}"
-                for i, (sh, dt) in enumerate(zip(self.input_shapes, self.input_dtypes))
+                for i, (sh, dt) in enumerate(zip(self.input_shapes, self.input_dtypes, strict=True))
             )
 
         def __call__(self, *args: object) -> object:

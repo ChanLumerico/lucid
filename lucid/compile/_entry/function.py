@@ -199,7 +199,7 @@ def compiled_step(
 
     # Direct grad assignment — the eager optimizer reads ``param.grad``
     # the same way as after ``loss.backward()``.
-    for param, grad_impl in zip(params, outs[1:n_loss_grad]):
+    for param, grad_impl in zip(params, outs[1:n_loss_grad], strict=True):
         param.grad = _wrap(grad_impl)
 
     # Write BN running stats back into the live module buffers.

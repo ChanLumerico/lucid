@@ -194,12 +194,16 @@ class TransformsPreset(_NoParams, Transform[Empty], abc.ABC):
         """
         key = cfg.get("preprocessor_type")
         kwargs = cfg.get("init_kwargs", {})
-        if not isinstance(key, str):
+        if key is None:
             raise ValueError(
-                f"from_dict: missing or non-string 'preprocessor_type' in {cfg!r}"
+                f"from_dict: missing 'preprocessor_type' in {cfg!r}"
+            )
+        if not isinstance(key, str):
+            raise TypeError(
+                f"from_dict: 'preprocessor_type' must be a str, got {type(key).__name__}"
             )
         if not isinstance(kwargs, dict):
-            raise ValueError(
+            raise TypeError(
                 f"from_dict: 'init_kwargs' must be a dict, got {type(kwargs).__name__}"
             )
         target = _PRESET_REGISTRY.get(key)
@@ -848,7 +852,7 @@ class Detection(TransformsPreset):
         fill: float | tuple[float, ...] = (
             0.0
             if pad_value is None
-            else tuple(pad_value * s + m for m, s in zip(self.mean, self.std))
+            else tuple(pad_value * s + m for m, s in zip(self.mean, self.std, strict=True))
         )
         self._pad = (
             PadIfNeeded(side, side, value=fill, position=pad_position)

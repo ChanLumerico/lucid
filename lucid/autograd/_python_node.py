@@ -40,7 +40,8 @@ def _expandable(shape: tuple[int, ...], target: tuple[int, ...]) -> bool:
     """Whether ``shape`` broadcasts to ``target`` — the input to its gradient."""
     if len(shape) > len(target):
         return False
-    for have, want in zip(reversed(shape), reversed(target)):
+    # Trailing axes only: len(shape) <= len(target) when broadcasting leading dims.
+    for have, want in zip(reversed(shape), reversed(target), strict=False):
         if have != want and have != 1:
             return False
     return True
@@ -84,7 +85,7 @@ def _per_input(
         grads = grads[:n_args]
     if len(grads) == n_args:
         picked: list[object] = []
-        for i, (g, is_tensor) in enumerate(zip(grads, is_tensor_arg)):
+        for i, (g, is_tensor) in enumerate(zip(grads, is_tensor_arg, strict=True)):
             if is_tensor:
                 picked.append(g)
             elif g is not None:

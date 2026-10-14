@@ -736,7 +736,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         box_all_parts: list[Tensor] = []
         anchors_flat_parts: list[Tensor] = []
 
-        for lvl, (cm, bm, anc) in enumerate(zip(cls_maps, box_maps, anchors_per_level)):
+        for lvl, (cm, bm, anc) in enumerate(zip(cls_maps, box_maps, anchors_per_level, strict=True)):
             fH = int(cm.shape[2])
             fW = int(cm.shape[3])
             # cm: (B, K*A, H, W) → (B, H*W*A, K)

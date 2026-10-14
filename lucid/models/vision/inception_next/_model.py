@@ -280,7 +280,7 @@ def _build_inception_next(cfg: InceptionNeXtConfig) -> tuple[
     total = sum(cfg.depths)
     dpr_all = [cfg.drop_path_rate * k / max(total - 1, 1) for k in range(total)]
     cursor = 0
-    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
+    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims, strict=True)):
         in_dim = cfg.dims[i - 1] if i > 0 else dim
         stage = _Stage(
             in_dim=in_dim,

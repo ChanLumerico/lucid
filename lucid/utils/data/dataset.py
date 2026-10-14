@@ -676,5 +676,5 @@ class StackDataset(Dataset):
         """
         items: tuple[object, ...] = tuple(d[idx] for d in self.datasets)
         if self._keys is not None:
-            return dict(zip(self._keys, items))
+            return dict(zip(self._keys, items, strict=True))
         return items

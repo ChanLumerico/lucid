@@ -77,7 +77,7 @@ def _sincos_3d(dim: int, grid: tuple[int, int, int], uniform_power: bool) -> Ten
     table = lucid.cat(
         [
             _sincos_embedding(axis.reshape(-1), width)
-            for axis, width in zip(coords, widths)
+            for axis, width in zip(coords, widths, strict=True)
         ],
         dim=1,
     )
@@ -578,7 +578,7 @@ class VJEPAModel(PretrainedModel, BackboneMixin):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum}")
         with lucid.no_grad():
             for live, averaged in zip(
-                self.encoder.parameters(), self.target_encoder.parameters()
+                self.encoder.parameters(), self.target_encoder.parameters(), strict=True
             ):
                 averaged[:] = momentum * averaged + (1.0 - momentum) * live
 

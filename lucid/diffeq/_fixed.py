@@ -115,7 +115,7 @@ def parse_options(options: dict[str, object] | None) -> FixedOptions:
 
     perturb = options.get("perturb", False)
     if not isinstance(perturb, bool):
-        raise ValueError(
+        raise TypeError(
             f"option 'perturb' must be a bool, got {type(perturb).__name__}"
         )
 

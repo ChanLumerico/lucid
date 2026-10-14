@@ -124,7 +124,7 @@ class MixtureSameFamily(Distribution):
             ``K``.
         """
         if not isinstance(mixture_distribution, Categorical):
-            raise ValueError(
+            raise TypeError(
                 "MixtureSameFamily: mixture_distribution must be Categorical"
             )
         # Component dist's rightmost batch dim is the number of components.

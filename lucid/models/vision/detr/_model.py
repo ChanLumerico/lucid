@@ -845,7 +845,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
             # matcher above already assumes.
             labels_l = [int(v) for v in cast(list[int], gt_labels.tolist())]
             cls_targets_data: list[int] = [bg_index] * N
-            for pi, gi in zip(pred_idx, gt_idx):
+            for pi, gi in zip(pred_idx, gt_idx, strict=True):
                 cls_targets_data[pi] = labels_l[gi]
 
             # Weight mask: matched queries get full weight; background = bg_weight

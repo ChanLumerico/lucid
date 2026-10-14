@@ -650,7 +650,14 @@ def from_dlpack(ext_tensor: object) -> Tensor:
     if callable(device):
         try:
             kind, _index = device()
-        except Exception:  # noqa: BLE001 - a broken producer falls to numpy
+        except (
+            AttributeError,
+            NotImplementedError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ):
+            # A broken producer falls back to numpy.
             kind = None
         if kind == _DLPACK_METAL:
             from lucid._C import engine as _C_engine

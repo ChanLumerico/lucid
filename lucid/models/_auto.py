@@ -196,10 +196,10 @@ def _load_from_directory(task: str, path: Path, *, strict: bool) -> PretrainedMo
     with open(cfg_file, "r", encoding="utf-8") as f:
         cfg_dict = json.load(f)
     if not isinstance(cfg_dict, dict):
-        raise ValueError(f"{cfg_file} did not contain a JSON object")
+        raise TypeError(f"{cfg_file} did not contain a JSON object")
     model_type = cfg_dict.get("model_type")
     if not isinstance(model_type, str):
-        raise ValueError(f"{cfg_file} must declare 'model_type' (string)")
+        raise TypeError(f"{cfg_file} must declare 'model_type' (string)")
 
     matching: list[_RegistryEntry] = [
         entry
@@ -389,10 +389,10 @@ def _load_config_from_directory(path: Path) -> ModelConfig:
     with open(cfg_file, "r", encoding="utf-8") as f:
         cfg_dict = json.load(f)
     if not isinstance(cfg_dict, dict):
-        raise ValueError(f"{cfg_file} did not contain a JSON object")
+        raise TypeError(f"{cfg_file} did not contain a JSON object")
     model_type = cfg_dict.get("model_type")
     if not isinstance(model_type, str):
-        raise ValueError(f"{cfg_file} must declare 'model_type' (string)")
+        raise TypeError(f"{cfg_file} must declare 'model_type' (string)")
 
     # Fast path: find an entry with a matching model_type and use its
     # default_config if present.

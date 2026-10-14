@@ -321,7 +321,7 @@ class ButcherTableau:
             return 0
         reached = 0
         for k in range(1, len(self.mid) + 2):
-            lhs = sum(m * c ** (k - 1) for m, c in zip(self.mid, self.c))
+            lhs = sum(m * c ** (k - 1) for m, c in zip(self.mid, self.c, strict=True))
             rhs = 0.5**k / k
             if abs(lhs - rhs) > 1e-10 * max(1.0, abs(rhs)):
                 break

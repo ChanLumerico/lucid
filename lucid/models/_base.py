@@ -230,7 +230,7 @@ class ModelConfig(ABC):
         with open(path, "r", encoding="utf-8") as f:
             d = json.load(f)
         if not isinstance(d, dict):
-            raise ValueError(f"{path} did not contain a JSON object")
+            raise TypeError(f"{path} did not contain a JSON object")
         return cls.from_dict(d)
 
 

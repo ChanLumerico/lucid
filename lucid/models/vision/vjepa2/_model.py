@@ -858,7 +858,7 @@ def _sincos_3d(dim: int, grid: tuple[int, int, int], uniform_power: bool) -> Ten
         lucid.arange(cols).to(lucid.float64).reshape(1, 1, cols) + zeros,
     )
     axes: list[Tensor] = []
-    for coordinate, width in zip(coords, widths):
+    for coordinate, width in zip(coords, widths, strict=True):
         flat = coordinate.reshape(-1, 1)
         omega = 1.0 / (
             10_000.0 ** (lucid.arange(width // 2).to(lucid.float64) * (2.0 / width))
@@ -1164,7 +1164,7 @@ class VJEPA2Model(PretrainedModel, BackboneMixin):
             raise ValueError(f"momentum must lie in [0, 1], got {momentum}")
         with lucid.no_grad():
             for live, target in zip(
-                self.encoder.parameters(), self.target_encoder.parameters()
+                self.encoder.parameters(), self.target_encoder.parameters(), strict=True
             ):
                 target[:] = momentum * target + (1.0 - momentum) * live
 

@@ -113,7 +113,7 @@ def parse_options(options: dict[str, object] | None) -> AdamsOptions:
     def _count(key: str, default: int) -> int:
         raw = adams_part.get(key, default)
         if isinstance(raw, bool) or not isinstance(raw, int):
-            raise ValueError(f"option {key!r} must be an int, got {type(raw).__name__}")
+            raise TypeError(f"option {key!r} must be an int, got {type(raw).__name__}")
         return raw
 
     max_order = _count("max_order", _DEFAULT_MAX_ORDER)

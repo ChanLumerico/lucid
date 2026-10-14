@@ -204,8 +204,5 @@ def remove_weight_norm(module: Module, name: str = "weight") -> Module:
         del module.__dict__[name]
     module.register_parameter(name, Parameter(materialised))
     if not hooks:
-        try:
-            object.__delattr__(module, _WN_HOOK_ATTR)
-        except AttributeError:
-            pass
+        object.__delattr__(module, _WN_HOOK_ATTR)
     return module

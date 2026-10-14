@@ -239,6 +239,9 @@ def load(
 
     obj = container["obj"]
 
+    if map_location is not None:
+        obj = _apply_map_location(obj, map_location)
+
     # Restore the `_metadata` attribute on state_dicts saved with format v2.
     sd_metadata = container.get("_state_dict_metadata")
     if sd_metadata is not None and isinstance(obj, dict):
@@ -251,14 +254,6 @@ def load(
             new_obj = _OD(obj)
             new_obj._metadata = sd_metadata  # type: ignore[attr-defined]
             obj = new_obj
-
-    if map_location is not None:
-        obj = _apply_map_location(obj, map_location)
-        if sd_metadata is not None and isinstance(obj, dict):
-            try:
-                obj._metadata = sd_metadata  # type: ignore[attr-defined]
-            except AttributeError:
-                pass
 
     return obj
 
@@ -422,6 +417,7 @@ def save_sharded(
             json.dumps(sd_meta)
             index["_state_dict_metadata"] = sd_meta
         except (TypeError, ValueError):  # fmt: skip
+            # Non-JSON-serializable _metadata is omitted from index.json; shards still load.
             pass
 
     with open(os.path.join(path_str, "index.json"), "w", encoding="utf-8") as fp:
@@ -510,10 +506,7 @@ def load_sharded(
 
     sd_meta = index.get("_state_dict_metadata")
     if sd_meta is not None and isinstance(sd_meta, dict):
-        try:
-            result._metadata = sd_meta  # type: ignore[attr-defined]
-        except AttributeError:
-            pass
+        result._metadata = sd_meta  # type: ignore[attr-defined]
 
     return result
 

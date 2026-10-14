@@ -1756,7 +1756,7 @@ def gaussian_nll_loss(
     if tuple(var.shape) != tuple(x.shape):
         if tuple(x.shape[:-1]) == tuple(var.shape):
             var = var.unsqueeze(-1)
-        elif x.ndim == var.ndim and (sum(v for d, v in zip(x.shape, var.shape) if d != v) == 1):
+        elif x.ndim == var.ndim and (sum(v for d, v in zip(x.shape, var.shape, strict=True) if d != v) == 1):
             pass
         else:
             raise ValueError("var is of incorrect size")

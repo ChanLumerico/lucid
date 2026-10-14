@@ -532,7 +532,7 @@ class PrioritizedSequenceReplay(SequenceReplay):
         """
         if len(indices) != len(errors):
             raise ValueError(f"got {len(indices)} indices and {len(errors)} errors")
-        for index, error in zip(indices, errors):
+        for index, error in zip(indices, errors, strict=True):
             priority = abs(error) + self.epsilon
             self._max_priority = max(self._max_priority, priority)
             if 0 <= index < len(self.episodes):

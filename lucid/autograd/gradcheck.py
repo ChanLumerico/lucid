@@ -154,7 +154,7 @@ def gradcheck(
         numerical.append(num64)
 
     # ── Compare analytical vs numerical ──────────────────────────────────────
-    for i, (an_t, nu_t) in enumerate(zip(analytical, numerical)):
+    for i, (an_t, nu_t) in enumerate(zip(analytical, numerical, strict=True)):
         an = _unwrap(an_t)
         nu = _unwrap(nu_t)
         diff = _C_engine.abs(_C_engine.sub(an, nu))

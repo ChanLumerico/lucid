@@ -152,7 +152,7 @@ def _augmented_dynamics(
         d_adjoint = vjps[0] if vjps[0] is not None else lucid.zeros_like(y)
         d_params = [
             v if v is not None else lucid.zeros_like(p)
-            for v, p in zip(vjps[1:], params)
+            for v, p in zip(vjps[1:], params, strict=True)
         ]
         return _flatten.flatten([f.detach(), d_adjoint, *d_params])
 

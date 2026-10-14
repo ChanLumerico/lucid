@@ -439,7 +439,7 @@ class Optimizer:
 
     def _hyperparam_dict(self, values: tuple[object, ...]) -> dict[str, Any]:
         """Name ``values`` by ``_HYPERPARAMS``, as the engine bindings take them."""
-        return dict(zip(self._HYPERPARAMS, values))
+        return dict(zip(self._HYPERPARAMS, values, strict=True))
 
     @classmethod
     def _check_hyperparams(cls, values: dict[str, Any]) -> None:
@@ -472,7 +472,7 @@ class Optimizer:
         if read is None:
             return
         seen = self._group_hparams
-        for idx, (group, last) in enumerate(zip(self.param_groups, seen)):
+        for idx, (group, last) in enumerate(zip(self.param_groups, seen, strict=True)):
             values = read(group)
             if values == last:
                 continue
@@ -720,7 +720,7 @@ class Optimizer:
             return {}
         out: dict[int, dict[str, object]] = {}
         flat_idx: int = 0
-        for group, eng in zip(self.param_groups, self._engine_optims):
+        for group, eng in zip(self.param_groups, self._engine_optims, strict=True):
             params: list[Parameter] = group["params"]  # type: ignore[assignment]
             if eng is None:
                 flat_idx += len(params)
@@ -753,7 +753,7 @@ class Optimizer:
         if not state:
             return
         flat_idx: int = 0
-        for group, eng in zip(self.param_groups, self._engine_optims):
+        for group, eng in zip(self.param_groups, self._engine_optims, strict=True):
             params: list[Parameter] = group["params"]  # type: ignore[assignment]
             if eng is None:
                 flat_idx += len(params)
@@ -825,7 +825,7 @@ class Optimizer:
                 f"loaded state_dict has {len(loaded_groups)} param_groups but "
                 f"optimizer has {len(self.param_groups)}"
             )
-        for g_new, g_old in zip(self.param_groups, loaded_groups):
+        for g_new, g_old in zip(self.param_groups, loaded_groups, strict=True):
             for k, v in g_old.items():
                 if k == "params":
                     continue

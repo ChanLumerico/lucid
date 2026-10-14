@@ -108,7 +108,7 @@ def added_tokens_from_config(value: object) -> list[AddedToken]:
         entry = as_object(raw, "added_tokens")
         tid = entry.get("id")
         if not isinstance(tid, int) or isinstance(tid, bool):
-            raise ValueError(f"added_tokens: entry without an integer id: {entry!r}")
+            raise TypeError(f"added_tokens: entry without an integer id: {entry!r}")
         where = f"added_tokens[{tid}]"
         content = get_str(entry, "content", where, "")
         if not content:

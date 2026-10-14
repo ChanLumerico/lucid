@@ -28,7 +28,7 @@ def _transpose_padding(module: Module, padding: object, mode: str) -> str:
     """
     label = type(module).__name__
     if isinstance(padding, str):
-        raise ValueError(
+        raise TypeError(
             f"{label}: string padding ({padding!r}) is not supported; "
             "use an int or tuple of ints"
         )

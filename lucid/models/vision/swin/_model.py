@@ -434,7 +434,7 @@ def _build_swin(
     ]
     block_cursor = 0
 
-    for i, (depth, heads) in enumerate(zip(cfg.depths, cfg.num_heads)):
+    for i, (depth, heads) in enumerate(zip(cfg.depths, cfg.num_heads, strict=True)):
         downsample = i < len(cfg.depths) - 1
         stage_dp = dp_all[block_cursor : block_cursor + depth]
         block_cursor += depth

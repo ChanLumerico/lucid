@@ -427,14 +427,15 @@ class CoreMLModel:
             self._handle = _C_engine.coreml.load_model(
                 self._lease.path, units, function_name, self._lease.lock_fd
             )
-        except BaseException as exc:
+        except RuntimeError as exc:
             # Whatever ends the load, the entry must not stay locked for
             # the rest of the process: a lock nobody will release is an
             # entry no eviction can ever remove.
             self._release()
-            if isinstance(exc, RuntimeError):
-                # Named after the package the caller gave, not the entry.
-                raise RuntimeError(str(exc).replace(self._lease.path, path)) from None
+            # Named after the package the caller gave, not the entry.
+            raise RuntimeError(str(exc).replace(self._lease.path, path)) from None
+        except BaseException:
+            self._release()
             raise
 
     def _declare_noise(
@@ -482,7 +483,7 @@ class CoreMLModel:
             given = list(x.items())
             offered = len(x)
         elif isinstance(x, (tuple, list)):
-            given = list(zip(asked, x))
+            given = list(zip(asked, x, strict=False))
             # Counted from what was handed over, not from what the pairing
             # kept: ``zip`` stops at the shorter side, so a caller who
             # passes one tensor too many would otherwise get a list that
@@ -679,7 +680,7 @@ class CoreMLModel:
             )
         raw = self._handle.predict(self._feed(x), self.output_names, self._images())
         produced: dict[str, Tensor] = {}
-        for name, impl in zip(self.output_names, raw):
+        for name, impl in zip(self.output_names, raw, strict=True):
             out = _wrap(impl)
             declared = self.output_shapes.get(name)
             # Core ML returns a 0-d result as ``(1,)``. An axis that follows

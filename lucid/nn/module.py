@@ -332,7 +332,20 @@ class Module:
                     hook(self, args, kwargs, output)
                 else:
                     hook(self, args, output)
-            except Exception as err:  # arbitrary user callback; reference warns too
+            except (
+                ArithmeticError,
+                AssertionError,
+                AttributeError,
+                BufferError,
+                EOFError,
+                ImportError,
+                LookupError,
+                OSError,
+                RuntimeError,
+                StopIteration,
+                TypeError,
+                ValueError,
+            ) as err:  # arbitrary user callback; reference warns too
                 warnings.warn(
                     f"forward hook {hook!r} with always_call=True raised {err!r}; "
                     "it was suppressed because forward() had already raised",
@@ -715,8 +728,6 @@ class Module:
         parts = target.split(".")
         mod: Module = self
         for part in parts:
-            if not isinstance(mod, Module):
-                raise AttributeError(f"'{type(mod).__name__}' is not a Module")
             if part not in mod._modules:
                 raise AttributeError(
                     f"'{type(mod).__name__}' has no submodule '{part}'"

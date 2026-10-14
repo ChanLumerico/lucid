@@ -590,7 +590,7 @@ class AnchorGenerator(nn.Module):
     def _compute_cell_anchors(self) -> list[list[list[float]]]:
         """Base anchors (centred at origin) for every FPN level, as xyxy rows."""
         all_anchors: list[list[list[float]]] = []
-        for level_sizes, level_ratios in zip(self.sizes, self.aspect_ratios):
+        for level_sizes, level_ratios in zip(self.sizes, self.aspect_ratios, strict=True):
             anchors: list[list[float]] = []
             for size in level_sizes:
                 area = float(size * size)
@@ -661,7 +661,7 @@ class AnchorGenerator(nn.Module):
         # with the predictions they will be matched against.
         device = feature_maps[0].device.type if feature_maps else "cpu"
         all_anchors: list[Tensor] = []
-        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
+        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides, strict=True):
             fH = int(feat.shape[2])
             fW = int(feat.shape[3])
             all_anchors.append(
@@ -1169,7 +1169,7 @@ class FPN(nn.Module):
         """
         # Lateral projections
         laterals: list[Tensor] = [
-            cast(Tensor, lat(f)) for lat, f in zip(self.lateral_convs, features)
+            cast(Tensor, lat(f)) for lat, f in zip(self.lateral_convs, features, strict=True)
         ]
 
         # Top-down: merge from coarsest to finest
@@ -1180,7 +1180,7 @@ class FPN(nn.Module):
 
         # 3×3 output convolutions (anti-aliasing)
         outs: list[Tensor] = [
-            cast(Tensor, conv(lat)) for conv, lat in zip(self.output_convs, laterals)
+            cast(Tensor, conv(lat)) for conv, lat in zip(self.output_convs, laterals, strict=True)
         ]
 
         # Extra coarser levels
@@ -1271,7 +1271,7 @@ class RPN(nn.Module):
         all_proposals: list[list[Tensor]] = [[] for _ in range(B)]
         all_scores: list[list[Tensor]] = [[] for _ in range(B)]
 
-        for feat, level_anchors in zip(features, anchors):
+        for feat, level_anchors in zip(features, anchors, strict=True):
             t = F.relu(self.conv(feat))
             logits = self.cls_logits(t)  # (B, A, H, W)
             deltas = self.bbox_pred(t)  # (B, 4A, H, W)
@@ -2020,7 +2020,7 @@ def select_training_samples(
     out_reg: list[Tensor] = []
     out_matched: list[Tensor] = []
 
-    for props, tgt in zip(proposals, targets):
+    for props, tgt in zip(proposals, targets, strict=True):
         gt_boxes = tgt["boxes"]
         gt_labels = tgt["labels"]
         dev = props.device.type
@@ -2296,7 +2296,7 @@ def flatten_rpn_outputs(
     """
     per_level_scores: list[Tensor] = []
     per_level_deltas: list[Tensor] = []
-    for lg, dl in zip(logits, deltas):
+    for lg, dl in zip(logits, deltas, strict=True):
         B = int(lg.shape[0])
         A = int(lg.shape[1])
         fH = int(lg.shape[2])
@@ -2515,7 +2515,7 @@ class _ReferenceAnchorGenerator(nn.Module):
         self.sizes = sizes
         self.aspect_ratios = aspect_ratios
         self._cell_anchors: list[Tensor] = [
-            self._gen_cell_anchors(s, r) for s, r in zip(sizes, aspect_ratios)
+            self._gen_cell_anchors(s, r) for s, r in zip(sizes, aspect_ratios, strict=True)
         ]
 
     @staticmethod
@@ -2539,7 +2539,7 @@ class _ReferenceAnchorGenerator(nn.Module):
         return lucid.tensor(rows)
 
     def num_anchors_per_location(self) -> list[int]:
-        return [len(s) * len(r) for s, r in zip(self.sizes, self.aspect_ratios)]
+        return [len(s) * len(r) for s, r in zip(self.sizes, self.aspect_ratios, strict=True)]
 
     def _grid_anchors(
         self, grid_size: tuple[int, int], stride: int, base: Tensor, device: str
@@ -2559,7 +2559,7 @@ class _ReferenceAnchorGenerator(nn.Module):
     def forward(self, feature_maps: list[Tensor], strides: list[int]) -> list[Tensor]:
         device = feature_maps[0].device.type if feature_maps else "cpu"
         out: list[Tensor] = []
-        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
+        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides, strict=True):
             gh = int(feat.shape[2])
             gw = int(feat.shape[3])
             out.append(self._grid_anchors((gh, gw), stride, base, device=device))

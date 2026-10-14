@@ -115,7 +115,7 @@ def parse_options(options: dict[str, object] | None) -> ImplicitOptions:
 
     raw = options.get("max_iters", _DEFAULT_MAX_ITERS)
     if isinstance(raw, bool) or not isinstance(raw, int):
-        raise ValueError(f"option 'max_iters' must be an int, got {type(raw).__name__}")
+        raise TypeError(f"option 'max_iters' must be an int, got {type(raw).__name__}")
     if raw < 1:
         raise ValueError(f"max_iters must be >= 1, got {raw}")
 

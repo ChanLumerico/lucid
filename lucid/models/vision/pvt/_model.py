@@ -341,7 +341,7 @@ def _build_pvt(cfg: PVTConfig) -> tuple[
     reduction *= 4
 
     for i, (dim, depth, heads, sr, mlp_r) in enumerate(
-        zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios, cfg.mlp_ratios)
+        zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios, cfg.mlp_ratios, strict=True)
     ):
         is_first = i == 0
         # patch_size/stride used by downsample in stages 1-3

@@ -180,7 +180,7 @@ def fuse_modules(
     for group in modules_to_fuse:
         mods = [_get_module(model, name) for name in group]
         replacements = _fuse_run(mods)
-        for name, repl in zip(group, replacements):
+        for name, repl in zip(group, replacements, strict=True):
             _set_module(model, name, repl)
     return model
 
@@ -307,6 +307,6 @@ def fuse_modules_qat(
     for group in modules_to_fuse:
         mods = [_get_module(model, name) for name in group]
         replacements = _fuse_run_qat(mods, qconfig)
-        for name, repl in zip(group, replacements):
+        for name, repl in zip(group, replacements, strict=True):
             _set_module(model, name, repl)
     return model

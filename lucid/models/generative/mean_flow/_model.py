@@ -293,7 +293,7 @@ class MeanFlowModel(PretrainedModel):
         tokens = tokens + self.pos_embed
 
         cond = cast(Tensor, self.time_mlps[0](self._time_inputs(r, t)[0]))
-        for mlp, scalar in zip(list(self.time_mlps)[1:], self._time_inputs(r, t)[1:]):
+        for mlp, scalar in zip(list(self.time_mlps)[1:], self._time_inputs(r, t)[1:], strict=True):
             cond = cond + cast(Tensor, mlp(scalar))
 
         if labels is None:

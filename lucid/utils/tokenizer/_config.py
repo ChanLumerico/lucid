@@ -46,7 +46,7 @@ def as_object(value: object, where: str) -> dict[str, object]:
         If ``value`` is not a JSON object.
     """
     if not isinstance(value, dict):
-        raise ValueError(f"{where}: expected a JSON object, got {type(value).__name__}")
+        raise TypeError(f"{where}: expected a JSON object, got {type(value).__name__}")
     return {str(k): v for k, v in value.items()}
 
 
@@ -67,11 +67,11 @@ def as_list(value: object, where: str) -> list[object]:
 
     Raises
     ------
-    ValueError
+    TypeError
         If ``value`` is not a JSON array.
     """
     if not isinstance(value, list):
-        raise ValueError(f"{where}: expected a JSON array, got {type(value).__name__}")
+        raise TypeError(f"{where}: expected a JSON array, got {type(value).__name__}")
     return list(value)
 
 
@@ -92,12 +92,12 @@ def type_of(config: dict[str, object], where: str) -> str:
 
     Raises
     ------
-    ValueError
+    TypeError
         If the block has no string ``"type"``.
     """
     tag = config.get("type")
     if not isinstance(tag, str):
-        raise ValueError(f"{where}: block has no 'type' tag: {config!r}")
+        raise TypeError(f"{where}: block has no 'type' tag: {config!r}")
     return tag
 
 
@@ -122,14 +122,14 @@ def get_str(config: dict[str, object], key: str, where: str, default: str) -> st
 
     Raises
     ------
-    ValueError
+    TypeError
         If the option is present but not a string.
     """
     value = config.get(key)
     if value is None:
         return default
     if not isinstance(value, str):
-        raise ValueError(f"{where}: option {key!r} must be a string, got {value!r}")
+        raise TypeError(f"{where}: option {key!r} must be a string, got {value!r}")
     return value
 
 
@@ -154,14 +154,14 @@ def get_bool(config: dict[str, object], key: str, where: str, default: bool) -> 
 
     Raises
     ------
-    ValueError
+    TypeError
         If the option is present but not a boolean.
     """
     value = config.get(key)
     if value is None:
         return default
     if not isinstance(value, bool):
-        raise ValueError(f"{where}: option {key!r} must be a boolean, got {value!r}")
+        raise TypeError(f"{where}: option {key!r} must be a boolean, got {value!r}")
     return value
 
 
@@ -186,7 +186,7 @@ def get_int(config: dict[str, object], key: str, where: str, default: int) -> in
 
     Raises
     ------
-    ValueError
+    TypeError
         If the option is present but not an integer.
     """
     value = config.get(key)
@@ -195,7 +195,7 @@ def get_int(config: dict[str, object], key: str, where: str, default: int) -> in
     # ``bool`` is an ``int`` subclass; a flag where a count belongs is a
     # malformed file, not the number 1.
     if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{where}: option {key!r} must be an integer, got {value!r}")
+        raise TypeError(f"{where}: option {key!r} must be an integer, got {value!r}")
     return value
 
 

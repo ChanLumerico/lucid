@@ -950,9 +950,9 @@ class DreamerForWorldModeling(WorldModelingModel):
         self.zero_grad()
         output.loss.backward()
 
-        for param, grad in zip(self.actor_parameters(), actor_grads):
+        for param, grad in zip(self.actor_parameters(), actor_grads, strict=True):
             param.grad = grad
-        for param, grad in zip(self.value_parameters(), value_grads):
+        for param, grad in zip(self.value_parameters(), value_grads, strict=True):
             param.grad = grad
 
     def _behavior(self, posteriors: RSSMState) -> DreamerBehaviorOutput:

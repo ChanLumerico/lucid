@@ -407,7 +407,7 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
         sampled_deltas: list[Tensor] = []
 
         offset = 0
-        for props, tgt in zip(proposals, targets):
+        for props, tgt in zip(proposals, targets, strict=True):
             N_i = int(props.shape[0])
             gt_boxes = tgt["boxes"]
             gt_labels = tgt["labels"]

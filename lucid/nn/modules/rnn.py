@@ -52,7 +52,7 @@ def _slice(x: Tensor, *index: slice) -> Tensor:
     a dense batch the prefix is the whole tensor and the slice only feeds
     the next op — nothing ever holds it as a tensor of its own.
     """
-    for sl, n in zip(index, x.shape):
+    for sl, n in zip(index, x.shape, strict=False):  # index slices leading axes only
         if sl.indices(int(n)) != (0, int(n), 1):
             return x[index]
     return x

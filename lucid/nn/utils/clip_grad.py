@@ -143,7 +143,7 @@ def clip_grad_norm_(
 
     clip_coef = max_norm / (total_norm + 1e-6)
     if clip_coef < 1.0:
-        for p, g_impl in zip(params_with_grad, grads):
+        for p, g_impl in zip(params_with_grad, grads, strict=True):
             coef = _C_engine.full(
                 list(g_impl.shape), clip_coef, g_impl.dtype, g_impl.device
             )

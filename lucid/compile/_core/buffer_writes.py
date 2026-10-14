@@ -88,7 +88,7 @@ def write_back(targets: list[object], values: list[object]) -> None:
     values : list of TensorImpl
         The matching executable outputs.
     """
-    for target, value in zip(targets, values):
+    for target, value in zip(targets, values, strict=True):
         dst = cast(_C_engine.TensorImpl, target)
         src = cast(_C_engine.TensorImpl, value)
         if src.dtype != dst.dtype:

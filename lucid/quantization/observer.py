@@ -914,7 +914,7 @@ class HistogramObserver(ObserverBase):
                 continue
             step = (cmax - cmin) / max(levels, 1)
             err = 0.0
-            for c, n in zip(centers, counts):
+            for c, n in zip(centers, counts, strict=True):
                 if n == 0.0:
                     continue
                 cc = cmin if c < cmin else (cmax if c > cmax else c)
@@ -943,7 +943,7 @@ def _quantile_from_hist(counts: list[float], centers: list[float], q: float) -> 
         return centers[0]
     target = q * total
     acc = 0.0
-    for c, n in zip(centers, counts):
+    for c, n in zip(centers, counts, strict=True):
         acc += n
         if acc >= target:
             return c

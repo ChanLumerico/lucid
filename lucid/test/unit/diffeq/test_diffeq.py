@@ -940,7 +940,7 @@ class TestFixedStepOptions:
         self, bad: dict[str, object], match: str
     ) -> None:
         y0 = lucid.tensor([1.0], dtype=lucid.float64)
-        with pytest.raises(ValueError, match=match):
+        with pytest.raises((ValueError, TypeError), match=match):
             diffeq.odeint(_decay, y0, _grid(4), method="rk4", options=bad)
 
     def test_grid_constructor_must_span_the_interval(self) -> None:
@@ -2103,7 +2103,7 @@ class TestMultistep:
         ],
     )
     def test_rejects_bad_options(self, options: dict[str, object], match: str) -> None:
-        with pytest.raises(ValueError, match=match):
+        with pytest.raises((ValueError, TypeError), match=match):
             diffeq.odeint(
                 self._decay,
                 lucid.tensor([1.0], dtype=lucid.float64),
@@ -2442,7 +2442,7 @@ class TestImplicitMethods:
         ],
     )
     def test_rejects_bad_options(self, options: dict[str, object], match: str) -> None:
-        with pytest.raises(ValueError, match=match):
+        with pytest.raises((ValueError, TypeError), match=match):
             diffeq.odeint(
                 _decay,
                 lucid.tensor([1.0], dtype=lucid.float64),
