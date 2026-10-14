@@ -3,12 +3,14 @@ reads with it, and all such indices follow one rule (LCD-234).
 
 Every ``nn.functional`` op that reads with a class or table index checks it
 through ``lucid/nn/functional/_index_checks.py``. That covers a class-index
-loss's targets, a ``one_hot`` class, an embedding row, and ``ctc_loss``'s
-labels, ``blank`` and lengths. The ops used to follow three different
-policies:
+loss's targets, a ``one_hot`` class, an embedding row, ``max_unpool{1,2,3}d``'s
+flat spatial indices, and ``ctc_loss``'s labels, ``blank`` and lengths. The ops
+used to follow different policies:
 
 - the class losses checked after their gather;
 - the embedding table was read on the host on every device;
+- ``max_unpool{1,2,3}d`` let ``scatter_add`` wrap negative indices into the
+  output and caught positive ones only inside the CPU kernel;
 - ``one_hot`` and ``ctc_loss`` did not check at all.
 
 As a result, ``one_hot([0, 7], 3)`` gave a zero row for the 7, and
@@ -21,7 +23,8 @@ The rule this file holds every consumer to, in the table ``ROWS``:
   dispatches only the guard's reads of the index (``GUARD_READS``) and
   waits on no device.
 - **Metal**: the index is not read back. The class losses' sample is NaN
-  (``POISON``), ``one_hot`` gives a zero row (``ZERO_ROW``), and
+  (``POISON``), ``one_hot`` gives a zero row (``ZERO_ROW``),
+  ``max_unpool{1,2,3}d`` drops the out-of-range update (``DROP``), and
   ``embedding`` / ``embedding_bag`` give a NaN row or bag (``NAN_ROW``, or
   a zero row for an integer ``embedding`` table), with 0 host syncs on the
   table indices. ``ctc_loss`` and ``embedding_bag``'s 1-D ``offsets`` read
@@ -43,6 +46,7 @@ from types import ModuleType
 import pytest
 
 import lucid
+import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
 from lucid.nn.functional import _index_checks
@@ -87,6 +91,7 @@ GUARD_READS = frozenset(
 POISON = "poison"  # the bad sample's loss is NaN, nothing read back
 ZERO_ROW = "zero-row"  # one_hot's row is all zeros, nothing read back
 NAN_ROW = "nan-row"  # embedding / embedding_bag's row or bag is NaN, index not read
+DROP = "drop"  # max_unpool drops the out-of-range update, index not read
 READ = "read"  # read on the host and refused, as on the CPU
 REFUSE = "refuse"  # a bad parameter, refused on both devices, nothing read
 
@@ -121,7 +126,7 @@ class Row:
     metal: str
     #: The consumer's own kernels; none of them may run in a refusal.
     kernels: frozenset[str]
-    #: For POISON / ZERO_ROW: the sample or row the bad index is in.
+    #: For POISON / ZERO_ROW / DROP: the sample or row the bad index is in.
     bad: int = 1
     #: Lucid refuses what the reference computes; documented in the owner.
     stricter: bool = False
@@ -172,6 +177,51 @@ def _ctc_row(id: str, match: str, *, stricter: bool = False, **override: object)
     )
 
 
+def _unpool_rows(n: int) -> list[Row]:
+    name = f"max_unpool{n}d"
+    shape = (1, 1) + (2,) * n
+    count = 2**n
+    extent = 4**n
+    kernels = frozenset({"scatter_add", "div"})
+    rows = [
+        Row(
+            id=f"{name}-index{bad}",
+            consumer=name,
+            call=lambda d, b=bad: {
+                "input": lucid.arange(
+                    1, count + 1, dtype=lucid.float32, device=d
+                ).reshape(*shape),
+                "indices": _ids([*range(count - 1), b], d).reshape(*shape),
+                "kernel_size": 2,
+            },
+            match=rf"{name}: index {bad} is out of range for output_size .* \({extent} elements\)",
+            metal=DROP,
+            kernels=kernels,
+            bad=count - 1,
+        )
+        for bad in (extent, 999, -1, -5)
+    ]
+    rows.append(
+        Row(
+            id=f"{name}-output_size-index{3**n}",
+            consumer=name,
+            call=lambda d: {
+                "input": lucid.arange(
+                    1, count + 1, dtype=lucid.float32, device=d
+                ).reshape(*shape),
+                "indices": _ids([*range(count - 1), 3**n], d).reshape(*shape),
+                "kernel_size": 2,
+                "output_size": (3,) * n,
+            },
+            match=rf"{name}: index {3**n} is out of range for output_size .* \({3**n} elements\)",
+            metal=DROP,
+            kernels=kernels,
+            bad=count - 1,
+        )
+    )
+    return rows
+
+
 ROWS: list[Row] = [
     *_class_rows("cross_entropy", frozenset({"log_softmax", "gather"})),
     *_class_rows("nll_loss", frozenset({"gather"})),
@@ -200,6 +250,9 @@ ROWS: list[Row] = [
         kernels=frozenset({"scatter_add", "relu"}),
         per_sample={"reduction": "none"},
     ),
+    *_unpool_rows(1),
+    *_unpool_rows(2),
+    *_unpool_rows(3),
     *[
         Row(
             id=f"one_hot-class{bad}",
@@ -449,6 +502,10 @@ def test_metal_follows_the_documented_policy(row: Row) -> None:
             if i != row.bad
             for v in r
         )
+    elif row.metal == DROP:
+        values = _flat(out.tolist())
+        assert values[: row.bad] == [float(i) for i in range(1, row.bad + 1)]
+        assert all(v == 0.0 for v in values[row.bad :])
     else:
         rows = out.tolist()
         assert isinstance(rows, list)
@@ -494,6 +551,15 @@ def test_the_ends_of_every_axis_are_taken(device: str) -> None:
         1,
         3,
     )
+    for n in (1, 2, 3):
+        shape = (1, 1) + (2,) * n
+        count, extent = 2**n, 4**n
+        vals = lucid.arange(1, count + 1, dtype=lucid.float32, device=device).reshape(
+            *shape
+        )
+        ends = _ids([0, *range(1, count - 1), extent - 1], device).reshape(*shape)
+        unpooled = _flat(getattr(F, f"max_unpool{n}d")(vals, ends, 2).tolist())
+        assert unpooled[0] == 1.0 and unpooled[-1] == float(count)
     full = F.ctc_loss(
         _log_probs(device),
         _ids([[1, C - 1], [2, 3]], device),
@@ -512,6 +578,36 @@ def test_an_empty_index_has_nothing_to_check(device: str) -> None:
     empty = lucid.zeros(0, dtype=lucid.int64, device=device)
     assert F.one_hot(empty, 3).shape == (0, 3)
     assert F.embedding(empty, _table(device)).shape == (0, 3)
+    for n in (1, 2, 3):
+        shape = (0, 1) + (2,) * n
+        vals = lucid.zeros(*shape, dtype=lucid.float32, device=device)
+        idx = lucid.zeros(*shape, dtype=lucid.int64, device=device)
+        assert getattr(F, f"max_unpool{n}d")(vals, idx, 2).shape == (0, 1) + (4,) * n
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_max_unpool_modules_follow_the_same_rule(device: str, n: int) -> None:
+    cls = getattr(nn, f"MaxUnpool{n}d")
+    mod = cls(kernel_size=2)
+    shape = (1, 1) + (2,) * n
+    count, extent = 2**n, 4**n
+    vals = lucid.arange(1, count + 1, dtype=lucid.float32, device=device).reshape(
+        *shape
+    )
+    for bad in (-5, extent):
+        idx = _ids([*range(count - 1), bad], device).reshape(*shape)
+        if device == "cpu":
+            with pytest.raises(
+                IndexError, match=rf"max_unpool{n}d: index {bad} is out of range"
+            ):
+                mod(vals, idx)
+        else:
+            syncs = _C_engine.host_sync_count()
+            out = mod(vals, idx)
+            assert _C_engine.host_sync_count() == syncs
+            flat_out = _flat(out.tolist())
+            assert flat_out[: count - 1] == [float(i) for i in range(1, count)]
+            assert all(v == 0.0 for v in flat_out[count - 1 :])
 
 
 def test_check_embedding_indices_is_the_same_rule(device: str) -> None:

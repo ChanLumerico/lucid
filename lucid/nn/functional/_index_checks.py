@@ -5,11 +5,13 @@ inside the axis it indexes.
 Every ``nn.functional`` op that reads with an integer index is checked
 here, before the gather or kernel that would read with it. That covers a
 class target of a class-index loss, a ``one_hot`` class, an embedding row,
-and ``ctc_loss``'s labels, ``blank`` and sequence lengths. Each used to have
-a policy of its own:
+``max_unpool{1,2,3}d``'s flat spatial indices, and ``ctc_loss``'s labels,
+``blank`` and sequence lengths. Each used to have a policy of its own:
 
 - the class-index losses checked after their gather;
 - the embedding table was read on the host on every device;
+- ``max_unpool{1,2,3}d`` let ``scatter_add`` wrap negative indices into the
+  output and caught positive ones only inside the CPU kernel;
 - ``one_hot`` and ``ctc_loss`` did not check at all.
 
 As a result, ``one_hot`` quietly gave a zero row for a class past the end,
@@ -338,6 +340,61 @@ def _check_table(x: Tensor, weight: Tensor, op: str) -> None:
         what="index",
         axis=f"a table with {rows} entries",
     )
+
+
+def _check_unpool(
+    x: Tensor,
+    indices: Tensor,
+    output_spatial: tuple[int, ...],
+    op: str,
+) -> tuple[Tensor, int]:
+    """Check the flat spatial ``indices`` and ``output_spatial`` extents of
+    ``max_unpool{1,2,3}d``, before its ``scatter_add``.
+
+    ``indices`` must match ``x`` in shape, hold integer values, and address
+    positions in ``[0, prod(output_spatial))``.  ``scatter_add`` wraps a
+    negative index ``[-extent, 0)`` into the axis on both devices, so a
+    negative ``indices`` entry used to write into the tail of the output
+    silently, and a positive one past the end only failed inside
+    ``cpu_backend::scatter_add``.  Here a CPU entry outside
+    ``[0, spatial_numel)`` raises ``IndexError`` before any buffer is
+    allocated, and a Metal negative entry is mapped on device to
+    ``spatial_numel`` so ``scatter_add`` drops it alongside entries
+    ``>= spatial_numel`` without a host sync.
+    """
+    if x.shape != indices.shape:
+        raise ValueError(
+            f"{op}: expected input and indices shapes to match, got "
+            f"{tuple(int(d) for d in x.shape)} vs {tuple(int(d) for d in indices.shape)}"
+        )
+    spatial_numel = 1
+    for extent in output_spatial:
+        if int(extent) <= 0:
+            raise ValueError(
+                f"{op}: output_size must be positive in every dimension, "
+                f"got {tuple(int(v) for v in output_spatial)}"
+            )
+        spatial_numel *= int(extent)
+    if indices.dtype not in (_lucid.int8, _lucid.int16, _lucid.int32, _lucid.int64):
+        raise TypeError(
+            f"{op}: indices must be an integer tensor, got {indices.dtype}; "
+            f"cast with .to(lucid.int64) first"
+        )
+    _check_indices(
+        indices,
+        spatial_numel,
+        op,
+        what="index",
+        axis=f"output_size {output_spatial} ({spatial_numel} elements)",
+    )
+    idx = (
+        indices
+        if indices.dtype in (_lucid.int32, _lucid.int64)
+        else indices.to(dtype=_lucid.int64)
+    )
+    if idx.device != "cpu" and idx.numel() > 0:
+        idx = _lucid.where(idx < 0, spatial_numel, idx)
+    return idx, spatial_numel
 
 
 def _padding_index(padding_idx: int | None, weight: Tensor, op: str) -> int | None:

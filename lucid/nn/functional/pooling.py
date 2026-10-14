@@ -5,6 +5,7 @@ nn.functional pooling operations.
 from typing import Literal, TYPE_CHECKING, overload
 
 import lucid as _lucid
+from lucid.nn.functional._index_checks import _check_unpool
 from lucid.nn.functional._pool_core import (
     _adaptive_max_pool,
     _adaptive_pool,
@@ -1099,7 +1100,7 @@ def lp_pool3d(
 
 def _scatter_unpool(
     x: Tensor,
-    indices: Tensor,
+    checked: tuple[Tensor, int],
     output_spatial: tuple[int, ...],
     n_spatial: int,
 ) -> Tensor:
@@ -1113,46 +1114,14 @@ def _scatter_unpool(
     carries the gradient back to ``x``; an index that overlapping windows
     repeat is written once, not summed, as the reference does.
     """
-    if x.shape != indices.shape:
-        raise ValueError(
-            f"max_unpool: expected input and indices shapes to match, got "
-            f"{tuple(x.shape)} vs {tuple(indices.shape)}"
-        )
-    # Every spatial extent has to be a positive integer.
-    #
-    # These went straight into an allocation.  ``output_size`` is
-    # annotated ``tuple[int, ...]`` and anything indexable satisfies that
-    # at runtime, so a tensor passed by mistake was read element-wise,
-    # ``int(-1.0)`` became a spatial extent of ``-1``, and the engine
-    # allocated from it — SIGSEGV, with no Python-level error to catch.
-    # A wrong argument has to raise; it must not take the process down.
-    for extent in output_spatial:
-        if int(extent) <= 0:
-            raise ValueError(
-                f"max_unpool: output_size must be positive in every dimension, "
-                f"got {tuple(int(v) for v in output_spatial)}"
-            )
-    leading = list(x.shape[:-n_spatial])
-    spatial_numel = 1
-    for s in output_spatial:
-        spatial_numel *= int(s)
-    out_flat_shape = leading + [spatial_numel]
-    zeros = _lucid.zeros(*out_flat_shape, dtype=x.dtype, device=x.device)
-
-    # Flatten the trailing spatial dims of ``x`` and ``indices`` so that
-    # ``scatter_add`` works on a single 1-D axis.
-    leading + [
-        (
-            int(x.shape[-n_spatial:].numel())  # type: ignore[attr-defined]
-            if hasattr(x.shape[-n_spatial:], "numel")
-            else 1
-        )
-    ]
+    idx, spatial_numel = checked
+    leading = [int(s) for s in x.shape[:-n_spatial]]
+    zeros = _lucid.zeros(*leading, spatial_numel, dtype=x.dtype, device=x.device)
     flat_count = 1
     for s in x.shape[-n_spatial:]:
         flat_count *= int(s)
     x_flat = x.reshape(*leading, flat_count)
-    idx_flat = indices.reshape(*leading, flat_count)
+    idx_flat = idx.reshape(*leading, flat_count)
 
     summed = zeros.scatter_add(-1, idx_flat, x_flat)
     # Overlapping windows can report the same element, so an index can
@@ -1240,8 +1209,10 @@ def max_unpool1d(
     """
     if output_size is None:
         output_size = _unpool_default_size(input, kernel_size, stride, padding, 1)
-    spatial = output_size[-1:] if len(output_size) > 1 else (output_size[0],)
-    return _scatter_unpool(input, indices, tuple(int(s) for s in spatial), n_spatial=1)
+    spatial = tuple(int(s) for s in output_size[-1:])
+    return _scatter_unpool(
+        input, _check_unpool(input, indices, spatial, "max_unpool1d"), spatial, 1
+    )
 
 
 def max_unpool2d(
@@ -1302,7 +1273,9 @@ def max_unpool2d(
     if output_size is None:
         output_size = _unpool_default_size(input, kernel_size, stride, padding, 2)
     spatial = tuple(int(s) for s in output_size[-2:])
-    return _scatter_unpool(input, indices, spatial, n_spatial=2)
+    return _scatter_unpool(
+        input, _check_unpool(input, indices, spatial, "max_unpool2d"), spatial, 2
+    )
 
 
 def max_unpool3d(
@@ -1362,7 +1335,9 @@ def max_unpool3d(
     if output_size is None:
         output_size = _unpool_default_size(input, kernel_size, stride, padding, 3)
     spatial = tuple(int(s) for s in output_size[-3:])
-    return _scatter_unpool(input, indices, spatial, n_spatial=3)
+    return _scatter_unpool(
+        input, _check_unpool(input, indices, spatial, "max_unpool3d"), spatial, 3
+    )
 
 
 @overload
