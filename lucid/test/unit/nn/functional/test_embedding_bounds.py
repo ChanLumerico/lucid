@@ -1,17 +1,16 @@
-"""``embedding`` must reject out-of-range indices instead of reading past the table.
+"""``embedding`` and ``embedding_bag`` isolate or refuse out-of-range indices instead of reading past the table.
 
 Found 2026-07-26 while sweeping the model zoo on Metal: feeding a model an
 index tensor it did not expect killed the process with SIGSEGV rather than
-raising.  The engine gather does no bounds checking, so an out-of-range index
-read whatever followed the table — **zeros for a small overrun**, which is the
-dangerous case, since a wrong ``vocab_size`` or an unclamped token id then
-trains silently on empty embeddings; and a segfault once the offset is large.
+being caught.  Before the engine bounds contract (LCD-228 / LCD-283), the
+engine gather did no bounds checking, so an out-of-range index read whatever
+followed the table — **zeros for a small overrun**, which is the dangerous
+case, since a wrong ``vocab_size`` or an unclamped token id then trained
+silently on empty embeddings; and a segfault once the offset was large.
 
-This also explains an intermittent failure seen earlier in the same session:
-``test_models_bert.py::test_causal_mask_prevents_leak`` fed token id 80 to a
-model with ``vocab_size=64``.  The out-of-bounds read returned whatever the
-allocator happened to be holding, so the assertion passed or failed depending
-on unrelated allocation state.  The ids are now in range and the flake is gone.
+CPU refuses an out-of-range index with ``IndexError`` before the gather runs;
+Metal isolates it inside the gather (Policy B: NaN row for a floating table,
+with zero host syncs).
 """
 
 import numpy as np
@@ -20,12 +19,25 @@ import pytest
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+from lucid._C import engine as _C_engine
 
 DEVICES = ["cpu", "metal"]
 
 
 def _ids(values, device):
     return lucid.tensor(np.array(values, dtype=np.int64), device=device)
+
+
+def _check_out_of_range(device, fn, *, bad_pos=0):
+    if device == "cpu":
+        with pytest.raises(IndexError, match="out of range"):
+            fn()
+        return
+    syncs = _C_engine.host_sync_count()
+    out = fn()
+    assert _C_engine.host_sync_count() == syncs
+    rows = out.numpy().reshape(-1, out.shape[-1])
+    assert np.isnan(rows[bad_pos]).all()
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -44,8 +56,8 @@ def test_in_range_lookup_matches_the_table(device):
 def test_index_at_or_above_num_embeddings_raises(device, bad):
     lucid.manual_seed(0)
     emb = nn.Embedding(10, 4).to(device)
-    with pytest.raises(IndexError, match="out of range"):
-        emb(_ids([bad], device))
+    ids = _ids([bad], device)
+    _check_out_of_range(device, lambda: emb(ids))
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -53,8 +65,8 @@ def test_index_at_or_above_num_embeddings_raises(device, bad):
 def test_negative_index_raises(device, bad):
     lucid.manual_seed(0)
     emb = nn.Embedding(10, 4).to(device)
-    with pytest.raises(IndexError, match="out of range"):
-        emb(_ids([bad], device))
+    ids = _ids([bad], device)
+    _check_out_of_range(device, lambda: emb(ids))
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -63,8 +75,8 @@ def test_boundary_index_is_accepted(device):
     lucid.manual_seed(0)
     emb = nn.Embedding(10, 4).to(device)
     assert emb(_ids([9], device)).shape == (1, 4)
-    with pytest.raises(IndexError):
-        emb(_ids([10], device))
+    ids = _ids([10], device)
+    _check_out_of_range(device, lambda: emb(ids))
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -72,8 +84,8 @@ def test_functional_embedding_checks_too(device):
     lucid.manual_seed(0)
     table = lucid.randn(6, 3).to(device)
     assert F.embedding(_ids([[0, 5]], device), table).shape == (1, 2, 3)
-    with pytest.raises(IndexError, match="out of range"):
-        F.embedding(_ids([[0, 6]], device), table)
+    ids = _ids([[0, 6]], device)
+    _check_out_of_range(device, lambda: F.embedding(ids, table), bad_pos=1)
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -125,8 +137,8 @@ def test_embedding_bag_in_range(device):
 def test_embedding_bag_rejects_out_of_range(device, bad):
     lucid.manual_seed(0)
     bag = nn.EmbeddingBag(10, 4).to(device)
-    with pytest.raises(IndexError, match="out of range"):
-        bag(_ids([[0, 1, bad]], device))
+    ids = _ids([[0, 1, bad]], device)
+    _check_out_of_range(device, lambda: bag(ids))
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -134,5 +146,5 @@ def test_functional_embedding_bag_rejects_out_of_range(device):
     lucid.manual_seed(0)
     table = lucid.randn(6, 3).to(device)
     assert F.embedding_bag(_ids([[0, 5]], device), table).shape == (1, 3)
-    with pytest.raises(IndexError, match="out of range"):
-        F.embedding_bag(_ids([[0, 6]], device), table)
+    ids = _ids([[0, 6]], device)
+    _check_out_of_range(device, lambda: F.embedding_bag(ids, table))
