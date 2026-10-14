@@ -48,9 +48,10 @@ def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
         pass a range check trivially and then be read by the gather as
         integer bits.
     IndexError
-        If any index is negative or ``>= weight.shape[0]``.  On a Metal
-        ``x`` this reads the indices on the host for now: the engine does
-        not yet isolate an out-of-range row inside the gather itself.
+        If a CPU ``x`` holds an index that is negative or
+        ``>= weight.shape[0]``.  A Metal ``x`` is not read back: the
+        engine's gather isolates an out-of-range row on device (NaN for a
+        floating table, 0 for an integer one).
 
     Examples
     --------
@@ -93,10 +94,10 @@ def embedding(
     ----------
     x : Tensor
         Integer index tensor of arbitrary shape ``(*)``, with entries in
-        ``[0, num_embeddings)``.  An entry outside that range raises
-        ``IndexError`` before the lookup (see
-        :func:`check_embedding_indices`), and a float tensor raises
-        ``TypeError``.
+        ``[0, num_embeddings)``.  A CPU entry outside that range raises
+        ``IndexError`` before the lookup and a Metal one is isolated in
+        the gather (see :func:`check_embedding_indices`); a float tensor
+        raises ``TypeError``.
     weight : Tensor
         Embedding table of shape ``(num_embeddings, embedding_dim)``.
     padding_idx : int, optional

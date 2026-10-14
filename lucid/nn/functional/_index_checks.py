@@ -40,16 +40,17 @@ inside the graph instead, and never reaches memory outside its buffer:
   factor NaN (:func:`_poison`). A bad label then makes the loss NaN,
   rather than being scored as class ``0`` or ``C - 1``.
 - The engine's index kernels clamp and mask the rest: a float gather
-  reads NaN, an integer gather reads 0, a scatter drops the update, and
-  ``one_hot`` gives a zero row.
+  (``embedding`` and ``embedding_bag`` included) reads NaN, an integer
+  gather reads 0, a scatter drops the update, and ``one_hot`` gives a
+  zero row.
 
 Two consumers read on Metal anyway, each for its own reason:
 
 - ``ctc_loss`` runs its recursions on the CPU, so its labels and lengths
   make the round trip regardless.
-- ``embedding`` and ``embedding_bag`` keep their host read until the
-  engine isolates the table gather. Until then, an index far past the
-  table reads past it.
+- ``embedding_bag``'s 1-D ``offsets`` (:func:`_check_offsets`) are bag
+  boundaries (starting at 0 and never decreasing) that its backward walks
+  on the CPU.
 
 ``ctc_loss`` is stricter than the reference in two places:
 
@@ -281,20 +282,16 @@ def _check_indices(
     *,
     what: str,
     axis: str,
-    read_on_metal: bool = False,
 ) -> None:
     """Refuse an entry of ``index`` outside ``[0, extent)`` with
     ``IndexError``, before the consumer reads with it.
 
     The message is ``"<op>: <what> <v> is out of range for <axis> (valid
-    range [0, extent - 1])"``. A Metal ``index`` is checked only with
-    ``read_on_metal``, for the two consumers the module docstring names;
-    any other Metal consumer is isolated in the graph and not read back.
-    An empty ``index`` has nothing to check.
+    range [0, extent - 1])"``. A Metal ``index`` is isolated in the graph
+    and not read back (see the module docstring). An empty ``index`` has
+    nothing to check.
     """
-    if index.numel() == 0:
-        return
-    if index.device != "cpu" and not read_on_metal:
+    if index.numel() == 0 or index.device != "cpu":
         return
     index, usable = _host_read(lambda: _guard(index, extent))
     _refuse(
@@ -324,9 +321,9 @@ def _check_table(x: Tensor, weight: Tensor, op: str) -> None:
     A float ``x`` raises ``TypeError``. It would pass the range check
     trivially, since its values sit in ``[0, 1)``, and the engine gather
     would then read its bits as integers: ``F.embedding(float_tensor,
-    weight)`` used to end in a segmentation fault. An index outside
-    ``[0, num_embeddings)`` raises ``IndexError``, on both devices for now
-    (see the module docstring).
+    weight)`` used to end in a segmentation fault. A CPU index outside
+    ``[0, num_embeddings)`` raises ``IndexError``; a Metal one is isolated
+    in the table gather (see the module docstring).
     """
     if x.dtype not in _TABLE_INDEX_DTYPES:
         raise TypeError(
@@ -340,7 +337,6 @@ def _check_table(x: Tensor, weight: Tensor, op: str) -> None:
         op,
         what="index",
         axis=f"a table with {rows} entries",
-        read_on_metal=True,
     )
 
 
@@ -370,8 +366,8 @@ def _check_offsets(offsets: Tensor, length: int, op: str) -> None:
     in ``[0, length]``.  A boundary past the end, which the kernel read past
     the indices for, raises ``IndexError``.  A first boundary that is not 0,
     or one that goes backwards, raises ``ValueError``.  Both used to be
-    scored silently.  ``offsets`` is read on the host, like the table indices
-    beside it (see the module docstring).
+    scored silently.  ``offsets`` is read on the host on both devices (see
+    the module docstring).
     """
     if offsets.ndim != 1:
         raise ValueError(

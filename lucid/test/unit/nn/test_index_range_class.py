@@ -21,11 +21,12 @@ The rule this file holds every consumer to, in the table ``ROWS``:
   dispatches only the guard's reads of the index (``GUARD_READS``) and
   waits on no device.
 - **Metal**: the index is not read back. The class losses' sample is NaN
-  (``POISON``) and ``one_hot`` gives a zero row (``ZERO_ROW``), with 0
-  host syncs. ``ctc_loss`` reads on the host anyway (``READ``), because
-  its kernel round-trips through the CPU. So, for now, do ``embedding`` and
-  ``embedding_bag``: until the engine isolates the table gather (LCD-228),
-  an index far past the table would read past it.
+  (``POISON``), ``one_hot`` gives a zero row (``ZERO_ROW``), and
+  ``embedding`` / ``embedding_bag`` give a NaN row or bag (``NAN_ROW``, or
+  a zero row for an integer ``embedding`` table), with 0 host syncs on the
+  table indices. ``ctc_loss`` and ``embedding_bag``'s 1-D ``offsets`` read
+  on the host anyway (``READ``), because their kernels or backwards walk
+  those boundaries on the CPU.
 
 Under ``-m parity`` the reference is checked to refuse the same rows,
 except for the two places where Lucid is deliberately stricter (marked
@@ -85,6 +86,7 @@ GUARD_READS = frozenset(
 #: Metal policies.
 POISON = "poison"  # the bad sample's loss is NaN, nothing read back
 ZERO_ROW = "zero-row"  # one_hot's row is all zeros, nothing read back
+NAN_ROW = "nan-row"  # embedding / embedding_bag's row or bag is NaN, index not read
 READ = "read"  # read on the host and refused, as on the CPU
 REFUSE = "refuse"  # a bad parameter, refused on both devices, nothing read
 
@@ -215,7 +217,7 @@ ROWS: list[Row] = [
             consumer="embedding",
             call=lambda d, b=bad: {"x": _ids([[0, b]], d), "weight": _table(d)},
             match=f"embedding: index {bad} is out of range for a table with 4",
-            metal=READ,
+            metal=NAN_ROW,
             kernels=frozenset({"embedding"}),
         )
         for bad in (C, -1, 10**6)
@@ -225,18 +227,23 @@ ROWS: list[Row] = [
             id=f"embedding_bag-{form}-index{bad}",
             consumer="embedding_bag",
             call=(
-                (lambda d, b=bad: {"x": _ids([[0, b]], d), "weight": _table(d)})
+                (
+                    lambda d, b=bad: {
+                        "x": _ids([[0, 1], [0, b]], d),
+                        "weight": _table(d),
+                    }
+                )
                 if form == "rows"
                 else (
                     lambda d, b=bad: {
-                        "x": _ids([0, b, 1], d),
+                        "x": _ids([0, 1, b], d),
                         "weight": _table(d),
                         "offsets": _ids([0, 2], d),
                     }
                 )
             ),
             match=f"embedding_bag: index {bad} is out of range for a table with 4",
-            metal=READ,
+            metal=NAN_ROW,
             kernels=frozenset({"embedding_bag", "embedding"}),
         )
         for bad in (C, -1)
@@ -418,9 +425,12 @@ def test_metal_follows_the_documented_policy(row: Row) -> None:
             assert _C_engine.host_sync_count() == syncs, "read back on Metal"
         return
     kwargs, again = row.call("metal"), row.call("metal")
+    # 1-D embedding_bag's offsets are read on the host (_check_offsets);
+    # the table indices themselves are never read back.
+    expected_syncs = 1 if "offsets" in kwargs else 0
     syncs = _C_engine.host_sync_count()
     out = fn(**kwargs, **row.per_sample)
-    assert _C_engine.host_sync_count() == syncs, "read back on Metal"
+    assert _C_engine.host_sync_count() - syncs == expected_syncs, "read back on Metal"
     if row.metal == POISON:
         values = _flat(out.tolist())
         assert math.isnan(values[row.bad])
@@ -429,11 +439,31 @@ def test_metal_follows_the_documented_policy(row: Row) -> None:
         mean = fn(**again)
         assert _C_engine.host_sync_count() == syncs, "read back on Metal"
         assert math.isnan(float(mean.item()))
+    elif row.metal == NAN_ROW:
+        rows = out.reshape(-1, 3).tolist()
+        assert isinstance(rows, list)
+        assert all(isinstance(v, float) and math.isnan(v) for v in rows[row.bad])
+        assert all(
+            isinstance(v, float) and math.isfinite(v)
+            for i, r in enumerate(rows)
+            if i != row.bad
+            for v in r
+        )
     else:
         rows = out.tolist()
         assert isinstance(rows, list)
         assert rows[row.bad] == [0, 0, 0]
         assert rows[0] == [1, 0, 0]
+
+
+@_needs_metal
+def test_metal_embedding_integer_table_reads_zero_out_of_range() -> None:
+    table = (lucid.arange(12, dtype=lucid.int32).reshape(C, 3) + 10).to("metal")
+    ids = _ids([[0, C]], "metal")
+    syncs = _C_engine.host_sync_count()
+    out = F.embedding(ids, table)
+    assert _C_engine.host_sync_count() == syncs
+    assert out.tolist() == [[[10, 11, 12], [0, 0, 0]]]
 
 
 # ── what is not refused ────────────────────────────────────────────────────
@@ -484,14 +514,20 @@ def test_an_empty_index_has_nothing_to_check(device: str) -> None:
     assert F.embedding(empty, _table(device)).shape == (0, 3)
 
 
-def test_check_embedding_indices_is_the_same_rule() -> None:
+def test_check_embedding_indices_is_the_same_rule(device: str) -> None:
     # Kept under its released name; it is the owner's table check.
-    table = _table("cpu")
-    check_embedding_indices(_ids([0, 3], "cpu"), table, "lookup")
-    with pytest.raises(IndexError, match="lookup: index 4 is out of range"):
-        check_embedding_indices(_ids([4], "cpu"), table, "lookup")
+    table = _table(device)
+    check_embedding_indices(_ids([0, 3], device), table, "lookup")
+    if device == "cpu":
+        with pytest.raises(IndexError, match="lookup: index 4 is out of range"):
+            check_embedding_indices(_ids([4], device), table, "lookup")
+    else:
+        bad = _ids([4], device)
+        syncs = _C_engine.host_sync_count()
+        check_embedding_indices(bad, table, "lookup")
+        assert _C_engine.host_sync_count() == syncs
     with pytest.raises(TypeError, match="lookup: indices must be an integer"):
-        check_embedding_indices(lucid.tensor([0.5]), table, "lookup")
+        check_embedding_indices(lucid.tensor([0.5], device=device), table, "lookup")
 
 
 # ── ctc_loss: shapes the kernel would read past ────────────────────────────
