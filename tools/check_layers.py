@@ -78,50 +78,62 @@ def _file_module(path: Path) -> str:
     return ".".join(parts)
 
 
-def check() -> int:
+# Imports that are explicitly allowed even if they cross layer boundaries.
+# Format: frozenset of (source_prefix, import_module) pairs.
+ALLOWED_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Optimizers legitimately need Parameter (it's a base type, not a module)
+        ("lucid.optim", "lucid.nn.parameter"),
+    }
+)
+
+
+def check_python_layers(lucid_dir: Path = LUCID) -> list[str]:
     violations: list[str] = []
 
-    for py_file in sorted(LUCID.rglob("*.py")):
+    for py_file in sorted(lucid_dir.rglob("*.py")):
         if "__pycache__" in py_file.parts:
             continue
 
         mod = _file_module(py_file)
 
-        # Imports that are explicitly allowed even if they cross layer boundaries.
-    # Format: frozenset of (source_prefix, import_module) pairs.
-    ALLOWED_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
-        {
-            # Optimizers legitimately need Parameter (it's a base type, not a module)
-            ("lucid.optim", "lucid.nn.parameter"),
-        }
-    )
+        for src_prefix, forbidden in RULES:
+            if not (mod == src_prefix or mod.startswith(src_prefix + ".")):
+                continue
+            for imp in _get_runtime_imports(py_file):
+                for forbidden_prefix in forbidden:
+                    if not (
+                        imp == forbidden_prefix or imp.startswith(forbidden_prefix + ".")
+                    ):
+                        continue
+                    if (src_prefix, imp) in ALLOWED_EXCEPTIONS:
+                        continue
+                    violations.append(
+                        f"  {mod} → {imp}  "
+                        f"(forbidden: {src_prefix} must not import {forbidden_prefix})"
+                    )
+    return violations
 
-    for src_prefix, forbidden in RULES:
-        if not (mod == src_prefix or mod.startswith(src_prefix + ".")):
-            continue
-        for imp in _get_runtime_imports(py_file):
-            for forbidden_prefix in forbidden:
-                if not (
-                    imp == forbidden_prefix or imp.startswith(forbidden_prefix + ".")
-                ):
-                    continue
-                # Check exceptions
-                if (src_prefix, imp) in ALLOWED_EXCEPTIONS:
-                    continue
-                violations.append(
-                    f"  {mod} → {imp}  "
-                    f"(forbidden: {src_prefix} must not import {forbidden_prefix})"
-                )
 
+def check() -> int:
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import check_cpp_layers
+
+    violations = check_python_layers()
+    py_rc = 0
     if violations:
         print("[check_layers] Forbidden layer imports found:")
         for v in violations:
             print(v)
         print(f"\n[check_layers] {len(violations)} violation(s).")
-        return 1
+        py_rc = 1
+    else:
+        print(f"[check_layers] all layer imports OK ({len(RULES)} rules checked)")
 
-    print(f"[check_layers] all layer imports OK ({len(RULES)} rules checked)")
-    return 0
+    cpp_rc = check_cpp_layers.check()
+    return 1 if (py_rc or cpp_rc) else 0
 
 
 if __name__ == "__main__":
