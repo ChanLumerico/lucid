@@ -401,6 +401,8 @@ class Optimizer:
             for group in self.param_groups:
                 self._bind_engine_optim(group)
             self._group_hparams = hparams
+            if not self._LIVE_STATE and self.state:
+                self._load_engine_state(self.state)
         else:
             self._rebind_replaced_params()
             self._sync_group_hyperparams()
@@ -717,7 +719,7 @@ class Optimizer:
         model converted afterwards then needs a rebuild at the first step.
         """
         if not self._engines_built:
-            return {}
+            return self.state
         out: dict[int, dict[str, object]] = {}
         flat_idx: int = 0
         for group, eng in zip(self.param_groups, self._engine_optims, strict=True):
@@ -831,7 +833,32 @@ class Optimizer:
                     continue
                 g_new[k] = v
         loaded_state: dict[int, dict[str, object]] = state_dict.get("state", {})  # type: ignore[assignment]
+        self._load_state(loaded_state)
         if not self._LIVE_STATE:
             self.state = loaded_state
-        self._load_state(loaded_state)
         self._sync_hyperparams()
+
+    @override
+    def __getstate__(self) -> dict[str, object]:
+        """Snapshot engine state into ``self.state`` and drop live engine handles.
+
+        C++ engine optimizers hold raw ``TensorImpl`` pointers and cannot be
+        pickled directly.  Synchronising ``self.state`` first and clearing
+        ``_engines`` / ``_engine_binds`` / ``_engines_built`` in the returned
+        dict lets ``pickle`` and ``copy.deepcopy`` serialise only Python state
+        while leaving the source optimizer's live engines untouched; the next
+        :meth:`step` on the restored instance rebuilds its engines over the
+        restored parameters and reloads ``self.state`` into them.
+        """
+        if not self._LIVE_STATE and self._engines_built:
+            self.state = self._save_engine_state()
+        state = dict(self.__dict__)
+        state["_engines"] = []
+        state["_engine_binds"] = []
+        state["_engines_built"] = False
+        return state
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        """Restore pickled or deep-copied optimizer state; engines rebuild lazily."""
+        self.__dict__.update(state)
+
