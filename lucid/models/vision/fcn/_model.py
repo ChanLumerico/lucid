@@ -386,7 +386,7 @@ class FCNForSemanticSegmentation(SemanticSegmentationModel):
         iW = int(x.shape[3])
 
         # Backbone: (B, c4, H/8, W/8) and (B, c5, H/8, W/8)
-        c4, c5 = self.backbone.forward(x)
+        c4, c5 = self.backbone(x)
 
         # Main head
         main_feat: Tensor = self.classifier(c5)

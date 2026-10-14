@@ -400,9 +400,9 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         inside = ((t >= low) & (t <= high)).float().reshape(-1, 1, 1, 1)
 
         with lucid.no_grad():
-            uncond = self.mean_flow.forward(z, t, t, None).sample
+            uncond = self.mean_flow(z, t, t, None).sample
             cond = (
-                self.mean_flow.forward(z, t, t, labels).sample
+                self.mean_flow(z, t, t, labels).sample
                 if labels is not None
                 else uncond
             )
@@ -463,7 +463,7 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         # ``jvp`` differentiates a function of tensors to a tensor, so the
         # field hands it the prediction, not the output record around it.
         def field(z_: Tensor, r_: Tensor, t_: Tensor) -> Tensor:
-            return self.mean_flow.forward(z_, r_, t_, labels).sample
+            return self.mean_flow(z_, r_, t_, labels).sample
 
         u, dudt = lucid.func.jvp(
             field,
@@ -566,6 +566,6 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
                 r_value = 1.0 - (index + 1) / steps
                 t = lucid.full((n_samples,), t_value, device=device, dtype=z.dtype)
                 r = lucid.full((n_samples,), r_value, device=device, dtype=z.dtype)
-                u = self.mean_flow.forward(z, r, t, labels).sample
+                u = self.mean_flow(z, r, t, labels).sample
                 z = z - (t_value - r_value) * u
         return GenerationOutput(samples=z)

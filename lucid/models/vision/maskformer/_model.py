@@ -247,7 +247,7 @@ class _ResNetBackbone(nn.Module):
     @override
     def forward(self, x: Tensor) -> list[Tensor]:
         x = self.embedder(x)
-        return self.encoder.forward(x)
+        return self.encoder(x)
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ class _FPNPixelDecoder(nn.Module):
 
     @override
     def forward(self, features: list[Tensor]) -> Tensor:
-        fpn_features = self.fpn.forward(features)
+        fpn_features = self.fpn(features)
         return self.mask_projection(fpn_features[-1])
 
 
@@ -517,13 +517,13 @@ class _DecoderLayer(nn.Module):
         # Self-attention (query pos added to Q + K).
         residual = hidden
         q_in = _with_pos(hidden, query_pos)
-        hidden = self.self_attn.forward(q_in, q_in, hidden)
+        hidden = self.self_attn(q_in, q_in, hidden)
         hidden = residual + self.dropout1(hidden)
         hidden = self.self_attn_layer_norm(hidden)
 
         # Cross-attention (query pos to Q, spatial pos to K, plain memory V).
         residual = hidden
-        hidden = self.encoder_attn.forward(
+        hidden = self.encoder_attn(
             _with_pos(hidden, query_pos),
             _with_pos(memory, spatial_pos),
             memory,
@@ -632,13 +632,13 @@ class _TransformerModule(nn.Module):
         hidden = lucid.zeros(query_pos.shape, device=device)
 
         # Spatial positions + flattened memory: (B, S, d)
-        pos = self._pos_embed.forward(B, h, w, device)  # (B, d, h, w)
+        pos = self._pos_embed(B, h, w, device)  # (B, d, h, w)
         spatial_pos = pos.reshape(B, c, h * w).permute(0, 2, 1)
         memory = feat.reshape(B, c, h * w).permute(0, 2, 1)
         for enc in self.encoder:
             memory = cast(Tensor, enc(memory + spatial_pos))
 
-        return self.decoder.forward(hidden, memory, spatial_pos, query_pos)
+        return self.decoder(hidden, memory, spatial_pos, query_pos)
 
 
 class _PixelLevelModule(nn.Module):
@@ -663,8 +663,8 @@ class _PixelLevelModule(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        features = self.encoder.forward(x)
-        pixel_embeddings = self.decoder.forward(features)
+        features = self.encoder(x)
+        pixel_embeddings = self.decoder(features)
         # (C5 raw backbone feature, per-pixel mask features)
         return features[-1], pixel_embeddings
 
@@ -974,13 +974,13 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
         iW = int(x.shape[3])
 
         # 1. Pixel-level module → (C5 feature, per-pixel mask embedding)
-        image_features, pixel_embeddings = self.pixel_level_module.forward(x)
+        image_features, pixel_embeddings = self.pixel_level_module(x)
         fH = int(pixel_embeddings.shape[2])
         fW = int(pixel_embeddings.shape[3])
         d = int(pixel_embeddings.shape[1])
 
         # 2. Transformer module → one (B, N, d) query tensor per decoder layer
-        hs_stages: list[Tensor] = self.transformer_module.forward(image_features)
+        hs_stages: list[Tensor] = self.transformer_module(image_features)
         hs: Tensor = hs_stages[-1]
         N = int(hs.shape[1])
 

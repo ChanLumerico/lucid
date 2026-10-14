@@ -471,7 +471,7 @@ class DiTForImageGeneration(ImageGenerationModel):
                 labels,
             )
 
-        prediction = self.dit.forward(noised, steps.float(), labels).sample
+        prediction = self.dit(noised, steps.float(), labels).sample
         noise_pred, variance = self._split(prediction)
         loss = ((noise_pred - noise) ** 2).mean()
         return DiTOutput(loss=loss, noise_pred=noise_pred, variance_pred=variance)
@@ -559,7 +559,7 @@ class DiTForImageGeneration(ImageGenerationModel):
             for index, step in enumerate(grid):
                 t = min(step, total - 1)
                 ts = lucid.full((n_samples,), float(t), device=device, dtype=z.dtype)
-                eps, _ = self._split(self.dit.forward(z, ts, labels).sample)
+                eps, _ = self._split(self.dit(z, ts, labels).sample)
 
                 alpha_bar = self.alphas_cumprod[t]
                 previous = grid[index + 1] if index + 1 < len(grid) else 0

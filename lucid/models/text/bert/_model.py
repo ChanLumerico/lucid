@@ -306,7 +306,7 @@ class _BERTAttention(nn.Module):
         head_mask: Tensor | None = None,
         output_attentions: bool = False,
     ) -> tuple[Tensor, Tensor | None]:
-        attn_out, weights = self.self.forward(
+        attn_out, weights = self.self(
             hidden,
             attention_mask=attention_mask,
             head_mask=head_mask,
@@ -367,7 +367,7 @@ class _BERTLayer(nn.Module):
         head_mask: Tensor | None = None,
         output_attentions: bool = False,
     ) -> tuple[Tensor, Tensor | None]:
-        attn_out, weights = self.attention.forward(
+        attn_out, weights = self.attention(
             hidden,
             attention_mask=attention_mask,
             head_mask=head_mask,
@@ -418,7 +418,7 @@ class _BERTEncoder(nn.Module):
                 if head_mask is not None and head_mask.ndim > 1
                 else head_mask
             )
-            hidden, weights = layer.forward(
+            hidden, weights = layer(
                 hidden,
                 attention_mask=attention_mask,
                 head_mask=layer_head_mask,
@@ -587,13 +587,13 @@ class BERTModel(PretrainedModel):
 
         ext_mask = extended_attention_mask(attention_mask, (B, T))
 
-        hidden = self.embeddings.forward(
+        hidden = self.embeddings(
             input_ids,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        sequence_output, all_hidden, all_attn = self.encoder.forward(
+        sequence_output, all_hidden, all_attn = self.encoder(
             hidden,
             attention_mask=ext_mask,
             output_hidden_states=output_hidden_states,
@@ -1482,7 +1482,7 @@ class BERTForCausalLM(LanguageModelingModel):
         ext_mask = self._causal_attention_mask(attention_mask, B, T, dev)
 
         hidden = self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
-        sequence_output, _, _ = self.bert.encoder.forward(
+        sequence_output, _, _ = self.bert.encoder(
             hidden, attention_mask=ext_mask
         )
         prediction_scores = self.cls(sequence_output)

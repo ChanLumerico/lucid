@@ -710,7 +710,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
 
         # 3. BiFPN stack
         for bifpn_layer in self.bifpn:
-            fpn_feats = cast(_BiFPNLayer, bifpn_layer).forward(fpn_feats)
+            fpn_feats = cast(_BiFPNLayer, bifpn_layer)(fpn_feats)
 
         # 4. Strides for 5 levels (P3=8, P4=16, P5=32, P6=64, P7=128)
         strides: list[tuple[int, int]] = [
@@ -722,11 +722,11 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         ]
 
         # 5. Generate anchors → list of (A_l, 4) per level
-        anchors_per_level = self._anchor_gen.forward(fpn_feats, (iH, iW), strides)
+        anchors_per_level = self._anchor_gen(fpn_feats, (iH, iW), strides)
 
         # 6. Prediction heads → per-level class / box maps
-        cls_maps = self.cls_head.forward(fpn_feats)
-        box_maps = self.box_head.forward(fpn_feats)
+        cls_maps = self.cls_head(fpn_feats)
+        box_maps = self.box_head(fpn_feats)
 
         # 7. Reshape and concatenate → (B, A_total, K) and (B, A_total, 4)
         num_anchors = len(self._cfg.anchor_scales) * len(self._cfg.anchor_ratios)

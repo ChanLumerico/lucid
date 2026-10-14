@@ -1019,10 +1019,10 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
         cfg = self._cfg
 
         # Backbone
-        p3, p4, p5 = self.backbone.forward(x)
+        p3, p4, p5 = self.backbone(x)
 
         # PANet neck
-        p3_out, p4_out, p5_out = self.neck.forward(p3, p4, p5)
+        p3_out, p4_out, p5_out = self.neck(p3, p4, p5)
 
         # Detection heads (P5→large, P4→medium, P3→small)
         p5_raw = self.p5_head(p5_out)  # (B, nA*(5+C), H/32, W/32)

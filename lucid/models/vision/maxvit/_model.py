@@ -362,7 +362,7 @@ class _PartitionAttn(nn.Module):
 
     @override
     def forward(self, x: Tensor, key_valid: Tensor | None = None) -> Tensor:
-        attended = self.attn.forward(self.norm1(x), key_valid)
+        attended = self.attn(self.norm1(x), key_valid)
         x = x + self.drop_path1(attended)
         x = x + self.drop_path2(self.mlp(self.norm2(x)))
         return x
@@ -585,7 +585,7 @@ class _MaxViTBlock(nn.Module):
         if valid_cl is not None:
             vw, _, _ = _window_partition(valid_cl, ws)
             win_valid = vw.reshape(-1, ws * ws)
-        wins_seq = self.attn_block.forward(wins_seq, win_valid)
+        wins_seq = self.attn_block(wins_seq, win_valid)
         wins = wins_seq.reshape(-1, ws, ws, C)
         x_cl = _window_reverse(wins, ws, nH, nW)  # (B, Hp, Wp, C)
 
@@ -596,7 +596,7 @@ class _MaxViTBlock(nn.Module):
         if valid_cl is not None:
             vg, _, _ = _grid_partition(valid_cl, ws)
             grid_valid = vg.reshape(-1, ws * ws)
-        grids_seq = self.attn_grid.forward(grids_seq, grid_valid)
+        grids_seq = self.attn_grid(grids_seq, grid_valid)
         grids = grids_seq.reshape(-1, ws, ws, C)
         x_cl = _grid_reverse(grids, ws, gH, gW, B)  # (B, Hp, Wp, C)
 

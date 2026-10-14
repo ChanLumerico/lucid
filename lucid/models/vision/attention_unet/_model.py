@@ -181,7 +181,7 @@ class _EncoderBlock(nn.Module):
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Returns (pooled, skip)."""
-        skip: Tensor = self.conv.forward(x)
+        skip: Tensor = self.conv(x)
         pooled: Tensor = cast(Tensor, self.pool(skip))
         return pooled, skip
 
@@ -236,7 +236,7 @@ class _DecoderBlock(nn.Module):
         # stages gate on the previous decoder output, as the reference does.
         g_src = x if gate is None else gate
         gated_skip: Tensor = (
-            skip if self.gate is None else self.gate.forward(skip, g_src)
+            skip if self.gate is None else self.gate(skip, g_src)
         )
         # The decoder's own upsample is also a fixed factor of 2, so pad it
         # up to the skip whenever the encoder's floor-division lost a row or
@@ -246,7 +246,7 @@ class _DecoderBlock(nn.Module):
         if sH != uH or sW != uW:
             x_up = F.pad(x_up, (0, sW - uW, 0, sH - uH))
         combined: Tensor = lucid.cat([x_up, gated_skip], dim=1)
-        return self.conv.forward(combined)
+        return self.conv(combined)
 
 
 # ---------------------------------------------------------------------------
@@ -426,11 +426,11 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
         skips: list[Tensor] = []
         feat = x
         for enc in self.encoders:
-            feat, skip = enc.forward(feat)
+            feat, skip = enc(feat)
             skips.append(skip)
 
         # Bottleneck
-        feat = self.bottleneck.forward(feat)
+        feat = self.bottleneck(feat)
         gating: Tensor = self.gating(feat)
 
         # Decoder path.  Deep supervision classifies every stage, so keep
@@ -440,7 +440,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
         dec_outputs: list[Tensor] = []
         for i, dec in enumerate(self.decoders):
             skip = skips[-(i + 1)]
-            feat = dec.forward(feat, skip, gating if i == 0 else None)
+            feat = dec(feat, skip, gating if i == 0 else None)
             if deep:
                 dec_outputs.append(feat)
 

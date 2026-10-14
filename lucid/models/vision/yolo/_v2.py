@@ -477,7 +477,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         Returns:
             (B, A*(5+C), H/32, W/32)
         """
-        route, feat = self.backbone.forward(x)  # (B,512,H/16,W/16), (B,1024,H/32,W/32)
+        route, feat = self.backbone(x)  # (B,512,H/16,W/16), (B,1024,H/32,W/32)
         feat = self.det1(feat)  # (B, 1024, H/32, W/32)
         feat = self.det2(feat)
 

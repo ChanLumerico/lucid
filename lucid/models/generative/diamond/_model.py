@@ -24,7 +24,7 @@ REINFORCE.  Nothing would be shared by fusing them but a checkpoint.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Literal, cast, overload, override
+from typing import ClassVar, Literal, cast, overload, override
 
 import lucid
 import lucid.nn as nn
@@ -241,7 +241,7 @@ class _ResBlock(nn.Module):
     ) -> None:
         """Initialise the block. See the class docstring for parameters."""
         super().__init__()
-        self.proj: nn.Module | None = (
+        self.proj: nn.Conv2d | None = (
             nn.Conv2d(in_channels, out_channels, 1)
             if in_channels != out_channels
             else None
@@ -253,7 +253,7 @@ class _ResBlock(nn.Module):
         # The second convolution of a residual block starts at zero too,
         # so the block is the identity on its skip at initialisation.
         init.zeros_(self.conv2.weight)
-        self.attn: nn.Module | None = (
+        self.attn: _SelfAttention2d | None = (
             _SelfAttention2d(out_channels, head_dim) if attention else None
         )
         self.act = nn.SiLU()
@@ -261,13 +261,13 @@ class _ResBlock(nn.Module):
     @override
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
         """Apply the block to ``(B, C, H, W)`` under ``cond``."""
-        residual = x if self.proj is None else cast(Tensor, self.proj(x))
+        residual = x if self.proj is None else self.proj(x)
         h = self.norm1(x, cond)
         h = self.conv1(self.act(h))
         h = self.norm2(h, cond)
         h = self.conv2(self.act(h))
         out = residual + h
-        return out if self.attn is None else cast(Tensor, self.attn(out))
+        return out if self.attn is None else self.attn(out)
 
 
 class _ResBlocks(nn.Module):
@@ -561,7 +561,7 @@ class _Denoiser(nn.Module):
         # degradations is two different conditionings.  Absent from the
         # Atari checkpoint, present in CS:GO's, exactly tracking
         # ``noise_previous_obs``.
-        self.noise_cond_emb: nn.Module | None = (
+        self.noise_cond_emb: _FourierFeatures | None = (
             _FourierFeatures(cond_dim) if config.noise_previous_obs else None
         )
         # One embedding per conditioning step, flattened back to
@@ -628,7 +628,7 @@ class _Denoiser(nn.Module):
         total = time + flat
         if self.noise_cond_emb is not None:
             level = lucid.zeros_like(c_noise) if cond_noise is None else cond_noise
-            total = total + cast(Tensor, self.noise_cond_emb(level))
+            total = total + self.noise_cond_emb(level)
         return self.cond_proj(total)
 
     @override
@@ -872,10 +872,7 @@ class _RewardEndModel(nn.Module):
                 (batch, self.config.reward_lstm_dim), device=frames.device.type
             )
             state = (zeros, zeros)
-        step = cast(
-            Callable[[Tensor, tuple[Tensor, Tensor]], tuple[Tensor, Tensor]], self.cell
-        )
-        hidden, cell = step(flat, state)
+        hidden, cell = self.cell(flat, state)
         out = self.head(hidden)
         return out[:, :3], out[:, 3:], (hidden, cell)
 
@@ -906,7 +903,7 @@ class _SimpleResBlock(nn.Module):
             nn.SiLU(),
             nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1),
         )
-        self.skip_projection: nn.Module | None = (
+        self.skip_projection: nn.Conv2d | None = (
             nn.Conv2d(in_channels, out_channels, 1)
             if in_channels != out_channels
             else None
@@ -915,9 +912,7 @@ class _SimpleResBlock(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         """Apply the block to ``(B, C, H, W)``."""
-        residual = (
-            x if self.skip_projection is None else cast(Tensor, self.skip_projection(x))
-        )
+        residual = x if self.skip_projection is None else self.skip_projection(x)
         return residual + self.f(x)
 
 
@@ -983,27 +978,10 @@ class _ActorCritic(nn.Module):
                 (batch, self.config.actor_lstm_dim), device=frame.device.type
             )
             state = (zeros, zeros)
-        step = cast(
-            Callable[[Tensor, tuple[Tensor, Tensor]], tuple[Tensor, Tensor]], self.cell
-        )
-        hidden, cell = step(flat, state)
+        hidden, cell = self.cell(flat, state)
         logits = self.actor_linear(hidden)
         value = self.critic_linear(hidden).reshape(-1)
         return logits, value, (hidden, cell)
-
-
-# ``Module.__call__`` is annotated for the common case of tensors in and a
-# tensor out, which neither of the recurrent sub-models fits: they take a
-# carried LSTM state and return one alongside their predictions.  Naming
-# the two call shapes once keeps the casts off every call site.
-_RewardEndCall = Callable[
-    [Tensor, Tensor, tuple[Tensor, Tensor] | None],
-    tuple[Tensor, Tensor, tuple[Tensor, Tensor]],
-]
-_ActorCriticCall = Callable[
-    [Tensor, tuple[Tensor, Tensor] | None],
-    tuple[Tensor, Tensor, tuple[Tensor, Tensor]],
-]
 
 
 # The decoder's upsample takes a target size rather than a second tensor,
@@ -1229,8 +1207,13 @@ class DIAMONDModel(PretrainedModel):
         >>> bool((expected.abs() <= 1).all())
         True
         """
+        if self.reward_end is None:
+            raise ValueError(
+                "this configuration has no reward/termination model "
+                "(config.with_agent=False)"
+            )
         pair = lucid.cat([frame, next_frame], dim=1)
-        return cast(_RewardEndCall, self.reward_end)(pair, action, state)
+        return self.reward_end(pair, action, state)
 
     def step_actor_critic(
         self, frame: Tensor, state: tuple[Tensor, Tensor] | None = None
@@ -1273,7 +1256,11 @@ class DIAMONDModel(PretrainedModel):
         >>> bool((carried == logits).all())
         False
         """
-        return cast(_ActorCriticCall, self.actor_critic)(frame, state)
+        if self.actor_critic is None:
+            raise ValueError(
+                "this configuration has no actor-critic (config.with_agent=False)"
+            )
+        return self.actor_critic(frame, state)
 
     def preconditioners(self, sigma: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         r"""EDM's four scalings at a noise level.

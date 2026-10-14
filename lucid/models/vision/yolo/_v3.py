@@ -991,7 +991,7 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
         int(x.shape[0])
 
         # Backbone
-        p3_raw, p4_raw, p5 = self.backbone.forward(x)
+        p3_raw, p4_raw, p5 = self.backbone(x)
 
         # P5 branch
         p5_feat = self.p5_compress(p5)  # (B, 512, H/32, W/32)
@@ -1175,7 +1175,7 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
         cfg = self._cfg
         anchors_all = self._tiny_anchors
 
-        p4_raw, p5 = self.backbone.forward(x)
+        p4_raw, p5 = self.backbone(x)
 
         p5_feat = self.p5_compress(p5)
         p5_raw_pred = self.p5_predict(p5_feat)

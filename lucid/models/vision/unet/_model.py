@@ -183,7 +183,7 @@ class _EncoderBlock(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        skip: Tensor = self.conv.forward(x)
+        skip: Tensor = self.conv(x)
         pooled: Tensor = cast(Tensor, self.pool(skip))
         return pooled, skip
 
@@ -250,7 +250,7 @@ class _DecoderBlock(nn.Module):
                 x_up = F.pad(x_up, (0, dW, 0, dH))
 
         combined: Tensor = lucid.cat([x_up, skip], dim=1)
-        return self.conv.forward(combined)
+        return self.conv(combined)
 
 
 # ---------------------------------------------------------------------------
@@ -419,14 +419,14 @@ class UNetForSemanticSegmentation(SemanticSegmentationModel):
         skips: list[Tensor] = []
         feat = x
         for enc in self.encoders:
-            feat, skip = enc.forward(feat)
+            feat, skip = enc(feat)
             skips.append(skip)
 
-        feat = self.bottleneck.forward(feat)
+        feat = self.bottleneck(feat)
 
         for i, dec in enumerate(self.decoders):
             skip = skips[-(i + 1)]
-            feat = dec.forward(feat, skip)
+            feat = dec(feat, skip)
 
         logits: Tensor = cast(Tensor, self.head(feat))
 

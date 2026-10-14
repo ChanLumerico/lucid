@@ -702,6 +702,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - validate max_unpool{1,2,3}d indices via _index_checks (LCD-279)
 
+- route submodule calls through Module.__call__ (LCD-312)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

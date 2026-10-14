@@ -709,7 +709,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
         device = feat.device.type
 
         # 2. 2-D positional encoding (B, d, H', W')
-        pos_embed = self._pos_embed.forward(B, fH, fW, device)
+        pos_embed = self._pos_embed(B, fH, fW, device)
 
         # 3. Transformer — returns (B, N, d)
         queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
