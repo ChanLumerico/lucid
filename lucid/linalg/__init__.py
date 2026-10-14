@@ -8,7 +8,7 @@ from typing import Callable, cast, final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
+from lucid._dtype import _ENGINE_TO_DTYPE, finfo as _finfo, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
 from lucid._tensor.tensor import Tensor
@@ -1945,15 +1945,28 @@ class _LogAbsDet(_AutogradFunction):
         return grad_out / d
 
 
+def _tol_tensor(val: float | Tensor, A: Tensor, dtype: lucid.dtype) -> Tensor:
+    if isinstance(val, Tensor):
+        if val.is_complex():
+            raise TypeError(
+                f"matrix_rank: tolerance tensor of complex dtype is not supported, got {val.dtype}"
+            )
+        return val.to(dtype).unsqueeze(-1)
+    return lucid.full((1,), float(val), dtype=dtype, device=A.device)
+
+
 def matrix_rank(
     A: Tensor,
-    tol: float | None = None,
+    tol: float | Tensor | None = None,
     hermitian: bool = False,
+    *,
+    atol: float | Tensor | None = None,
+    rtol: float | Tensor | None = None,
 ) -> Tensor:
-    r"""Compute the numerical rank of a matrix.
+    r"""Compute the numerical rank of a matrix or a batch of matrices.
 
-    The numerical rank is the number of singular values of :math:`A`
-    that exceed a tolerance:
+    Counts singular values (or eigenvalue magnitudes when ``hermitian=True``)
+    above :math:`\tau = \max(\text{atol},\, \sigma_{\max} \cdot \text{rtol})`:
 
     .. math::
 
@@ -1963,27 +1976,20 @@ def matrix_rank(
     ----------
     A : Tensor
         Input matrix of shape ``(*, m, n)``.
-    tol : float or None, optional
-        Threshold below which singular values are treated as zero.
-        ``None`` (default) uses :math:`\max(m, n) \cdot \varepsilon
-        \cdot \sigma_{\max}` with :math:`\varepsilon` the float32
-        machine epsilon (:math:`\approx 1.19 \times 10^{-7}`).
+    tol : float, Tensor or None, optional
+        Alias for ``atol`` with ``rtol=0``; mutually exclusive with ``atol``/``rtol``.
     hermitian : bool, optional
-        If ``True`` exploit Hermitian structure for a cheaper
-        eigen-based computation.  Currently unused (SVD path is always
-        taken).
+        If ``True``, use :func:`eigvalsh` of the lower triangle instead of :func:`svdvals`.
+    atol : float, Tensor or None, keyword-only, optional
+        Absolute tolerance (treated as ``0.0`` when ``None``).
+    rtol : float, Tensor or None, keyword-only, optional
+        Relative tolerance; defaults to :math:`\max(m, n) \cdot \varepsilon`
+        unless ``atol > 0``, in which case ``0.0``.
 
     Returns
     -------
     Tensor
-        Integer scalar (or batched scalars) holding the rank.
-
-    Notes
-    -----
-    Computed via :func:`svd` so cost is :math:`O(\min(m,n)^2 \cdot
-    \max(m,n))`.  Choosing the tolerance is application-specific —
-    consider scaling by :math:`\|A\|` when the singular values span
-    many orders of magnitude.
+        ``int64`` tensor of numerical ranks per matrix.
 
     Examples
     --------
@@ -1992,45 +1998,34 @@ def matrix_rank(
     >>> matrix_rank(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))
     tensor(1, dtype=lucid.int64)
     """
-    unsupported_if(
-        hermitian,
-        "matrix_rank",
-        "hermitian",
-        hermitian,
-        detail="The general SVD path is always used.",
-    )
-    _, S, _ = svd(A)
-    m, n = int(A.shape[-2]), int(A.shape[-1])
-    if tol is None:
-        # eps for float32 ≈ 1.19e-7; use C++ ops to compute max(sv)*max(m,n)*eps
-        # No singular values (an empty matrix) has rank 0 at any tolerance —
-        # and ``max`` of nothing is refused, having no identity.
-        largest = (
-            float(_wrap(_C_engine.max(_unwrap(S), [], False)).item())
-            if S.numel()
-            else 0.0
+    if A.ndim < 2:
+        raise ValueError(
+            f"matrix_rank: A must have at least 2 dimensions, got shape {tuple(A.shape)}"
         )
-        tol_val = largest * max(m, n) * 1.1920929e-7
-    else:
-        tol_val = float(tol)
-    S_impl = _unwrap(S)
-    thr = _C_engine.full(list(S_impl.shape), tol_val, S_impl.dtype, S_impl.device)
-    gt = _C_engine.greater(S_impl, thr)
-    # bool tensors can't be summed directly — convert via where
-    one = _C_engine.full(list(S_impl.shape), 1.0, S_impl.dtype, S_impl.device)
-    zero = _C_engine.full(list(S_impl.shape), 0.0, S_impl.dtype, S_impl.device)
-    gt_f = _C_engine.where(gt, one, zero)
-    rank = int(_wrap(_C_engine.sum(gt_f, [], False)).item())
-    # On the input's device, not unconditionally the CPU.
-    #
-    # The rank is read back to a Python int — a data-dependent output, so
-    # the round trip is the H3 carve-out and not a mistake — but the
-    # tensor built from it was tagged ``CPU`` regardless of where ``A``
-    # lived.  Handed a Metal matrix it returned a CPU scalar, and the next
-    # op raised DeviceMismatch.  Every neighbour that takes the same
-    # round trip (``det``, ``svd``, ``eigvalsh``, ``matrix_norm``) returns
-    # the input's device.
-    return _wrap(_C_engine.full([], float(rank), _C_engine.I64, _unwrap(A).device))
+    if tol is not None:
+        if atol is not None or rtol is not None:
+            raise ValueError(
+                "matrix_rank: tol cannot be specified together with atol or rtol"
+            )
+        atol, rtol = tol, 0.0
+    with lucid.no_grad():
+        sv = eigvalsh(A).abs() if hermitian else svdvals(A)
+        atol_t = _tol_tensor(0.0 if atol is None else atol, A, sv.dtype)
+        eps = float(_finfo(sv.dtype).eps)
+        default_rtol = max(int(A.shape[-2]), int(A.shape[-1])) * eps
+        if rtol is not None:
+            rtol_t = _tol_tensor(rtol, A, sv.dtype)
+        elif atol is None:
+            rtol_t = _tol_tensor(default_rtol, A, sv.dtype)
+        else:
+            zero = lucid.zeros_like(atol_t)
+            rtol_t = lucid.where(
+                atol_t > zero, zero, _tol_tensor(default_rtol, A, sv.dtype)
+            )
+        if sv.numel() == 0:
+            return lucid.zeros(tuple(A.shape[:-2]), dtype=lucid.int64, device=A.device)
+        max_sv = _wrap(_C_engine.max(_unwrap(sv), [-1], True))
+        return (sv > lucid.maximum(atol_t, max_sv * rtol_t)).sum(dim=-1)
 
 
 _COND_ORDERS: tuple[int | float | str | None, ...] = (
