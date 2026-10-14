@@ -99,6 +99,11 @@ _REFUSALS: dict[str, tuple[Callable[[], object], str, type[Exception]]] = {
         "IndexError",
         IndexError,
     ),
+    "fftn empty": (
+        lambda: lucid.fft.fftn(lucid.zeros(0)),
+        "InvalidArgument",
+        ValueError,
+    ),
 }
 
 
@@ -116,3 +121,44 @@ def test_a_device_mismatch_is_a_value_error() -> None:
         lucid.ones(2).to("metal") + lucid.ones(2)
     with pytest.raises(_C_engine.DeviceMismatch):
         lucid.ones(2).to("metal") + lucid.ones(2)
+
+
+_MLX_INVALID_ARGUMENT_REPROS: dict[str, Callable[[], object]] = {
+    "broadcast_shapes": lambda: lucid.gather(
+        lucid.zeros(2, 3, device="metal"),
+        0,
+        lucid.zeros(2, 4, dtype=lucid.int64, device="metal"),
+    ),
+    "reshape": lambda: _C_engine.nn.rotary_pos_embedding(
+        _unwrap(lucid.zeros(2, 4, 8, device="metal")),
+        _unwrap(lucid.zeros(3, dtype=lucid.int64, device="metal")),
+        True,
+    ),
+    "scatter": lambda: lucid.scatter_reduce(
+        lucid.zeros(3, dtype=lucid.int64, device="metal"),
+        0,
+        lucid.zeros(2, dtype=lucid.int64, device="metal"),
+        lucid.ones(2, dtype=lucid.int64, device="metal"),
+        reduce="amax",
+    ).tolist(),
+    "fftn": lambda: lucid.fft.fftn(lucid.zeros(0, device="metal")),
+}
+
+
+@pytest.mark.skipif(not metal_available(), reason="metal unavailable")
+@pytest.mark.parametrize("prefix", list(_MLX_INVALID_ARGUMENT_REPROS))
+def test_mlx_invalid_argument_is_translated_to_lucid_invalid_argument(
+    prefix: str,
+) -> None:
+    fn = _MLX_INVALID_ARGUMENT_REPROS[prefix]
+    with pytest.raises(_C_engine.InvalidArgument, match=rf"^\[{prefix}\]") as exc_info:
+        fn()
+    assert isinstance(exc_info.value, _C_engine.LucidError)
+    assert isinstance(exc_info.value, ValueError)
+    assert isinstance(exc_info.value, RuntimeError)
+
+
+def test_pybind_builtin_exception_stays_unwrapped() -> None:
+    with pytest.raises(TypeError) as exc_info:
+        getattr(_C_engine, "add")(1, 2)
+    assert not isinstance(exc_info.value, _C_engine.LucidError)
