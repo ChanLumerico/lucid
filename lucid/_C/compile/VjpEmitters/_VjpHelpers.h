@@ -18,6 +18,7 @@
 #include "../../core/Dtype.h"
 #include "../MpsDtype.h"
 #include "../OpEmitters/OpEmitter.h"
+#include "../OpEmitters/_AttrHelpers.h"
 #include "../TraceIR.h"
 #include "VjpEmitter.h"
 

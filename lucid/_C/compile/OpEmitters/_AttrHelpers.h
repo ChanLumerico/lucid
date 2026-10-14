@@ -253,4 +253,39 @@ promote_to_float_output(MPSGraph* g, MPSGraphTensor* x, const OpNode& node) {
     return [graph reshapeTensor:x_t withShape:tgt name:name];
 }
 
+// Return ``x`` unchanged when every padding amount in ``left`` and ``right``
+// is zero; otherwise emit the MPSGraph pad op.  All-zero pad ops lower
+// through MPSGraph's ANEC padding conversion and abort compilation on macOS 26.
+[[maybe_unused]] inline MPSGraphTensor* pad_or_identity(MPSGraph* g,
+                                                        MPSGraphTensor* x,
+                                                        NSArray<NSNumber*>* left,
+                                                        NSArray<NSNumber*>* right,
+                                                        MPSGraphPaddingMode mode,
+                                                        double value,
+                                                        NSString* name = nil) {
+    bool has_padding = false;
+    for (NSNumber* n in left) {
+        if (n.longLongValue != 0) {
+            has_padding = true;
+            break;
+        }
+    }
+    if (!has_padding) {
+        for (NSNumber* n in right) {
+            if (n.longLongValue != 0) {
+                has_padding = true;
+                break;
+            }
+        }
+    }
+    if (!has_padding)
+        return x;
+    return [g padTensor:x
+        withPaddingMode:mode
+            leftPadding:left
+           rightPadding:right
+          constantValue:value
+                   name:name];
+}
+
 }  // namespace lucid::compile

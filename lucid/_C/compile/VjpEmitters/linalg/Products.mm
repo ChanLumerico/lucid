@@ -324,14 +324,12 @@ public:
                 // g[t] sits at row t (offset ≥ 0) or column t (offset < 0).
                 const bool by_row = offset >= 0;
                 const long long span = by_row ? rows : cols;
-                MPSGraphTensor* gp = go;
-                if (len < span)
-                    gp = [g padTensor:go
-                            withPaddingMode:MPSGraphPaddingModeConstant
-                                leftPadding:@[ @0 ]
-                               rightPadding:@[ @(span - len) ]
-                              constantValue:0.0
-                                       name:nil];
+                MPSGraphTensor* gp = pad_or_identity(g,
+                                                     go,
+                                                     @[ @0 ],
+                                                     @[ @(span > len ? span - len : 0) ],
+                                                     MPSGraphPaddingModeConstant,
+                                                     0.0);
                 gp = [g reshapeTensor:gp withShape:by_row ? @[ @(rows), @1 ] : @[ @1, @(cols) ] name:nil];
                 MPSGraphTensor* dx = [g multiplicationWithPrimaryTensor:mask secondaryTensor:gp name:nil];
                 return swapped ? tr(g, dx) : dx;

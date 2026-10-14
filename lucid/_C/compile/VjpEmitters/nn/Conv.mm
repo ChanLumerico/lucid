@@ -175,17 +175,15 @@ public:
             // which is exactly the symmetric-conv weight gradient.  p is per-layer
             // so this is kernel-size-general.
             const long pT = (long)(*P)[0], pL = (long)(*P)[1];
-            MPSGraphTensor* x_dw = x;
-            if (pT > 0 || pL > 0) {
-                NSArray<NSNumber*>* lo = @[ @0, @0, @(pT), @(pL) ];
-                NSArray<NSNumber*>* hi = @[ @0, @0, @(pT), @(pL) ];
-                x_dw = [g padTensor:x
-                    withPaddingMode:MPSGraphPaddingModeConstant
-                        leftPadding:lo
-                       rightPadding:hi
-                      constantValue:0.0
-                               name:@"conv2d_vjp_dw_prepad"];
-            }
+            NSArray<NSNumber*>* lo = @[ @0, @0, @(pT), @(pL) ];
+            NSArray<NSNumber*>* hi = @[ @0, @0, @(pT), @(pL) ];
+            MPSGraphTensor* x_dw = pad_or_identity(g,
+                                                   x,
+                                                   lo,
+                                                   hi,
+                                                   MPSGraphPaddingModeConstant,
+                                                   0.0,
+                                                   @"conv2d_vjp_dw_prepad");
             MPSGraphDepthwiseConvolution2DOpDescriptor* dwd =
                 [MPSGraphDepthwiseConvolution2DOpDescriptor
                     descriptorWithStrideInX:1

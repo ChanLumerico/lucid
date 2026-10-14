@@ -168,12 +168,14 @@ public:
             [leading addObject:[NSNumber numberWithLongLong:(*pads)[2 * d]]];
             [trailing addObject:[NSNumber numberWithLongLong:(*pads)[2 * d + 1]]];
         }
-        ctx.bind(node.outputs[0].id, (__bridge void*)([graph padTensor:x_t
-                            withPaddingMode:MPSGraphPaddingModeConstant
-                                leftPadding:leading
-                               rightPadding:trailing
-                              constantValue:constant_value
-                                       name:@"pad"]));
+        ctx.bind(node.outputs[0].id,
+                 (__bridge void*)(pad_or_identity(graph,
+                                                  x_t,
+                                                  leading,
+                                                  trailing,
+                                                  MPSGraphPaddingModeConstant,
+                                                  constant_value,
+                                                  @"pad")));
         return true;
     }
 };
