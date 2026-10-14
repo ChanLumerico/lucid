@@ -110,19 +110,37 @@ public:
     }
 };
 
+inline MPSGraphTensor* multiply_avoiding_i64_square(MPSGraph* g, MPSGraphTensor* a,
+                                                    MPSGraphTensor* b, NSString* name) {
+    // MPSGraph's algebraic simplifier pattern-matches ``mul(x, x)`` (after CSE
+    // of identical subgraphs such as ``abs(a) * abs(a)`` or ``y.argmax(1) *
+    // y.argmax(1)``) and rewrites it to ``mps.square(x)``.  On 64-bit integers
+    // MPSGraph has a working ``mul_i64`` kernel but no ``square_i64`` kernel,
+    // so the rewritten executable throws an Objective-C exception ("object
+    // cannot be nil (key: square_i64)") on its first run.
+    //
+    // Wrapping the primary operand in ``maximum(a, a)`` and the secondary
+    // operand in ``minimum(b, b)`` is an exact identity for all 64-bit integer
+    // bit patterns (integers have no NaNs or signed zeros), and MPSGraph does
+    // not fold ``maximum(x, x)`` or ``minimum(x, x)``.  Because the defining
+    // MLIR ops of the two operands are distinct (``mps.maximum`` vs
+    // ``mps.minimum``), CSE can never unify them into the same SSA value even
+    // if ``a`` and ``b`` already end in ``maximum`` or ``minimum``, so
+    // ``mul_i64`` always runs directly.
+    if (a.dataType == MPSDataTypeInt64 || a.dataType == MPSDataTypeUInt64) {
+        MPSGraphTensor* lhs = [g maximumWithPrimaryTensor:a secondaryTensor:a name:nil];
+        MPSGraphTensor* rhs = [g minimumWithPrimaryTensor:b secondaryTensor:b name:nil];
+        return [g multiplicationWithPrimaryTensor:lhs secondaryTensor:rhs name:name];
+    }
+    return [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:name];
+}
+
 class MulEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mul"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        // MPSGraph rewrites ``x * x`` to ``square``, which has no int64
-        // kernel: the executable then fails on its first run ("object
-        // cannot be nil (key: square_i64)").  Decline it here, as the square
-        // emitter does (Math.mm).
-        if (node.inputs.size() == 2 && node.inputs[0] == node.inputs[1] && !node.outputs.empty() &&
-            node.outputs[0].dtype == Dtype::I64)
-            return false;
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            return [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:@"mul"];
+            return multiply_avoiding_i64_square(g, a, b, @"mul");
         });
     }
 };
@@ -193,7 +211,7 @@ public:
             MPSGraphTensor* q = [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
             q = [g floorWithTensor:q name:nil];
 
-            MPSGraphTensor* prod = [g multiplicationWithPrimaryTensor:q secondaryTensor:b name:nil];
+            MPSGraphTensor* prod = multiply_avoiding_i64_square(g, q, b, nil);
             MPSGraphTensor* rem = [g subtractionWithPrimaryTensor:a secondaryTensor:prod name:nil];
 
             MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:a.dataType];

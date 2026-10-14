@@ -97,16 +97,18 @@ class SquareEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "square"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        // MPSGraph has no int64 square kernel, and it finds out only on the
-        // first run ("object cannot be nil (key: square_i64)").  ``x * x``
-        // does not escape it — the simplifier turns that back into
-        // ``square`` — so int64 declines here instead of failing there.
-        if (!node.outputs.empty() && node.outputs[0].dtype == Dtype::I64)
-            return false;
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
-            // ``squareWithTensor`` takes floating point only and throws an
-            // Objective-C exception on narrower integers; ``x * x`` is the
-            // same answer and has an int32 kernel.
+            // ``squareWithTensor`` takes floating point only (throwing on
+            // narrower integers) and has no ``square_i64`` kernel on 64-bit
+            // integers.  ``x * x`` is the same answer on integers; for 64-bit
+            // integers we wrap the two operands in ``maximum(x, x)`` and
+            // ``minimum(x, x)`` so MPSGraph's algebraic simplifier cannot fold
+            // the multiply back into ``square_i64``.
+            if (x.dataType == MPSDataTypeInt64 || x.dataType == MPSDataTypeUInt64) {
+                MPSGraphTensor* lhs = [g maximumWithPrimaryTensor:x secondaryTensor:x name:nil];
+                MPSGraphTensor* rhs = [g minimumWithPrimaryTensor:x secondaryTensor:x name:nil];
+                return [g multiplicationWithPrimaryTensor:lhs secondaryTensor:rhs name:@"square"];
+            }
             if (!(x.dataType & MPSDataTypeFloatBit))
                 return [g multiplicationWithPrimaryTensor:x secondaryTensor:x name:@"square"];
             return [g squareWithTensor:x name:@"square"];

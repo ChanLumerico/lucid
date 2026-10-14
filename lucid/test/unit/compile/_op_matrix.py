@@ -708,7 +708,6 @@ CASE_BY_NAME = {c.name: c for c in CASES}
 
 #: (case, dtype) → why eager is the right answer there.  A fallback that is
 #: not listed fails the matrix, so a new one is seen the day it appears.
-_NO_I64_SQUARE = "MPSGraph has no int64 square kernel (``x * x`` is folded into it)"
 _INT_MATMUL = "MPSGraph's matmul aborts on integers, so the emitter declines"
 _BOOL_SUM = "MPSGraph cannot sum bool exactly (_DataMovement.h), so it declines"
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
@@ -719,7 +718,6 @@ _NO_OPS = "a cast to the dtype the tensor already has records no op"
 # op while this stands.
 _NO_DIVMOD_EMITTER = "LCD-444: no MPSGraph emitter for remainder / fmod yet"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
-    ("square", "i64"): _NO_I64_SQUARE,
     ("astype_f32", "f32"): _NO_OPS,
     ("astype_i64", "i64"): _NO_OPS,
     ("astype_bool", "bool"): _NO_OPS,

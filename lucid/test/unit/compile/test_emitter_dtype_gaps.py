@@ -78,18 +78,18 @@ def test_float_predicates_on_non_float_inputs(op: str, dtype: object) -> None:
     _compiled_matches(fn, _x(dtype))
 
 
-@pytest.mark.parametrize("dtype", [lucid.int32, lucid.float32])
+@pytest.mark.parametrize("dtype", [lucid.int64, lucid.int32, lucid.float32])
 def test_square_on_integers(dtype: object) -> None:
     _compiled_matches(lambda t: lucid.square(t), _x(dtype))
 
 
 @pytest.mark.parametrize("spelling", ["square", "self_mul", "deduplicated"])
-def test_int64_square_falls_back_instead_of_raising(spelling: str) -> None:
-    """MPSGraph has no int64 square kernel and learns so on the first run.
+def test_int64_square_compiles_without_falling_back(spelling: str) -> None:
+    """MPSGraph has no ``square_i64`` kernel, so 64-bit self-products shield
+    their operands with ``maximum(a, a) * minimum(b, b)`` to stay on ``mul_i64``.
 
-    Every spelling below reaches it — the simplifier folds ``x * x`` and two
-    identical ``abs`` into ``square`` — and each used to raise "Caught an
-    unknown exception!" from the first call.  The answer must be eager's.
+    Every spelling below — ``square(t)``, ``t * t``, and ``abs(t) * abs(t)`` —
+    must compile and execute on the GPU with zero eager fallback.
     """
     fns = {
         "square": lambda t: lucid.square(t),
@@ -102,7 +102,8 @@ def test_int64_square_falls_back_instead_of_raising(spelling: str) -> None:
     for _ in range(2):
         got = compiled(x).to("cpu").numpy()
         assert np.array_equal(got, fn(x.to("cpu")).numpy())
-    assert len(compiled.cache_info()["eager_only"]) == 1
+    info = compiled.cache_info()
+    assert info["entries"] == 1 and len(info["eager_only"]) == 0, info
 
 
 @pytest.mark.parametrize("k", [-2, -1, 0, 1, 2])
