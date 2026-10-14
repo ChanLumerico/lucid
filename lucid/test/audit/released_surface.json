@@ -1730,7 +1730,7 @@
   "lucid.models.StableDiffusionConfig": {"params": ["a:sample_size=", "a:in_channels=", "a:out_channels=", "a:act_fn=", "a:num_train_timesteps=", "a:beta_start=", "a:beta_end=", "a:beta_schedule=", "a:prediction_type=", "a:latent_channels=", "a:downsample_factor=", "a:vae_block_out_channels=", "a:vae_layers_per_block=", "a:unet_block_out_channels=", "a:unet_layers_per_block=", "a:attention_head_dim=", "a:cross_attention_dim=", "a:context_length=", "a:steps_offset=", "a:set_alpha_to_one=", "a:norm_num_groups="]},
   "lucid.models.StableDiffusionConfig.latent_size": {"params": null},
   "lucid.models.StableDiffusionForImageGeneration": {"params": ["a:config"]},
-  "lucid.models.StableDiffusionForImageGeneration.forward": {"params": ["a:self", "a:context", "a:num_inference_steps="]},
+  "lucid.models.StableDiffusionForImageGeneration.forward": {"params": ["a:self", "a:images", "a:context", "a:timestep="]},
   "lucid.models.StableDiffusionForImageGeneration.generate": {"params": ["a:self", "a:context", "a:uncond_context=", "a:num_inference_steps=", "a:guidance_scale=", "a:eta=", "a:latent=", "a:sampler="]},
   "lucid.models.StableDiffusionModel": {"params": ["a:config"]},
   "lucid.models.StableDiffusionModel.decode_latent": {"params": ["a:self", "a:latent"]},
