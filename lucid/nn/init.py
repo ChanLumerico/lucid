@@ -6,12 +6,14 @@ All functions operate in-place and return the tensor.
 import functools
 import math
 import threading
+import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
+from lucid._tensor import _metal_views
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -50,7 +52,7 @@ def _skippable(fn: Callable[_P, _R]) -> Callable[_P, _R]:
     return initialise
 
 
-def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
+def _fill_from_impl(tensor: Tensor, src_impl: _C_engine.TensorImpl) -> Tensor:
     """Write ``src_impl`` into ``tensor``, in place.
 
     It used to *replace* ``tensor._impl`` with a fresh one carrying the
@@ -67,7 +69,9 @@ def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
     grad, which an in-place write is otherwise refused on.  That is the
     same shape the reference gives its own ``nn.init``.
     """
-    reshaped = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[arg-type]
+    if not src_impl.is_contiguous():
+        src_impl = _C_engine.contiguous(src_impl)
+    reshaped = _C_engine.reshape(src_impl, list(tensor.shape))
     # The draw does not always land on the target's dtype —
     # ``orthogonal_`` builds its factor at float32.  Replacing the impl
     # hid that by adopting the source's dtype wholesale, so initialising a
@@ -76,12 +80,22 @@ def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
     if reshaped.dtype != tensor._impl.dtype:
         reshaped = _C_engine.astype(reshaped, tensor._impl.dtype)
     with _lucid.no_grad():
-        tensor._impl.assign_from(reshaped, "nn.init")
+        _metal_views._check(tensor)
+        if tensor._impl.is_aliased():
+            _C_engine.assign_inplace(tensor._impl, reshaped, "nn.init")
+        else:
+            tensor._impl.assign_from(reshaped, "nn.init")
+        _metal_views.write_back(tensor)
     return tensor
 
 
 @_skippable
-def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
+def uniform_(
+    tensor: Tensor,
+    a: float = 0.0,
+    b: float = 1.0,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise ``tensor`` in-place with samples from a uniform distribution.
 
     Each entry is drawn independently from :math:`\mathcal{U}(a, b)`.  The
@@ -97,11 +111,13 @@ def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
         Lower bound of the uniform interval.  Default ``0.0``.
     b : float, optional
         Upper bound of the uniform interval.  Default ``1.0``.
+    generator : Generator, optional
+        PRNG for uniform draws.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        ``tensor`` after uniform fill.
 
     Notes
     -----
@@ -125,16 +141,25 @@ def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     >>> bool(((w >= -0.1) & (w <= 0.1)).all().item())
     True
     """
+    shape = list(tensor.shape)
+    dt = tensor._impl.dtype
+    dev = tensor._impl.device
+    if a == b:
+        _C_engine.uniform(shape, 0.0, 1.0, dt, dev, generator)
+        return _fill_from_impl(tensor, _C_engine.full(shape, a, dt, dev))
     return _fill_from_impl(
         tensor,
-        _C_engine.uniform(
-            list(tensor.shape), a, b, tensor._impl.dtype, tensor._impl.device
-        ),
+        _C_engine.uniform(shape, a, b, dt, dev, generator),
     )
 
 
 @_skippable
-def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
+def normal_(
+    tensor: Tensor,
+    mean: float = 0.0,
+    std: float = 1.0,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise ``tensor`` in-place with samples from a Gaussian distribution.
 
     Each entry is drawn independently from
@@ -152,11 +177,13 @@ def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     std : float, optional
         Standard deviation of the Gaussian distribution.  Must be
         non-negative.  Default ``1.0``.
+    generator : Generator, optional
+        PRNG for Gaussian draws.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        ``tensor`` after Gaussian fill.
 
     Notes
     -----
@@ -184,7 +211,12 @@ def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     return _fill_from_impl(
         tensor,
         _C_engine.normal(
-            list(tensor.shape), mean, std, tensor._impl.dtype, tensor._impl.device
+            list(tensor.shape),
+            mean,
+            std,
+            tensor._impl.dtype,
+            tensor._impl.device,
+            generator,
         ),
     )
 
@@ -360,7 +392,11 @@ def eye_(tensor: Tensor) -> Tensor:
 
 
 @_skippable
-def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
+def xavier_uniform_(
+    tensor: Tensor,
+    gain: float = 1.0,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise ``tensor`` in-place with Xavier (Glorot) uniform initialisation.
 
     Fills the tensor with values drawn uniformly from :math:`[-a, a]`
@@ -380,11 +416,13 @@ def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
         Multiplicative gain factor — typically the value returned by
         :func:`calculate_gain` for the downstream nonlinearity.
         Default ``1.0``.
+    generator : Generator, optional
+        PRNG used for the Xavier uniform draw.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        The Xavier-uniform-initialised ``tensor``.
 
     Notes
     -----
@@ -416,13 +454,20 @@ def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     True
     """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    if 0 in tensor.shape:
+        warnings.warn("Initializing zero-element tensors is a no-op", stacklevel=2)
+        return tensor
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
     a = math.sqrt(3.0) * std
-    return uniform_(tensor, -a, a)
+    return uniform_(tensor, -a, a, generator=generator)
 
 
 @_skippable
-def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
+def xavier_normal_(
+    tensor: Tensor,
+    gain: float = 1.0,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise ``tensor`` in-place with Xavier (Glorot) normal initialisation.
 
     Gaussian counterpart of :func:`xavier_uniform_`.  Draws each entry
@@ -439,11 +484,13 @@ def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     gain : float, optional
         Multiplicative gain factor — see :func:`calculate_gain`.
         Default ``1.0``.
+    generator : Generator, optional
+        PRNG used for the Xavier Gaussian draw.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        The Xavier-normal-initialised ``tensor``.
 
     Notes
     -----
@@ -471,8 +518,11 @@ def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     True
     """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
+    if 0 in tensor.shape:
+        warnings.warn("Initializing zero-element tensors is a no-op", stacklevel=2)
+        return tensor
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
-    return normal_(tensor, 0.0, std)
+    return normal_(tensor, 0.0, std, generator=generator)
 
 
 @_skippable
@@ -481,6 +531,7 @@ def kaiming_uniform_(
     a: float = 0,
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
+    generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     r"""Initialise ``tensor`` in-place with Kaiming (He) uniform initialisation.
 
@@ -506,11 +557,13 @@ def kaiming_uniform_(
     nonlinearity : str, optional
         Nonlinearity name forwarded to :func:`calculate_gain`.
         Default ``'leaky_relu'``.
+    generator : Generator, optional
+        PRNG used for the Kaiming uniform draw.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        The Kaiming-uniform-initialised ``tensor``.
 
     Notes
     -----
@@ -537,11 +590,14 @@ def kaiming_uniform_(
     >>> bool((w.abs() <= bound).all().item())
     True
     """
+    if 0 in tensor.shape:
+        warnings.warn("Initializing zero-element tensors is a no-op", stacklevel=2)
+        return tensor
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
     bound = math.sqrt(3.0) * std
-    return uniform_(tensor, -bound, bound)
+    return uniform_(tensor, -bound, bound, generator=generator)
 
 
 @_skippable
@@ -550,6 +606,7 @@ def kaiming_normal_(
     a: float = 0,
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
+    generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     r"""Initialise ``tensor`` in-place with Kaiming (He) normal initialisation.
 
@@ -571,11 +628,13 @@ def kaiming_normal_(
     nonlinearity : str, optional
         Activation name forwarded to :func:`calculate_gain`.  Default
         ``'leaky_relu'``.
+    generator : Generator, optional
+        PRNG used for the Kaiming Gaussian draw.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        The Kaiming-normal-initialised ``tensor``.
 
     Notes
     -----
@@ -598,10 +657,17 @@ def kaiming_normal_(
     >>> abs(w.std().item() - std) < 0.1 * std
     True
     """
+    if 0 in tensor.shape:
+        warnings.warn("Initializing zero-element tensors is a no-op", stacklevel=2)
+        return tensor
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
-    return normal_(tensor, 0.0, std)
+    return normal_(tensor, 0.0, std, generator=generator)
+
+
+def _norm_cdf(x: float) -> float:
+    return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
 
 
 @_skippable
@@ -611,12 +677,14 @@ def trunc_normal_(
     std: float = 1.0,
     a: float = -2.0,
     b: float = 2.0,
+    generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     r"""Initialise ``tensor`` in-place with truncated normal samples.
 
     Each entry is drawn from :math:`\mathcal{N}(\text{mean},
-    \text{std}^2)` and rejected if it falls outside ``[a, b]``;
-    rejection sampling is repeated until ``tensor`` is fully populated.
+    \text{std}^2)` truncated to ``[a, b]`` via the inverse-CDF transform
+    (:func:`~lucid.special.erfinv` applied to uniform draws in
+    ``[2*Phi((a-mean)/std)-1, 2*Phi((b-mean)/std)-1]``).
     This is the preferred initialiser for transformer weights (e.g.
     ViT, BERT) where unbounded Gaussian tails would otherwise produce
     rare but disruptive activations.
@@ -633,11 +701,13 @@ def trunc_normal_(
         Lower truncation bound.  Default ``-2.0``.
     b : float, optional
         Upper truncation bound.  Default ``2.0``.
+    generator : Generator, optional
+        PRNG used for the inverse-CDF uniform quantile draw.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        ``tensor`` populated with truncated normal draws.
 
     Notes
     -----
@@ -663,39 +733,50 @@ def trunc_normal_(
     >>> bool(((w >= -0.04) & (w <= 0.04)).all().item())
     True
     """
-    shape = list(tensor.shape) if tensor.shape else [1]
-    total = 1
-    for s in shape:
-        total *= s
-
+    if (mean < a - 2 * std) or (mean > b + 2 * std):
+        warnings.warn(
+            "mean is more than 2 std from [a, b] in nn.init.trunc_normal_. "
+            "The distribution of values may be incorrect.",
+            stacklevel=2,
+        )
+    l = _norm_cdf((a - mean) / std)
+    u = _norm_cdf((b - mean) / std)
+    lo = 2.0 * l - 1.0
+    hi = 2.0 * u - 1.0
     dt = tensor._impl.dtype
     dev = tensor._impl.device
-    filled_parts = []
-    remaining = total
-    while remaining > 0:
-        needed = max(remaining * 4, 16)
-        candidates = _C_engine.normal([needed], mean, std, dt, dev)
-        # Build mask: a <= x <= b
-        lo = _C_engine.full([needed], a, dt, dev)
-        hi = _C_engine.full([needed], b, dt, dev)
-        ge_a = _C_engine.greater_equal(candidates, lo)
-        le_b = _C_engine.less_equal(candidates, hi)
-        mask = _C_engine.bitwise_and(ge_a, le_b)
-        valid = _C_engine.masked_select(candidates, mask)
-        n_valid = int(list(valid.shape)[0])
-        take = min(n_valid, remaining)
-        if take > 0:
-            # Slice first `take` elements via gather + arange.
-            idx = _C_engine.arange(0, take, 1, _C_engine.I32, dev)
-            filled_parts.append(_C_engine.gather(valid, idx, 0))
-            remaining -= take
-
-    result = _C_engine.concatenate(filled_parts, 0)
-    return _fill_from_impl(tensor, result)
+    if a > b or lo > hi:
+        _C_engine.uniform([1], 1.0, 0.0, dt, dev, generator)
+    shape = list(tensor.shape)
+    if 0 in shape:
+        _C_engine.uniform(shape, 0.0, 1.0, dt, dev, generator)
+        return tensor
+    work_dt = _C_engine.F32 if dt in (_C_engine.F16, _C_engine.BF16) else dt
+    if (
+        dev == _C_engine.Device.CPU
+        and work_dt in (_C_engine.F32, _C_engine.F64)
+        and (abs(lo) > 0.999999 or abs(hi) > 0.999999)
+    ):
+        work_dt = _C_engine.F64
+    if lo == hi:
+        _C_engine.uniform(shape, 0.0, 1.0, work_dt, dev, generator)
+        clamped = _C_engine.full(shape, a, work_dt, dev)
+    else:
+        u_impl = _C_engine.uniform(shape, lo, hi, work_dt, dev, generator)
+        z = _C_engine.erfinv(u_impl)
+        scale = _C_engine.full([], std * math.sqrt(2.0), work_dt, dev)
+        loc = _C_engine.full([], mean, work_dt, dev)
+        scaled = _C_engine.add(_C_engine.mul(z, scale), loc)
+        clamped = _C_engine.clip(scaled, a, b)
+    return _fill_from_impl(tensor, clamped)
 
 
 @_skippable
-def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
+def orthogonal_(
+    tensor: Tensor,
+    gain: float = 1.0,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise ``tensor`` in-place with a (semi-)orthogonal matrix.
 
     A random Gaussian matrix is drawn and orthonormalised via QR
@@ -718,11 +799,13 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
         Tensor to initialise in place; must have at least 2 dimensions.
     gain : float, optional
         Multiplicative scaling applied to ``Q``.  Default ``1.0``.
+    generator : Generator, optional
+        PRNG used to draw the pre-QR Gaussian matrix.  Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        ``tensor`` populated with a Haar-distributed orthogonal matrix.
 
     Raises
     ------
@@ -745,18 +828,24 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     """
     if tensor.ndim < 2:
         raise ValueError("orthogonal_() requires at least a 2D tensor")
+    if tensor.numel() == 0:
+        return tensor
     rows: int = int(tensor.shape[0])
     cols: int = int(tensor.numel() // rows)
     # All work on the engine — no numpy.
-    flat: Tensor = _lucid.randn(rows, cols, device=tensor._impl.device)
+    flat: Tensor = _lucid.randn(
+        rows, cols, device=tensor._impl.device, generator=generator
+    )
     # Use QR on the (max-dim × min-dim) shape so we always get an
-    # orthonormal Q with the right number of columns.
+    # orthonormal Q with the right number of columns, and multiply by
+    # sign(diag(R)) so Q is Haar-distributed on O(n).
     if rows < cols:
-        q_full, _r = _lucid.linalg.qr(flat.mT)
-        q: Tensor = q_full.narrow(1, 0, rows).mT
-    else:
-        q_full, _r = _lucid.linalg.qr(flat)
-        q = q_full.narrow(1, 0, cols)
+        flat = flat.mT
+    q, r = _lucid.linalg.qr(flat)
+    d = r.diagonal(dim1=-2, dim2=-1)
+    q = q * d.sign()
+    if rows < cols:
+        q = q.mT
     if gain != 1.0:
         q = q * gain
     src_t: Tensor = _lucid.tensor(
@@ -766,10 +855,15 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
 
 
 @_skippable
-def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
+def sparse_(
+    tensor: Tensor,
+    sparsity: float,
+    std: float = 0.01,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     r"""Initialise a 2-D ``tensor`` in-place with a sparse random matrix.
 
-    For each column, a random subset of ``floor(sparsity * rows)`` rows
+    For each column, a random subset of ``ceil(sparsity * rows)`` rows
     is set to zero; the remaining entries are drawn from
     :math:`\mathcal{N}(0, \text{std}^2)`.  Sparse initialisation, due to
     Martens (2010), encourages each output unit to depend on only a
@@ -787,11 +881,14 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     std : float, optional
         Standard deviation of the Gaussian used for the non-zero
         entries.  Default ``0.01``.
+    generator : Generator, optional
+        PRNG used for both the Gaussian fill and the column zero-mask.
+        Default ``None``.
 
     Returns
     -------
     Tensor
-        ``tensor`` (mutated) for chaining.
+        ``tensor`` populated with a column-sparse Gaussian matrix.
 
     Raises
     ------
@@ -812,29 +909,33 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     >>> from lucid.nn.init import sparse_
     >>> w = lucid.empty(256, 256)
     >>> _ = sparse_(w, sparsity=0.9, std=0.01)
-    >>> int((w == 0).sum().item())   # floor(0.9 * 256) = 230 zeros in each column
-    58880
+    >>> int((w == 0).sum().item())   # ceil(0.9 * 256) = 231 zeros in each column
+    59136
     """
     if tensor.ndim != 2:
         raise ValueError("sparse_() requires a 2D tensor")
     if not 0.0 <= sparsity <= 1.0:
         raise ValueError(f"sparsity must be in [0, 1], got {sparsity!r}")
+    if tensor.numel() == 0:
+        return tensor
 
     rows: int = int(tensor.shape[0])
     cols: int = int(tensor.shape[1])
-    n_zero: int = int(math.floor(sparsity * rows))
+    n_zero: int = int(math.ceil(sparsity * rows))
     dev = tensor._impl.device
     # Per-column random row selection: ``argsort`` of uniform draws gives a
     # uniform permutation; take the first ``n_zero`` rows of each column.
-    src: Tensor = _lucid.normal(0.0, std, size=(rows, cols), device=dev)
+    src: Tensor = _lucid.normal(
+        0.0, std, size=(rows, cols), device=dev, generator=generator
+    )
     if n_zero > 0:
         # noise is shape (rows, cols); per-column argsort along dim=0.
-        noise: Tensor = _lucid.rand(rows, cols, device=dev)
+        noise: Tensor = _lucid.rand(rows, cols, device=dev, generator=generator)
         perm: Tensor = noise.argsort(dim=0)  # (rows, cols) int.
-        zero_rows: Tensor = perm.narrow(0, 0, n_zero)  # (n_zero, cols).
+        zero_rows: Tensor = perm.narrow(0, 0, min(n_zero, rows))  # (n_zero, cols).
         # Build a (rows, cols) bool mask: 1 where a row was chosen.
         mask: Tensor = _lucid.zeros(rows, cols, device=dev)
-        ones: Tensor = _lucid.ones(n_zero, cols, device=dev)
+        ones: Tensor = _lucid.ones(zero_rows.shape[0], cols, device=dev)
         mask = mask.scatter_add(0, zero_rows, ones)
         src = _lucid.where(mask > 0.0, _lucid.zeros_like(src), src)
     src_t: Tensor = _lucid.tensor(src, dtype=tensor._impl.dtype, device=dev)
@@ -899,6 +1000,8 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
         raise ValueError(
             f"out_channels ({out_ch}) must be divisible by groups ({groups})"
         )
+    if tensor.numel() == 0:
+        return tensor
 
     out_per_group: int = out_ch // groups
     min_dim: int = min(in_ch_per_group, out_per_group)
@@ -946,8 +1049,10 @@ def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
     ----------
     nonlinearity : str
         Name of the activation function.  One of ``'linear'``,
-        ``'conv1d'``, ``'conv2d'``, ``'conv3d'``, ``'sigmoid'``,
-        ``'tanh'``, ``'relu'``, ``'leaky_relu'``, ``'selu'``.
+        ``'conv1d'``, ``'conv2d'``, ``'conv3d'``,
+        ``'conv_transpose1d'``, ``'conv_transpose2d'``,
+        ``'conv_transpose3d'``, ``'sigmoid'``, ``'tanh'``, ``'relu'``,
+        ``'leaky_relu'``, ``'selu'``.
     param : float, optional
         Negative slope of the rectifier — only consulted when
         ``nonlinearity='leaky_relu'``.  Default ``0.01``.
@@ -960,7 +1065,8 @@ def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
     Raises
     ------
     ValueError
-        If ``nonlinearity`` is not in the supported set.
+        If ``nonlinearity`` is not in the supported set, or if ``param``
+        is not a valid number when ``nonlinearity='leaky_relu'``.
 
     Notes
     -----
@@ -991,13 +1097,21 @@ def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
         "conv1d": 1.0,
         "conv2d": 1.0,
         "conv3d": 1.0,
+        "conv_transpose1d": 1.0,
+        "conv_transpose2d": 1.0,
+        "conv_transpose3d": 1.0,
         "sigmoid": 1.0,
         "tanh": 5.0 / 3.0,
         "relu": math.sqrt(2.0),
         "selu": 3.0 / 4.0,
     }
     if nonlinearity == "leaky_relu":
-        slope = param if param is not None else 0.01
+        if param is None:
+            slope: float = 0.01
+        elif not isinstance(param, bool) and isinstance(param, (int, float)):
+            slope = float(param)
+        else:
+            raise ValueError(f"negative_slope {param!r} not a valid number")
         return math.sqrt(2.0 / (1 + slope**2))
     if nonlinearity in _gains:
         return _gains[nonlinearity]
@@ -1019,6 +1133,7 @@ def _calculate_fan_in_and_fan_out(tensor: Tensor) -> tuple[int, int]:
 
 
 def _calculate_correct_fan(tensor: Tensor, mode: str) -> int:
+    mode = mode.lower()
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     if mode == "fan_in":
         return fan_in

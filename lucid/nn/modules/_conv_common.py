@@ -61,7 +61,7 @@ def _init_conv_weights(weight: Parameter, bias: Parameter | None) -> None:
     init.kaiming_uniform_(weight, a=math.sqrt(5))
     if bias is not None:
         fan_in, _ = init._calculate_fan_in_and_fan_out(weight)
-        bound: float = 1.0 / math.sqrt(fan_in)
+        bound: float = 1.0 / math.sqrt(fan_in) if fan_in > 0 else 0.0
         init.uniform_(bias, -bound, bound)
 
 
