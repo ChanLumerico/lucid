@@ -36,6 +36,8 @@ from lucid.test._fixtures.devices import device_dtype_params, metal_available
 # A matrix, a vector and a scalar: the scalar checks 0-d parameters, whose
 # per-parameter scalars (eta, mu) are the same shape as the parameter.
 _SHAPES = ((3, 4), (4,), ())
+# SparseAdam in the reference requires at least 1-D parameters.
+_SPARSE_SHAPES = ((4, 3), (5,))
 _STEPS = 6
 
 _CASES: list[tuple[str, dict[str, Any]]] = [
@@ -53,6 +55,16 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "initial_accumulator_value": 0.1,
         },
     ),
+    (
+        "Adagrad",
+        {
+            "lr": 0.1,
+            "lr_decay": 0.05,
+            "weight_decay": 0.1,
+            "eps": 1e-3,
+            "initial_accumulator_value": 0.5,
+        },
+    ),
     ("RMSprop", {"lr": 0.01}),
     ("RMSprop", {"lr": 0.01, "centered": True}),
     ("RMSprop", {"lr": 0.01, "centered": True, "momentum": 0.9}),
@@ -68,17 +80,108 @@ _CASES: list[tuple[str, dict[str, Any]]] = [
             "alpha": 0.9,
         },
     ),
+    (
+        "RMSprop",
+        {
+            "lr": 0.05,
+            "alpha": 0.7,
+            "eps": 1e-3,
+            "weight_decay": 0.1,
+            "momentum": 0.9,
+            "centered": True,
+        },
+    ),
     ("RMSprop", {"lr": 0.01, "momentum": 0.9, "weight_decay": 0.1}),
     # t0 = 1e6: the average only tracks the parameter.
     ("ASGD", {"lr": 0.05}),
     ("ASGD", {"lr": 0.05, "t0": 2.0, "lambd": 0.1}),
     ("ASGD", {"lr": 0.05, "t0": 0.0, "alpha": 0.5, "lambd": 0.01}),
     ("ASGD", {"lr": 0.05, "t0": 3.0, "weight_decay": 0.1}),
+    (
+        "ASGD",
+        {"lr": 0.05, "lambd": 0.1, "alpha": 0.5, "t0": 2.0, "weight_decay": 0.1},
+    ),
     # The first momentum step starts the buffer at the gradient, undamped.
     ("SGD", {"lr": 0.1, "momentum": 0.9}),
     ("SGD", {"lr": 0.1, "momentum": 0.9, "dampening": 0.5}),
     ("SGD", {"lr": 0.1, "momentum": 0.5, "dampening": 0.3, "weight_decay": 0.1}),
     ("SGD", {"lr": 0.1, "momentum": 0.9, "nesterov": True}),
+    (
+        "SGD",
+        {"lr": 0.1, "momentum": 0.9, "weight_decay": 0.1, "nesterov": True},
+    ),
+    # Exaggerated hyper-parameters across the remaining optimizers (LCD-221):
+    # large eps (1e-3), non-default betas, weight_decay, and variant flags
+    # expose update-rule placement differences hidden at default eps=1e-8.
+    (
+        "Adam",
+        {
+            "lr": 0.05,
+            "betas": (0.7, 0.8),
+            "eps": 1e-3,
+            "weight_decay": 0.1,
+            "amsgrad": False,
+        },
+    ),
+    (
+        "Adam",
+        {
+            "lr": 0.05,
+            "betas": (0.7, 0.8),
+            "eps": 1e-3,
+            "weight_decay": 0.1,
+            "amsgrad": True,
+        },
+    ),
+    (
+        "AdamW",
+        {
+            "lr": 0.05,
+            "betas": (0.7, 0.8),
+            "eps": 1e-3,
+            "weight_decay": 0.1,
+            "amsgrad": False,
+        },
+    ),
+    (
+        "AdamW",
+        {
+            "lr": 0.05,
+            "betas": (0.7, 0.8),
+            "eps": 1e-3,
+            "weight_decay": 0.1,
+            "amsgrad": True,
+        },
+    ),
+    (
+        "NAdam",
+        {"lr": 0.05, "betas": (0.7, 0.8), "eps": 1e-3, "weight_decay": 0.1},
+    ),
+    # beta2 = 0.8 keeps rho_t <= 5 for early steps; beta2 = 0.5 reaches rho_t > 5.
+    (
+        "RAdam",
+        {"lr": 0.05, "betas": (0.7, 0.8), "eps": 1e-3, "weight_decay": 0.1},
+    ),
+    (
+        "RAdam",
+        {"lr": 0.05, "betas": (0.7, 0.5), "eps": 1e-3, "weight_decay": 0.1},
+    ),
+    (
+        "Adamax",
+        {"lr": 0.05, "betas": (0.7, 0.8), "eps": 1e-3, "weight_decay": 0.1},
+    ),
+    (
+        "Adadelta",
+        {"lr": 0.5, "rho": 0.7, "eps": 1e-3, "weight_decay": 0.1},
+    ),
+    (
+        "Rprop",
+        {"lr": 0.05, "etas": (0.4, 1.5), "step_sizes": (1e-2, 0.2)},
+    ),
+    (
+        "SparseAdam",
+        {"lr": 0.05, "betas": (0.7, 0.8), "eps": 1e-3},
+    ),
 ]
 
 
@@ -99,9 +202,17 @@ def _np_dtype(dtype: lucid.dtype) -> type:
     return np.float64 if dtype == lucid.float64 else np.float32
 
 
-def _arrays(seed: int, dtype: lucid.dtype) -> list[np.ndarray]:
+def _shapes(name: str = "") -> tuple[tuple[int, ...], ...]:
+    return _SPARSE_SHAPES if name == "SparseAdam" else _SHAPES
+
+
+def _arrays(
+    seed: int,
+    dtype: lucid.dtype,
+    shapes: tuple[tuple[int, ...], ...] = _SHAPES,
+) -> list[np.ndarray]:
     rng = np.random.default_rng(seed)
-    return [np.asarray(rng.standard_normal(s), dtype=_np_dtype(dtype)) for s in _SHAPES]
+    return [np.asarray(rng.standard_normal(s), dtype=_np_dtype(dtype)) for s in shapes]
 
 
 def _tensor(a: np.ndarray, device: str) -> lucid.Tensor:
@@ -115,7 +226,7 @@ def _params(arrays: list[np.ndarray], device: str) -> list[nn.Parameter]:
 
 
 def _feed(params: list[nn.Parameter], grads: list[np.ndarray], device: str) -> None:
-    for p, g in zip(params, grads):
+    for p, g in zip(params, grads, strict=True):
         p.grad = _tensor(g, device)
 
 
@@ -152,20 +263,25 @@ def test_trajectory_and_state_match_the_reference(
 ) -> None:
     name, kw = case
     tol = _TOL[dtype]
-    init = _arrays(0, dtype)
+    shapes = _shapes(name)
+    init = _arrays(0, dtype, shapes)
     params = _params(init, device)
     opt = getattr(optim, name)(params, **kw)
     with _ref_default_dtype(ref, dtype):
         ref_params = [ref.nn.Parameter(ref.from_numpy(a.copy())) for a in init]
         ref_opt = getattr(ref.optim, name)(ref_params, **kw)
         for k in range(_STEPS):
-            grads = _arrays(100 + k, dtype)
+            grads = _arrays(100 + k, dtype, shapes)
+            if name == "SparseAdam":
+                for g in grads:
+                    g[k % g.shape[0]] = 0.0
             _feed(params, grads, device)
             opt.step()
-            for rp, g in zip(ref_params, grads):
-                rp.grad = ref.from_numpy(g.copy())
+            for rp, g in zip(ref_params, grads, strict=True):
+                tg = ref.from_numpy(g.copy())
+                rp.grad = tg.to_sparse(1) if name == "SparseAdam" else tg
             ref_opt.step()
-            for i, (ours, rp) in enumerate(zip(_values(params), ref_params)):
+            for i, (ours, rp) in enumerate(zip(_values(params), ref_params, strict=True)):
                 np.testing.assert_allclose(
                     ours,
                     rp.detach().numpy(),
@@ -182,7 +298,11 @@ def test_trajectory_and_state_match_the_reference(
         assert set(entry) == set(ref_entry), idx
         for key, ref_value in ref_entry.items():
             ours = _as_array(entry[key])
-            theirs = ref_value.detach().numpy()
+            theirs = (
+                ref_value.detach().numpy()
+                if hasattr(ref_value, "detach")
+                else np.asarray(ref_value)
+            )
             assert ours.shape == theirs.shape, (idx, key)
             if key == "step":
                 assert int(ours) == int(theirs) == _STEPS
@@ -190,6 +310,30 @@ def test_trajectory_and_state_match_the_reference(
                 np.testing.assert_allclose(
                     ours, theirs, rtol=tol, atol=tol, err_msg=f"{idx}/{key}"
                 )
+
+
+def test_adamax_adds_eps_inside_exp_inf(device: str, ref: Any) -> None:
+    # LCD-221 repro: Adamax adds eps inside max(beta2 * exp_inf, |g| + eps),
+    # not in the denominator m / (exp_inf + eps).
+    w = nn.Parameter(lucid.zeros(2, device=device))
+    opt = optim.Adamax([w], lr=0.05, eps=1e-3)
+    w.grad = lucid.tensor([1e-3, 2e-3], device=device)
+    opt.step()
+
+    rw = ref.nn.Parameter(ref.zeros(2))
+    ref_opt = ref.optim.Adamax([rw], lr=0.05, eps=1e-3)
+    rw.grad = ref.tensor([1e-3, 2e-3])
+    ref_opt.step()
+
+    exp_inf = _as_array(opt.state_dict()["state"][0]["exp_inf"])
+    np.testing.assert_allclose(exp_inf, [0.002, 0.003], rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(
+        exp_inf,
+        ref_opt.state_dict()["state"][0]["exp_inf"].detach().numpy(),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(w.numpy(), rw.detach().numpy(), rtol=1e-6, atol=1e-6)
 
 
 def test_adagrad_takes_eps_before_initial_accumulator_value(ref: Any) -> None:

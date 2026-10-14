@@ -1709,9 +1709,9 @@ class _CompiledAdamax(_CompiledStepBase):
     .. math::
 
         m_t &= \beta_1 m_{t-1} + (1-\beta_1) g_t, \quad
-        u_t = \max(\beta_2 u_{t-1}, |g_t|) \\
+        u_t = \max(\beta_2 u_{t-1}, |g_t| + \varepsilon) \\
         \theta_t &= \theta_{t-1} - \frac{\eta}{1-\beta_1^t}
-                    \cdot \frac{m_t}{u_t + \varepsilon}
+                    \cdot \frac{m_t}{u_t}
 
     See Also
     --------
@@ -1770,8 +1770,8 @@ class _CompiledAdamax(_CompiledStepBase):
         if flags[0]:
             g = g + gs("weight_decay") * p
         m = gs("beta1") * state["exp_avg"] + gs("one_minus_beta1") * g
-        u = _lucid.maximum(gs("beta2") * state["exp_inf"], g.abs())
-        new_p = p - ps("step_size") * (m / (u + gs("eps")))
+        u = _lucid.maximum(gs("beta2") * state["exp_inf"], g.abs() + gs("eps"))
+        new_p = p - ps("step_size") * (m / u)
         return new_p, {"exp_avg": m, "exp_inf": u}
 
 

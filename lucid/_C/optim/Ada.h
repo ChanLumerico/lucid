@@ -46,11 +46,11 @@ class TensorImpl;
 //   m_{t+1} = \beta_1 m_t + (1 - \beta_1) g_t
 // $$
 // $$
-//   u_{t+1} = \max(\beta_2 u_t,\; |g_t|)
+//   u_{t+1} = \max(\beta_2 u_t,\; |g_t| + \epsilon)
 // $$
 // $$
 //   \theta_{t+1} = \theta_t - \frac{\eta}{1 - \beta_1^{t+1}} \cdot
-//     \frac{m_{t+1}}{u_{t+1} + \epsilon}
+//     \frac{m_{t+1}}{u_{t+1}}
 // $$
 // The second-moment recursion is the limit of an Adam-style $L^p$ EMA
 // as $p \to \infty$, hence "max".
@@ -66,7 +66,7 @@ class TensorImpl;
 // beta2 : float, default 0.999
 //     Decay used inside the running-max envelope.
 // eps : float, default 1e-8
-//     Numerical stabiliser added to $u$.
+//     Numerical stabiliser added to $|g_t|$ inside the running-max envelope.
 // weight_decay : float, default 0.0
 //     L2 penalty applied to $g_t$ before the update.
 //

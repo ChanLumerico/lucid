@@ -720,6 +720,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - guard int64 mul from square_i64 and fallback fused_step
 
+- place Adamax eps inside exp_inf max (LCD-221)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

@@ -67,6 +67,7 @@ _CASES: list[Case] = [
     ("RAdam", {"lr": 0.05}, [{"beta2": 0.5, "eps": 1e-3, "weight_decay": 0.1}]),
     ("Adamax", {"lr": 0.05}, [{"lr": 0.01, "beta1": 0.7, "beta2": 0.9}]),
     ("Adamax", {"lr": 0.05}, [{"weight_decay": 0.1}]),
+    ("Adamax", {"lr": 0.05}, [{"eps": 1e-3}]),
     ("RMSprop", {"lr": 0.01}, [{"lr": 0.05, "alpha": 0.9}, {"eps": 1e-3}]),
     ("RMSprop", {"lr": 0.01}, [{"weight_decay": 0.1}]),
     ("RMSprop", {"lr": 0.01, "momentum": 0.9}, [{"momentum": 0.5}, {"momentum": 0.0}]),
@@ -91,12 +92,6 @@ _CASES: list[Case] = [
     ("SparseAdam", {"lr": 0.05}, [{"lr": 0.01}, {"betas": (0.5, 0.9)}]),
     ("SparseAdam", {"lr": 0.05}, [{"eps": 1e-3}]),
 ]
-
-# Lucid's Adamax adds ``eps`` to the denominator where the reference adds it
-# inside the running maximum, ``max(beta2 * u, |g| + eps)``: invisible at the
-# default 1e-8, visible at 1e-3 with or without an edit.  The edit itself is
-# checked against a fresh optimizer below.
-_ADAMAX_EPS: Case = ("Adamax", {"lr": 0.05}, [{"eps": 1e-3}])
 
 # Switched on mid-run, which the reference refuses with a ``KeyError``: the
 # new buffer starts at zero, as in a fresh optimizer given the same state.
@@ -228,16 +223,7 @@ def _run_ref(case: Case, ref: Any) -> list[list[np.ndarray]]:
 @pytest.mark.parity
 @pytest.mark.parametrize(
     "case",
-    [pytest.param(c, id=_case_id(c)) for c in _CASES]
-    + [
-        pytest.param(
-            _ADAMAX_EPS,
-            id=_case_id(_ADAMAX_EPS),
-            marks=pytest.mark.xfail(
-                strict=True, reason="Adamax adds eps outside the running maximum"
-            ),
-        )
-    ],
+    [pytest.param(c, id=_case_id(c)) for c in _CASES],
 )
 def test_an_edit_takes_effect_as_in_the_reference(
     case: Case, device: str, ref: Any
@@ -279,10 +265,7 @@ def _transfer_state(src: optim.Optimizer, dst: optim.Optimizer) -> None:
 
 @pytest.mark.parametrize(
     "case",
-    [
-        pytest.param(c, id=_case_id(c))
-        for c in [*_CASES, _ADAMAX_EPS, *_SWITCH_ON_CASES]
-    ],
+    [pytest.param(c, id=_case_id(c)) for c in [*_CASES, *_SWITCH_ON_CASES]],
 )
 def test_an_edit_equals_a_fresh_optimizer_on_the_same_state(
     case: Case, device: str

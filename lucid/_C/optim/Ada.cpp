@@ -74,14 +74,14 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         }
         auto new_m = ::mlx::core::add(::mlx::core::multiply(mlx_scalar(beta1_, dt), *mg.arr),
                                       ::mlx::core::multiply(mlx_scalar(1.0 - beta1_, dt), g));
-        // Infinity-norm update: u = max(beta2 * u, |g|).
-        auto new_u = ::mlx::core::maximum(::mlx::core::multiply(mlx_scalar(beta2_, dt), *ug.arr),
-                                          ::mlx::core::abs(g));
+        // Infinity-norm update: u = max(beta2 * u, |g| + eps).
+        auto new_u =
+            ::mlx::core::maximum(::mlx::core::multiply(mlx_scalar(beta2_, dt), *ug.arr),
+                                 ::mlx::core::add(::mlx::core::abs(g), mlx_scalar(eps_, dt)));
         gpu_replace(mg, ::mlx::core::array(new_m), dt);
         gpu_replace(ug, ::mlx::core::array(new_u), dt);
         auto step_size = mlx_scalar(lr_ / bc1, dt);
-        auto denom = ::mlx::core::add(new_u, mlx_scalar(eps_, dt));
-        auto update = ::mlx::core::multiply(step_size, ::mlx::core::divide(new_m, denom));
+        auto update = ::mlx::core::multiply(step_size, ::mlx::core::divide(new_m, new_u));
         gpu_replace(pg, ::mlx::core::subtract(*pg.arr, update), dt);
         pg.bump_version();
         return;
@@ -103,11 +103,11 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
             if (weight_decay_ != 0.0)
                 g += wdT * P[k];
             M[k] = b1T * M[k] + omb1 * g;
-            const T abs_g = std::abs(g);
+            const T abs_g_eps = std::abs(g) + epsT;
             const T b2u = b2T * U[k];
-            // Element-wise max: u = max(beta2 * u, |g|).
-            U[k] = (b2u > abs_g) ? b2u : abs_g;
-            P[k] -= step_size * (M[k] / (U[k] + epsT));
+            // Element-wise max: u = max(beta2 * u, |g| + eps).
+            U[k] = (b2u > abs_g_eps) ? b2u : abs_g_eps;
+            P[k] -= step_size * (M[k] / U[k]);
         }
     };
     if (dt == Dtype::F32)

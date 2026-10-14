@@ -379,11 +379,11 @@ class Adamax(Optimizer):
     .. math::
 
         m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
-        u_t &= \max\!\left(\beta_2 \, u_{t-1},\; |g_t|\right) \\
+        u_t &= \max\!\left(\beta_2 \, u_{t-1},\; |g_t| + \epsilon\right) \\
         \theta_t &= \theta_{t-1}
-            - \frac{\eta}{(1 - \beta_1^t)} \cdot \frac{m_t}{u_t + \epsilon}
+            - \frac{\eta}{(1 - \beta_1^t)} \cdot \frac{m_t}{u_t}
 
-    Because :math:`u_t` is bounded by :math:`\max_k \beta_2^k |g_{t-k}|`,
+    Because :math:`u_t` is bounded by :math:`\max_k \beta_2^k (|g_{t-k}| + \epsilon)`,
     the effective step size is naturally bounded.
 
     Parameters
@@ -397,7 +397,7 @@ class Adamax(Optimizer):
         estimate and the :math:`\ell_\infty` norm decay
         (default: ``(0.9, 0.999)``).
     eps : float, optional
-        Term :math:`\epsilon` added to the denominator for numerical
+        Term :math:`\epsilon` added to the infinity-norm update for numerical
         stability (default: ``1e-8``).
     weight_decay : float, optional
         L2 regularisation coefficient (default: ``0``).
