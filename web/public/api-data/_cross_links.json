@@ -960,6 +960,16 @@
         "kind": "free_function"
       }
     ],
+    "lucid.ops.selu": [
+      {
+        "name": "SeluBackward",
+        "kind": "backward_node"
+      },
+      {
+        "name": "selu_op",
+        "kind": "free_function"
+      }
+    ],
     "lucid.nn.Sigmoid": [
       {
         "name": "SigmoidBackward",
@@ -2856,6 +2866,11 @@
         "path": "lucid.nn.functional.selu",
         "module": "lucid.nn.functional",
         "kind": "function"
+      },
+      {
+        "path": "lucid.ops.selu",
+        "module": "lucid.ops",
+        "kind": "function"
       }
     ],
     "SigmoidBackward": [
@@ -4396,6 +4411,11 @@
       {
         "path": "lucid.nn.functional.selu",
         "module": "lucid.nn.functional",
+        "kind": "function"
+      },
+      {
+        "path": "lucid.ops.selu",
+        "module": "lucid.ops",
         "kind": "function"
       }
     ],
