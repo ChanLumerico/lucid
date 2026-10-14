@@ -706,6 +706,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - route all MPSGraph padTensor calls via pad_or_identity
 
+- introspect engine.pyi class stubs and check 1:1 parity (LCD-220)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
