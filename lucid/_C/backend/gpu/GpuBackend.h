@@ -251,10 +251,8 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::astype(mask, gpu::to_mlx_dtype(dt)), dt)};
     }
 
-    // On-device random fills via mlx::core::random (see :func:`IBackend`).  Each
-    // builds a PRNG key from ``key_seed`` and fills in one kernel, replacing the
-    // per-element CPU loop + host->device upload of the ``random_*_storage``
-    // helpers (Helpers.cpp).
+    // On-device random fills via mlx::core::random (see :func:`IBackend`).
+    // Each builds a PRNG key from ``key_seed`` and fills in one kernel.
     Storage random_uniform(
         const Shape& shape, double lo, double hi, Dtype dt, std::uint64_t key_seed) override {
         auto key = ::mlx::core::random::key(key_seed);
@@ -298,18 +296,20 @@ public:
                            std::int64_t high,
                            Dtype dt,
                            std::uint64_t key_seed) override {
-        auto key = ::mlx::core::random::key(key_seed);
-        // MLX draws int32 in [low, high); cast to the requested integer dtype.
-        auto arr = ::mlx::core::random::randint(::mlx::core::array(static_cast<int>(low)),
-                                                ::mlx::core::array(static_cast<int>(high)),
-                                                gpu::to_mlx_shape(shape), ::mlx::core::int32, key);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::astype(arr, gpu::to_mlx_dtype(dt)), dt)};
+        const auto ulow = static_cast<std::uint64_t>(low);
+        const auto span = static_cast<std::uint64_t>(high) - ulow;
+        auto pairs_shape = gpu::to_mlx_shape(shape);
+        pairs_shape.push_back(2);
+        auto words = ::mlx::core::random::bits(pairs_shape, 4, ::mlx::core::random::key(key_seed));
+        auto u64 = ::mlx::core::reshape(::mlx::core::view(words, ::mlx::core::uint64),
+                                        gpu::to_mlx_shape(shape));
+        auto sum = ::mlx::core::add(::mlx::core::array(ulow),
+                                    ::mlx::core::remainder(u64, ::mlx::core::array(span)));
+        auto i64 = ::mlx::core::view(sum, ::mlx::core::int64);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::astype(i64, gpu::to_mlx_dtype(dt)), dt)};
     }
 
     // Deep-copy a tensor into a fresh contiguous MLX array.
-    //
-    // Calls ``mlx::core::contiguous`` to materialise the source array
-    // into row-major layout; result is disjoint from the input.
     Storage clone(const Storage& src, const Shape&, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(src);
         auto arr = ::mlx::core::contiguous(*gs.arr);

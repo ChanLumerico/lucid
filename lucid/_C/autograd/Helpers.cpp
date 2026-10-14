@@ -559,6 +559,25 @@ std::uint64_t gpu_random_key_seed(Generator& gen) {
     gen.next_uint32x4(k);
     return (static_cast<std::uint64_t>(k[0]) << 32) | static_cast<std::uint64_t>(k[1]);
 }
+
+// Extract 53 random bits from two 32-bit Philox words and scale by 2^-53 to
+// produce a full-mantissa IEEE-754 double in [0, 1).
+inline double next_uniform_double(Generator& gen) {
+    std::uint32_t buf[4];
+    gen.next_uint32x4(buf);
+    const std::uint64_t bits53 =
+        ((static_cast<std::uint64_t>(buf[0]) << 32) | static_cast<std::uint64_t>(buf[1])) >> 11;
+    return static_cast<double>(bits53) * 0x1.0p-53;
+}
+
+template <typename T>
+inline T next_uniform(Generator& gen) {
+    if constexpr (std::is_same_v<T, double>) {
+        return next_uniform_double(gen);
+    } else {
+        return static_cast<T>(gen.next_uniform_float());
+    }
+}
 }  // namespace
 
 // Generate a Bernoulli mask with explicit shape.  Samples are drawn on CPU
@@ -607,7 +626,7 @@ Storage bernoulli_mask_storage_shape(
     case Dtype::F64: {
         auto* q = reinterpret_cast<double*>(out.ptr.get());
         for (std::size_t i = 0; i < numel; ++i) {
-            q[i] = (static_cast<double>(gen.next_uniform_float()) < keep_prob) ? 1.0 : 0.0;
+            q[i] = (next_uniform_double(gen) < keep_prob) ? 1.0 : 0.0;
         }
         break;
     }
@@ -638,7 +657,7 @@ void fill_uniform(T* dst, std::size_t numel, double lo, double hi, Generator& ge
     const T span = static_cast<T>(hi - lo);
     const T offset = static_cast<T>(lo);
     for (std::size_t i = 0; i < numel; ++i) {
-        dst[i] = static_cast<T>(gen.next_uniform_float()) * span + offset;
+        dst[i] = next_uniform<T>(gen) * span + offset;
     }
 }
 
@@ -651,13 +670,13 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
     const T m = static_cast<T>(mean);
     const T s = static_cast<T>(std);
     constexpr T two_pi = static_cast<T>(6.28318530717958647692);
-    constexpr T eps = static_cast<T>(1e-7);
+    constexpr T eps = std::is_same_v<T, double> ? static_cast<T>(1e-15) : static_cast<T>(1e-7);
     std::size_t i = 0;
     while (i + 1 < numel) {
-        T u1 = static_cast<T>(gen.next_uniform_float());
+        T u1 = next_uniform<T>(gen);
         if (u1 < eps)
             u1 = eps;
-        T u2 = static_cast<T>(gen.next_uniform_float());
+        T u2 = next_uniform<T>(gen);
         const T r = std::sqrt(static_cast<T>(-2) * std::log(u1));
         const T z0 = r * std::cos(two_pi * u2);
         const T z1 = r * std::sin(two_pi * u2);
@@ -667,24 +686,24 @@ void fill_normal(T* dst, std::size_t numel, double mean, double std, Generator& 
     }
     if (i < numel) {
         // Odd element: use only z0 from the final Box-Muller pair.
-        T u1 = static_cast<T>(gen.next_uniform_float());
+        T u1 = next_uniform<T>(gen);
         if (u1 < eps)
             u1 = eps;
-        T u2 = static_cast<T>(gen.next_uniform_float());
+        T u2 = next_uniform<T>(gen);
         const T r = std::sqrt(static_cast<T>(-2) * std::log(u1));
         dst[i] = m + s * r * std::cos(two_pi * u2);
     }
 }
 
 // Fill dst[0..numel) with integers uniformly drawn from [low, high).
-// When range fits in 32 bits, a single uint32 is used per element.
-// When range exceeds 32 bits, two consecutive uint32 values are combined
-// into a 64-bit value.  The Generator is queried in batches of four uint32s
-// to amortise call overhead.
+// Each element uses a 64-bit value formed from two 32-bit Philox words so
+// large 31/32-bit and 64-bit ranges are free of 32-bit modulo bias, and
+// span/addition run in uint64_t to avoid signed overflow on wide bounds.
 template <typename Int>
 void fill_randint(
     Int* dst, std::size_t numel, std::int64_t low, std::int64_t high, Generator& gen) {
-    const std::uint64_t range = static_cast<std::uint64_t>(high - low);
+    const std::uint64_t ulow = static_cast<std::uint64_t>(low);
+    const std::uint64_t range = static_cast<std::uint64_t>(high) - ulow;
     if (range == 0) {
         for (std::size_t i = 0; i < numel; ++i)
             dst[i] = static_cast<Int>(low);
@@ -694,16 +713,10 @@ void fill_randint(
     std::size_t i = 0;
     while (i < numel) {
         gen.next_uint32x4(buf);
-        for (int k = 0; k < 4 && i < numel; ++k, ++i) {
-            std::uint64_t r = buf[k];
-
-            if (range > 0xFFFFFFFFull) {
-                // Combine two 32-bit words for large ranges.
-                std::uint32_t buf2[4];
-                gen.next_uint32x4(buf2);
-                r = (r << 32) | buf2[0];
-            }
-            dst[i] = static_cast<Int>(low) + static_cast<Int>(r % range);
+        for (int k = 0; k < 2 && i < numel; ++k, ++i) {
+            const std::uint64_t r = (static_cast<std::uint64_t>(buf[2 * k]) << 32) |
+                                    static_cast<std::uint64_t>(buf[2 * k + 1]);
+            dst[i] = static_cast<Int>(ulow + (r % range));
         }
     }
 }
@@ -842,7 +855,7 @@ random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, 
     case Dtype::F64: {
         auto* q = reinterpret_cast<double*>(cpu.ptr.get());
         for (std::size_t i = 0; i < n; ++i) {
-            q[i] = (static_cast<double>(gen.next_uniform_float()) < p) ? 1.0 : 0.0;
+            q[i] = (next_uniform_double(gen) < p) ? 1.0 : 0.0;
         }
         break;
     }
@@ -867,6 +880,13 @@ Storage random_randint_storage(const Shape& shape,
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
+    case Dtype::I8:
+        fill_randint<std::int8_t>(reinterpret_cast<std::int8_t*>(cpu.ptr.get()), n, low, high, gen);
+        break;
+    case Dtype::I16:
+        fill_randint<std::int16_t>(reinterpret_cast<std::int16_t*>(cpu.ptr.get()), n, low, high,
+                                   gen);
+        break;
     case Dtype::I32:
         fill_randint<std::int32_t>(reinterpret_cast<std::int32_t*>(cpu.ptr.get()), n, low, high,
                                    gen);
@@ -876,7 +896,7 @@ Storage random_randint_storage(const Shape& shape,
                                    gen);
         break;
     default:
-        ErrorBuilder("random_randint").not_implemented("dtype not supported (I32/I64)");
+        ErrorBuilder("random_randint").not_implemented("dtype not supported (I8/I16/I32/I64)");
     }
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }

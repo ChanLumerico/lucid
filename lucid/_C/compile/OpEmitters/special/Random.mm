@@ -171,6 +171,10 @@ public:
         if (!open_rng(ctx, node, rc)) return false;
         const std::int64_t low = int_attr(node, "low", 0);
         const std::int64_t high = int_attr(node, "high", 0);
+        if (high <= low)
+            return false;
+        if (low < -2147483648LL || (high - 1) > 2147483647LL)
+            return false;
         // MPSGraph's integer uniform path requires an int dtype.  If
         // Lucid materialised the result as a float (rare but
         // possible), fall back to eager.

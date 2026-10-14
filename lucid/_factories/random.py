@@ -978,7 +978,9 @@ def randperm(
     if n == 0:
         impl = _C_engine.zeros([0], _dt, _dev)
         return _wrap(_leaf(impl, requires_grad))
-    keys_impl = _C_engine.rand([n], _C_engine.F32, _dev, _get_gen(generator))
+    keys_impl = _C_engine.randint(
+        [n], -(2**63), 2**63 - 1, _C_engine.I64, _dev, _get_gen(generator)
+    )
     perm_impl = _C_engine.argsort(keys_impl, -1)
     if perm_impl.dtype != _dt:
         perm_impl = _C_engine.astype(perm_impl, _dt)
