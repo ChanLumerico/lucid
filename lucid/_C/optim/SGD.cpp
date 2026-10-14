@@ -150,10 +150,11 @@ void sgd_step_gpu(GpuStorage& param_g,
         ::mlx::core::array m_arr(momentum, mdt);
         ::mlx::core::array dampening_arr(1.0 - dampening, mdt);
 
-        // MLX arrays are immutable, so the buffer may share the gradient's.
+        // Copy on the first step so a shared-buffer gradient does not share
+        // its array descriptor with the momentum buffer.
         const bool first_momentum_step = !holds_buffer(*moment);
         auto new_buf = first_momentum_step
-                           ? g
+                           ? ::mlx::core::copy(g)
                            : ::mlx::core::add(::mlx::core::multiply(m_arr, *gpu_get(*moment).arr),
                                               ::mlx::core::multiply(dampening_arr, g));
         if (first_momentum_step)

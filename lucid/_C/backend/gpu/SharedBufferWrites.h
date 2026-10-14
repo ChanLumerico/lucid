@@ -35,15 +35,16 @@ namespace lucid::gpu {
 // Notes
 // -----
 // A pending array reads the buffer when its graph reaches an array that has
-// run and holds the buffer's ``array::Data``: the pinned alias
-// (``sh.gpu_alias``) and whatever MLX derived from it without a copy
-// (reshape, slice, contiguous).  Only arrays :func:`wrap_mlx_array` noted as
-// pending are roots of the search.  Other pending work stays lazy while the
-// walking it costs stays within a budget shared by successive settles; past
-// it every pending array runs, which costs no more than searching it again
-// on every later write would.  A result that ran without a copy — before the
-// write, or because this ran it — shares the buffer's bytes: it is an alias,
-// not a reader, and sees the write.
+// run and holds the buffer's bytes: the pinned alias (``sh.gpu_alias``), a
+// DLPack import of the same Metal buffer, or whatever MLX derived from either
+// without a copy (reshape, slice, contiguous, copy, single-input cat/stack,
+// unit-axis sum).  Only arrays :func:`wrap_mlx_array` noted as pending are
+// roots of the search.  Other pending work stays lazy while the walking it
+// costs stays within a budget shared by successive settles; past it every
+// pending array runs, which costs no more than searching it again on every
+// later write would.  Every op result :func:`wrap_mlx_array` created that MLX
+// evaluated by aliasing the buffer's bytes (``copy_shared_buffer``) is then
+// rebound onto a fresh snapshot of the pre-write bytes before the write lands.
 LUCID_API void settle_buffer_readers(const SharedStorage& sh,
                                      std::vector<::mlx::core::array> with = {});
 

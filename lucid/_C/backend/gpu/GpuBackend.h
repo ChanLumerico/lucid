@@ -312,7 +312,7 @@ public:
     // Deep-copy a tensor into a fresh contiguous MLX array.
     Storage clone(const Storage& src, const Shape&, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(src);
-        auto arr = ::mlx::core::contiguous(*gs.arr);
+        auto arr = ::mlx::core::copy(::mlx::core::contiguous(*gs.arr));
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 

@@ -210,29 +210,54 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
 
 namespace {
 
-// Arrays that may still be unevaluated graphs, for evaluate_pending().
-// Weak references, pruned whenever the list doubles, so tracking neither
-// keeps an array alive nor grows without bound.
+// Arrays that may still be unevaluated graphs, for evaluate_pending(), and
+// arrays created while a Metal shared buffer is pinned, which an MLX op
+// (copy, contiguous, reshape, slice, single-input cat/stack, unit-axis sum)
+// may evaluate by aliasing the shared buffer's Data via copy_shared_buffer.
+// Weak references, pruned whenever a list doubles, so tracking neither keeps
+// an array alive nor grows without bound.
 constexpr std::size_t kPruneFloor = 4096;
 std::mutex g_pending_mu;
 std::vector<std::weak_ptr<::mlx::core::array>> g_pending;
 std::size_t g_prune_at = kPruneFloor;
+std::vector<std::weak_ptr<::mlx::core::array>> g_shared_candidates;
+std::size_t g_candidates_prune_at = kPruneFloor;
+std::atomic<std::size_t> g_pinned_count{0};
 
 bool is_pending(const ::mlx::core::array& arr) {
     return arr.status() == ::mlx::core::array::Status::unscheduled;
 }
 
 void note_pending(const std::shared_ptr<::mlx::core::array>& arr) {
-    if (!arr || !is_pending(*arr))
+    if (!arr)
+        return;
+    const bool pending = is_pending(*arr);
+    const bool pinned = g_pinned_count.load(std::memory_order_relaxed) > 0;
+    if (!pending && !pinned)
         return;
     std::lock_guard<std::mutex> lock(g_pending_mu);
-    g_pending.push_back(arr);
-    if (g_pending.size() >= g_prune_at) {
-        std::erase_if(g_pending, [](const std::weak_ptr<::mlx::core::array>& weak) {
-            const auto held = weak.lock();
-            return !held || !is_pending(*held);
-        });
-        g_prune_at = std::max(kPruneFloor, 2 * g_pending.size());
+    if (pending) {
+        g_pending.push_back(arr);
+        if (g_pending.size() >= g_prune_at) {
+            std::erase_if(g_pending, [](const std::weak_ptr<::mlx::core::array>& weak) {
+                const auto held = weak.lock();
+                return !held || !is_pending(*held);
+            });
+            g_prune_at = std::max(kPruneFloor, 2 * g_pending.size());
+        }
+    }
+    if (pinned) {
+        g_shared_candidates.push_back(arr);
+        if (g_shared_candidates.size() >= g_candidates_prune_at) {
+            std::erase_if(g_shared_candidates, [](const std::weak_ptr<::mlx::core::array>& weak) {
+                const auto held = weak.lock();
+                return !held || (!is_pending(*held) && !held->data_shared_ptr());
+            });
+            g_candidates_prune_at = std::max(kPruneFloor, 2 * g_shared_candidates.size());
+        }
+    } else if (!g_shared_candidates.empty()) {
+        g_shared_candidates.clear();
+        g_candidates_prune_at = kPruneFloor;
     }
 }
 
@@ -273,6 +298,12 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     // size comparison on every other result.
     if (held.size() == 0)
         held = ::mlx::core::zeros(held.shape(), held.dtype());
+    else if (g_pinned_count.load(std::memory_order_relaxed) > 0 && !is_pending(held))
+        // An MLX op that passed an evaluated input through unchanged
+        // (``contiguous`` on a row-contiguous shared buffer) shares its
+        // ArrayDesc with the input; ``copy`` gives the result a descriptor of
+        // its own so detaching it before a host write leaves the input intact.
+        held = ::mlx::core::copy(held);
     GpuStorage out;
     out.dtype = dtype;
     out.nbytes = held.nbytes();
@@ -324,13 +355,15 @@ using ReadsMemo = std::unordered_map<std::uintptr_t, bool>;
 constexpr std::size_t kSettleWalkBudget = 4096;
 std::atomic<std::size_t> g_walk_credit{kSettleWalkBudget};
 
-// Whether ``root``'s graph reads the bytes ``data`` holds: an array that has
-// run reads them when it holds them, a pending one when any input does.
-// Empty once the walk has spent ``budget``.  Iterative, because a lazy chain
-// can be deeper than the C++ stack.  Frames hold handles, not pointers into
-// a parent's inputs, which another thread's eval may clear.
+// Whether ``root``'s graph reads the bytes ``buf_ptr`` points to: an array
+// that has run reads them when its buffer is ``buf_ptr`` (the pinned alias,
+// a DLPack import of the same Metal buffer, or anything MLX evaluated over
+// either via copy_shared_buffer), a pending one when any input does.  Empty
+// once the walk has spent ``budget``.  Iterative, because a lazy chain can be
+// deeper than the C++ stack.  Frames hold handles, not pointers into a
+// parent's inputs, which another thread's eval may clear.
 std::optional<bool> graph_reads(const ::mlx::core::array& root,
-                                const ::mlx::core::array::Data* data,
+                                const void* buf_ptr,
                                 ReadsMemo& memo,
                                 std::size_t& budget) {
     struct Frame {
@@ -348,7 +381,9 @@ std::optional<bool> graph_reads(const ::mlx::core::array& root,
         if (top.next == 0 && budget-- == 0)
             return std::nullopt;
         if (top.arr.status() != ::mlx::core::array::Status::unscheduled) {
-            memo.emplace(top.arr.id(), top.arr.data_shared_ptr().get() == data);
+            const bool same_buf =
+                top.arr.data_shared_ptr() != nullptr && top.arr.buffer().ptr() == buf_ptr;
+            memo.emplace(top.arr.id(), same_buf);
             stack.pop_back();
             continue;
         }
@@ -378,15 +413,15 @@ std::vector<::mlx::core::array> buffer_readers(const SharedStorage& sh) {
         return readers;
     }
     // Without the pinned alias no tensor has handed the buffer to MLX.
-    if (!sh.gpu_alias)
+    if (!sh.gpu_alias || !sh.gpu_alias->data_shared_ptr())
         return readers;
-    const ::mlx::core::array::Data* data = sh.gpu_alias->data_shared_ptr().get();
+    const void* buf_ptr = sh.gpu_alias->buffer().ptr();
     // No reserve(): a power-of-two bucket count makes libc++ mask the
     // identity hash of aligned pointers into a few buckets.
     ReadsMemo memo;
     std::size_t budget = g_walk_credit.load(std::memory_order_relaxed);
     for (const auto& arr : pending) {
-        const auto reads = graph_reads(*arr, data, memo, budget);
+        const auto reads = graph_reads(*arr, buf_ptr, memo, budget);
         if (!reads) {
             // Everything runs now, so nothing is left to search.
             g_walk_credit.store(kSettleWalkBudget, std::memory_order_relaxed);
@@ -402,6 +437,44 @@ std::vector<::mlx::core::array> buffer_readers(const SharedStorage& sh) {
     return readers;
 }
 
+// Rebind every evaluated op result that MLX aliased onto ``sh``'s buffer
+// (via ``copy_shared_buffer``) to a fresh snapshot of ``sh``'s pre-write
+// bytes, so the host write that follows does not mutate independent tensors.
+void detach_buffer_aliases(const SharedStorage& sh) {
+    if (!sh.gpu_alias || !sh.gpu_alias->data_shared_ptr() || !sh.cpu_ptr || sh.nbytes == 0)
+        return;
+    const void* buf_ptr = sh.gpu_alias->buffer().ptr();
+    if (!buf_ptr)
+        return;
+    const auto pin_id = sh.gpu_alias->id();
+    const bool sole_pinned = g_pinned_count.load(std::memory_order_relaxed) <= 1;
+    std::vector<std::shared_ptr<::mlx::core::array>> aliases;
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        std::erase_if(g_shared_candidates, [&](const std::weak_ptr<::mlx::core::array>& weak) {
+            auto held = weak.lock();
+            if (!held || held->id() == pin_id)
+                return true;
+            if (is_pending(*held))
+                return false;
+            if (held->data_shared_ptr() && held->buffer().ptr() == buf_ptr) {
+                aliases.push_back(std::move(held));
+                return true;
+            }
+            return sole_pinned || !held->data_shared_ptr();
+        });
+    }
+    if (aliases.empty())
+        return;
+    ::mlx::core::allocator::Buffer fresh = ::mlx::core::allocator::malloc(sh.nbytes);
+    std::memcpy(fresh.raw_ptr(), sh.cpu_ptr, sh.nbytes);
+    ::mlx::core::array snap(fresh, sh.gpu_alias->shape(), sh.gpu_alias->dtype());
+    for (const auto& arr : aliases) {
+        const auto elem_off = arr->offset() / static_cast<std::int64_t>(arr->itemsize());
+        arr->copy_shared_buffer(snap, arr->strides(), arr->flags(), arr->data_size(), elem_off);
+    }
+}
+
 }  // namespace
 
 void settle_buffer_readers(const SharedStorage& sh, std::vector<::mlx::core::array> with) {
@@ -412,6 +485,7 @@ void settle_buffer_readers(const SharedStorage& sh, std::vector<::mlx::core::arr
         ::mlx::core::eval(run);
     // Work already submitted may still be reading the buffer as well.
     ::mlx::core::synchronize();
+    detach_buffer_aliases(sh);
 }
 
 namespace {
@@ -435,7 +509,12 @@ void pin_shared_storage(SharedStorage& sh, const Shape& shape) {
     if (sh.gpu_alias || !sh.cpu_ptr || sh.nbytes == 0 || sh.dtype == Dtype::F64 ||
         sh.dtype == Dtype::C128)
         return;
-    sh.gpu_alias = std::make_shared<::mlx::core::array>(external_over(sh, shape));
+    g_pinned_count.fetch_add(1, std::memory_order_relaxed);
+    sh.gpu_alias = std::shared_ptr<::mlx::core::array>(
+        new ::mlx::core::array(external_over(sh, shape)), [](::mlx::core::array* p) noexcept {
+            g_pinned_count.fetch_sub(1, std::memory_order_relaxed);
+            delete p;
+        });
 }
 
 GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape) {

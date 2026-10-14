@@ -482,6 +482,22 @@ Storage gpu_placeholder(Dtype dtype) {
     return Storage{std::move(g)};
 }
 
+// Whether a Metal member's cached ``packed`` storage no longer matches its
+// family root — either because the root array was replaced or because a
+// shared-buffer settle rebound the root's Data onto a snapshot.
+bool stale_gpu_pack(const std::optional<Storage>& packed,
+                    const std::weak_ptr<::mlx::core::array>& packed_root,
+                    const GpuStorage& rg,
+                    bool contig) {
+    if (packed_root.lock() != rg.arr)
+        return true;
+    if (!contig)
+        return false;
+    const auto& pg = std::get<GpuStorage>(*packed);
+    return pg.arr && pg.arr->data_shared_ptr() && rg.arr->data_shared_ptr() &&
+           pg.arr->data_shared_ptr() != rg.arr->data_shared_ptr();
+}
+
 }  // namespace
 
 bool TensorImpl::write_lands_in_buffer() const {
@@ -564,7 +580,8 @@ const Storage& TensorImpl::storage() const {
             return root;
         std::lock_guard<std::mutex> lock(packed_mu_);
         const std::int64_t v = version();
-        if (!packed_ || packed_version_ != v || packed_root_.lock() != rg.arr) {
+        if (!packed_ || packed_version_ != v ||
+            stale_gpu_pack(packed_, packed_root_, rg, is_contiguous())) {
             const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_,
                                           dtype_size(meta_.dtype));
             ::mlx::core::array elems = gpu_strided::read(*rg.arr, g);

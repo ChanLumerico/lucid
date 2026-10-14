@@ -44,14 +44,8 @@ clone_state_storage(const Storage& src, const Shape& shape, Dtype dtype, Device 
         const auto& s = std::get<GpuStorage>(src);
         // Force materialisation, then make an independent copy via MLX.
         s.arr->eval();
-        auto copy = ::mlx::core::array(*s.arr);
-        copy.eval();
-        // Carry the storage's own dtype and byte count, as the CPU branch
-        // does — left at their defaults a non-float state reads back as F32.
-        GpuStorage gs;
-        gs.dtype = s.dtype;
-        gs.nbytes = s.nbytes;
-        gs.arr = std::make_shared<::mlx::core::array>(std::move(copy));
+        GpuStorage gs = gpu::wrap_mlx_array(::mlx::core::copy(*s.arr), s.dtype);
+        gs.arr->eval();
         dst = std::move(gs);
     } else {
         ErrorBuilder("clone_state_storage").fail("unsupported storage variant");
@@ -74,7 +68,8 @@ void overwrite_state_storage(Storage& dst, const Storage& src) {
     if (std::holds_alternative<GpuStorage>(dst) && std::holds_alternative<GpuStorage>(src)) {
         auto& d = std::get<GpuStorage>(dst);
         const auto& s = std::get<GpuStorage>(src);
-        d.arr = std::make_shared<::mlx::core::array>(*s.arr);
+        s.arr->eval();
+        d.arr = gpu::wrap_mlx_array(::mlx::core::copy(*s.arr), d.dtype).arr;
         d.arr->eval();
         return;
     }
