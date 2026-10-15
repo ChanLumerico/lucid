@@ -986,6 +986,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def scatter(self, dim: _int, index: Tensor, src: Tensor | _float, reduce: str | None = None) -> Tensor: ...",
         "    def kthvalue(self, k: _int, dim: _int = -1, keepdim: _bool = False) -> Tensor: ...",
         "    def movedim(self, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...",
+        "    def roll(self, shifts: _int | Sequence[_int], dims: _int | Sequence[_int] | None = None) -> Tensor: ...",
         "    def flatten(self, start_dim: _int = 0, end_dim: _int = -1) -> Tensor: ...",
         "    def tril(self, diagonal: _int = 0) -> Tensor: ...",
         "    def triu(self, diagonal: _int = 0) -> Tensor: ...",

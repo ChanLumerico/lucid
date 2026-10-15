@@ -472,9 +472,11 @@ def _movedim_adapter(
     destination: int | Sequence[int],
 ) -> _Impl:
     """movedim(a, source, destination) — accept int or list for either arg."""
-    src = [int(source)] if isinstance(source, int) else [int(s) for s in source]
-    dst = [int(destination)] if isinstance(destination, int) else [int(d) for d in destination]
-    return _C_engine.movedim(a_impl, src, dst)
+    return _C_engine.movedim(
+        a_impl,
+        _int_list(source, "movedim", "source"),
+        _int_list(destination, "movedim", "destination"),
+    )
 
 
 def _unflatten_adapter(a_impl: _Impl, dim: int, sizes: Sequence[int]) -> _Impl:
@@ -482,20 +484,26 @@ def _unflatten_adapter(a_impl: _Impl, dim: int, sizes: Sequence[int]) -> _Impl:
     return _C_engine.unflatten(a_impl, int(dim), [int(s) for s in sizes])
 
 
-def _int_list(value: int | Sequence[int]) -> list[int]:
+def _int_list(
+    value: int | Sequence[int],
+    name: str = "op",
+    what: str = "dims",
+) -> list[int]:
     """An int-list argument as a list: one int is a list of one.
 
     The method spellings ``x.view(2, 3)`` reach these adapters as one tuple
-    (``lucid._tensor._methods``), the reference's own reading.
+    (``lucid._tensor._methods``), the reference's own reading.  Routes
+    through :func:`_to_axes` so ``SupportsIndex`` scalars (such as
+    ``np.int64``) are accepted and ``bool`` / ``None`` are refused.
     """
-    if isinstance(value, int):
-        return [int(value)]
-    return [int(d) for d in value]
+    if value is None:
+        raise TypeError(f"{name}(): {what} must be an int or a sequence of ints, got None")
+    return _to_axes(value, name, what)
 
 
 def _view_adapter(a_impl: _Impl, size: int | Sequence[int]) -> _Impl:
     """view(input, size) — ``x.view(2, 3)`` is ``x.view((2, 3))``."""
-    return _C_engine.view(a_impl, _int_list(size))
+    return _C_engine.view(a_impl, _int_list(size, "view", "size"))
 
 
 def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
@@ -505,7 +513,7 @@ def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
 
 def _reshape_adapter(x_impl: _Impl, shape: int | Sequence[int]) -> _Impl:
     """reshape(input, shape) — ``x.reshape(2, 3)`` is ``x.reshape((2, 3))``."""
-    return _C_engine.reshape(x_impl, _int_list(shape))
+    return _C_engine.reshape(x_impl, _int_list(shape, "reshape", "shape"))
 
 
 def _transpose_adapter(x_impl: _Impl, dim0: int | None = None, dim1: int | None = None) -> _Impl:
@@ -523,12 +531,12 @@ def _transpose_adapter(x_impl: _Impl, dim0: int | None = None, dim1: int | None 
 
 def _permute_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
     """permute(input, dims) — ``x.permute(1, 0)`` is ``x.permute((1, 0))``."""
-    return _C_engine.permute(x_impl, _int_list(dims))
+    return _C_engine.permute(x_impl, _int_list(dims, "permute", "dims"))
 
 
 def _broadcast_to_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
     """broadcast_to(input, size) — ``expand`` without the ``-1``."""
-    return _C_engine.expand(x_impl, _int_list(size))
+    return _C_engine.expand(x_impl, _int_list(size, "broadcast_to", "size"))
 
 
 def _expand_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
@@ -537,7 +545,7 @@ def _expand_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
     ``-1`` in any position means *keep the existing size along that dim*,
     matching the reference framework semantics.
     """
-    raw = _int_list(size)
+    raw = _int_list(size, "expand", "size")
     # Resolve -1 entries: replace with the corresponding source dimension.
     src_shape = list(x_impl.shape)
     ndim_src = len(src_shape)
@@ -551,8 +559,7 @@ def _expand_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
 
 def _flip_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
     """flip(x, dims) — accept ``dims=int`` or list/tuple of ints."""
-    dims_list = [int(dims)] if isinstance(dims, int) else [int(d) for d in dims]
-    return _C_engine.flip(x_impl, dims_list)
+    return _C_engine.flip(x_impl, _int_list(dims, "flip", "dims"))
 
 
 def _roll_adapter(
@@ -567,7 +574,7 @@ def _roll_adapter(
     signature.  As in the reference, no ``dims`` rolls the elements in
     their flattened order and puts the shape back, a 0-d tensor included.
     """
-    steps = _to_axes(shifts, "roll", "shifts")
+    steps = _int_list(shifts, "roll", "shifts")
     if dims is None:
         if len(steps) != 1:
             raise ValueError(f"roll: without dims, shifts must be a single int, got {shifts!r}")
@@ -618,7 +625,7 @@ def _tile_adapter(a_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
     Fewer counts than axes are padded with leading 1s, as documented and as
     the reference does; the engine refuses them.
     """
-    counts = _int_list(dims)
+    counts = _int_list(dims, "tile", "dims")
     short = len(a_impl.shape) - len(counts)
     return _C_engine.tile(a_impl, [1] * short + counts)
 
@@ -818,7 +825,7 @@ def _repeat_method_adapter(x_impl: _Impl, repeats: int | Sequence[int]) -> _Impl
     framework's ``Tensor.repeat`` (and stay separated from the free
     function above).
     """
-    return _C_engine.tile(x_impl, _int_list(repeats))
+    return _C_engine.tile(x_impl, _int_list(repeats, "repeat", "repeats"))
 
 
 def _repeat_interleave_adapter(
