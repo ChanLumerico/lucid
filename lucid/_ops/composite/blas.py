@@ -541,7 +541,16 @@ def vdot(input: Tensor, other: Tensor) -> Tensor:
     >>> lucid.vdot(a, b)
     tensor(32.)
     """
-    return lucid.linalg.dot(input, other)
+    if (
+        input.is_complex()
+        and input.ndim == 1
+        and other.ndim == 1
+        and input.shape == other.shape
+        and input.dtype == other.dtype
+        and input.device == other.device
+    ):
+        return _la.vecdot(input, other)
+    return _la.dot(input, other)
 
 
 def block_diag(*tensors: Tensor) -> Tensor:

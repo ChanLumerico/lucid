@@ -36,11 +36,11 @@ Limitations
 * ``randomness='error'`` (default) raises if the function calls any random op.
 """
 
-from typing import Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 from lucid._ctx import _RandomnessGuard as _RandGuard
+from lucid.autograd._functional import jvp as _jvp_by_double_backward
 
 if TYPE_CHECKING:
-    from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import Tensor
 
 __all__ = [
@@ -64,9 +64,10 @@ __all__ = [
 # the batch dimension as part of the input — Stage 1 would give wrong shapes
 # like (B, out, B, in) instead of (B, out, in).
 _ISOLATION_ATTR = "_lucid_needs_vmap_isolation"
+_MIN_AUX_TUPLE_LEN = 2
 
 
-def _mark_isolation[F: Callable[..., object]](fn: F) -> F:
+def _mark_isolation[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     """Tag *fn* so :func:`vmap` uses the per-element isolation path.
 
     Used by functional transforms (:func:`grad`, :func:`grad_and_value`,
@@ -79,6 +80,42 @@ def _mark_isolation[F: Callable[..., object]](fn: F) -> F:
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────
+
+
+def _normalise_argnums(
+    argnums: int | tuple[int, ...],
+) -> tuple[bool, tuple[int, ...]]:
+    if isinstance(argnums, int):
+        return True, (argnums,)
+    return False, tuple(argnums)
+
+
+def _prepare_grad_args(
+    args: tuple[Any, ...], argnums: tuple[int, ...]
+) -> list[Any]:
+    from lucid._tensor.tensor import Tensor as _T
+
+    args_list = list(args)
+    for i in argnums:
+        a = args_list[i]
+        if isinstance(a, _T) and not a.requires_grad:
+            args_list[i] = a.detach().requires_grad_(True)
+    return args_list
+
+
+def _unpack_has_aux(
+    output: Any, *, has_aux: bool, name: str, label: str = "output"
+) -> tuple[Tensor, Any]:
+    if not has_aux:
+        out_t: Tensor = output
+        return out_t, None
+    if not isinstance(output, tuple) or len(output) < _MIN_AUX_TUPLE_LEN:
+        raise ValueError(
+            f"lucid.func.{name}: has_aux=True requires func to return ({label}, aux)"
+        )
+    aux = output[1] if len(output) == _MIN_AUX_TUPLE_LEN else output[1:]
+    out_first: Tensor = output[0]
+    return out_first, aux
 
 
 def _normalise_in_dims(
@@ -133,6 +170,59 @@ def _combine_outputs(
         )
     od_i: int = out_dims if isinstance(out_dims, int) else out_dims[0]
     return combine([t for t in items if isinstance(t, _T)], od_i)
+
+
+def _validate_vmap_batch_size(
+    args: tuple[Any, ...], in_dims: list[int | None]
+) -> int | None:
+    from lucid._tensor.tensor import Tensor as _T
+
+    batch_size: int | None = None
+    for a, d in zip(args, in_dims, strict=True):
+        if d is None or not isinstance(a, _T):
+            continue
+        ndim = len(a.shape)
+        bd = d if d >= 0 else ndim + d
+        if bd < 0 or bd >= ndim:
+            raise ValueError(
+                f"vmap: in_dim {d} is out of range for a {ndim}-D tensor"
+            )
+        bs = int(a.shape[bd])
+        if batch_size is None:
+            batch_size = bs
+        elif batch_size != bs:
+            raise ValueError(f"vmap: inconsistent batch sizes {batch_size} vs {bs}")
+    return batch_size
+
+
+def _vectorized_vmap_call(
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    args: tuple[Any, ...],
+    kwargs: dict[str, object],
+    in_dims: list[int | None],
+    out_dims: int | tuple[int, ...],
+) -> Tensor | tuple[Tensor, ...]:
+    from lucid._tensor.tensor import Tensor as _T
+
+    moved = [
+        a if d is None or not isinstance(a, _T) else _move_to_front(a, d)
+        for a, d in zip(args, in_dims, strict=True)
+    ]
+    output: Any = func(*moved, **kwargs)
+    if isinstance(output, tuple):
+        od_list = (
+            [out_dims] * len(output)
+            if isinstance(out_dims, int)
+            else list(out_dims)
+        )
+        return tuple(
+            _move_from_front(o, od) if isinstance(o, _T) else o
+            for o, od in zip(output, od_list, strict=True)
+        )
+    if isinstance(output, _T) and isinstance(out_dims, int) and out_dims != 0:
+        return _move_from_front(output, out_dims)
+    out_tensor: Tensor = output
+    return out_tensor
 
 
 # ── vmap ─────────────────────────────────────────────────────────────────────
@@ -215,8 +305,6 @@ def vmap(
             f"got {strategy!r}"
         )
 
-    from lucid._tensor.tensor import Tensor as _T
-
     def vectorized(
         *args: Tensor,
         **kwargs: object,
@@ -228,72 +316,23 @@ def vmap(
         are stacked along ``out_dims`` to form the vectorised result.
         """
         _in = _normalise_in_dims(in_dims, len(args))
+        batch_size = _validate_vmap_batch_size(args, _in)
 
-        # ── validate inputs and find batch_size ───────────────────────
-        batch_size: int | None = None
-        for a, d in zip(args, _in, strict=True):
-            if d is None or not isinstance(a, _T):
-                continue
-            ndim = len(a.shape)
-            bd = d if d >= 0 else ndim + d
-            if bd < 0 or bd >= ndim:
-                raise ValueError(
-                    f"vmap: in_dim {d} is out of range for a {ndim}-D tensor"
-                )
-            bs = int(a.shape[bd])
-            if batch_size is None:
-                batch_size = bs
-            elif batch_size != bs:
-                raise ValueError(f"vmap: inconsistent batch sizes {batch_size} vs {bs}")
-
-        # No batching — propagate randomness context then call directly.
         with _RandGuard(randomness):
             if batch_size is None:
                 return func(*args, **kwargs)
-
-            # ── dispatch: isolated vs vectorized ──────────────────────
-            # Without a C++ BatchedTensor layer, passing physical (B, ...)
-            # tensors to Python functions exposes the batch axis to .shape,
-            # unqualified reductions, loss target checks, and autograd
-            # transforms. Isolate per sample unless 'vectorized' is
-            # explicitly requested on a plain function.
-            _isolate = batch_size > 0 and (
+            isolate = batch_size > 0 and (
                 strategy != "vectorized" or getattr(func, _ISOLATION_ATTR, False)
             )
-
-            if _isolate:
+            if isolate:
                 return _isolated_vmap(
                     func, args, kwargs, _in, out_dims, batch_size, chunk_size
                 )
-
             if chunk_size is not None and batch_size > chunk_size:
                 return _chunked_vmap(
                     func, args, kwargs, _in, out_dims, chunk_size, batch_size
                 )
-
-            # ── Stage 1: move-batch-dim + call-once ──────────────────
-            moved: list[object] = []
-            for a, d in zip(args, _in, strict=True):
-                if d is None or not isinstance(a, _T):
-                    moved.append(a)
-                else:
-                    moved.append(_move_to_front(a, d))
-
-            output = func(*moved, **kwargs)
-
-            if isinstance(output, tuple):
-                _od: list[int] = (
-                    [out_dims] * len(output)
-                    if isinstance(out_dims, int)
-                    else list(out_dims)
-                )
-                return tuple(
-                    _move_from_front(o, od) if isinstance(o, _T) else o
-                    for o, od in zip(output, _od, strict=True)
-                )
-            if isinstance(output, _T) and isinstance(out_dims, int) and out_dims != 0:
-                return _move_from_front(output, out_dims)
-            return output
+            return _vectorized_vmap_call(func, args, kwargs, _in, out_dims)
 
     return _mark_isolation(vectorized)
 
@@ -378,14 +417,41 @@ def _isolated_vmap(
     return _combine_outputs(results, out_dims, lambda ts, d: lucid.stack(ts, dim=d))
 
 
-# ── grad ─────────────────────────────────────────────────────────────────────
+# ── grad & grad_and_value ────────────────────────────────────────────────────
+
+
+def _eval_grad_and_value(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, object],
+    argnums: tuple[int, ...],
+    *,
+    has_aux: bool,
+    name: str,
+) -> tuple[Any, Tensor, Any]:
+    from lucid.autograd._backward import grad as _ag
+    from lucid.autograd._grad_mode import enable_grad
+
+    args_list = _prepare_grad_args(args, argnums)
+    with enable_grad():
+        output = func(*args_list, **kwargs)
+    loss, aux = _unpack_has_aux(output, has_aux=has_aux, name=name, label="loss")
+    grads = _ag(
+        [loss],
+        [args_list[i] for i in argnums],
+        retain_graph=False,
+        create_graph=False,
+        allow_unused=True,
+    )
+    g: Any = grads[0] if len(argnums) == 1 else tuple(grads)
+    return g, loss.detach(), aux
 
 
 def grad(
     func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
+) -> Callable[..., Any]:
     r"""Build a function returning the gradient of ``func``.
 
     The cornerstone of functional-style autograd: rather than calling
@@ -434,61 +500,23 @@ def grad(
     >>> df(lucid.tensor([1.0, 2.0, 3.0]))  # 3 * x ** 2
     tensor([3., 12., 27.])
     """
-    _argnums: tuple[int, ...] = (
-        (argnums,) if isinstance(argnums, int) else tuple(argnums)
-    )
+    _, _argnums = _normalise_argnums(argnums)
 
-    def grad_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+    def grad_fn(*args: Tensor, **kwargs: object) -> Any:
         """Closure that computes the gradient via reverse-mode autograd."""
-        from lucid._tensor.tensor import Tensor as _T
-        from lucid.autograd._grad_mode import enable_grad
-        from lucid.autograd._backward import grad as _ag
-
-        args_list = list(args)
-        for i in _argnums:
-            a = args_list[i]
-            if isinstance(a, _T) and not a.requires_grad:
-                args_list[i] = a.detach().requires_grad_(True)
-
-        with enable_grad():
-            output = func(*args_list, **kwargs)
-
-        if has_aux:
-            if not isinstance(output, tuple) or len(output) < 2:
-                raise ValueError(
-                    "lucid.func.grad: has_aux=True requires func to return (loss, aux)"
-                )
-            loss: Tensor = output[0]
-            aux: object = output[1] if len(output) == 2 else output[1:]
-        else:
-            loss = output
-            aux = None
-
-        grads = _ag(
-            [loss],
-            [args_list[i] for i in _argnums],
-            retain_graph=False,
-            create_graph=False,
-            allow_unused=True,
+        g, _, aux = _eval_grad_and_value(
+            func, args, kwargs, _argnums, has_aux=has_aux, name="grad"
         )
-        g: Tensor | None | tuple[Tensor | None, ...] = (
-            grads[0] if len(_argnums) == 1 else tuple(grads)
-        )
-        if has_aux:
-            return g, aux
-        return g  # type: ignore[return-value]
+        return (g, aux) if has_aux else g
 
     return _mark_isolation(grad_fn)
-
-
-# ── grad_and_value ────────────────────────────────────────────────────────────
 
 
 def grad_and_value(
     func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> Callable[..., tuple[Tensor | tuple[Tensor | None, ...], Tensor]]:
+) -> Callable[..., Any]:
     r"""Return a function computing both the gradient and the primal value.
 
     Equivalent to combining :func:`grad` with an evaluation of ``func``,
@@ -534,52 +562,14 @@ def grad_and_value(
     >>> value  # 14.0
     tensor(14.)
     """
-    _argnums: tuple[int, ...] = (
-        (argnums,) if isinstance(argnums, int) else tuple(argnums)
-    )
+    _, _argnums = _normalise_argnums(argnums)
 
-    def gv_fn(
-        *args: Tensor, **kwargs: object
-    ) -> tuple[Tensor | tuple[Tensor | None, ...], Tensor]:
-        """Closure that computes the gradient-vector product."""
-        from lucid._tensor.tensor import Tensor as _T
-        from lucid.autograd._grad_mode import enable_grad
-        from lucid.autograd._backward import grad as _ag
-
-        args_list = list(args)
-        for i in _argnums:
-            a = args_list[i]
-            if isinstance(a, _T) and not a.requires_grad:
-                args_list[i] = a.detach().requires_grad_(True)
-
-        with enable_grad():
-            output = func(*args_list, **kwargs)
-
-        if has_aux:
-            if not isinstance(output, tuple) or len(output) < 2:
-                raise ValueError(
-                    "lucid.func.grad_and_value: has_aux=True requires func to "
-                    "return (loss, aux)"
-                )
-            loss: Tensor = output[0]
-            aux: object = output[1] if len(output) == 2 else output[1:]
-        else:
-            loss = output
-            aux = None
-
-        grads = _ag(
-            [loss],
-            [args_list[i] for i in _argnums],
-            retain_graph=False,
-            create_graph=False,
-            allow_unused=True,
+    def gv_fn(*args: Tensor, **kwargs: object) -> Any:
+        """Closure that computes the gradient and primal value."""
+        g, val, aux = _eval_grad_and_value(
+            func, args, kwargs, _argnums, has_aux=has_aux, name="grad_and_value"
         )
-        g: Tensor | None | tuple[Tensor | None, ...] = (
-            grads[0] if len(_argnums) == 1 else tuple(grads)
-        )
-        if has_aux:
-            return g, (loss.detach(), aux)
-        return g, loss.detach()  # type: ignore[return-value]
+        return (g, (val, aux)) if has_aux else (g, val)
 
     return _mark_isolation(gv_fn)
 
@@ -591,7 +581,7 @@ def vjp(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
     *primals: Tensor,
     has_aux: bool = False,
-) -> tuple[Tensor | tuple[Tensor, ...], Callable[..., tuple[Tensor | None, ...]]]:
+) -> tuple[Any, Callable[..., tuple[Tensor | None, ...]]]:
     r"""Compute the vector-Jacobian product of ``func`` at ``primals``.
 
     Evaluates ``func`` at the supplied primal inputs and returns both the
@@ -640,37 +630,19 @@ def vjp(
     >>> y, vjp_fn = vjp(f, x)
     >>> (grads,) = vjp_fn(lucid.ones_like(y))  # 2 * x
     """
-    from lucid._tensor.tensor import Tensor as _T
-    from lucid.autograd._grad_mode import enable_grad
     from lucid.autograd._backward import grad as _ag
+    from lucid.autograd._grad_mode import enable_grad
 
-    primals_rg: list[Tensor] = []
-    for p in primals:
-        if isinstance(p, _T) and not p.requires_grad:
-            p = p.detach().requires_grad_(True)
-        primals_rg.append(p)
-
+    primals_rg = _prepare_grad_args(primals, tuple(range(len(primals))))
     with enable_grad():
         raw_out = func(*primals_rg)
 
-    if has_aux:
-        if not isinstance(raw_out, tuple) or len(raw_out) < 2:
-            raise ValueError(
-                "lucid.func.vjp: has_aux=True requires func to return (output, aux)"
-            )
-        outputs: Tensor | tuple[Tensor, ...] = raw_out[0]
-        aux: object = raw_out[1] if len(raw_out) == 2 else raw_out[1:]
-    else:
-        outputs = raw_out
-        aux = None
-
+    outputs, aux = _unpack_has_aux(raw_out, has_aux=has_aux, name="vjp")
     out_list: list[Tensor] = (
         list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
     )
 
-    def _vjp(
-        *cotangents: Tensor,
-    ) -> tuple[Tensor | None, ...]:
+    def _vjp(*cotangents: Tensor) -> tuple[Tensor | None, ...]:
         cots: list[Tensor | None] = (
             list(cotangents) if cotangents else [None] * len(out_list)
         )
@@ -686,61 +658,10 @@ def vjp(
         )
 
     vjp_fn = _mark_isolation(_vjp)
-    if has_aux:
-        return (outputs, aux), vjp_fn  # type: ignore[return-value]
-    return outputs, vjp_fn
+    return ((outputs, aux), vjp_fn) if has_aux else (outputs, vjp_fn)
 
 
 # ── jvp ──────────────────────────────────────────────────────────────────────
-
-
-def _jvp_by_double_backward(
-    o: Tensor,
-    alpha: Tensor,
-    out_shape: list[int],
-    dtype: _C_engine.Dtype,
-    dev: _C_engine.Device,
-) -> Tensor | None:
-    """``∂o/∂α`` for a non-scalar ``o`` by differentiating a vector-Jacobian
-    product; ``None`` when a backward on the path is not itself differentiable."""
-    import lucid
-    from lucid._C import engine as _C_engine
-    from lucid._dispatch import _wrap
-    from lucid.autograd import grad as _grad
-    from lucid.autograd._grad_mode import enable_grad
-
-    try:
-        with enable_grad():
-            # ``u`` enters as a factor of the forward, not as grad_outputs:
-            # a double backward does not follow grad_outputs, and the second
-            # pass then found no dependence on u and answered zero.
-            u = _wrap(_C_engine.zeros(out_shape, dtype, dev)).requires_grad_(True)
-            (first,) = _grad((o * u).sum(), alpha, create_graph=True, retain_graph=True)
-            if first is None:
-                return _wrap(_C_engine.zeros(out_shape, dtype, dev))
-            (jt,) = _grad(first.sum(), u, allow_unused=True)
-    except RuntimeError, NotImplementedError:
-        return None
-    if jt is None:
-        return _wrap(_C_engine.zeros(out_shape, dtype, dev))
-    jt = lucid.reshape(jt.detach(), out_shape)
-    # An op whose backward is not itself differentiable drops out of the
-    # second pass without an error, and J t would come back partial.  So
-    # check it along one direction against a plain backward: rᵀ(J t) must be
-    # ∂(rᵀo)/∂α.  ``r`` is a fixed hash of the index — drawing it from the
-    # generator would move the caller's random stream.
-    n = 1
-    for d in out_shape:
-        n *= d
-    r = lucid.sin(lucid.arange(n, dtype=jt.dtype, device=jt.device) * 12.9898 + 0.5)
-    r = lucid.reshape(r, out_shape)
-    (plain,) = _grad((o * r).sum(), alpha, retain_graph=True, allow_unused=True)
-    want = 0.0 if plain is None else float(plain.sum().item())
-    got = float((jt * r).sum().item())
-    scale = float((jt * r).abs().sum().item()) + abs(want) + 1e-12
-    if abs(got - want) > 1e-3 * scale:
-        return None
-    return jt
 
 
 def jvp(
@@ -778,12 +699,9 @@ def jvp(
 
     Notes
     -----
-    Implemented via the exact :math:`\alpha`-perturbation trick: introduce
-    a scalar :math:`\alpha` with ``requires_grad=True``, substitute
-    ``x + alpha * t`` for each primal, and read
-    :math:`\partial \text{out} / \partial \alpha` at :math:`\alpha = 0` from
-    a single backward pass. No finite differences are used, so the result
-    is exact up to floating-point rounding.
+    Delegates to :func:`lucid.autograd.functional.jvp`, which computes
+    :math:`J v` exactly in two reverse-mode passes via the double-VJP
+    trick without finite differences.
 
     Examples
     --------
@@ -796,128 +714,22 @@ def jvp(
     """
     import lucid
     from lucid._tensor.tensor import Tensor as _T
-    from lucid._C import engine as _C_engine
-    from lucid._dispatch import _wrap, _unwrap
-    from lucid.autograd._grad_mode import enable_grad
 
-    # Scalar perturbation variable α (leaf, requires_grad) evaluated at 0.
-    # x_pert(α) = primal + α * tangent → d(out)/dα = J(primal) @ tangent
-    # On the tangents' device and in their dtype: made on the CPU, α could
-    # not multiply a Metal tangent, and every jvp on Metal raised — MeanFlow's
-    # training loss among them.
-    first = next((t for t in tangents if isinstance(t, _T)), None)
-    alpha = (
-        lucid.zeros((), dtype=first.dtype, device=first.device)
-        if first is not None
-        else lucid.tensor(0.0)
-    ).requires_grad_(True)
-
-    perturbed: list[Tensor] = []
-    for p, t in zip(primals, tangents):
-        if isinstance(p, _T) and isinstance(t, _T):
-            perturbed.append(
-                _wrap(
-                    _C_engine.add(_unwrap(p), _C_engine.mul(_unwrap(alpha), _unwrap(t)))
-                )
-            )
-        else:
-            perturbed.append(p)
-
-    # The backward of this forward is differentiated again below, so every op
-    # in it needs a graph-mode backward — fused attention included.
-    with enable_grad():
-        pert_out = func(*perturbed)
-
-    # Under the caller's grad mode, not ``no_grad``: the primal output is
-    # what a loss is built from.  MeanFlow's is ‖u − sg(target)‖² with u this
-    # output, and detached it carried no gradient to a single parameter —
-    # the parameters' gradients came instead from the backward passes below,
-    # which accumulated into every leaf until they were routed through
-    # ``autograd.grad``.
-    primals_out = func(*primals)
-
-    out_list: list[Tensor] = (
-        list(pert_out) if isinstance(pert_out, (list, tuple)) else [pert_out]
+    primals_t = tuple(primals)
+    tangents_t = tuple(tangents)
+    create_graph = lucid.is_grad_enabled()
+    if all(isinstance(p, _T) for p in primals_t):
+        return _jvp_by_double_backward(
+            func, primals_t, tangents_t, create_graph=create_graph, strict=strict
+        )
+    tensor_idx = tuple(i for i, p in enumerate(primals_t) if isinstance(p, _T))
+    return _jvp_by_double_backward(
+        lambda *sel: func(*_splice(primals_t, tensor_idx, sel)),
+        tuple(primals_t[i] for i in tensor_idx),
+        tuple(tangents_t[i] for i in tensor_idx),
+        create_graph=create_graph,
+        strict=strict,
     )
-    from lucid.autograd import grad as _grad_of
-
-    jvp_parts: list[Tensor] = []
-    for o in out_list:
-        o_impl = _unwrap(o)
-        out_numel = 1
-        for s in o_impl.shape:
-            out_numel *= s
-        out_shape = list(o_impl.shape)
-        dtype = o_impl.dtype
-        dev = o_impl.device
-
-        if out_numel == 1:
-            # Scalar output: d(o) / d(alpha) computed in one backward pass —
-            # through ``autograd.grad``, which touches no leaf's ``.grad``.
-            (ag,) = _grad_of(o, alpha, retain_graph=True, allow_unused=True)
-            if ag is None:
-                if strict:
-                    raise ValueError(
-                        "jvp: output does not depend on inputs (strict=True)"
-                    )
-                jvp_parts.append(
-                    _wrap(_C_engine.zeros(out_shape if out_shape else [], dtype, dev))
-                )
-            else:
-                # alpha may have shape (1,) due to lucid.tensor(0.0) semantics;
-                # reshape to match the actual output element shape.
-                jvp_parts.append(
-                    _wrap(
-                        _C_engine.reshape(
-                            _unwrap(ag.detach()), out_shape if out_shape else []
-                        )
-                    )
-                )
-        else:
-            # Vector output: two backward passes, not one per element.  With
-            # ``u`` a dummy cotangent, ∂(uᵀo)/∂α = uᵀ(J t) is linear in u, so
-            # its gradient with respect to u is J t itself.  One pass per
-            # element made MeanFlow's training loss — a jvp through the whole
-            # network — thousands of backward passes long.
-            fast = _jvp_by_double_backward(o, alpha, out_shape, dtype, dev)
-            if fast is not None:
-                jvp_parts.append(fast)
-                continue
-            # Fallback for an op without a differentiable backward: O(out_numel)
-            # backward passes — one per element.  d(o[i]) / d(alpha) = JVP[i].
-            from lucid._tensor.tensor import Tensor as _TT
-
-            rows: list[Tensor] = []
-            for row_i in range(out_numel):
-                seed_impl = _C_engine.zeros([out_numel], dtype, dev)
-                one = _C_engine.ones([1], dtype, dev)
-                idx = _C_engine.full([1], float(row_i), _C_engine.I32, dev)
-                seed_impl = _C_engine.scatter_add(seed_impl, idx, one, 0)
-                if out_shape:
-                    seed_impl = _C_engine.reshape(seed_impl, out_shape)
-                (ag,) = _grad_of(
-                    o,
-                    alpha,
-                    grad_outputs=[_TT.__new_from_impl__(seed_impl)],
-                    retain_graph=True,
-                    allow_unused=True,
-                )
-                if ag is None:
-                    if strict:
-                        raise ValueError(
-                            "jvp: output does not depend on inputs (strict=True)"
-                        )
-                    rows.append(_wrap(_C_engine.zeros([], dtype, dev)))
-                else:
-                    rows.append(ag.detach().flatten())
-            jvp_impl = _C_engine.stack([_unwrap(r) for r in rows], 0)
-            jvp_parts.append(
-                _wrap(_C_engine.reshape(jvp_impl, out_shape) if out_shape else jvp_impl)
-            )
-
-    if isinstance(pert_out, tuple):
-        return tuple(primals_out), tuple(jvp_parts)
-    return primals_out, jvp_parts[0]
 
 
 # ── linearize ────────────────────────────────────────────────────────────────
@@ -982,7 +794,62 @@ def linearize(
     return primals_out, _mark_isolation(linear_fn)
 
 
-# ── jacrev ───────────────────────────────────────────────────────────────────
+# ── jacrev & jacfwd ──────────────────────────────────────────────────────────
+
+
+def _one_hot_tangent(x: Tensor, col: int) -> Tensor:
+    from lucid._C import engine as _C_engine
+    from lucid._tensor.tensor import Tensor as _TT
+
+    x_numel = x.numel()
+    x_shape = list(x.shape)
+    dev = x._impl.device
+    dtype = x._impl.dtype
+    t_flat = _C_engine.zeros([x_numel], dtype, dev)
+    one = _C_engine.ones([1], dtype, dev)
+    idx = _C_engine.full([1], float(col), _C_engine.I32, dev)
+    t_flat = _C_engine.scatter_add(t_flat, idx, one, 0)
+    return _TT.__new_from_impl__(
+        _C_engine.reshape(t_flat, x_shape) if x_shape else t_flat
+    )
+
+
+def _jacfwd_block(
+    wrapped_fn: Callable[..., Tensor],
+    primals_sel: tuple[Any, ...],
+    argnums: tuple[int, ...],
+    target_idx: int,
+    out_shape: list[int],
+) -> Tensor | None:
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+    from lucid._tensor.tensor import Tensor as _T
+
+    x = primals_sel[target_idx]
+    if not isinstance(x, _T):
+        return None
+    argn = argnums[target_idx]
+    dev = x._impl.device
+    dtype = x._impl.dtype
+    cols: list[Tensor] = []
+    for col in range(x.numel()):
+        t = _one_hot_tangent(x, col)
+        tans = tuple(
+            t
+            if argn2 == argn or not isinstance(x2, _T)
+            else _T.__new_from_impl__(
+                _C_engine.zeros(list(x2.shape) if x2.shape else [], dtype, dev)
+            )
+            for argn2, x2 in zip(argnums, primals_sel, strict=True)
+        )
+        _, jvp_col = jvp(wrapped_fn, primals_sel, tans)
+        jc: Tensor = jvp_col if not isinstance(jvp_col, tuple) else jvp_col[0]
+        cols.append(_wrap(_C_engine.reshape(_unwrap(jc), [jc.numel()])))
+    if not cols:
+        return None
+    stacked = _C_engine.stack([_unwrap(c) for c in cols], -1)
+    full_shape = out_shape + list(x.shape)
+    return _wrap(_C_engine.reshape(stacked, full_shape) if full_shape else stacked)
 
 
 def jacrev(
@@ -991,7 +858,7 @@ def jacrev(
     has_aux: bool = False,
     *,
     chunk_size: int | None = None,
-) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
+) -> Callable[..., Any]:
     r"""Build a function returning the reverse-mode Jacobian of ``func``.
 
     Assembles the full Jacobian matrix one row at a time, each row
@@ -1036,105 +903,32 @@ def jacrev(
     >>> jacrev(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)
     tensor([[1., 1., 1.], [2., 4., 6.]])
     """
-    _argnums: tuple[int, ...] = (
-        (argnums,) if isinstance(argnums, int) else tuple(argnums)
-    )
+    from lucid.autograd._functional import jacobian as _jacobian
 
-    def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+    if chunk_size is not None and chunk_size <= 0:
+        raise ValueError("jacrev: chunk_size must be positive")
+    _scalar_argnum, _argnums = _normalise_argnums(argnums)
+
+    def jac_fn(*args: Tensor, **kwargs: object) -> Any:
         """Closure that computes the Jacobian."""
-        from lucid._tensor.tensor import Tensor as _T
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _wrap, _unwrap
-        from lucid.autograd._grad_mode import enable_grad
-
-        args_list = list(args)
-        for i in _argnums:
-            a = args_list[i]
-            if isinstance(a, _T) and not a.requires_grad:
-                args_list[i] = a.detach().requires_grad_(True)
-
-        with enable_grad():
-            output = func(*args_list, **kwargs)
-
-        if has_aux:
-            if not isinstance(output, tuple) or len(output) < 2:
-                raise ValueError(
-                    "lucid.func.jacrev: has_aux=True requires func to return (output, aux)"
-                )
-            out_t: Tensor = output[0]
-            aux: object = output[1] if len(output) == 2 else output[1:]
-        else:
-            out_t = output  # type: ignore[assignment]
-            aux = None
-
-        out_impl = _unwrap(out_t)
-        out_numel = 1
-        for s in out_impl.shape:
-            out_numel *= s
-        out_shape = list(out_impl.shape)
-
-        rows: list[list[Tensor]] = [[] for _ in _argnums]
-
-        for row_idx in range(out_numel):
-            for k, i in enumerate(_argnums):
-                a = args_list[i]
-                if isinstance(a, _T):
-                    a._impl.zero_grad()
-
-            if out_numel == 1:
-                out_t.backward(retain_graph=True)
-            else:
-                seed = _C_engine.zeros([out_numel], _C_engine.F32, out_impl.device)
-                one = _C_engine.ones([1], _C_engine.F32, out_impl.device)
-                idx = _C_engine.full(
-                    [1], float(row_idx), _C_engine.I32, out_impl.device
-                )
-                seed = _C_engine.scatter_add(seed, idx, one, 0)
-                if out_shape:
-                    seed = _C_engine.reshape(seed, out_shape)
-                from lucid._tensor.tensor import Tensor as _TT
-
-                out_t.backward(gradient=_TT.__new_from_impl__(seed), retain_graph=True)
-
-            for k, i in enumerate(_argnums):
-                a = args_list[i]
-                if isinstance(a, _T):
-                    g = a._impl.grad_as_python()
-                    if g is not None:
-                        row_impl = _C_engine.TensorImpl(g, a._impl.device, False)
-                        rows[k].append(_wrap(_C_engine.reshape(row_impl, [a.numel()])))
-                    else:
-                        rows[k].append(
-                            _wrap(
-                                _C_engine.zeros(
-                                    [a.numel()], _C_engine.F32, a._impl.device
-                                )
-                            )
-                        )
-
-        results: list[Tensor | None] = []
-        for k, i in enumerate(_argnums):
-            a = args_list[i]
-            if isinstance(a, _T) and rows[k]:
-                J = _C_engine.stack([_unwrap(r) for r in rows[k]], 0)
-                full_shape = out_shape + list(a.shape)
-                results.append(
-                    _wrap(_C_engine.reshape(J, full_shape) if full_shape else J)
-                )
-            else:
-                results.append(None)
-
-        r: Tensor | tuple[Tensor | None, ...] = (
-            results[0] if len(_argnums) == 1 else tuple(results)  # type: ignore[assignment]
+        selected: Any = (
+            args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
         )
-        if has_aux:
-            return r, aux  # type: ignore[return-value]
-        return r
+        aux_holder: list[Any] = []
+
+        def _wrapped(*sel: Tensor) -> Tensor:
+            out, aux = _unpack_has_aux(
+                func(*_splice(args, _argnums, sel), **kwargs),
+                has_aux=has_aux,
+                name="jacrev",
+            )
+            aux_holder.append(aux)
+            return out
+
+        jac = _jacobian(_wrapped, selected)
+        return (jac, aux_holder[0]) if has_aux else jac
 
     return _mark_isolation(jac_fn)
-
-
-# ── jacfwd ───────────────────────────────────────────────────────────────────
 
 
 def jacfwd(
@@ -1143,7 +937,7 @@ def jacfwd(
     has_aux: bool = False,
     *,
     randomness: str = "error",
-) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
+) -> Callable[..., Any]:
     r"""Build a function returning the forward-mode Jacobian of ``func``.
 
     Materialises the Jacobian one column at a time by repeatedly calling
@@ -1191,94 +985,37 @@ def jacfwd(
     >>> jacfwd(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)
     tensor([[1., 1., 1.], [2., 4., 6.]])
     """
-    _argnums: tuple[int, ...] = (
-        (argnums,) if isinstance(argnums, int) else tuple(argnums)
-    )
+    _scalar_argnum, _argnums = _normalise_argnums(argnums)
 
-    def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+    def jac_fn(*args: Tensor, **kwargs: object) -> Any:
         """Closure that computes the Jacobian."""
         import lucid
         from lucid._tensor.tensor import Tensor as _T
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _wrap, _unwrap
 
-        args_list = list(args)
-        primals_sel = tuple(args_list[i] for i in _argnums)
+        primals_sel = tuple(args[i] for i in _argnums)
+        with _RandGuard(randomness):
+            with lucid.no_grad():
+                ref_out = func(*args, **kwargs)
+            sample_out, aux = _unpack_has_aux(
+                ref_out, has_aux=has_aux, name="jacfwd"
+            )
+            out_shape = list(sample_out.shape) if isinstance(sample_out, _T) else []
 
-        # Primal output for shape reference and has_aux
-        with lucid.no_grad():
-            ref_out = func(*args_list, **kwargs)
-
-        if has_aux:
-            if not isinstance(ref_out, tuple) or len(ref_out) < 2:
-                raise ValueError(
-                    "lucid.func.jacfwd: has_aux=True requires func to return (output, aux)"
+            def _wrapped(*sel: Tensor) -> Tensor:
+                out, _ = _unpack_has_aux(
+                    func(*_splice(args, _argnums, sel), **kwargs),
+                    has_aux=has_aux,
+                    name="jacfwd",
                 )
-            sample_out: Tensor = ref_out[0]
-            aux: object = ref_out[1] if len(ref_out) == 2 else ref_out[1:]
-        else:
-            sample_out = ref_out  # type: ignore[assignment]
-            aux = None
+                return out
 
-        out_shape = list(sample_out.shape) if isinstance(sample_out, _T) else []
+            results = [
+                _jacfwd_block(_wrapped, primals_sel, _argnums, k, out_shape)
+                for k in range(len(_argnums))
+            ]
 
-        cols: list[list[Tensor]] = [[] for _ in _argnums]
-
-        for k, (argn, x) in enumerate(zip(_argnums, primals_sel)):
-            if not isinstance(x, _T):
-                continue
-            x_numel = x.numel()
-            x_shape = list(x.shape)
-            dev = x._impl.device
-            dtype = x._impl.dtype
-
-            for col in range(x_numel):
-                # One-hot tangent
-                t_flat = _C_engine.zeros([x_numel], dtype, dev)
-                one = _C_engine.ones([1], dtype, dev)
-                idx = _C_engine.full([1], float(col), _C_engine.I32, dev)
-                t_flat = _C_engine.scatter_add(t_flat, idx, one, 0)
-                from lucid._tensor.tensor import Tensor as _TT
-
-                t = _TT.__new_from_impl__(
-                    _C_engine.reshape(t_flat, x_shape) if x_shape else t_flat
-                )
-
-                # Build full tangent tuple (zero for all other argnums)
-                tans: list[Tensor] = []
-                for argn2, x2 in zip(_argnums, primals_sel):
-                    if argn2 == argn:
-                        tans.append(t)
-                    elif isinstance(x2, _T):
-                        tans.append(
-                            _TT.__new_from_impl__(
-                                _C_engine.zeros(
-                                    list(x2.shape) if x2.shape else [], dtype, dev
-                                )
-                            )
-                        )
-                    else:
-                        tans.append(t)  # fallback
-
-                _, jvp_col = jvp(func, primals_sel, tuple(tans))
-                jc: Tensor = jvp_col if not isinstance(jvp_col, tuple) else jvp_col[0]
-                cols[k].append(_wrap(_C_engine.reshape(_unwrap(jc), [jc.numel()])))
-
-        results: list[Tensor | None] = []
-        for k, x in enumerate(primals_sel):
-            if not isinstance(x, _T) or not cols[k]:
-                results.append(None)
-                continue
-            J = _C_engine.stack([_unwrap(c) for c in cols[k]], -1)
-            full_shape = out_shape + list(x.shape)
-            results.append(_wrap(_C_engine.reshape(J, full_shape) if full_shape else J))
-
-        r: Tensor | tuple[Tensor | None, ...] = (
-            results[0] if len(_argnums) == 1 else tuple(results)  # type: ignore[assignment]
-        )
-        if has_aux:
-            return r, aux  # type: ignore[return-value]
-        return r
+        r: Any = results[0] if _scalar_argnum else tuple(results)
+        return (r, aux) if has_aux else r
 
     return _mark_isolation(jac_fn)
 
@@ -1289,7 +1026,7 @@ def jacfwd(
 def hessian(
     func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
-) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
+) -> Callable[..., Any]:
     r"""Build a function returning the Hessian of a scalar-valued ``func``.
 
     Computes the matrix of second partial derivatives by composing
@@ -1333,23 +1070,17 @@ def hessian(
     """
     from lucid.autograd._functional import hessian as _hessian
 
-    _scalar_argnum = isinstance(argnums, int)
-    _argnums: tuple[int, ...] = (
-        (argnums,) if isinstance(argnums, int) else tuple(argnums)
-    )
+    _scalar_argnum, _argnums = _normalise_argnums(argnums)
 
-    def hessian_fn(
-        *args: Tensor, **kwargs: object
-    ) -> Tensor | tuple[Tensor | None, ...]:
+    def hessian_fn(*args: Tensor, **kwargs: object) -> Any:
         """Closure that computes the Hessian (second-order derivative tensor)."""
-        selected: object = (
+        selected: Any = (
             args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
         )
-        result = _hessian(
+        return _hessian(
             lambda *sel: func(*_splice(args, _argnums, sel), **kwargs),
-            selected,  # type: ignore[arg-type]
+            selected,
         )
-        return result  # type: ignore[return-value]
 
     return _mark_isolation(hessian_fn)
 
@@ -1361,6 +1092,6 @@ def _splice(
 ) -> tuple[object, ...]:
     """Replace args at argnums positions with selected values."""
     lst = list(args)
-    for i, s in zip(argnums, selected):
+    for i, s in zip(argnums, selected, strict=True):
         lst[i] = s
     return tuple(lst)

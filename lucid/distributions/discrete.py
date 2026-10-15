@@ -224,6 +224,16 @@ class Poisson(ExponentialFamily):
         # returns NotImplemented.  We follow.
         raise NotImplementedError("Poisson.entropy: no closed form available")
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor]:
+        return (self.rate.log(),)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        (x,) = natural_params
+        return x.exp()
+
 
 class Binomial(Distribution):
     r"""Binomial distribution over the number of successes in n independent trials.

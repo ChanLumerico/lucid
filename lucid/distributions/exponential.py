@@ -354,6 +354,16 @@ class Exponential(ExponentialFamily):
         """
         return 1.0 - self.rate.log()
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor]:
+        return (-self.rate,)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        (x,) = natural_params
+        return -(-x).log()
+
 
 class Laplace(Distribution):
     r"""Laplace (double-exponential) distribution on :math:`\mathbb{R}`.

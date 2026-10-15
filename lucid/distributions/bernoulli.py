@@ -434,6 +434,16 @@ class Bernoulli(ExponentialFamily):
         values = lucid.arange(0, 2, 1, dtype=param.dtype, device=param.device)
         return self._expand_support(values, expand)
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor]:
+        return (self.logits,)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        (x,) = natural_params
+        return x.softplus()
+
 
 class Geometric(Distribution):
     r"""Geometric distribution: number of failures before the first success.

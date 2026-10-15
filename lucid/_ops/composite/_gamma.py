@@ -463,11 +463,12 @@ def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor
     pkm2, qkm2 = lucid.ones_like(a), x
     pkm1, qkm1 = x + 1.0, z * x
     ans = pkm1 / qkm1
+    one = lucid.ones_like(ans)
+    biginv = lucid.full_like(ans, k.biginv)
     done = lucid.zeros_like(a) != 0.0
     for i in range(1, _IGAM_MAX_ITER + 1):
         if lanes.shape[0] == 0:
             break
-        one = lucid.ones_like(ans)
         y = y + 1.0
         z = z + 2.0
         yc = y * float(i)
@@ -478,7 +479,7 @@ def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor
         t = lucid.where(nonzero, lucid.abs((ans - r) / r), one)
         ans = lucid.where(nonzero, r, ans)
         # The four are rescaled together, so every ratio read is unchanged.
-        s = lucid.where(lucid.abs(pk) > k.big, one * k.biginv, one)
+        s = lucid.where(lucid.abs(pk) > k.big, biginv, one)
         pkm2, pkm1, qkm2, qkm1 = pkm1 * s, pk * s, qkm1 * s, qk * s
         done = done | (t <= k.machep)
         if i % _IGAM_CHUNK == 0 and _any_true(done):
@@ -486,10 +487,19 @@ def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor
             keep = ~done
             lanes, ax, ans, y, z = (v[keep] for v in (lanes, ax, ans, y, z))
             pkm2, pkm1, qkm2, qkm1 = (v[keep] for v in (pkm2, pkm1, qkm2, qkm1))
-            done = done[keep]
+            one, biginv, done = one[keep], biginv[keep], done[keep]
     if lanes.shape[0] > 0:
         result[lanes] = ans * ax
     return result
+
+
+# -2 * (log1p(s) - s) / s^2 = sum_{k>=2} (-1)^k (2/k) s^{k-2} for |s| < 0.05,
+# avoiding cancellation in log1p(sigma) - sigma when sigma = (x - a) / a -> 0.
+_IGAM_ETA_SERIES = 0.05
+_IGAM_SERIES_MIN_REL = 0.05
+_ETA_SQ_COEFFS: tuple[float, ...] = tuple(
+    (-1.0) ** k * (2.0 / k) for k in range(2, 20)
+)
 
 
 def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
@@ -498,8 +508,14 @@ def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
 
     sgn = -1.0 if lower else 1.0
     sigma = (x - a) / a
-    eta_abs = lucid.sqrt(-2.0 * (lucid.log1p(sigma) - sigma))
     zero = lucid.zeros_like(a)
+    near_sig = lucid.abs(sigma) < _IGAM_ETA_SERIES
+    eta_sq_series = (
+        sigma * sigma * _horner_float(_ETA_SQ_COEFFS, lucid.where(near_sig, sigma, zero))
+    )
+    eta_sq_log = -2.0 * (lucid.log1p(sigma) - sigma)
+    eta_sq = lucid.where(near_sig, eta_sq_series, eta_sq_log)
+    eta_abs = lucid.sqrt(eta_sq)
     eta = lucid.where(x > a, eta_abs, lucid.where(x < a, -eta_abs, zero))
     res = 0.5 * lucid.erfc(sgn * eta * lucid.sqrt(a / 2.0))
 
@@ -516,7 +532,7 @@ def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     grows = (mag[..., 1:] > mag[..., :-1]).to(a.dtype)
     grown = lucid.cumsum(lucid.cat([lucid.zeros_like(mag[..., :1]), grows], -1), -1)
     total = lucid.where(grown == 0.0, term, lucid.zeros_like(term)).sum(-1)
-    scale = lucid.exp(-0.5 * a * eta * eta) / lucid.sqrt(2.0 * math.pi * a)
+    scale = lucid.exp(-0.5 * a * eta_sq) / lucid.sqrt(2.0 * math.pi * a)
     return res + sgn * scale * total
 
 
@@ -527,9 +543,12 @@ def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
         lucid.isnan(a) | lucid.isnan(x) | lucid.isinf(a) | lucid.isinf(x) | (a <= 0.0) | (x <= 0.0)
     )
     rel = lucid.abs(x - a) / a
+    asym_large = (rel < _IGAM_LARGE_RATIO / lucid.sqrt(a)) | (
+        (x < a) & (rel < _IGAM_SERIES_MIN_REL)
+    )
     asym = ~edge & (
         ((a > _IGAM_SMALL) & (a < _IGAM_LARGE) & (rel < _IGAM_SMALL_RATIO))
-        | ((a > _IGAM_LARGE) & (rel < _IGAM_LARGE_RATIO / lucid.sqrt(a)))
+        | ((a > _IGAM_LARGE) & asym_large)
     )
     rest = ~edge & ~asym
     # Q's own choice between its branches.  P takes ``1 - Q`` only for

@@ -66,11 +66,7 @@ _CALLS: dict[str, tuple[Any, ...]] = {
 
 #: (function, dtype) pairs whose 16-bit path lives outside ``lucid.special``,
 #: with why they still fail; strict, so a fix shows up as an XPASS.
-_PENDING: dict[tuple[str, str], str] = {
-    ("modified_bessel_i0", "float16"): "is lucid.i0 (lucid/_ops/composite/"
-    "elementwise.py, held by LCD-410), whose exp(|x|) overflows float16 from "
-    "|x| = 11.1",
-}
+_PENDING: dict[tuple[str, str], str] = {}
 
 _TOLS = {"float16": (2e-3, 1e-3), "bfloat16": (1.6e-2, 1e-2)}
 

@@ -279,7 +279,7 @@ def _refuse_independent_rows(
 
 
 def jacobian(
-    func: Callable[..., Tensor],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
@@ -486,7 +486,7 @@ def _first_gradients(
 
 
 def vjp(
-    func: Callable[..., Tensor],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     inputs: Tensor | tuple[Tensor, ...],
     v: Tensor | tuple[Tensor, ...] | None = None,
     create_graph: bool = False,
@@ -585,7 +585,7 @@ def _detach_outputs(
 
 
 def jvp(
-    func: Callable[..., Tensor],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     inputs: Tensor | tuple[Tensor, ...],
     v: Tensor | tuple[Tensor, ...] | None = None,
     create_graph: bool = False,

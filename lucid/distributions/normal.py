@@ -335,6 +335,17 @@ class Normal(ExponentialFamily):
         """
         return 0.5 + 0.5 * math.log(2.0 * math.pi) + self.scale.log()
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor, Tensor]:
+        var = self.variance
+        return (self.loc / var, -0.5 / var)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        x, y = natural_params
+        return -0.25 * (x * x) / y + 0.5 * (-math.pi / y).log()
+
 
 class LogNormal(Distribution):
     r"""Log-Normal distribution: :math:`X = \exp(Y)` where :math:`Y \sim \mathcal{N}(\mu, \sigma^2)`.

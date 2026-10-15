@@ -964,3 +964,38 @@ class ExponentialFamily(Distribution):
             If the subclass has not provided an implementation.
         """
         raise NotImplementedError(f"{type(self).__name__}._log_normalizer")
+
+    @property
+    def _mean_carrier_measure(self) -> Tensor | float:
+        r"""Expected carrier measure :math:`\mathbb{E}_p[k(X)]` under the distribution.
+
+        Defaults to ``0.0`` (Lebesgue or counting carrier with :math:`k(x) = 0`);
+        subclasses with a non-trivial carrier measure override this property.
+        """
+        return 0.0
+
+    @override
+    def entropy(self) -> Tensor:
+        r"""Compute Shannon entropy via the Bregman divergence of :meth:`_log_normalizer`.
+
+        .. math::
+
+            H[p] = A(\eta) - \langle \eta,\, \nabla_\eta A(\eta) \rangle
+                   - \mathbb{E}_p[k(X)]
+
+        Returns
+        -------
+        Tensor
+            Entropy tensor of shape ``batch_shape``.
+        """
+        nparams = [p.detach().requires_grad_(True) for p in self._natural_params]
+        with lucid.enable_grad():
+            lg_normal = self._log_normalizer(*nparams)
+            gradients = lucid.autograd.grad(
+                lg_normal.sum(), nparams, create_graph=True
+            )
+        result: Tensor = lg_normal - self._mean_carrier_measure
+        for np, g in zip(nparams, gradients, strict=True):
+            assert g is not None
+            result = result - (np * g).reshape(self._batch_shape + (-1,)).sum(-1)
+        return result

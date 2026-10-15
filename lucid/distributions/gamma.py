@@ -405,6 +405,16 @@ class Gamma(ExponentialFamily):
             + (1.0 - self.concentration) * lucid.digamma(self.concentration)
         )
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor, Tensor]:
+        return (self.concentration - 1.0, -self.rate)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        x, y = natural_params
+        return lucid.lgamma(x + 1.0) + (x + 1.0) * (-1.0 / y).log()
+
 
 class Chi2(Gamma):
     r"""Chi-squared distribution with :math:`k` degrees of freedom.
@@ -801,6 +811,23 @@ class Beta(ExponentialFamily):
             + (ab - 2.0) * lucid.digamma(ab)
         )
 
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor, Tensor]:
+        return (self.concentration1, self.concentration0)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        x, y = natural_params
+        return lucid.lgamma(x) + lucid.lgamma(y) - lucid.lgamma(x + y)
+
+    @override
+    @property
+    def _mean_carrier_measure(self) -> Tensor:
+        a = self.concentration1
+        b = self.concentration0
+        return 2.0 * lucid.digamma(a + b) - lucid.digamma(a) - lucid.digamma(b)
+
 
 class Dirichlet(ExponentialFamily):
     r"""Dirichlet distribution on the :math:`K`-simplex.
@@ -1097,3 +1124,20 @@ class Dirichlet(ExponentialFamily):
             + (s - k) * lucid.digamma(s)
             - ((a - 1.0) * lucid.digamma(a)).sum(dim=-1)
         )
+
+    @override
+    @property
+    def _natural_params(self) -> tuple[Tensor]:
+        return (self.concentration,)
+
+    @override
+    def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
+        (x,) = natural_params
+        return lucid.lgamma(x).sum(dim=-1) - lucid.lgamma(x.sum(dim=-1))
+
+    @override
+    @property
+    def _mean_carrier_measure(self) -> Tensor:
+        a = self.concentration
+        k = float(a.shape[-1])
+        return k * lucid.digamma(a.sum(dim=-1)) - lucid.digamma(a).sum(dim=-1)
