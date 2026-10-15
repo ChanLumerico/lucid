@@ -118,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - skip contiguous(broadcast_to) in Metal BinaryKernel (#372)
 
+- vectorize f16 and bf16 conversions in Half.h (LCD-298)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

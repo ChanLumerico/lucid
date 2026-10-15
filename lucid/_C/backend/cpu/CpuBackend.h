@@ -163,22 +163,16 @@ inline bool is_half_like(Dtype dt) {
 
 inline CpuStorage widen_half(const CpuStorage& in, std::size_t n) {
     auto p = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
-    const auto* src = reinterpret_cast<const std::uint16_t*>(in.ptr.get());
-    auto* dst = reinterpret_cast<float*>(p.get());
-    const bool brain = in.dtype == Dtype::BF16;
-    for (std::size_t i = 0; i < n; ++i)
-        dst[i] = brain ? bfloat_bits_to_float(src[i]) : half_bits_to_float(src[i]);
+    half_or_bfloat16_to_float_bulk(reinterpret_cast<const std::uint16_t*>(in.ptr.get()),
+                                   reinterpret_cast<float*>(p.get()), n, in.dtype == Dtype::BF16);
     return CpuStorage{p, n * sizeof(float), Dtype::F32};
 }
 
 inline Storage narrow_half(const Storage& wide, std::size_t n, Dtype to) {
     const auto& w = std::get<CpuStorage>(wide);
     auto p = allocate_aligned_bytes(n * sizeof(std::uint16_t), Device::CPU);
-    const auto* src = reinterpret_cast<const float*>(w.ptr.get());
-    auto* dst = reinterpret_cast<std::uint16_t*>(p.get());
-    const bool brain = to == Dtype::BF16;
-    for (std::size_t i = 0; i < n; ++i)
-        dst[i] = brain ? float_to_bfloat_bits(src[i]) : float_to_half_bits(src[i]);
+    float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(w.ptr.get()),
+                                   reinterpret_cast<std::uint16_t*>(p.get()), n, to == Dtype::BF16);
     return Storage{CpuStorage{p, n * sizeof(std::uint16_t), to}};
 }
 
@@ -6857,31 +6851,19 @@ public:
         const bool dst_half = detail::is_half_like(dst_dt);
         if (src_dt != dst_dt && (src_half || dst_half)) {
             if (src_half) {
-                auto f32_ptr = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
-                const auto* bits = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
-                auto* f32 = reinterpret_cast<float*>(f32_ptr.get());
-                const bool brain = src_dt == Dtype::BF16;
-                for (std::size_t i = 0; i < n; ++i)
-                    f32[i] = brain ? detail::bfloat_bits_to_float(bits[i])
-                                   : detail::half_bits_to_float(bits[i]);
-                Storage as_f32{CpuStorage{f32_ptr, n * sizeof(float), Dtype::F32}};
-                if (dst_dt == Dtype::F32)
-                    return as_f32;
-                // The recursion has to be on a leg with no 16-bit float on
-                // either side.  A previous version recursed with F16 still
-                // present, re-entered this branch every time and died of
-                // stack exhaustion — CPU half casts SIGSEGV'd in both
-                // directions and had never worked.
-                return astype(as_f32, shape, Dtype::F32, dst_dt);
+                if (dst_dt == Dtype::F32) {
+                    detail::half_or_bfloat16_to_float_bulk(
+                        reinterpret_cast<const std::uint16_t*>(ca.ptr.get()),
+                        reinterpret_cast<float*>(out_ptr.get()), n, src_dt == Dtype::BF16);
+                    return Storage{CpuStorage{out_ptr, n * dsz, Dtype::F32}};
+                }
+                return astype(Storage{detail::widen_half(ca, n)}, shape, Dtype::F32, dst_dt);
             }
             Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
             const auto& cf = std::get<CpuStorage>(as_f32);
-            const auto* f32 = reinterpret_cast<const float*>(cf.ptr.get());
-            auto* out16 = reinterpret_cast<std::uint16_t*>(out_ptr.get());
-            const bool brain = dst_dt == Dtype::BF16;
-            for (std::size_t i = 0; i < n; ++i)
-                out16[i] = brain ? detail::float_to_bfloat_bits(f32[i])
-                                 : detail::float_to_half_bits(f32[i]);
+            detail::float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(cf.ptr.get()),
+                                                   reinterpret_cast<std::uint16_t*>(out_ptr.get()),
+                                                   n, dst_dt == Dtype::BF16);
             return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
         }
 
@@ -11878,14 +11860,10 @@ private:
             const auto* p = reinterpret_cast<const std::uint16_t*>(cs.ptr.get());
             const bool brain = dt == Dtype::BF16;
             std::vector<float> wi(n), wo(n);
-            for (std::size_t i = 0; i < n; ++i)
-                wi[i] =
-                    brain ? detail::bfloat_bits_to_float(p[i]) : detail::half_bits_to_float(p[i]);
+            detail::half_or_bfloat16_to_float_bulk(p, wi.data(), n, brain);
             fn32(wi.data(), wo.data(), n);
             auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                o[i] =
-                    brain ? detail::float_to_bfloat_bits(wo[i]) : detail::float_to_half_bits(wo[i]);
+            detail::float_to_half_or_bfloat16_bulk(wo.data(), o, n, brain);
         } else {
             ErrorBuilder("cpu_backend::unary").not_implemented("dtype not supported");
         }
@@ -11967,17 +11945,11 @@ private:
             const auto* pb = reinterpret_cast<const std::uint16_t*>(cb.ptr.get());
             const bool brain = dt == Dtype::BF16;
             std::vector<float> wa(n), wb(n), wo(n);
-            for (std::size_t i = 0; i < n; ++i) {
-                wa[i] =
-                    brain ? detail::bfloat_bits_to_float(pa[i]) : detail::half_bits_to_float(pa[i]);
-                wb[i] =
-                    brain ? detail::bfloat_bits_to_float(pb[i]) : detail::half_bits_to_float(pb[i]);
-            }
+            detail::half_or_bfloat16_to_float_bulk(pa, wa.data(), n, brain);
+            detail::half_or_bfloat16_to_float_bulk(pb, wb.data(), n, brain);
             fn32(wa.data(), wb.data(), wo.data(), n);
             auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                o[i] =
-                    brain ? detail::float_to_bfloat_bits(wo[i]) : detail::float_to_half_bits(wo[i]);
+            detail::float_to_half_or_bfloat16_bulk(wo.data(), o, n, brain);
         } else
             ErrorBuilder("cpu_backend::binary").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
@@ -12200,6 +12172,18 @@ private:
 
         if (src_dt == dst_dt) {
             std::memcpy(dst, src, n * dtype_size(dst_dt));
+            return;
+        }
+        if (detail::is_half_like(src_dt) && dst_dt == Dtype::F32) {
+            detail::half_or_bfloat16_to_float_bulk(reinterpret_cast<const std::uint16_t*>(src),
+                                                   reinterpret_cast<float*>(dst), n,
+                                                   src_dt == Dtype::BF16);
+            return;
+        }
+        if (src_dt == Dtype::F32 && detail::is_half_like(dst_dt)) {
+            detail::float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(src),
+                                                   reinterpret_cast<std::uint16_t*>(dst), n,
+                                                   dst_dt == Dtype::BF16);
             return;
         }
 

@@ -110,14 +110,10 @@ AxisResult reduce_one_axis(const CpuStorage& in,
         const std::size_t in_numel = shape_numel(in_shape);
         std::vector<float> wide_in(in_numel), wide_out(out_numel);
         const auto* src = reinterpret_cast<const std::uint16_t*>(in.ptr.get());
-        for (std::size_t i = 0; i < in_numel; ++i)
-            wide_in[i] = bf ? backend::detail::bfloat_bits_to_float(src[i])
-                            : backend::detail::half_bits_to_float(src[i]);
+        backend::detail::half_or_bfloat16_to_float_bulk(src, wide_in.data(), in_numel, bf);
         k32(wide_in.data(), wide_out.data(), oir.outer, oir.reduce_dim, oir.inner);
         auto* dst = reinterpret_cast<std::uint16_t*>(r.data.ptr.get());
-        for (std::size_t i = 0; i < out_numel; ++i)
-            dst[i] = bf ? backend::detail::float_to_bfloat_bits(wide_out[i])
-                        : backend::detail::float_to_half_bits(wide_out[i]);
+        backend::detail::float_to_half_or_bfloat16_bulk(wide_out.data(), dst, out_numel, bf);
         break;
     }
     case Dtype::Bool:
