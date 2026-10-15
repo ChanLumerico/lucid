@@ -400,6 +400,15 @@ class Categorical(Distribution):
             log_p = self.logits
         return -(self._probs * log_p).sum(dim=-1)
 
+    @override
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        r"""Category indices :math:`0, \ldots, K - 1` along axis 0, in ``int64``."""
+        param = self.logits if self._is_logits else self.probs
+        values = lucid.arange(
+            0, self._num_events, 1, dtype=lucid.int64, device=param.device
+        )
+        return self._expand_support(values, expand)
+
 
 class OneHotCategorical(Distribution):
     r"""Categorical distribution with one-hot encoded samples.
@@ -468,6 +477,7 @@ class OneHotCategorical(Distribution):
     tensor(1.)
     """
 
+    has_enumerate_support = True
     arg_constraints = {"probs": simplex, "logits": real_vector}
 
     def __init__(
@@ -597,6 +607,15 @@ class OneHotCategorical(Distribution):
             Entropy values of shape ``batch_shape`` (nats).
         """
         return self._cat.entropy()
+
+    @override
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        r"""The one-hot basis vectors in :math:`\{0, 1\}^K` along axis 0, in
+        the parameter's floating dtype and device."""
+        n = self._event_shape[0]
+        param = self._cat.logits if self._cat._is_logits else self._cat.probs
+        values = lucid.eye(n, dtype=param.dtype, device=param.device)
+        return self._expand_support(values, expand)
 
     @override
     @property

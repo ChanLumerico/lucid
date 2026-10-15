@@ -86,3 +86,44 @@ def test_validation_can_be_turned_off() -> None:
         lucid.tensor(np.array(0.0)), lucid.tensor(np.array(1.0)), validate_args=False
     )
     assert dist is not None
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_enumerate_support_contract(device: str) -> None:
+    """Every distribution declaring ``has_enumerate_support`` enumerates a
+    support whose probabilities sum to 1, and every other raises
+    ``NotImplementedError`` (LCD-453)."""
+    with pytest.raises(NotImplementedError):
+        D.Distribution().enumerate_support()
+
+    t = lambda v: lucid.tensor(np.asarray(v, dtype=np.float32)).to(device)
+    enumerable = [
+        (D.Bernoulli(probs=t([[0.2, 0.7], [0.4, 0.9]])), (2, 2, 2), (2, 1, 1)),
+        (D.Binomial(5, probs=t([0.3, 0.6])), (6, 2), (6, 1)),
+        (D.Categorical(probs=t([[0.2, 0.3, 0.5], [0.1, 0.4, 0.5]])), (3, 2), (3, 1)),
+        (
+            D.OneHotCategorical(probs=t([[0.2, 0.3, 0.5], [0.1, 0.4, 0.5]])),
+            (3, 2, 3),
+            (3, 1, 3),
+        ),
+        (D.Independent(D.Bernoulli(probs=t([0.3, 0.7])), 0), (2, 2), (2, 1)),
+    ]
+    for dist, expanded_shape, unexpanded_shape in enumerable:
+        assert dist.has_enumerate_support
+        full = dist.enumerate_support(expand=True)
+        slim = dist.enumerate_support(expand=False)
+        assert full.device.type == device
+        assert slim.device.type == device
+        assert tuple(full.shape) == expanded_shape
+        assert tuple(slim.shape) == unexpanded_shape
+        assert np.allclose(dist.log_prob(full).exp().sum(dim=0).numpy(), 1.0, atol=1e-5)
+        assert np.allclose(dist.log_prob(slim).exp().sum(dim=0).numpy(), 1.0, atol=1e-5)
+
+    ind_1 = D.Independent(D.Bernoulli(probs=t([0.3, 0.7])), 1)
+    assert not ind_1.has_enumerate_support
+    with pytest.raises(NotImplementedError):
+        ind_1.enumerate_support()
+
+    inhom = D.Binomial(t([2.0, 5.0]), probs=t([0.3, 0.7]))
+    with pytest.raises(NotImplementedError):
+        inhom.enumerate_support()

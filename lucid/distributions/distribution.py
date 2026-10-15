@@ -660,6 +660,49 @@ class Distribution:
         """
         return self.log_prob(value).exp()
 
+    def _expand_support(self, values: Tensor, expand: bool) -> Tensor:
+        """Place ``values`` of shape ``(cardinality, *event_shape)`` along
+        axis 0, with singleton or expanded ``batch_shape`` axes between axis 0
+        and ``event_shape``.
+        """
+        cardinality = int(values.shape[0])
+        values = values.reshape(
+            (cardinality,) + (1,) * len(self._batch_shape) + self._event_shape
+        )
+        if expand:
+            values = values.broadcast_to(
+                (cardinality,) + self._batch_shape + self._event_shape
+            )
+        return values
+
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        r"""Return a tensor containing all values supported by a discrete distribution.
+
+        The result enumerates over dimension 0, so the shape of the result is
+        ``(cardinality,) + batch_shape + event_shape`` when ``expand=True``, or
+        ``(cardinality,) + (1,) * len(batch_shape) + event_shape`` when
+        ``expand=False`` (where ``event_shape = ()`` for univariate
+        distributions).
+
+        Parameters
+        ----------
+        expand : bool, optional
+            Whether to expand the support over the batch dimensions to match
+            the distribution's :attr:`batch_shape`.  Default is ``True``.
+
+        Returns
+        -------
+        Tensor
+            Tensor iterating over dimension 0.
+
+        Raises
+        ------
+        NotImplementedError
+            If the distribution does not implement support enumeration
+            (``has_enumerate_support = False``).
+        """
+        raise NotImplementedError(f"{type(self).__name__}.enumerate_support")
+
     # ── validation ─────────────────────────────────────────────────────────
 
     def _is_pending(self, name: str) -> bool:

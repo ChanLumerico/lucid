@@ -86,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add public broadcast_shapes and broadcast_tensors (LCD-339)
 
+- implement enumerate_support (LCD-453)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

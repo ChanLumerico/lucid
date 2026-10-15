@@ -596,20 +596,27 @@ class Binomial(Distribution):
         >>> Binomial(total_count=2, probs=0.5).entropy()  # 1.5 ln 2
         tensor(1.04)
         """
-        n_max = float(self.total_count.max().item())
-        if n_max != float(self.total_count.min().item()):
-            raise NotImplementedError(
-                "Binomial.entropy: total_count differs across the batch "
-                "(inhomogeneous total count is not supported)"
-            )
-        p: Tensor = self._probs
-        k = lucid.arange(0, int(n_max) + 1, 1, dtype=p.dtype, device=p.device)
-        log_p = self.log_prob(k.reshape([-1] + [1] * len(self._batch_shape)))
+        log_p = self.log_prob(self.enumerate_support(expand=False))
         # p log p is 0 where p is: an outcome a degenerate probability rules
         # out scores -inf, and exp(-inf) * -inf is NaN.
         finite = lucid.isfinite(log_p)
         safe = lucid.where(finite, log_p, 0.0)
         return -lucid.where(finite, safe.exp() * safe, 0.0).sum(dim=0)
+
+    @override
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        r"""The counts :math:`0, \ldots, n` along axis 0, when ``total_count``
+        is homogeneous across the batch."""
+        total_count = int(self.total_count.max().item())
+        if float(self.total_count.min().item()) != total_count:
+            raise NotImplementedError(
+                "Inhomogeneous total count not supported by `enumerate_support`."
+            )
+        param = self.logits if self._is_logits else self.probs
+        values = lucid.arange(
+            0, 1 + total_count, 1, dtype=param.dtype, device=param.device
+        )
+        return self._expand_support(values, expand)
 
 
 

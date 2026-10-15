@@ -484,6 +484,8 @@ def test_constraint_table(name: str, ref: Any) -> None:
     differences: list[Any] = []
     if set(ours.arg_constraints) != set(theirs.arg_constraints):
         differences.append(("arg_constraints", sorted(ours.arg_constraints)))
+    if ours.has_enumerate_support != theirs.has_enumerate_support:
+        differences.append(("has_enumerate_support", ours.has_enumerate_support))
     if ours.support is None:
         differences.append(("support", None))
     else:
@@ -904,4 +906,117 @@ def test_method_gradients(
         return  # presence is test_method_presence's question
     differences = [] if _close(ours, theirs, dtype) else [(param, ours, theirs)]
     _judge(name, f"grad:{method}", differences)
+
+
+# ── enumerate_support (LCD-453) ───────────────────────────────────────────────
+
+
+def _check_support_enumeration(
+    ours_dist: Any, theirs_dist: Any, device: str, expand: bool
+) -> None:
+    assert ours_dist.has_enumerate_support == theirs_dist.has_enumerate_support
+    if not theirs_dist.has_enumerate_support:
+        with pytest.raises(NotImplementedError):
+            ours_dist.enumerate_support(expand=expand)
+        with pytest.raises(NotImplementedError):
+            theirs_dist.enumerate_support(expand=expand)
+        return
+    ours_out = ours_dist.enumerate_support(expand=expand)
+    theirs_out = theirs_dist.enumerate_support(expand=expand)
+    assert ours_out.device.type == device
+    assert tuple(ours_out.shape) == tuple(theirs_out.shape)
+    assert str(ours_out.dtype).split(".")[-1] == str(theirs_out.dtype).split(".")[-1]
+    assert np.array_equal(ours_out.numpy(), theirs_out.numpy())
+    # Scoring the enumerated support under validation must succeed and sum to 1.
+    mass = ours_dist.log_prob(ours_out).exp().sum(dim=0).numpy()
+    assert np.allclose(mass, 1.0, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("expand", [True, False], ids=["expand", "no-expand"])
+@pytest.mark.parametrize("place", _PLACES, ids=_PLACE_IDS)
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_enumerate_support(name: str, place: Any, expand: bool, ref: Any) -> None:
+    device, dtype = place
+    case = CASES[name]
+    ours_dist = case.build(D, _lucid_at(device, dtype), True)
+    theirs_dist = case.build(ref.distributions, _ref_at(ref, dtype), True)
+    _check_support_enumeration(ours_dist, theirs_dist, device, expand)
+
+
+_ENUM_BATCH_BUILDERS: list[tuple[str, Callable[[Any, Callable[[Any], Any]], Any]]] = [
+    ("Bernoulli.probs.scalar", lambda M, t: M.Bernoulli(probs=t(0.3))),
+    ("Bernoulli.logits.1d", lambda M, t: M.Bernoulli(logits=t([-1.0, 0.0, 2.0]))),
+    (
+        "Bernoulli.probs.2d",
+        lambda M, t: M.Bernoulli(probs=t([[0.1, 0.5, 0.9], [0.2, 0.4, 0.8]])),
+    ),
+    ("Binomial.0.scalar", lambda M, t: M.Binomial(0, probs=t(0.3))),
+    ("Binomial.probs.1d", lambda M, t: M.Binomial(4, probs=t([0.1, 0.5, 0.9]))),
+    (
+        "Binomial.logits.2d",
+        lambda M, t: M.Binomial(3, logits=t([[-1.0, 0.0], [1.0, 2.0]])),
+    ),
+    (
+        "Binomial.inhomogeneous",
+        lambda M, t: M.Binomial(t([2.0, 5.0]), probs=t([0.3, 0.7])),
+    ),
+    ("Categorical.probs.1d", lambda M, t: M.Categorical(probs=t([0.2, 0.3, 0.5]))),
+    (
+        "Categorical.logits.2d",
+        lambda M, t: M.Categorical(
+            logits=t([[[0.0, 1.0, 2.0, -1.0], [1.0, 0.0, -1.0, 2.0]]])
+        ),
+    ),
+    (
+        "OneHotCategorical.probs.1d",
+        lambda M, t: M.OneHotCategorical(probs=t([0.2, 0.3, 0.5])),
+    ),
+    (
+        "OneHotCategorical.logits.2d",
+        lambda M, t: M.OneHotCategorical(
+            logits=t([[0.0, 1.0, 2.0], [-1.0, 0.0, 1.0]])
+        ),
+    ),
+    (
+        "Independent.Bernoulli.0",
+        lambda M, t: M.Independent(M.Bernoulli(probs=t([0.2, 0.8])), 0),
+    ),
+    (
+        "Independent.Bernoulli.1",
+        lambda M, t: M.Independent(M.Bernoulli(probs=t([0.2, 0.8])), 1),
+    ),
+]
+
+
+@pytest.mark.parametrize("expand", [True, False], ids=["expand", "no-expand"])
+@pytest.mark.parametrize("place", _PLACES, ids=_PLACE_IDS)
+@pytest.mark.parametrize(
+    "label,build", _ENUM_BATCH_BUILDERS, ids=[b[0] for b in _ENUM_BATCH_BUILDERS]
+)
+def test_enumerate_support_batches(
+    label: str,
+    build: Callable[[Any, Callable[[Any], Any]], Any],
+    place: Any,
+    expand: bool,
+    ref: Any,
+) -> None:
+    del label
+    device, dtype = place
+    ours_dist = build(D, _lucid_at(device, dtype))
+    theirs_dist = build(ref.distributions, _ref_at(ref, dtype))
+    if not theirs_dist.has_enumerate_support:
+        assert not ours_dist.has_enumerate_support
+        with pytest.raises(NotImplementedError):
+            ours_dist.enumerate_support(expand=expand)
+        with pytest.raises(NotImplementedError):
+            theirs_dist.enumerate_support(expand=expand)
+        return
+    try:
+        theirs_out = theirs_dist.enumerate_support(expand=expand)
+    except NotImplementedError:
+        with pytest.raises(NotImplementedError):
+            ours_dist.enumerate_support(expand=expand)
+        return
+    _check_support_enumeration(ours_dist, theirs_dist, device, expand)
+    del theirs_out
 

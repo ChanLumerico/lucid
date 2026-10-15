@@ -426,6 +426,14 @@ class Bernoulli(ExponentialFamily):
         l = self._logits
         return l.softplus() - self._probs * l
 
+    @override
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        r"""The two outcomes :math:`\{0, 1\}` along axis 0, in the parameter's
+        floating dtype and device."""
+        param = self.param
+        values = lucid.arange(0, 2, 1, dtype=param.dtype, device=param.device)
+        return self._expand_support(values, expand)
+
 
 class Geometric(Distribution):
     r"""Geometric distribution: number of failures before the first success.

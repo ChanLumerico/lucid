@@ -290,3 +290,27 @@ class Independent(Distribution):
             return h
         dims = list(range(h.ndim - self.reinterpreted_batch_ndims, h.ndim))
         return h.sum(dim=dims)
+
+    def _has_enumerate_support(self) -> bool:
+        """Whether finite support enumeration is supported.
+
+        Mirrors ``base_dist.has_enumerate_support`` when
+        ``reinterpreted_batch_ndims == 0``; cartesian-product enumeration
+        over re-interpreted batch dimensions is not implemented.
+        """
+        if self.reinterpreted_batch_ndims > 0:
+            return False
+        return self.base_dist.has_enumerate_support
+
+    has_enumerate_support = property(
+        _has_enumerate_support, doc=_has_enumerate_support.__doc__
+    )
+
+    @override
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        """Delegate support enumeration to ``base_dist`` when no batch axes are re-interpreted."""
+        if self.reinterpreted_batch_ndims > 0:
+            raise NotImplementedError(
+                "Enumeration over cartesian product is not implemented"
+            )
+        return self.base_dist.enumerate_support(expand=expand)
