@@ -374,6 +374,116 @@ void set_mutation_on_saved_allowed(bool v) {
     g_allow_mutation_on_saved = v;
 }
 
+static bool g_anomaly_enabled = false;
+
+bool is_anomaly_enabled() {
+    return g_anomaly_enabled;
+}
+
+void set_anomaly_enabled(bool v) {
+    g_anomaly_enabled = v;
+}
+
+namespace {
+
+template <typename T>
+bool has_nan_typed(const std::byte* raw, std::size_t n) {
+    const auto* p = reinterpret_cast<const T*>(raw);
+    for (std::size_t i = 0; i < n; ++i)
+        if (std::isnan(p[i]))
+            return true;
+    return false;
+}
+
+template <float (*Widen)(std::uint16_t)>
+bool has_nan_half(const std::byte* raw, std::size_t n) {
+    const auto* p = reinterpret_cast<const std::uint16_t*>(raw);
+    for (std::size_t i = 0; i < n; ++i)
+        if (std::isnan(Widen(p[i])))
+            return true;
+    return false;
+}
+
+bool cpu_storage_has_nan(const CpuStorage& c) {
+    if (!c.ptr || c.nbytes == 0)
+        return false;
+    const std::size_t n = c.nbytes / dtype_size(c.dtype);
+    const std::byte* raw = c.ptr.get();
+    switch (c.dtype) {
+    case Dtype::F32:
+        return has_nan_typed<float>(raw, n);
+    case Dtype::F64:
+        return has_nan_typed<double>(raw, n);
+    case Dtype::F16:
+        return has_nan_half<backend::detail::half_bits_to_float>(raw, n);
+    case Dtype::BF16:
+        return has_nan_half<backend::detail::bfloat_bits_to_float>(raw, n);
+    case Dtype::C64:
+        return has_nan_typed<float>(raw, 2 * n);
+    case Dtype::C128:
+        return has_nan_typed<double>(raw, 2 * n);
+    default:
+        return false;
+    }
+}
+
+std::string anomaly_node_name(const Node& node) {
+    const std::string cls = node.Node::node_name();
+    if (cls.size() > 8 && cls.rfind("Backward") == cls.size() - 8)
+        return cls;
+    return node.node_name();
+}
+
+}  // namespace
+
+bool storage_has_nan(const Storage& s) {
+    return std::visit(overloaded{
+                          [](const CpuStorage& c) { return cpu_storage_has_nan(c); },
+                          [](const GpuStorage& g) {
+                              if (!g.arr || g.nbytes == 0)
+                                  return false;
+                              if (!is_floating_point(g.dtype) && !is_complex(g.dtype))
+                                  return false;
+                              auto has_nan = ::mlx::core::any(::mlx::core::isnan(*g.arr));
+                              has_nan.eval();
+                              return has_nan.item<bool>();
+                          },
+                          [](const SharedStorage& sh) {
+                              return cpu_storage_has_nan(sh.cpu_view());
+                          },
+                      },
+                      s);
+}
+
+void check_anomaly_grads(const Node& node, const std::vector<Storage>& grads) {
+    if (!g_anomaly_enabled)
+        return;
+    for (std::size_t i = 0; i < grads.size(); ++i) {
+        if (node.empty_grad_is_none() && storage_nbytes(grads[i]) == 0)
+            continue;
+        if (storage_has_nan(grads[i])) {
+            ErrorBuilder("detect_anomaly")
+                .fail("Function '" + anomaly_node_name(node) + "' returned nan values in its " +
+                      std::to_string(i) + "th output.");
+        }
+    }
+}
+
+void check_anomaly_grads_for_graph(const Node& node,
+                                   const std::vector<std::shared_ptr<TensorImpl>>& grads) {
+    if (!g_anomaly_enabled)
+        return;
+    for (std::size_t i = 0; i < grads.size(); ++i) {
+        if (!grads[i])
+            continue;
+        if (storage_has_nan(grads[i]->storage())) {
+            ErrorBuilder("detect_anomaly")
+                .fail("Function '" + anomaly_node_name(node) + "' returned nan values in its " +
+                      std::to_string(i) + "th output.");
+        }
+    }
+}
+
 // Compare the version counter of the live TensorImpl against the saved value.
 // A discrepancy means the tensor was mutated in-place between the forward pass
 // and this backward call — which invalidates the saved activation data.

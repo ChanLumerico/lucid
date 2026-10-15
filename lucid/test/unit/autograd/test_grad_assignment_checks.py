@@ -335,3 +335,94 @@ def test_refuses_self_assignment_like_the_reference(ref: object) -> None:
     lp = lucid.nn.Parameter(lucid.ones(3))
     with pytest.raises(RuntimeError):
         lp.grad = lp
+
+
+# ── after backward(create_graph=True) (LCD-81) ─────────────────────────────
+
+
+def test_set_grad_after_create_graph_replaces_graph_grad_with_plain_tensor(
+    device: str,
+) -> None:
+    w = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+    (w * w).sum().backward(create_graph=True)
+    assert w.grad is not None and w.grad.requires_grad
+    assert w.grad.tolist() == [2.0, 4.0, 6.0]
+
+    w.grad = lucid.zeros(3, device=device)
+    assert w.grad is not None
+    assert w.grad.tolist() == [0.0, 0.0, 0.0]
+    assert not w.grad.requires_grad
+    assert w.grad.grad_fn is None
+
+
+def test_set_grad_after_create_graph_preserves_graph_when_assigned_grad_tracks_autograd(
+    device: str,
+) -> None:
+    w = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+    (w * w).sum().backward(create_graph=True)
+    w.grad = w * 5.0
+    assert w.grad is not None
+    assert w.grad.tolist() == [5.0, 10.0, 15.0]
+    assert w.grad.requires_grad
+    (g2,) = lucid.autograd.grad(w.grad.sum(), [w])
+    assert g2.tolist() == [5.0, 5.0, 5.0]
+
+
+def test_clip_grad_norm_and_value_after_create_graph(device: str) -> None:
+    w = _param([3.0, 4.0], device)
+    (w * w).sum().backward(create_graph=True)  # grad = [6.0, 8.0], norm = 10.0
+    clip_grad_norm_([w], max_norm=1.0)
+    assert w.grad is not None
+    assert w.grad.tolist() == pytest.approx([0.6, 0.8], abs=1e-4)
+    assert w.grad.requires_grad
+
+    clip_grad_value_([w], clip_value=0.7)
+    assert w.grad is not None
+    assert w.grad.tolist() == pytest.approx([0.6, 0.7], abs=1e-4)
+
+    # Also verify clipping under no_grad() replaces the graph-mode grad cleanly.
+    w2 = _param([3.0, 4.0], device)
+    (w2 * w2).sum().backward(create_graph=True)
+    with lucid.no_grad():
+        clip_grad_norm_([w2], max_norm=1.0)
+    assert w2.grad is not None
+    assert w2.grad.tolist() == pytest.approx([0.6, 0.8], abs=1e-4)
+    assert not w2.grad.requires_grad
+
+
+def test_mixed_create_graph_and_eager_backward_accumulates(device: str) -> None:
+    # create_graph=True followed by create_graph=False
+    w = lucid.tensor([1.0, 2.0], device=device, requires_grad=True)
+    (w * w).sum().backward(create_graph=True)  # + [2.0, 4.0] (graph)
+    (w * 3.0).sum().backward(create_graph=False)  # + [3.0, 3.0] (eager)
+    assert w.grad is not None
+    assert w.grad.tolist() == [5.0, 7.0]
+    assert w.grad.requires_grad
+
+    # create_graph=False followed by create_graph=True
+    w2 = lucid.tensor([1.0, 2.0], device=device, requires_grad=True)
+    (w2 * 3.0).sum().backward(create_graph=False)  # + [3.0, 3.0] (eager)
+    (w2 * w2).sum().backward(create_graph=True)  # + [2.0, 4.0] (graph)
+    assert w2.grad is not None
+    assert w2.grad.tolist() == [5.0, 7.0]
+    assert w2.grad.requires_grad
+
+
+@pytest.mark.parity
+def test_create_graph_grad_assignment_and_clipping_parity(ref: object) -> None:
+    rw = ref.nn.Parameter(ref.tensor([3.0, 4.0]))  # type: ignore[attr-defined]
+    (rw * rw).sum().backward(create_graph=True)
+    ref.nn.utils.clip_grad_norm_([rw], max_norm=1.0)  # type: ignore[attr-defined]
+
+    lw = lucid.nn.Parameter(lucid.tensor([3.0, 4.0]))
+    (lw * lw).sum().backward(create_graph=True)
+    clip_grad_norm_([lw], max_norm=1.0)
+
+    assert lw.grad is not None
+    assert lw.grad.tolist() == pytest.approx(rw.grad.tolist(), abs=1e-5)
+    assert lw.grad.requires_grad == rw.grad.requires_grad
+
+    rw.grad = ref.zeros(2)  # type: ignore[attr-defined]
+    lw.grad = lucid.zeros(2)
+    assert lw.grad.tolist() == rw.grad.tolist()
+    assert lw.grad.requires_grad == rw.grad.requires_grad

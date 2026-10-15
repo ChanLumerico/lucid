@@ -410,7 +410,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         return;
     }
 
-    run_fusion_pass(root->grad_fn().get());
+    if (!is_anomaly_enabled())
+        run_fusion_pass(root->grad_fn().get());
     auto order = topo_order(root->grad_fn());
 
     GraphPending pending;
@@ -453,6 +454,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
 
         if (!retain_graph)
             release(*node);
+
+        check_anomaly_grads_for_graph(*node, input_grads);
 
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
@@ -504,7 +507,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
 
     // Optionally fuse adjacent backward nodes (e.g. LinearBackward + ReluBackward)
     // into a single fused node before traversal.
-    run_fusion_pass(root->grad_fn().get());
+    if (!is_anomaly_enabled())
+        run_fusion_pass(root->grad_fn().get());
 
     // Build the execution order once; reuse it for the accumulation loop.
     auto order = topo_order(root->grad_fn());
@@ -559,6 +563,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         // graph intact for a second backward call.
         if (!retain_graph)
             release(*node);
+
+        check_anomaly_grads(*node, input_grads);
 
         // Validate size consistency: the number of returned gradients should
         // equal the number of outgoing edges.  A mismatch is only an error
@@ -792,7 +798,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
         return results;
     }
 
-    if (!create_graph)
+    if (!create_graph && !is_anomaly_enabled())
         run_fusion_pass(root->grad_fn().get());
     const auto order = topo_order(root->grad_fn());
     const auto reaching = reaching_nodes(order, targets);
@@ -872,6 +878,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
             if (node->is_barrier())
                 deliver_held_for_graph(*node, std::move(slots), grad_in);
             const auto input_grads = apply_node_for_graph(*node, grad_in);
+            check_anomaly_grads_for_graph(*node, input_grads);
 
             const auto& edges = node->next_edges();
             for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
@@ -947,6 +954,8 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
 
         if (!retain_graph)
             release(*node);
+
+        check_anomaly_grads(*node, input_grads);
 
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {

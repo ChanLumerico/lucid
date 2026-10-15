@@ -899,7 +899,13 @@ py::object TensorImpl::data_as_python() const {
 // Same variant dispatch as data_as_python() but applied to the optional
 // gradient storage.  Returns py::none() when no gradient has been accumulated.
 py::object TensorImpl::grad_as_python() const {
-    if (!autograd_ || !autograd_->grad.has_value()) {
+    if (!autograd_) {
+        return py::none();
+    }
+    if (autograd_->grad_impl) {
+        return autograd_->grad_impl->data_as_python();
+    }
+    if (!autograd_->grad.has_value()) {
         return py::none();
     }
     // A gradient is always its own dense buffer, so it starts at byte 0.
@@ -1970,6 +1976,16 @@ std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<Te
 // Subsequent arrivals: add via add_op so the result remains differentiable.
 void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
     ensure_autograd();
+    if (!autograd_->grad_impl && autograd_->grad.has_value()) {
+        Storage prev = std::move(*autograd_->grad);
+        autograd_->grad.reset();
+        if (auto* cpu = std::get_if<CpuStorage>(&prev); cpu && cpu->ptr) {
+            if (auto* owned = std::get_deleter<GradSlot>(cpu->ptr))
+                cpu->ptr = owned->buffer;
+        }
+        autograd_->grad_impl = std::make_shared<TensorImpl>(
+            std::move(prev), meta_.shape, meta_.dtype, meta_.device, false);
+    }
     if (!autograd_->grad_impl) {
         autograd_->grad_impl = std::move(g);
     } else {
@@ -1978,7 +1994,18 @@ void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
         // declare it as an extern to keep TensorImpl.cpp independent of the ops layer.
         extern std::shared_ptr<TensorImpl> add_op(const std::shared_ptr<TensorImpl>&,
                                                   const std::shared_ptr<TensorImpl>&);
-        autograd_->grad_impl = add_op(autograd_->grad_impl, g);
+        const bool prev_mode = GradMode::is_enabled();
+        if (autograd_->grad_impl->requires_grad() || autograd_->grad_impl->grad_fn() ||
+            (g && (g->requires_grad() || g->grad_fn()))) {
+            GradMode::set_enabled(true);
+        }
+        try {
+            autograd_->grad_impl = add_op(autograd_->grad_impl, g);
+            GradMode::set_enabled(prev_mode);
+        } catch (...) {
+            GradMode::set_enabled(prev_mode);
+            throw;
+        }
     }
 }
 

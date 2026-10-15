@@ -1159,6 +1159,46 @@ bool is_mutation_on_saved_allowed();
 // restoring the previous value on exit.
 void set_mutation_on_saved_allowed(bool v);
 
+class Node;
+
+// Read the process-wide autograd anomaly-detection flag.
+//
+// Returns
+// -------
+// bool
+//     ``true`` when backward node outputs should be checked for ``NaN``
+//     values.
+//
+// See Also
+// --------
+// :func:`set_anomaly_enabled`
+// :class:`lucid.autograd.detect_anomaly`
+bool is_anomaly_enabled();
+
+// Toggle the process-wide autograd anomaly-detection flag.
+//
+// Parameters
+// ----------
+// v : bool
+//     ``true`` enables ``NaN`` gradient checks on backward node outputs;
+//     ``false`` disables them.
+void set_anomaly_enabled(bool v);
+
+// Return whether ``s`` contains at least one ``NaN`` element (real or
+// complex lane).  Returns ``false`` for integer / boolean storages or
+// empty buffers.
+bool storage_has_nan(const Storage& s);
+
+// When :func:`is_anomaly_enabled` is ``true``, inspect every storage in
+// ``grads`` and raise a :class:`LucidError` naming ``node`` and the
+// offending output index on the first ``NaN`` encountered.
+void check_anomaly_grads(const Node& node, const std::vector<Storage>& grads);
+
+// Graph-mode counterpart of :func:`check_anomaly_grads` for
+// ``backward(create_graph=True)`` and ``grad(..., create_graph=True)``.
+void check_anomaly_grads_for_graph(const Node& node,
+                                   const std::vector<std::shared_ptr<TensorImpl>>& grads);
+
 // Broadcast ``grad`` back to ``input_shape`` after a forward reduction.
 //
 // The backward pass for any reduction op (``sum``, ``mean``, ``var``,

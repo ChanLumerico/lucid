@@ -84,6 +84,13 @@ void accumulate_leaf(TensorImpl& leaf, Storage grad_out) {
 
     grad_out = run_leaf_hooks(leaf, std::move(grad_out));
 
+    if (leaf.grad_as_impl()) {
+        auto g_impl = std::make_shared<TensorImpl>(own_grad_copy(grad_out), leaf.shape(),
+                                                   leaf.dtype(), leaf.device(), false);
+        leaf.accumulate_grad_impl(std::move(g_impl));
+        return;
+    }
+
     auto& grad = leaf.mutable_grad_storage();
     if (!grad.has_value()) {
         // First gradient arriving at this leaf — take ownership directly

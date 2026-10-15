@@ -88,17 +88,22 @@ class detect_anomaly:
 
     def __enter__(self) -> detect_anomaly:
         """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
+        from lucid._C import engine as _C_engine
         from lucid.autograd._grad_mode import _ANOMALY_ENABLED
 
-        self._prev = _ANOMALY_ENABLED[0]
-        _ANOMALY_ENABLED[0] = self.check_nan
+        self._prev = bool(_C_engine.is_anomaly_enabled())
+        active = bool(self.check_nan)
+        _ANOMALY_ENABLED[0] = active
+        _C_engine.set_anomaly_enabled(active)
         return self
 
     def __exit__(self, *args: object) -> None:
         """Exit the context, restoring any state that was modified on entry."""
+        from lucid._C import engine as _C_engine
         from lucid.autograd._grad_mode import _ANOMALY_ENABLED
 
         _ANOMALY_ENABLED[0] = self._prev
+        _C_engine.set_anomaly_enabled(self._prev)
 
     def __call__(self, fn: object) -> object:
         """Support use as a decorator."""
@@ -156,9 +161,12 @@ def set_detect_anomaly(mode: bool, check_nan: bool = True) -> None:
     True
     >>> set_detect_anomaly(False)
     """
+    from lucid._C import engine as _C_engine
     from lucid.autograd._grad_mode import _ANOMALY_ENABLED
 
-    _ANOMALY_ENABLED[0] = bool(mode) and bool(check_nan)
+    active = bool(mode) and bool(check_nan)
+    _ANOMALY_ENABLED[0] = active
+    _C_engine.set_anomaly_enabled(active)
 
 
 def is_anomaly_enabled() -> bool:
@@ -198,6 +206,6 @@ def is_anomaly_enabled() -> bool:
     >>> is_anomaly_enabled()
     False
     """
-    from lucid.autograd._grad_mode import _ANOMALY_ENABLED
+    from lucid._C import engine as _C_engine
 
-    return bool(_ANOMALY_ENABLED[0])
+    return bool(_C_engine.is_anomaly_enabled())

@@ -134,6 +134,13 @@ void register_autograd(py::module_& m) {
           "Enable or disable the autograd version-mismatch check.  When "
           "True, in-place mutations of saved tensors no longer raise "
           "VersionMismatch — gradients become the user's responsibility.");
+
+    // Process-wide flag for ``lucid.autograd.detect_anomaly`` /
+    // ``lucid.autograd.set_detect_anomaly``.
+    m.def("is_anomaly_enabled", &lucid::is_anomaly_enabled,
+          "Return whether autograd anomaly detection (NaN gradient checking) is enabled.");
+    m.def("set_anomaly_enabled", &lucid::set_anomaly_enabled, py::arg("enabled"),
+          "Enable or disable autograd anomaly detection (NaN gradient checking) in the engine.");
 }
 
 }  // namespace lucid::bindings

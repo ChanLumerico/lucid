@@ -136,12 +136,18 @@ Storage run_slot_hooks(Node& producer, std::uint32_t output_nr, Storage grad) {
     if (slot->runner)
         grad = run_hooks(*slot, std::move(grad), slot->shape);
     if (const TensorImplPtr t = retaining_tensor(*slot, producer, output_nr)) {
-        // A buffer of its own: what flows on is added into in place.
-        auto& kept = t->mutable_grad_storage();
-        if (!kept.has_value())
-            kept = own_grad_copy(grad);
-        else
-            accumulate_into(*kept, grad);
+        if (t->grad_as_impl()) {
+            auto g_impl = std::make_shared<TensorImpl>(own_grad_copy(grad), t->shape(), t->dtype(),
+                                                       t->device(), false);
+            t->accumulate_grad_impl(std::move(g_impl));
+        } else {
+            // A buffer of its own: what flows on is added into in place.
+            auto& kept = t->mutable_grad_storage();
+            if (!kept.has_value())
+                kept = own_grad_copy(grad);
+            else
+                accumulate_into(*kept, grad);
+        }
     }
     return grad;
 }

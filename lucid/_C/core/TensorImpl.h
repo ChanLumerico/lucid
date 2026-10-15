@@ -647,7 +647,11 @@ public:
     // grad : Storage
     //     Gradient buffer to adopt.  Must have the same dtype / device /
     //     shape as this tensor.
-    void set_grad_storage(Storage grad) { ensure_autograd()->grad = std::move(grad); }
+    void set_grad_storage(Storage grad) {
+        auto* ag = ensure_autograd();
+        ag->grad = std::move(grad);
+        ag->grad_impl.reset();
+    }
 
     // Returns the graph-mode gradient as a full :class:`TensorImpl`.
     //
@@ -671,7 +675,10 @@ public:
     // g : std::shared_ptr<TensorImpl>
     //     Gradient tensor to install.
     void set_grad_impl(std::shared_ptr<TensorImpl> g) noexcept {
-        ensure_autograd()->grad_impl = std::move(g);
+        auto* ag = ensure_autograd();
+        ag->grad_impl = std::move(g);
+        if (ag->grad_impl)
+            ag->grad.reset();
     }
 
     // Accumulates a graph-mode gradient.

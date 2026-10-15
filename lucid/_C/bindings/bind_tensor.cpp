@@ -427,7 +427,12 @@ void register_tensor_impl(py::module_& m) {
                 if (!g)
                     ErrorBuilder("Tensor.grad")
                         .invalid_argument("expected a tensor; zero_grad() clears a gradient");
-                self.set_grad_storage(lucid::assignable_grad(self, *g));
+                Storage slot = lucid::assignable_grad(self, *g);
+                if (g->requires_grad() || g->grad_fn()) {
+                    self.set_grad_impl(g);
+                } else {
+                    self.set_grad_storage(std::move(slot));
+                }
             },
             py::arg("grad"),
             "Replace this tensor's gradient with grad's values.  grad must have "
