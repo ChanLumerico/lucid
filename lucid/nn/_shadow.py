@@ -73,7 +73,7 @@ class PhantomImpl:
             shape = (shape,)
         self.shape = tuple(int(s) for s in shape)
         # Default dtype/device to F32/CPU when None — empty values trip
-        # ``_maybe_promote`` (it then calls ``astype(impl, None)`` which
+        # ``_promotion`` / ``_dispatch`` (e.g. ``astype(impl, None)`` which
         # the engine binding rejects).  RoFormer / CoAtNet hit this path
         # during ``__init__`` via arithmetic on freshly-created
         # ``arange`` phantoms.
@@ -82,13 +82,31 @@ class PhantomImpl:
         self.requires_grad = requires_grad
         self.ndim = len(self.shape)
 
+    @property
+    def retains_grad(self) -> bool:
+        return False
+
+    def is_aliased(self) -> bool:
+        return False
+
+    def retain_grad_(self) -> None:
+        return None
+
     # Methods that lucid code paths *do* call on impls during __init__:
 
     def clone_with_grad(self, requires_grad: bool) -> PhantomImpl:
         return PhantomImpl(self.shape, self.dtype, self.device, requires_grad)
 
+    def data_alias(self) -> PhantomImpl:
+        return PhantomImpl(self.shape, self.dtype, self.device, False)
+
     def reshape(self, shape: Any) -> PhantomImpl:
-        return PhantomImpl(shape, self.dtype, self.device, self.requires_grad)
+        return PhantomImpl(
+            _resolve_reshape(self.shape, shape),
+            self.dtype,
+            self.device,
+            self.requires_grad,
+        )
 
     def detach(self) -> PhantomImpl:
         return self
@@ -137,13 +155,100 @@ class _PhantomMethod:
 
 
 # ---------------------------------------------------------------------------
-# Patched engine factories
+# Shape and dtype helpers for phantom ops
+# ---------------------------------------------------------------------------
+
+
+def _broadcast_shapes(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
+    """Broadcast two shape tuples following the standard right-aligned rule."""
+    if a == b:
+        return a
+    if not a:
+        return b
+    if not b:
+        return a
+    rank = max(len(a), len(b))
+    pa = (1,) * (rank - len(a)) + a
+    pb = (1,) * (rank - len(b)) + b
+    out: list[int] = []
+    for x, y in zip(pa, pb, strict=True):
+        if x != y and 1 not in (x, y):
+            raise _C_engine.ShapeMismatch(
+                f"Shapes {list(a)} and {list(b)} cannot be broadcast"
+            )
+        out.append(y if x == 1 else x)
+    return tuple(out)
+
+
+def _resolve_reshape(src_shape: tuple[int, ...], target: Any) -> tuple[int, ...]:
+    """Resolve a reshape target (including up to one ``-1`` dim) against ``src_shape``."""
+    raw = (int(target),) if isinstance(target, int) else tuple(int(s) for s in target)
+    if -1 not in raw:
+        return raw
+    known = 1
+    neg_idx = -1
+    for i, s in enumerate(raw):
+        if s == -1:
+            neg_idx = i
+        else:
+            known *= s
+    total = math.prod(src_shape)
+    inferred = total // known if known > 0 else 0
+    return (*raw[:neg_idx], inferred, *raw[neg_idx + 1 :])
+
+
+def _promote_two(
+    a: Any, b: Any, *, true_div: bool = False, opmath: bool = False
+) -> Any:
+    """Compute the promoted engine dtype for two impls via :mod:`lucid._promotion`."""
+    from lucid import _promotion
+
+    if opmath and a.dtype != b.dtype:
+        if (
+            _promotion.is_half(a.dtype)
+            and not b.shape
+            and b.dtype in (_C_engine.F32, _C_engine.F64)
+        ):
+            return a.dtype
+        if (
+            _promotion.is_half(b.dtype)
+            and not a.shape
+            and a.dtype in (_C_engine.F32, _C_engine.F64)
+        ):
+            return b.dtype
+    dt = _promotion.result_type(a, b)
+    if true_div and _promotion.is_integral(dt):
+        dt = _promotion.default_float(a.device)
+    return dt
+
+
+def _reduced_shape(
+    shape: tuple[int, ...], axes: Any, keepdim: bool
+) -> tuple[int, ...]:
+    """Compute output shape for a reduction along ``axes``."""
+    ndim = len(shape)
+    if ndim == 0:
+        return ()
+    if axes is None:
+        norm = set(range(ndim))
+    elif isinstance(axes, int):
+        norm = {axes % ndim}
+    else:
+        axis_list = [int(a) % ndim for a in axes]
+        norm = set(axis_list) if axis_list else set(range(ndim))
+    if keepdim:
+        return tuple(1 if i in norm else s for i, s in enumerate(shape))
+    return tuple(s for i, s in enumerate(shape) if i not in norm)
+
+
+# ---------------------------------------------------------------------------
+# Patched engine factories and ops
 # ---------------------------------------------------------------------------
 
 
 def _shape_only_factory(*args: Any, **kwargs: Any) -> PhantomImpl:
     """Engine signature: ``f(shape, dtype, device)`` — zeros / ones /
-    empty / eye all match this layout."""
+    empty / rand / randn all match this layout."""
     if not args:
         return PhantomImpl((), None, None)
     shape = args[0]
@@ -152,8 +257,51 @@ def _shape_only_factory(*args: Any, **kwargs: Any) -> PhantomImpl:
     return PhantomImpl(shape, dtype, device)
 
 
+def _eye_factory(
+    n: int, m: int = -1, k: int = 0, *args: Any, **kwargs: Any
+) -> PhantomImpl:
+    """Engine signature: ``eye(N, M=-1, k=0, dtype=F32, device=CPU, requires_grad=False)``."""
+    del k
+    rows = int(n)
+    cols = int(m) if int(m) >= 0 else rows
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl((rows, cols), dtype, device)
+
+
 def _full_factory(shape: Any, value: Any, *args: Any, **kwargs: Any) -> PhantomImpl:
     """Engine signature: ``full(shape, value, dtype, device)``."""
+    del value
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl(shape, dtype, device)
+
+
+def _randint_factory(
+    shape: Any, low: Any, high: Any, *args: Any, **kwargs: Any
+) -> PhantomImpl:
+    """Engine signature: ``randint(shape, low, high, dtype=I64, device=CPU, generator=None)``."""
+    del low, high
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype", _C_engine.I64)
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl(shape, dtype, device)
+
+
+def _uniform_normal_factory(
+    shape: Any, p1: Any = 0.0, p2: Any = 1.0, *args: Any, **kwargs: Any
+) -> PhantomImpl:
+    """Engine signature: ``uniform/normal(shape, p1, p2, dtype=F32, device=CPU, generator=None)``."""
+    del p1, p2
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl(shape, dtype, device)
+
+
+def _bernoulli_exponential_factory(
+    shape: Any, param: Any = 1.0, *args: Any, **kwargs: Any
+) -> PhantomImpl:
+    """Engine signature: ``bernoulli/exponential(shape, p, dtype=F32, device=CPU, generator=None)``."""
+    del param
     dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
     device = args[1] if len(args) >= 2 else kwargs.get("device")
     return PhantomImpl(shape, dtype, device)
@@ -179,12 +327,324 @@ def _arange_factory(
     return PhantomImpl((length,), dtype, device)
 
 
+def _linspace_factory(
+    start: float, stop: float, num: int = 50, *args: Any, **kwargs: Any
+) -> PhantomImpl:
+    """Engine signature: ``linspace(start, stop, num=50, dtype=F32, device=CPU, requires_grad=False)``."""
+    del start, stop
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl((int(num),), dtype, device)
+
+
+def _logspace_factory(
+    start: float,
+    stop: float,
+    num: int = 50,
+    base: float = 10.0,
+    *args: Any,
+    **kwargs: Any,
+) -> PhantomImpl:
+    """Engine signature: ``logspace(start, stop, num=50, base=10.0, dtype=F32, device=CPU, requires_grad=False)``."""
+    del start, stop, base
+    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
+    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    return PhantomImpl((int(num),), dtype, device)
+
+
+def _astype_factory(impl: Any, dtype: Any, *args: Any, **kwargs: Any) -> Any:
+    """``astype(impl, dtype)`` — cast a phantom's dtype metadata."""
+    if isinstance(impl, PhantomImpl):
+        return PhantomImpl(impl.shape, dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["astype"](impl, dtype, *args, **kwargs)
+
+
+def _to_device_factory(impl: Any, device: Any, *args: Any, **kwargs: Any) -> Any:
+    """``to_device(impl, device)`` — update a phantom's device metadata."""
+    if isinstance(impl, PhantomImpl):
+        return PhantomImpl(impl.shape, impl.dtype, device, impl.requires_grad)
+    return _ORIGINAL["to_device"](impl, device, *args, **kwargs)
+
+
 def _reshape_factory(impl: Any, shape: Any, *args: Any, **kwargs: Any) -> PhantomImpl:
     """``reshape(impl, shape)`` — used by ``init._fill_from_impl``.
     Pass-through for phantom input; defer to real engine otherwise."""
     if isinstance(impl, PhantomImpl):
-        return PhantomImpl(shape, impl.dtype, impl.device, impl.requires_grad)
+        return PhantomImpl(
+            _resolve_reshape(impl.shape, shape),
+            impl.dtype,
+            impl.device,
+            impl.requires_grad,
+        )
     return cast(PhantomImpl, _ORIGINAL["reshape"](impl, shape, *args, **kwargs))
+
+
+def _view_factory(impl: Any, shape: Any, *args: Any, **kwargs: Any) -> Any:
+    """``view(impl, shape)`` — resolves ``-1`` like ``reshape``."""
+    if isinstance(impl, PhantomImpl):
+        return PhantomImpl(
+            _resolve_reshape(impl.shape, shape),
+            impl.dtype,
+            impl.device,
+            impl.requires_grad,
+        )
+    return _ORIGINAL["view"](impl, shape, *args, **kwargs)
+
+
+def _unsqueeze_factory(impl: Any, dim: int, *args: Any, **kwargs: Any) -> Any:
+    """``unsqueeze(impl, dim)`` — insert a size-1 axis at ``dim``."""
+    if isinstance(impl, PhantomImpl):
+        ndim = len(impl.shape) + 1
+        d = int(dim) % ndim
+        new_shape = (*impl.shape[:d], 1, *impl.shape[d:])
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["unsqueeze"](impl, dim, *args, **kwargs)
+
+
+def _squeeze_factory(impl: Any, dim: int, *args: Any, **kwargs: Any) -> Any:
+    """``squeeze(impl, dim)`` — remove size-1 axis ``dim``."""
+    if isinstance(impl, PhantomImpl):
+        if not impl.shape:
+            return PhantomImpl((), impl.dtype, impl.device, impl.requires_grad)
+        d = int(dim) % len(impl.shape)
+        new_shape = (
+            (*impl.shape[:d], *impl.shape[d + 1 :])
+            if impl.shape[d] == 1
+            else impl.shape
+        )
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["squeeze"](impl, dim, *args, **kwargs)
+
+
+def _squeeze_all_factory(impl: Any, *args: Any, **kwargs: Any) -> Any:
+    """``squeeze_all(impl)`` — drop all size-1 axes."""
+    if isinstance(impl, PhantomImpl):
+        new_shape = tuple(s for s in impl.shape if s != 1)
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["squeeze_all"](impl, *args, **kwargs)
+
+
+def _transpose_factory(impl: Any, *args: Any, **kwargs: Any) -> Any:
+    """``transpose(impl)`` / ``T(impl)`` — reverse all axes."""
+    if isinstance(impl, PhantomImpl):
+        return PhantomImpl(
+            impl.shape[::-1], impl.dtype, impl.device, impl.requires_grad
+        )
+    return _ORIGINAL["transpose"](impl, *args, **kwargs)
+
+
+def _mT_factory(impl: Any, *args: Any, **kwargs: Any) -> Any:
+    """``mT(impl)`` — swap the last two axes."""
+    if isinstance(impl, PhantomImpl):
+        s = impl.shape
+        new_shape = (*s[:-2], s[-1], s[-2]) if len(s) >= 2 else s
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["mT"](impl, *args, **kwargs)
+
+
+def _swapaxes_factory(
+    impl: Any, dim1: int, dim2: int, *args: Any, **kwargs: Any
+) -> Any:
+    """``swapaxes(impl, dim1, dim2)`` — swap two axes."""
+    if isinstance(impl, PhantomImpl):
+        s = list(impl.shape)
+        if s:
+            d1, d2 = int(dim1) % len(s), int(dim2) % len(s)
+            s[d1], s[d2] = s[d2], s[d1]
+        return PhantomImpl(tuple(s), impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["swapaxes"](impl, dim1, dim2, *args, **kwargs)
+
+
+def _permute_factory(impl: Any, dims: Any, *args: Any, **kwargs: Any) -> Any:
+    """``permute(impl, dims)`` — reorder axes according to ``dims``."""
+    if isinstance(impl, PhantomImpl):
+        ndim = len(impl.shape)
+        new_shape = tuple(impl.shape[int(d) % ndim] for d in dims) if ndim else ()
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["permute"](impl, dims, *args, **kwargs)
+
+
+def _flatten_factory(
+    impl: Any, start_axis: int = 0, end_axis: int = -1, *args: Any, **kwargs: Any
+) -> Any:
+    """``flatten(impl, start_axis=0, end_axis=-1)``."""
+    if isinstance(impl, PhantomImpl):
+        s = impl.shape
+        if not s:
+            return PhantomImpl((1,), impl.dtype, impl.device, impl.requires_grad)
+        ndim = len(s)
+        sa = int(start_axis) % ndim
+        ea = int(end_axis) % ndim
+        flat = math.prod(s[sa : ea + 1])
+        new_shape = (*s[:sa], flat, *s[ea + 1 :])
+        return PhantomImpl(new_shape, impl.dtype, impl.device, impl.requires_grad)
+    return _ORIGINAL["flatten"](impl, start_axis, end_axis, *args, **kwargs)
+
+
+def _ravel_factory(impl: Any, *args: Any, **kwargs: Any) -> Any:
+    """``ravel(impl)`` — 1-D flattened view."""
+    if isinstance(impl, PhantomImpl):
+        return PhantomImpl(
+            (impl.numel(),), impl.dtype, impl.device, impl.requires_grad
+        )
+    return _ORIGINAL["ravel"](impl, *args, **kwargs)
+
+
+def _matmul_factory(a: Any, b: Any, *args: Any, **kwargs: Any) -> Any:
+    """``matmul(a, b)`` / ``mm(a, b)`` / ``bmm(a, b)`` — contraction shape and promoted dtype."""
+    if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+        sa, sb = tuple(a.shape), tuple(b.shape)
+        if len(sa) == 1 and len(sb) == 1:
+            out_shape: tuple[int, ...] = ()
+        elif len(sa) == 1:
+            out_shape = (*sb[:-2], sb[-1])
+        elif len(sb) == 1:
+            out_shape = sa[:-1]
+        else:
+            batch = _broadcast_shapes(sa[:-2], sb[:-2])
+            out_shape = (*batch, sa[-2], sb[-1])
+        dt = _promote_two(a, b)
+        req_grad = bool(a.requires_grad or b.requires_grad)
+        return PhantomImpl(out_shape, dt, a.device, req_grad)
+    return _ORIGINAL["matmul"](a, b, *args, **kwargs)
+
+
+def _dot_factory(a: Any, b: Any, *args: Any, **kwargs: Any) -> Any:
+    """``dot(a, b)`` — 1-D inner product -> 0-D scalar."""
+    if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+        dt = _promote_two(a, b)
+        return PhantomImpl((), dt, a.device, bool(a.requires_grad or b.requires_grad))
+    return _ORIGINAL["dot"](a, b, *args, **kwargs)
+
+
+def _inner_factory(a: Any, b: Any, *args: Any, **kwargs: Any) -> Any:
+    """``inner(a, b)`` — contracts the last axis of ``a`` and ``b``."""
+    if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+        sa, sb = tuple(a.shape), tuple(b.shape)
+        out_shape = (*sa[:-1], *sb[:-1]) if (sa and sb) else (*sa, *sb)
+        dt = _promote_two(a, b)
+        return PhantomImpl(
+            out_shape, dt, a.device, bool(a.requires_grad or b.requires_grad)
+        )
+    return _ORIGINAL["inner"](a, b, *args, **kwargs)
+
+
+def _outer_factory(a: Any, b: Any, *args: Any, **kwargs: Any) -> Any:
+    """``outer(a, b)`` — 1-D × 1-D -> 2-D ``(a.numel(), b.numel())``."""
+    if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+        dt = _promote_two(a, b)
+        return PhantomImpl(
+            (int(a.numel()), int(b.numel())),
+            dt,
+            a.device,
+            bool(a.requires_grad or b.requires_grad),
+        )
+    return _ORIGINAL["outer"](a, b, *args, **kwargs)
+
+
+def _kron_factory(a: Any, b: Any, *args: Any, **kwargs: Any) -> Any:
+    """``kron(a, b)`` — Kronecker product shape."""
+    if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+        sa, sb = tuple(a.shape), tuple(b.shape)
+        rank = max(len(sa), len(sb))
+        pa = (1,) * (rank - len(sa)) + sa
+        pb = (1,) * (rank - len(sb)) + sb
+        out_shape = tuple(x * y for x, y in zip(pa, pb, strict=True))
+        dt = _promote_two(a, b)
+        return PhantomImpl(
+            out_shape, dt, a.device, bool(a.requires_grad or b.requires_grad)
+        )
+    return _ORIGINAL["kron"](a, b, *args, **kwargs)
+
+
+def _where_factory(cond: Any, x: Any, y: Any, *args: Any, **kwargs: Any) -> Any:
+    """``where(cond, x, y)`` — 3-way broadcast shape and branch dtype."""
+    if (
+        isinstance(cond, PhantomImpl)
+        or isinstance(x, PhantomImpl)
+        or isinstance(y, PhantomImpl)
+    ):
+        shape = _broadcast_shapes(
+            _broadcast_shapes(tuple(cond.shape), tuple(x.shape)), tuple(y.shape)
+        )
+        dt = _promote_two(x, y)
+        req_grad = bool(x.requires_grad or y.requires_grad)
+        return PhantomImpl(shape, dt, x.device, req_grad)
+    return _ORIGINAL["where"](cond, x, y, *args, **kwargs)
+
+
+def _cat_factory(tensors: Any, dim: int = 0, *args: Any, **kwargs: Any) -> Any:
+    """``concatenate(tensors, dim=0)`` / ``concat(tensors, dim)``."""
+    if isinstance(tensors, (list, tuple)) and any(
+        isinstance(t, PhantomImpl) for t in tensors
+    ):
+        rep = next(t for t in tensors if isinstance(t, PhantomImpl))
+        base = list(rep.shape)
+        if base:
+            d = int(dim) % len(base)
+            base[d] = sum(int(t.shape[d]) for t in tensors)
+        return PhantomImpl(tuple(base), rep.dtype, rep.device, rep.requires_grad)
+    return _ORIGINAL["concatenate"](tensors, dim, *args, **kwargs)
+
+
+def _stack_factory(tensors: Any, dim: int = 0, *args: Any, **kwargs: Any) -> Any:
+    """``stack(tensors, dim=0)``."""
+    if isinstance(tensors, (list, tuple)) and any(
+        isinstance(t, PhantomImpl) for t in tensors
+    ):
+        rep = next(t for t in tensors if isinstance(t, PhantomImpl))
+        ndim = len(rep.shape) + 1
+        d = int(dim) % ndim
+        out_shape = (*rep.shape[:d], len(tensors), *rep.shape[d:])
+        return PhantomImpl(out_shape, rep.dtype, rep.device, rep.requires_grad)
+    return _ORIGINAL["stack"](tensors, dim, *args, **kwargs)
+
+
+def _hstack_factory(tensors: Any, *args: Any, **kwargs: Any) -> Any:
+    """``hstack(tensors)`` — concatenate along axis 0 for 1-D, axis 1 for >=2-D."""
+    if isinstance(tensors, (list, tuple)) and any(
+        isinstance(t, PhantomImpl) for t in tensors
+    ):
+        rep = next(t for t in tensors if isinstance(t, PhantomImpl))
+        dim = 0 if len(rep.shape) <= 1 else 1
+        return _cat_factory(tensors, dim)
+    return _ORIGINAL["hstack"](tensors, *args, **kwargs)
+
+
+def _vstack_factory(tensors: Any, *args: Any, **kwargs: Any) -> Any:
+    """``vstack(tensors)`` — stack 1-D inputs into ``(N, L)``, concatenate >=2-D along axis 0."""
+    if isinstance(tensors, (list, tuple)) and any(
+        isinstance(t, PhantomImpl) for t in tensors
+    ):
+        rep = next(t for t in tensors if isinstance(t, PhantomImpl))
+        if len(rep.shape) == 1:
+            return _stack_factory(tensors, 0)
+        return _cat_factory(tensors, 0)
+    return _ORIGINAL["vstack"](tensors, *args, **kwargs)
+
+
+def _complex_factory(real: Any, imag: Any, *args: Any, **kwargs: Any) -> Any:
+    """``complex(real, imag)`` — broadcast shape and complex64/complex128 dtype."""
+    if isinstance(real, PhantomImpl) or isinstance(imag, PhantomImpl):
+        shape = _broadcast_shapes(tuple(real.shape), tuple(imag.shape))
+        part_dt = _promote_two(real, imag)
+        dt = _C_engine.C128 if part_dt == _C_engine.F64 else _C_engine.C64
+        req_grad = bool(real.requires_grad or imag.requires_grad)
+        return PhantomImpl(shape, dt, real.device, req_grad)
+    return _ORIGINAL["complex"](real, imag, *args, **kwargs)
+
+
+def _real_imag_factory(a: Any, *args: Any, **kwargs: Any) -> Any:
+    """``real(a)`` / ``imag(a)`` — extract real floating dtype from complex."""
+    if isinstance(a, PhantomImpl):
+        if a.dtype == _C_engine.C128:
+            dt = _C_engine.F64
+        elif a.dtype == _C_engine.C64:
+            dt = _C_engine.F32
+        else:
+            dt = a.dtype
+        return PhantomImpl(a.shape, dt, a.device, a.requires_grad)
+    return _ORIGINAL["real"](a, *args, **kwargs)
 
 
 def _meshgrid_factory(tensors: Any, *args: Any, **kwargs: Any) -> list[Any]:
@@ -197,14 +657,122 @@ def _meshgrid_factory(tensors: Any, *args: Any, **kwargs: Any) -> list[Any]:
     if isinstance(tensors, (list, tuple)) and any(
         isinstance(t, PhantomImpl) for t in tensors
     ):
-        # Combined shape = product of input lengths
         combined = tuple(
             t.shape[0] if isinstance(t, PhantomImpl) and t.shape else 1 for t in tensors
         )
-        # Pick a representative phantom for dtype/device
         rep = next(t for t in tensors if isinstance(t, PhantomImpl))
         return [PhantomImpl(combined, rep.dtype, rep.device, False) for _ in tensors]
     return cast(list[Any], _ORIGINAL["meshgrid"](tensors, *args, **kwargs))
+
+
+_OPMATH_BINARY_OPS = frozenset({"mul", "mul_", "div", "div_", "floordiv"})
+
+
+def _binary_wrap(
+    orig_name: str,
+    orig: Any,
+    *,
+    out_bool: bool = False,
+    float_integral: bool = False,
+    inplace: bool = False,
+) -> Any:
+    """Wrapper for binary elementwise engine ops ``f(a, b)``."""
+    is_opmath = orig_name in _OPMATH_BINARY_OPS
+
+    def w(a: Any, b: Any, *rest: Any, **kwargs: Any) -> Any:
+        if isinstance(a, PhantomImpl) or isinstance(b, PhantomImpl):
+            shape = _broadcast_shapes(tuple(a.shape), tuple(b.shape))
+            if out_bool:
+                dt = _C_engine.Bool
+            else:
+                dt = _promote_two(a, b, true_div=float_integral, opmath=is_opmath)
+            if inplace and isinstance(a, PhantomImpl):
+                a.shape = shape
+                a.dtype = dt
+                a.ndim = len(shape)
+                return a
+            req_grad = bool(a.requires_grad or b.requires_grad)
+            return PhantomImpl(shape, dt, a.device, req_grad)
+        return orig(a, b, *rest, **kwargs)
+
+    return w
+
+
+def _unary_float_wrap(orig: Any) -> Any:
+    """Wrapper for unary math ops that promote integral/bool inputs to default float."""
+    from lucid import _promotion
+
+    def w(a: Any, *rest: Any, **kwargs: Any) -> Any:
+        if isinstance(a, PhantomImpl):
+            dt = (
+                _promotion.default_float(a.device)
+                if _promotion.is_integral(a.dtype)
+                else a.dtype
+            )
+            return PhantomImpl(a.shape, dt, a.device, a.requires_grad)
+        return orig(a, *rest, **kwargs)
+
+    return w
+
+
+def _unary_bool_wrap(orig: Any) -> Any:
+    """Wrapper for unary predicate ops that always return ``Bool``."""
+
+    def w(a: Any, *rest: Any, **kwargs: Any) -> Any:
+        if isinstance(a, PhantomImpl):
+            return PhantomImpl(a.shape, _C_engine.Bool, a.device, False)
+        return orig(a, *rest, **kwargs)
+
+    return w
+
+
+def _reduce_dtype(in_dtype: Any, device: Any, kind: str) -> Any:
+    """Compute output dtype for a reduction op of ``kind``."""
+    from lucid import _promotion
+
+    if kind == "int64_integral":
+        return _C_engine.I64 if _promotion.is_integral(in_dtype) else in_dtype
+    if kind == "float_integral":
+        return (
+            _promotion.default_float(device)
+            if _promotion.is_integral(in_dtype)
+            else in_dtype
+        )
+    if kind == "int64":
+        return _C_engine.I64
+    if kind == "bool":
+        return _C_engine.Bool
+    return in_dtype
+
+
+def _reduce_wrap(orig: Any, *, kind: str) -> Any:
+    """Wrapper for reduction ops ``f(a, dim=[], keepdims=False)``."""
+
+    def w(
+        a: Any, dim: Any = None, keepdims: bool = False, *rest: Any, **kwargs: Any
+    ) -> Any:
+        if isinstance(a, PhantomImpl):
+            shape = _reduced_shape(a.shape, dim, keepdims)
+            dt = _reduce_dtype(a.dtype, a.device, kind)
+            return PhantomImpl(shape, dt, a.device, a.requires_grad)
+        if dim is None:
+            return orig(a, *rest, **kwargs)
+        return orig(a, dim, keepdims, *rest, **kwargs)
+
+    return w
+
+
+def _cum_int64_wrap(orig: Any) -> Any:
+    """Wrapper for ``cumsum`` / ``cumprod`` which widen integral/bool inputs to ``int64``."""
+    from lucid import _promotion
+
+    def w(a: Any, *rest: Any, **kwargs: Any) -> Any:
+        if isinstance(a, PhantomImpl):
+            dt = _C_engine.I64 if _promotion.is_integral(a.dtype) else a.dtype
+            return PhantomImpl(a.shape, dt, a.device, a.requires_grad)
+        return orig(a, *rest, **kwargs)
+
+    return w
 
 
 def _find_phantom(args: tuple[Any, ...]) -> PhantomImpl | None:
@@ -222,19 +790,12 @@ def _find_phantom(args: tuple[Any, ...]) -> PhantomImpl | None:
     return None
 
 
-def _shape_preserving_wrap(orig_name: str, orig: Any) -> Any:
+def _shape_preserving_wrap(orig: Any) -> Any:
     """Default phantom-aware wrapper: if any arg (including elements of
     a top-level list/tuple) is a phantom, return a phantom with that
     arg's shape.  Falls through to the real engine when nothing
     phantom is present so non-shadow paths in the same process aren't
-    affected.
-
-    The shape isn't exact for shape-changing ops (cat, stack, slice),
-    but the only consumers in module ``__init__`` paths are
-    ``init._fill_from_impl`` (which immediately reshapes to the
-    Parameter's true shape) and the no-op chain inside
-    ``PhantomImpl.__getattr__``, so the inaccuracy is harmless.
-    """
+    affected."""
 
     def w(*args: Any, **kwargs: Any) -> Any:
         ph = _find_phantom(args)
@@ -245,10 +806,9 @@ def _shape_preserving_wrap(orig_name: str, orig: Any) -> Any:
     return w
 
 
-def _explicit_shape_wrap(orig_name: str, orig: Any) -> Any:
+def _explicit_shape_wrap(orig: Any) -> Any:
     """For ops whose output shape = **second positional arg** (the
-    shape parameter): ``reshape(t, shape)``, ``broadcast_to(t, shape)``,
-    ``expand(t, shape)``, etc."""
+    shape parameter): ``broadcast_to(t, shape)``, ``expand(t, shape)``."""
 
     def w(impl: Any, shape: Any, *rest: Any, **kwargs: Any) -> Any:
         if isinstance(impl, PhantomImpl):
@@ -259,47 +819,282 @@ def _explicit_shape_wrap(orig_name: str, orig: Any) -> Any:
 
 
 # Engine ops whose output shape is the *explicit* shape argument (not
-# derived from input).  Anything not in this list defaults to
-# shape-preserving (output shape == first phantom-arg's shape).
+# derived from input).
 _EXPLICIT_SHAPE_OPS = frozenset(
     {
-        "reshape",
-        "view",
         "broadcast_to",
         "expand",
     }
 )
 
+_BINARY_ARITH_OPS = frozenset(
+    {
+        "add",
+        "sub",
+        "mul",
+        "floordiv",
+        "pow",
+        "maximum",
+        "minimum",
+        "fmod",
+        "remainder",
+        "hypot",
+        "logaddexp",
+        "nextafter",
+        "bitwise_and",
+        "bitwise_or",
+        "bitwise_xor",
+        "bitwise_left_shift",
+        "bitwise_right_shift",
+    }
+)
 
-# Engine functions intercepted while shadow_alloc is active.  Targeted
-# list — we only patch what lucid Modules / init helpers exercise during
-# object construction.
+_BINARY_INPLACE_OPS = frozenset(
+    {
+        "add_",
+        "sub_",
+        "mul_",
+        "div_",
+        "pow_",
+        "maximum_",
+        "minimum_",
+    }
+)
+
+_BINARY_FLOAT_OPS = frozenset({"div", "atan2"})
+
+_BINARY_BOOL_OPS = frozenset(
+    {
+        "equal",
+        "not_equal",
+        "greater",
+        "greater_equal",
+        "less",
+        "less_equal",
+        "eq",
+        "ne",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+        "logical_and",
+        "logical_or",
+        "logical_xor",
+        "isclose",
+    }
+)
+
+_UNARY_FLOAT_OPS = frozenset(
+    {
+        "exp",
+        "exp2",
+        "log",
+        "log2",
+        "log10",
+        "log1p",
+        "sqrt",
+        "rsqrt",
+        "reciprocal",
+        "sin",
+        "cos",
+        "tan",
+        "arcsin",
+        "arccos",
+        "arctan",
+        "asin",
+        "acos",
+        "atan",
+        "sinh",
+        "cosh",
+        "tanh",
+        "sigmoid",
+        "silu",
+        "gelu",
+        "gelu_exact",
+        "mish",
+        "selu",
+        "softplus",
+        "hard_sigmoid",
+        "hard_swish",
+        "erf",
+        "erfinv",
+    }
+)
+
+_UNARY_BOOL_OPS = frozenset({"isnan", "isinf", "isfinite", "logical_not"})
+
+_REDUCE_KIND_BY_OP: dict[str, str] = {
+    "sum": "int64_integral",
+    "prod": "int64_integral",
+    "mean": "float_integral",
+    "var": "float_integral",
+    "std": "float_integral",
+    "logsumexp": "float_integral",
+    "max": "same",
+    "min": "same",
+    "argmax": "int64",
+    "argmin": "int64",
+    "any": "bool",
+    "all": "bool",
+}
+
+_CUM_INT64_OPS = frozenset({"cumsum", "cumprod"})
+
+_BINARY_OP_KWARGS: dict[str, dict[str, bool]] = {
+    **{op: {} for op in _BINARY_ARITH_OPS},
+    **{op: {"inplace": True} for op in _BINARY_INPLACE_OPS},
+    **{op: {"float_integral": True} for op in _BINARY_FLOAT_OPS},
+    **{op: {"out_bool": True} for op in _BINARY_BOOL_OPS},
+}
+
+_UNARY_WRAPPER_BY_OP: dict[str, Any] = {
+    **{op: _explicit_shape_wrap for op in _EXPLICIT_SHAPE_OPS},
+    **{op: _unary_float_wrap for op in _UNARY_FLOAT_OPS},
+    **{op: _unary_bool_wrap for op in _UNARY_BOOL_OPS},
+    **{op: _cum_int64_wrap for op in _CUM_INT64_OPS},
+}
 
 # Engine functions whose semantics need a custom wrapper (not the
-# generic shape-preserving default).  Anything not listed here is
-# auto-wrapped to "first phantom arg's shape pass-through".
+# generic shape-preserving default).
 _SPECIFIC_WRAPPERS: dict[str, Any] = {
-    # Pure tensor factories — ``f(shape, ..., dtype, device)``.  These
-    # take a shape as the first positional arg and create a brand-new
-    # tensor; no phantom input means the generic shape-preserving
-    # wrapper would miss them.
     "zeros": _shape_only_factory,
     "ones": _shape_only_factory,
     "empty": _shape_only_factory,
-    "eye": _shape_only_factory,
+    "eye": _eye_factory,
     "randn": _shape_only_factory,
     "rand": _shape_only_factory,
-    "uniform": _shape_only_factory,
-    "normal": _shape_only_factory,
-    "bernoulli": _shape_only_factory,
-    "exponential": _shape_only_factory,
+    "randint": _randint_factory,
+    "uniform": _uniform_normal_factory,
+    "normal": _uniform_normal_factory,
+    "bernoulli": _bernoulli_exponential_factory,
+    "exponential": _bernoulli_exponential_factory,
     "full": _full_factory,
     "arange": _arange_factory,
+    "linspace": _linspace_factory,
+    "logspace": _logspace_factory,
+    "astype": _astype_factory,
+    "to_device": _to_device_factory,
     "reshape": _reshape_factory,
+    "view": _view_factory,
+    "unsqueeze": _unsqueeze_factory,
+    "expand_dims": _unsqueeze_factory,
+    "squeeze": _squeeze_factory,
+    "squeeze_all": _squeeze_all_factory,
+    "transpose": _transpose_factory,
+    "T": _transpose_factory,
+    "mT": _mT_factory,
+    "swapaxes": _swapaxes_factory,
+    "permute": _permute_factory,
+    "flatten": _flatten_factory,
+    "ravel": _ravel_factory,
+    "matmul": _matmul_factory,
+    "mm": _matmul_factory,
+    "bmm": _matmul_factory,
+    "dot": _dot_factory,
+    "inner": _inner_factory,
+    "outer": _outer_factory,
+    "kron": _kron_factory,
+    "where": _where_factory,
+    "concatenate": _cat_factory,
+    "concat": _cat_factory,
+    "stack": _stack_factory,
+    "hstack": _hstack_factory,
+    "vstack": _vstack_factory,
+    "complex": _complex_factory,
+    "real": _real_imag_factory,
+    "imag": _real_imag_factory,
     "meshgrid": _meshgrid_factory,
 }
 
 _ORIGINAL: dict[str, Any] = {}
+
+
+def _make_engine_wrapper(name: str, attr: Any) -> Any:
+    """Select the shadow wrapper for ``_C_engine.<name>``."""
+    if name in _SPECIFIC_WRAPPERS:
+        return _SPECIFIC_WRAPPERS[name]
+    if name in _BINARY_OP_KWARGS:
+        return _binary_wrap(name, attr, **_BINARY_OP_KWARGS[name])
+    if name in _REDUCE_KIND_BY_OP:
+        return _reduce_wrap(attr, kind=_REDUCE_KIND_BY_OP[name])
+    builder = _UNARY_WRAPPER_BY_OP.get(name, _shape_preserving_wrap)
+    return builder(attr)
+
+
+def _patch_closure_cells(
+    fn: Any, orig_by_id: dict[Any, str], cell_originals: list[tuple[Any, Any]]
+) -> None:
+    """Rebind any closure cell on ``fn`` that holds an original engine callable."""
+    closure = getattr(fn, "__closure__", None)
+    if not closure:
+        return
+    for cell in closure:
+        try:
+            val = cell.cell_contents
+        except ValueError:
+            continue
+        cell_attr = orig_by_id.get(val)
+        if cell_attr is not None:
+            new_fn = getattr(_C_engine, cell_attr, None)
+            if new_fn is not None and new_fn is not val:
+                cell_originals.append((cell, val))
+                cell.cell_contents = new_fn
+
+
+def _patch_op_registry(orig_by_id: dict[Any, str]) -> None:
+    """Rebind ``OpEntry.engine_fn`` and adapter closure cells for shadow mode."""
+    from lucid._ops import _adapters as _adapters_mod
+    from lucid._ops._registry import _REGISTRY as _OP_REGISTRY
+
+    op_originals: list[tuple[Any, Any]] = []
+    cell_originals: list[tuple[Any, Any]] = []
+    for entry in _OP_REGISTRY:
+        fn = entry.engine_fn
+        attr_name = orig_by_id.get(fn)
+        if attr_name is not None:
+            new_fn = getattr(_C_engine, attr_name, None)
+            if new_fn is not None and new_fn is not fn:
+                op_originals.append((entry, fn))
+                entry.engine_fn = new_fn
+            continue
+        _patch_closure_cells(fn, orig_by_id, cell_originals)
+
+    _patch_closure_cells(_adapters_mod._complex_parts, orig_by_id, cell_originals)
+    _ORIGINAL["__op_registry__"] = op_originals
+    _ORIGINAL["__op_cells__"] = cell_originals
+
+
+def _rebind_sys_module_attr(attr_name: str, orig_fn: Any, new_fn: Any) -> list[Any]:
+    """Replace ``attr_name`` across loaded modules where it is ``orig_fn``."""
+    import sys
+
+    rebound: list[Any] = []
+    for mod in list(sys.modules.values()):
+        if getattr(mod, attr_name, None) is orig_fn:
+            setattr(mod, attr_name, new_fn)
+            rebound.append(mod)
+    return rebound
+
+
+def _restore_shadow_patches() -> None:
+    """Restore all module, registry, closure, and engine attributes after ``shadow_alloc``."""
+    sites = _ORIGINAL.pop("__unwrap_sites__", None)
+    if sites is not None:
+        orig_uw, mods = sites
+        for mod in mods:
+            mod._unwrap = orig_uw
+    sites = _ORIGINAL.pop("__uos_sites__", None)
+    if sites is not None:
+        orig_uos, mods = sites
+        for mod in mods:
+            mod._unwrap_or_scalar = orig_uos
+    for entry, orig_fn in _ORIGINAL.pop("__op_registry__", []):
+        entry.engine_fn = orig_fn
+    for cell, orig_val in _ORIGINAL.pop("__op_cells__", []):
+        cell.cell_contents = orig_val
+    for name, orig in _ORIGINAL.items():
+        setattr(_C_engine, name, orig)
+    _ORIGINAL.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -350,44 +1145,18 @@ def shadow_alloc() -> Iterator[None]:
         yield
         return
 
-    # Patch ``_unwrap`` to accept phantom impls.  ~20+ modules across
-    # ``lucid/`` do ``from lucid._dispatch import _unwrap`` at
-    # module-load time, so we can't just rebind ``_dispatch._unwrap``
-    # — each importer captured the function object then.  Walk
-    # ``sys.modules`` once and replace every module-level ``_unwrap``
-    # attribute that *is* the original (identity check).
-    import sys
     from lucid import _dispatch as _disp
 
     _orig_unwrap = _disp._unwrap
+    _orig_uos = _disp._unwrap_or_scalar
 
     def _shadow_unwrap(t: Any) -> Any:
         impl = getattr(t, "_impl", None)
         if isinstance(impl, PhantomImpl):
             return impl
+        if isinstance(t, PhantomImpl):
+            return t
         return _orig_unwrap(t)
-
-    _unwrap_rebindings: list[Any] = []
-    for _mod in list(sys.modules.values()):
-        if _mod is None:
-            continue
-        if getattr(_mod, "_unwrap", None) is _orig_unwrap:
-            setattr(_mod, "_unwrap", _shadow_unwrap)
-            _unwrap_rebindings.append(_mod)
-    _ORIGINAL["__unwrap_sites__"] = (_orig_unwrap, _unwrap_rebindings)
-
-    # Same treatment for ``_unwrap_or_scalar`` — defined in
-    # ``lucid._dispatch`` and used by every binary-arithmetic dunder and by
-    # the arithmetic op adapters behind their method and free-function forms.
-    # CoAtNet's ``_init_rel_idx`` exercises this path during ``__init__``
-    # (computing relative-position offsets on tiny arange-backed tensors).
-    # The default impl rejects anything whose impl isn't a TensorImpl; we
-    # extend it to also accept phantoms.  Taken from the defining module
-    # rather than from one of its importers, so the sweep below still finds
-    # every site that holds a reference to it.
-    from lucid import _dispatch as _dispatch_mod
-
-    _orig_uos = _dispatch_mod._unwrap_or_scalar
 
     def _shadow_uos(x: Any, ref_impl: Any = None) -> Any:
         impl = getattr(x, "_impl", None)
@@ -397,23 +1166,16 @@ def shadow_alloc() -> Iterator[None]:
             return x
         return _orig_uos(x, ref_impl)
 
-    _uos_rebindings: list[Any] = []
-    for _mod in list(sys.modules.values()):
-        if _mod is None:
-            continue
-        if getattr(_mod, "_unwrap_or_scalar", None) is _orig_uos:
-            setattr(_mod, "_unwrap_or_scalar", _shadow_uos)
-            _uos_rebindings.append(_mod)
-    _ORIGINAL["__uos_sites__"] = (_orig_uos, _uos_rebindings)
+    _ORIGINAL["__unwrap_sites__"] = (
+        _orig_unwrap,
+        _rebind_sys_module_attr("_unwrap", _orig_unwrap, _shadow_unwrap),
+    )
+    _ORIGINAL["__uos_sites__"] = (
+        _orig_uos,
+        _rebind_sys_module_attr("_unwrap_or_scalar", _orig_uos, _shadow_uos),
+    )
 
-    # Snapshot + patch every callable attribute on the engine module.
-    # Tensor-creating ops with shape semantics that differ from "pass
-    # through the first phantom's shape" get a custom wrapper from
-    # ``_SPECIFIC_WRAPPERS``; ops whose output shape is the explicit
-    # ``shape`` argument (``reshape``, ``broadcast_to`` ...) use
-    # ``_explicit_shape_wrap``; everything else gets the generic
-    # phantom-aware fallback.  Classes and constants (TensorImpl,
-    # Device, Dtype enums, ...) are left untouched.
+    _orig_by_id: dict[Any, str] = {}
     for name in dir(_C_engine):
         if name.startswith("_"):
             continue
@@ -421,62 +1183,16 @@ def shadow_alloc() -> Iterator[None]:
         if not callable(attr) or isinstance(attr, type):
             continue
         _ORIGINAL[name] = attr
-        if name in _SPECIFIC_WRAPPERS:
-            setattr(_C_engine, name, _SPECIFIC_WRAPPERS[name])
-        elif name in _EXPLICIT_SHAPE_OPS:
-            setattr(_C_engine, name, _explicit_shape_wrap(name, attr))
-        else:
-            setattr(_C_engine, name, _shape_preserving_wrap(name, attr))
+        _orig_by_id[attr] = name
+        setattr(_C_engine, name, _make_engine_wrapper(name, attr))
 
-    # ``_ops/_registry.OpEntry`` instances captured ``_C_engine.<op>``
-    # references at import time, so re-bind each entry's ``engine_fn``
-    # to the freshly-patched attribute looked up by name.  Tensor methods
-    # (``a.unsqueeze(0)``) and ``lucid.<op>`` free functions both dispatch
-    # through these entries, so without this step they'd still hit the
-    # original C++ binding and reject phantom inputs.
-    from lucid._ops._registry import _REGISTRY as _OP_REGISTRY
-
-    # IMPORTANT: only rebind when ``engine_fn`` IS the (pre-patch)
-    # engine attribute — entries whose engine_fn is a Python *adapter*
-    # (e.g. ``_where_adapter``) handle their own ``_unwrap`` /
-    # pre-processing internally and break if blindly replaced with the
-    # engine-level patch.  Adapters already call into ``_C_engine.<op>``
-    # which we *did* patch, so phantom routing still happens via them.
-    _op_originals: list[tuple[Any, Any]] = []
-    for _e in _OP_REGISTRY:
-        orig_engine_attr = _ORIGINAL.get(_e.name)
-        if orig_engine_attr is None:
-            continue
-        if _e.engine_fn is not orig_engine_attr:
-            continue  # adapter or already-wrapped — leave alone
-        new_fn = getattr(_C_engine, _e.name, None)
-        if new_fn is None or new_fn is _e.engine_fn:
-            continue
-        _op_originals.append((_e, _e.engine_fn))
-        _e.engine_fn = new_fn
-    _ORIGINAL["__op_registry__"] = _op_originals
+    _patch_op_registry(_orig_by_id)
 
     _SHADOW_ENABLED = True
     try:
         yield
     finally:
         _SHADOW_ENABLED = False
-        # Restore the ``_unwrap`` rebindings.
-        sites = _ORIGINAL.pop("__unwrap_sites__", None)
-        if sites is not None:
-            _orig_uw, _mods = sites
-            for _mod in _mods:
-                _mod._unwrap = _orig_uw
-        # Restore the ``_unwrap_or_scalar`` rebindings.
-        sites = _ORIGINAL.pop("__uos_sites__", None)
-        if sites is not None:
-            _orig_uw, _mods = sites
-            for _mod in _mods:
-                _mod._unwrap_or_scalar = _orig_uw
-        # Roll back the OpEntry.engine_fn rebindings.
-        op_pairs = _ORIGINAL.pop("__op_registry__", [])
-        for _e, _orig_fn in op_pairs:
-            _e.engine_fn = _orig_fn
-        for name, orig in _ORIGINAL.items():
-            setattr(_C_engine, name, orig)
-        _ORIGINAL.clear()
+        _restore_shadow_patches()
+
+
