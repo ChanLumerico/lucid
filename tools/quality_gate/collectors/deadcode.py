@@ -17,6 +17,14 @@ from tools.quality_gate.core import Counts, Scope, is_py_target
 
 _LINE = re.compile(r"^(?P<path>[^:]+):(?P<line>\d+): (?P<msg>.*?) \(\d+% confidence")
 WHITELIST = Path(__file__).resolve().parents[1] / "vulture_whitelist.py"
+_IGNORE_DECORATORS = (
+    "@_emitter",
+    "@register_kl",
+    "@register_model",
+    "@register_weights",
+    "@_register_preset",
+    "@_register",
+)
 
 
 def _rule(message: str) -> str:
@@ -41,6 +49,7 @@ class VultureCollector(Collector):
             str(WHITELIST),
             f"--min-confidence={config.VULTURE_MIN_CONFIDENCE}",
             "--ignore-names=" + ",".join(config.VULTURE_IGNORE_NAMES),
+            "--ignore-decorators=" + ",".join(_IGNORE_DECORATORS),
         ]
         # 0: nothing found, 3: dead code found.  1/2 are input/usage errors.
         out = run_tool(cmd, scope.root, ok_codes=(0, 3))

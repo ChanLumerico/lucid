@@ -191,7 +191,7 @@
    },
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 10558,
-    "lucid/_C/backend/gpu/GpuBackend.h": 4601,
+    "lucid/_C/backend/gpu/GpuBackend.h": 4592,
     "lucid/_ops/composite/elementwise.py": 122,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2796,
@@ -955,7 +955,7 @@
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/Engine.cpp": 2,
     "lucid/_C/backend/cpu/CpuBackend.h": 15,
-    "lucid/_C/backend/gpu/GpuBackend.h": 8,
+    "lucid/_C/backend/gpu/GpuBackend.h": 7,
     "lucid/_C/bindings/bind.cpp": 1,
     "lucid/_C/bindings/bind_autograd.cpp": 1,
     "lucid/_C/bindings/bind_compile.cpp": 2,
@@ -1699,9 +1699,7 @@
    "unused-attribute": {
     "lucid/amp/autocast.py": 1,
     "lucid/amp/grad_scaler.py": 1,
-    "lucid/autograd/_python_node.py": 1,
     "lucid/autograd/function.py": 2,
-    "lucid/coreml/_build.py": 1,
     "lucid/metal/__init__.py": 1,
     "lucid/models/generative/rectified_flow/_model.py": 1,
     "lucid/models/vision/cspnet/_model.py": 1,
@@ -1718,82 +1716,40 @@
     "lucid/utils/transforms/_misc.py": 1
    },
    "unused-class": {
-    "lucid/_types.py": 1,
-    "lucid/linalg/__init__.py": 2,
-    "lucid/models/_protocols.py": 3,
-    "lucid/nn/quantized/conv.py": 1,
-    "lucid/nn/quantized/conv_transpose.py": 1,
-    "lucid/nn/quantized/dynamic/linear.py": 1,
-    "lucid/nn/quantized/linear.py": 1,
-    "lucid/nn/quantized/sparse.py": 1
+    "lucid/linalg/__init__.py": 2
    },
    "unused-function": {
-    "lucid/__init__.py": 9,
     "lucid/_dispatch.py": 1,
     "lucid/compile/_core/fallback.py": 1,
-    "lucid/coreml/_emit.py": 58,
     "lucid/coreml/_spec.py": 2,
-    "lucid/distributions/constraints.py": 2,
-    "lucid/distributions/kl.py": 18,
-    "lucid/models/_summary.py": 1,
-    "lucid/nn/utils/prune.py": 2,
     "lucid/utils/tokenizer/_unigram.py": 1
    },
    "unused-method": {
-    "lucid/_tensor/tensor.py": 7,
-    "lucid/autograd/function.py": 1,
-    "lucid/compile/_entry/fused_step.py": 1,
-    "lucid/metal/__init__.py": 1,
-    "lucid/models/_utils/_detection.py": 1,
-    "lucid/models/generative/diamond/_model.py": 1,
-    "lucid/models/generative/genie/_model.py": 1,
-    "lucid/models/text/transformer/_model.py": 1,
-    "lucid/models/vision/coatnet/_model.py": 1,
-    "lucid/nn/module.py": 4,
-    "lucid/nn/modules/rnn.py": 3,
-    "lucid/profiler/__init__.py": 2,
-    "lucid/serialization/__init__.py": 1,
-    "lucid/utils/data/dataloader.py": 1
+    "lucid/models/_utils/_detection.py": 1
    },
    "unused-property": {
     "lucid/distributions/distribution.py": 1,
-    "lucid/distributions/transforms.py": 1,
-    "lucid/models/vision/convnext/_model.py": 1,
-    "lucid/profiler/__init__.py": 1,
-    "lucid/utils/tokenizer/_base.py": 2
+    "lucid/distributions/transforms.py": 1
    },
    "unused-variable": {
     "lucid/__init__.py": 1,
     "lucid/_ctx.py": 1,
-    "lucid/_dtype.py": 2,
+    "lucid/_dtype.py": 1,
     "lucid/_tensor/tensor.py": 1,
-    "lucid/_types.py": 2,
+    "lucid/_types.py": 1,
     "lucid/autograd/_backward.py": 1,
     "lucid/coreml/_spec.py": 1,
-    "lucid/distributions/bernoulli.py": 1,
-    "lucid/distributions/categorical.py": 1,
-    "lucid/distributions/constraints.py": 1,
-    "lucid/distributions/discrete.py": 1,
-    "lucid/distributions/distribution.py": 2,
-    "lucid/models/_output.py": 3,
-    "lucid/models/_protocols.py": 1,
-    "lucid/models/generative/diamond/_weights.py": 25,
-    "lucid/models/generative/dit/_weights.py": 1,
-    "lucid/models/generative/genie/_config.py": 8,
+    "lucid/distributions/distribution.py": 1,
     "lucid/models/generative/planet/_config.py": 1,
-    "lucid/models/generative/planet/_model.py": 2,
     "lucid/models/vision/densenet/_model.py": 2,
     "lucid/models/vision/efficientnet/_model.py": 1,
-    "lucid/models/vision/maskformer/_model.py": 2,
     "lucid/models/vision/mobilenet_v3/_model.py": 1,
-    "lucid/models/vision/vjepa/_model.py": 4,
     "lucid/models/vision/yolo/_v3.py": 1,
     "lucid/nn/_shadow.py": 2,
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
     "lucid/profiler/__init__.py": 1,
-    "lucid/utils/transforms/_autoaugment.py": 1,
-    "lucid/utils/transforms/_base.py": 1
+    "lucid/utils/transforms/_autoaugment.py": 1
    }
   }
  }
