@@ -950,7 +950,11 @@ def _take(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     ``y.grad`` None (LCD-296).  The reference moves it to the new place in
     the graph, as the engine's in-place ops do.
     """
-    retains = t._impl.retains_grad
+    old = t._impl
+    retains = old.retains_grad
+    if isinstance(old, _C_engine.TensorImpl):
+        v0 = _C_engine.TensorImpl._make_view(old, [0], [1], 0)
+        v0.copy_from(v0)
     t._impl = impl
     if retains:
         impl.retain_grad_()
@@ -998,16 +1002,16 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
 def _read_for_write(t: Tensor, value: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     """``t``'s values, for a write into ``t`` to be computed from.
 
-    A write that records a graph and lands in ``t``'s buffer (``t`` has live
-    views — any tensor an earlier assignment rebound has) must not read
-    ``t`` through an engine op: the op records ``t``'s version, the write
-    bumps it, and backward refused the very write it was computing —
+    A write that records a graph bumps ``t``'s version counter (either in
+    place or in :func:`_take`), so it must not read ``t`` through an engine
+    op: the op records ``t``'s version, the write bumps it, and backward
+    refused the very write it was computing —
     ``out[0] = a; out[1] = b; out.sum().backward()``.  It reads a snapshot
     instead, which stands in for ``t`` in the graph and records nothing.
     """
     impl = t._impl
     records = _C_engine.grad_enabled() and (impl.requires_grad or value.requires_grad)
-    if not (records and impl.is_aliased()):
+    if not records:
         return impl
     from lucid._ops.composite.indexing import _Snapshot
     from lucid._tensor.tensor import Tensor as _Tensor
@@ -1175,6 +1179,7 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     base = _read_for_write(t, flat_val)
     if not base.is_contiguous():
         base = _C_engine.contiguous(base)
-    flat_t = _C_engine.reshape(base, [_prod(shape)])
-    flat_out = _C_engine.scatter(flat_t, 0, flat_idx, flat_val)
+    flat_out = _C_engine.scatter(
+        _C_engine.reshape(base, [_prod(shape)]), 0, flat_idx, flat_val
+    )
     _rebind(t, _C_engine.reshape(flat_out, shape))

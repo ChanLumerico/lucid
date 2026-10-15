@@ -202,3 +202,31 @@ def test_a_compiled_step_carries_a_buffer_view_write() -> None:
     eager = run(False)
     assert eager[1] != [0.0, 0.0, 0.0, 0.0]  # the writes happen at all
     assert run(True) == eager
+
+
+def test_non_viewable_reshape_does_not_write_back_on_metal() -> None:
+    x = lucid.arange(6.0, device="metal").reshape(2, 3)
+    before = x.tolist()
+    flat = x.t().flatten()
+    flat.add_(10.0)
+    assert x.tolist() == before
+    assert flat.tolist() == [0.0 + 10.0, 3.0 + 10.0, 1.0 + 10.0, 4.0 + 10.0, 2.0 + 10.0, 5.0 + 10.0]
+
+    y = lucid.arange(12.0, device="metal").reshape(3, 4)
+    y_before = y.tolist()
+    narrow_flat = y.narrow(1, 0, 2).reshape(-1)
+    narrow_flat.fill_(0.0)
+    assert y.tolist() == y_before
+
+
+@pytest.mark.parametrize("dev", ["cpu", "metal"])
+def test_view_and_view_as_refuse_incompatible_strides(dev: str) -> None:
+    x = lucid.arange(6.0, device=dev).reshape(2, 3)
+    proto = lucid.zeros(6, device=dev)
+    with pytest.raises(RuntimeError, match="use .reshape"):
+        x.transpose(0, 1).view(-1)
+    with pytest.raises(RuntimeError, match="use .reshape"):
+        x.transpose(0, 1).view_as(proto)
+    with pytest.raises(RuntimeError, match="use .reshape"):
+        lucid.view(x.transpose(0, 1), (-1,))
+

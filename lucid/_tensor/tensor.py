@@ -31,6 +31,7 @@ else:
 
     np = _LazyNumpy()
 
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
     dtype as _dtype_cls,
@@ -95,9 +96,11 @@ def _set_requires_grad(t: Tensor, requires_grad: bool, *, setter: bool) -> None:
         If ``t`` was computed by an operation and the change is refused.
     """
     impl = t._impl
+    if requires_grad and _promotion.is_integral(impl.dtype):
+        raise RuntimeError(
+            "only Tensors of floating point and complex dtype can require gradients"
+        )
     if not isinstance(impl, _C_engine.TensorImpl):
-        # A lazy layer's placeholder holds no autograd state to flip; it
-        # takes the flag on a fresh placeholder.
         t._impl = _impl_with_grad(impl, requires_grad)
         return
     if not impl.is_leaf:
@@ -3792,38 +3795,27 @@ class Tensor:
         )
 
     def view_as(self, other: Self) -> Self:
-        r"""Reinterpret strides to match ``other.shape``.
+        r"""Return a view of ``self`` with the same shape as ``other``.
 
-        Convenience wrapper around :func:`reshape` that adopts the shape
-        of another tensor. When the source is contiguous the result is a
-        true view (zero copy); otherwise the engine may have to
-        materialise a contiguous copy first.
+        Equivalent to ``self.view(other.shape)``: never copies storage and
+        raises ``RuntimeError`` when ``self``'s size and stride are not
+        compatible with ``other.shape``.
 
         Parameters
         ----------
         other : Tensor
-            Tensor whose shape will be adopted. Only ``other.shape`` is
-            consulted.
+            Tensor whose ``shape`` is adopted.
 
         Returns
         -------
         Tensor
-            A reshaped view (or copy) of ``self`` with shape ``other.shape``.
+            A view of ``self`` with shape ``other.shape``.
 
         Raises
         ------
         RuntimeError
-            If ``self.numel() != other.numel()``.
-
-        Notes
-        -----
-        For a contiguous tensor the new strides are computed as
-
-        .. math::
-
-            \text{stride}[i] = \prod_{j > i} \text{shape}[j]
-
-        so the layout is row-major with no data motion.
+            If ``self.numel() != other.numel()`` or ``self``'s strides are
+            not compatible with ``other.shape``.
 
         Examples
         --------
@@ -3834,7 +3826,7 @@ class Tensor:
         (2, 3)
         """
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _C_engine.reshape(self._impl, list(other._impl.shape))
+            _C_engine.view(self._impl, list(other._impl.shape))
         )
 
     def type_as(self, other: Self) -> Self:

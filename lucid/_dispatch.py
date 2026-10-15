@@ -494,6 +494,10 @@ def normalize_factory_kwargs(
         _device = _default_device_enum_cached()
     else:
         _device = _parse_device(dev)
+    if requires_grad and _promotion.is_integral(_dtype):
+        raise RuntimeError(
+            "only Tensors of floating point and complex dtype can require gradients"
+        )
     return _dtype, _device, requires_grad
 
 
@@ -502,6 +506,10 @@ def _impl_with_grad(
 ) -> _C_engine.TensorImpl:
     """Return a new TensorImpl sharing the same storage but with a different requires_grad.
     Uses clone_with_grad — no data copy, no numpy round-trip."""
+    if requires_grad and _promotion.is_integral(impl.dtype):
+        raise RuntimeError(
+            "only Tensors of floating point and complex dtype can require gradients"
+        )
     return impl.clone_with_grad(requires_grad)
 
 

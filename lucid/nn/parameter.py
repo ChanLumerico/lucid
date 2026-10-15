@@ -4,6 +4,7 @@ nn.Parameter: a Tensor that is automatically registered by Module.
 
 from typing import cast, override
 
+from lucid import _promotion
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._factories.converters import _to_impl
@@ -113,6 +114,10 @@ class Parameter(Tensor):
                 impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
                 impl = impl.clone_with_grad(requires_grad)
         elif isinstance(data, Tensor):
+            if requires_grad and _promotion.is_integral(data._impl.dtype):
+                raise RuntimeError(
+                    "only Tensors of floating point and complex dtype can require gradients"
+                )
             impl = data._impl.clone_with_grad(requires_grad)
         else:
             impl = _to_impl(data, requires_grad=requires_grad)

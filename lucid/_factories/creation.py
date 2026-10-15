@@ -5,8 +5,13 @@ Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_li
 import struct
 from typing import TYPE_CHECKING, SupportsFloat
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap
-from lucid._factories._build import _fill, _leaf, _python_scalar
+from lucid._dispatch import (
+    _default_dtype_enum_cached,
+    normalize_factory_kwargs,
+    _unwrap,
+    _wrap,
+)
+from lucid._factories._build import _fill, _leaf, _python_scalar, _scalar_dtype
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -319,7 +324,12 @@ def full(
     larger tensor is not supported here (use :func:`lucid.broadcast_to`
     instead).
     """
-    _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
+    _dt_arg = (
+        _scalar_dtype(fill_value, _default_dtype_enum_cached())
+        if dtype is None
+        else dtype
+    )
+    _dt, _dev, _rg = normalize_factory_kwargs(_dt_arg, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]
     return _wrap(_leaf(_fill(shape, fill_value, _dt, _dev), _rg))
 

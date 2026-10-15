@@ -556,3 +556,125 @@ class TestInPlaceAutograd:
         assert_close(y.detach(), np.array([[1, 2, 3], [9, 5, 6]], dtype=np.float32))
         assert x.grad is not None
         assert_close(x.grad, np.array([[2, 4, 6], [0, 10, 12]], dtype=np.float32))
+
+    def test_recorded_setitem_and_inplace_bump_old_version(self, device: str) -> None:
+        w = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+        x = w * 2.0
+        y = x * x
+        x[0] = 0.0
+        with pytest.raises(RuntimeError, match="version"):
+            y.sum().backward()
+
+        w2 = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+        x2 = w2 * 2.0
+        x2[0] = 0.0
+        x2.sum().backward()
+        assert w2.grad is not None
+        assert_close(w2.grad, np.array([0.0, 2.0, 2.0], dtype=np.float32))
+
+        w3 = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+        x3 = w3 * 2.0
+        y3 = x3 * x3
+        x3.masked_fill_(lucid.tensor([True, False, False], device=device), 0.0)
+        with pytest.raises(RuntimeError, match="version"):
+            y3.sum().backward()
+
+
+class TestNewTensorMethodsLCD340:
+    def test_masked_fill_inplace(self, device: str) -> None:
+        x = lucid.tensor([1.0, 2.0, 3.0], device=device, requires_grad=True)
+        y = x * 2.0
+        mask = lucid.tensor([False, True, False], device=device)
+        ret = y.masked_fill_(mask, -1.0)
+        assert ret is y
+        assert_close(y.detach(), np.array([2.0, -1.0, 6.0], dtype=np.float32))
+        y.sum().backward()
+        assert x.grad is not None
+        assert_close(x.grad, np.array([2.0, 0.0, 2.0], dtype=np.float32))
+
+        v = lucid.tensor(5.0, device=device, requires_grad=True)
+        z = lucid.zeros(3, device=device)
+        z.masked_fill_(mask, v)
+        z.sum().backward()
+        assert v.grad is not None and v.grad.item() == 1.0
+
+        with pytest.raises(RuntimeError, match="0-dimensional"):
+            lucid.zeros(3, device=device).masked_fill_(mask, lucid.ones(1, device=device))
+
+    def test_scatter_and_scatter_add_inplace(self, device: str) -> None:
+        x = lucid.zeros(4, device=device)
+        idx = lucid.tensor([1, 3], device=device)
+        src = lucid.tensor([2.0, 5.0], device=device, requires_grad=True)
+        ret = x.scatter_(0, idx, src)
+        assert ret is x
+        assert_close(x.detach(), np.array([0.0, 2.0, 0.0, 5.0], dtype=np.float32))
+        (x * 3.0).sum().backward()
+        assert src.grad is not None
+        assert_close(src.grad, np.array([3.0, 3.0], dtype=np.float32))
+
+        a = lucid.ones(4, device=device)
+        a.scatter_(0, idx, 10.0, reduce="add")
+        assert_close(a, np.array([1.0, 11.0, 1.0, 11.0], dtype=np.float32))
+
+        b = lucid.ones(4, device=device, requires_grad=True)
+        c = b * 2.0
+        s = lucid.tensor([3.0, 4.0], device=device, requires_grad=True)
+        ret2 = c.scatter_add_(0, idx, s)
+        assert ret2 is c
+        assert_close(c.detach(), np.array([2.0, 5.0, 2.0, 6.0], dtype=np.float32))
+        c.sum().backward()
+        assert b.grad is not None and s.grad is not None
+        assert_close(b.grad, np.array([2.0, 2.0, 2.0, 2.0], dtype=np.float32))
+        assert_close(s.grad, np.array([1.0, 1.0], dtype=np.float32))
+
+    def test_scatter_reduce_and_inplace(self, device: str) -> None:
+        x = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        idx = lucid.tensor([0, 0, 2], device=device)
+        src = lucid.tensor([4.0, 6.0, 5.0], device=device)
+        out = x.scatter_reduce(0, idx, src, "mean", include_self=False)
+        assert_close(out, np.array([5.0, 2.0, 5.0], dtype=np.float32))
+
+        y = x.clone()
+        ret = y.scatter_reduce_(0, idx, src, "sum", include_self=True)
+        assert ret is y
+        assert_close(y, np.array([11.0, 2.0, 8.0], dtype=np.float32))
+
+    def test_put_inplace(self, device: str) -> None:
+        x = lucid.zeros(2, 2, device=device)
+        idx = lucid.tensor([0, 3], device=device)
+        src = lucid.tensor([7.0, 9.0], device=device, requires_grad=True)
+        ret = x.put_(idx, src)
+        assert ret is x
+        assert_close(x.detach(), np.array([[7.0, 0.0], [0.0, 9.0]], dtype=np.float32))
+        x.sum().backward()
+        assert src.grad is not None
+        assert_close(src.grad, np.array([1.0, 1.0], dtype=np.float32))
+
+    def test_masked_scatter_and_inplace(self, device: str) -> None:
+        x = lucid.zeros(2, 2, device=device)
+        mask = lucid.tensor([[True, False], [False, True]], device=device)
+        src = lucid.tensor([3.0, 8.0, 9.0], device=device, requires_grad=True)
+        out = x.masked_scatter(mask, src)
+        assert_close(out.detach(), np.array([[3.0, 0.0], [0.0, 8.0]], dtype=np.float32))
+
+        y = lucid.ones(2, 2, device=device)
+        ret = y.masked_scatter_(mask, src)
+        assert ret is y
+        assert_close(y.detach(), np.array([[3.0, 1.0], [1.0, 8.0]], dtype=np.float32))
+        y.sum().backward()
+        assert src.grad is not None
+        assert_close(src.grad, np.array([1.0, 1.0, 0.0], dtype=np.float32))
+
+    def test_bincount_and_take_along_dim(self, device: str) -> None:
+        idx = lucid.tensor([0, 1, 1, 3], dtype=lucid.int64, device=device)
+        assert idx.bincount().tolist() == [1, 2, 0, 1]
+        w = lucid.tensor([0.5, 1.0, 2.0, 4.0], device=device)
+        assert_close(idx.bincount(weights=w, minlength=5), np.array([0.5, 3.0, 0.0, 4.0, 0.0], dtype=np.float32))
+
+        mat = lucid.tensor([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0]], device=device)
+        take_idx = lucid.tensor([[2, 0], [1, 2]], dtype=lucid.int64, device=device)
+        assert_close(
+            mat.take_along_dim(take_idx, dim=1),
+            np.array([[30.0, 10.0], [50.0, 60.0]], dtype=np.float32),
+        )
+

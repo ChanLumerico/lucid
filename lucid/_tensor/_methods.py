@@ -86,71 +86,217 @@ def _fixed_arity_method(e: OpEntry, tensor_cls: type) -> object:
     return method
 
 
+def _masked_fill_(self: Tensor, mask: Tensor, value: float | Tensor) -> Tensor:
+    """Fill elements of ``self`` where ``mask`` is ``True`` with ``value``, in place."""
+    from lucid._ops.composite.indexing import _write_inplace
+
+    if hasattr(value, "_impl"):
+        assert isinstance(value, Tensor)
+        if value.ndim != 0:
+            raise RuntimeError(
+                "masked_fill_ only supports a 0-dimensional value tensor"
+            )
+        if value.requires_grad:
+            import lucid
+
+            return _write_inplace(
+                self,
+                "masked_fill_",
+                lambda base: lucid.where(mask, value.to(base.dtype), base),
+                value,
+            )
+        scalar = float(value.item())
+    else:
+        scalar = float(value)
+    return _write_inplace(
+        self, "masked_fill_", lambda base: base.masked_fill(mask, scalar)
+    )
+
+
+def _scatter_(
+    self: Tensor,
+    dim: int,
+    index: Tensor,
+    src: Tensor | float,
+    reduce: str | None = None,
+) -> Tensor:
+    """Write ``src`` into ``self`` along ``dim`` at ``index``, in place."""
+    from lucid._ops.composite.indexing import _write_inplace
+
+    if hasattr(src, "_impl"):
+        assert isinstance(src, Tensor)
+        return _write_inplace(
+            self,
+            "scatter_",
+            lambda base: base.scatter(dim, index, src, reduce=reduce),
+            src,
+        )
+    return _write_inplace(
+        self,
+        "scatter_",
+        lambda base: base.scatter(dim, index, src, reduce=reduce),
+    )
+
+
+def _scatter_add_(self: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
+    """Add ``src`` into ``self`` along ``dim`` at ``index``, in place."""
+    from lucid._ops.composite.indexing import _write_inplace
+
+    return _write_inplace(
+        self,
+        "scatter_add_",
+        lambda base: base.scatter_add(dim, index, src),
+        src,
+    )
+
+
+def _scatter_reduce(
+    self: Tensor,
+    dim: int,
+    index: Tensor,
+    src: Tensor,
+    reduce: str = "sum",
+    *,
+    include_self: bool = True,
+) -> Tensor:
+    """Out-of-place ``scatter_reduce`` along ``dim``."""
+    from lucid._ops.composite.indexing import scatter_reduce as _sr
+
+    return _sr(self, dim, index, src, reduce=reduce, include_self=include_self)
+
+
+def _scatter_reduce_(
+    self: Tensor,
+    dim: int,
+    index: Tensor,
+    src: Tensor,
+    reduce: str = "sum",
+    *,
+    include_self: bool = True,
+) -> Tensor:
+    """In-place ``scatter_reduce_`` along ``dim``."""
+    from lucid._ops.composite.indexing import (
+        _write_inplace,
+        scatter_reduce as _sr,
+    )
+
+    return _write_inplace(
+        self,
+        "scatter_reduce_",
+        lambda base: _sr(
+            base, dim, index, src, reduce=reduce, include_self=include_self
+        ),
+        src,
+    )
+
+
+def _put_(
+    self: Tensor, index: Tensor, source: Tensor, accumulate: bool = False
+) -> Tensor:
+    """Write ``source`` into ``self`` at flat ``index`` positions, in place."""
+    from lucid._ops.composite.indexing import _write_inplace, put as _put
+
+    return _write_inplace(
+        self,
+        "put_",
+        lambda base: _put(base, index, source, accumulate=accumulate),
+        source,
+    )
+
+
+def _masked_scatter(self: Tensor, mask: Tensor, source: Tensor) -> Tensor:
+    """Out-of-place ``masked_scatter`` where ``mask`` is ``True``."""
+    from lucid._ops.composite.indexing import masked_scatter as _ms
+
+    return _ms(self, mask, source)
+
+
+def _masked_scatter_(self: Tensor, mask: Tensor, source: Tensor) -> Tensor:
+    """In-place ``masked_scatter_`` where ``mask`` is ``True``."""
+    from lucid._ops.composite.indexing import (
+        _write_inplace,
+        masked_scatter as _ms,
+    )
+
+    return _write_inplace(
+        self,
+        "masked_scatter_",
+        lambda base: _ms(base, mask, source),
+        source,
+    )
+
+
+def _bincount(
+    self: Tensor, weights: Tensor | None = None, minlength: int = 0
+) -> Tensor:
+    """Count occurrences of each value in 1-D non-negative integer ``self``."""
+    from lucid._ops.composite.statistics import bincount as _bc
+
+    return _bc(self, weights=weights, minlength=minlength)
+
+
+def _take_along_dim(
+    self: Tensor, indices: Tensor, dim: int | None = None
+) -> Tensor:
+    """Select values from ``self`` at ``indices`` along ``dim``."""
+    from lucid._ops.composite.shape import take_along_dim as _tad
+
+    return _tad(self, indices, dim=dim)
+
+
+
+_EXTRA_METHODS = (
+    ("masked_fill_", _masked_fill_),
+    ("scatter_", _scatter_),
+    ("scatter_add_", _scatter_add_),
+    ("scatter_reduce", _scatter_reduce),
+    ("scatter_reduce_", _scatter_reduce_),
+    ("put_", _put_),
+    ("masked_scatter", _masked_scatter),
+    ("masked_scatter_", _masked_scatter_),
+    ("bincount", _bincount),
+    ("take_along_dim", _take_along_dim),
+)
+
+
+def _make_method(e: OpEntry, tensor_cls: type) -> object:
+    """Build a Tensor method that dispatches to ``e.engine_fn``."""
+    if e.n_tensor_args == -1:
+
+        def method_list(
+            self: Tensor,
+            tensors: list[Tensor],
+            *args: object,
+            **kwargs: object,
+        ) -> Tensor:
+            """Variadic-tensor method body — prepends ``self`` to the unwrapped tensor list."""
+            all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
+            result = e.engine_fn(all_tensors, *args, **kwargs)
+            if e.returns_tensor:
+                if isinstance(result, (list, tuple)):
+                    return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
+                return _wrap(result)
+            return cast("Tensor", result)
+
+        method_list.__name__ = e.method_name or e.name
+        return method_list
+    return _fixed_arity_method(e, tensor_cls)
+
+
 def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
-    # The generated methods are annotated ``self: Tensor`` and
-    # ``-> Tensor``, and ``Tensor`` is imported here for type checking
-    # only, so under PEP 649 nothing could resolve those annotations at
-    # runtime: ``inspect.signature`` raised NameError on 193 of the 236
-    # callables on Tensor, and ``typing.get_type_hints`` with them.
-    # Everything that reads annotations — an IDE, ``help()``, a docs
-    # walker — saw the same wall.
-    #
-    # The class is right here as ``tensor_cls``.  Binding the name it is
-    # already written as costs nothing and cannot drift, because the
-    # TYPE_CHECKING import and this binding name the same object.
     globals().setdefault("Tensor", tensor_cls)
 
-    def _make_method(e: OpEntry) -> object:
-        """Build a Tensor method that dispatches to ``e.engine_fn``.
-
-        Two branches are emitted based on ``e.n_tensor_args``: a variadic
-        version (``-1``) that accepts a list of tensors after ``self``, and
-        the standard version that takes a fixed-arity argument list.
-        """
-        if e.n_tensor_args == -1:
-
-            def method_list(
-                self: Tensor,
-                tensors: list[Tensor],
-                *args: object,
-                **kwargs: object,
-            ) -> Tensor:
-                """Variadic-tensor method body — prepends ``self`` to the unwrapped tensor list."""
-                all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
-                result = e.engine_fn(all_tensors, *args, **kwargs)
-                if e.returns_tensor:
-                    if isinstance(result, (list, tuple)):
-                        return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
-                    return _wrap(result)
-                return cast("Tensor", result)
-
-            method_list.__name__ = e.method_name or e.name
-            return method_list
-        return _fixed_arity_method(e, tensor_cls)
-
     for entry in _REGISTRY:
-        if entry.method_name is None:
+        if entry.method_name is None or entry.method_name.startswith("__"):
             continue
-        # skip dunders — handled in _dunders.py
-        if entry.method_name.startswith("__"):
-            continue
-        setattr(tensor_cls, entry.method_name, _make_method(entry))
-
-    # ── methods that bypass the registry — only those with no clean
-    # registry mapping live here.  Everything else is auto-injected from
-    # ``_REGISTRY`` above (now that ``_make_method`` forwards keyword args
-    # the registry adapters handle the API-compat translation directly).
+        setattr(tensor_cls, entry.method_name, _make_method(entry, tensor_cls))
 
     def eval(self: Tensor) -> Tensor:
-        """Force immediate evaluation of this tensor.
-
-        Special-cased because it operates on the impl handle rather than going
-        through any engine op — so it has no place in the ops registry.
-        On Metal this flushes the lazy compute graph; on CPU it's a no-op.
-        Returns ``self`` for chaining.
-        """
+        """Force immediate evaluation of this tensor."""
         self._impl.eval()
         return self
 
-    setattr(tensor_cls, "eval", eval)
+    for _name, _fn in (("eval", eval), *_EXTRA_METHODS):
+        _fn.__name__ = _name
+        setattr(tensor_cls, _name, _fn)

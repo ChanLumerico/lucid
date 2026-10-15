@@ -164,11 +164,16 @@ def _write_inplace[T: Tensor](
         )
     aliased = input._impl.is_aliased()
     base: Tensor = input
-    if records and aliased:
+    if records:
         snapshot = _Snapshot.apply(input)
         assert isinstance(snapshot, lucid.Tensor)
         base = snapshot
     result = result_of(base)
+    if result.shape != input.shape:
+        raise _C_engine.ShapeMismatch(
+            f"{name}: result shape {tuple(result.shape)} does not match "
+            f"destination shape {tuple(input.shape)}"
+        )
     if aliased:
         _C_engine.assign_inplace(input._impl, result._impl, name)
     elif records:

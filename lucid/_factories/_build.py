@@ -84,6 +84,10 @@ def _leaf(impl: _C_engine.TensorImpl, requires_grad: bool) -> _C_engine.TensorIm
     final device, built without grad — nothing may convert it afterwards,
     or the caller gets that conversion's output instead of a leaf.
     """
+    if requires_grad and _promotion.is_integral(impl.dtype):
+        raise RuntimeError(
+            "only Tensors of floating point and complex dtype can require gradients"
+        )
     return impl.clone_with_grad(True) if requires_grad else impl
 
 
@@ -131,6 +135,9 @@ def _default_complex(default_float: _C_engine.Dtype) -> _C_engine.Dtype:
 
 def _scalar_dtype(value: object, default_float: _C_engine.Dtype) -> _C_engine.Dtype:
     r"""The dtype a literal element asks for on its own."""
+    impl: object = getattr(value, "_impl", None)
+    if isinstance(impl, _C_engine.TensorImpl):
+        return impl.dtype
     if _is_numpy_scalar(value):
         return _NUMPY_SCALAR_DTYPE[str(getattr(value, "dtype", ""))]
     if isinstance(value, bool):

@@ -52,6 +52,7 @@ from lucid._C import engine as _C_engine
 if TYPE_CHECKING:
     from lucid._ops._registry import OpEntry
     from lucid._tensor.tensor import Tensor
+    from lucid._types import _IndexType
 
 _ATTR = "_metal_view"
 
@@ -107,6 +108,8 @@ class _Link:
         "overlap",
         "positions",
         "shape",
+        "stride",
+        "stride_known",
     )
 
     def __init__(
@@ -114,12 +117,14 @@ class _Link:
         base: Tensor,
         kind: int,
         *,
-        key: object = None,
+        key: _IndexType = None,
         replay: (
             tuple[str, tuple[object, ...], dict[str, object], int | None] | None
         ) = None,
         overlap: bool = False,
         weak: bool = False,
+        stride: tuple[int, ...] | None = None,
+        stride_known: bool = False,
     ) -> None:
         # A detached alias may outlive its base by a long way — a loss
         # detached into a history list — and a strong reference would keep
@@ -132,9 +137,11 @@ class _Link:
         self.replay = replay
         self.overlap = overlap
         self.positions: Tensor | None = None
-        # Kept so positions — and an overlap refusal — do not need the base,
-        # which may be gone.  Only views that replay need it.
-        self.shape: tuple[int, ...] = tuple(base.shape) if replay is not None else ()
+        # Kept so positions, stride checks and an overlap refusal do not need
+        # the base, which may be gone.
+        self.shape: tuple[int, ...] = tuple(base.shape)
+        self.stride: tuple[int, ...] | None = stride
+        self.stride_known: bool = stride_known or stride is not None
 
     @property
     def base(self) -> Tensor | None:
@@ -155,6 +162,171 @@ _GPU = _C_engine.Device.GPU.value
 
 def _on_metal(t: Tensor) -> bool:
     return t._impl.device.value == _GPU
+
+
+def _contiguous_stride(shape: tuple[int, ...]) -> tuple[int, ...]:
+    if not shape:
+        return ()
+    stride = [1] * len(shape)
+    for d in range(len(shape) - 2, -1, -1):
+        stride[d] = stride[d + 1] * max(shape[d + 1], 1)
+    return tuple(stride)
+
+
+def _is_contiguous_stride(shape: tuple[int, ...], stride: tuple[int, ...]) -> bool:
+    expected = 1
+    for d in range(len(shape) - 1, -1, -1):
+        if shape[d] == 0:
+            return True
+        if shape[d] != 1:
+            if stride[d] != expected:
+                return False
+            expected *= shape[d]
+    return True
+
+
+def _squeezes_only(
+    in_shape: tuple[int, ...],
+    in_stride: tuple[int, ...],
+    out_shape: tuple[int, ...],
+) -> tuple[int, ...] | None:
+    sizes = [s for s in in_shape if s != 1]
+    kept = [st for s, st in zip(in_shape, in_stride, strict=True) if s != 1]
+    want = [s for s in out_shape if s != 1]
+    if want != sizes:
+        return None
+    stride = [0] * len(out_shape)
+    k = len(kept)
+    next_st = 1
+    for d in range(len(out_shape) - 1, -1, -1):
+        if out_shape[d] != 1:
+            k -= 1
+            stride[d] = kept[k]
+        else:
+            stride[d] = next_st
+        next_st = stride[d] * out_shape[d]
+    return tuple(stride)
+
+
+def _fill_chunk(
+    stride: list[int],
+    out_shape: tuple[int, ...],
+    view_d: int,
+    in_numel: int,
+    chunk_stride: int,
+) -> tuple[int, int]:
+    view_numel = 1
+    while view_d >= 0 and (view_numel < in_numel or out_shape[view_d] == 1):
+        stride[view_d] = view_numel * chunk_stride
+        view_numel *= out_shape[view_d]
+        view_d -= 1
+    return view_d, view_numel
+
+
+def _chunk_strides(
+    in_shape: tuple[int, ...],
+    in_stride: tuple[int, ...],
+    out_shape: tuple[int, ...],
+) -> tuple[int, ...] | None:
+    if not in_shape:
+        return (1,) * len(out_shape)
+    if 0 in in_shape:
+        return in_stride if in_shape == out_shape else _contiguous_stride(out_shape)
+    stride = [0] * len(out_shape)
+    view_d = len(out_shape) - 1
+    chunk_stride = in_stride[-1]
+    in_numel = 1
+    for k in range(len(in_shape) - 1, -1, -1):
+        if in_shape[k] == 1 and k > 0 and in_numel == 1:
+            chunk_stride = in_stride[k - 1]
+            continue
+        in_numel *= in_shape[k]
+        if k > 0 and (
+            in_shape[k - 1] == 1 or in_stride[k - 1] == in_numel * chunk_stride
+        ):
+            continue
+        view_d, view_numel = _fill_chunk(
+            stride, out_shape, view_d, in_numel, chunk_stride
+        )
+        if view_numel != in_numel:
+            return None
+        if k > 0:
+            chunk_stride = in_stride[k - 1]
+            in_numel = 1
+    return tuple(stride) if view_d == -1 else None
+
+
+def _view_strides(
+    in_shape: tuple[int, ...],
+    in_stride: tuple[int, ...],
+    out_shape: tuple[int, ...],
+    squeeze: bool,
+) -> tuple[int, ...] | None:
+    if squeeze:
+        return _squeezes_only(in_shape, in_stride, out_shape)
+    if _is_contiguous_stride(in_shape, in_stride):
+        return _contiguous_stride(out_shape)
+    return _chunk_strides(in_shape, in_stride, out_shape)
+
+
+def _probe_stride(
+    link: _Link, in_stride: tuple[int, ...]
+) -> tuple[int, ...] | None:
+    from lucid._dispatch import _wrap
+    from lucid.compile import _host_check
+
+    with _host_check():
+        span = (
+            sum(
+                (s - 1) * max(st, 0)
+                for s, st in zip(link.shape, in_stride, strict=True)
+                if s > 0
+            )
+            + 1
+        )
+        seed = _C_engine.empty([span], _C_engine.I8, _C_engine.CPU)
+        probe = _wrap(
+            _C_engine.TensorImpl._make_view(
+                seed, list(link.shape), list(in_stride), 0
+            )
+        )
+        if link.kind == _KEY:
+            traced = probe[link.key]
+        else:
+            assert link.replay is not None
+            name, args, kwargs, piece = link.replay
+            attr = getattr(probe, name)
+            traced = attr(*args, **kwargs) if callable(attr) else attr
+            if piece is not None:
+                traced = traced[piece]
+        if 0 in link.shape or traced._impl.is_aliased():
+            return traced.stride()
+        return None
+
+
+def _stride(t: Tensor) -> tuple[int, ...] | None:
+    link: _Link | None = t.__dict__.get(_ATTR)
+    if link is None:
+        return _contiguous_stride(t.shape)
+    if link.stride_known:
+        return link.stride
+    base = link.base
+    in_stride = (
+        _stride(base)
+        if base is not None and _ATTR in base.__dict__
+        else _contiguous_stride(link.shape)
+    )
+    if in_stride is None:
+        out_stride = None
+    elif link.kind in (_DETACHED, _GRAD):
+        out_stride = in_stride
+    elif link.kind == _RESHAPE:
+        out_stride = _view_strides(link.shape, in_stride, t.shape, False)
+    else:
+        out_stride = _probe_stride(link, in_stride)
+    link.stride = out_stride
+    link.stride_known = True
+    return out_stride
 
 
 def _link(view: object, base: Tensor, kind: int, **kwargs: object) -> None:
@@ -274,6 +446,8 @@ def write_back(view: Tensor) -> None:
     else:
         flat = base.reshape(-1)
         flat[_positions(link).to(base.device)] = view.reshape(-1)
+        if _ATTR not in flat.__dict__:
+            base.copy_(flat.reshape(tuple(base.shape)))
 
 
 def _writer(original: Callable[..., object]) -> Callable[..., object]:
@@ -303,6 +477,27 @@ def _metal_input(args: tuple[object, ...]) -> Tensor | None:
     return None
 
 
+def _link_reshape(out: Tensor, base: Tensor, name: str) -> None:
+    if _ATTR not in base.__dict__:
+        _link(out, base, _RESHAPE, stride=_contiguous_stride(out.shape))
+        return
+    base_stride = _stride(base)
+    squeeze = name in ("squeeze", "squeeze_all", "unsqueeze", "expand_dims")
+    new_stride = (
+        _view_strides(base.shape, base_stride, out.shape, squeeze)
+        if base_stride is not None
+        else None
+    )
+    if new_stride is not None:
+        _link(out, base, _RESHAPE, stride=new_stride)
+    elif name in ("view", "view_as"):
+        raise _C_engine.LucidError(
+            "view: view size is not compatible with input tensor's "
+            "size and stride (at least one dimension spans across "
+            "two contiguous subspaces) — use .reshape(...) instead"
+        )
+
+
 def _viewer(
     original: Callable[..., object], kind: int, name: str, overlap: bool = False
 ) -> Callable[..., object]:
@@ -328,6 +523,8 @@ def _viewer(
                     replay=(name, args[1:], kwargs, None),
                     overlap=overlap,
                 )
+            elif kind == _RESHAPE and isinstance(out, _TENSOR):
+                _link_reshape(out, base, name)
             else:
                 _link(out, base, kind)
         return out

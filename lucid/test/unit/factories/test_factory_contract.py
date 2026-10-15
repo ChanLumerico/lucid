@@ -354,3 +354,69 @@ def test_exact_rows_match_reference(ref: ModuleType, case: str) -> None:
         rt = r.tensor([1.5, 2.0], dtype=r.bfloat16, requires_grad=True)
         lt = lucid.tensor([1.5, 2.0], dtype=lucid.bfloat16, requires_grad=True)
         assert lt.is_leaf == rt.is_leaf
+
+
+# ── LCD-319: full() dtype inference when dtype is None ───────────────────
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_full_infers_dtype_from_fill_value(device: str) -> None:
+    assert lucid.full((2, 2), True, device=device).dtype is lucid.bool
+    assert lucid.full((2, 2), False, device=device).dtype is lucid.bool
+    assert lucid.full((2, 2), 5, device=device).dtype is lucid.int64
+    assert lucid.full((2, 2), -7, device=device).dtype is lucid.int64
+    assert lucid.full((2, 2), 2.5, device=device).dtype is lucid.float32
+    assert lucid.full((2, 2), 1 + 2j, device=device).dtype is lucid.complex64
+    assert lucid.full((2, 2), np.int16(9), device=device).dtype is lucid.int16
+    assert lucid.full((2, 2), np.float16(1.5), device=device).dtype is lucid.float16
+    scalar_t = lucid.tensor(4, dtype=lucid.int32, device=device)
+    assert lucid.full((2, 2), scalar_t, device=device).dtype is lucid.int32
+
+
+def test_full_follows_default_float_dtype() -> None:
+    previous = lucid.get_default_dtype()
+    lucid.set_default_dtype(lucid.float64)
+    try:
+        assert lucid.full((2,), 1.5).dtype is lucid.float64
+        assert lucid.full((2,), 1 + 2j).dtype is lucid.complex128
+        assert lucid.full((2,), 3).dtype is lucid.int64
+        assert lucid.full((2,), True).dtype is lucid.bool
+    finally:
+        lucid.set_default_dtype(previous)
+
+
+# ── LCD-330 / LCD-69: integral and boolean tensors refuse requires_grad ──
+
+_INTEGRAL_DTYPES = [
+    lucid.int8,
+    lucid.int16,
+    lucid.int32,
+    lucid.int64,
+    lucid.bool,
+]
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("dtype", _INTEGRAL_DTYPES, ids=str)
+def test_integral_and_bool_tensors_refuse_requires_grad(
+    device: str, dtype: lucid.dtype
+) -> None:
+    msg = "only Tensors of floating point and complex dtype can require gradients"
+    for name, fn in FACTORIES.items():
+        if _reference_refuses(name, dtype):
+            continue
+        with pytest.raises(RuntimeError, match=msg):
+            fn(dtype, device, True)
+    with pytest.raises(RuntimeError, match=msg):
+        lucid.Tensor([1, 0], dtype=dtype, device=device, requires_grad=True)
+    t = lucid.zeros(2, dtype=dtype, device=device)
+    with pytest.raises(RuntimeError, match=msg):
+        t.requires_grad_(True)
+    with pytest.raises(RuntimeError, match=msg):
+        t.requires_grad = True
+    with pytest.raises(RuntimeError, match=msg):
+        lucid.nn.Parameter(t)
+    assert t.requires_grad_(False) is t
+    t.requires_grad = False
+    assert not t.requires_grad
+
