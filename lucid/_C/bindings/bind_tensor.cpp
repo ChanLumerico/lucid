@@ -145,7 +145,8 @@ void register_tensor_impl(py::module_& m) {
     // held as shared_ptr<TensorImpl> on both the C++ and Python sides.  The
     // constructor delegates to TensorImpl::from_numpy, which copies the numpy
     // array data into a managed Storage buffer.
-    py::class_<TensorImpl, std::shared_ptr<TensorImpl>>(m, "TensorImpl")
+    py::class_<TensorImpl, std::shared_ptr<TensorImpl>>(
+        m, "TensorImpl", py::custom_type_setup(enable_tensor_autograd_gc))
         .def(py::init([](py::array arr, Device device, bool requires_grad) {
                  auto out = TensorImpl::from_numpy(std::move(arr), device, requires_grad);
                  traced_factory(out);

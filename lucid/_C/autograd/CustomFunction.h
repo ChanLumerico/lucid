@@ -74,6 +74,7 @@ public:
     // via :func:`save_for_backward` and :func:`store` before returning.
     // Defaulted — no resources need acquisition at construction.
     FunctionCtx() = default;
+    ~FunctionCtx();
 
     // Save tensors needed for the backward pass.
     //
@@ -137,6 +138,10 @@ public:
         return (it != extras_.end()) ? it->second : py::none();
     }
 
+    const std::unordered_map<std::string, py::object>& extras() const noexcept { return extras_; }
+
+    void clear() noexcept;
+
 private:
     std::vector<std::shared_ptr<TensorImpl>> saved_tensors_;
     std::unordered_map<std::string, py::object> extras_;
@@ -185,6 +190,9 @@ private:
 // :class:`FunctionCtx` — context object carrying saved state.
 class LUCID_API PythonBackwardNode : public Node {
 public:
+    PythonBackwardNode() = default;
+    ~PythonBackwardNode() override;
+
     // The FunctionCtx object forwarded to py_backward_fn as its first argument.
     py::object py_ctx;
 
@@ -309,6 +317,8 @@ public:
     // std::vector<Storage>
     //     One :class:`Storage` per forward input, as for :func:`apply`.
     std::vector<Storage> apply_barrier() override;
+
+    void release_saved() override;
 
 private:
     // One slot per forward output; engaged once a gradient has arrived.

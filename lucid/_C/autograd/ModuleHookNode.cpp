@@ -246,6 +246,10 @@ std::shared_ptr<TensorImpl> alias_with_hook(const std::shared_ptr<TensorImpl>& b
 ModuleBackwardHookState::ModuleBackwardHookState(std::size_t n, py::object pre, py::object full)
     : pre_runner(std::move(pre)), full_runner(std::move(full)), n_inputs(n) {}
 
+ModuleBackwardHookState::~ModuleBackwardHookState() {
+    clear();
+}
+
 void ModuleBackwardHookState::enter_pass() {
     const std::uint64_t current = BackwardPass::current();
     if (current == pass) {
@@ -260,6 +264,12 @@ void ModuleBackwardHookState::reset() {
     std::fill(grad_outputs.begin(), grad_outputs.end(), nullptr);
     pre_hooks_ran = false;
     full_hooks_ran = false;
+}
+
+void ModuleBackwardHookState::clear() noexcept {
+    reset();
+    release_py_object(pre_runner);
+    release_py_object(full_runner);
 }
 
 ModuleOutputHookNode::ModuleOutputHookNode(std::shared_ptr<ModuleBackwardHookState> state)
@@ -338,6 +348,11 @@ std::vector<TensorImplPtr> ModuleOutputHookNode::apply_barrier_for_graph() {
     return out;
 }
 
+void ModuleOutputHookNode::release_saved() {
+    Node::release_saved();
+    state_.reset();
+}
+
 ModuleInputHookNode::ModuleInputHookNode(std::shared_ptr<ModuleBackwardHookState> state)
     : state_(std::move(state)) {}
 
@@ -399,9 +414,14 @@ std::vector<TensorImplPtr> ModuleInputHookNode::apply_barrier_for_graph() {
     return out;
 }
 
+void ModuleInputHookNode::release_saved() {
+    Node::release_saved();
+    state_.reset();
+}
+
 void register_module_hook_nodes(py::module_& m) {
     py::class_<ModuleBackwardHookState, std::shared_ptr<ModuleBackwardHookState>>(
-        m, "_ModuleBackwardHookState");
+        m, "_ModuleBackwardHookState", py::custom_type_setup(enable_module_hook_state_gc));
 
     m.def(
         "_create_module_backward_hook_state",

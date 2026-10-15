@@ -146,12 +146,6 @@ def test_a_state_lives_as_long_as_its_graph(device: str) -> None:
     assert _states_of(module) == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-167 residual: a module holding its own hooked output closes "
-    "a cycle through engine-held tensors; freeing it needs the engine to "
-    "expose those edges to the garbage collector",
-)
 def test_a_module_holding_its_hooked_output_is_freed(device: str) -> None:
     module = nn.Linear(3, 3, device=device)
     module.register_full_backward_hook(_full_hook)
@@ -160,6 +154,140 @@ def test_a_module_holding_its_hooked_output_is_freed(device: str) -> None:
     del module
     gc.collect()
     assert module_ref() is None
+
+
+@pytest.mark.parametrize("mode", _MODES)
+@pytest.mark.parametrize("kind", _KINDS)
+def test_a_module_holding_its_hooked_output_across_a_deeper_graph_is_freed(
+    kind: str, mode: str, device: str
+) -> None:
+    with _global_hook(kind):
+        module = _hooked_linear(kind, device)
+        x = lucid.randn(2, 3, device=device, requires_grad=True)
+        y = module(x) * 2 + 1
+        module.last = y
+        if mode == "backward":
+            y.sum().backward()
+        elif mode == "retain-graph-twice":
+            loss = y.sum()
+            loss.backward(retain_graph=True)
+            loss.backward()
+            del loss
+        module_ref = weakref.ref(module)
+        output_ref = weakref.ref(y)
+        del module, x, y
+        gc.collect()
+        assert module_ref() is None
+        assert output_ref() is None
+
+
+def test_a_module_holding_multiple_tensors_from_the_same_hooked_graph_is_freed(
+    device: str,
+) -> None:
+    module = nn.Linear(3, 3, device=device)
+    module.register_full_backward_hook(_full_hook)
+    module.register_full_backward_pre_hook(_pre_hook)
+    x = lucid.randn(2, 3, device=device, requires_grad=True)
+    y = module(x)
+    z = y * 2 + 1
+    module.y = y
+    module.z = z
+    module_ref = weakref.ref(module)
+    y_ref = weakref.ref(y)
+    z_ref = weakref.ref(z)
+    del module, x, y, z
+    gc.collect()
+    assert module_ref() is None
+    assert y_ref() is None
+    assert z_ref() is None
+
+
+def test_a_live_downstream_branch_keeps_a_cyclic_hooked_module_alive_until_dropped(
+    device: str,
+) -> None:
+    calls: list[int] = []
+    module = nn.Linear(3, 3, device=device)
+    module.register_full_backward_hook(lambda mod, gi, go: calls.append(1))
+    x = lucid.randn(2, 3, device=device, requires_grad=True)
+    y = module(x)
+    z = y * 2
+    module.last = y
+    module_ref = weakref.ref(module)
+    del module, y
+    gc.collect()
+    # ``z`` is still reachable and its backward path runs through the module.
+    assert module_ref() is not None
+    z.sum().backward()
+    assert calls == [1]
+    del z, x
+    gc.collect()
+    assert module_ref() is None
+
+
+@pytest.mark.parametrize("run_backward", [False, True], ids=["no-backward", "backward"])
+def test_custom_function_cycle_through_ctx_or_module_is_freed(
+    run_backward: bool, device: str
+) -> None:
+    class SelfSavingFn(lucid.autograd.Function):
+        @staticmethod
+        def forward(ctx: object, x: lucid.Tensor, owner: object) -> lucid.Tensor:
+            out = x * 2
+            ctx.save_for_backward(out)  # type: ignore[attr-defined]
+            ctx.owner = owner  # type: ignore[attr-defined]
+            return out
+
+        @staticmethod
+        def backward(
+            ctx: object, grad_out: lucid.Tensor
+        ) -> tuple[lucid.Tensor, None]:
+            (out,) = ctx.saved_tensors  # type: ignore[attr-defined]
+            return grad_out * (out * 0 + 2), None
+
+    module = nn.Linear(3, 3, device=device)
+    x = lucid.randn(2, 3, device=device, requires_grad=True)
+    y = SelfSavingFn.apply(module(x), module)
+    assert isinstance(y, lucid.Tensor)
+    module.last = y * 3
+    if run_backward:
+        module.last.sum().backward()
+    module_ref = weakref.ref(module)
+    y_ref = weakref.ref(y)
+    del module, x, y
+    gc.collect()
+    assert module_ref() is None
+    assert y_ref() is None
+
+
+@pytest.mark.parametrize("leaf", [False, True], ids=["non-leaf", "leaf"])
+def test_tensor_hook_cycle_through_module_is_freed(leaf: bool, device: str) -> None:
+    module = nn.Linear(3, 3, device=device)
+    x = lucid.randn(2, 3, device=device, requires_grad=True)
+    target = x if leaf else module(x) * 2
+    target.register_hook(lambda g, m=module, t=target: g)
+    module.held = target
+    module_ref = weakref.ref(module)
+    target_ref = weakref.ref(target)
+    del module, x, target
+    gc.collect()
+    assert module_ref() is None
+    assert target_ref() is None
+
+
+def test_repeated_gc_collect_cycles_with_hooked_modules(device: str) -> None:
+    refs: list[weakref.ref[nn.Module]] = []
+    for i in range(12):
+        module = nn.Linear(3, 3, device=device)
+        module.register_full_backward_hook(_full_hook)
+        module.register_full_backward_pre_hook(_pre_hook)
+        x = lucid.randn(2, 3, device=device, requires_grad=True)
+        y = module(x) * 2 + 1
+        module.last = y
+        if i % 2 == 0:
+            y.sum().backward()
+        refs.append(weakref.ref(module))
+        del module, x, y
+        gc.collect()
+    assert all(r() is None for r in refs)
 
 
 # ── hook semantics against the reference ───────────────────────────────────

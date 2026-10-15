@@ -34,7 +34,8 @@ void register_autograd(py::module_& m) {
     // Node is the abstract base for all backward-graph vertices.  It is held
     // as shared_ptr<Node> because backward-graph edges are also shared_ptrs;
     // Python may hold a reference longer than the graph itself.
-    py::class_<Node, std::shared_ptr<Node>>(m, "Node")
+    py::class_<Node, std::shared_ptr<Node>>(m, "Node",
+                                            py::custom_type_setup(enable_node_autograd_gc))
         .def_property_readonly("sequence_nr", &Node::sequence_nr)
         .def("name", &Node::node_name,
              "The operation this node differentiates, e.g. ``\"MulBackward\"``.")
@@ -44,7 +45,8 @@ void register_autograd(py::module_& m) {
 
     // AccumulateGrad is the leaf-variable sink node; Python code can detect it
     // via isinstance(tensor.grad_fn, engine.AccumulateGrad).
-    py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(m, "AccumulateGrad");
+    py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(
+        m, "AccumulateGrad", py::custom_type_setup(enable_node_autograd_gc));
 
     // engine_backward seeds the backward pass with a ones_like gradient so
     // scalar loss tensors do not need an explicit gradient argument.  The

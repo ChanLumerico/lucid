@@ -752,6 +752,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resolve dtype edge parity and 0-D backward (LCD-343)
 
+- expose C++ graph edges to Python cyclic GC (LCD-392)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

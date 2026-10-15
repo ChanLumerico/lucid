@@ -129,6 +129,7 @@ public:
     //     Python callable that will fan full-backward hooks at the input
     //     barrier.
     ModuleBackwardHookState(std::size_t n_inputs, py::object pre_runner, py::object full_runner);
+    ~ModuleBackwardHookState();
 
     // Discard what an earlier backward pass left behind, if the running pass
     // is a different one.  Called before every read or write of the slots.
@@ -138,6 +139,9 @@ public:
     // module's backward is complete, so the next pass starts empty and fires
     // the hooks again.
     void reset();
+
+    // Release all Python runners and saved gradients under the GIL.
+    void clear() noexcept;
 
     py::object pre_runner;
     py::object full_runner;
@@ -251,6 +255,10 @@ public:
     // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleOutputHook"; }
 
+    void release_saved() override;
+
+    const std::shared_ptr<ModuleBackwardHookState>& state() const noexcept { return state_; }
+
 private:
     // Fire the pre-backward hooks — and the full ones when the module has no
     // input that takes a gradient — once per pass.  ``graph`` is whether the
@@ -345,6 +353,10 @@ public:
     // Graph label — ``"ModuleInputHook"`` — for debug printing and
     // profiler traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleInputHook"; }
+
+    void release_saved() override;
+
+    const std::shared_ptr<ModuleBackwardHookState>& state() const noexcept { return state_; }
 
 private:
     // Fire the full-backward hooks once per pass; ``graph`` as for

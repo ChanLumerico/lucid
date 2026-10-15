@@ -32,6 +32,33 @@ constexpr const char* kBackwardResult = "a custom Function's backward result";
 
 }  // namespace
 
+FunctionCtx::~FunctionCtx() {
+    clear();
+}
+
+void FunctionCtx::clear() noexcept {
+    auto saved = std::move(saved_tensors_);
+    saved_tensors_.clear();
+    auto ext = std::move(extras_);
+    extras_.clear();
+    saved.clear();
+    for (auto& kv : ext)
+        release_py_object(kv.second);
+}
+
+PythonBackwardNode::~PythonBackwardNode() {
+    grad_slots_.clear();
+    release_py_object(py_ctx);
+    release_py_object(py_backward_fn);
+}
+
+void PythonBackwardNode::release_saved() {
+    Node::release_saved();
+    grad_slots_.clear();
+    release_py_object(py_ctx);
+    release_py_object(py_backward_fn);
+}
+
 // Invoke the Python backward function and collect the resulting gradients.
 //
 // Steps:
@@ -93,6 +120,8 @@ std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplP
 }
 
 void PythonBackwardNode::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) {
+    if (saved_released())
+        return;
     if (grad_slots_.size() < out_shapes.size())
         grad_slots_.resize(out_shapes.size());
     if (input_nr >= grad_slots_.size())
@@ -178,7 +207,8 @@ void register_custom_function(py::module_& m) {
     // save_for_backward accepts *args of tensors (TensorImpl or Python
     // wrappers with an .impl attribute).  saved_tensors returns a tuple.
     // Arbitrary attributes are stored/retrieved via __setattr__/__getattr__.
-    py::class_<FunctionCtx, std::shared_ptr<FunctionCtx>>(m, "FunctionCtx")
+    py::class_<FunctionCtx, std::shared_ptr<FunctionCtx>>(
+        m, "FunctionCtx", py::custom_type_setup(enable_function_ctx_gc))
         .def(py::init<>())
         .def(
             "save_for_backward",
@@ -210,8 +240,8 @@ void register_custom_function(py::module_& m) {
 
     // _PythonBackwardNode — internal type; Python sets ctx and backward_fn
     // fields, then passes the node to _register_python_backward_node.
-    py::class_<PythonBackwardNode, Node, std::shared_ptr<PythonBackwardNode>>(m,
-                                                                              "_PythonBackwardNode")
+    py::class_<PythonBackwardNode, Node, std::shared_ptr<PythonBackwardNode>>(
+        m, "_PythonBackwardNode", py::custom_type_setup(enable_node_autograd_gc))
         .def(py::init<>())
         .def_readwrite("ctx", &PythonBackwardNode::py_ctx)
         .def_readwrite("backward_fn", &PythonBackwardNode::py_backward_fn)

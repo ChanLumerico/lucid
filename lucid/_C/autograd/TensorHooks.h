@@ -78,6 +78,8 @@ struct LUCID_API TensorHookSlot {
 
     TensorHookSlot(const TensorHookSlot&) = delete;
     TensorHookSlot& operator=(const TensorHookSlot&) = delete;
+
+    void clear() noexcept;
 };
 
 // The hook slots of one node, by output slot.
@@ -93,6 +95,9 @@ public:
 
     // The slot of output ``output_nr``, made empty if it does not exist yet.
     std::shared_ptr<TensorHookSlot> ensure(std::uint32_t output_nr);
+
+    // Every registered slot, for CPython cyclic GC traversal.
+    const std::vector<std::shared_ptr<TensorHookSlot>>& slots() const noexcept { return slots_; }
 
 private:
     std::vector<std::shared_ptr<TensorHookSlot>> slots_;
@@ -267,5 +272,20 @@ LUCID_API Storage present_gradient(Storage s);
 // LucidError
 //     ``g`` is ``self``, or a Metal strided view with no buffer of its own.
 LUCID_API Storage assignable_grad(const TensorImpl& self, const TensorImpl& g);
+
+// ── Python reference lifetime & cyclic garbage collection ────────────────────
+
+// Release ``obj``'s reference under the GIL if the interpreter is still
+// running.  Detaches the underlying ``PyObject*`` before ``Py_DECREF`` so
+// re-entrant Python finalizers cannot observe a half-cleared handle.
+LUCID_API void release_py_object(py::object& obj) noexcept;
+
+// Enable CPython cyclic garbage collection (``Py_TPFLAGS_HAVE_GC``,
+// ``tp_traverse``, ``tp_clear``) on pybind11 heap types that can participate
+// in reference cycles through the C++ autograd graph.
+LUCID_API void enable_tensor_autograd_gc(PyHeapTypeObject* heap_type);
+LUCID_API void enable_node_autograd_gc(PyHeapTypeObject* heap_type);
+LUCID_API void enable_function_ctx_gc(PyHeapTypeObject* heap_type);
+LUCID_API void enable_module_hook_state_gc(PyHeapTypeObject* heap_type);
 
 }  // namespace lucid

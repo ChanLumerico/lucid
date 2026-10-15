@@ -7,11 +7,16 @@
 #include "TensorHooks.h"
 
 #include <string>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "AccumulateGrad.h"
+#include "CustomFunction.h"
 #include "Helpers.h"
+#include "ModuleHookNode.h"
 
 namespace lucid {
 
@@ -97,15 +102,12 @@ retaining_tensor(const TensorHookSlot& slot, const Node& producer, std::uint32_t
 // ── Slots ────────────────────────────────────────────────────────────────────
 
 TensorHookSlot::~TensorHookSlot() {
-    PyObject* obj = runner.release().ptr();
-    if (obj == nullptr)
-        return;
-    // At interpreter shutdown there is nobody to hand the reference back to.
-    if (!Py_IsInitialized() || Py_IsFinalizing())
-        return;
-    const PyGILState_STATE state = PyGILState_Ensure();
-    Py_DECREF(obj);
-    PyGILState_Release(state);
+    clear();
+}
+
+void TensorHookSlot::clear() noexcept {
+    retain.reset();
+    release_py_object(runner);
 }
 
 std::shared_ptr<TensorHookSlot> NodeHooks::find(std::uint32_t output_nr) const {
@@ -296,6 +298,341 @@ Storage assignable_grad(const TensorImpl& self, const TensorImpl& g) {
         err.fail("a tensor cannot be assigned as its own gradient");
     check_grad_kind(err, "an assigned gradient", self.dtype(), self.device(), self.shape(), g);
     return grad_slot_buffer(err, g);
+}
+
+// ── Python reference lifetime & cyclic garbage collection ────────────────────
+
+namespace {
+
+// During CPython's ``subtract_refs`` pass of ``gc.collect()``, ``tp_traverse``
+// is invoked with ``arg == self`` on each tracked object in the collected
+// generation.  Multiple live ``TensorImpl`` (or ``Node``) wrappers in the same
+// generation can reach the same shared C++ ``Node`` / ``ModuleBackwardHookState``
+// / ``TensorHookSlot``, whereas each C++ ``py::object`` member only owns a
+// single ``Py_INCREF`` on its underlying ``PyObject*``.  Visiting the same C++
+// ``py::object`` slot more than once during a single ``subtract_refs`` pass
+// would subtract from ``gc_refs`` multiple times and underflow it in Python
+// 3.14 (where ``_gc_prev`` is unsigned), making unreachable cycles appear
+// reachable.
+//
+// We therefore deduplicate by ``const py::object*`` slot address across a
+// single ``subtract_refs`` pass (``arg == self``), and reset the pass state as
+// soon as ``move_unreachable`` (``arg != self``), ``tp_clear``, a new
+// ``subtract_refs`` pass (seeing the same ``self`` again), or any C++ slot
+// release runs.
+struct GcDecrefPassState {
+    std::unordered_set<PyObject*> seen_selves;
+    std::unordered_set<const py::object*> seen_slots;
+
+    void reset() noexcept {
+        seen_selves.clear();
+        seen_slots.clear();
+    }
+};
+
+GcDecrefPassState& gc_decref_state() {
+    static GcDecrefPassState state;
+    return state;
+}
+
+void reset_gc_decref_pass() noexcept {
+    gc_decref_state().reset();
+}
+
+template <typename T>
+T* try_get_cpp_ptr(PyObject* self) noexcept {
+    if (self == nullptr)
+        return nullptr;
+    auto* tinfo = py::detail::get_type_info(typeid(T));
+    if (tinfo == nullptr)
+        return nullptr;
+    PyTypeObject* type = Py_TYPE(self);
+    if (type != tinfo->type && !PyType_IsSubtype(type, tinfo->type))
+        return nullptr;
+    auto* inst = reinterpret_cast<py::detail::instance*>(self);
+    auto vh = inst->get_value_and_holder(tinfo, /*throw_if_missing=*/false);
+    if (!vh || !vh.holder_constructed())
+        return nullptr;
+    return vh.value_ptr<T>();
+}
+
+struct AutogradGcVisitor {
+    visitproc visit;
+    void* arg;
+    bool is_decref_pass;
+    std::unordered_set<const TensorImpl*> visited_tensors;
+    std::unordered_set<const Node*> visited_nodes;
+    std::unordered_set<const ModuleBackwardHookState*> visited_states;
+    std::unordered_set<const TensorHookSlot*> visited_slots;
+    std::unordered_set<const FunctionCtx*> visited_ctxs;
+    std::vector<const TensorImpl*> tensor_stack;
+    std::vector<const Node*> node_stack;
+
+    AutogradGcVisitor(PyObject* self, visitproc v, void* a)
+        : visit(v), arg(a), is_decref_pass(a != nullptr && a == static_cast<void*>(self)) {
+        auto& state = gc_decref_state();
+        if (is_decref_pass) {
+            if (!state.seen_selves.insert(self).second) {
+                state.reset();
+                state.seen_selves.insert(self);
+            }
+        } else {
+            state.reset();
+        }
+    }
+
+    int visit_slot(const py::object& obj) {
+        PyObject* ptr = obj.ptr();
+        if (ptr == nullptr)
+            return 0;
+        if (is_decref_pass) {
+            auto& state = gc_decref_state();
+            if (!state.seen_slots.insert(&obj).second)
+                return 0;
+        }
+        Py_VISIT(ptr);
+        return 0;
+    }
+
+    void push_tensor(const TensorImpl* t) {
+        if (t != nullptr && visited_tensors.insert(t).second)
+            tensor_stack.push_back(t);
+    }
+
+    void push_node(const Node* n) {
+        if (n != nullptr && visited_nodes.insert(n).second)
+            node_stack.push_back(n);
+    }
+
+    int traverse_hook_slot(const TensorHookSlot* slot) {
+        if (slot == nullptr || !visited_slots.insert(slot).second)
+            return 0;
+        return visit_slot(slot->runner);
+    }
+
+    int traverse_module_state(const ModuleBackwardHookState* state) {
+        if (state == nullptr || !visited_states.insert(state).second)
+            return 0;
+        if (int r = visit_slot(state->pre_runner))
+            return r;
+        if (int r = visit_slot(state->full_runner))
+            return r;
+        for (const auto& g : state->grad_inputs)
+            push_tensor(g.get());
+        for (const auto& g : state->grad_outputs)
+            push_tensor(g.get());
+        return 0;
+    }
+
+    int traverse_function_ctx(const FunctionCtx* ctx) {
+        if (ctx == nullptr || !visited_ctxs.insert(ctx).second)
+            return 0;
+        for (const auto& t : ctx->saved_tensors())
+            push_tensor(t.get());
+        for (const auto& kv : ctx->extras()) {
+            if (int r = visit_slot(kv.second))
+                return r;
+        }
+        return 0;
+    }
+
+    int step_tensor(const TensorImpl* t) {
+        if (const auto& slot = t->leaf_hooks()) {
+            if (int r = traverse_hook_slot(slot.get()))
+                return r;
+        }
+        if (const auto& gi = t->grad_as_impl())
+            push_tensor(gi.get());
+        if (const auto& fn = t->grad_fn())
+            push_node(fn.get());
+        return 0;
+    }
+
+    int step_node_hooks(const NodeHooks* hooks) {
+        if (hooks == nullptr)
+            return 0;
+        for (const auto& slot : hooks->slots()) {
+            if (int r = traverse_hook_slot(slot.get()))
+                return r;
+        }
+        return 0;
+    }
+
+    int step_python_node(const PythonBackwardNode* py_node) {
+        if (int r = visit_slot(py_node->py_ctx))
+            return r;
+        if (int r = visit_slot(py_node->py_backward_fn))
+            return r;
+        if (const auto* ctx = try_get_cpp_ptr<FunctionCtx>(py_node->py_ctx.ptr()))
+            return traverse_function_ctx(ctx);
+        return 0;
+    }
+
+    int step_node_kind(const Node* n) {
+        if (const auto* out_hook = dynamic_cast<const ModuleOutputHookNode*>(n))
+            return traverse_module_state(out_hook->state().get());
+        if (const auto* in_hook = dynamic_cast<const ModuleInputHookNode*>(n))
+            return traverse_module_state(in_hook->state().get());
+        if (const auto* py_node = dynamic_cast<const PythonBackwardNode*>(n))
+            return step_python_node(py_node);
+        if (const auto* acc = dynamic_cast<const AccumulateGrad*>(n)) {
+            if (const TensorImplPtr leaf = acc->leaf().lock())
+                push_tensor(leaf.get());
+        }
+        return 0;
+    }
+
+    int step_node(const Node* n) {
+        if (int r = step_node_hooks(n->tensor_hooks()))
+            return r;
+        if (int r = step_node_kind(n))
+            return r;
+        for (const auto& edge : n->next_edges()) {
+            if (edge.node)
+                push_node(edge.node.get());
+        }
+        return 0;
+    }
+
+    int drain() {
+        while (!tensor_stack.empty() || !node_stack.empty()) {
+            while (!tensor_stack.empty()) {
+                const TensorImpl* t = tensor_stack.back();
+                tensor_stack.pop_back();
+                if (int r = step_tensor(t))
+                    return r;
+            }
+            while (!node_stack.empty()) {
+                const Node* n = node_stack.back();
+                node_stack.pop_back();
+                if (int r = step_node(n))
+                    return r;
+            }
+        }
+        return 0;
+    }
+};
+
+extern "C" int tensor_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+    AutogradGcVisitor visitor(self, visit, arg);
+    if (const auto* t = try_get_cpp_ptr<TensorImpl>(self)) {
+        visitor.push_tensor(t);
+        if (int r = visitor.drain())
+            return r;
+    }
+    Py_VISIT(Py_TYPE(self));
+    return 0;
+}
+
+extern "C" int tensor_tp_clear(PyObject* self) {
+    reset_gc_decref_pass();
+    if (auto* t = try_get_cpp_ptr<TensorImpl>(self)) {
+        std::shared_ptr<Node> fn = t->grad_fn();
+        std::shared_ptr<TensorImpl> gi = t->grad_as_impl();
+        std::shared_ptr<TensorHookSlot> lh = t->leaf_hooks();
+        t->clear_grad_fn();
+        t->set_grad_impl(nullptr);
+        t->mutable_leaf_hooks().reset();
+        if (lh)
+            lh->clear();
+    }
+    return 0;
+}
+
+extern "C" int node_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+    AutogradGcVisitor visitor(self, visit, arg);
+    if (const auto* n = try_get_cpp_ptr<Node>(self)) {
+        visitor.push_node(n);
+        if (int r = visitor.drain())
+            return r;
+    }
+    Py_VISIT(Py_TYPE(self));
+    return 0;
+}
+
+extern "C" int node_tp_clear(PyObject* self) {
+    reset_gc_decref_pass();
+    if (auto* n = try_get_cpp_ptr<Node>(self)) {
+        n->release_tensor_hooks();
+        n->release_saved();
+    }
+    return 0;
+}
+
+extern "C" int function_ctx_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+    AutogradGcVisitor visitor(self, visit, arg);
+    if (const auto* ctx = try_get_cpp_ptr<FunctionCtx>(self)) {
+        if (int r = visitor.traverse_function_ctx(ctx))
+            return r;
+        if (int r = visitor.drain())
+            return r;
+    }
+    Py_VISIT(Py_TYPE(self));
+    return 0;
+}
+
+extern "C" int function_ctx_tp_clear(PyObject* self) {
+    reset_gc_decref_pass();
+    if (auto* ctx = try_get_cpp_ptr<FunctionCtx>(self))
+        ctx->clear();
+    return 0;
+}
+
+extern "C" int module_hook_state_tp_traverse(PyObject* self, visitproc visit, void* arg) {
+    AutogradGcVisitor visitor(self, visit, arg);
+    if (const auto* state = try_get_cpp_ptr<ModuleBackwardHookState>(self)) {
+        if (int r = visitor.traverse_module_state(state))
+            return r;
+        if (int r = visitor.drain())
+            return r;
+    }
+    Py_VISIT(Py_TYPE(self));
+    return 0;
+}
+
+extern "C" int module_hook_state_tp_clear(PyObject* self) {
+    reset_gc_decref_pass();
+    if (auto* state = try_get_cpp_ptr<ModuleBackwardHookState>(self))
+        state->clear();
+    return 0;
+}
+
+void install_gc_hooks(PyHeapTypeObject* heap_type, traverseproc traverse, inquiry clear) {
+    auto* type = &heap_type->ht_type;
+    type->tp_flags |= Py_TPFLAGS_HAVE_GC;
+    type->tp_traverse = traverse;
+    type->tp_clear = clear;
+}
+
+}  // namespace
+
+void release_py_object(py::object& obj) noexcept {
+    PyObject* ptr = obj.release().ptr();
+    if (ptr == nullptr)
+        return;
+    // At interpreter shutdown there is nobody to hand the reference back to.
+    if (!Py_IsInitialized() || Py_IsFinalizing())
+        return;
+    const PyGILState_STATE state = PyGILState_Ensure();
+    reset_gc_decref_pass();
+    Py_DECREF(ptr);
+    PyGILState_Release(state);
+}
+
+void enable_tensor_autograd_gc(PyHeapTypeObject* heap_type) {
+    install_gc_hooks(heap_type, tensor_tp_traverse, tensor_tp_clear);
+}
+
+void enable_node_autograd_gc(PyHeapTypeObject* heap_type) {
+    install_gc_hooks(heap_type, node_tp_traverse, node_tp_clear);
+}
+
+void enable_function_ctx_gc(PyHeapTypeObject* heap_type) {
+    install_gc_hooks(heap_type, function_ctx_tp_traverse, function_ctx_tp_clear);
+}
+
+void enable_module_hook_state_gc(PyHeapTypeObject* heap_type) {
+    install_gc_hooks(heap_type, module_hook_state_tp_traverse, module_hook_state_tp_clear);
 }
 
 }  // namespace lucid
