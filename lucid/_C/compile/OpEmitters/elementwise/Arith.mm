@@ -212,25 +212,46 @@ public:
     }
 };
 
-inline MPSGraphTensor* emit_float_floordiv(MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-    // Match eager ``DivMod.h`` / ``gpu/DivMod.h``: floating-point floor
-    // division runs in float32 via exact ``fmod`` so an upward-rounded
-    // quotient (e.g. ``1.5 / 0.1 == 15.0`` when ``0.1f > 0.1``) or
-    // reciprocal multiplication (``1.7 / 1.7 < 1.0``) does not land one
-    // integer off.
+enum class DivModKind : std::uint8_t { FloorDiv, Remainder, Fmod };
+
+inline MPSGraphTensor* emit_float_divmod(MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b,
+                                         DivModKind kind) {
+    // Match eager ``DivMod.h`` / ``gpu/DivMod.h``: floating-point ``//``,
+    // ``%`` (remainder), and ``fmod`` run in float32 starting from exact
+    // ``fmod(|a|, |b|)`` with ``a``'s sign bit restored.
     const MPSDataType orig_dt = a.dataType;
     MPSGraphTensor* af = (orig_dt == MPSDataTypeFloat32)
                              ? a
                              : [g castTensor:a toType:MPSDataTypeFloat32 name:nil];
-    MPSGraphTensor* bf = (orig_dt == MPSDataTypeFloat32)
+    MPSGraphTensor* bf = (b.dataType == MPSDataTypeFloat32)
                              ? b
                              : [g castTensor:b toType:MPSDataTypeFloat32 name:nil];
-    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:MPSDataTypeFloat32];
-    MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:MPSDataTypeFloat32];
-    MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:MPSDataTypeFloat32];
 
-    MPSGraphTensor* raw_div = [g divisionWithPrimaryTensor:af secondaryTensor:bf name:nil];
-    MPSGraphTensor* mod = [g moduloWithPrimaryTensor:af secondaryTensor:bf name:nil];
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* r = [g moduloWithPrimaryTensor:[g absoluteWithTensor:af name:nil]
+                                   secondaryTensor:[g absoluteWithTensor:bf name:nil]
+                                              name:nil];
+    MPSGraphTensor* inv_a = [g reciprocalWithTensor:af name:nil];
+    MPSGraphTensor* neg_zero =
+        [g logicalANDWithPrimaryTensor:[g equalWithPrimaryTensor:af secondaryTensor:zero name:nil]
+                       secondaryTensor:[g lessThanWithPrimaryTensor:inv_a
+                                                    secondaryTensor:zero
+                                                               name:nil]
+                                  name:nil];
+    MPSGraphTensor* a_sign =
+        [g logicalORWithPrimaryTensor:[g lessThanWithPrimaryTensor:af secondaryTensor:zero name:nil]
+                      secondaryTensor:neg_zero
+                                 name:nil];
+    MPSGraphTensor* mod = [g selectWithPredicateTensor:a_sign
+                                   truePredicateTensor:[g negativeWithTensor:r name:nil]
+                                  falsePredicateTensor:r
+                                                  name:@"fmod"];
+    if (kind == DivModKind::Fmod) {
+        return (orig_dt == MPSDataTypeFloat32)
+                   ? mod
+                   : [g castTensor:mod toType:orig_dt name:@"fmod_cast"];
+    }
+
     MPSGraphTensor* mod_nonzero = [g notEqualWithPrimaryTensor:mod secondaryTensor:zero name:nil];
     MPSGraphTensor* mod_neg = [g lessThanWithPrimaryTensor:mod secondaryTensor:zero name:nil];
     MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:bf secondaryTensor:zero name:nil];
@@ -240,6 +261,20 @@ inline MPSGraphTensor* emit_float_floordiv(MPSGraph* g, MPSGraphTensor* a, MPSGr
     MPSGraphTensor* needs_adjust = [g logicalANDWithPrimaryTensor:mod_nonzero
                                                   secondaryTensor:signs_differ
                                                              name:nil];
+    if (kind == DivModKind::Remainder) {
+        MPSGraphTensor* mod_plus_b = [g additionWithPrimaryTensor:mod secondaryTensor:bf name:nil];
+        MPSGraphTensor* res = [g selectWithPredicateTensor:needs_adjust
+                                       truePredicateTensor:mod_plus_b
+                                      falsePredicateTensor:mod
+                                                      name:@"remainder"];
+        return (orig_dt == MPSDataTypeFloat32)
+                   ? res
+                   : [g castTensor:res toType:orig_dt name:@"remainder_cast"];
+    }
+
+    MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* raw_div = [g divisionWithPrimaryTensor:af secondaryTensor:bf name:nil];
     MPSGraphTensor* adjust = [g selectWithPredicateTensor:needs_adjust
                                       truePredicateTensor:one
                                      falsePredicateTensor:zero
@@ -275,45 +310,109 @@ inline MPSGraphTensor* emit_float_floordiv(MPSGraph* g, MPSGraphTensor* a, MPSGr
                : [g castTensor:res toType:orig_dt name:@"floordiv_cast"];
 }
 
+inline MPSGraphTensor* emit_int_divmod(MPSGraph* g, MPSGraphTensor* a_in, MPSGraphTensor* b_in,
+                                       DivModKind kind) {
+    // Match eager ``DivMod.h`` / ``gpu/DivMod.h``: integer division truncates
+    // toward zero, so ``fmod`` is the raw remainder ``a - q * b``, ``floordiv``
+    // subtracts 1 when ``rem != 0`` and ``(rem < 0) != (b < 0)``, and
+    // ``remainder`` adds ``b`` back in the same case.  A zero divisor on Metal
+    // substitutes 1 during division and selects ``-1`` (``floordiv``) or ``a``
+    // (``remainder`` / ``fmod``) without host synchronisation.  Widen int8 to
+    // int32 to avoid MPSGraph's broken int8 ``a - (a / b) * b`` fold.
+    const MPSDataType orig_dt = a_in.dataType;
+    const MPSDataType dt = (orig_dt == MPSDataTypeInt8) ? MPSDataTypeInt32 : orig_dt;
+    MPSGraphTensor* a = (orig_dt == dt) ? a_in : [g castTensor:a_in toType:dt name:nil];
+    MPSGraphTensor* b_raw = (b_in.dataType == dt) ? b_in : [g castTensor:b_in toType:dt name:nil];
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:dt];
+    MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
+    MPSGraphTensor* neg_one = [g constantWithScalar:-1.0 dataType:dt];
+    MPSGraphTensor* by_zero = [g equalWithPrimaryTensor:b_raw secondaryTensor:zero name:nil];
+    MPSGraphTensor* b = [g selectWithPredicateTensor:by_zero
+                                 truePredicateTensor:one
+                                falsePredicateTensor:b_raw
+                                                name:nil];
+    MPSGraphTensor* q = [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
+    MPSGraphTensor* prod = multiply_avoiding_i64_square(g, q, b, nil);
+    MPSGraphTensor* rem = [g subtractionWithPrimaryTensor:a secondaryTensor:prod name:nil];
+    MPSGraphTensor* zero_b = [g multiplicationWithPrimaryTensor:b_raw secondaryTensor:zero name:nil];
+    MPSGraphTensor* a_bcast = [g additionWithPrimaryTensor:a secondaryTensor:zero_b name:nil];
+    if (kind == DivModKind::Fmod) {
+        MPSGraphTensor* res = [g selectWithPredicateTensor:by_zero
+                                       truePredicateTensor:a_bcast
+                                      falsePredicateTensor:rem
+                                                      name:@"fmod"];
+        return (orig_dt == dt) ? res : [g castTensor:res toType:orig_dt name:@"fmod_cast"];
+    }
+
+    MPSGraphTensor* rem_nonzero = [g notEqualWithPrimaryTensor:rem secondaryTensor:zero name:nil];
+    MPSGraphTensor* rem_neg = [g lessThanWithPrimaryTensor:rem secondaryTensor:zero name:nil];
+    MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:b secondaryTensor:zero name:nil];
+    MPSGraphTensor* signs_differ = [g logicalXORWithPrimaryTensor:rem_neg
+                                                  secondaryTensor:div_neg
+                                                             name:nil];
+    MPSGraphTensor* needs_adjust = [g logicalANDWithPrimaryTensor:rem_nonzero
+                                                  secondaryTensor:signs_differ
+                                                             name:nil];
+    if (kind == DivModKind::Remainder) {
+        MPSGraphTensor* rem_plus_b = [g additionWithPrimaryTensor:rem secondaryTensor:b name:nil];
+        MPSGraphTensor* floored_rem = [g selectWithPredicateTensor:needs_adjust
+                                               truePredicateTensor:rem_plus_b
+                                              falsePredicateTensor:rem
+                                                              name:nil];
+        MPSGraphTensor* res = [g selectWithPredicateTensor:by_zero
+                                       truePredicateTensor:a_bcast
+                                      falsePredicateTensor:floored_rem
+                                                      name:@"remainder"];
+        return (orig_dt == dt) ? res : [g castTensor:res toType:orig_dt name:@"remainder_cast"];
+    }
+
+    MPSGraphTensor* adjust = [g selectWithPredicateTensor:needs_adjust
+                                      truePredicateTensor:one
+                                     falsePredicateTensor:zero
+                                                     name:nil];
+    MPSGraphTensor* floored_q = [g subtractionWithPrimaryTensor:q secondaryTensor:adjust name:nil];
+    MPSGraphTensor* res = [g selectWithPredicateTensor:by_zero
+                                   truePredicateTensor:neg_one
+                                  falsePredicateTensor:floored_q
+                                                  name:@"floordiv"];
+    return (orig_dt == dt) ? res : [g castTensor:res toType:orig_dt name:@"floordiv_cast"];
+}
+
+inline MPSGraphTensor* emit_divmod(MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b,
+                                   DivModKind kind) {
+    const MPSDataType dt = a.dataType;
+    if (dt == MPSDataTypeFloat16 || dt == MPSDataTypeBFloat16 || dt == MPSDataTypeFloat32) {
+        return emit_float_divmod(g, a, b, kind);
+    }
+    return emit_int_divmod(g, a, b, kind);
+}
+
 class FloordivEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "floordiv"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            const MPSDataType dt = a.dataType;
-            if (dt == MPSDataTypeFloat16 || dt == MPSDataTypeBFloat16 || dt == MPSDataTypeFloat32) {
-                return emit_float_floordiv(g, a, b);
-            }
+            return emit_divmod(g, a, b, DivModKind::FloorDiv);
+        });
+    }
+};
 
-            // Integer floor division: MPSGraph's integer division truncates
-            // toward zero, so subtract one when the remainder is non-zero and
-            // disagrees in sign with the divisor.
-            MPSGraphTensor* q = [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
-            q = [g floorWithTensor:q name:nil];
+class RemainderEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "remainder"; }
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+            return emit_divmod(g, a, b, DivModKind::Remainder);
+        });
+    }
+};
 
-            MPSGraphTensor* prod = multiply_avoiding_i64_square(g, q, b, nil);
-            MPSGraphTensor* rem = [g subtractionWithPrimaryTensor:a secondaryTensor:prod name:nil];
-
-            MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:a.dataType];
-            MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:a.dataType];
-            MPSGraphTensor* rem_nonzero = [g notEqualWithPrimaryTensor:rem
-                                                       secondaryTensor:zero
-                                                                  name:nil];
-            MPSGraphTensor* rem_neg = [g lessThanWithPrimaryTensor:rem
-                                                   secondaryTensor:zero
-                                                              name:nil];
-            MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:b secondaryTensor:zero name:nil];
-            MPSGraphTensor* signs_differ = [g logicalXORWithPrimaryTensor:rem_neg
-                                                          secondaryTensor:div_neg
-                                                                     name:nil];
-            MPSGraphTensor* needs_adjust = [g logicalANDWithPrimaryTensor:rem_nonzero
-                                                          secondaryTensor:signs_differ
-                                                                     name:nil];
-            MPSGraphTensor* adjust = [g selectWithPredicateTensor:needs_adjust
-                                              truePredicateTensor:one
-                                             falsePredicateTensor:zero
-                                                             name:nil];
-            return [g subtractionWithPrimaryTensor:q secondaryTensor:adjust name:@"floordiv"];
+class FmodEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "fmod"; }
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+            return emit_divmod(g, a, b, DivModKind::Fmod);
         });
     }
 };
@@ -460,6 +559,8 @@ struct ElementwiseEmitterRegistrar {
         register_emitter(std::make_unique<MaximumEmitter>());
         register_emitter(std::make_unique<MinimumEmitter>());
         register_emitter(std::make_unique<FloordivEmitter>());
+        register_emitter(std::make_unique<RemainderEmitter>());
+        register_emitter(std::make_unique<FmodEmitter>());
         register_emitter(std::make_unique<NextafterEmitter>());
         register_emitter(std::make_unique<PowScalarEmitter>());
         register_emitter(std::make_unique<RPowScalarEmitter>());

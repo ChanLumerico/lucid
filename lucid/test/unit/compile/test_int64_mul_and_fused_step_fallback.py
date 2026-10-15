@@ -35,6 +35,8 @@ def _clean_compile_verbose(monkeypatch: pytest.MonkeyPatch) -> None:
         "max_left",
         "min_right",
         "floordiv",
+        "remainder",
+        "fmod",
     ],
 )
 def test_integer_self_mul_compiles_and_matches_eager(
@@ -56,6 +58,10 @@ def test_integer_self_mul_compiles_and_matches_eager(
             return lucid.maximum(a, a) * a
         if kind == "min_right":
             return a * lucid.minimum(a, a)
+        if kind == "remainder":
+            return a % a
+        if kind == "fmod":
+            return lucid.fmod(a, a)
         return a // a
 
     vals = (
@@ -126,16 +132,18 @@ def test_fused_step_with_argmax_self_mul_compiles_without_fallback(
 
 
 def test_fused_step_falls_back_to_eager_on_uncompilable_op() -> None:
-    """When a loss uses an op with no MPSGraph emitter, ``fused_step`` falls back to eager."""
+    """When a loss uses an op whose emitter declines lowering, ``fused_step`` falls back to eager."""
     lucid.manual_seed(42)
     comp_model = nn.Linear(6, 3).to("metal")
     eager_model = nn.Linear(6, 3).to("metal")
     eager_model.load_state_dict(comp_model.state_dict())
 
-    # ``remainder`` (``%``) has no compile emitter (LCD-444), triggering lowering fallback.
+    # Integer ``inner`` runs as ``A @ B^T`` where MPSGraph has no integer matmul kernel,
+    # so ``InnerEmitter`` declines lowering.
     def loss_fn(p: lucid.Tensor, y: lucid.Tensor) -> lucid.Tensor:
-        rem = (y.argmax(dim=1) % 2).to(p.dtype)
-        return ((p * y).sum(dim=1) * (rem + 1.0)).mean()
+        idx = y.argmax(dim=1)
+        scale = lucid.linalg.inner(idx, idx).to(p.dtype)
+        return ((p * y).sum(dim=1) * (scale + 1.0)).mean()
 
     comp_opt = optim.Adam(comp_model.parameters(), lr=0.02)
     eager_opt = optim.Adam(eager_model.parameters(), lr=0.02)

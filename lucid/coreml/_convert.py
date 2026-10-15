@@ -7,9 +7,10 @@ and scatters take no bool data at all. :func:`emit_cast` is the one place
 a conversion is spelled, so neither reaches a package.
 """
 
+import math
 from typing import TYPE_CHECKING
 
-from lucid.coreml import _spec
+from lucid.coreml import _flex, _spec
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
@@ -166,6 +167,177 @@ def moved(
     return emit_cast(b, result, "bool")
 
 
+def _broadcast_f32(b: Builder, val: str, peer: str, dims: _flex.Dims) -> str:
+    """Broadcast ``val`` to ``dims`` by multiplying by a 1.0 tensor of ``peer``'s shape."""
+    if b.shape_of(val) == dims.declared():
+        return val
+    peer_shape = b.shape_of(peer)
+    less_peer = b.emit(
+        "less", [("x", peer), ("y", b.const_float32(0.0))], peer_shape, dtype=_MIL_BOOL
+    )
+    true_peer = b.emit(
+        "logical_or",
+        [("x", less_peer), ("y", b.const_bool(True))],
+        peer_shape,
+        dtype=_MIL_BOOL,
+    )
+    one_peer = b.emit(*emit_cast(b, true_peer, "fp32"), peer_shape, dtype=_spec.FLOAT32)
+    return b.emit("mul", [("x", val), ("y", one_peer)], dims, dtype=_spec.FLOAT32)
+
+
+def _emit_f32_fmod_bindings(
+    b: Builder, a: str, b_val: str, dims: _flex.Dims
+) -> EmitResult:
+    """Exact ``fmod(a, b_val)`` in float32 for equal-shape operands ``a`` and ``b_val``."""
+    f32 = _spec.FLOAT32
+    c_zero = b.const_float32(0.0)
+    c_one = b.const_float32(1.0)
+    c_neg_one = b.const_float32(-1.0)
+    c_inf = b.const_float32(math.inf)
+    abs_a = b.emit("abs", [("x", a)], dims, dtype=f32)
+    abs_b = b.emit("abs", [("x", b_val)], dims, dtype=f32)
+    r = abs_a
+    for k in (96, 80, 64, 48, 32, 16):
+        c_2k = b.const_float32(float(2**k))
+        bk = b.emit("mul", [("x", abs_b), ("y", c_2k)], dims, dtype=f32)
+        bk_fin = b.emit("less", [("x", bk), ("y", c_inf)], dims, dtype=_MIL_BOOL)
+        step = b.emit(
+            "select", [("cond", bk_fin), ("a", bk), ("b", abs_b)], dims, dtype=f32
+        )
+        rn = b.emit("mod", [("x", r), ("y", step)], dims, dtype=f32)
+        rn_neg = b.emit("less", [("x", rn), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+        rn_fix = b.emit("add", [("x", rn), ("y", step)], dims, dtype=f32)
+        r = b.emit(
+            "select", [("cond", rn_neg), ("a", rn_fix), ("b", rn)], dims, dtype=f32
+        )
+    rn = b.emit("mod", [("x", r), ("y", abs_b)], dims, dtype=f32)
+    rn_neg = b.emit("less", [("x", rn), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    rn_fix = b.emit("add", [("x", rn), ("y", abs_b)], dims, dtype=f32)
+    r = b.emit("select", [("cond", rn_neg), ("a", rn_fix), ("b", rn)], dims, dtype=f32)
+    a_diff = b.emit("sub", [("x", abs_a), ("y", abs_a)], dims, dtype=f32)
+    a_fin = b.emit("equal", [("x", a_diff), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    b_inf = b.emit("equal", [("x", abs_b), ("y", c_inf)], dims, dtype=_MIL_BOOL)
+    fin_over_inf = b.emit(
+        "logical_and", [("x", a_fin), ("y", b_inf)], dims, dtype=_MIL_BOOL
+    )
+    r = b.emit(
+        "select", [("cond", fin_over_inf), ("a", abs_a), ("b", r)], dims, dtype=f32
+    )
+    a_lt = b.emit("less", [("x", a), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    a_eq = b.emit("equal", [("x", a), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    inv_a = b.emit("real_div", [("x", c_one), ("y", a)], dims, dtype=f32)
+    inv_neg = b.emit("less", [("x", inv_a), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    neg_zero = b.emit(
+        "logical_and", [("x", a_eq), ("y", inv_neg)], dims, dtype=_MIL_BOOL
+    )
+    a_sign = b.emit(
+        "logical_or", [("x", a_lt), ("y", neg_zero)], dims, dtype=_MIL_BOOL
+    )
+    neg_r = b.emit("mul", [("x", r), ("y", c_neg_one)], dims, dtype=f32)
+    return "select", [("cond", a_sign), ("a", neg_r), ("b", r)]
+
+
+def _emit_f32_floordiv_bindings(
+    b: Builder,
+    operands: tuple[str, str],
+    mod_adjust: tuple[str, str],
+    dims: _flex.Dims,
+) -> EmitResult:
+    """Exact ``floordiv(a, b_val)`` in float32 from ``mod_val`` and ``adjust``."""
+    a, b_val = operands
+    mod_val, adjust = mod_adjust
+    f32 = _spec.FLOAT32
+    c_zero = b.const_float32(0.0)
+    c_one = b.const_float32(1.0)
+    c_half = b.const_float32(0.5)
+    raw_div = b.emit("real_div", [("x", a), ("y", b_val)], dims, dtype=f32)
+    num = b.emit("sub", [("x", a), ("y", mod_val)], dims, dtype=f32)
+    q_exact = b.emit("real_div", [("x", num), ("y", b_val)], dims, dtype=f32)
+    q_minus_one = b.emit("sub", [("x", q_exact), ("y", c_one)], dims, dtype=f32)
+    div = b.emit(
+        "select", [("cond", adjust), ("a", q_minus_one), ("b", q_exact)], dims, dtype=f32
+    )
+    whole = b.emit("floor", [("x", div)], dims, dtype=f32)
+    frac = b.emit("sub", [("x", div), ("y", whole)], dims, dtype=f32)
+    round_up = b.emit("greater", [("x", frac), ("y", c_half)], dims, dtype=_MIL_BOOL)
+    whole_inc = b.emit("add", [("x", whole), ("y", c_one)], dims, dtype=f32)
+    whole = b.emit(
+        "select", [("cond", round_up), ("a", whole_inc), ("b", whole)], dims, dtype=f32
+    )
+    signed_zero = b.emit("mul", [("x", raw_div), ("y", c_zero)], dims, dtype=f32)
+    div_zero = b.emit("equal", [("x", div), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    res = b.emit(
+        "select", [("cond", div_zero), ("a", signed_zero), ("b", whole)], dims, dtype=f32
+    )
+    b_zero = b.emit("equal", [("x", b_val), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    return "select", [("cond", b_zero), ("a", raw_div), ("b", res)]
+
+
+def _emit_float_divmod(
+    b: Builder, op: TracedOp, lhs: str, rhs: str, target: int
+) -> EmitResult:
+    """Emit floating-point ``floordiv``, ``remainder``, or ``fmod`` in float32."""
+    f32 = _spec.FLOAT32
+    dims = b.result_dims(op)
+    if target == _spec.FLOAT16 and op.name != "floordiv":
+        lhs, rhs = b.agree_on_dtype([lhs, rhs], _spec.FLOAT16)
+    x_f32, y_f32 = b.agree_on_dtype([lhs, rhs], f32)
+    a = _broadcast_f32(b, x_f32, y_f32, dims)
+    b_val = _broadcast_f32(b, y_f32, x_f32, dims)
+    fmod_res = _emit_f32_fmod_bindings(b, a, b_val, dims)
+    if op.name == "fmod":
+        if target == _spec.FLOAT16:
+            return emit_cast(b, b.emit(*fmod_res, dims, dtype=f32), "fp16")
+        return fmod_res
+    mod_val = b.emit(*fmod_res, dims, dtype=f32)
+    c_zero = b.const_float32(0.0)
+    mod_nz = b.emit("not_equal", [("x", mod_val), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    mod_neg = b.emit("less", [("x", mod_val), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    b_neg = b.emit("less", [("x", b_val), ("y", c_zero)], dims, dtype=_MIL_BOOL)
+    diff_sign = b.emit(
+        "logical_xor", [("x", mod_neg), ("y", b_neg)], dims, dtype=_MIL_BOOL
+    )
+    adjust = b.emit(
+        "logical_and", [("x", mod_nz), ("y", diff_sign)], dims, dtype=_MIL_BOOL
+    )
+    if op.name == "remainder":
+        mod_plus_b = b.emit("add", [("x", mod_val), ("y", b_val)], dims, dtype=f32)
+        rem_res: EmitResult = (
+            "select",
+            [("cond", adjust), ("a", mod_plus_b), ("b", mod_val)],
+        )
+        if target == _spec.FLOAT16:
+            return emit_cast(b, b.emit(*rem_res, dims, dtype=f32), "fp16")
+        return rem_res
+    fdiv_res = _emit_f32_floordiv_bindings(b, (a, b_val), (mod_val, adjust), dims)
+    if target == _spec.FLOAT16:
+        return emit_cast(b, b.emit(*fdiv_res, dims, dtype=f32), "fp16")
+    return fdiv_res
+
+
+def _emit_int_divmod(b: Builder, op: TracedOp, lhs: str, rhs: str) -> EmitResult:
+    """Emit integer ``floordiv``, ``remainder``, or ``fmod`` in int32."""
+    x, y = b.agree_on_dtype([lhs, rhs], _MIL_INT32)
+    if op.name == "floordiv":
+        return "floor_div", [("x", x), ("y", y)]
+    if op.name == "fmod":
+        return "mod", [("x", x), ("y", y)]
+    dims = b.result_dims(op)
+    zero = b.const_int(0)
+    r = b.emit("mod", [("x", x), ("y", y)], dims, dtype=_MIL_INT32)
+    r_plus_y = b.emit("add", [("x", r), ("y", y)], dims, dtype=_MIL_INT32)
+    r_nz = b.emit("not_equal", [("x", r), ("y", zero)], dims, dtype=_MIL_BOOL)
+    r_neg = b.emit("less", [("x", r), ("y", zero)], dims, dtype=_MIL_BOOL)
+    y_neg = b.emit("less", [("x", y), ("y", zero)], b.shape_of(y), dtype=_MIL_BOOL)
+    diff_sign = b.emit(
+        "logical_xor", [("x", r_neg), ("y", y_neg)], dims, dtype=_MIL_BOOL
+    )
+    adjust = b.emit(
+        "logical_and", [("x", r_nz), ("y", diff_sign)], dims, dtype=_MIL_BOOL
+    )
+    return "select", [("cond", adjust), ("a", r_plus_y), ("b", r)]
+
+
 def emit_opmath_binary(
     b: Builder,
     op: TracedOp,
@@ -175,10 +347,10 @@ def emit_opmath_binary(
     rhs: str,
     target: int | None,
 ) -> EmitResult | None:
-    """Upcast a float16 + 0-d float32 ``mul``/``div``/``floordiv`` pair to fp32.
+    """Emit exact ``floordiv``/``remainder``/``fmod`` or half op-math ``mul``/``div``.
 
-    Matches eager op-math promotion by casting the half input to float32,
-    emitting the binary op in float32, and casting the result back to fp16.
+    Matches eager ``DivMod.h`` and ``_Opmath.h`` rules across integer and
+    floating-point operands, casting half-precision results back to fp16.
 
     Parameters
     ----------
@@ -200,9 +372,14 @@ def emit_opmath_binary(
     Returns
     -------
     EmitResult or None
-        Cast-back MIL result name if op-math promotion applies, else ``None``.
+        Emitted MIL operation and bindings if handled here, else ``None``.
     """
-    if target != _spec.FLOAT16 or lucid_name not in ("mul", "div", "floordiv"):
+    if lucid_name in ("floordiv", "remainder", "fmod"):
+        if target == _MIL_INT32:
+            return _emit_int_divmod(b, op, lhs, rhs)
+        if target in (_spec.FLOAT16, _spec.FLOAT32):
+            return _emit_float_divmod(b, op, lhs, rhs, target)
+    if target != _spec.FLOAT16 or lucid_name not in ("mul", "div"):
         return None
     is_pair = (b.dtype_of(lhs) == _spec.FLOAT16 and b.is_0d_float32(rhs)) or (
         b.dtype_of(rhs) == _spec.FLOAT16 and b.is_0d_float32(lhs)

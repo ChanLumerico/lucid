@@ -1940,13 +1940,13 @@ class Builder:
 
 #: Operations that a leading axis of one can be taken away from without
 #: changing what they compute. Elementwise arithmetic follows its
-#: operands; the shape operations here are emitted as a reshape to their
-#: recorded output, so they adapt on their own; ``split_at`` needs its
-#: axis moved and knows to ask.
+#: operands; shape ops reshape to their recorded output; ``split_at``
+#: needs its axis moved and knows to ask.
 _UNIT_AXIS_SAFE = frozenset(
     {
-        "add", "div", "floordiv", "mul", "sub", "maximum", "minimum",
-        "pow", "reshape", "squeeze", "unsqueeze", "split_at",
+        "add", "div", "floordiv", "fmod", "mul", "remainder", "sub",
+        "maximum", "minimum", "pow", "reshape", "squeeze", "unsqueeze",
+        "split_at",
     }
 )
 
@@ -2981,7 +2981,7 @@ def build_package(
                 names[tid] = name
             else:
                 names[tid] = builder.const_from_tensor(written)
-        elif folded_value.dtype in (lucid.int32, lucid.int64):
+        elif folded_value.dtype in (lucid.int8, lucid.int16, lucid.int32, lucid.int64):
             names[tid] = builder.const_ints_shaped(
                 [int(v) for v in _flatten(folded_value, _as_int)],
                 [int(d) for d in folded_value.shape],

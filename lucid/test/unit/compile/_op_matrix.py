@@ -711,12 +711,6 @@ CASE_BY_NAME = {c.name: c for c in CASES}
 _INT_MATMUL = "MPSGraph's matmul aborts on integers, so the emitter declines"
 _BOOL_SUM = "MPSGraph cannot sum bool exactly (_DataMovement.h), so it declines"
 _NO_OPS = "a cast to the dtype the tensor already has records no op"
-# ``remainder`` and ``fmod`` are exact engine kernels now (LCD-159), and the
-# compile backend has no emitter for either yet.  The fallback answers
-# eagerly, so the value is still exact.  Other cases bound an index or an
-# exponent with ``clamp`` rather than ``%`` so they keep testing their own
-# op while this stands.
-_NO_DIVMOD_EMITTER = "LCD-444: no MPSGraph emitter for remainder / fmod yet"
 EXPECTED_EAGER: dict[tuple[str, str], str] = {
     ("astype_f32", "f32"): _NO_OPS,
     ("astype_i64", "i64"): _NO_OPS,
@@ -730,11 +724,6 @@ EXPECTED_EAGER: dict[tuple[str, str], str] = {
     # An integer inner product runs as ``A @ B^T``: no kernel takes integers.
     ("inner", "i64"): _INT_MATMUL,
     ("inner", "i32"): _INT_MATMUL,
-    **{
-        (name, dtype): _NO_DIVMOD_EMITTER
-        for name in ("remainder", "fmod")
-        for dtype in ("f32", "i64", "i32", "bool")
-    },
 }
 
 

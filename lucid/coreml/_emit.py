@@ -421,9 +421,10 @@ def _batch_norm_eval(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 # ── elementwise binary: same table, same reason as the unary one ─────────────
 _BINARY_MIL = {
     "add": "add", "div": "real_div", "equal": "equal", "floordiv": "floor_div",
-    "greater": "greater", "greater_equal": "greater_equal", "less": "less",
-    "less_equal": "less_equal", "maximum": "maximum", "minimum": "minimum",
-    "mul": "mul", "not_equal": "not_equal", "pow": "pow", "sub": "sub",
+    "fmod": "mod", "greater": "greater", "greater_equal": "greater_equal",
+    "less": "less", "less_equal": "less_equal", "maximum": "maximum",
+    "minimum": "minimum", "mul": "mul", "not_equal": "not_equal", "pow": "pow",
+    "remainder": "mod", "sub": "sub",
 }
 
 
@@ -454,9 +455,8 @@ def _register_binary(lucid_name: str, mil_name: str) -> None:
     """Bind one Lucid binary op to the MIL op of the same meaning."""
 
     def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-        # Core ML does not promote, and says so only when the package is
-        # parsed. Lucid does, so a traced graph reaches here with mixed
-        # operands as a matter of course.
+        # Core ML does not promote, and says so only at parse time; Lucid
+        # does, so a traced graph reaches here with mixed operands.
         target = None if lucid_name in _COMPARISONS else b.result_mil_dtype(op)
         if target is None and _MIL_BOOL in (b.dtype_of(ins[0]), b.dtype_of(ins[1])):
             # MIL compares numbers only; ``mask != False`` compares 0 and 1.

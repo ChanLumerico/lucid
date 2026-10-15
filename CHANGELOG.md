@@ -772,6 +772,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - enforce detect_anomaly NaN check and create_graph grad set (LCD-52, LCD-81)
 
+- add compile and CoreML emitters for fmod/remainder
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
