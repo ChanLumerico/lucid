@@ -48,15 +48,13 @@ inline Geometry geometry(
 // A normalised grid coordinate as a position in an axis of ``size`` samples.
 template <class T>
 T unnormalize(T g, std::int64_t size, bool align_corners) {
-    if (align_corners)
-        return (g + T{1}) * static_cast<T>(size - 1) / T{2};
-    return (g + T{1}) * static_cast<T>(size) / T{2} - static_cast<T>(0.5);
+    return resample::unnormalize(g, size, align_corners);
 }
 
 // d(position) / d(grid coordinate).
 template <class T>
 T unnormalize_slope(std::int64_t size, bool align_corners) {
-    return align_corners ? static_cast<T>(size - 1) / T{2} : static_cast<T>(size) / T{2};
+    return resample::unnormalize_slope<T>(size, align_corners);
 }
 
 // One sample point: the two neighbours on each axis (the same one twice
@@ -174,8 +172,10 @@ void backward(const T* go, const T* x, const T* grid, T* dx, T* dgrid, const Geo
                 dix += gv * ((v[2] - v[0]) * wy[0] + (v[3] - v[1]) * wy[1]);
                 diy += gv * ((v[1] - v[0]) * wx[0] + (v[3] - v[2]) * wx[1]);
             }
-            dgrid[gi] = t.clipped_x ? T{0} : dix * sx;
-            dgrid[gi + 1] = t.clipped_y ? T{0} : diy * sy;
+            // Scale by 0 when clipped so NaN from the other axis's weights
+            // propagates through ``NaN * 0 = NaN`` as in the reference.
+            dgrid[gi] = dix * (t.clipped_x ? T{0} : sx);
+            dgrid[gi + 1] = diy * (t.clipped_y ? T{0} : sy);
         }
 }
 

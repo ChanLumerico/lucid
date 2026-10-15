@@ -1288,12 +1288,16 @@ def copysign(input: Tensor, other: Tensor) -> Tensor:
     return lucid.where(other < 0.0, -lucid.abs(input), lucid.abs(input))
 
 
+def _pow2(k: Tensor) -> Tensor:
+    return lucid.where(k < 0.0, 1.0 / (2.0 ** (-k)), 2.0**k)
+
+
 def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise :math:`\text{input} \cdot 2^{\text{exponent}}`.
 
-    Differentiable through both arguments (uses ``exp * log(2)``
-    internally rather than integer bit twiddling), so safe to chain
-    inside autograd graphs.
+    Splits scaling into three bounded power-of-two steps so extreme exponents
+    neither overflow nor flush to subnormal zero prematurely, while remaining
+    differentiable through both arguments.
 
     Parameters
     ----------
@@ -1311,12 +1315,21 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     --------
     frexp : inverse decomposition into mantissa / exponent.
     """
+    orig_dtype = input.dtype
+    work_dtype = orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
     exp_t: Tensor = (
-        other
+        other.to(dtype=work_dtype)
         if _is_tensor(other)
-        else lucid.tensor(cast(float, other), dtype=input.dtype, device=input.device)
+        else lucid.tensor(cast(float, other), dtype=work_dtype, device=input.device)
     )
-    return input * lucid.exp(exp_t * math.log(2.0))
+    limit = 2400.0 if work_dtype == lucid.float64 else 300.0
+    k = lucid.clip(lucid.trunc(exp_t), -limit, limit)
+    k1 = lucid.trunc(k / 3.0)
+    k2 = lucid.trunc((k - k1) * 0.5)
+    k3 = lucid.where(lucid.abs(exp_t) > limit, k - k1 - k2, exp_t - k1 - k2)
+    out = ((work * _pow2(k1)) * _pow2(k2)) * _pow2(k3)
+    return out.to(dtype=orig_dtype) if orig_dtype != work_dtype else out
 
 
 def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
@@ -1324,28 +1337,24 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
     ``input = m * 2**e`` with ``|m|`` in ``[0.5, 1)`` (or ``m == 0``).
 
     Returns a ``(mantissa, exponent)`` tuple.  Exponent dtype is int32.
-    Non-finite inputs propagate: NaN → (NaN, 0); ±inf → (±inf, 0); 0 → (0, 0).
+    Non-finite inputs and signed zero propagate verbatim:
+    ``NaN -> (NaN, 0)``, ``±inf -> (±inf, 0)``, ``±0.0 -> (±0.0, 0)``.
     """
-    abs_x = lucid.abs(input)
-    is_zero = abs_x == 0.0
-    is_nonfinite = lucid.logical_or(lucid.isinf(input), lucid.isnan(input))
-    safe_abs = lucid.where(
-        lucid.logical_or(is_zero, is_nonfinite),
-        lucid.full_like(input, 1.0),
-        abs_x,
-    )
-    # e = floor(log2(|x|)) + 1 puts |m| in [0.5, 1).
-    e_float = lucid.floor(lucid.log2(safe_abs)) + 1.0
-    e_float = lucid.where(
-        lucid.logical_or(is_zero, is_nonfinite),
-        lucid.full_like(e_float, 0.0),
-        e_float,
-    )
-    m = input * lucid.exp(-e_float * math.log(2.0))
-    m = lucid.where(is_zero, lucid.full_like(m, 0.0), m)
-    m = lucid.where(is_nonfinite, input, m)
-    e_i32 = e_float.to(dtype=lucid.int32)
-    return m, e_i32
+    orig_dtype = input.dtype
+    work_dtype = orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
+    abs_x = lucid.abs(work)
+    special = (abs_x == 0.0) | lucid.isinf(work) | lucid.isnan(work)
+    safe_abs = lucid.where(special, lucid.full_like(work, 1.0), abs_x)
+    e_float = lucid.where(special, lucid.zeros_like(work), lucid.floor(lucid.log2(safe_abs)) + 1.0)
+    e1 = lucid.trunc(e_float * 0.5)
+    m = (work * _pow2(-e1)) * _pow2(-(e_float - e1))
+    hi = (~special) & (lucid.abs(m) >= 1.0)
+    m, e_float = lucid.where(hi, m * 0.5, m), lucid.where(hi, e_float + 1.0, e_float)
+    lo = (~special) & (lucid.abs(m) < 0.5)
+    m, e_float = lucid.where(lo, m * 2.0, m), lucid.where(lo, e_float - 1.0, e_float)
+    m = lucid.where(special, work, m)
+    return (m.to(dtype=orig_dtype) if orig_dtype != work_dtype else m), e_float.to(dtype=lucid.int32)
 
 
 # ── Integer math (non-differentiable) ────────────────────────────────────
@@ -1401,9 +1410,6 @@ def lcm(input: Tensor, other: Tensor) -> Tensor:
 
 
 # ── Log-gamma and Digamma ─────────────────────────────────────────────────
-#
-# Both live in ``_gamma.py`` as pure composites over engine primitives, so
-# autograd flows through them automatically.
 
 
 def lgamma(input: Tensor) -> Tensor:
@@ -1500,14 +1506,12 @@ def _i0_as_fit(input: Tensor) -> Tensor:
     ax = lucid.abs(input)
     ax_safe = lucid.clamp(ax, min=3.75)
     t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
-    val_small = lucid.full_like(input, _bessel._AS_I0_SMALL[0])
-    t_pow = lucid.ones_like(input)
+    val_small, t_pow = lucid.full_like(input, _bessel._AS_I0_SMALL[0]), lucid.ones_like(input)
     for c in _bessel._AS_I0_SMALL[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
     y_large = 3.75 / ax_safe
-    val_large = lucid.full_like(input, _bessel._AS_I0_LARGE[0])
-    y_pow = lucid.ones_like(input)
+    val_large, y_pow = lucid.full_like(input, _bessel._AS_I0_LARGE[0]), lucid.ones_like(input)
     for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
@@ -1575,41 +1579,11 @@ def log_softmax(input: Tensor, dim: int | None = None) -> Tensor:
 
 
 __all__ = [
-    "absolute",
-    "negative",
-    "positive",
-    "subtract",
-    "multiply",
-    "divide",
-    "true_divide",
-    "rsub",
-    "arctan2",
-    "arccosh",
-    "acosh",
-    "arcsinh",
-    "asinh",
-    "arctanh",
-    "atanh",
-    "expm1",
-    "sinc",
-    "heaviside",
-    "xlogy",
-    "logit",
-    "signbit",
-    "float_power",
-    "fmax",
-    "fmin",
-    "erfc",
-    "copysign",
-    "ldexp",
-    "frexp",
-    "gcd",
-    "lcm",
-    "lgamma",
-    "digamma",
-    "i0",
-    "softmax",
-    "log_softmax",
+    "absolute", "negative", "positive", "subtract", "multiply", "divide",
+    "true_divide", "rsub", "arctan2", "arccosh", "acosh", "arcsinh", "asinh",
+    "arctanh", "atanh", "expm1", "sinc", "heaviside", "xlogy", "logit",
+    "signbit", "float_power", "fmax", "fmin", "erfc", "copysign", "ldexp",
+    "frexp", "gcd", "lcm", "lgamma", "digamma", "i0", "softmax", "log_softmax",
 ]
 
 

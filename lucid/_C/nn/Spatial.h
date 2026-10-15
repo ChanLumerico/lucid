@@ -142,9 +142,9 @@ public:
 // schema_v1 : OpSchema
 //     ``"grid_sample"``, ``AmpPolicy::Promote``.
 // mode_ : int
-//     Interpolation kernel: ``0`` = bilinear, ``1`` = nearest, ``2`` = bicubic.
+//     Interpolation kernel: ``0`` = bilinear, ``1`` = nearest.
 // padding_mode_ : int
-//     Out-of-bounds policy: ``0`` = zeros, ``1`` = border, ``2`` = reflection.
+//     Out-of-bounds policy: ``0`` = zeros, ``1`` = border.
 // align_corners_ : bool
 //     Coordinate mapping mode (see file header).
 // input_shape_ : Shape
@@ -158,8 +158,8 @@ public:
 class LUCID_API GridSampleBackward : public FuncOp<GridSampleBackward, 2> {
 public:
     static const OpSchema schema_v1;
-    int mode_ = 0;          // 0=bilinear, 1=nearest, 2=bicubic.
-    int padding_mode_ = 0;  // 0=zeros, 1=border, 2=reflection.
+    int mode_ = 0;          // 0=bilinear, 1=nearest.
+    int padding_mode_ = 0;  // 0=zeros, 1=border.
     bool align_corners_ = true;
     Shape input_shape_;  // Saved for backward shape reconstruction.
     Shape grid_shape_;
@@ -174,9 +174,9 @@ public:
     //     Sampling grid of shape ``(N, H_out, W_out, 2)`` with normalised
     //     coordinates in $[-1, 1]$.
     // mode : int
-    //     Interpolation kernel code (``0/1/2`` for bilinear/nearest/bicubic).
+    //     Interpolation kernel code (``0/1`` for bilinear/nearest).
     // padding_mode : int
-    //     Out-of-bounds policy code (``0/1/2`` for zeros/border/reflection).
+    //     Out-of-bounds policy code (``0/1`` for zeros/border).
     // align_corners : bool
     //     Coordinate mapping mode.
     //
@@ -234,9 +234,9 @@ affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bool align_corne
 // grid : TensorImplPtr
 //     Sampling grid ``(N, H_out, W_out, 2)`` with coordinates in $[-1, 1]$.
 // mode : int
-//     Interpolation kernel code (``0/1/2`` for bilinear/nearest/bicubic).
+//     Interpolation kernel code (``0/1`` for bilinear/nearest).
 // padding_mode : int
-//     Out-of-bounds policy code (``0/1/2`` for zeros/border/reflection).
+//     Out-of-bounds policy code (``0/1`` for zeros/border).
 // align_corners : bool
 //     Coordinate mapping mode.
 //

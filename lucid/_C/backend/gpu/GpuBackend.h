@@ -6593,19 +6593,11 @@ private:
         auto gy_n = ::mlx::core::take(*gg.arr, idx1, -1);
 
         auto denorm_arr = [&](const ::mlx::core::array& g, int dim) {
-            if (align_corners) {
-                auto half = ::mlx::core::astype(::mlx::core::array(0.5f), mlx_dt);
-                auto dim_m1 =
-                    ::mlx::core::astype(::mlx::core::array(static_cast<float>(dim - 1)), mlx_dt);
-                auto one = ::mlx::core::astype(::mlx::core::array(1.0f), mlx_dt);
-                return ::mlx::core::multiply(
-                    half, ::mlx::core::multiply(::mlx::core::add(g, one), dim_m1));
-            }
             auto half = ::mlx::core::astype(::mlx::core::array(0.5f), mlx_dt);
-            auto dim_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(dim)), mlx_dt);
             auto one = ::mlx::core::astype(::mlx::core::array(1.0f), mlx_dt);
-            auto num = ::mlx::core::multiply(::mlx::core::add(g, one), dim_arr);
-            return ::mlx::core::subtract(::mlx::core::multiply(half, num), half);
+            auto slope = gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
+            auto scaled = ::mlx::core::multiply(::mlx::core::add(g, one), slope);
+            return align_corners ? scaled : ::mlx::core::subtract(scaled, half);
         };
         auto ix = denorm_arr(gx_n, W_in);
         auto iy = denorm_arr(gy_n, H_in);
@@ -6762,15 +6754,9 @@ private:
         auto Wm1f = ::mlx::core::astype(::mlx::core::array(static_cast<float>(W_in - 1)), mlx_dt);
 
         auto denorm_arr = [&](const ::mlx::core::array& g, int dim) {
-            auto dim_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(dim)), mlx_dt);
-            auto dim_m1 =
-                ::mlx::core::astype(::mlx::core::array(static_cast<float>(dim - 1)), mlx_dt);
-            if (align_corners) {
-                return ::mlx::core::multiply(
-                    half, ::mlx::core::multiply(::mlx::core::add(g, one), dim_m1));
-            }
-            auto num = ::mlx::core::multiply(::mlx::core::add(g, one), dim_arr);
-            return ::mlx::core::subtract(::mlx::core::multiply(half, num), half);
+            auto slope = gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
+            auto scaled = ::mlx::core::multiply(::mlx::core::add(g, one), slope);
+            return align_corners ? scaled : ::mlx::core::subtract(scaled, half);
         };
         auto ix = denorm_arr(gx_n, W_in);
         auto iy = denorm_arr(gy_n, H_in);
@@ -6940,17 +6926,12 @@ private:
                                  ::mlx::core::multiply(::mlx::core::subtract(Id, Ic), dx_t2_b)));
             auto dix_sum = ::mlx::core::sum(dix_per, std::vector<int>{1}, false);
             auto diy_sum = ::mlx::core::sum(diy_per, std::vector<int>{1}, false);
-            auto sx = align_corners ? gpu::mlx_scalar(static_cast<double>(W_in - 1) / 2.0, mlx_dt)
-                                    : gpu::mlx_scalar(static_cast<double>(W_in) / 2.0, mlx_dt);
-            auto sy_arr = align_corners
-                              ? gpu::mlx_scalar(static_cast<double>(H_in - 1) / 2.0, mlx_dt)
-                              : gpu::mlx_scalar(static_cast<double>(H_in) / 2.0, mlx_dt);
-            dgrid_x = ::mlx::core::multiply(dix_sum, sx);
-            dgrid_y = ::mlx::core::multiply(diy_sum, sy_arr);
-            if (padding_mode == 1) {
-                dgrid_x = ::mlx::core::where(clipped_x, zero, dgrid_x);
-                dgrid_y = ::mlx::core::where(clipped_y, zero, dgrid_y);
-            }
+            auto sx = gpu::mlx_scalar(resample::unnormalize_slope<double>(W_in, align_corners), mlx_dt);
+            auto sy_arr = gpu::mlx_scalar(resample::unnormalize_slope<double>(H_in, align_corners), mlx_dt);
+            dgrid_x = ::mlx::core::multiply(
+                dix_sum, padding_mode == 1 ? ::mlx::core::where(clipped_x, zero, sx) : sx);
+            dgrid_y = ::mlx::core::multiply(
+                diy_sum, padding_mode == 1 ? ::mlx::core::where(clipped_y, zero, sy_arr) : sy_arr);
         }
 
         auto dx_arr =

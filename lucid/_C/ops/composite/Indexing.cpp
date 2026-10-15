@@ -189,6 +189,10 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
     Validator::pair(base, indices, "scatter").same_device();
     Validator::pair(base, src, "scatter").same_device();
     require_index_dtype(indices, "scatter");
+    if (src->dtype() != base->dtype())
+        throw DtypeMismatch(std::string(dtype_name(base->dtype())),
+                            std::string(dtype_name(src->dtype())),
+                            "scatter: src must have self's dtype");
 
     if (auto out = on_scalar_scatter("scatter", base, indices, src, dim,
                                      [](const TensorImplPtr& b, const TensorImplPtr& i,
@@ -224,9 +228,7 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
                                             " has size 0");
 
     // Only the corner of src the index covers is written; cut src to that
-    // corner so every backend reads it in the index's own layout.  The
-    // values are moved, not converted, so they take base's dtype first —
-    // the cast ``index_copy`` makes in Python (``_like_input``).
+    // corner so every backend reads it in the index's own layout.
     TensorImplPtr values = src;
     for (int i = 0; i < ndim; ++i) {
         const auto k = static_cast<std::size_t>(i);
@@ -234,8 +236,6 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
             values = narrow_op(values, i, 0, is[k]);
     }
     const Dtype dt = base->dtype();
-    if (values->dtype() != dt)
-        values = astype_op(values, dt);
 
     // A true overwrite.  This was a scatter-add of the delta
     // ``src - base[idx]``, which is not one: NaN or inf in ``base`` stayed

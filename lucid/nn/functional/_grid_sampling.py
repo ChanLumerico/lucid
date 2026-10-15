@@ -162,8 +162,9 @@ def _clip(position: Tensor, size: int) -> Tensor:
         The clamped positions, same shape.
     """
     last = float(size - 1)
-    inner = _lucid.where(position >= last, last, position)
-    return _lucid.where(position <= 0.0, 0.0, inner)
+    zero = _lucid.where(_lucid.isfinite(position), position, 0.0) * 0.0
+    inner = _lucid.where(position >= last, zero + last, position)
+    return _lucid.where(position <= 0.0, zero, inner)
 
 
 def _constant_zero(position: Tensor) -> Tensor:
@@ -179,7 +180,7 @@ def _constant_zero(position: Tensor) -> Tensor:
     Tensor
         Zeros of the same shape and dtype, with a zero slope.
     """
-    return _lucid.where(_lucid.ones_like(position, dtype=_lucid.bool), 0.0, position)
+    return _lucid.where(_lucid.isfinite(position), position, 0.0) * 0.0
 
 
 def _unnormalize(

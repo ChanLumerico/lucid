@@ -253,6 +253,18 @@ _RESAMPLE_AND_DROPOUT = [
         SHAPE,
         "(N, C, H_in, W_in)",
     ),
+    (
+        "grid_sample_mode_bicubic",
+        "E.nn.grid_sample(R(1, 3, 4, 4), R(1, 4, 4, 2), 2, 0, False)",
+        ARG,
+        "mode",
+    ),
+    (
+        "grid_sample_pad_reflection",
+        "E.nn.grid_sample(R(1, 3, 4, 4), R(1, 4, 4, 2), 0, 2, False)",
+        ARG,
+        "padding_mode",
+    ),
     ("affine_grid_negative", "E.nn.affine_grid(R(1, 2, 3), 1, -4, 4)", ARG, "affine_grid"),
     ("dropoutnd_rank1", "E.nn.dropoutnd(R(8), 0.5)", SHAPE, "at least 2-D"),
     ("drop_block_rank3", "E.nn.drop_block(R(3, 8, 8), 3, 0.5)", SHAPE, "4-D"),

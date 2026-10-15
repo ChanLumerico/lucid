@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
@@ -143,7 +144,7 @@ inline Stride contiguous_stride(const Shape& shape, std::size_t elem_size) {
     std::int64_t acc = static_cast<std::int64_t>(elem_size);
     for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(shape.size()) - 1; i >= 0; --i) {
         s[static_cast<std::size_t>(i)] = acc;
-        acc *= shape[static_cast<std::size_t>(i)];
+        acc *= std::max<std::int64_t>(shape[static_cast<std::size_t>(i)], 1);
     }
     return s;
 }

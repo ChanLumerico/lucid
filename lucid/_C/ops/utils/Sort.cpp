@@ -18,6 +18,7 @@
 #include "Sort.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <numeric>
 #include <tuple>
@@ -33,6 +34,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
+#include "../../core/Half.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -276,8 +278,60 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
 // need host memory, and the output length is data-dependent), but the RESULT
 // rides the input's device — see the note on ``nonzero_op``.
 //
-// The template lambda `run` is instantiated for each supported element type
-// (F32, F64, I32, I64) via explicit casts from the raw byte buffer.
+namespace {
+template <typename T>
+CpuStorage pack_unique_vec(Dtype dt, const std::vector<T>& vals) {
+    CpuStorage out;
+    out.dtype = dt;
+    out.nbytes = vals.size() * sizeof(T);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
+    if (out.nbytes > 0)
+        std::memcpy(out.ptr.get(), vals.data(), out.nbytes);
+    return out;
+}
+
+template <typename T>
+CpuStorage run_unique_int(Dtype dt, const T* src, std::size_t n) {
+    std::vector<T> vals(src, src + n);
+    std::sort(vals.begin(), vals.end());
+    vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
+    return pack_unique_vec(dt, vals);
+}
+
+template <typename T>
+CpuStorage run_unique_float(Dtype dt, const T* src, std::size_t n) {
+    std::vector<T> vals(src, src + n);
+    std::stable_sort(vals.begin(), vals.end(), [](T x, T y) {
+        if (std::isnan(x))
+            return false;
+        if (std::isnan(y))
+            return true;
+        return x < y;
+    });
+    vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
+    return pack_unique_vec(dt, vals);
+}
+
+template <typename ToF32>
+CpuStorage run_unique_half(Dtype dt, const void* raw, std::size_t n, ToF32 to_f32) {
+    const auto* src = reinterpret_cast<const std::uint16_t*>(raw);
+    std::vector<std::uint16_t> vals(src, src + n);
+    std::stable_sort(vals.begin(), vals.end(), [&](std::uint16_t x, std::uint16_t y) {
+        const float fx = to_f32(x), fy = to_f32(y);
+        if (std::isnan(fx))
+            return false;
+        if (std::isnan(fy))
+            return true;
+        return fx < fy;
+    });
+    vals.erase(
+        std::unique(vals.begin(), vals.end(),
+                    [&](std::uint16_t x, std::uint16_t y) { return to_f32(x) == to_f32(y); }),
+        vals.end());
+    return pack_unique_vec(dt, vals);
+}
+}  // namespace
+
 TensorImplPtr unique_op(const TensorImplPtr& a) {
     Validator::input(a, "unique.a").non_null();
     const Dtype dt = a->dtype();
@@ -285,38 +339,30 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
 
     CpuStorage cpu = backend::Dispatcher::for_device(a->device()).to_cpu(a->storage(), a->shape());
     const std::size_t n = shape_numel(a->shape());
-
-    auto run = [&](const auto* src) -> CpuStorage {
-        using T = std::remove_cv_t<std::remove_pointer_t<decltype(src)>>;
-        std::vector<T> vals(src, src + n);
-        std::sort(vals.begin(), vals.end());
-        vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
-        CpuStorage out;
-        out.dtype = dt;
-        out.nbytes = vals.size() * sizeof(T);
-        out.ptr = allocate_aligned_bytes(out.nbytes);
-        std::memcpy(out.ptr.get(), vals.data(), out.nbytes);
-        return out;
-    };
+    const void* raw = cpu.ptr.get();
 
     CpuStorage out_cpu;
-    Shape out_shape;
-    // After deduplication, back-compute the output element count from the
-    // remaining byte count and record the 1-D output shape.
-    auto wrap = [&](auto&& s) {
-        out_shape = {static_cast<std::int64_t>(s.nbytes / dtype_size(dt))};
-        out_cpu = std::move(s);
-    };
-    if (dt == Dtype::F32)
-        wrap(run(reinterpret_cast<const float*>(cpu.ptr.get())));
+    if (dt == Dtype::F16)
+        out_cpu = run_unique_half(dt, raw, n, backend::detail::half_bits_to_float);
+    else if (dt == Dtype::BF16)
+        out_cpu = run_unique_half(dt, raw, n, backend::detail::bfloat16_bits_to_float);
+    else if (dt == Dtype::F32)
+        out_cpu = run_unique_float(dt, reinterpret_cast<const float*>(raw), n);
     else if (dt == Dtype::F64)
-        wrap(run(reinterpret_cast<const double*>(cpu.ptr.get())));
+        out_cpu = run_unique_float(dt, reinterpret_cast<const double*>(raw), n);
+    else if (dt == Dtype::I8)
+        out_cpu = run_unique_int(dt, reinterpret_cast<const std::int8_t*>(raw), n);
+    else if (dt == Dtype::I16)
+        out_cpu = run_unique_int(dt, reinterpret_cast<const std::int16_t*>(raw), n);
     else if (dt == Dtype::I32)
-        wrap(run(reinterpret_cast<const std::int32_t*>(cpu.ptr.get())));
+        out_cpu = run_unique_int(dt, reinterpret_cast<const std::int32_t*>(raw), n);
     else if (dt == Dtype::I64)
-        wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
+        out_cpu = run_unique_int(dt, reinterpret_cast<const std::int64_t*>(raw), n);
+    else if (dt == Dtype::Bool)
+        out_cpu = run_unique_int(dt, reinterpret_cast<const std::uint8_t*>(raw), n);
     else
         ErrorBuilder("unique").not_implemented("dtype not supported");
+    Shape out_shape{static_cast<std::int64_t>(out_cpu.nbytes / dtype_size(dt))};
     TensorImplPtr result;
     if (a->device() != Device::CPU) {
         Storage up =

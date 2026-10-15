@@ -59,6 +59,22 @@ inline std::int64_t next_index(std::int64_t i) {
     return i < std::numeric_limits<std::int64_t>::max() ? i + 1 : i;
 }
 
+// d(position) / d(grid coordinate): ``(size - 1) / 2`` with aligned corners,
+// ``size / 2`` without.  Halving the extent before multiplying by ``g + 1``
+// matches the 4-D reference kernel and avoids overflowing ``(g + 1) * size``
+// when ``|g| * size`` exceeds ``float_max``.
+template <class T>
+T unnormalize_slope(std::int64_t size, bool align_corners) {
+    return static_cast<T>(align_corners ? size - 1 : size) * static_cast<T>(0.5);
+}
+
+// A normalised grid coordinate as a position in an axis of ``size`` samples.
+template <class T>
+T unnormalize(T g, std::int64_t size, bool align_corners) {
+    const T scaled = (g + T{1}) * unnormalize_slope<T>(size, align_corners);
+    return align_corners ? scaled : scaled - static_cast<T>(0.5);
+}
+
 // The input sample output ``dst`` copies under nearest.
 template <class R>
 std::int64_t nearest_source(std::int64_t dst, std::int64_t in, std::int64_t out) {

@@ -138,18 +138,7 @@ bool chunk_strides(const TensorImpl& a, const Shape& out, Stride& stride) {
         return true;
     }
     if (shape_numel(in) == 0) {
-        if (in == out) {
-            stride = in_stride;
-            return true;
-        }
-        // Packed, but a zero-length axis counts as one so that no stride is
-        // zero: an empty tensor repeats no element.
-        stride.assign(out.size(), 0);
-        auto next = static_cast<std::int64_t>(elem);
-        for (std::size_t d = out.size(); d-- > 0;) {
-            stride[d] = next;
-            next *= std::max<std::int64_t>(out[d], 1);
-        }
+        stride = (in == out) ? in_stride : contiguous_stride(out, elem);
         return true;
     }
     stride.assign(out.size(), 0);
@@ -198,6 +187,8 @@ enum class UnitAxes { kChunk, kSqueeze };
 // or split of its axes when chunk_strides finds strides for it.
 bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride, UnitAxes unit) {
     if (a.is_dense()) {
+        if (unit == UnitAxes::kSqueeze)
+            return squeezes_only(a, out_shape, stride);
         stride = contiguous_stride(out_shape, dtype_size(a.dtype()));
         return true;
     }

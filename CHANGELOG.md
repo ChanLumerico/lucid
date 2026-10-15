@@ -778,6 +778,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - support unbatched inputs, lp_pool ceil_mode, Transformer API
 
+- resolve empty stride/overlap, frexp, grid_sample, unique
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

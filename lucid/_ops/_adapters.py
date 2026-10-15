@@ -1171,10 +1171,20 @@ def _histc_adapter(
     return _C_engine.histc(a_impl, int(bins), lo, hi)
 
 
-#: The dtypes the engine's own ``unique`` kernel answers exactly: integers
-#: have no NaN and no ``-0.0``, which its float path gets wrong, and it
-#: sorts several times faster than the composite below on the CPU.
-_UNIQUE_KERNEL_DTYPES = (_C_engine.I32, _C_engine.I64)
+#: All non-complex dtypes: the engine's ``unique`` kernel stably orders NaN
+#: at the end, collapses ``-0.0`` and ``0.0`` to the first seen, and covers
+#: half, sub-int32, and bool inputs directly.
+_UNIQUE_KERNEL_DTYPES = (
+    _C_engine.Bool,
+    _C_engine.I8,
+    _C_engine.I16,
+    _C_engine.I32,
+    _C_engine.I64,
+    _C_engine.F16,
+    _C_engine.BF16,
+    _C_engine.F32,
+    _C_engine.F64,
+)
 
 
 def _unique_adapter(

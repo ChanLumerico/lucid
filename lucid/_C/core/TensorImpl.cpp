@@ -973,18 +973,17 @@ void scatter_contig_to_strided(const std::byte* packed,
 // non-zero.  Such a view reads fine and cannot be written: a repeated element
 // has no single value to take.
 bool overlaps_itself(const Shape& shape, const Stride& stride) {
+    const std::size_t n = shape_numel(shape);
+    if (n <= 1)
+        return false;
     std::vector<std::pair<std::int64_t, std::int64_t>> axes;  // |stride|, extent - 1
-    std::size_t n = 1;
     for (std::size_t d = 0; d < shape.size(); ++d) {
-        n *= static_cast<std::size_t>(std::max<std::int64_t>(shape[d], 0));
         if (shape[d] <= 1)
             continue;
         if (stride[d] == 0)
             return true;
         axes.emplace_back(stride[d] < 0 ? -stride[d] : stride[d], shape[d] - 1);
     }
-    if (n == 0)
-        return false;
     // Sorted by stride, if every axis steps past all that the smaller ones
     // reach, each index lands on its own byte, as the digits of a
     // mixed-radix number do.

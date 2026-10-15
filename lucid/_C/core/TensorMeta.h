@@ -137,7 +137,7 @@ struct TensorMeta {
         for (int i = static_cast<int>(shape.size()) - 1; i >= 0; --i) {
             if (stride[static_cast<std::size_t>(i)] != expected)
                 return false;
-            expected *= shape[static_cast<std::size_t>(i)];
+            expected *= std::max<std::int64_t>(shape[static_cast<std::size_t>(i)], 1);
         }
         return true;
     }

@@ -137,6 +137,38 @@ TensorImplPtr affine_grid_op(const TensorImplPtr& theta, int N, int H, int W, bo
 }
 LUCID_REGISTER_OP(AffineGridBackward)
 
+namespace {
+void validate_grid_sample_inputs(const TensorImplPtr& input,
+                                 const TensorImplPtr& grid,
+                                 int mode,
+                                 int padding_mode) {
+    if (input->device() != grid->device())
+        throw DeviceMismatch(std::string(device_name(input->device())),
+                             std::string(device_name(grid->device())), "grid_sample: input/grid");
+    if (input->shape().size() != 4)
+        throw ShapeMismatch(input->shape(), Shape{},
+                            "grid_sample: input must be (N, C, H_in, W_in)");
+    if (grid->shape().size() != 4 || grid->shape()[3] != 2)
+        throw ShapeMismatch(grid->shape(), Shape{},
+                            "grid_sample: grid must be (N, H_out, W_out, 2)");
+    if (input->dtype() != grid->dtype())
+        throw DtypeMismatch(std::string(dtype_name(input->dtype())),
+                            std::string(dtype_name(grid->dtype())), "grid_sample");
+    if (input->shape()[0] != grid->shape()[0])
+        throw ShapeMismatch(input->shape(), grid->shape(), "grid_sample: batch size mismatch");
+    if (mode != 0 && mode != 1)
+        ErrorBuilder("grid_sample")
+            .invalid_argument("mode must be 0 (bilinear) or 1 (nearest), got " +
+                              std::to_string(mode) +
+                              " (bicubic and volumetric grids are lowered in Python)");
+    if (padding_mode != 0 && padding_mode != 1)
+        ErrorBuilder("grid_sample")
+            .invalid_argument("padding_mode must be 0 (zeros) or 1 (border), got " +
+                              std::to_string(padding_mode) +
+                              " (reflection padding is folded into the grid in Python)");
+}
+}  // namespace
+
 const OpSchema GridSampleBackward::schema_v1{"grid_sample", 1, AmpPolicy::Promote, true, "", true};
 
 TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
@@ -154,20 +186,7 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
     // move the dtype mismatch below.
     const TensorImplPtr input = promote_for_schema(schema_v1, input0);
     const TensorImplPtr grid = promote_for_schema(schema_v1, grid0);
-    if (input->device() != grid->device())
-        throw DeviceMismatch(std::string(device_name(input->device())),
-                             std::string(device_name(grid->device())), "grid_sample: input/grid");
-    if (input->shape().size() != 4)
-        throw ShapeMismatch(input->shape(), Shape{},
-                            "grid_sample: input must be (N, C, H_in, W_in)");
-    if (grid->shape().size() != 4 || grid->shape()[3] != 2)
-        throw ShapeMismatch(grid->shape(), Shape{},
-                            "grid_sample: grid must be (N, H_out, W_out, 2)");
-    if (input->dtype() != grid->dtype())
-        throw DtypeMismatch(std::string(dtype_name(input->dtype())),
-                            std::string(dtype_name(grid->dtype())), "grid_sample");
-    if (input->shape()[0] != grid->shape()[0])
-        throw ShapeMismatch(input->shape(), grid->shape(), "grid_sample: batch size mismatch");
+    validate_grid_sample_inputs(input, grid, mode, padding_mode);
 
     const int N = static_cast<int>(input->shape()[0]);
     const int C = static_cast<int>(input->shape()[1]);
