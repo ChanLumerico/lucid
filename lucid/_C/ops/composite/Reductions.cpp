@@ -8,6 +8,7 @@
 #include "Reductions.h"
 
 #include "../../autograd/Helpers.h"
+#include "../../core/AmpPolicy.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
@@ -21,6 +22,9 @@
 namespace lucid {
 
 TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
+    // Disable autocast inside composite logsumexp so Promote elementwise ops
+    // (sub_op, add_op) do not downcast float32 inputs to half/bfloat16.
+    amp::AutocastGuard amp_off(Dtype::F32, a->device(), /*enabled=*/false);
     // A float16 / bfloat16 input is evaluated in float32 and the answer
     // rounded back.  The sum of exp(x - max) is up to the length of the
     // reduced axis, which float16 cannot hold past 65504: logsumexp of

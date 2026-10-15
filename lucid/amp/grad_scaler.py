@@ -322,7 +322,6 @@ class GradScaler:
                 grads.append((p, g_impl))
 
         inv_scale = 1.0 / self._scale
-        amp_active = _C_engine.amp_is_active()
         nonfinite: dict[_C_engine.Device, _C_engine.TensorImpl] = {}
         for p, g_impl in grads:
             grad_dtype = g_impl.dtype
@@ -337,7 +336,12 @@ class GradScaler:
             # ``1/65536`` is subnormal) — and a float32 scope would cast a
             # float64 gradient down.  A guard on the work dtype pins it;
             # dropping the guard restores the caller's state.
-            guard = _C_engine.AutocastGuard(work_dtype) if amp_active else None
+            amp_active = _C_engine.amp_is_active(g_impl.device)
+            guard = (
+                _C_engine.AutocastGuard(work_dtype, g_impl.device)
+                if amp_active
+                else None
+            )
             try:
                 g_work = (
                     g_impl

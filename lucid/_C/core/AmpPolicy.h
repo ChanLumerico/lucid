@@ -30,6 +30,7 @@
 #include <optional>
 
 #include "../api.h"
+#include "Device.h"
 #include "Dtype.h"
 
 namespace lucid {
@@ -102,17 +103,15 @@ LUCID_API const char* amp_policy_name(AmpPolicy p);
 
 namespace amp {
 
-// Returns the active autocast dtype on the calling thread.
+// Returns the active autocast dtype for ``device`` on the calling thread.
 //
-// Reads the thread-local AMP state established by the innermost live
-// :class:`AutocastGuard`.  Returns ``std::nullopt`` when no guard is
-// active — callers can use this to skip the AMP dispatch path entirely.
-//
-// Returns
-// -------
-// std::optional<Dtype>
-//     The autocast target dtype if AMP is active on this thread, or
-//     ``std::nullopt`` otherwise.
+// Reads the thread-local per-device AMP state established by the innermost
+// live :class:`AutocastGuard` for ``device``.  Returns ``std::nullopt`` when
+// no guard is active for ``device``.
+LUCID_API std::optional<Dtype> active_dtype(Device device);
+
+// Returns the active autocast dtype on the calling thread (GPU if active,
+// otherwise CPU if active, otherwise ``std::nullopt``).
 //
 // Notes
 // -----
@@ -121,67 +120,23 @@ namespace amp {
 // synchronisation.
 LUCID_API std::optional<Dtype> active_dtype();
 
-// Returns true when AMP is active on the calling thread.
-//
-// Equivalent to ``active_dtype().has_value()`` but avoids constructing
-// an ``std::optional`` on the hot dispatch path.
-//
-// Returns
-// -------
-// bool
-//     ``true`` if at least one :class:`AutocastGuard` is currently live
-//     on this thread, ``false`` otherwise.
+// Returns true when AMP is active for ``device`` on the calling thread.
+LUCID_API bool is_active(Device device);
+
+// Returns true when AMP is active on any device on the calling thread.
 LUCID_API bool is_active();
 
-// RAII guard that activates AMP with a target dtype for the duration of
-// the guard's lifetime.
-//
-// Construction sets the thread-local autocast state to ``(active=true,
-// dtype=target)`` and saves the previous values.  Destruction restores
-// the previous values unconditionally, so guards may be nested freely
-// (an inner ``ForceFP32`` scope inside an outer ``F16`` scope, etc.).
-//
-// The Python-side ``lucid.amp.autocast`` context manager wraps this guard
-// and is the user-facing entry point — direct C++ use is rare outside
-// the engine itself.
-//
-// Notes
-// -----
-// Copy and move are deleted: this is a stack-only RAII object, and
-// duplicating it would corrupt the saved/restore state machine.
-//
-// The Python binding exposes ``__enter__`` / ``__exit__`` semantics
-// without restoring on exit (the Python ``autocast`` class implements
-// proper RAII in Python); the destructor still runs the restore when
-// the C++ object is finally collected.
-//
-// Examples
-// --------
-// .. code-block:: cpp
-//
-//     {
-//         amp::AutocastGuard guard(Dtype::F16);
-//         // ops inside this scope dispatch under AMP
-//         auto y = matmul(a, b);
-//     } // guard destructor restores previous AMP state
+// RAII guard that activates (or disables) AMP for a device (or all active
+// devices) for the duration of the guard's lifetime.
 class LUCID_API AutocastGuard {
 public:
-    // Activates AMP with ``target`` as the effective compute dtype.
-    //
-    // Saves the previous ``(active, dtype)`` pair so the destructor can
-    // restore it.  Does not validate ``target`` — any :class:`Dtype` is
-    // accepted (the per-op :class:`AmpPolicy` controls how that dtype is
-    // interpreted at dispatch time).
-    //
-    // Parameters
-    // ----------
-    // target : Dtype
-    //     The autocast target dtype reported by :func:`amp::active_dtype`
-    //     while this guard is live.  Typical values are :class:`Dtype::F16`
-    //     for GPU half-precision training and :class:`Dtype::BF16` for
-    //     bfloat16 training; :class:`Dtype::F32` produces an effectively
-    //     neutral guard.
+    // Sets the autocast target dtype to ``target`` on whichever device(s)
+    // currently have AMP active (or both devices if neither is active).
     explicit AutocastGuard(Dtype target);
+
+    // Sets the autocast state for ``device`` to ``(active=enabled, dtype=target)``
+    // and restores the previous state for ``device`` on destruction.
+    AutocastGuard(Dtype target, Device device, bool enabled = true);
 
     // Restores the previous AMP state captured at construction.
     //
@@ -192,8 +147,11 @@ public:
     AutocastGuard& operator=(const AutocastGuard&) = delete;
 
 private:
-    bool prev_active_;
-    Dtype prev_dtype_;
+    std::optional<Device> device_;
+    bool prev_cpu_active_ = false;
+    Dtype prev_cpu_dtype_ = Dtype::F16;
+    bool prev_gpu_active_ = false;
+    Dtype prev_gpu_dtype_ = Dtype::F16;
 };
 
 }  // namespace amp

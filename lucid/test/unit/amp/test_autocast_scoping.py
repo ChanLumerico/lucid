@@ -7,9 +7,8 @@ now released in ``__exit__``; its destructor restores the state recorded on
 entry.  The scope is re-usable, re-entrant, nests, unwinds on an exception,
 and the decorator form behaves the same.
 
-``device_type`` is kept and checked, but the engine has one autocast state
-per thread, not per device, so a scope still reaches ops on the other
-device; those tests are expected failures until the engine work lands.
+``device_type`` is kept and checked, and the engine tracks autocast state
+per device on each thread so a scope only affects ops on its own device.
 """
 
 import threading
@@ -22,7 +21,6 @@ import lucid
 autocast = lucid.amp.autocast
 
 OFF = (False, None)
-_PER_THREAD = "CHA-70: engine AMP state is per-thread, not per-device"
 
 
 def _state() -> tuple[bool, lucid.dtype | None]:
@@ -196,20 +194,17 @@ def test_an_unknown_device_type_is_refused() -> None:
         autocast(device_type="gpu")
 
 
-@pytest.mark.xfail(strict=True, reason=_PER_THREAD)
 def test_a_cpu_scope_leaves_metal_ops_alone(a: lucid.Tensor) -> None:
     with autocast(device_type="cpu", dtype=lucid.bfloat16):
         assert (a @ a).dtype == lucid.float32
 
 
-@pytest.mark.xfail(strict=True, reason=_PER_THREAD)
 def test_a_metal_scope_leaves_cpu_ops_alone() -> None:
     c = lucid.randn(4, 4)
     with autocast(device_type="metal", dtype=lucid.bfloat16):
         assert (c @ c).dtype == lucid.float32
 
 
-@pytest.mark.xfail(strict=True, reason=_PER_THREAD)
 def test_the_decorator_keeps_its_device_type(a: lucid.Tensor) -> None:
     @autocast(device_type="cpu", dtype=lucid.bfloat16)
     def mm() -> lucid.dtype:

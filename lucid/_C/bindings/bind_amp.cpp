@@ -37,6 +37,8 @@ void register_amp(py::module_& m) {
     // ownership stays with the outer scope.
     py::class_<amp::AutocastGuard>(m, "AutocastGuard")
         .def(py::init<Dtype>(), py::arg("target"))
+        .def(py::init<Dtype, Device, bool>(), py::arg("target"), py::arg("device"),
+             py::arg("enabled") = true)
         .def(
             "__enter__", [](amp::AutocastGuard& g) -> amp::AutocastGuard& { return g; },
             py::return_value_policy::reference)
@@ -46,13 +48,22 @@ void register_amp(py::module_& m) {
     // amp_active_dtype returns None when no autocast scope is active, or the
     // current target Dtype when one is.  The optional is unpacked here rather
     // than relying on pybind11's optional support to keep the None path explicit.
-    m.def("amp_active_dtype", []() -> py::object {
-        auto d = amp::active_dtype();
-        if (d)
-            return py::cast(*d);
-        return py::none();
-    });
-    m.def("amp_is_active", &amp::is_active);
+    m.def(
+        "amp_active_dtype",
+        [](py::object device) -> py::object {
+            auto d =
+                device.is_none() ? amp::active_dtype() : amp::active_dtype(device.cast<Device>());
+            if (d)
+                return py::cast(*d);
+            return py::none();
+        },
+        py::arg("device") = py::none());
+    m.def(
+        "amp_is_active",
+        [](py::object device) -> bool {
+            return device.is_none() ? amp::is_active() : amp::is_active(device.cast<Device>());
+        },
+        py::arg("device") = py::none());
 }
 
 }  // namespace lucid::bindings

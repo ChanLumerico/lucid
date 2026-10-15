@@ -58,7 +58,7 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
     // Fast path: no AMP active, or input dtype is not autocast-eligible — use
     // the tensor's own dtype unchanged, unless the op cannot express its
     // answer in that dtype at all.
-    if (!amp::is_active() || !is_autocast_eligible(input_dtype)) {
+    if (!amp::is_active(device) || !is_autocast_eligible(input_dtype)) {
         // ``ForceFP32`` says this op needs real numbers: exp, log, sqrt,
         // tanh, sigmoid, erfinv.  It was only consulted inside an autocast
         // scope, so outside one an integer input took two different wrong
@@ -82,7 +82,7 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
         return;
     }
 
-    const Dtype autocast_dt = *amp::active_dtype();
+    const Dtype autocast_dt = *amp::active_dtype(device);
     switch (schema.amp_policy) {
     case AmpPolicy::Promote: {
         // Accelerate does not support native F16 arithmetic on the CPU stream;

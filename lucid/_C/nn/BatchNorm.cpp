@@ -537,8 +537,8 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     // implementation engaged for the duration of the update.  Running buffers
     // are always kept at F32 regardless of the outer autocast scope.
     std::unique_ptr<amp::AutocastGuard> amp_off;
-    if (amp::is_active()) {
-        amp_off = std::make_unique<amp::AutocastGuard>(Dtype::F32);
+    if (amp::is_active(device)) {
+        amp_off = std::make_unique<amp::AutocastGuard>(Dtype::F32, device);
     }
 
     // Cast x → buf_dt if needed.  ``astype`` is a no-op when dtypes match.

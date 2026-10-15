@@ -13,6 +13,15 @@ from lucid._dtype import dtype, float16, to_engine_dtype
 _DEVICE_TYPES = frozenset({"metal", "cpu"})
 
 
+def _to_engine_device(device_type: str) -> _C_engine.Device:
+    """Validate ``device_type`` and map it to :class:`_C_engine.Device`."""
+    if device_type not in _DEVICE_TYPES:
+        raise ValueError(
+            f"autocast: unknown device_type {device_type!r}. Use 'metal' or 'cpu'."
+        )
+    return _C_engine.Device.GPU if device_type == "metal" else _C_engine.Device.CPU
+
+
 class autocast:
     """Enable automatic mixed-precision computation inside a context.
 
@@ -29,12 +38,12 @@ class autocast:
     normally or by an exception, and however long the ``autocast`` object
     itself lives on afterwards.  One object can be entered again after it
     exits, entered while it is already active (each entry is undone by its
-    own exit), and used as a decorator.  ``enabled=False`` leaves the
-    current state untouched: it does not switch an enclosing scope off.
+    own exit), and used as a decorator.  ``enabled=False`` disables
+    autocast on ``device_type`` for the duration of the scope while leaving
+    the other device's autocast state untouched.
 
-    The engine keeps one autocast state per thread rather than one per
-    device, so a scope currently applies to eligible ops on *both*
-    devices whichever ``device_type`` it names (CHA-70).
+    Autocast state is tracked independently per device (``"metal"`` vs
+    ``"cpu"``) on each thread.
 
     Parameters
     ----------
@@ -51,9 +60,9 @@ class autocast:
         reference framework's CPU autocast does by default.  Not every CPU
         op has a bfloat16 kernel yet.
     enabled : bool, optional
-        When ``False`` the context is a no-op — useful for ablation /
-        A/B comparing AMP on vs off without changing call sites.
-        Default ``True``.
+        When ``False`` autocast is disabled on ``device_type`` inside the
+        scope — useful for ablation or forcing full precision in a nested
+        subregion.  Default ``True``.
 
     Examples
     --------
@@ -110,17 +119,15 @@ class autocast:
             Lower-precision dtype that supported ops cast inputs to inside
             the scope (defaults to :data:`lucid.float16` when ``None``).
         enabled : bool, default=True
-            When ``False`` the context is a no-op (useful for ablation).
+            When ``False`` autocast is disabled on ``device_type`` inside
+            the scope (useful for ablation or nested full-precision blocks).
 
         Raises
         ------
         ValueError
             If ``device_type`` is neither ``'metal'`` nor ``'cpu'``.
         """
-        if device_type not in _DEVICE_TYPES:
-            raise ValueError(
-                f"autocast: unknown device_type {device_type!r}. Use 'metal' or 'cpu'."
-            )
+        self._engine_device = _to_engine_device(device_type)
         self._device_type = device_type
         self._dtype = float16 if dtype is None else dtype
         self._enabled = enabled
@@ -141,15 +148,19 @@ class autocast:
         return stack
 
     def __enter__(self) -> autocast:
-        """Activate the autocast scope and return ``self``.
+        """Activate (or disable) the autocast scope and return ``self``.
 
-        Constructing the engine ``AutocastGuard`` switches AMP on with the
-        configured dtype and records the state it replaced; the guard is
-        kept until :meth:`__exit__`.
+        Constructing the engine ``AutocastGuard`` sets the AMP state for
+        ``self._device_type`` to ``(enabled, dtype)`` and records the state
+        it replaced; the guard is kept until :meth:`__exit__`.
         """
-        if not self._enabled:
-            return self
-        self._guards().append(_C_engine.AutocastGuard(to_engine_dtype(self._dtype)))
+        self._guards().append(
+            _C_engine.AutocastGuard(
+                to_engine_dtype(self._dtype),
+                self._engine_device,
+                self._enabled,
+            )
+        )
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -160,8 +171,6 @@ class autocast:
         rather than whenever the ``autocast`` object is collected.
         Exceptions propagate.
         """
-        if not self._enabled:
-            return
         guard = self._guards().pop()
         del guard  # the last reference — ~AutocastGuard restores the prior state
 
@@ -192,16 +201,22 @@ class autocast:
         return wrapper  # type: ignore[return-value]
 
     @staticmethod
-    def is_autocast_enabled() -> bool:
-        """Return True if autocast is currently active."""
-        return _C_engine.amp_is_active()
+    def is_autocast_enabled(device_type: str | None = None) -> bool:
+        """Return True if autocast is currently active (for ``device_type`` if given)."""
+        if device_type is None:
+            return _C_engine.amp_is_active()
+        return _C_engine.amp_is_active(_to_engine_device(device_type))
 
     @staticmethod
-    def get_autocast_dtype() -> dtype | None:
-        """Return the currently active autocast dtype, or None."""
+    def get_autocast_dtype(device_type: str | None = None) -> dtype | None:
+        """Return the currently active autocast dtype (for ``device_type`` if given), or None."""
         from lucid._dtype import _ENGINE_TO_DTYPE
 
-        eng = _C_engine.amp_active_dtype()
+        eng = (
+            _C_engine.amp_active_dtype()
+            if device_type is None
+            else _C_engine.amp_active_dtype(_to_engine_device(device_type))
+        )
         if eng is None:
             return None
         return _ENGINE_TO_DTYPE.get(eng)
