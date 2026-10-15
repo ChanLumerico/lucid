@@ -8,14 +8,18 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <mlx/ops.h>
 
 #include "../backend/gpu/MlxBridge.h"
 #include "../core/ErrorBuilder.h"
+#include "../core/Half.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 
@@ -291,6 +295,81 @@ inline double round_to_state_scalar(double v, Dtype param_dtype) {
     if (state_scalar_dtype(param_dtype) == Dtype::F64)
         return v;
     return static_cast<double>(static_cast<float>(v));
+}
+
+// Fill a CPU storage buffer of ``n`` elements with ``val`` converted to ``dt``.
+inline void cpu_fill(Storage& s, Dtype dt, std::size_t n, double val) {
+    if (dt == Dtype::F32) {
+        auto* q = cpu_ptr<float>(s);
+        const float v = static_cast<float>(val);
+        for (std::size_t k = 0; k < n; ++k)
+            q[k] = v;
+    } else if (dt == Dtype::F64) {
+        auto* q = cpu_ptr<double>(s);
+        for (std::size_t k = 0; k < n; ++k)
+            q[k] = val;
+    } else if (dt == Dtype::F16 || dt == Dtype::BF16) {
+        auto* q = cpu_ptr<std::uint16_t>(s);
+        const float vf = static_cast<float>(val);
+        const std::uint16_t bits = (dt == Dtype::BF16) ? backend::detail::float_to_bfloat16_bits(vf)
+                                                       : backend::detail::float_to_half_bits(vf);
+        for (std::size_t k = 0; k < n; ++k)
+            q[k] = bits;
+    }
+}
+
+// Dispatch a CPU optimizer step over ``F32``, ``F64``, ``F16``, or ``BF16``
+// parameter / gradient / state buffers.  ``F16`` and ``BF16`` buffers are
+// widened to ``float`` via ``Half.h`` bulk conversions, stepped in ``float``
+// (op-math precision), and narrowed back to ``F16`` / ``BF16`` in place.
+template <typename Fn, typename... StatePtrs>
+inline void dispatch_cpu_step(const char* op,
+                              Dtype dt,
+                              std::size_t n,
+                              Storage& param_s,
+                              const Storage& grad_s,
+                              Fn&& fn,
+                              StatePtrs*... states) {
+    if (dt == Dtype::F32) {
+        fn(cpu_ptr<float>(param_s), cpu_cptr<float>(grad_s),
+           (states ? cpu_ptr<float>(*states) : static_cast<float*>(nullptr))...);
+    } else if (dt == Dtype::F64) {
+        fn(cpu_ptr<double>(param_s), cpu_cptr<double>(grad_s),
+           (states ? cpu_ptr<double>(*states) : static_cast<double*>(nullptr))...);
+    } else if (dt == Dtype::F16 || dt == Dtype::BF16) {
+        const bool is_bf16 = (dt == Dtype::BF16);
+        std::vector<float> p_f32(n);
+        std::vector<float> g_f32(n);
+        backend::detail::half_or_bfloat16_to_float_bulk(cpu_cptr<std::uint16_t>(param_s),
+                                                        p_f32.data(), n, is_bf16);
+        backend::detail::half_or_bfloat16_to_float_bulk(cpu_cptr<std::uint16_t>(grad_s),
+                                                        g_f32.data(), n, is_bf16);
+        constexpr std::size_t kNumStates = sizeof...(StatePtrs);
+        std::array<Storage*, kNumStates> state_arr{states...};
+        std::array<std::vector<float>, kNumStates> state_f32{};
+        for (std::size_t idx = 0; idx < kNumStates; ++idx) {
+            if (state_arr[idx] != nullptr) {
+                state_f32[idx].resize(n);
+                backend::detail::half_or_bfloat16_to_float_bulk(
+                    cpu_cptr<std::uint16_t>(*state_arr[idx]), state_f32[idx].data(), n, is_bf16);
+            }
+        }
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            fn(p_f32.data(), static_cast<const float*>(g_f32.data()),
+               (state_arr[Is] ? state_f32[Is].data() : static_cast<float*>(nullptr))...);
+        }(std::make_index_sequence<kNumStates>{});
+        backend::detail::float_to_half_or_bfloat16_bulk(
+            p_f32.data(), cpu_ptr<std::uint16_t>(param_s), n, is_bf16);
+        for (std::size_t idx = 0; idx < kNumStates; ++idx) {
+            if (state_arr[idx] != nullptr) {
+                backend::detail::float_to_half_or_bfloat16_bulk(
+                    state_f32[idx].data(), cpu_ptr<std::uint16_t>(*state_arr[idx]), n, is_bf16);
+            }
+        }
+    } else {
+        ErrorBuilder(op).not_implemented("dtype not supported (F16/BF16/F32/F64)");
+    }
+    storage_cpu(param_s).bump_version();
 }
 
 }  // namespace lucid::optim_detail

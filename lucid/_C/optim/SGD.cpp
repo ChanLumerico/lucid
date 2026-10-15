@@ -175,7 +175,7 @@ void sgd_step_gpu(GpuStorage& param_g,
 }  // namespace
 
 // Dispatch SGD update to the GPU path or the typed CPU scalar loop.
-// Only F32 and F64 are supported on CPU; other dtypes raise.
+// F16, BF16, F32, and F64 are supported on CPU; other dtypes raise.
 void SGD::update_one(std::size_t slot_idx,
                      std::shared_ptr<TensorImpl>& param,
                      const Storage& grad) {
@@ -189,38 +189,19 @@ void SGD::update_one(std::size_t slot_idx,
         return;
     }
 
-    auto& param_cpu = storage_cpu(param->mutable_storage());
-    const auto& grad_cpu = storage_cpu(grad);
-    CpuStorage* moment_cpu = nullptr;
     // A slot without a buffer is at its first momentum step: the loop
     // writes the gradient into a fresh one.
     const bool first_momentum_step = use_momentum && !holds_buffer(moment_[slot_idx]);
     if (first_momentum_step)
         moment_[slot_idx] = make_zero_storage(param->shape(), param->dtype(), param->device());
-    if (use_momentum) {
-        moment_cpu = &storage_cpu(moment_[slot_idx]);
-    }
-    const std::size_t numel = param_cpu.nbytes / dtype_size(param->dtype());
-
-    switch (param->dtype()) {
-    case Dtype::F32:
-        sgd_step_cpu<float>(reinterpret_cast<float*>(param_cpu.ptr.get()),
-                            reinterpret_cast<const float*>(grad_cpu.ptr.get()),
-                            moment_cpu ? reinterpret_cast<float*>(moment_cpu->ptr.get()) : nullptr,
-                            first_momentum_step, numel, lr_, momentum_, dampening_, weight_decay_,
-                            nesterov_);
-        break;
-    case Dtype::F64:
-        sgd_step_cpu<double>(
-            reinterpret_cast<double*>(param_cpu.ptr.get()),
-            reinterpret_cast<const double*>(grad_cpu.ptr.get()),
-            moment_cpu ? reinterpret_cast<double*>(moment_cpu->ptr.get()) : nullptr,
-            first_momentum_step, numel, lr_, momentum_, dampening_, weight_decay_, nesterov_);
-        break;
-    default:
-        ErrorBuilder("SGD").not_implemented("dtype not supported (F32/F64)");
-    }
-    param_cpu.bump_version();
+    const std::size_t numel = cpu_numel(*param);
+    dispatch_cpu_step(
+        "SGD", param->dtype(), numel, param->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M) {
+            sgd_step_cpu(P, G, M, first_momentum_step, numel, lr_, momentum_, dampening_,
+                         weight_decay_, nesterov_);
+        },
+        use_momentum ? &moment_[slot_idx] : static_cast<Storage*>(nullptr));
 }
 
 // Every buffer a slot holds is exported, including one kept after momentum
@@ -301,37 +282,31 @@ void ASGD::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stora
         pg.bump_version();
     } else {
         const std::size_t n = cpu_numel(*p);
-        auto& p_cpu = storage_cpu(p->mutable_storage());
-        auto step_cpu = [&](auto* P, const auto* G) {
-            using T = std::remove_pointer_t<decltype(P)>;
-            T* A = cpu_ptr<T>(ax_[i]);
-            const T wdT = static_cast<T>(weight_decay_);
-            const T decay = static_cast<T>(1.0 - lambd_ * eta);
-            const T neg_eta = static_cast<T>(-eta);
-            const T muT = static_cast<T>(mu);
-            for (std::size_t k = 0; k < n; ++k) {
-                T g = G[k];
-                if (weight_decay_ != 0.0)
-                    g += wdT * P[k];
-                // Separate statements keep the decay and the step from
-                // being contracted into one rounding.
-                const T decayed = P[k] * decay;
-                P[k] = decayed + neg_eta * g;
-                if (track) {
-                    A[k] = P[k];
-                } else {
-                    const T pull = (P[k] - A[k]) * muT;
-                    A[k] += pull;
+        dispatch_cpu_step(
+            "ASGD", dt, n, p->mutable_storage(), grad,
+            [&](auto* P, const auto* G, auto* A) {
+                using T = std::remove_pointer_t<decltype(P)>;
+                const T wdT = static_cast<T>(weight_decay_);
+                const T decay = static_cast<T>(1.0 - lambd_ * eta);
+                const T neg_eta = static_cast<T>(-eta);
+                const T muT = static_cast<T>(mu);
+                for (std::size_t k = 0; k < n; ++k) {
+                    T g = G[k];
+                    if (weight_decay_ != 0.0)
+                        g += wdT * P[k];
+                    // Separate statements keep the decay and the step from
+                    // being contracted into one rounding.
+                    const T decayed = P[k] * decay;
+                    P[k] = decayed + neg_eta * g;
+                    if (track) {
+                        A[k] = P[k];
+                    } else {
+                        const T pull = (P[k] - A[k]) * muT;
+                        A[k] += pull;
+                    }
                 }
-            }
-        };
-        if (dt == Dtype::F32)
-            step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-        else if (dt == Dtype::F64)
-            step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-        else
-            ErrorBuilder("ASGD").not_implemented("dtype not supported");
-        p_cpu.bump_version();
+            },
+            &ax_[i]);
     }
 
     // Advance the schedule with the slot's own step count and the current

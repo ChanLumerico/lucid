@@ -760,6 +760,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - run half op-math mixed pairs in f32 (LCD-344)
 
+- support f16/bf16 params in CPU optimizer kernels (LCD-71)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

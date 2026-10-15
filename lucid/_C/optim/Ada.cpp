@@ -87,36 +87,29 @@ void Adamax::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Sto
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* M = cpu_ptr<T>(m_[i]);
-        T* U = cpu_ptr<T>(u_[i]);
-        const T b1T = static_cast<T>(beta1_);
-        const T b2T = static_cast<T>(beta2_);
-        const T omb1 = static_cast<T>(1.0 - beta1_);
-        const T epsT = static_cast<T>(eps_);
-        const T wdT = static_cast<T>(weight_decay_);
-        const T step_size = static_cast<T>(lr_ / bc1);
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            M[k] = b1T * M[k] + omb1 * g;
-            const T abs_g_eps = std::abs(g) + epsT;
-            const T b2u = b2T * U[k];
-            // Element-wise max: u = max(beta2 * u, |g| + eps).
-            U[k] = (b2u > abs_g_eps) ? b2u : abs_g_eps;
-            P[k] -= step_size * (M[k] / U[k]);
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("Adamax").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+    dispatch_cpu_step(
+        "Adamax", dt, n, p->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M, auto* U) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            const T b1T = static_cast<T>(beta1_);
+            const T b2T = static_cast<T>(beta2_);
+            const T omb1 = static_cast<T>(1.0 - beta1_);
+            const T epsT = static_cast<T>(eps_);
+            const T wdT = static_cast<T>(weight_decay_);
+            const T step_size = static_cast<T>(lr_ / bc1);
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                M[k] = b1T * M[k] + omb1 * g;
+                const T abs_g_eps = std::abs(g) + epsT;
+                const T b2u = b2T * U[k];
+                // Element-wise max: u = max(beta2 * u, |g| + eps).
+                U[k] = (b2u > abs_g_eps) ? b2u : abs_g_eps;
+                P[k] -= step_size * (M[k] / U[k]);
+            }
+        },
+        &m_[i], &u_[i]);
 }
 
 std::vector<Optimizer::StateSlot> Adamax::state_slots() {
@@ -170,17 +163,7 @@ void Adagrad::init_state_slot(std::size_t i, const std::shared_ptr<TensorImpl>& 
                 ::mlx::core::multiply(mlx_scalar(initial_accumulator_value_, p->dtype()), ones_arr);
             gpu_replace(gpu_get(sum_sq_grad_[i]), std::move(init), p->dtype());
         } else {
-            const std::size_t n = cpu_numel(*p);
-            if (p->dtype() == Dtype::F32) {
-                auto* q = cpu_ptr<float>(sum_sq_grad_[i]);
-                const auto v = static_cast<float>(initial_accumulator_value_);
-                for (std::size_t k = 0; k < n; ++k)
-                    q[k] = v;
-            } else if (p->dtype() == Dtype::F64) {
-                auto* q = cpu_ptr<double>(sum_sq_grad_[i]);
-                for (std::size_t k = 0; k < n; ++k)
-                    q[k] = initial_accumulator_value_;
-            }
+            cpu_fill(sum_sq_grad_[i], p->dtype(), cpu_numel(*p), initial_accumulator_value_);
         }
     }
 }
@@ -209,28 +192,22 @@ void Adagrad::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const St
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* SS = cpu_ptr<T>(sum_sq_grad_[i]);
-        const T clrT = static_cast<T>(clr);
-        const T epsT = static_cast<T>(eps_);
-        const T wdT = static_cast<T>(weight_decay_);
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            SS[k] += g * g;
-            P[k] -= clrT * g / (std::sqrt(SS[k]) + epsT);
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("Adagrad").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+    dispatch_cpu_step(
+        "Adagrad", dt, n, p->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* SS) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            const T clrT = static_cast<T>(clr);
+            const T epsT = static_cast<T>(eps_);
+            const T wdT = static_cast<T>(weight_decay_);
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                SS[k] += g * g;
+                P[k] -= clrT * g / (std::sqrt(SS[k]) + epsT);
+            }
+        },
+        &sum_sq_grad_[i]);
 }
 
 std::vector<Optimizer::StateSlot> Adagrad::state_slots() {
@@ -308,33 +285,26 @@ void Adadelta::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const S
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* SQ = cpu_ptr<T>(sq_avg_[i]);
-        T* AC = cpu_ptr<T>(accumulated_update_[i]);
-        const T lrT = static_cast<T>(lr_);
-        const T rT = static_cast<T>(rho_);
-        const T omrT = static_cast<T>(1.0 - rho_);
-        const T epsT = static_cast<T>(eps_);
-        const T wdT = static_cast<T>(weight_decay_);
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            SQ[k] = rT * SQ[k] + omrT * g * g;
-            const T update = (std::sqrt(AC[k] + epsT) / std::sqrt(SQ[k] + epsT)) * g;
-            AC[k] = rT * AC[k] + omrT * update * update;
-            P[k] -= lrT * update;
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("Adadelta").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+    dispatch_cpu_step(
+        "Adadelta", dt, n, p->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* SQ, auto* AC) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            const T lrT = static_cast<T>(lr_);
+            const T rT = static_cast<T>(rho_);
+            const T omrT = static_cast<T>(1.0 - rho_);
+            const T epsT = static_cast<T>(eps_);
+            const T wdT = static_cast<T>(weight_decay_);
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                SQ[k] = rT * SQ[k] + omrT * g * g;
+                const T update = (std::sqrt(AC[k] + epsT) / std::sqrt(SQ[k] + epsT)) * g;
+                AC[k] = rT * AC[k] + omrT * update * update;
+                P[k] -= lrT * update;
+            }
+        },
+        &sq_avg_[i], &accumulated_update_[i]);
 }
 
 std::vector<Optimizer::StateSlot> Adadelta::state_slots() {

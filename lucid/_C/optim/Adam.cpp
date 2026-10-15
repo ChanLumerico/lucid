@@ -275,31 +275,14 @@ void Adam::update_one(std::size_t slot_idx,
         pg.bump_version();
         return;
     }
-    auto& pc = storage_cpu(param->mutable_storage());
-    const auto& gc = storage_cpu(grad);
-    auto& mc = storage_cpu(m_[slot_idx]);
-    auto& vc = storage_cpu(v_[slot_idx]);
-    CpuStorage* vmc = amsgrad_ ? &storage_cpu(vmax_[slot_idx]) : nullptr;
-    const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
-    switch (param->dtype()) {
-    case Dtype::F32:
-        adam_step_cpu<float>(
-            reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
-            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()),
-            vmc ? reinterpret_cast<float*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
-            eps_, weight_decay_, false, step);
-        break;
-    case Dtype::F64:
-        adam_step_cpu<double>(
-            reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
-            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()),
-            vmc ? reinterpret_cast<double*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
-            eps_, weight_decay_, false, step);
-        break;
-    default:
-        ErrorBuilder("Adam").not_implemented("dtype not supported (F32/F64)");
-    }
-    pc.bump_version();
+    const std::size_t numel = cpu_numel(*param);
+    dispatch_cpu_step(
+        "Adam", param->dtype(), numel, param->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M, auto* V, auto* VM) {
+            adam_step_cpu(P, G, M, V, VM, numel, lr_, beta1_, beta2_, eps_, weight_decay_, false,
+                          step);
+        },
+        &m_[slot_idx], &v_[slot_idx], amsgrad_ ? &vmax_[slot_idx] : static_cast<Storage*>(nullptr));
 }
 
 std::vector<Optimizer::StateSlot> Adam::state_slots() {
@@ -384,31 +367,14 @@ void AdamW::update_one(std::size_t slot_idx,
         pg.bump_version();
         return;
     }
-    auto& pc = storage_cpu(param->mutable_storage());
-    const auto& gc = storage_cpu(grad);
-    auto& mc = storage_cpu(m_[slot_idx]);
-    auto& vc = storage_cpu(v_[slot_idx]);
-    CpuStorage* vmc = amsgrad_ ? &storage_cpu(vmax_[slot_idx]) : nullptr;
-    const std::size_t numel = pc.nbytes / dtype_size(param->dtype());
-    switch (param->dtype()) {
-    case Dtype::F32:
-        adam_step_cpu<float>(
-            reinterpret_cast<float*>(pc.ptr.get()), reinterpret_cast<const float*>(gc.ptr.get()),
-            reinterpret_cast<float*>(mc.ptr.get()), reinterpret_cast<float*>(vc.ptr.get()),
-            vmc ? reinterpret_cast<float*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
-            eps_, weight_decay_, true, step);
-        break;
-    case Dtype::F64:
-        adam_step_cpu<double>(
-            reinterpret_cast<double*>(pc.ptr.get()), reinterpret_cast<const double*>(gc.ptr.get()),
-            reinterpret_cast<double*>(mc.ptr.get()), reinterpret_cast<double*>(vc.ptr.get()),
-            vmc ? reinterpret_cast<double*>(vmc->ptr.get()) : nullptr, numel, lr_, beta1_, beta2_,
-            eps_, weight_decay_, true, step);
-        break;
-    default:
-        ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
-    }
-    pc.bump_version();
+    const std::size_t numel = cpu_numel(*param);
+    dispatch_cpu_step(
+        "AdamW", param->dtype(), numel, param->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M, auto* V, auto* VM) {
+            adam_step_cpu(P, G, M, V, VM, numel, lr_, beta1_, beta2_, eps_, weight_decay_, true,
+                          step);
+        },
+        &m_[slot_idx], &v_[slot_idx], amsgrad_ ? &vmax_[slot_idx] : static_cast<Storage*>(nullptr));
 }
 
 std::vector<Optimizer::StateSlot> AdamW::state_slots() {
@@ -513,37 +479,30 @@ void NAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* M = cpu_ptr<T>(m_[i]);
-        T* V = cpu_ptr<T>(v_[i]);
-        const T b1T = static_cast<T>(beta1_);
-        const T b2T = static_cast<T>(beta2_);
-        const T omb1 = static_cast<T>(1.0 - beta1_);
-        const T omb2 = static_cast<T>(1.0 - beta2_);
-        const T epsT = static_cast<T>(eps_);
-        const T wdT = static_cast<T>(weight_decay_);
-        const T inv_bc2 = static_cast<T>(1.0 / bc2);
-        const T c1 = static_cast<T>(lr_ * (1.0 - mu) / (1.0 - mu_prod));
-        const T c2 = static_cast<T>(lr_ * mu_next / (1.0 - mu_prod_next));
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            M[k] = b1T * M[k] + omb1 * g;
-            V[k] = b2T * V[k] + omb2 * g * g;
-            const T denom = std::sqrt(V[k] * inv_bc2) + epsT;
-            P[k] -= c1 * (g / denom) + c2 * (M[k] / denom);
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("NAdam").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+    dispatch_cpu_step(
+        "NAdam", dt, n, p->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M, auto* V) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            const T b1T = static_cast<T>(beta1_);
+            const T b2T = static_cast<T>(beta2_);
+            const T omb1 = static_cast<T>(1.0 - beta1_);
+            const T omb2 = static_cast<T>(1.0 - beta2_);
+            const T epsT = static_cast<T>(eps_);
+            const T wdT = static_cast<T>(weight_decay_);
+            const T inv_bc2 = static_cast<T>(1.0 / bc2);
+            const T c1 = static_cast<T>(lr_ * (1.0 - mu) / (1.0 - mu_prod));
+            const T c2 = static_cast<T>(lr_ * mu_next / (1.0 - mu_prod_next));
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                M[k] = b1T * M[k] + omb1 * g;
+                V[k] = b2T * V[k] + omb2 * g * g;
+                const T denom = std::sqrt(V[k] * inv_bc2) + epsT;
+                P[k] -= c1 * (g / denom) + c2 * (M[k] / denom);
+            }
+        },
+        &m_[i], &v_[i]);
 }
 
 std::vector<Optimizer::StateSlot> NAdam::state_slots() {
@@ -642,43 +601,36 @@ void RAdam::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         return;
     }
     const std::size_t n = cpu_numel(*p);
-    auto& p_cpu = storage_cpu(p->mutable_storage());
-    auto step_cpu = [&](auto* P, const auto* G) {
-        using T = std::remove_pointer_t<decltype(P)>;
-        T* M = cpu_ptr<T>(m_[i]);
-        T* V = cpu_ptr<T>(v_[i]);
-        const T lrT = static_cast<T>(lr_);
-        const T b1T = static_cast<T>(beta1_);
-        const T b2T = static_cast<T>(beta2_);
-        const T omb1 = static_cast<T>(1.0 - beta1_);
-        const T omb2 = static_cast<T>(1.0 - beta2_);
-        const T epsT = static_cast<T>(eps_);
-        const T wdT = static_cast<T>(weight_decay_);
-        const T inv_bc1 = static_cast<T>(1.0 / bc1);
-        const T bc2_sqT = static_cast<T>(bc2_sqrt);
-        const T r_tT = static_cast<T>(r_t);
-        for (std::size_t k = 0; k < n; ++k) {
-            T g = G[k];
-            if (weight_decay_ != 0.0)
-                g += wdT * P[k];
-            M[k] = b1T * M[k] + omb1 * g;
-            V[k] = b2T * V[k] + omb2 * g * g;
-            const T m_hat = M[k] * inv_bc1;
-            if (use_rect) {
-                const T adaptive = bc2_sqT / (std::sqrt(V[k]) + epsT);
-                P[k] -= lrT * r_tT * m_hat * adaptive;
-            } else {
-                P[k] -= lrT * m_hat;
+    dispatch_cpu_step(
+        "RAdam", dt, n, p->mutable_storage(), grad,
+        [&](auto* P, const auto* G, auto* M, auto* V) {
+            using T = std::remove_pointer_t<decltype(P)>;
+            const T lrT = static_cast<T>(lr_);
+            const T b1T = static_cast<T>(beta1_);
+            const T b2T = static_cast<T>(beta2_);
+            const T omb1 = static_cast<T>(1.0 - beta1_);
+            const T omb2 = static_cast<T>(1.0 - beta2_);
+            const T epsT = static_cast<T>(eps_);
+            const T wdT = static_cast<T>(weight_decay_);
+            const T inv_bc1 = static_cast<T>(1.0 / bc1);
+            const T bc2_sqT = static_cast<T>(bc2_sqrt);
+            const T r_tT = static_cast<T>(r_t);
+            for (std::size_t k = 0; k < n; ++k) {
+                T g = G[k];
+                if (weight_decay_ != 0.0)
+                    g += wdT * P[k];
+                M[k] = b1T * M[k] + omb1 * g;
+                V[k] = b2T * V[k] + omb2 * g * g;
+                const T m_hat = M[k] * inv_bc1;
+                if (use_rect) {
+                    const T adaptive = bc2_sqT / (std::sqrt(V[k]) + epsT);
+                    P[k] -= lrT * r_tT * m_hat * adaptive;
+                } else {
+                    P[k] -= lrT * m_hat;
+                }
             }
-        }
-    };
-    if (dt == Dtype::F32)
-        step_cpu(reinterpret_cast<float*>(p_cpu.ptr.get()), cpu_cptr<float>(grad));
-    else if (dt == Dtype::F64)
-        step_cpu(reinterpret_cast<double*>(p_cpu.ptr.get()), cpu_cptr<double>(grad));
-    else
-        ErrorBuilder("RAdam").not_implemented("dtype not supported");
-    p_cpu.bump_version();
+        },
+        &m_[i], &v_[i]);
 }
 
 std::vector<Optimizer::StateSlot> RAdam::state_slots() {

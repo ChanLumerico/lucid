@@ -61,20 +61,8 @@ _MOVES: dict[str, tuple[str, str]] = {
 }
 
 
-def _case_marks(name: str, move: str) -> list[pytest.MarkDecorator]:
-    if move == "cpu-half" and name not in _PYTHON_SIDE:
-        return [
-            pytest.mark.xfail(
-                strict=True,
-                raises=NotImplementedError,
-                reason="LCD-417: engine CPU optimizers refuse float16",
-            )
-        ]
-    return []
-
-
 _CASES = [
-    pytest.param(name, kwargs, move, marks=_case_marks(name, move), id=f"{name}-{move}")
+    pytest.param(name, kwargs, move, id=f"{name}-{move}")
     for name, kwargs in _OPTIMIZERS
     for move in _MOVES
 ]

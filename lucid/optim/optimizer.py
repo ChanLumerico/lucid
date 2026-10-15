@@ -815,7 +815,16 @@ class Optimizer:
                         step_count = max(step_count, int(v))
                         continue
                     by_name.setdefault(k, [None] * len(params))
-                    by_name[k][slot] = _from_host(v, p._impl.device)
+                    loaded_impl = _from_host(v, p._impl.device)
+                    if (
+                        p._impl.dtype == _C_engine.Dtype.BF16
+                        and loaded_impl.dtype == _C_engine.Dtype.F32
+                        and k not in ("step", "eta", "mu", "mu_product")
+                    ):
+                        loaded_impl = _C_engine.astype(
+                            loaded_impl, _C_engine.Dtype.BF16
+                        )
+                    by_name[k][slot] = loaded_impl
             if by_name:
                 eng.load_state_buffers(list(by_name.items()))
             if step_count and hasattr(eng, "step_count"):
