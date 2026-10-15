@@ -411,3 +411,208 @@ def test_abs_is_forward_only_and_reports_a_zero_log_det():
     transform = T.AbsTransform()
     assert np.allclose(_v(transform(_t(X))), np.abs(X))
     assert np.allclose(_v(transform.log_abs_det_jacobian(_t(X), transform(_t(X)))), 0.0)
+
+
+# ── domain / codomain constraints, support, and boundary clamping (LCD-397) ──
+
+
+def _transform_constraint_cases(ref):
+    rt = ref.distributions.transforms
+    return [
+        (
+            "ExpTransform",
+            T.ExpTransform(),
+            rt.ExpTransform(),
+            [-1.0, 0.0, 2.5],
+            [-1.0, 0.0, 0.5, 2.5],
+        ),
+        (
+            "SigmoidTransform",
+            T.SigmoidTransform(),
+            rt.SigmoidTransform(),
+            [-3.0, 0.0, 3.0],
+            [-0.1, 0.0, 0.5, 1.0, 1.1],
+        ),
+        (
+            "TanhTransform",
+            T.TanhTransform(),
+            rt.TanhTransform(),
+            [-3.0, 0.0, 3.0],
+            [-1.5, -1.0, 0.0, 1.0, 1.5],
+        ),
+        (
+            "AffineTransform",
+            T.AffineTransform(1.0, 2.0),
+            rt.AffineTransform(1.0, 2.0),
+            [-2.0, 0.0, 2.0],
+            [-2.0, 0.0, 2.0],
+        ),
+        (
+            "PowerTransform",
+            T.PowerTransform(_t(2.0)),
+            rt.PowerTransform(ref.tensor(2.0, dtype=ref.float64)),
+            [-1.0, 0.0, 2.0],
+            [-1.0, 0.0, 2.0],
+        ),
+        (
+            "SoftmaxTransform",
+            T.SoftmaxTransform(),
+            rt.SoftmaxTransform(),
+            [[0.0, 1.0, -1.0], [2.0, 3.0, 4.0]],
+            [[0.2, 0.3, 0.5], [-0.1, 0.6, 0.5], [0.5, 0.5, 0.5]],
+        ),
+        (
+            "StickBreakingTransform",
+            T.StickBreakingTransform(),
+            rt.StickBreakingTransform(),
+            [[0.0, 1.0], [-1.0, 2.0]],
+            [[0.2, 0.3, 0.5], [-0.1, 0.6, 0.5], [0.5, 0.5, 0.5]],
+        ),
+        (
+            "LowerCholeskyTransform",
+            T.LowerCholeskyTransform(),
+            rt.LowerCholeskyTransform(),
+            [[[1.0, 0.0], [0.5, 2.0]], [[1.0, 2.0], [0.5, -1.0]]],
+            [[[1.0, 0.0], [0.5, 2.0]], [[1.0, 2.0], [0.5, 2.0]], [[1.0, 0.0], [0.5, -1.0]]],
+        ),
+        (
+            "CorrCholeskyTransform",
+            T.CorrCholeskyTransform(3),
+            rt.CorrCholeskyTransform(),
+            [[0.1, -0.2, 0.3], [0.0, 0.0, 0.0]],
+            [
+                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                [[1.0, 0.5, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                [[2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            ],
+        ),
+        (
+            "AbsTransform",
+            T.AbsTransform(),
+            rt.AbsTransform(),
+            [-2.0, 0.0, 2.0],
+            [-1.0, 0.0, 2.0],
+        ),
+        (
+            "IndependentTransform",
+            T.IndependentTransform(T.ExpTransform(), 1),
+            rt.IndependentTransform(rt.ExpTransform(), 1),
+            [[-1.0, 0.5], [0.0, 2.0]],
+            [[0.5, 2.0], [-1.0, 2.0], [0.0, 1.0]],
+        ),
+        (
+            "ReshapeTransform",
+            T.ReshapeTransform((2, 3), (6,)),
+            rt.ReshapeTransform((2, 3), (6,)),
+            [np.zeros((2, 3)).tolist(), np.ones((2, 3)).tolist()],
+            [np.zeros((6,)).tolist(), np.ones((6,)).tolist()],
+        ),
+        (
+            "CumulativeDistributionTransform",
+            T.CumulativeDistributionTransform(D.Exponential(_t(1.0))),
+            rt.CumulativeDistributionTransform(
+                ref.distributions.Exponential(ref.tensor(1.0, dtype=ref.float64))
+            ),
+            [-1.0, 0.0, 1.5],
+            [-0.5, 0.0, 0.5, 1.0, 1.5],
+        ),
+        (
+            "StackTransform",
+            T.StackTransform([T.ExpTransform(), T.SigmoidTransform()], dim=-1),
+            rt.StackTransform([rt.ExpTransform(), rt.SigmoidTransform()], dim=-1),
+            [[-1.0, 0.0], [2.0, -2.0]],
+            [[1.5, 0.5], [-1.0, 0.5], [1.5, 1.5], [0.0, 0.5]],
+        ),
+        (
+            "CatTransform",
+            T.CatTransform(
+                [T.ExpTransform(), T.SigmoidTransform()], dim=-1, lengths=[2, 1]
+            ),
+            rt.CatTransform(
+                [rt.ExpTransform(), rt.SigmoidTransform()], dim=-1, lengths=[2, 1]
+            ),
+            [[-1.0, 0.0, 1.0], [2.0, -2.0, 0.0]],
+            [[1.5, 0.5, 0.5], [-1.0, 0.5, 0.5], [1.5, 0.5, 1.5]],
+        ),
+        (
+            "ComposeTransform",
+            T.ComposeTransform([T.ExpTransform(), T.IndependentTransform(T.SigmoidTransform(), 1)]),
+            rt.ComposeTransform([rt.ExpTransform(), rt.IndependentTransform(rt.SigmoidTransform(), 1)]),
+            [[-1.0, 0.0], [1.0, 2.0]],
+            [[0.2, 0.8], [-0.1, 0.8], [0.2, 1.2]],
+        ),
+        (
+            "InverseTransform(ExpTransform)",
+            T.ExpTransform().inv,
+            rt.ExpTransform().inv,
+            [-1.0, 0.0, 0.5, 2.5],
+            [-1.0, 0.0, 2.5],
+        ),
+    ]
+
+
+def test_every_transform_declares_matching_domain_and_codomain(ref):
+    for name, ours, theirs, dom_vals, cod_vals in _transform_constraint_cases(ref):
+        assert ours.domain.event_dim == theirs.domain.event_dim, f"{name} domain.event_dim"
+        assert ours.domain.is_discrete == theirs.domain.is_discrete, f"{name} domain.is_discrete"
+        assert ours.codomain.event_dim == theirs.codomain.event_dim, f"{name} codomain.event_dim"
+        assert (
+            ours.codomain.is_discrete == theirs.codomain.is_discrete
+        ), f"{name} codomain.is_discrete"
+
+        x_l = _t(dom_vals)
+        x_r = ref.tensor(np.asarray(dom_vals, dtype=np.float64))
+        assert np.array_equal(
+            _v(ours.domain.check(x_l)),
+            theirs.domain.check(x_r).numpy(),
+        ), f"{name} domain.check mismatch"
+
+        y_l = _t(cod_vals)
+        y_r = ref.tensor(np.asarray(cod_vals, dtype=np.float64))
+        assert np.array_equal(
+            _v(ours.codomain.check(y_l)),
+            theirs.codomain.check(y_r).numpy(),
+        ), f"{name} codomain.check mismatch"
+
+
+def test_transformed_distribution_reexport_and_support_validation(ref):
+    from lucid.distributions.transformed_distribution import (
+        TransformedDistribution as DirectTD,
+    )
+
+    assert DirectTD is T.TransformedDistribution
+    assert DirectTD is D.TransformedDistribution
+
+    dist = DirectTD(
+        D.Normal(_t(0.0), _t(1.0)),
+        [T.AffineTransform(0.0, 1.0), T.ExpTransform()],
+        validate_args=True,
+    )
+    ref_dist = ref.distributions.TransformedDistribution(
+        ref.distributions.Normal(ref.tensor(0.0), ref.tensor(1.0)),
+        [ref.distributions.transforms.AffineTransform(0.0, 1.0), ref.distributions.transforms.ExpTransform()],
+        validate_args=True,
+    )
+    assert dist.support is not None
+    assert dist.support.event_dim == ref_dist.support.event_dim
+    for bad in (-1.0, 0.0):
+        with pytest.raises(ValueError):
+            dist.log_prob(_t(bad))
+    assert np.isclose(
+        float(_v(dist.log_prob(_t(1.5))).ravel()[0]),
+        float(ref_dist.log_prob(ref.tensor(1.5)).item()),
+        atol=1e-6,
+    )
+
+
+@pytest.mark.parametrize("dtype_name", ["float32", "float64"])
+def test_sigmoid_transform_inverse_clamps_to_finfo_bounds(dtype_name, ref):
+    l_dtype = getattr(lucid, dtype_name)
+    r_dtype = getattr(ref, dtype_name)
+    pts_l = lucid.tensor([0.0, 1e-6, 0.5, 1.0 - 1e-6, 1.0], dtype=l_dtype)
+    pts_r = ref.tensor([0.0, 1e-6, 0.5, 1.0 - 1e-6, 1.0], dtype=r_dtype)
+    got = _v(T.SigmoidTransform()._inverse(pts_l))
+    want = ref.distributions.transforms.SigmoidTransform()._inverse(pts_r).numpy()
+    assert np.isfinite(got).all()
+    assert np.allclose(got, want, rtol=1e-6, atol=1e-6)
+

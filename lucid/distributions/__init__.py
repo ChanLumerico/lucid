@@ -31,6 +31,7 @@ from lucid.distributions.relaxed import (
     RelaxedOneHotCategorical,
 )
 from lucid.distributions.student import StudentT
+from lucid.distributions.transformed_distribution import TransformedDistribution
 from lucid.distributions.transforms import (
     AbsTransform,
     AffineTransform,
@@ -49,7 +50,6 @@ from lucid.distributions.transforms import (
     StickBreakingTransform,
     TanhTransform,
     Transform,
-    TransformedDistribution,
 )
 from lucid.distributions.extra import (
     ContinuousBernoulli,

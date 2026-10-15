@@ -724,6 +724,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - translate std::invalid_argument to InvalidArgument
 
+- track transform domain and shapes (LCD-397)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

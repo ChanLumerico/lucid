@@ -707,3 +707,126 @@ def independent(
     tensor([True, False], dtype=lucid.bool)
     """
     return _IndependentConstraint(base_constraint, reinterpreted_batch_ndims)
+
+
+@final
+class _Cat(Constraint):
+    """Apply a sequence of constraints to slices along ``dim`` of sizes ``lengths``."""
+
+    def __init__(
+        self,
+        cseq: list[Constraint],
+        dim: int = 0,
+        lengths: list[int] | None = None,
+    ) -> None:
+        """Store the per-slice constraints, concatenation axis, and slice lengths."""
+        self.cseq = list(cseq)
+        self._explicit_lengths = lengths is not None
+        if lengths is None:
+            lengths = [1] * len(self.cseq)
+        self.lengths = list(lengths)
+        if len(self.lengths) != len(self.cseq):
+            raise ValueError(
+                f"cat: lengths ({len(self.lengths)}) must match cseq ({len(self.cseq)})"
+            )
+        self.dim = dim
+        self.is_discrete = any(c.is_discrete for c in self.cseq)
+        self.event_dim = max((c.event_dim for c in self.cseq), default=0)
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` where each slice along ``dim`` satisfies its constraint."""
+        if not (-value.ndim <= self.dim < value.ndim):
+            raise ValueError(
+                f"cat: dim {self.dim} out of range for value with {value.ndim} dimensions"
+            )
+        lengths = self.lengths
+        if not self._explicit_lengths:
+            total = int(value.shape[self.dim])
+            n = len(self.cseq)
+            if total != n and n > 0 and total % n == 0:
+                lengths = [total // n] * n
+        checks: list[Tensor] = []
+        start = 0
+        for constr, length in zip(self.cseq, lengths, strict=True):
+            v = value.narrow(self.dim, start, length)
+            checks.append(constr.check(v))
+            start = start + length
+        return lucid.cat(checks, dim=self.dim)
+
+
+@final
+class _Stack(Constraint):
+    """Apply a sequence of constraints to indexed slices along ``dim``."""
+
+    def __init__(self, cseq: list[Constraint], dim: int = 0) -> None:
+        """Store the per-slice constraints and stacking dimension."""
+        self.cseq = list(cseq)
+        self.dim = dim
+        self.is_discrete = any(c.is_discrete for c in self.cseq)
+        event_dim = max((c.event_dim for c in self.cseq), default=0)
+        if self.dim + event_dim < 0:
+            event_dim += 1
+        self.event_dim = event_dim
+
+    @override
+    def check(self, value: Tensor) -> Tensor:
+        """Return ``True`` where each slice along ``dim`` satisfies its constraint."""
+        if not (-value.ndim <= self.dim < value.ndim):
+            raise ValueError(
+                f"stack: dim {self.dim} out of range for value with {value.ndim} dimensions"
+            )
+        vs = value.unbind(self.dim)
+        if len(vs) != len(self.cseq):
+            raise ValueError(
+                f"stack: got {len(vs)} slices along dim {self.dim} but "
+                f"{len(self.cseq)} constraints"
+            )
+        return lucid.stack(
+            [constr.check(v) for v, constr in zip(vs, self.cseq, strict=True)],
+            dim=self.dim,
+        )
+
+
+def cat(
+    cseq: list[Constraint],
+    dim: int = 0,
+    lengths: list[int] | None = None,
+) -> Constraint:
+    """Apply a sequence of constraints to contiguous slices along ``dim``.
+
+    Parameters
+    ----------
+    cseq : list[Constraint]
+        One constraint per slice along ``dim``.
+    dim : int, optional
+        Dimension along which the slices are concatenated.  Default ``0``.
+    lengths : list[int] or None, optional
+        Length of each slice along ``dim``.  Defaults to ``[1, ..., 1]``.
+
+    Returns
+    -------
+    Constraint
+        Composite constraint checking each slice against the corresponding
+        entry of ``cseq``.
+    """
+    return _Cat(cseq, dim=dim, lengths=lengths)
+
+
+def stack(cseq: list[Constraint], dim: int = 0) -> Constraint:
+    """Apply a sequence of constraints to indexed slices along ``dim``.
+
+    Parameters
+    ----------
+    cseq : list[Constraint]
+        One constraint per index along ``dim``.
+    dim : int, optional
+        Dimension along which the slices are stacked.  Default ``0``.
+
+    Returns
+    -------
+    Constraint
+        Composite constraint checking each slice against the corresponding
+        entry of ``cseq``.
+    """
+    return _Stack(cseq, dim=dim)

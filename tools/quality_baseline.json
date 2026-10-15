@@ -198,7 +198,7 @@
     "lucid/compile/_optim/compiler.py": 752,
     "lucid/coreml/_build.py": 1726,
     "lucid/coreml/_emit.py": 1176,
-    "lucid/distributions/transforms.py": 558,
+    "lucid/distributions/transforms.py": 281,
     "lucid/fft/__init__.py": 379,
     "lucid/linalg/__init__.py": 2356,
     "lucid/models/_utils/_detection.py": 1329,
@@ -377,7 +377,6 @@
     "lucid/__init__.py": 1,
     "lucid/_factories/_generator.py": 1,
     "lucid/distributions/independent.py": 1,
-    "lucid/distributions/transforms.py": 1,
     "lucid/models/vision/crossvit/_model.py": 1,
     "lucid/utils/data/dataset.py": 1,
     "lucid/utils/data/sampler.py": 1,
@@ -1728,8 +1727,7 @@
     "lucid/models/_utils/_detection.py": 1
    },
    "unused-property": {
-    "lucid/distributions/distribution.py": 1,
-    "lucid/distributions/transforms.py": 1
+    "lucid/distributions/distribution.py": 1
    },
    "unused-variable": {
     "lucid/__init__.py": 1,
