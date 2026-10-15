@@ -1010,7 +1010,11 @@ class CompiledModule[**P, R](_ModuleWrapper):
             else:
                 _fallback_notice("lowering", str(why))
             return None
-        return cast(_ExecutableLike, exe) if exe is not None else None
+        if exe is None:
+            if not use_dynamic:
+                _fallback_notice("lowering", "backend returned no executable")
+            return None
+        return cast(_ExecutableLike, exe)
 
     def _compile_for(
         self,
@@ -1056,6 +1060,11 @@ class CompiledModule[**P, R](_ModuleWrapper):
             getattr(m, "training", False) and getattr(m, "track_running_stats", False)
             for m in self._model.modules()
         ):
+            _fallback_notice(
+                "batch-norm-training",
+                "forward-only compile cannot advance BatchNorm running stats in training mode "
+                "(use make_step or fused_step for compiled training)",
+            )
             return None
 
         # kwargs are traced as-is (line below) and their tensor values are
@@ -1079,6 +1088,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
         graph = tracer.graph
         if not graph.ops:
+            _fallback_notice("empty-trace", "traced call recorded no operations")
             return None
 
         # If this graph has attention, make sure the fused-attention workaround
@@ -1154,6 +1164,10 @@ class CompiledModule[**P, R](_ModuleWrapper):
                 # Should not happen — the builder only emits placeholder
                 # ids that are in the external_feeds set.  Treat as a
                 # compile failure.
+                _fallback_notice(
+                    "unresolvable-feed",
+                    f"executable input id {tid} is not in traced external_feeds",
+                )
                 return None
             input_source.append(feed_source.get(id(impl)))
 

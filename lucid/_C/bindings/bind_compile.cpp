@@ -454,11 +454,14 @@ void register_compile(py::module_& m) {
             for (const auto& [tid, impl] : feeds)
                 if (impl)
                     feed_meta.emplace(tid, std::make_pair(impl->shape(), impl->dtype()));
+            lucid::compile::TraceIdMap id_map;
             lucid::compile::CacheKey key =
-                lucid::compile::make_cache_key(graph, feed_meta, explicit_outputs);
+                lucid::compile::make_cache_key(graph, feed_meta, explicit_outputs, &id_map);
 
             if (auto hit = cache.find(key)) {
-                return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
+                if (auto local = lucid::compile::localize_executable(hit.get(), id_map)) {
+                    return py::cast(std::make_shared<PyCompiledExecutable>(std::move(local)));
+                }
             }
 
             // ``LUCID_COMPILE_DISK_CACHE=1`` opt-in: before falling
@@ -502,8 +505,12 @@ void register_compile(py::module_& m) {
                 lucid::compile::CompiledExecutable* disk_hit =
                     lucid::compile::load_executable(disk_path, &load_err);
                 if (disk_hit != nullptr) {
-                    auto hit = cache.insert(key, lucid::compile::share_executable(disk_hit));
-                    return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
+                    auto shared_disk = lucid::compile::share_executable(disk_hit);
+                    if (auto local =
+                            lucid::compile::localize_executable(shared_disk.get(), id_map)) {
+                        cache.insert(key, std::move(shared_disk));
+                        return py::cast(std::make_shared<PyCompiledExecutable>(std::move(local)));
+                    }
                 }
             }
 
@@ -516,10 +523,14 @@ void register_compile(py::module_& m) {
                     throw std::runtime_error(err);
                 return py::none();
             }
-            auto hit = cache.insert(key, lucid::compile::share_executable(exe));
-            if (disk_cache_enabled && !disk_path.empty())
-                (void)lucid::compile::save_executable(hit.get(), disk_path);
-            return py::cast(std::make_shared<PyCompiledExecutable>(std::move(hit)));
+            auto raw_shared = lucid::compile::share_executable(exe);
+            if (auto canon_shared =
+                    lucid::compile::canonicalize_executable(raw_shared.get(), id_map)) {
+                auto hit = cache.insert(key, std::move(canon_shared));
+                if (disk_cache_enabled && !disk_path.empty())
+                    (void)lucid::compile::save_executable(hit.get(), disk_path);
+            }
+            return py::cast(std::make_shared<PyCompiledExecutable>(std::move(raw_shared)));
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("dynamic_batch") = false,
         py::arg("param_ids") = std::vector<lucid::compile::TensorId>{},

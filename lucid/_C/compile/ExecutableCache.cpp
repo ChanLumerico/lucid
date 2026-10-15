@@ -62,6 +62,72 @@ inline bool same_op_attrs(const std::vector<std::pair<std::string, AttributeValu
         return x.first == y.first && same_attribute_value(x.second, y.second);
     });
 }
+
+inline std::int64_t intern_canonical_id(TraceIdMap& map, TensorId id) {
+    if (id.v < 0)
+        return id.v;
+    auto [it, inserted] =
+        map.to_canonical.emplace(id.v, static_cast<std::int64_t>(map.to_raw.size()));
+    if (inserted)
+        map.to_raw.push_back(id);
+    return it->second;
+}
+
+inline std::vector<std::pair<std::string, AttributeValue>> sorted_node_attrs(const OpNode& node) {
+    std::vector<std::pair<std::string, AttributeValue>> sorted(node.attrs.begin(),
+                                                               node.attrs.end());
+    std::sort(sorted.begin(), sorted.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    return sorted;
+}
+
+inline std::vector<FeedSig>
+build_feed_sigs(const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta,
+                TraceIdMap& map) {
+    // Any external feed not referenced by ``graph.ops`` or ``explicit_outputs``
+    // (for example, an unused RNG draw that still occupies a placeholder slot
+    // in ``MpsBuilder::compile_trace``) receives a deterministic canonical id
+    // in ascending raw-id order so the key distinguishes traces with extra
+    // feeds and ``map`` covers every slot of ``exe->input_ids``.
+    std::vector<TensorId> unreferenced;
+    for (const auto& [tid, _] : feed_meta) {
+        if (map.to_canonical.find(tid.v) == map.to_canonical.end())
+            unreferenced.push_back(tid);
+    }
+    std::sort(unreferenced.begin(), unreferenced.end());
+    for (TensorId tid : unreferenced)
+        intern_canonical_id(map, tid);
+
+    std::vector<FeedSig> feeds;
+    feeds.reserve(feed_meta.size());
+    for (const auto& [tid, meta] : feed_meta) {
+        const auto it = map.to_canonical.find(tid.v);
+        if (it != map.to_canonical.end())
+            feeds.push_back(FeedSig{it->second, meta.first, meta.second});
+    }
+    std::sort(feeds.begin(), feeds.end(),
+              [](const FeedSig& a, const FeedSig& b) { return a.canonical_id < b.canonical_id; });
+    return feeds;
+}
+
+inline bool remap_to_canonical(std::vector<TensorId>& ids, const TraceIdMap& id_map) {
+    for (auto& tid : ids) {
+        const auto it = id_map.to_canonical.find(tid.v);
+        if (it == id_map.to_canonical.end())
+            return false;
+        tid = TensorId{it->second};
+    }
+    return true;
+}
+
+inline bool remap_to_raw(std::vector<TensorId>& ids, const TraceIdMap& id_map) {
+    for (auto& tid : ids) {
+        if (tid.v < 0 || static_cast<std::size_t>(tid.v) >= id_map.to_raw.size())
+            return false;
+        tid = id_map.to_raw[static_cast<std::size_t>(tid.v)];
+    }
+    return true;
+}
 }  // namespace
 
 bool CacheKey::operator==(const CacheKey& other) const noexcept {
@@ -115,7 +181,8 @@ std::size_t CacheKeyHash::operator()(const CacheKey& key) const noexcept {
 
 CacheKey make_cache_key(const TraceGraph& graph,
                         const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta,
-                        const std::vector<TensorId>& explicit_outputs) {
+                        const std::vector<TensorId>& explicit_outputs,
+                        TraceIdMap* id_map) {
     CacheKey key;
     key.op_names.reserve(graph.ops.size());
     key.op_inputs.reserve(graph.ops.size());
@@ -123,23 +190,17 @@ CacheKey make_cache_key(const TraceGraph& graph,
     key.output_dtypes.reserve(graph.ops.size());
     key.op_attrs.reserve(graph.ops.size());
 
-    // Tensor ids renumbered by first appearance, so the wiring compares
-    // across traces that drew different ids for the same graph.
-    std::unordered_map<std::int64_t, std::int64_t> canon;
-    auto canonical = [&canon](TensorId id) {
-        return canon.emplace(id.v, static_cast<std::int64_t>(canon.size())).first->second;
-    };
-
+    TraceIdMap local_map;
     Device device = Device::CPU;
     for (const auto& node : graph.ops) {
         key.op_names.push_back(node.name);
         std::vector<std::int64_t> inputs;
         inputs.reserve(node.inputs.size());
         for (const auto& id : node.inputs)
-            inputs.push_back(canonical(id));
+            inputs.push_back(intern_canonical_id(local_map, id));
         key.op_inputs.push_back(std::move(inputs));
         for (const auto& out : node.outputs)
-            canonical(out.id);
+            intern_canonical_id(local_map, out.id);
         if (!node.outputs.empty()) {
             const auto& meta = node.outputs[0];
             key.output_shapes.push_back(meta.shape);
@@ -149,34 +210,20 @@ CacheKey make_cache_key(const TraceGraph& graph,
             key.output_shapes.emplace_back();
             key.output_dtypes.push_back(Dtype::F32);
         }
-        // Serialise attrs in sorted-key order so cache lookup is
-        // independent of std::unordered_map insertion order.
-        std::vector<std::pair<std::string, AttributeValue>> sorted_attrs;
-        sorted_attrs.reserve(node.attrs.size());
-        for (const auto& kv : node.attrs)
-            sorted_attrs.emplace_back(kv.first, kv.second);
-        std::sort(sorted_attrs.begin(), sorted_attrs.end(),
-                  [](const auto& a, const auto& b) { return a.first < b.first; });
-        key.op_attrs.push_back(std::move(sorted_attrs));
+        key.op_attrs.push_back(sorted_node_attrs(node));
     }
     key.device = device;
 
-    // Feeds in the walk's own numbering, so the order depends on how the
-    // graph reads them and not on the ids this trace happened to draw.
-    for (const auto& [tid, meta] : feed_meta) {
-        const auto it = canon.find(tid.v);
-        if (it == canon.end())
-            continue;  // no op reads it — it cannot reach a placeholder
-        key.feeds.push_back(FeedSig{it->second, meta.first, meta.second});
-    }
-    std::sort(key.feeds.begin(), key.feeds.end(),
-              [](const FeedSig& a, const FeedSig& b) { return a.canonical_id < b.canonical_id; });
-
     // Requested outputs in the same numbering; an id the walk never saw
-    // (a feed returned as-is) still gets a stable number from ``canonical``.
+    // (a feed returned as-is) still gets a stable number before ``feed_meta``
+    // is canonicalized below.
     key.outputs.reserve(explicit_outputs.size());
     for (const auto& id : explicit_outputs)
-        key.outputs.push_back(canonical(id));
+        key.outputs.push_back(intern_canonical_id(local_map, id));
+
+    key.feeds = build_feed_sigs(feed_meta, local_map);
+    if (id_map != nullptr)
+        *id_map = std::move(local_map);
     return key;
 }
 
@@ -184,6 +231,26 @@ SharedExecutable share_executable(CompiledExecutable* exec) {
     if (exec == nullptr)
         return {};
     return SharedExecutable(exec, [](CompiledExecutable* e) { destroy_executable(e); });
+}
+
+SharedExecutable canonicalize_executable(const CompiledExecutable* exe, const TraceIdMap& id_map) {
+    if (exe == nullptr)
+        return {};
+    std::vector<TensorId> canon_in = executable_input_ids(exe);
+    std::vector<TensorId> canon_out = executable_output_ids(exe);
+    if (!remap_to_canonical(canon_in, id_map) || !remap_to_canonical(canon_out, id_map))
+        return {};
+    return share_executable(relabel_executable(exe, std::move(canon_in), std::move(canon_out)));
+}
+
+SharedExecutable localize_executable(const CompiledExecutable* exe, const TraceIdMap& id_map) {
+    if (exe == nullptr)
+        return {};
+    std::vector<TensorId> raw_in = executable_input_ids(exe);
+    std::vector<TensorId> raw_out = executable_output_ids(exe);
+    if (!remap_to_raw(raw_in, id_map) || !remap_to_raw(raw_out, id_map))
+        return {};
+    return share_executable(relabel_executable(exe, std::move(raw_in), std::move(raw_out)));
 }
 
 ExecutableCache::~ExecutableCache() {

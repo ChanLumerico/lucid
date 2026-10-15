@@ -83,6 +83,16 @@ LUCID_API std::vector<std::string> executable_feed_names(const CompiledExecutabl
 // ARC-strong reference held on the wrapped ``MPSGraphExecutable*``.
 LUCID_API void destroy_executable(CompiledExecutable* exe);
 
+// Return a shallow copy of ``exe`` sharing the underlying
+// ``MPSGraphExecutable*`` (and any retained ``source_graph``) and all
+// shape/dtype/slot metadata, with ``input_ids`` and ``output_ids``
+// replaced by the given vectors.  Returns ``nullptr`` when ``exe`` is
+// ``nullptr`` or when the replacement vector lengths do not match the
+// existing ``input_ids`` / ``output_ids`` lengths.
+LUCID_API CompiledExecutable* relabel_executable(const CompiledExecutable* exe,
+                                                 std::vector<TensorId> input_ids,
+                                                 std::vector<TensorId> output_ids);
+
 // Run a compiled executable.
 //
 // Parameters

@@ -121,6 +121,24 @@ struct LUCID_API CacheKeyHash {
     std::size_t operator()(const CacheKey& key) const noexcept;
 };
 
+// Bidirectional mapping between a trace's raw :type:`TensorId` values and
+// the canonical first-appearance numbering minted by :func:`make_cache_key`.
+//
+// The session :class:`ExecutableCache` stores each cached executable with
+// its ``input_ids`` and ``output_ids`` translated into canonical indices
+// ``0 .. to_raw.size() - 1`` via :func:`canonicalize_executable`, and each
+// caller of ``compile_or_cached`` receives a copy relabelled into that
+// caller's own raw :type:`TensorId` space via :func:`localize_executable`.
+// Without this translation, a session-cache hit returned an executable
+// whose ``input_ids`` / ``output_ids`` carried the *first* trace's raw ids
+// — which either failed feed lookup in the second trace (silently dropping
+// the second callable to eager) or bound feeds in the wrong order when an
+// earlier RNG draw or folded constant shifted raw ids (LCD-454).
+struct LUCID_API TraceIdMap {
+    std::unordered_map<std::int64_t, std::int64_t> to_canonical;
+    std::vector<TensorId> to_raw;
+};
+
 // Build a :class:`CacheKey` from a :class:`TraceGraph`.
 //
 // Walks ``graph.ops`` once, copying the name + first-output meta from
@@ -130,13 +148,16 @@ struct LUCID_API CacheKeyHash {
 // hashing).
 //
 // ``feed_meta`` maps each external-feed id to its shape and dtype; it
-// fills :attr:`CacheKey::feeds`.  A feed no op reads is left out.
+// fills :attr:`CacheKey::feeds`.
 // ``explicit_outputs`` are the trace ids the caller will read back, in
 // order; they fill :attr:`CacheKey::outputs`.
+// When ``id_map`` is non-null, it is populated with the raw-to-canonical
+// and canonical-to-raw :type:`TensorId` bijection for this trace.
 LUCID_API CacheKey
 make_cache_key(const TraceGraph& graph,
                const std::unordered_map<TensorId, std::pair<Shape, Dtype>>& feed_meta = {},
-               const std::vector<TensorId>& explicit_outputs = {});
+               const std::vector<TensorId>& explicit_outputs = {},
+               TraceIdMap* id_map = nullptr);
 
 // Shared ownership of a compiled executable.  The last holder — the cache,
 // or a Python wrapper that took it out of the cache — releases it through
@@ -145,6 +166,20 @@ using SharedExecutable = std::shared_ptr<CompiledExecutable>;
 
 // Take ownership of ``exec`` (``nullptr`` gives an empty pointer).
 LUCID_API SharedExecutable share_executable(CompiledExecutable* exec);
+
+// Return a copy of ``exe`` whose ``input_ids`` and ``output_ids`` have been
+// translated from the trace's raw :type:`TensorId` space into canonical
+// indices via ``id_map.to_canonical``.  Returns an empty pointer if ``exe``
+// is null or any id is absent from ``id_map``.
+LUCID_API SharedExecutable canonicalize_executable(const CompiledExecutable* exe,
+                                                   const TraceIdMap& id_map);
+
+// Return a copy of a canonicalized ``exe`` whose ``input_ids`` and
+// ``output_ids`` have been translated from canonical indices back into the
+// caller's raw :type:`TensorId` space via ``id_map.to_raw``.  Returns an
+// empty pointer if ``exe`` is null or any canonical index is out of range.
+LUCID_API SharedExecutable localize_executable(const CompiledExecutable* exe,
+                                               const TraceIdMap& id_map);
 
 // Bounded-LRU cache of compiled MPSGraph executables.
 //

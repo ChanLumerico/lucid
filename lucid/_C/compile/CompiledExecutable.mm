@@ -146,6 +146,35 @@ void destroy_executable(CompiledExecutable* exe) {
     delete exe;
 }
 
+CompiledExecutable* relabel_executable(const CompiledExecutable* exe,
+                                       std::vector<TensorId> input_ids,
+                                       std::vector<TensorId> output_ids) {
+    if (exe == nullptr)
+        return nullptr;
+    if (input_ids.size() != exe->input_ids.size() || output_ids.size() != exe->output_ids.size())
+        return nullptr;
+    auto* copy = new CompiledExecutable();
+    copy->executable = exe->executable;
+    if (exe->source_graph != nullptr) {
+        @autoreleasepool {
+            MPSGraph* g = (__bridge MPSGraph*)exe->source_graph;
+            copy->source_graph = (__bridge_retained void*)g;
+        }
+    }
+    copy->input_ids = std::move(input_ids);
+    copy->output_ids = std::move(output_ids);
+    copy->input_shapes = exe->input_shapes;
+    copy->input_dtypes = exe->input_dtypes;
+    copy->output_shapes = exe->output_shapes;
+    copy->output_dtypes = exe->output_dtypes;
+    copy->device = exe->device;
+    copy->grad_output_ids = exe->grad_output_ids;
+    copy->dynamic_batch = exe->dynamic_batch;
+    copy->static_feed_slots = exe->static_feed_slots;
+    copy->feed_order = exe->feed_order;
+    return copy;
+}
+
 // Helpers shared with Linear emitter / MpsBuilder (defined here so the
 // .mm can use them; not exported to other TUs).
 namespace detail {
