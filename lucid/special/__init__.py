@@ -93,7 +93,7 @@ def erfcx(x: Tensor) -> Tensor:
     >>> erfcx(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([1., 0.4276, 0.1107])
     """
-    return _erfcx_stable(x)
+    return _in_float32(_erfcx_stable, _real(x))
 
 
 # Every scaled special function below had the same defect: it was written
@@ -191,13 +191,14 @@ def i0e(x: Tensor) -> Tensor:
     >>> i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))
     tensor([1., 0.4658, 0.1835, 0.08978])
     """
+    x = _real(x)
     if x.dtype == lucid.float64:
         return _bessel._i0e(x)
+    return _in_float32(_i0e_as_fit, x)
+
+
+def _i0e_as_fit(x: Tensor) -> Tensor:
     ax = lucid.abs(x)
-    # ``i0``'s own large branch is ``P(3.75/|x|) · exp(|x|) / √|x|``, so the
-    # scaled value is that polynomial over the square root and the
-    # exponential never appears.  Below the split the direct form is safe:
-    # ``exp(-|x|)`` is at most 1 and ``i0`` is at most ``i0(3.75)``.
     xs = lucid.clamp(ax, max=3.75)
     small = lucid.exp(-xs) * lucid.i0(xs)
     big = lucid.clamp(ax, min=3.75)
@@ -276,31 +277,23 @@ def i1(x: Tensor) -> Tensor:
     >>> i1(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.5652, 24.34])
     """
+    x = _real(x)
     if x.dtype == lucid.float64:
         return _bessel._i1(x)
     return _in_float32(_i1_as_fit, x)
 
 
 def _i1_as_fit(x: Tensor) -> Tensor:
-    """:func:`i1` by the Abramowitz & Stegun 9.8.3/9.8.4 fits, in float32.
-
-    A 16-bit argument comes here widened: ``exp(|x|)`` overflows float16
-    from ``|x| = 11.1`` although ``I1(12) = 18141`` is representable.
-    """
     ax = lucid.abs(x)
     ax_safe = lucid.clamp(ax, min=3.75)
     xs = lucid.clip(x, -3.75, 3.75)
-
-    # Small-argument branch: x · poly((x / 3.75)²)
     t_small = (xs * (1.0 / 3.75)) ** 2
     val_small = lucid.full_like(x, _I1_SMALL_COEFFS[0])
     t_pow = lucid.ones_like(x)
     for c in _I1_SMALL_COEFFS[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
-    val_small = val_small * xs  # I₁ is odd
-
-    # Large-argument branch: sign(x) · exp(|x|)/√|x| · poly(3.75/|x|)
+    val_small = val_small * xs
     y_large = 3.75 / ax_safe
     val_large = lucid.full_like(x, _I1_LARGE_COEFFS[0])
     y_pow = lucid.ones_like(x)
@@ -308,9 +301,7 @@ def _i1_as_fit(x: Tensor) -> Tensor:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
     val_large = val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)
-    val_large = val_large * lucid.sign(x)
-
-    return lucid.where(ax <= 3.75, val_small, val_large)
+    return lucid.where(ax <= 3.75, val_small, val_large * lucid.sign(x))
 
 
 def i1e(x: Tensor) -> Tensor:
@@ -353,10 +344,15 @@ def i1e(x: Tensor) -> Tensor:
     >>> i1e(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.2079, 0.164])
     """
+    x = _real(x)
     if x.dtype == lucid.float64:
         return _bessel._i1e(x)
+    return _in_float32(_i1e_as_fit, x)
+
+
+def _i1e_as_fit(x: Tensor) -> Tensor:
     ax = lucid.abs(x)
-    small = lucid.exp(-lucid.clamp(ax, max=3.75)) * i1(lucid.clip(x, -3.75, 3.75))
+    small = lucid.exp(-lucid.clamp(ax, max=3.75)) * _i1_as_fit(lucid.clip(x, -3.75, 3.75))
     big = lucid.clamp(ax, min=3.75)
     y = 3.75 / big
     poly = lucid.full_like(x, _I1_LARGE_COEFFS[0])
@@ -581,11 +577,16 @@ def ndtri(p: Tensor) -> Tensor:
     >>> ndtri(lucid.tensor([0.025, 0.5, 0.975]))
     tensor([-1.96, 0., 1.96])
     """
+    return _in_float32(_ndtri, _real(p))
+
+
+def _ndtri(p: Tensor) -> Tensor:
     plow = 0.02425
     phigh = 1.0 - plow
+    in_open = (p > 0.0) & (p < 1.0)
+    p_safe = lucid.where((p <= 0.0) | (p >= 1.0), lucid.full_like(p, 0.5), p)
 
-    # Central region.
-    q = p - 0.5
+    q = p_safe - 0.5
     r_central = q * q
     num_c = (
         (
@@ -605,16 +606,8 @@ def ndtri(p: Tensor) -> Tensor:
     ) * r_central + 1.0
     central = q * num_c / den_c
 
-    # Tails: same polynomial form on r = √(-2·log(p_tail)), with a sign flip
-    # at the upper tail.  Compute the lower-tail value for every element;
-    # in the upper-tail branch we pre-flip ``p`` to ``1 - p`` so the same
-    # polynomial applies, then negate the answer.
-    p_low_tail = p
-    p_high_tail = 1.0 - p
-    p_tail_in = lucid.where(p < lucid.full_like(p, 0.5), p_low_tail, p_high_tail)
-    # Clamp to keep log finite even when callers pass ``p == 0`` / ``1``.
-    p_tail_safe = lucid.clip(p_tail_in, 1e-300, 1.0)
-    r_tail = lucid.sqrt(-2.0 * lucid.log(p_tail_safe))
+    p_tail_in = lucid.where(p_safe < 0.5, p_safe, 1.0 - p_safe)
+    r_tail = lucid.sqrt(-2.0 * lucid.log(p_tail_in))
     num_t = (
         (((_NDTRI_C[0] * r_tail + _NDTRI_C[1]) * r_tail + _NDTRI_C[2]) * r_tail + _NDTRI_C[3])
         * r_tail
@@ -624,10 +617,18 @@ def ndtri(p: Tensor) -> Tensor:
         ((_NDTRI_D[0] * r_tail + _NDTRI_D[1]) * r_tail + _NDTRI_D[2]) * r_tail + _NDTRI_D[3]
     ) * r_tail + 1.0
     tail_low = num_t / den_t
-    tail = lucid.where(p < lucid.full_like(p, 0.5), tail_low, -tail_low)
+    tail = lucid.where(p_safe < 0.5, tail_low, -tail_low)
 
-    in_central = (p > lucid.full_like(p, plow)) & (p < lucid.full_like(p, phigh))
-    return lucid.where(in_central, central, tail)
+    # Endpoints map to ±inf; anything outside [0, 1] or NaN maps to NaN.
+    # Both inner branches ran on p_safe in (0, 1), so neither leaks NaN to grad.
+    in_central = (p_safe > plow) & (p_safe < phigh)
+    inside = lucid.where(in_central, central, tail)
+    boundary = lucid.where(
+        p == 0.0,
+        lucid.full_like(p, -math.inf),
+        lucid.where(p == 1.0, lucid.full_like(p, math.inf), lucid.full_like(p, math.nan)),
+    )
+    return lucid.where(in_open, inside, boundary)
 
 
 # ── x-times-log-of-something helpers ───────────────────────────────────────
@@ -1564,15 +1565,11 @@ def _split(
     small_fn: Callable[[Tensor], Tensor],
     large_fn: Callable[[Tensor], Tensor],
 ) -> Tensor:
-    """``where(|x| <= threshold, small_fn(x), large_fn(x))``, each branch on
-    its own interval (``large_fn`` clamps ``|x|``), as in ``_half_line_split``,
-    and in float32 for a 16-bit ``x`` (:func:`_in_float32`)."""
-
     def split(v: Tensor) -> Tensor:
         small = small_fn(lucid.clip(v, -threshold, threshold))
         return lucid.where(lucid.abs(v) <= threshold, small, large_fn(v))
 
-    return _in_float32(split, x)
+    return _in_float32(split, _real(x))
 
 
 def _bessel_j0_small(x: Tensor) -> Tensor:
@@ -1837,7 +1834,7 @@ def bessel_y0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._y0(x)
-    return _half_line_split(x, 8.0, _bessel_y0_small, _bessel_y0_large, -math.inf)
+    return _half_line_split(_real(x), 8.0, _bessel_y0_small, _bessel_y0_large, -math.inf)
 
 
 def _bessel_y1_small(x: Tensor) -> Tensor:
@@ -1919,7 +1916,7 @@ def bessel_y1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._y1(x)
-    return _half_line_split(x, 8.0, _bessel_y1_small, _bessel_y1_large, -math.inf)
+    return _half_line_split(_real(x), 8.0, _bessel_y1_small, _bessel_y1_large, -math.inf)
 
 
 def _modified_bessel_k0_small(x: Tensor) -> Tensor:
@@ -1987,7 +1984,9 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k0(x)
-    return _half_line_split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf)
+    return _half_line_split(
+        _real(x), 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf
+    )
 
 
 def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
@@ -2023,9 +2022,8 @@ def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k0e(x)
-    # The large branch is ``_modified_bessel_k0_large`` without ``exp(-x)``.
     return _half_line_split(
-        x,
+        _real(x),
         2.0,
         lambda s: _modified_bessel_k0_small(s) * lucid.exp(s),
         lambda big: _K0E_LARGE(2.0 / big) / lucid.sqrt(big),
@@ -2094,7 +2092,9 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     """
     if x.dtype == lucid.float64:
         return _bessel._k1(x)
-    return _half_line_split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf)
+    return _half_line_split(
+        _real(x), 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf
+    )
 
 
 def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
@@ -2129,7 +2129,7 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
     if x.dtype == lucid.float64:
         return _bessel._k1e(x)
     return _half_line_split(
-        x,
+        _real(x),
         2.0,
         lambda s: _modified_bessel_k1_small(s) * lucid.exp(s),
         lambda big: _K1E_LARGE(2.0 / big) / lucid.sqrt(big),

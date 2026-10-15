@@ -21,6 +21,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _unwrap_or_scalar, _wrap
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
+from lucid._ops.composite._opmath import _in_float32, _real
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar, TensorOrScalar
 
@@ -1489,29 +1490,28 @@ def i0(input: Tensor) -> Tensor:
     Tensor
         :math:`I_0(x)` element-wise; always positive.
     """
-    if input.dtype == lucid.float64:
-        return _bessel._i0(input)
+    x = _real(input)
+    if x.dtype == lucid.float64:
+        return _bessel._i0(x)
+    return _in_float32(_i0_as_fit, x)
+
+
+def _i0_as_fit(input: Tensor) -> Tensor:
     ax = lucid.abs(input)
     ax_safe = lucid.clamp(ax, min=3.75)
-
-    # Small-argument branch: polynomial in t = (x / 3.75)²
     t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
     val_small = lucid.full_like(input, _bessel._AS_I0_SMALL[0])
     t_pow = lucid.ones_like(input)
     for c in _bessel._AS_I0_SMALL[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
-
-    # Large-argument branch: polynomial in y = 3.75 / |x|
     y_large = 3.75 / ax_safe
     val_large = lucid.full_like(input, _bessel._AS_I0_LARGE[0])
     y_pow = lucid.ones_like(input)
     for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
-    val_large = val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)
-
-    return lucid.where(ax <= 3.75, val_small, val_large)
+    return lucid.where(ax <= 3.75, val_small, val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe))
 
 
 def softmax(input: Tensor, dim: int | None = None) -> Tensor:

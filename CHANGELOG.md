@@ -766,6 +766,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resolve in-place promotion, copy_, einops, windows, PathLike
 
+- handle ndtri/bessel boundaries and f16 i0 overflow
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
