@@ -435,6 +435,23 @@ def main_root_of(trees: list[Worktree]) -> Path:
     return trees[0].path
 
 
+def _newest_cpp_mtime(root: Path) -> float:
+    """Newest mtime across ``lucid/_C/**/*.{cpp,h,mm}``, or ``0.0`` if none."""
+    c_dir = root / "lucid" / "_C"
+    if not c_dir.is_dir():
+        return 0.0
+    newest = 0.0
+    for pat in ("*.cpp", "*.h", "*.mm"):
+        for p in c_dir.rglob(pat):
+            try:
+                mt = p.stat().st_mtime
+            except OSError:
+                continue
+            if mt > newest:
+                newest = mt
+    return newest
+
+
 def bootstrap(root: Path, main_root: Path) -> list[str]:
     """Idempotent; cheap when already done (one stat)."""
     done: list[str] = []
@@ -443,10 +460,18 @@ def bootstrap(root: Path, main_root: Path) -> list[str]:
     # 1. Engine binary: an APFS clone costs no space and no time.
     for so in main_root.glob("lucid/_C/engine.cpython-*.so"):
         dst = root / so.relative_to(main_root)
-        if not dst.exists():
+        if not dst.exists() or so.stat().st_mtime > dst.stat().st_mtime:
             dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.unlink(missing_ok=True)
             subprocess.run(["cp", "-c", str(so), str(dst)], check=True)
             done.append(f"cloned {dst.relative_to(root)}")
+    cpp_mtime = _newest_cpp_mtime(root)
+    for dst in root.glob("lucid/_C/engine.cpython-*.so"):
+        if cpp_mtime > dst.stat().st_mtime:
+            done.append(
+                "⚠ engine .so is older than lucid/_C sources — run: python3 tools/agent_ws.py build"
+            )
+            break
     # 2. A light venv: `lucid` and `tools` from this worktree, then the main
     #    venv's site-packages for every dependency.  `lucid` therefore resolves
     #    to this worktree even for `python tools/x.py`, and the shared editable
@@ -625,6 +650,22 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _check_engine_freshness(root: Path) -> bool:
+    """Verify that the worktree's ``engine.cpython-*.so`` is not older than ``lucid/_C`` sources."""
+    sos = list(root.glob("lucid/_C/engine.cpython-*.so"))
+    cpp_mtime = _newest_cpp_mtime(root)
+    if sos:
+        if any(cpp_mtime > so.stat().st_mtime for so in sos):
+            print("engine     ✗ engine .so is older than its sources — run: agent_ws.py build")
+            return False
+        print(f"engine     {sos[0].relative_to(root)}  ✓")
+        return True
+    if cpp_mtime > 0.0:
+        print("engine     ✗ engine .so is older than its sources — run: agent_ws.py build")
+        return False
+    return True
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     root, trees = here()
     main_root = main_root_of(trees)
@@ -634,6 +675,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(
         f"branch     {git('branch', '--show-current', cwd=root).strip() or '(detached)'}"
     )
+    wt_cfg_ok = (
+        git(
+            "config",
+            "--bool",
+            "extensions.worktreeConfig",
+            cwd=main_root,
+            check=False,
+        ).strip()
+        == "true"
+    )
+    print(
+        "wtconfig   extensions.worktreeConfig = true  ✓"
+        if wt_cfg_ok
+        else "wtconfig   ✗ extensions.worktreeConfig is not true — run: agent_ws.py setup"
+    )
+    engine_ok = _check_engine_freshness(root)
     print(f"python     {py if py.exists() else 'missing — run: agent_ws.py bootstrap'}")
     if py.exists():
         proc = subprocess.run(
@@ -644,12 +701,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             text=True,
             check=False,
         )
-        where = proc.stdout.strip() or proc.stderr.strip().splitlines()[-1]
+        where = proc.stdout.strip() or (
+            proc.stderr.strip().splitlines()[-1] if proc.stderr.strip() else ""
+        )
         ok = where.startswith(str(root))
         print(
             f"lucid      {where}  {'✓' if ok else '✗ resolves outside this worktree'}"
         )
-        return 0 if ok else 1
+        return 0 if (wt_cfg_ok and engine_ok and ok) else 1
     return 1
 
 
@@ -1035,7 +1094,12 @@ def ensure_merge_drivers(root: Path) -> list[str]:
 
 def cmd_setup(args: argparse.Namespace) -> int:
     root, _ = here()
-    settings = {"rerere.enabled": "true", "rerere.autoupdate": "true", **MERGE_DRIVERS}
+    settings = {
+        "extensions.worktreeConfig": "true",
+        "rerere.enabled": "true",
+        "rerere.autoupdate": "true",
+        **MERGE_DRIVERS,
+    }
     for key, value in settings.items():
         git("config", "--local", key, value, cwd=root)
         print(f"git config {key} = {value}")

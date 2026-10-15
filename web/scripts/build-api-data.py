@@ -330,6 +330,12 @@ _SUBCATEGORY_RULES: list[tuple[str, str]] = [
 ]
 
 
+# File stems split out for size that belong to the same docs subcategory group.
+_STEM_ALIASES: dict[str, str] = {
+    "conv_transpose": "conv",
+}
+
+
 def _subcategory(
     obj: Any,
     module_root: Path | None = None,
@@ -384,7 +390,7 @@ def _subcategory(
                     return None    # member is defined in the package's own init
                 if last.endswith(".py"):
                     parts[-1] = last[:-3]
-                parts = [pp.lstrip("_") for pp in parts]
+                parts = [_STEM_ALIASES.get(pp.lstrip("_"), pp.lstrip("_")) for pp in parts]
                 parts = [pp for pp in parts if pp]
                 if not parts:
                     return None
@@ -394,7 +400,7 @@ def _subcategory(
         # Fallback when no module_root context: file basename only.
         if p.name == "__init__.py":
             return None
-        name = p.stem.lstrip("_")
+        name = _STEM_ALIASES.get(p.stem.lstrip("_"), p.stem.lstrip("_"))
         return name or None
     except Exception:
         return None

@@ -6,22 +6,23 @@ order: 1
 ---
 
 <Callout variant="info" title="Apple Silicon only">
-Lucid targets macOS on M1–M4 chips exclusively. Linux, Windows, and x86 are not supported.
+Lucid targets macOS on Apple Silicon (M1 or later) exclusively. Linux, Windows, and x86-64 are not supported.
 </Callout>
 
 ## Requirements
 
 | Requirement | Version |
 |---|---|
-| macOS | 26 Tahoe or later |
-| Apple chip | M1 / M2 / M3 / M4 |
+| macOS | 26.2 Tahoe or later |
+| Apple chip | Apple Silicon (M1 or later) |
 | Python | 3.14 |
+| MLX | Bundled (`liblucid_mlx`, MLX 0.32.3) |
 | Xcode Command Line Tools | latest |
 
-One wheel covers macOS 26 and every later release; 3.15.0 was the last release for macOS 15. Python 3.14 is required: Lucid's type annotations rely on its lazy evaluation (PEP 649).
+3.15.1 was the last release for macOS 15. Python 3.14 is required: Lucid's type annotations rely on its lazy evaluation (PEP 649).
 
 <Callout variant="note">
-MLX 0.32's macOS 26 build is compiled for macOS 26.2. On an M5-class Mac still running 26.0 or 26.1 it can pick GPU kernels that release predates and fail at runtime; update macOS, or install the previous MLX with `pip install "mlx<0.32"`. M1–M4 Macs are not affected.
+The engine ships its own pinned MLX build (`liblucid_mlx`, MLX 0.32.3), compiled for macOS 26.2 and renamed so it loads alongside any `mlx` version you install (or none). Because `pip` has no platform tag for a macOS minor release, the wheel is tagged `macosx_26_0`, and `import lucid` enforces the macOS 26.2 floor at import time (refusing 26.0 and 26.1 with a clear message).
 </Callout>
 
 ## Install
@@ -54,6 +55,12 @@ If both lines print without error, Lucid is installed correctly and the MLX GPU 
 ## Optional extras
 
 ```bash
+# Pretrained weights / safetensors checkpoints
+pip install "lucid-dl[models]"
+
+# Zero-copy DLPack interop with the Python mlx package (mlx >= 0.32)
+pip install "lucid-dl[mlx]"
+
 # Development tools (ruff, mypy, pytest)
 pip install "lucid-dl[dev]"
 
@@ -73,10 +80,10 @@ pip install --upgrade lucid-dl
 git clone https://github.com/ChanLumerico/lucid.git
 cd lucid
 python3.14 -m venv .venv && source .venv/bin/activate
-pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1"
 pip install --no-build-isolation -e ".[dev]"
 ```
 
 <Callout variant="note">
-Building from source requires CMake ≥ 3.24, Ninja ≥ 1.11, and the Xcode Command Line Tools. `--no-build-isolation` matters: the engine links against the `libmlx.dylib` of the MLX installed in your environment.
+Building from source requires CMake ≥ 3.24, Ninja ≥ 1.11, and the Xcode Command Line Tools. During the build, `python3 tools/fetch_mlx.py` downloads, verifies (`sha256`), and stages the pinned `mlx-metal` wheel into `~/Library/Caches/lucid/mlx-metal` as `liblucid_mlx.dylib`. For offline builds, pre-stage the cache with `python3 tools/fetch_mlx.py` or point `LUCID_MLX_DIST_DIR` at an already-unpacked `mlx-metal` wheel directory.
 </Callout>

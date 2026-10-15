@@ -53,13 +53,20 @@ OUT = API_DATA / "_usedby.json"
 SKIP_DIRS = {"test", "benchmarks"}
 
 
+# Split-file modules that belong to a single logical module group in docs.
+_MODULE_ALIASES: dict[str, str] = {
+    "lucid.nn.modules.conv_transpose": "lucid.nn.modules.conv",
+}
+
+
 def _module_path_of(p: Path) -> str:
     """Convert ``lucid/nn/functional/linear.py`` → ``lucid.nn.functional.linear``."""
     rel = p.relative_to(LUCID_SRC.parent).with_suffix("")
     parts = rel.parts
     if parts[-1] == "__init__":
         parts = parts[:-1]
-    return ".".join(parts)
+    raw = ".".join(parts)
+    return _MODULE_ALIASES.get(raw, raw)
 
 
 def _resolve_relative(
@@ -129,7 +136,7 @@ def _collect_imports_per_file() -> dict[str, set[str]]:
                 # would never appear in any "used by" list.
                 imported.add(base)
         if imported:
-            out[importer] = imported
+            out.setdefault(importer, set()).update(imported)
     return out
 
 
@@ -180,15 +187,26 @@ def _invert(
     inverted: dict[str, set[str]] = {}
     for importer, targets in imports.items():
         for t in targets:
-            inverted.setdefault(t, set()).add(importer)
+            resolved_t = t
+            if resolved_t not in emitted:
+                for src_mod, canonical_mod in _MODULE_ALIASES.items():
+                    prefix = f"{canonical_mod}."
+                    if resolved_t.startswith(prefix):
+                        cand = f"{src_mod}.{resolved_t[len(prefix):]}"
+                        if cand in emitted:
+                            resolved_t = cand
+                            break
+            inverted.setdefault(resolved_t, set()).add(importer)
     result: dict[str, list[dict[str, str]]] = {}
     for target, importers in inverted.items():
         if target not in emitted:
             continue
+        target_parent = target.rsplit(".", 1)[0]
+        target_group = _MODULE_ALIASES.get(target_parent, target_parent)
         rows = [
             {"module": imp, "kind": "module"}
             for imp in sorted(importers)
-            if imp != target  # self-import noise
+            if imp != target and imp != target_group  # self-import noise
         ]
         if rows:
             result[target] = rows

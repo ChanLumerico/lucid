@@ -243,3 +243,75 @@ def test_worktree_venv_resolves_lucid_and_tools_without_the_root_on_sys_path(
         str(root / "tools" / "helper.py"),
         "False True",
     ]
+
+
+def test_setup_sets_worktree_config_and_doctor_verifies_it(
+    scratch: Scratch,
+) -> None:
+    """LCD-30: `setup` sets `extensions.worktreeConfig = true` and `doctor` checks it."""
+    scratch.git(scratch.main, "config", "--unset", "extensions.worktreeConfig")
+    setup_res = subprocess.run(
+        [sys.executable, str(AGENT_WS), "setup"],
+        cwd=scratch.main,
+        env=scratch.env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert setup_res.returncode == 0, setup_res.stderr
+    assert "git config extensions.worktreeConfig = true" in setup_res.stdout
+    val = scratch.git(
+        scratch.main, "config", "--bool", "extensions.worktreeConfig"
+    ).stdout.strip()
+    assert val == "true"
+
+    # When worktreeConfig is unset/false, doctor reports the problem and exits 1.
+    scratch.git(scratch.main, "config", "extensions.worktreeConfig", "false")
+    doc_res = subprocess.run(
+        [sys.executable, str(AGENT_WS), "doctor"],
+        cwd=scratch.a,
+        env=scratch.env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert doc_res.returncode == 1
+    assert "extensions.worktreeConfig is not true" in doc_res.stdout
+
+
+def test_bootstrap_refreshes_stale_so_and_warns_when_cpp_is_newer(
+    tmp_path: Path,
+) -> None:
+    """LCD-136: `bootstrap` re-clones a newer main `.so` and warns when C++ sources are newer."""
+    spec = importlib.util.spec_from_file_location("agent_ws", AGENT_WS)
+    assert spec is not None and spec.loader is not None
+    agent_ws = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agent_ws)
+
+    main_root = tmp_path / "main"
+    wt_root = tmp_path / "wt"
+    (main_root / "lucid" / "_C").mkdir(parents=True)
+    (wt_root / "lucid" / "_C").mkdir(parents=True)
+
+    so_rel = Path("lucid/_C/engine.cpython-314-darwin.so")
+    main_so = main_root / so_rel
+    wt_so = wt_root / so_rel
+    main_so.write_bytes(b"v2")
+    wt_so.write_bytes(b"v1")
+    os.utime(wt_so, (1000.0, 1000.0))
+    os.utime(main_so, (2000.0, 2000.0))
+
+    done = agent_ws.bootstrap(wt_root, main_root)
+    assert f"cloned {so_rel}" in done
+    assert wt_so.read_bytes() == b"v2"
+
+    # Touch a C++ source in the worktree so it is newer than the .so.
+    cpp = wt_root / "lucid" / "_C" / "foo.cpp"
+    cpp.write_text("// changed\n")
+    future_mtime = wt_so.stat().st_mtime + 100.0
+    os.utime(cpp, (future_mtime, future_mtime))
+
+    done2 = agent_ws.bootstrap(wt_root, main_root)
+    assert any("engine .so is older than lucid/_C sources" in line for line in done2)
+    assert not agent_ws._check_engine_freshness(wt_root)
+

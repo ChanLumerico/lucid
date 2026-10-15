@@ -135,9 +135,9 @@ def _float32_scope() -> contextlib.AbstractContextManager[object]:
     RAII and restores the enclosing state on exit.  Outside autocast it is
     not entered: an active float32 guard would cast float64 operands down.
     """
-    if _C_engine.amp_is_active():
-        return _C_engine.AutocastGuard(_C_engine.F32)
-    return contextlib.nullcontext()
+    from lucid._engine_scope import autocast_dtype
+
+    return autocast_dtype(_C_engine.Dtype.F32)
 
 
 def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:

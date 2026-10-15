@@ -28,11 +28,32 @@ _SAFE_CLASSES = frozenset(
         "builtins.tuple",
         "builtins.int",
         "builtins.float",
+        "builtins.complex",
         "builtins.str",
         "builtins.bool",
         "builtins.bytes",
+        "builtins.bytearray",
+        "builtins.set",
+        "builtins.slice",
         "builtins.NoneType",
         "collections.OrderedDict",
+        "collections.Counter",
+        "collections.defaultdict",
+        "lucid._dtype.dtype",
+        "lucid._dtype.float16",
+        "lucid._dtype.float32",
+        "lucid._dtype.float64",
+        "lucid._dtype.bfloat16",
+        "lucid._dtype.int8",
+        "lucid._dtype.int16",
+        "lucid._dtype.int32",
+        "lucid._dtype.int64",
+        "lucid._dtype.bool_",
+        "lucid._dtype.complex64",
+        "lucid._dtype.complex128",
+        "lucid._device.device",
+        "lucid._C.engine.Dtype",
+        "lucid._C.engine.Device",
         # Optimizer state_dict() stores momentum/variance buffers and step
         # counters as NumPy arrays/scalars via _host_copy (LCD-67).
         "numpy.ndarray",
@@ -500,6 +521,12 @@ class _SafeUnpickler(_LucidUnpickler):
     def persistent_load(self, pid: object) -> object:
         return super().persistent_load(pid)
 
+    @override
+    def load(self) -> object:
+        res = super().load()
+        _check_no_frozenset(res, set())
+        return res
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -664,6 +691,71 @@ def load(
     return obj
 
 
+def _check_no_frozenset(obj: object, seen: set[int]) -> None:
+    """Refuse ``frozenset`` under ``weights_only=True`` (protocol 4+ uses opcode ``FROZENSET``)."""
+    oid = id(obj)
+    if oid in seen:
+        return
+    if isinstance(obj, frozenset):
+        raise pickle.UnpicklingError(
+            "weights_only=True: refusing to deserialize 'builtins.frozenset'. "
+            "Pass weights_only=False to allow arbitrary objects "
+            "(potential security risk)."
+        )
+    if isinstance(obj, dict):
+        seen.add(oid)
+        for k, v in obj.items():
+            _check_no_frozenset(k, seen)
+            _check_no_frozenset(v, seen)
+    elif isinstance(obj, (list, tuple, set)):
+        seen.add(oid)
+        for item in obj:
+            _check_no_frozenset(item, seen)
+
+
+def _remap_dict(
+    obj: dict[object, object],
+    map_location: str | Callable[..., Any] | dict[str, str],
+    memo: dict[int, object],
+) -> dict[object, object]:
+    """Rebuild ``obj`` with remapped entries while preserving subtype and attrs."""
+    from collections import defaultdict
+
+    if type(obj) is dict:
+        res_dict: dict[object, object] = {}
+    elif isinstance(obj, defaultdict):
+        res_dict = type(obj)(obj.default_factory)
+    else:
+        res_dict = type(obj)()
+    memo[id(obj)] = res_dict
+    for k, v in obj.items():
+        res_dict[_apply_map_location(k, map_location, memo)] = _apply_map_location(
+            v, map_location, memo
+        )
+    obj_dict = getattr(obj, "__dict__", None)
+    if isinstance(obj_dict, dict):
+        for attr_k, attr_v in obj_dict.items():
+            setattr(res_dict, attr_k, _apply_map_location(attr_v, map_location, memo))
+    return res_dict
+
+
+def _remap_seq(
+    obj: list[object] | tuple[object, ...] | set[object],
+    map_location: str | Callable[..., Any] | dict[str, str],
+    memo: dict[int, object],
+) -> object:
+    """Rebuild a sequence/set with remapped items while preserving namedtuple types."""
+    import operator
+
+    remapped = [_apply_map_location(v, map_location, memo) for v in obj]
+    if isinstance(obj, tuple) and hasattr(obj, "_fields"):
+        res_seq: object = operator.methodcaller("_make", remapped)(type(obj))
+    else:
+        res_seq = type(obj)(remapped)
+    memo[id(obj)] = res_seq
+    return res_seq
+
+
 def _apply_map_location(
     obj: object,
     map_location: str | Callable[..., Any] | dict[str, str],
@@ -694,16 +786,9 @@ def _apply_map_location(
         return mapped
 
     if isinstance(obj, dict):
-        res_dict = {
-            k: _apply_map_location(v, map_location, _memo) for k, v in obj.items()
-        }
-        _memo[oid] = res_dict
-        return res_dict
-    if isinstance(obj, (list, tuple)):
-        remapped = [_apply_map_location(v, map_location, _memo) for v in obj]
-        res_seq = type(obj)(remapped)
-        _memo[oid] = res_seq
-        return res_seq
+        return _remap_dict(obj, map_location, _memo)
+    if isinstance(obj, (list, tuple, set)):
+        return _remap_seq(obj, map_location, _memo)
     return obj
 
 

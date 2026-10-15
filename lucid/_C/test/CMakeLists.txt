@@ -82,6 +82,6 @@ target_include_directories(lucid_test SYSTEM PRIVATE
 # ── Register with CTest ───────────────────────────────────────────────────────
 include(GoogleTest)
 gtest_discover_tests(lucid_test
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     PROPERTIES        LABELS "lucid_unit"
 )

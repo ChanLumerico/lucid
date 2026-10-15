@@ -287,3 +287,121 @@ class TestParameterGradAndStorageSharing:
         opt2.step()
         assert w2.tolist() == pytest.approx(w.tolist(), rel=1e-6)
 
+
+class TestWeightsOnlyWhitelistAndMapLocationContainers:
+    """LCD-106 & LCD-107: weights_only=True whitelist and map_location containers."""
+
+    @staticmethod
+    def _save_load(
+        obj: object,
+        *,
+        weights_only: bool = True,
+        map_location: object = None,
+    ) -> object:
+        import io
+
+        buf = io.BytesIO()
+        lucid.save(obj, buf)
+        buf.seek(0)
+        return lucid.load(
+            buf,
+            weights_only=weights_only,
+            map_location=map_location,  # type: ignore[arg-type]
+        )
+
+    def test_weights_only_allows_dtypes_devices_and_builtins(self) -> None:
+        from collections import Counter, defaultdict
+
+        dd: defaultdict[str, int] = defaultdict(int, {"a": 1})
+        payload = {
+            "dtypes": [
+                lucid.float16,
+                lucid.float32,
+                lucid.float64,
+                lucid.bfloat16,
+                lucid.int8,
+                lucid.int16,
+                lucid.int32,
+                lucid.int64,
+                lucid.bool_,
+                lucid.complex64,
+                lucid.complex128,
+            ],
+            "device_cpu": lucid.device("cpu"),
+            "device_metal": lucid.device("metal"),
+            "complex": 1 + 2j,
+            "bytearray": bytearray(b"abc"),
+            "set": {1, 2, 3},
+            "slice": slice(1, 10, 2),
+            "counter": Counter({"x": 3, "y": 1}),
+            "defaultdict": dd,
+        }
+        loaded = self._save_load(payload, weights_only=True)
+        assert isinstance(loaded, dict)
+        for orig_dt, loaded_dt in zip(
+            payload["dtypes"], loaded["dtypes"], strict=True
+        ):
+            assert loaded_dt is orig_dt
+            assert loaded_dt == orig_dt
+            assert hash(loaded_dt) == hash(orig_dt)
+        assert loaded["device_cpu"] == lucid.device("cpu")
+        assert loaded["device_metal"] == lucid.device("metal")
+        assert loaded["complex"] == 1 + 2j
+        assert loaded["bytearray"] == bytearray(b"abc")
+        assert loaded["set"] == {1, 2, 3}
+        assert loaded["slice"] == slice(1, 10, 2)
+        assert isinstance(loaded["counter"], Counter)
+        assert loaded["counter"] == Counter({"x": 3, "y": 1})
+        assert isinstance(loaded["defaultdict"], defaultdict)
+        assert loaded["defaultdict"].default_factory is int
+        assert loaded["defaultdict"]["missing"] == 0
+
+    def test_weights_only_refuses_frozenset(self) -> None:
+        import io
+        import pickle
+
+        buf = io.BytesIO()
+        lucid.save({"fs": frozenset([1, 2, 3])}, buf)
+        buf.seek(0)
+        with pytest.raises(pickle.UnpicklingError, match="frozenset"):
+            lucid.load(buf, weights_only=True)
+
+    def test_map_location_preserves_ordered_dict_and_metadata(self) -> None:
+        from collections import Counter, OrderedDict, defaultdict, namedtuple
+
+        Pair = namedtuple("Pair", ["left", "right"])
+        m = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 3))
+        sd = m.state_dict()
+        assert isinstance(sd, OrderedDict)
+        assert hasattr(sd, "_metadata")
+
+        for loc in ("cpu", {"cpu": "cpu", "metal": "cpu"}, lambda t, _d: t.to("cpu")):
+            loaded_sd = self._save_load(sd, weights_only=True, map_location=loc)
+            assert isinstance(loaded_sd, OrderedDict)
+            assert hasattr(loaded_sd, "_metadata")
+            assert loaded_sd._metadata == sd._metadata  # type: ignore[attr-defined]
+            assert list(loaded_sd.keys()) == list(sd.keys())
+
+        dd: defaultdict[str, lucid.Tensor] = defaultdict(lucid.Tensor)
+        dd["x"] = lucid.tensor([1.0, 2.0])
+        cnt: Counter[str] = Counter({"a": 2})
+        nt = Pair(lucid.tensor([3.0]), lucid.tensor([4.0]))
+
+        from lucid.serialization import _apply_map_location
+
+        remapped = _apply_map_location(
+            {"dd": dd, "cnt": cnt, "nt": nt, "s": {1, 2}},
+            lambda t, _d: t.to("cpu"),
+        )
+        assert isinstance(remapped, dict)
+        assert isinstance(remapped["dd"], defaultdict)
+        assert remapped["dd"].default_factory is lucid.Tensor
+        assert remapped["dd"]["x"].tolist() == [1.0, 2.0]
+        assert isinstance(remapped["cnt"], Counter)
+        assert remapped["cnt"]["a"] == 2
+        assert isinstance(remapped["nt"], Pair)
+        assert remapped["nt"].left.tolist() == [3.0]
+        assert remapped["nt"].right.tolist() == [4.0]
+        assert remapped["s"] == {1, 2}
+
+

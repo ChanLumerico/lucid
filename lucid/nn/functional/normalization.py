@@ -499,25 +499,18 @@ def instance_norm(
             and _C_engine.compile.current_tracer() is None
         ):
             import lucid as _lucid
+            from lucid._engine_scope import autocast_dtype
 
-            _amp_off = (
-                _C_engine.AutocastGuard(_C_engine.F32)
-                if _C_engine.amp_is_active()
-                else None
-            )
-            try:
-                with _lucid.no_grad():
-                    x_s = (
-                        x
-                        if x.dtype == running_mean.dtype
-                        else x.to(dtype=running_mean.dtype)
-                    )
-                    bm = x_s.mean([0, *spatial_dims])
-                    bv = x_s.var(spatial_dims, correction=1).mean(0)
-                    running_mean.copy_((1.0 - momentum) * running_mean + momentum * bm)
-                    running_var.copy_((1.0 - momentum) * running_var + momentum * bv)
-            finally:
-                _amp_off = None
+            with autocast_dtype(), _lucid.no_grad():
+                x_s = (
+                    x
+                    if x.dtype == running_mean.dtype
+                    else x.to(dtype=running_mean.dtype)
+                )
+                bm = x_s.mean([0, *spatial_dims])
+                bv = x_s.var(spatial_dims, correction=1).mean(0)
+                running_mean.copy_((1.0 - momentum) * running_mean + momentum * bm)
+                running_var.copy_((1.0 - momentum) * running_var + momentum * bv)
     else:
         mean = running_mean.reshape(bcast_shape)
         var = running_var.reshape(bcast_shape)

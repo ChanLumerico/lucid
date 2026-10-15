@@ -478,12 +478,10 @@ def _host_check() -> Iterator[None]:
     ...             raise ValueError("scale: x must be non-negative")
     ...     return x * 2
     """
-    tracer = _C_engine.compile.current_tracer()
-    _C_engine.compile.set_current_tracer(None)
-    try:
+    from lucid._engine_scope import untraced
+
+    with untraced():
         yield
-    finally:
-        _C_engine.compile.set_current_tracer(tracer)
 
 
 def compile[**P, R](

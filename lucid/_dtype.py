@@ -67,13 +67,22 @@ class dtype:
 
     @override
     def __eq__(self, other: object) -> bool:
-        """Identity comparison — dtypes are singletons."""
-        return self is other
+        """Identity comparison with engine-dtype fallback."""
+        if self is other:
+            return True
+        if isinstance(other, dtype):
+            return self._engine == other._engine
+        return False
 
     @override
     def __hash__(self) -> int:
-        """Identity-based hash so dtypes can key dicts/sets."""
-        return id(self)
+        """Hash by canonical name so dtypes can key dicts/sets across pickle."""
+        return hash(self._name)
+
+    @override
+    def __reduce__(self) -> str:
+        """Pickle by module-level singleton name so identity is preserved."""
+        return "bool_" if self._name == "bool" else self._name
 
 
 float16: dtype = dtype("float16", _C_engine.Dtype.F16, 2)

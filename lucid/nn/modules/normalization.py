@@ -766,13 +766,10 @@ class _BatchNormBase(Module):
         # keep their F32 dtype.  The C++ ``AutocastGuard`` is RAII —
         # dropping the Python reference triggers the C++ destructor,
         # which restores the outer AMP state.
-        _amp_off = (
-            _C_engine.AutocastGuard(_C_engine.F32)
-            if _C_engine.amp_is_active()
-            else None
-        )
+        from lucid._engine_scope import autocast_dtype
+
         try:
-            with _lucid.no_grad():
+            with autocast_dtype(), _lucid.no_grad():
                 rm_dt = self._buffers["running_mean"].dtype  # type: ignore[union-attr]
                 rv_dt = self._buffers["running_var"].dtype  # type: ignore[union-attr]
                 # Cast ``x`` up to the buffer dtype *before* computing
@@ -830,9 +827,6 @@ class _BatchNormBase(Module):
                 self._buffers["running_mean"] = new_rm
                 self._buffers["running_var"] = new_rv
         finally:
-            # Explicit drop → CPython refcount → 0 → C++ ~AutocastGuard()
-            # restores the outer AMP state synchronously.
-            _amp_off = None
 
             # 3.2.1 leak fix: force evaluation of the running stats so that
             # the lazy MLX expression's parent chain (which references the
@@ -1309,13 +1303,10 @@ class _InstanceNormBase(Module):
         reduce_dims: list[int] = [0, *spatial_dims]
         # Keep the running stats in F32 under autocast — the 3.3 AMP fix in
         # ``_BatchNormBase._update_running_stats`` gives the rationale.
-        _amp_off = (
-            _C_engine.AutocastGuard(_C_engine.F32)
-            if _C_engine.amp_is_active()
-            else None
-        )
+        from lucid._engine_scope import autocast_dtype
+
         try:
-            with _lucid.no_grad():
+            with autocast_dtype(), _lucid.no_grad():
                 rm_dt = self._buffers["running_mean"].dtype  # type: ignore[union-attr]
                 rv_dt = self._buffers["running_var"].dtype  # type: ignore[union-attr]
                 # Cast x to buffer dtype before reduction — ``var`` is
@@ -1339,7 +1330,6 @@ class _InstanceNormBase(Module):
                 self._buffers["running_mean"] = new_rm
                 self._buffers["running_var"] = new_rv
         finally:
-            _amp_off = None
 
             # The same lazy-chain leak as BatchNorm's (its 3.2.1 fix): force
             # the running stats so the chain does not grow every step.
