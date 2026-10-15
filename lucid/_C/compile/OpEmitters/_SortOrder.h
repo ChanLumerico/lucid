@@ -108,12 +108,152 @@ struct GraphTopK {
     MPSGraphTensor* indices = nil;  // int32
 };
 
-inline GraphTopK graph_topk(MPSGraph* g, MPSGraphTensor* x, NSInteger axis, NSInteger k) {
+// Order-preserving float32 key with no NaNs:
+//   -0.0  -> +0.0
+//   +inf  -> FLT_MAX
+//   NaN   -> +inf (so MPSGraph's topK ranks NaN above +inf without dropping it)
+inline MPSGraphTensor* graph_topk_f32_key(MPSGraph* g, MPSGraphTensor* x) {
+    MPSGraphTensor* xf = graph_sort_key(g, x);
+    if (xf.dataType != MPSDataTypeFloat32)
+        xf = [g castTensor:xf toType:MPSDataTypeFloat32 name:nil];
+    MPSGraphTensor* pos_inf = [g constantWithScalar:std::numeric_limits<double>::infinity()
+                                           dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* flt_max =
+        [g constantWithScalar:static_cast<double>(std::numeric_limits<float>::max())
+                     dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* step1 = [g selectWithPredicateTensor:[g equalWithPrimaryTensor:xf
+                                                                   secondaryTensor:pos_inf
+                                                                              name:nil]
+                                     truePredicateTensor:flt_max
+                                    falsePredicateTensor:xf
+                                                    name:nil];
+    return [g selectWithPredicateTensor:[g isNaNWithTensor:xf name:nil]
+                    truePredicateTensor:pos_inf
+                   falsePredicateTensor:step1
+                                   name:nil];
+}
+
+inline GraphTopK graph_topk_full_sort(MPSGraph* g, MPSGraphTensor* x, NSInteger axis, NSInteger k) {
     MPSGraphTensor* order = graph_sort_order(g, x, axis, true);
     MPSGraphTensor* indices = [g sliceTensor:order dimension:axis start:0 length:k name:nil];
     if (indices == nil)
         return {};
     return {graph_gather_sorted(g, x, indices, axis), indices};
+}
+
+inline GraphTopK graph_topk_small_k(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* key,
+                                    NSInteger axis, NSInteger k) {
+    if (k == 1) {
+        MPSGraphTensor* indices = [g reductionArgMaximumWithTensor:key axis:axis name:nil];
+        if (indices == nil)
+            return graph_topk_full_sort(g, x, axis, k);
+        return {graph_gather_sorted(g, x, indices, axis), indices};
+    }
+    MPSGraphTensor* pos = [g coordinateAlongAxis:axis withShape:x.shape name:nil];
+    MPSGraphTensor* neg_inf = [g constantWithScalar:-std::numeric_limits<double>::infinity()
+                                           dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* cur = key;
+    NSMutableArray<MPSGraphTensor*>* picked = [NSMutableArray arrayWithCapacity:(NSUInteger)k];
+    for (NSInteger s = 0; s < k; ++s) {
+        MPSGraphTensor* idx_s = [g reductionArgMaximumWithTensor:cur axis:axis name:nil];
+        if (idx_s == nil)
+            return graph_topk_full_sort(g, x, axis, k);
+        [picked addObject:idx_s];
+        if (s + 1 < k) {
+            MPSGraphTensor* mask = [g equalWithPrimaryTensor:pos secondaryTensor:idx_s name:nil];
+            cur = [g selectWithPredicateTensor:mask
+                           truePredicateTensor:neg_inf
+                          falsePredicateTensor:cur
+                                          name:nil];
+        }
+    }
+    MPSGraphTensor* indices = [g concatTensors:picked dimension:axis name:nil];
+    return {graph_gather_sorted(g, x, indices, axis), indices};
+}
+
+inline GraphTopK graph_topk_two_pass(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* key,
+                                     NSInteger axis, NSInteger axis_len, NSInteger k) {
+    NSArray<MPSGraphTensor*>* tk1 = [g topKWithSourceTensor:key axis:axis k:(NSUInteger)k name:nil];
+    if (tk1 == nil || tk1.count < 2 || tk1[0] == nil)
+        return graph_topk_full_sort(g, x, axis, k);
+
+    // ``v_last`` is the k-th largest key value. Elements strictly above it
+    // all belong in the top-k (score = axis_len - index >= 1); elements equal
+    // to ``v_last`` get score = -index (0, -1, ..., -(N-1)) so a second topK
+    // picks the lowest indices among boundary ties; elements below get -(N+1).
+    MPSGraphTensor* v_last = [g sliceTensor:tk1[0] dimension:axis start:k - 1 length:1 name:nil];
+    MPSGraphTensor* neg_pos = [g negativeWithTensor:[g castTensor:[g coordinateAlongAxis:axis
+                                                                               withShape:x.shape
+                                                                                    name:nil]
+                                                           toType:MPSDataTypeFloat32
+                                                             name:nil]
+                                               name:nil];
+    MPSGraphTensor* above = [g greaterThanWithPrimaryTensor:key secondaryTensor:v_last name:nil];
+    MPSGraphTensor* tied = [g equalWithPrimaryTensor:key secondaryTensor:v_last name:nil];
+    MPSGraphTensor* hi_score =
+        [g additionWithPrimaryTensor:neg_pos
+                     secondaryTensor:[g constantWithScalar:(double)axis_len
+                                                  dataType:MPSDataTypeFloat32]
+                                name:nil];
+    MPSGraphTensor* lo_score = [g constantWithScalar:-(double)axis_len - 1.0
+                                            dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* tie_key = [g selectWithPredicateTensor:above
+                                       truePredicateTensor:hi_score
+                                      falsePredicateTensor:[g selectWithPredicateTensor:tied
+                                                                    truePredicateTensor:neg_pos
+                                                                   falsePredicateTensor:lo_score
+                                                                                   name:nil]
+                                                      name:nil];
+
+    NSArray<MPSGraphTensor*>* tk2 = [g topKWithSourceTensor:tie_key
+                                                       axis:axis
+                                                          k:(NSUInteger)k
+                                                       name:nil];
+    if (tk2 == nil || tk2.count < 2 || tk2[1] == nil)
+        return graph_topk_full_sort(g, x, axis, k);
+
+    // Order the k candidate indices ascending first, then stably sort their k
+    // keys descending (both sorts are of length k, not axis_len).
+    MPSGraphTensor* cand_idx = tk2[1];
+    MPSGraphTensor* asc_order = [g argSortWithTensor:cand_idx axis:axis descending:NO name:nil];
+    MPSGraphTensor* sorted_idx = graph_gather_along_axis(g, axis, cand_idx, asc_order);
+    MPSGraphTensor* cand_key = graph_gather_along_axis(g, axis, key, sorted_idx);
+    MPSGraphTensor* key_order = [g argSortWithTensor:cand_key axis:axis descending:YES name:nil];
+    MPSGraphTensor* indices = graph_gather_along_axis(g, axis, sorted_idx, key_order);
+    if (indices == nil)
+        return {};
+    return {graph_gather_sorted(g, x, indices, axis), indices};
+}
+
+inline bool graph_topk_can_use_fast_path(MPSGraphTensor* x, NSInteger axis, NSInteger k) {
+    const MPSDataType dt = x.dataType;
+    if (dt == MPSDataTypeInt64 || dt == MPSDataTypeUInt64 || dt == MPSDataTypeBool)
+        return false;
+    const NSInteger axis_len = [x.shape[(NSUInteger)axis] integerValue];
+    if (axis_len <= 0 || k >= axis_len)
+        return false;
+    for (NSNumber* dim in x.shape) {
+        if (dim.integerValue <= 0)
+            return false;
+    }
+    return true;
+}
+
+inline GraphTopK graph_topk(MPSGraph* g, MPSGraphTensor* x, NSInteger axis, NSInteger k) {
+    if (g == nil || x == nil || x.shape == nil)
+        return {};
+    const NSInteger rank = (NSInteger)x.shape.count;
+    if (axis < 0)
+        axis += rank;
+    if (axis < 0 || axis >= rank || k <= 0)
+        return {};
+    if (!graph_topk_can_use_fast_path(x, axis, k))
+        return graph_topk_full_sort(g, x, axis, k);
+
+    MPSGraphTensor* key = graph_topk_f32_key(g, x);
+    if (k <= 8)
+        return graph_topk_small_k(g, x, key, axis, k);
+    return graph_topk_two_pass(g, x, key, axis, [x.shape[(NSUInteger)axis] integerValue], k);
 }
 
 }  // namespace lucid::compile

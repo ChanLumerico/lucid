@@ -99,23 +99,31 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     return true;
 }
 
-// ``add`` and ``sub`` route an operand that is a +0 (add) or -0 (sub) splat
-// through ``add_pos_zero`` — MPSGraph would fold it away and keep a -0 that
-// IEEE turns into +0 (_SignedZero.h).
+// ``add``, ``sub``, ``mul`` and ``div`` route ±0 / ±1 splat operands through
+// ``add_pos_zero`` / ``sub_pos_zero`` — MPSGraph would otherwise fold the
+// constant away and preserve f32/bf16 subnormals or -0 that hardware
+// arithmetic flushes (_SignedZero.h, LCD-446 / LCD-452).
 class AddEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "add"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         const bool a_pos_zero = node.inputs.size() == 2 && is_pos_zero_splat(ctx, node.inputs[0]);
         const bool b_pos_zero = node.inputs.size() == 2 && is_pos_zero_splat(ctx, node.inputs[1]);
-        return emit_binary(
-            ctx, node, [a_pos_zero, b_pos_zero](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-                if (b_pos_zero)
-                    return add_pos_zero(g, a, b);
-                if (a_pos_zero)
-                    return add_pos_zero(g, b, a);
-                return [g additionWithPrimaryTensor:a secondaryTensor:b name:@"add"];
-            });
+        const bool a_neg_zero = node.inputs.size() == 2 && is_neg_zero_splat(ctx, node.inputs[0]);
+        const bool b_neg_zero = node.inputs.size() == 2 && is_neg_zero_splat(ctx, node.inputs[1]);
+        return emit_binary(ctx, node,
+                           [a_pos_zero, b_pos_zero, a_neg_zero, b_neg_zero](
+                               MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+                               if (b_pos_zero)
+                                   return add_pos_zero(g, a, b);
+                               if (a_pos_zero)
+                                   return add_pos_zero(g, b, a);
+                               if (b_neg_zero)
+                                   return sub_pos_zero(g, a, zero_splat_like(g, b));
+                               if (a_neg_zero)
+                                   return sub_pos_zero(g, b, zero_splat_like(g, a));
+                               return [g additionWithPrimaryTensor:a secondaryTensor:b name:@"add"];
+                           });
     }
 };
 
@@ -123,11 +131,20 @@ class SubEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sub"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
+        const bool a_neg_zero = node.inputs.size() == 2 && is_neg_zero_splat(ctx, node.inputs[0]);
+        const bool b_pos_zero = node.inputs.size() == 2 && is_pos_zero_splat(ctx, node.inputs[1]);
         const bool b_neg_zero = node.inputs.size() == 2 && is_neg_zero_splat(ctx, node.inputs[1]);
         return emit_binary(
-            ctx, node, [b_neg_zero](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+            ctx, node,
+            [a_neg_zero, b_pos_zero, b_neg_zero](MPSGraph* g, MPSGraphTensor* a,
+                                                 MPSGraphTensor* b) {
                 if (b_neg_zero)
-                    return add_pos_zero(g, a, [g negativeWithTensor:b name:nil]);
+                    return add_pos_zero(g, a, zero_splat_like(g, b));
+                if (b_pos_zero)
+                    return sub_pos_zero(g, a, b);
+                if (a_neg_zero)
+                    return [g negativeWithTensor:sub_pos_zero(g, b, zero_splat_like(g, a))
+                                            name:@"sub_from_neg_zero"];
                 return [g subtractionWithPrimaryTensor:a secondaryTensor:b name:@"sub"];
             });
     }
@@ -162,9 +179,31 @@ class MulEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mul"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            return multiply_avoiding_i64_square(g, a, b, @"mul");
-        });
+        const bool a_pos_one = node.inputs.size() == 2 && is_pos_one_splat(ctx, node.inputs[0]);
+        const bool b_pos_one = node.inputs.size() == 2 && is_pos_one_splat(ctx, node.inputs[1]);
+        const bool a_neg_one = node.inputs.size() == 2 && is_neg_one_splat(ctx, node.inputs[0]);
+        const bool b_neg_one = node.inputs.size() == 2 && is_neg_one_splat(ctx, node.inputs[1]);
+        return emit_binary(ctx, node,
+                           [a_pos_one, b_pos_one, a_neg_one, b_neg_one](
+                               MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+                               if ((a.dataType & MPSDataTypeFloatBit) != 0) {
+                                   if (b_pos_one)
+                                       return sub_pos_zero(g, a, zero_splat_like(g, b));
+                                   if (a_pos_one)
+                                       return sub_pos_zero(g, b, zero_splat_like(g, a));
+                                   if (b_neg_one)
+                                       return [g
+                                           negativeWithTensor:sub_pos_zero(g, a,
+                                                                           zero_splat_like(g, b))
+                                                         name:@"mul_neg_one"];
+                                   if (a_neg_one)
+                                       return [g
+                                           negativeWithTensor:sub_pos_zero(g, b,
+                                                                           zero_splat_like(g, a))
+                                                         name:@"mul_neg_one"];
+                               }
+                               return multiply_avoiding_i64_square(g, a, b, @"mul");
+                           });
     }
 };
 
@@ -172,9 +211,22 @@ class DivEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "div"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            return [g divisionWithPrimaryTensor:a secondaryTensor:b name:@"div"];
-        });
+        const bool b_pos_one = node.inputs.size() == 2 && is_pos_one_splat(ctx, node.inputs[1]);
+        const bool b_neg_one = node.inputs.size() == 2 && is_neg_one_splat(ctx, node.inputs[1]);
+        return emit_binary(ctx, node,
+                           [b_pos_one, b_neg_one](MPSGraph* g, MPSGraphTensor* a,
+                                                  MPSGraphTensor* b) {
+                               if ((a.dataType & MPSDataTypeFloatBit) != 0) {
+                                   if (b_pos_one)
+                                       return sub_pos_zero(g, a, zero_splat_like(g, b));
+                                   if (b_neg_one)
+                                       return [g
+                                           negativeWithTensor:sub_pos_zero(g, a,
+                                                                           zero_splat_like(g, b))
+                                                         name:@"div_neg_one"];
+                               }
+                               return [g divisionWithPrimaryTensor:a secondaryTensor:b name:@"div"];
+                           });
     }
 };
 

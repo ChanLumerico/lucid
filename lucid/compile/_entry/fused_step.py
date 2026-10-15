@@ -317,6 +317,7 @@ class _FusedPlan:
     loss_shape: tuple[int, ...]
     loss_dtype: _dtype_cls
     loss_device: _device_cls
+    scaled_loss_sink: _C_engine.TensorImpl | None = None
 
 
 @final
@@ -445,10 +446,6 @@ class _FusedStep:
         self._current_args: tuple[Tensor, ...] = ()
         # This call's packed scalar vectors (read by their resolvers).
         self._step_vectors: list[_C_engine.TensorImpl] = []
-        # The "scale that was applied this step" — captured before
-        # ``run`` so the user-visible loss can be unscaled afterwards
-        # even if the scaler's schedule advances between calls.
-        self._last_applied_scale: float = 1.0
 
     # ── Public API ──────────────────────────────────────────────
 
@@ -501,6 +498,7 @@ class _FusedStep:
         key = self._key(
             self._members() if self._reachable is not None else (),
             flags,
+            args,
         )
         if key in self._eager_only:
             return self._run_eager(args)
@@ -543,11 +541,12 @@ class _FusedStep:
             fallback_key = self._key(
                 self._members() if self._reachable is not None else (),
                 flags,
+                args,
             )
             self._eager_only.add(fallback_key)
             return self._run_eager(args)
         # Keyed after the build + first run: it initialised the new members' state.
-        self._plans[self._key(plan.members, flags)] = plan
+        self._plans[self._key(plan.members, flags, args)] = plan
         while len(self._plans) > _MAX_PLANS:
             self._plans.pop(next(iter(self._plans)))
         return result
@@ -578,10 +577,6 @@ class _FusedStep:
 
         ``copy_`` writes through to the holder's existing buffer so
         the cached executable keeps hitting the same input slot.
-        Captures ``self._last_applied_scale`` so the loss returned by
-        ``_run`` can be unscaled by exactly the value that was applied
-        in this step (even if ``scaler.update()`` mutates ``_scale``
-        between calls).
         """
         if self._grad_scaler is None or not self._grad_scaler._enabled:
             return
@@ -591,7 +586,6 @@ class _FusedStep:
         import lucid as _lucid
 
         scale = float(self._grad_scaler.get_scale())
-        self._last_applied_scale = scale
         inv = 1.0 / scale
         dt = self._scale_holder.dtype
         dev = self._scale_holder.device
@@ -614,10 +608,16 @@ class _FusedStep:
     # ── Internals ───────────────────────────────────────────────
 
     def _key(
-        self, members: tuple[int, ...], flags: tuple[_Flags, ...]
+        self,
+        members: tuple[int, ...],
+        flags: tuple[_Flags, ...],
+        args: tuple[Tensor, ...] = (),
     ) -> tuple[object, ...]:
-        """Plan key: participants, structural flags, per-parameter classes."""
-        return (members, flags, self._copt._partition(members))
+        """Plan key: participants, structural flags, per-parameter classes, input shapes."""
+        arg_sig = tuple((tuple(a.shape), a.dtype, a.device) for a in args)
+        amp_active = _C_engine.amp_is_active()
+        amp_sig = (amp_active, _C_engine.amp_active_dtype() if amp_active else None)
+        return (members, flags, self._copt._partition(members), arg_sig, amp_sig)
 
     def _members(self) -> tuple[int, ...]:
         """Parameters that step: reach the loss and require grad (eager's rule)."""
@@ -682,6 +682,8 @@ class _FusedStep:
             self._found_inf_target = _lucid.zeros(
                 (), dtype=_lucid.float32, device=p0.device
             )
+        if scaler_enabled:
+            self._refresh_scaler_scalars()
 
         members: tuple[int, ...] = ()
         ghost_grads: dict[int, Tensor] = {}
@@ -696,8 +698,9 @@ class _FusedStep:
 
                         # GradScaler step 1 — scale loss before backward.
                         # ``loss_id`` (the backward source) points at the
-                        # scaled loss; the unscaled loss is divided out on
-                        # the return path.
+                        # scaled loss; the unscaled loss is captured as its own
+                        # output target so F16 overflow of the scaled loss
+                        # cannot corrupt the user-visible loss tensor.
                         if scaler_enabled:
                             assert self._scale_holder is not None
                             loss_for_bwd = loss * self._scale_holder.to(loss.dtype)
@@ -759,6 +762,11 @@ class _FusedStep:
 
                                 # GradScaler step 3a — found_inf over the
                                 # unscaled gradients: Σ isfinite < Σ numel.
+                                # Under F16 backward, MPSGraph's optimizer can
+                                # fuse the F32 scale holder's cast to F16 with
+                                # downstream F16->F32 casts and hide an F16
+                                # overflow at ``scale > 65504`` or in the scaled
+                                # loss that eager's F16 backward hits.
                                 finite_counts: list[Tensor] = []
                                 expected_total = 0.0
                                 for g in unscaled.values():
@@ -766,6 +774,22 @@ class _FusedStep:
                                         _lucid.isfinite(g).to(_lucid.float32).sum()
                                     )
                                     expected_total += float(int(_prod_shape(g.shape)))
+                                if loss_for_bwd.dtype == _lucid.float16:
+                                    assert self._scale_holder is not None
+                                    finite_counts.append(
+                                        _lucid.isfinite(loss_for_bwd)
+                                        .to(_lucid.float32)
+                                        .sum()
+                                    )
+                                    expected_total += float(
+                                        int(_prod_shape(loss_for_bwd.shape))
+                                    )
+                                    finite_counts.append(
+                                        (self._scale_holder <= 65504.0)
+                                        .to(_lucid.float32)
+                                        .sum()
+                                    )
+                                    expected_total += 1.0
                                 total_finite = finite_counts[0]
                                 for nf in finite_counts[1:]:
                                     total_finite = total_finite + nf
@@ -831,6 +855,12 @@ class _FusedStep:
         # tid bound to output[0].  Under GradScaler, both purposes
         # need the SCALED loss (so grads come out scaled).
         loss_id = int(tracer.lookup_id(_unwrap(loss_for_bwd)))
+        unscaled_loss_tid: int | None = None
+        if scaler_enabled:
+            _ul_tid = tracer.lookup_id(_unwrap(loss))
+            if _ul_tid is None:
+                raise RuntimeError("fused_step: unscaled loss missing from trace")
+            unscaled_loss_tid = int(_ul_tid)
 
         param_ids: list[int] = []
         for i in members:
@@ -897,7 +927,9 @@ class _FusedStep:
             (feed_id, out_id) for feed_id, out_id, _ in bn_writeback_targets(graph, ext)
         ]
         for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
-            output_target_ids.append(_bn_new_id)  # LAST in output_target_ids
+            output_target_ids.append(_bn_new_id)  # LAST before unscaled_loss_tid
+        if unscaled_loss_tid is not None:
+            output_target_ids.append(unscaled_loss_tid)
 
         # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
         # variables) is gated behind ``LUCID_COMPILE_VARS=1`` for the
@@ -1020,11 +1052,16 @@ class _FusedStep:
                 )
             output_targets.append(Tensor(_bn_impl, requires_grad=False))
 
-        if len(output_targets) != len(output_target_ids):
+        checked_target_ids = (
+            output_target_ids[:-1]
+            if unscaled_loss_tid is not None
+            else output_target_ids
+        )
+        if len(output_targets) != len(checked_target_ids):
             raise RuntimeError(
                 "fused_step: output_targets count "
                 f"({len(output_targets)}) doesn't match "
-                f"output_target_ids count ({len(output_target_ids)})"
+                f"output_target_ids count ({len(checked_target_ids)})"
             )
 
         # Per-slot shape guard: any misordering (e.g. a found_inf/dropout/BN
@@ -1033,7 +1070,9 @@ class _FusedStep:
         for _n in graph.ops:
             for _m in _n.outputs:
                 _id_to_shape[int(_m.id)] = tuple(_m.shape)
-        for _slot, (_oid, _tgt) in enumerate(zip(output_target_ids, output_targets, strict=True)):
+        for _slot, (_oid, _tgt) in enumerate(
+            zip(checked_target_ids, output_targets, strict=True)
+        ):
             _exp = _id_to_shape.get(int(_oid))
             if _exp is not None and tuple(_tgt.shape) != _exp:
                 raise RuntimeError(
@@ -1041,6 +1080,16 @@ class _FusedStep:
                     f"{tuple(_tgt.shape)} != trace meta {_exp} — "
                     "output_target_ids / output_targets ordering drift"
                 )
+
+        scaled_loss_sink: _C_engine.TensorImpl | None = None
+        if unscaled_loss_tid is not None:
+            scaled_loss_sink = _unwrap_hot(
+                _lucid_hot.zeros(
+                    *loss_for_bwd.shape if loss_for_bwd.shape else (),
+                    dtype=loss_for_bwd.dtype,
+                    device=loss_for_bwd.device,
+                )
+            )
 
         # Phase 1.10: the targets are stable across calls (a state
         # buffer keeps its identity for life), so unwrap them once.
@@ -1051,9 +1100,10 @@ class _FusedStep:
             resolvers=resolvers,
             target_impls=tuple(_unwrap(t) for t in output_targets),
             bn_counters=bn_counters,
-            loss_shape=tuple(loss_for_bwd.shape),
-            loss_dtype=loss_for_bwd.dtype,
-            loss_device=loss_for_bwd.device,
+            loss_shape=tuple(loss.shape),
+            loss_dtype=loss.dtype,
+            loss_device=loss.device,
+            scaled_loss_sink=scaled_loss_sink,
         )
 
     def _run(
@@ -1093,7 +1143,14 @@ class _FusedStep:
             dtype=plan.loss_dtype,
             device=plan.loss_device,
         )
-        output_targets = [_unwrap_hot(loss_tensor), *plan.target_impls]
+        if plan.scaled_loss_sink is None:
+            output_targets = [_unwrap_hot(loss_tensor), *plan.target_impls]
+        else:
+            output_targets = [
+                plan.scaled_loss_sink,
+                *plan.target_impls,
+                _unwrap_hot(loss_tensor),
+            ]
         _C_engine.compile.run_executable_inplace(plan.exe, feeds, output_targets)
         advance_bn_counters(plan.bn_counters)
 
@@ -1108,10 +1165,6 @@ class _FusedStep:
             skipped = bool(float(self._found_inf_target.item()))
             self._grad_scaler._found_inf = skipped
             self._grad_scaler.update()
-            # Unscale the loss — the user expects to see the original
-            # unscaled loss value, matching ``scaler.scale(loss)``'s
-            # eager contract.
-            loss_tensor = loss_tensor / self._last_applied_scale
         if not skipped:
             copt._commit(plan.members)
         return loss_tensor

@@ -47,14 +47,23 @@ namespace lucid::compile {
 
 inline constexpr const char* kPosZeroSplatSlot = "signed_zero:pos_splat";
 inline constexpr const char* kNegZeroSplatSlot = "signed_zero:neg_splat";
+inline constexpr const char* kPosOneSplatSlot = "signed_zero:pos_one_splat";
+inline constexpr const char* kNegOneSplatSlot = "signed_zero:neg_one_splat";
 
-// Record that ``out_id`` is a splat of ``fill``, if that is a floating zero.
+// Record that ``out_id`` is a splat of ``fill``, if that is a floating ±0 or ±1.
 inline void mark_zero_splat(
     BuilderContext& ctx, TensorId out_id, Dtype dtype, double fill, MPSGraphTensor* splat) {
-    if (!is_floating_point(dtype) || fill != 0.0)
+    if (!is_floating_point(dtype))
         return;
-    ctx.stash_saved(out_id, std::signbit(fill) ? kNegZeroSplatSlot : kPosZeroSplatSlot,
-                    (__bridge void*)splat);
+    const char* slot = nullptr;
+    if (fill == 0.0)
+        slot = std::signbit(fill) ? kNegZeroSplatSlot : kPosZeroSplatSlot;
+    else if (fill == 1.0)
+        slot = kPosOneSplatSlot;
+    else if (fill == -1.0)
+        slot = kNegOneSplatSlot;
+    if (slot != nullptr)
+        ctx.stash_saved(out_id, slot, (__bridge void*)splat);
 }
 
 inline bool is_pos_zero_splat(const BuilderContext& ctx, TensorId id) {
@@ -63,6 +72,18 @@ inline bool is_pos_zero_splat(const BuilderContext& ctx, TensorId id) {
 
 inline bool is_neg_zero_splat(const BuilderContext& ctx, TensorId id) {
     return ctx.resolve_saved(id, kNegZeroSplatSlot) != nullptr;
+}
+
+inline bool is_pos_one_splat(const BuilderContext& ctx, TensorId id) {
+    return ctx.resolve_saved(id, kPosOneSplatSlot) != nullptr;
+}
+
+inline bool is_neg_one_splat(const BuilderContext& ctx, TensorId id) {
+    return ctx.resolve_saved(id, kNegOneSplatSlot) != nullptr;
+}
+
+inline MPSGraphTensor* zero_splat_like(MPSGraph* g, MPSGraphTensor* t) {
+    return [g constantWithScalar:0.0 shape:t.shape dataType:t.dataType];
 }
 
 // ``x + pos_zero`` as IEEE computes it, where ``pos_zero`` is a +0 splat (it
@@ -74,6 +95,18 @@ inline MPSGraphTensor* add_pos_zero(MPSGraph* g, MPSGraphTensor* x, MPSGraphTens
     return [g additionWithPrimaryTensor:x
                         secondaryTensor:[g floorWithTensor:zero_unless_nan name:nil]
                                    name:@"add_pos_zero"];
+}
+
+// ``x - pos_zero`` (and ``x + (-0)``, ``x * 1``, ``x / 1``): keeps ``-0`` as
+// ``-0`` while executing a real hardware op so f32/bf16 subnormals flush to
+// signed zero as in eager Metal (LCD-452).
+inline MPSGraphTensor* sub_pos_zero(MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* pos_zero) {
+    MPSGraphTensor* zero_unless_nan = [g minimumWithPrimaryTensor:[g absoluteWithTensor:x name:nil]
+                                                  secondaryTensor:pos_zero
+                                                             name:nil];
+    return [g subtractionWithPrimaryTensor:x
+                           secondaryTensor:[g floorWithTensor:zero_unless_nan name:nil]
+                                      name:@"sub_pos_zero"];
 }
 
 // Ops whose output holds only values of their first input: a splat in is a
@@ -88,7 +121,7 @@ inline bool moves_values_only(const OpNode& node) {
     return kMoves.count(node.name) != 0;
 }
 
-// Carry a ±0 splat mark from ``node``'s input to its output.  ``emit_node``
+// Carry a ±0 / ±1 splat mark from ``node``'s input to its output.  ``emit_node``
 // calls it after every op, so the rule lives in one place.
 inline void propagate_zero_splat(BuilderContext& ctx, const OpNode& node) {
     if (node.inputs.empty() || node.outputs.size() != 1 || !moves_values_only(node))
@@ -96,7 +129,8 @@ inline void propagate_zero_splat(BuilderContext& ctx, const OpNode& node) {
     void* out = ctx.resolve(node.outputs[0].id);
     if (out == nullptr)
         return;
-    for (const char* slot : {kPosZeroSplatSlot, kNegZeroSplatSlot})
+    for (const char* slot :
+         {kPosZeroSplatSlot, kNegZeroSplatSlot, kPosOneSplatSlot, kNegOneSplatSlot})
         if (ctx.resolve_saved(node.inputs[0], slot) != nullptr)
             ctx.stash_saved(node.outputs[0].id, slot, out);
 }

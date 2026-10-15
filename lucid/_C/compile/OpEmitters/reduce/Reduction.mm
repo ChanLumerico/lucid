@@ -25,6 +25,7 @@
 
 #include "../OpEmitter.h"
 #include "../_AttrHelpers.h"
+#include "../_SignedZero.h"
 
 namespace lucid::compile {
 
@@ -113,7 +114,11 @@ public:
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
-            return [g meanOfTensor:x axes:axes name:@"mean"];
+            MPSGraphTensor* m = [g meanOfTensor:x axes:axes name:@"mean"];
+            if (m != nil && (m.dataType & MPSDataTypeFloatBit) != 0) {
+                m = sub_pos_zero(g, m, [g constantWithScalar:0.0 dataType:m.dataType]);
+            }
+            return m;
         });
     }
 };

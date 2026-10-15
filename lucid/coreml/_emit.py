@@ -1021,25 +1021,22 @@ def _grid_sample(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """MIL calls it ``resample``, and it is the same operation.
 
     Same operand order, same ``(x, y)`` coordinate order, same
-    normalised ``[-1, 1]`` range. This was listed for a long time as an
-    operation the trace could not carry, which was true and not about
-    Core ML: ``grid_sample`` returned before ``wire_autograd`` whenever
-    no gradient was wanted, so an inference trace — the only kind an
-    export takes — recorded neither operand.
-
-    ``reflection`` padding maps to ``border`` because that is what the
-    engine kernel does with it (see ``F.grid_sample``'s ``pad_map``);
-    exporting Core ML's real reflection would make the package disagree
-    with the model it came from.
+    normalised ``[-1, 1]`` range. ``F.grid_sample`` folds ``reflection``
+    padding into the grid in Python and hands the kernel ``border``
+    (``padding_mode == 1``); only ``mode in (0, 1)`` and
+    ``padding_mode in (0, 1)`` reach this op.
     """
     attrs = op.attrs
-    sampling = "nearest" if _as_int(attrs.get("mode", 0)) == 1 else "bilinear"
-    zeros = _as_int(attrs.get("padding_mode", 0)) == 0
+    mode, pad = _as_int(attrs.get("mode", 0)), _as_int(attrs.get("padding_mode", 0))
+    if mode not in (0, 1) or pad not in (0, 1):
+        raise ValueError(
+            f"lucid.coreml: grid_sample mode={mode}, padding_mode={pad} out of {{0, 1}}"
+        )
     return "resample", [
         ("x", ins[0]),
         ("coordinates", ins[1]),
-        ("sampling_mode", b.const_str(sampling)),
-        ("padding_mode", b.const_str("constant" if zeros else "border")),
+        ("sampling_mode", b.const_str("nearest" if mode == 1 else "bilinear")),
+        ("padding_mode", b.const_str("constant" if pad == 0 else "border")),
         ("padding_value", b.const_float32(0.0)),
         ("coordinates_mode", b.const_str("normalized_minus_one_to_one")),
         ("align_corners", b.const_bool(bool(attrs.get("align_corners", False)))),
