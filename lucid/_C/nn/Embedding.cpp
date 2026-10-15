@@ -299,7 +299,8 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     bwd->include_last_offset_ = include_last_offset;
     bwd->dtype_ = weight->dtype();
     bwd->device_ = weight->device();
-    kernel::NaryKernel<EmbeddingBagBackward, 1>::wire_autograd(std::move(bwd), {weight}, out);
+    kernel::NaryKernel<EmbeddingBagBackward, 1>::wire_autograd(std::move(bwd), {weight}, out,
+                                                               mode == 2);
     return out;
 }
 

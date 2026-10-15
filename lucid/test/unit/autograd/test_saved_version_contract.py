@@ -450,36 +450,52 @@ def test_a_write_into_lu_solve_b_is_named_as_argument_2(device_cpu_only: str) ->
         x.sum().backward()
 
 
-def _embedding_bag_sum_written(lib: Any, kw: dict[str, str]) -> np.ndarray:
+def _embedding_bag_written(lib: Any, mode: str, kw: dict[str, str]) -> np.ndarray:
     w = lib.tensor(np.arange(12.0, dtype=np.float32).reshape(4, 3), **kw)
     w.requires_grad_()
     idx = lib.tensor([0, 2, 1, 3], **kw)
     off = lib.tensor([0, 2], **kw)
-    out = _fn(lib, "embedding_bag")(idx, w, off, mode="sum")
+    out = _fn(lib, "embedding_bag")(idx, w, off, mode=mode)
     with lib.no_grad():
         w.add_(1.0)
     (out * lib.tensor([[1.0, 2.0, 3.0]], **kw)).sum().backward()
     return np.asarray(w.grad.detach().cpu().numpy())
 
 
-def test_embedding_bag_sum_allows_a_write_into_the_weight(
-    device_gpu_only: str, ref: ModuleType
+@pytest.mark.parametrize("mode", ["sum", "mean"])
+def test_embedding_bag_sum_and_mean_allow_a_write_into_the_weight(
+    mode: str, device: str, ref: ModuleType
 ) -> None:
     # Only ``mode="max"`` reads the weight's values (to find each winner), so
-    # only that mode's version check guards it.
-    got = _embedding_bag_sum_written(lucid, {"device": device_gpu_only})
-    np.testing.assert_allclose(got, _embedding_bag_sum_written(ref, {}))
+    # ``sum`` and ``mean`` do not save the weight or refuse a later write.
+    got = _embedding_bag_written(lucid, mode, {"device": device})
+    np.testing.assert_allclose(got, _embedding_bag_written(ref, mode, {}))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=_C_engine.LucidError,
-    reason="LCD-349: the backend's embedding_bag_backward takes the weight in "
-    "every mode, so the CPU node holds its bytes and refuses the write itself",
-)
-def test_embedding_bag_sum_allows_a_write_into_the_weight_on_cpu(ref: ModuleType) -> None:
-    got = _embedding_bag_sum_written(lucid, {"device": "cpu"})
-    np.testing.assert_allclose(got, _embedding_bag_sum_written(ref, {}))
+@pytest.mark.parametrize("mode", ["sum", "mean"])
+def test_embedding_bag_sum_and_mean_allow_inplace_on_nonleaf_weight(
+    mode: str, device: str, ref: ModuleType
+) -> None:
+    base = np.arange(15.0, dtype=np.float32).reshape(5, 3)
+    x = lucid.tensor(base, device=device).requires_grad_()
+    wt = x * 1.0
+    y = F.embedding_bag(
+        lucid.tensor([0, 1, 2, 3], device=device),
+        wt,
+        lucid.tensor([0, 2], device=device),
+        mode=mode,
+    )
+    wt.add_(1.0)
+    y.sum().backward()
+
+    rx = ref.tensor(base).requires_grad_()
+    rwt = rx * 1.0
+    ry = ref.nn.functional.embedding_bag(
+        ref.tensor([0, 1, 2, 3]), rwt, ref.tensor([0, 2]), mode=mode
+    )
+    rwt.add_(1.0)
+    ry.sum().backward()
+    np.testing.assert_allclose(x.grad.detach().cpu().numpy(), rx.grad.numpy())
 
 
 def test_embedding_bag_max_refuses_a_write_into_the_weight(device: str) -> None:

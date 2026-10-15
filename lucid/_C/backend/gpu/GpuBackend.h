@@ -3274,18 +3274,18 @@ public:
         // an EmbeddingBag backward is bounded by the bag contents, not by
         // the vocabulary.  The device axis compares the two paths, so if
         // this ever diverges the audit says so.
-        const std::int64_t n_bags = offsets_count(offsets) - (include_last_offset ? 1 : 0);
-        const Shape grad_shape = {n_bags, weight_shape[1]};
-        const Shape offsets_shape = {static_cast<std::int64_t>(offsets_count(offsets))};
-        Storage grad_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(grad_out), grad_shape)};
-        Storage weight_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(weight), weight_shape)};
-        Storage idx_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(indices), indices_shape)};
-        Storage off_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(offsets), offsets_shape)};
-
-        auto& cpu = backend::Dispatcher::for_device(Device::CPU);
+        const std::int64_t n_off = offsets_count(offsets);
+        const std::int64_t n_bags = n_off - (include_last_offset ? 1 : 0);
+        auto dl = [](const Storage& s, const Shape& sh) {
+            return Storage{gpu::download_gpu_to_cpu(std::get<GpuStorage>(s), sh)};
+        };
+        Storage grad_cpu = dl(grad_out, {n_bags, weight_shape[1]});
+        Storage weight_cpu = mode == 2 ? dl(weight, weight_shape) : Storage{};
         Storage out_cpu =
-            cpu.embedding_bag_backward(grad_cpu, weight_cpu, idx_cpu, off_cpu, weight_shape,
-                                       indices_shape, mode, padding_idx, include_last_offset, dt);
+            backend::Dispatcher::for_device(Device::CPU)
+                .embedding_bag_backward(grad_cpu, weight_cpu, dl(indices, indices_shape),
+                                        dl(offsets, {n_off}), weight_shape, indices_shape, mode,
+                                        padding_idx, include_last_offset, dt);
         return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), weight_shape)};
     }
 
