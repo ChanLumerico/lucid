@@ -14,7 +14,7 @@ a result that would otherwise be filled in with zeros.
 """
 
 from collections.abc import Sequence
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import lucid
 from lucid.autograd._backward import grad as _grad
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _require_differentiable(inputs: Tensor | tuple[Tensor, ...], where: str) -> None:
+def _require_differentiable(inputs: tuple[Tensor, ...], where: str) -> None:
     """Refuse to differentiate with respect to a discrete input.
 
     A derivative with respect to an integer is not a small number, it is
@@ -37,9 +37,8 @@ def _require_differentiable(inputs: Tensor | tuple[Tensor, ...], where: str) -> 
     The reference states it as "only Tensors of floating point dtype can
     require gradients", and that is the same rule.
     """
-    candidates = inputs if isinstance(inputs, (list, tuple)) else (inputs,)
-    for item in candidates:
-        if hasattr(item, "dtype") and not lucid.is_floating_point(item):
+    for item in inputs:
+        if not lucid.is_floating_point(item):
             raise TypeError(
                 f"{where}: only a floating-point input can be differentiated, "
                 f"got {item.dtype}"
@@ -67,13 +66,29 @@ def _differentiable_inputs(
     ]
 
 
-def _as_tuple(value: Tensor | Sequence[Tensor]) -> tuple[tuple[Tensor, ...], bool]:
+_OUT_NAME = "outputs of the user-provided function"
+
+
+def _as_tuple(
+    value: object, arg_name: str, where: str
+) -> tuple[tuple[Tensor, ...], bool]:
     """``value`` as a tuple of tensors, and whether it was one tensor."""
     from lucid._tensor.tensor import Tensor as _Tensor
 
     if isinstance(value, _Tensor):
         return (value,), True
-    return tuple(value), False
+    if not isinstance(value, tuple):
+        raise TypeError(
+            f"The {arg_name} given to {where} must be either a Tensor or a "
+            f"tuple of Tensors but the given {arg_name} has type {type(value)}."
+        )
+    for i, item in enumerate(value):
+        if not isinstance(item, _Tensor):
+            raise TypeError(
+                f"The {arg_name} given to {where} must be either a Tensor or a "
+                f"tuple of Tensors but the value at index {i} has type {type(item)}."
+            )
+    return value, False
 
 
 def _or_zeros(grads: Sequence[Tensor | None], like: Sequence[Tensor]) -> list[Tensor]:
@@ -171,22 +186,20 @@ def _filled(
 
 def _single_element(out: object, where: str) -> Tensor:
     """``out`` when it is one tensor of one element; refused otherwise."""
-    from lucid._tensor.tensor import Tensor as _Tensor
-
-    if not isinstance(out, _Tensor) or out.numel() != 1:
-        got = (
-            f"shape {tuple(out.shape)}"
-            if isinstance(out, _Tensor)
-            else type(out).__name__
-        )
+    outs, one_output = _as_tuple(out, _OUT_NAME, where)
+    if not one_output or outs[0].numel() != 1:
+        got = f"shape {tuple(outs[0].shape)}" if one_output else "tuple"
         raise RuntimeError(
             f"{where}: func must return a single tensor of one element, got {got}"
         )
-    return out
+    return outs[0]
 
 
 def _seeds(
-    v: Tensor | Sequence[Tensor] | None, like: tuple[Tensor, ...], subject: str
+    v: Tensor | Sequence[Tensor] | None,
+    like: tuple[Tensor, ...],
+    subject: str,
+    where: str,
 ) -> list[Tensor]:
     """``v`` as a list, or ones for a ``like`` that is one single-element tensor.
 
@@ -196,7 +209,7 @@ def _seeds(
     scalar input — where a vector of ones is the only seed that makes sense.
     """
     if v is not None:
-        return list(_as_tuple(v)[0])
+        return list(_as_tuple(v, "v", where)[0])
     if len(like) != 1 or like[0].numel() != 1:
         raise RuntimeError(
             f"The vector v can only be None if {subject} a single Tensor with "
@@ -339,11 +352,13 @@ def jacobian(
     >>> jacobian(f, x)
     tensor([[2., 0., 0.], [0., 4., 0.], [0., 0., 6.]])
     """
-    _require_differentiable(inputs, "jacobian")
-    inputs_t, one_input = _as_tuple(inputs)
+    inputs_t, one_input = _as_tuple(inputs, "inputs", "jacobian")
+    _require_differentiable(inputs_t, "jacobian")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
-        outputs, one_output = _as_tuple(func(*xs))
+        outputs, one_output = _as_tuple(
+            func(*xs), "outputs of the user-provided function", "jacobian"
+        )
         _require_tracked(outputs, "outputs", strict)
         per_output = [
             _pack(
@@ -360,7 +375,7 @@ def _shaped(
 ) -> list[Tensor]:
     """Each flat ``(numel(output), numel(x))`` block as ``output.shape +
     x.shape`` — the shape the reference gives a Jacobian block."""
-    return [b.reshape(*output.shape, *x.shape) for b, x in zip(blocks, xs, strict=True)]
+    return [b.reshape(output.shape + x.shape) for b, x in zip(blocks, xs, strict=True)]
 
 
 def hessian(
@@ -439,8 +454,8 @@ def hessian(
     >>> hessian(f, x).tolist()
     [[6.0, 0.0], [0.0, 12.0]]
     """
-    _require_differentiable(inputs, "hessian")
-    inputs_t, one_input = _as_tuple(inputs)
+    inputs_t, one_input = _as_tuple(inputs, "inputs", "hessian")
+    _require_differentiable(inputs_t, "hessian")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         _, firsts = _first_gradients(func, xs, strict, "hessian")
@@ -480,45 +495,27 @@ def vjp(
     r"""Vector-Jacobian product :math:`v^\top J` (reverse-mode AD).
 
     Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian
-    :math:`J \in \mathbb{R}^{m \times n}` and a cotangent vector
-    :math:`v \in \mathbb{R}^m`, returns
-
-    .. math::
-
-        v^\top J \in \mathbb{R}^{n}
-
-    along with the primal output :math:`y = f(x)`. This is the
-    operation that backpropagation performs on every node: when
-    a scalar loss :math:`\mathcal{L}(y)` is being differentiated
-    against an intermediate :math:`y`, the upstream cotangent is
-    :math:`v = \partial \mathcal{L} / \partial y` and the result
-    is :math:`\partial \mathcal{L} / \partial x`.
-
-    Computing a full VJP costs the same as one backward pass —
-    much cheaper than materialising :math:`J` when only the
-    product is needed.
+    :math:`J \in \mathbb{R}^{m \times n}` and cotangent vector :math:`v \in \mathbb{R}^m`,
+    returns :math:`v^\top J \in \mathbb{R}^{n}` along with the primal output
+    :math:`y = f(x)`. Computing a full VJP costs one backward pass.
 
     Parameters
     ----------
     func : callable
-        Function mapping ``Tensor`` inputs to a ``Tensor`` (or
-        tuple thereof).
+        Function mapping ``Tensor`` inputs to a ``Tensor`` (or tuple thereof).
     inputs : Tensor or tuple of Tensor
         Primal point :math:`x` at which :math:`J` is evaluated. Left as
         it is: the product is taken at copies that require grad.
     v : Tensor or tuple of Tensor, optional
         Cotangent vector(s), one per output of ``func``, each of its
-        output's shape and device — the seed rules of
-        :func:`lucid.autograd.grad`.  May be left out when ``func``
-        returns one single-element tensor, which is then seeded with 1.
+        output's shape and device — the seed rules of :func:`lucid.autograd.grad`.
+        May be left out when ``func`` returns one single-element tensor.
     create_graph : bool, optional
-        If ``True`` the returned VJP is itself differentiable,
-        enabling double-backward. Defaults to ``False``.
+        If ``True`` the returned VJP is itself differentiable. Defaults to ``False``.
     strict : bool, optional
         If ``True``, refuse an output that does not require grad and an
         input the outputs do not depend on, instead of giving it a zero
-        gradient — and, under ``create_graph``, a gradient that is a
-        constant.  Defaults to ``False``.
+        gradient. Defaults to ``False``.
 
     Returns
     -------
@@ -539,8 +536,7 @@ def vjp(
 
     Notes
     -----
-    The dual to :func:`vjp` is :func:`jvp`, which computes :math:`J v`
-    by differentiating this product with respect to :math:`v`.
+    The dual to :func:`vjp` is :func:`jvp`, which computes :math:`J v`.
 
     Examples
     --------
@@ -548,20 +544,18 @@ def vjp(
     >>> from lucid.autograd import vjp
     >>> x = lucid.tensor([1.0, 2.0, 3.0])
     >>> v = lucid.tensor([1.0, 1.0, 1.0])
-    >>> def f(x):
-    ...     return x * x
-    >>> y, grad_x = vjp(f, x, v)
+    >>> y, grad_x = vjp(lambda x: x * x, x, v)
     >>> grad_x
     tensor([2., 4., 6.])
     """
-    _require_differentiable(inputs, "vjp")
-    inputs_t, one_input = _as_tuple(inputs)
+    inputs_t, one_input = _as_tuple(inputs, "inputs", "vjp")
+    _require_differentiable(inputs_t, "vjp")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
-        outputs = func(*xs)
-        outs, _ = _as_tuple(outputs)
+        outputs: Tensor | tuple[Tensor, ...] = func(*xs)
+        outs, one_output = _as_tuple(outputs, "outputs of the user-provided function", "vjp")
         _require_tracked(outs, "outputs", strict)
-        seeds = _seeds(v, outs, "the user-provided function returns")
+        seeds = _seeds(v, outs, "the user-provided function returns", "vjp")
         grads = _grad(
             list(outs),
             xs,
@@ -571,32 +565,23 @@ def vjp(
             allow_unused=True,
         )
 
-    # ``retain_graph`` follows ``create_graph``, so by default the graph
-    # behind ``outputs`` has just been freed — while ``outputs`` itself
-    # still advertises ``requires_grad=True``.  Handing that back invites
-    # a second backward through storages that no longer exist, and it does
-    # not raise: ``MulBackward`` multiplied a live gradient by a released
-    # operand and read off the end of it.  ``(out * out).sum().backward()``
-    # after a plain ``vjp`` was a segfault in four lines.
-    #
-    # Detached only when the graph was not kept.  Under ``create_graph``
-    # the graph is alive and differentiating the output again is exactly
-    # what the flag is for.
+    # Detach outputs when retain_graph=False so a later backward does not read freed storage.
     vjps = _filled(grads, inputs_t, "back", strict, create_graph)
     if not create_graph:
-        outputs = _detach_outputs(outputs)
+        outputs = _detach_outputs(outs, one_output)
     return outputs, _pack(vjps, one_input)
 
 
-def _detach_outputs(outputs: Any) -> Any:
-    """Detach ``outputs``, preserving whether it was a single tensor.
+def _detach_outputs(
+    outs: tuple[Tensor, ...], one_output: bool
+) -> Tensor | tuple[Tensor, ...]:
+    """Detach ``outs``, preserving whether it was a single tensor.
 
     ``vjp`` and its callers accept one tensor or a tuple of them, and the
     return type has to keep that distinction.
     """
-    if isinstance(outputs, (list, tuple)):
-        return type(outputs)(o.detach() if hasattr(o, "detach") else o for o in outputs)
-    return outputs.detach() if hasattr(outputs, "detach") else outputs
+    detached = [o.detach() for o in outs]
+    return _pack(detached, one_output)
 
 
 def jvp(
@@ -685,18 +670,20 @@ def jvp(
     >>> tangent
     tensor([2., 0., 0.])
     """
-    _require_differentiable(inputs, "jvp")
-    inputs_t, _ = _as_tuple(inputs)
-    v_t = _seeds(v, inputs_t, "the input to the user-provided function is")
+    inputs_t, _ = _as_tuple(inputs, "inputs", "jvp")
+    _require_differentiable(inputs_t, "jvp")
+    v_t = _seeds(v, inputs_t, "the input to the user-provided function is", "jvp")
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
-        outputs = func(*xs)
-        outs, one_output = _as_tuple(outputs)
+        outputs: Tensor | tuple[Tensor, ...] = func(*xs)
+        outs, one_output = _as_tuple(
+            outputs, "outputs of the user-provided function", "jvp"
+        )
         _require_tracked(outs, "outputs", strict)
         tangents = _forward_by_double_back(outs, xs, v_t, create_graph, strict)
     tangents_out = _filled(tangents, outs, "back_trick", strict, create_graph)
     if not create_graph:
-        outputs = _detach_outputs(outputs)
+        outputs = _detach_outputs(outs, one_output)
     return outputs, _pack(tangents_out, one_output)
 
 
@@ -743,9 +730,9 @@ def _hessian_product(
     reverse pass.  ``hvp`` is its Jacobian-vector product, taken as
     :func:`jvp` takes one; the two agree when the Hessian is symmetric.
     """
-    _require_differentiable(inputs, name)
-    inputs_t, one_input = _as_tuple(inputs)
-    v_t = _seeds(v, inputs_t, "the input to the user-provided function is")
+    inputs_t, one_input = _as_tuple(inputs, "inputs", name)
+    _require_differentiable(inputs_t, name)
+    v_t = _seeds(v, inputs_t, "the input to the user-provided function is", name)
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         out, firsts = _first_gradients(func, xs, strict, name)
