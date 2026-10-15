@@ -360,8 +360,16 @@ void register_compile(py::module_& m) {
             if (!wrapper)
                 throw std::invalid_argument("run_executable_inplace: null wrapper");
             const auto feeds = resolve_feeds(inputs);
-            py::gil_scoped_release release;
-            lucid::compile::run_executable_inplace(wrapper->raw(), feeds, output_targets);
+            std::vector<lucid::GpuStorage> fresh_outputs;
+            {
+                py::gil_scoped_release release;
+                fresh_outputs = lucid::compile::run_executable_inplace_outputs(
+                    wrapper->raw(), feeds, output_targets);
+            }
+            // The swap replaces a Metal view family's root and drops its
+            // members' cached views: run it with the GIL held again so no
+            // Python thread reading a sibling races it.
+            lucid::compile::swap_executable_inplace_targets(output_targets, fresh_outputs);
         },
         py::arg("executable"), py::arg("inputs"), py::arg("output_targets"),
         "Execute a CompiledExecutable, writing each output directly into "

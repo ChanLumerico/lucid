@@ -552,9 +552,10 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
     return outputs;
 }
 
-LUCID_API void run_executable_inplace(CompiledExecutable* exe,
-                                      const std::vector<TensorImplPtr>& traced_feeds,
-                                      const std::vector<TensorImplPtr>& output_targets) {
+LUCID_API std::vector<GpuStorage>
+run_executable_inplace_outputs(CompiledExecutable* exe,
+                               const std::vector<TensorImplPtr>& traced_feeds,
+                               const std::vector<TensorImplPtr>& output_targets) {
     const std::vector<TensorImplPtr> input_feeds = redraw_rng_feeds(traced_feeds);
     // Swap-buffer variant: instead of allocating fresh MTLBuffers per
     // output and returning new TensorImpls, allocate one fresh
@@ -609,6 +610,7 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
         if (!target)
             throw std::invalid_argument("run_executable_inplace: null output target at slot " +
                                         std::to_string(j));
+        target->check_wholesale_writable("run_executable_inplace");
         if (target->device() != Device::GPU)
             throw std::invalid_argument(
                 "run_executable_inplace: output target not on GPU at slot " + std::to_string(j));
@@ -624,6 +626,7 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
 
     std::vector<id<MTLBuffer>> fresh_out_bufs;
     fresh_out_bufs.reserve(total_outs);
+    std::vector<GpuStorage> fresh_outputs(total_outs);
 
     @autoreleasepool {
         NSMutableArray<MPSGraphTensorData*>* feeds =
@@ -728,25 +731,52 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
         // anything bigger than a toy MLP.
         detail::run_or_throw(exe->executable, queue, feeds, results, "run_executable_inplace");
 
-        // Swap (or skip in alias mode): wrap each fresh MTLBuffer as
-        // a leaf MLX array and overwrite the target's ``GpuStorage::arr``
-        // pointer.  In alias mode the buffer is already the target's
-        // own — bump_version is still needed so downstream readers
-        // observe the update.
+        // Wrap each fresh MTLBuffer as a leaf MLX array while still
+        // inside the autoreleasepool.  The actual target storage swap +
+        // version bump happens in :func:`swap_executable_inplace_targets`
+        // (with the Python GIL re-acquired when called from Python so
+        // concurrent readers of Metal view-family siblings never race
+        // the root replacement or cache invalidation).
         for (std::size_t j = 0; j < total_outs; ++j) {
-            auto& target = const_cast<TensorImplPtr&>(output_targets[j]);
             id<MTLBuffer> buf = fresh_out_bufs[j];
             if (buf != nil) {
-                auto& gs = std::get<GpuStorage>(target->mutable_storage());
                 void* raw = (__bridge_retained void*)buf;
-                std::vector<int> mlx_shape(target->shape().begin(), target->shape().end());
+                const Shape& out_shape = exe->output_shapes[j];
+                const Dtype out_dtype = exe->output_dtypes[j];
+                std::vector<int> mlx_shape(out_shape.begin(), out_shape.end());
                 ::mlx::core::array fresh =
-                    lucid::gpu::mps::buffer_to_array(raw, std::move(mlx_shape), target->dtype());
-                gs.arr = std::make_shared<::mlx::core::array>(std::move(fresh));
+                    lucid::gpu::mps::buffer_to_array(raw, std::move(mlx_shape), out_dtype);
+                fresh_outputs[j].dtype = out_dtype;
+                fresh_outputs[j].nbytes = detail::shape_nbytes(out_shape, out_dtype);
+                fresh_outputs[j].arr = std::make_shared<::mlx::core::array>(std::move(fresh));
             }
-            target->bump_version();
         }
     }
+
+    return fresh_outputs;
+}
+
+LUCID_API void swap_executable_inplace_targets(const std::vector<TensorImplPtr>& output_targets,
+                                               std::vector<GpuStorage>& fresh_outputs) {
+    if (output_targets.size() != fresh_outputs.size())
+        throw std::invalid_argument(
+            "swap_executable_inplace_targets: target/output count mismatch");
+    for (std::size_t j = 0; j < output_targets.size(); ++j) {
+        const auto& target = output_targets[j];
+        if (fresh_outputs[j].arr) {
+            auto& gs = std::get<GpuStorage>(target->mutable_storage());
+            gs.arr = std::move(fresh_outputs[j].arr);
+        }
+        target->bump_version();
+    }
+}
+
+LUCID_API void run_executable_inplace(CompiledExecutable* exe,
+                                      const std::vector<TensorImplPtr>& traced_feeds,
+                                      const std::vector<TensorImplPtr>& output_targets) {
+    std::vector<GpuStorage> fresh_outputs =
+        run_executable_inplace_outputs(exe, traced_feeds, output_targets);
+    swap_executable_inplace_targets(output_targets, fresh_outputs);
 }
 
 // ── Disk cache implementation ───────────────────────────────────────

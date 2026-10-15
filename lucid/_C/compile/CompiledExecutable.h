@@ -141,6 +141,23 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
                                       const std::vector<TensorImplPtr>& input_feeds,
                                       const std::vector<TensorImplPtr>& output_targets);
 
+// Execute ``exe`` for :func:`run_executable_inplace` and return one fresh
+// :class:`GpuStorage` per slot in ``output_targets`` (with ``arr`` null in
+// alias mode), without mutating the targets' storage or versions.  Safe to
+// run with the Python GIL released once feeds have been resolved; follow with
+// :func:`swap_executable_inplace_targets` under the GIL.
+LUCID_API std::vector<GpuStorage>
+run_executable_inplace_outputs(CompiledExecutable* exe,
+                               const std::vector<TensorImplPtr>& input_feeds,
+                               const std::vector<TensorImplPtr>& output_targets);
+
+// Install the outputs returned by :func:`run_executable_inplace_outputs` into
+// ``output_targets`` and bump each target's version counter.  Replaces any
+// Metal view-family root and drops sibling caches, so callers must hold the
+// Python GIL when other Python threads may read the family.
+LUCID_API void swap_executable_inplace_targets(const std::vector<TensorImplPtr>& output_targets,
+                                               std::vector<GpuStorage>& fresh_outputs);
+
 // ── Disk cache (Tier 1-A) ───────────────────────────────────────────
 //
 // Persist a compiled :class:`CompiledExecutable` to disk so subsequent
