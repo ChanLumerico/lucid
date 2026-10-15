@@ -219,6 +219,10 @@ def _max_pool(
     n = len(g.kernel)
     xb, unbatched = _add_batch_axis(x, n)
     if any(d != 1 for d in g.dilation):
+        if xb.ndim != n + 2:
+            raise ValueError(
+                f"max_pool{n}d: expected {n + 1}D or {n + 2}D input, got {x.ndim}D"
+            )
         spatial = tuple(int(v) for v in xb.shape[2:])
         out_spatial = tuple(
             _pooled_extent(size, *axis, ceil_mode)
@@ -307,12 +311,10 @@ def _lp_pool(x: Tensor, norm_type: float, g: _PoolGeometry, ceil_mode: bool) -> 
     derivative is infinite; the reference does this with
     ``sign(s) * relu(|s|)``, and a ``where`` does it here, because the
     engine's ``relu`` gradient also drops a ``nan`` sum's gradient, which
-    the reference passes on.  ``p = inf`` is max pooling of ``|x|``.
+    the reference passes on.
     """
     p = float(norm_type)
     n = len(g.kernel)
-    if p == math.inf:
-        return _max_pool(_lucid.abs(x), g, ceil_mode, False)
     if not p > 0.0:
         raise ValueError(f"lp_pool{n}d: norm_type must be > 0, got {p}")
     pooled = _avg_pool(x**p, g, ceil_mode, True, None)
@@ -358,6 +360,8 @@ def _adaptive_pool(
     """
     op = f"adaptive_{'avg' if reduce == 'mean' else 'max'}_pool{n}d"
     xb, unbatched = _add_batch_axis(x, n)
+    if xb.ndim != n + 2:
+        raise ValueError(f"{op}: expected {n + 1}D or {n + 2}D input, got {x.ndim}D")
     spatial = tuple(int(s) for s in xb.shape[-n:])
     sizes = _adaptive_size(output_size, spatial, op)
     if 0 in sizes:

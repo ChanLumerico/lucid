@@ -53,6 +53,11 @@ def _triple(v: _Size3d, name: str) -> tuple[int, int, int]:
 
 def _in_channels(x: Tensor, n: int) -> int:
     """The channel count of a batched or unbatched ``n``-D conv input."""
+    if x.ndim not in (n + 1, n + 2):
+        raise ValueError(
+            f"expected {n + 1}D (unbatched) or {n + 2}D (batched) input, "
+            f"got {x.ndim}D input of shape {tuple(x.shape)}"
+        )
     return int(x.shape[0 if x.ndim == n + 1 else 1])
 
 

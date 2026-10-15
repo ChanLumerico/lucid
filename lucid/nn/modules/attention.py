@@ -621,10 +621,43 @@ class MultiheadAttention(Module):
         Tensor
             Output tensor; refer to the class docstring for the exact shape.
         """
-        if not self.batch_first:
-            query = query.permute([1, 0, 2])
-            key = key.permute([1, 0, 2])
-            value = value.permute([1, 0, 2])
+        is_batched = query.ndim == 3
+        if query.ndim not in (2, 3):
+            raise ValueError(
+                "MultiheadAttention: expected query to be 2-D or 3-D, "
+                f"got {query.ndim}-D"
+            )
+        if is_batched:
+            if key.ndim != 3 or value.ndim != 3:
+                raise ValueError(
+                    "MultiheadAttention: for 3-D (batched) query, expected "
+                    f"key and value to be 3-D, got {key.ndim}-D and {value.ndim}-D"
+                )
+            if key_padding_mask is not None and key_padding_mask.ndim != 2:
+                raise ValueError(
+                    "MultiheadAttention: for 3-D (batched) query, expected "
+                    f"key_padding_mask to be 2-D, got {key_padding_mask.ndim}-D"
+                )
+            if not self.batch_first:
+                query = query.permute([1, 0, 2])
+                key = key.permute([1, 0, 2])
+                value = value.permute([1, 0, 2])
+        else:
+            if key.ndim != 2 or value.ndim != 2:
+                raise ValueError(
+                    "MultiheadAttention: for 2-D (unbatched) query, expected "
+                    f"key and value to be 2-D, got {key.ndim}-D and {value.ndim}-D"
+                )
+            if key_padding_mask is not None:
+                if key_padding_mask.ndim != 1:
+                    raise ValueError(
+                        "MultiheadAttention: for 2-D (unbatched) query, expected "
+                        f"key_padding_mask to be 1-D, got {key_padding_mask.ndim}-D"
+                    )
+                key_padding_mask = key_padding_mask.unsqueeze(0)
+            query = query.unsqueeze(0)
+            key = key.unsqueeze(0)
+            value = value.unsqueeze(0)
 
         B: int = query.shape[0]
         Tq: int = query.shape[1]
@@ -777,12 +810,17 @@ class MultiheadAttention(Module):
 
         out = linear(out, self.out_proj_weight, self.out_proj_bias)
 
-        if not self.batch_first:
+        if not is_batched:
+            out = out.squeeze(0)
+        elif not self.batch_first:
             out = out.permute([1, 0, 2])
 
-        if need_weights and attn_weights is not None and average_attn_weights:
-            # (B, H, Tq, Tk) → (B, Tq, Tk)
-            attn_weights = attn_weights.mean(dim=1)
+        if need_weights and attn_weights is not None:
+            if average_attn_weights:
+                # (B, H, Tq, Tk) → (B, Tq, Tk)
+                attn_weights = attn_weights.mean(dim=1)
+            if not is_batched:
+                attn_weights = attn_weights.squeeze(0)
 
         return out, attn_weights
 

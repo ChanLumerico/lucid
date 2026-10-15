@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator, Sequence
 
 from typing import cast, override
 
+import lucid as _lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 
@@ -213,13 +214,15 @@ class TransformerEncoderLayer(Module):
         nhead: int,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
-        attention_dropout: float | None = None,
         activation: str | Callable[[Tensor], Tensor] = "relu",
+        layer_norm_eps: float = 1e-5,
         batch_first: bool = False,
         norm_first: bool = False,
-        layer_norm_eps: float = 1e-5,
+        bias: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        attention_dropout: float | None = None,
     ) -> None:
         """Initialise the TransformerEncoderLayer module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -231,6 +234,7 @@ class TransformerEncoderLayer(Module):
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
+        self.bias = bias
         self.layer_norm_eps = layer_norm_eps
 
         # A single ``dropout`` used to drive both the residual dropout and the
@@ -240,17 +244,12 @@ class TransformerEncoderLayer(Module):
         attn_p = dropout if attention_dropout is None else attention_dropout
         self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
-            d_model,
-            nhead,
-            dropout=attn_p,
-            batch_first=batch_first,
-            device=device,
-            dtype=dtype,
+            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
         )
-        self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
-        self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
-        self.norm1 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        self.linear1 = Linear(d_model, dim_feedforward, bias, device, dtype)
+        self.linear2 = Linear(dim_feedforward, d_model, bias, device, dtype)
+        self.norm1 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
+        self.norm2 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -492,9 +491,13 @@ class TransformerEncoder(Module):
         encoder_layer: TransformerEncoderLayer,
         num_layers: int,
         norm: Module | None = None,
+        enable_nested_tensor: bool = True,
+        mask_check: bool = True,
     ) -> None:
         """Initialise the TransformerEncoder module. See the class docstring for parameter semantics."""
         super().__init__()
+        self.enable_nested_tensor = enable_nested_tensor
+        self.mask_check = mask_check
         # Rebuild from the prototype's *full* configuration.  Dropping
         # ``layer_norm_eps`` / ``device`` / ``dtype`` here silently reset every
         # cloned layer to the framework defaults, so a Transformer built with
@@ -506,13 +509,14 @@ class TransformerEncoder(Module):
                 encoder_layer.nhead,
                 encoder_layer.dim_feedforward,
                 encoder_layer.dropout_val,
-                encoder_layer.attention_dropout_val,
                 encoder_layer.activation,
+                encoder_layer.layer_norm_eps,
                 encoder_layer.batch_first,
                 encoder_layer.norm_first,
-                layer_norm_eps=encoder_layer.layer_norm_eps,
+                encoder_layer.bias,
                 device=_proto_device(encoder_layer),
                 dtype=_proto_dtype(encoder_layer),
+                attention_dropout=encoder_layer.attention_dropout_val,
             )
             for _ in range(num_layers)
         ]
@@ -560,6 +564,7 @@ class TransformerEncoder(Module):
         src: Tensor,
         mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
+        is_causal: bool | None = None,
     ) -> Tensor:
         """Run the forward pass of the module.
 
@@ -571,6 +576,8 @@ class TransformerEncoder(Module):
             See the class docstring.
         src_key_padding_mask : Tensor
             See the class docstring.
+        is_causal : bool, optional
+            If ``True``, applies a causal mask across every encoder layer.
 
         Returns
         -------
@@ -578,10 +585,16 @@ class TransformerEncoder(Module):
             Output tensor; refer to the class docstring for the exact shape.
         """
         output = src
+        causal = bool(is_causal)
         for layer in self.layers:
             output = cast(
                 Tensor,
-                layer(output, src_mask=mask, src_key_padding_mask=src_key_padding_mask),
+                layer(
+                    output,
+                    src_mask=mask,
+                    src_key_padding_mask=src_key_padding_mask,
+                    is_causal=causal,
+                ),
             )
         if self.norm is not None:
             output = cast(Tensor, self.norm(output))
@@ -757,13 +770,15 @@ class TransformerDecoderLayer(Module):
         nhead: int,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
-        attention_dropout: float | None = None,
         activation: str | Callable[[Tensor], Tensor] = "relu",
+        layer_norm_eps: float = 1e-5,
         batch_first: bool = False,
         norm_first: bool = False,
-        layer_norm_eps: float = 1e-5,
+        bias: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        attention_dropout: float | None = None,
     ) -> None:
         """Initialise the TransformerDecoderLayer module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -775,6 +790,7 @@ class TransformerDecoderLayer(Module):
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
+        self.bias = bias
         self.layer_norm_eps = layer_norm_eps
 
         # A single ``dropout`` used to drive both the residual dropout and the
@@ -784,26 +800,16 @@ class TransformerDecoderLayer(Module):
         attn_p = dropout if attention_dropout is None else attention_dropout
         self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
-            d_model,
-            nhead,
-            dropout=attn_p,
-            batch_first=batch_first,
-            device=device,
-            dtype=dtype,
+            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
         )
         self.multihead_attn = MultiheadAttention(
-            d_model,
-            nhead,
-            dropout=attn_p,
-            batch_first=batch_first,
-            device=device,
-            dtype=dtype,
+            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
         )
-        self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
-        self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
-        self.norm1 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
-        self.norm3 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        self.linear1 = Linear(d_model, dim_feedforward, bias, device, dtype)
+        self.linear2 = Linear(dim_feedforward, d_model, bias, device, dtype)
+        self.norm1 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
+        self.norm2 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
+        self.norm3 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -1068,13 +1074,14 @@ class TransformerDecoder(Module):
                 decoder_layer.nhead,
                 decoder_layer.dim_feedforward,
                 decoder_layer.dropout_val,
-                decoder_layer.attention_dropout_val,
                 decoder_layer.activation,
+                decoder_layer.layer_norm_eps,
                 decoder_layer.batch_first,
                 decoder_layer.norm_first,
-                layer_norm_eps=decoder_layer.layer_norm_eps,
+                decoder_layer.bias,
                 device=_proto_device(decoder_layer),
                 dtype=_proto_dtype(decoder_layer),
+                attention_dropout=decoder_layer.attention_dropout_val,
             )
             for _ in range(num_layers)
         ]
@@ -1125,6 +1132,8 @@ class TransformerDecoder(Module):
         memory_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
+        tgt_is_causal: bool | None = None,
+        memory_is_causal: bool = False,
         *,
         past_key_value: Cache | None = None,
         use_cache: bool = False,
@@ -1146,6 +1155,10 @@ class TransformerDecoder(Module):
             See the class docstring.
         memory_key_padding_mask : Tensor
             See the class docstring.
+        tgt_is_causal : bool, optional
+            If ``True``, applies a causal mask to target self-attention.
+        memory_is_causal : bool, optional
+            If ``True``, applies a causal mask to memory cross-attention.
         past_key_value : Cache or None, optional, keyword-only
             Shared encoder-decoder cache threaded to every layer (each layer
             writes its own ``layer_idx`` slot).
@@ -1160,6 +1173,7 @@ class TransformerDecoder(Module):
             Output tensor; refer to the class docstring for the exact shape.
         """
         output = tgt
+        causal = bool(tgt_is_causal)
         for layer_idx, layer in enumerate(self.layers):
             output = cast(
                 Tensor,
@@ -1170,6 +1184,8 @@ class TransformerDecoder(Module):
                     memory_mask=memory_mask,
                     tgt_key_padding_mask=tgt_key_padding_mask,
                     memory_key_padding_mask=memory_key_padding_mask,
+                    tgt_is_causal=causal,
+                    memory_is_causal=memory_is_causal,
                     past_key_value=past_key_value,
                     layer_idx=layer_idx,
                     use_cache=use_cache,
@@ -1249,12 +1265,12 @@ class Transformer(Module):
 
     Attributes
     ----------
-    encoder : TransformerEncoder
+    encoder : Module
         The encoder module (``num_encoder_layers`` stacked encoder
-        layers + final LayerNorm).
-    decoder : TransformerDecoder
+        layers + final LayerNorm, or ``custom_encoder``).
+    decoder : Module
         The decoder module (``num_decoder_layers`` stacked decoder
-        layers + final LayerNorm).
+        layers + final LayerNorm, or ``custom_decoder``).
     d_model : int
         Model dimension used at construction.
     nhead : int
@@ -1277,38 +1293,8 @@ class Transformer(Module):
     where :math:`S` is the source length, :math:`T` is the target
     length, :math:`N` is the batch size, and :math:`E` = ``d_model``.
 
-    Notes
-    -----
-    **Positional encoding** is *not* included in this module.
-    The caller is responsible for adding positional information to
-    ``src`` and ``tgt`` before passing them in.  The standard approach
-    is sinusoidal encodings (Vaswani et al.) or learned absolute /
-    rotary position embeddings.
-
-    **Masking conventions**:
-
-    * ``src_mask`` / ``tgt_mask`` / ``memory_mask``: attention bias
-      masks of shape ``(S, S)``, ``(T, T)``, or ``(T, S)``
-      respectively (or ``(N*H, ...)`` per-head variants).  Boolean
-      ``True`` = ignore that position.
-    * ``*_key_padding_mask``: boolean masks of shape ``(N, S)`` or
-      ``(N, T)`` indicating padding positions (``True`` = pad).
-
-    **Initialisation**: All projection weights use Xavier uniform
-    initialisation (via :class:`MultiheadAttention`) and all biases
-    are zeroed.  This matches the original paper's setup and provides
-    stable gradient flow at the start of training.
-
-    **Inference / generation**: For autoregressive decoding, invoke
-    the encoder once to obtain ``memory``, then call the decoder
-    iteratively with a growing ``tgt`` tensor and an appropriate
-    causal mask.  Each decoder call produces logits for the next
-    token at the last position.
-
     Examples
     --------
-    **Standard translation model** (default hyperparameters):
-
     >>> import lucid
     >>> import lucid.nn as nn
     >>> model = nn.Transformer(d_model=512, nhead=8,
@@ -1319,20 +1305,6 @@ class Transformer(Module):
     >>> out = model(src, tgt)
     >>> out.shape
     (7, 2, 512)
-
-    **Compact model with batch_first and GELU**:
-
-    >>> model = nn.Transformer(
-    ...     d_model=256, nhead=4,
-    ...     num_encoder_layers=3, num_decoder_layers=3,
-    ...     dim_feedforward=512, dropout=0.0,
-    ...     activation="gelu", batch_first=True,
-    ... )
-    >>> src = lucid.randn(2, 20, 256)
-    >>> tgt = lucid.randn(2, 15, 256)
-    >>> out = model(src, tgt)
-    >>> out.shape
-    (2, 15, 256)
     """
 
     def __init__(
@@ -1343,45 +1315,65 @@ class Transformer(Module):
         num_decoder_layers: int = 6,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
-        attention_dropout: float | None = None,
         activation: str | Callable[[Tensor], Tensor] = "relu",
-        batch_first: bool = False,
+        custom_encoder: TransformerEncoder | None = None,
+        custom_decoder: TransformerDecoder | None = None,
         layer_norm_eps: float = 1e-5,
-        device: DeviceLike = None,
-        dtype: DTypeLike = None,
+        batch_first: bool = False, norm_first: bool = False, bias: bool = True,
+        device: DeviceLike = None, dtype: DTypeLike = None,
+        *,
+        attention_dropout: float | None = None,
     ) -> None:
         """Initialise the Transformer module. See the class docstring for parameter semantics."""
         super().__init__()
-        enc_layer = TransformerEncoderLayer(
-            d_model,
-            nhead,
-            dim_feedforward,
-            dropout,
-            attention_dropout,
-            activation,
-            batch_first,
-            layer_norm_eps=layer_norm_eps,
-            device=device,
-            dtype=dtype,
+        _resolve_activation(activation)
+        self.encoder = (
+            custom_encoder
+            if custom_encoder is not None
+            else TransformerEncoder(
+                TransformerEncoderLayer(
+                    d_model,
+                    nhead,
+                    dim_feedforward,
+                    dropout,
+                    activation,
+                    layer_norm_eps,
+                    batch_first,
+                    norm_first,
+                    bias,
+                    device,
+                    dtype,
+                    attention_dropout=attention_dropout,
+                ),
+                num_encoder_layers,
+                norm=LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype),
+            )
         )
-        dec_layer = TransformerDecoderLayer(
-            d_model,
-            nhead,
-            dim_feedforward,
-            dropout,
-            attention_dropout,
-            activation,
-            batch_first,
-            layer_norm_eps=layer_norm_eps,
-            device=device,
-            dtype=dtype,
+        self.decoder = (
+            custom_decoder
+            if custom_decoder is not None
+            else TransformerDecoder(
+                TransformerDecoderLayer(
+                    d_model,
+                    nhead,
+                    dim_feedforward,
+                    dropout,
+                    activation,
+                    layer_norm_eps,
+                    batch_first,
+                    norm_first,
+                    bias,
+                    device,
+                    dtype,
+                    attention_dropout=attention_dropout,
+                ),
+                num_decoder_layers,
+                norm=LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype),
+            )
         )
-        enc_norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
-        dec_norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
-        self.encoder = TransformerEncoder(enc_layer, num_encoder_layers, norm=enc_norm)
-        self.decoder = TransformerDecoder(dec_layer, num_decoder_layers, norm=dec_norm)
         self.d_model = d_model
         self.nhead = nhead
+        self.batch_first = batch_first
 
     @override
     def forward(
@@ -1394,35 +1386,27 @@ class Transformer(Module):
         src_key_padding_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
+        src_is_causal: bool | None = None,
+        tgt_is_causal: bool | None = None,
+        memory_is_causal: bool = False,
     ) -> Tensor:
-        """Run the forward pass of the module.
-
-        Parameters
-        ----------
-        src : Tensor
-            See the class docstring.
-        tgt : Tensor
-            See the class docstring.
-        src_mask : Tensor
-            See the class docstring.
-        tgt_mask : Tensor
-            See the class docstring.
-        memory_mask : Tensor
-            See the class docstring.
-        src_key_padding_mask : Tensor
-            See the class docstring.
-        tgt_key_padding_mask : Tensor
-            See the class docstring.
-        memory_key_padding_mask : Tensor
-            See the class docstring.
-
-        Returns
-        -------
-        Tensor
-            Output tensor; refer to the class docstring for the exact shape.
-        """
+        """Run the forward pass of the module."""
+        is_batched = src.ndim == 3
+        if src.ndim != tgt.ndim:
+            raise RuntimeError("the number of dimensions in src and tgt must be equal")
+        if is_batched:
+            batch_dim = 0 if self.batch_first else 1
+            if src.shape[batch_dim] != tgt.shape[batch_dim]:
+                raise RuntimeError("the batch number of src and tgt must be equal")
+        if src.shape[-1] != self.d_model or tgt.shape[-1] != self.d_model:
+            raise RuntimeError(
+                "the feature number of src and tgt must be equal to d_model"
+            )
         memory = self.encoder(
-            src, mask=src_mask, src_key_padding_mask=src_key_padding_mask
+            src,
+            mask=src_mask,
+            src_key_padding_mask=src_key_padding_mask,
+            is_causal=src_is_causal,
         )
         return self.decoder(
             tgt,
@@ -1431,6 +1415,24 @@ class Transformer(Module):
             memory_mask=memory_mask,
             tgt_key_padding_mask=tgt_key_padding_mask,
             memory_key_padding_mask=memory_key_padding_mask,
+            tgt_is_causal=tgt_is_causal,
+            memory_is_causal=memory_is_causal,
+        )
+
+    @staticmethod
+    def generate_square_subsequent_mask(
+        sz: int,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> Tensor:
+        """Generate a square causal mask of shape ``(sz, sz)``."""
+        if sz < 0:
+            raise ValueError(
+                f"generate_square_subsequent_mask: sz must be >= 0, got {sz}"
+            )
+        return _lucid.triu(
+            _lucid.full((sz, sz), float("-inf"), dtype=dtype, device=device),
+            diagonal=1,
         )
 
     @override
