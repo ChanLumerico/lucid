@@ -108,7 +108,12 @@ class _LucidUnpickler(pickle.Unpickler):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
+def save(
+    obj: object,
+    f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | io.IOBase,
+    *,
+    pickle_protocol: int = 4,
+) -> None:
     r"""Serialise ``obj`` to a Lucid-format checkpoint file.
 
     Writes a pickle stream augmented with a custom persistent-id
@@ -122,7 +127,7 @@ def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -
         Object graph to serialise. ``dict`` / ``OrderedDict`` state
         dicts are the primary use case; arbitrary picklable objects are
         also supported.
-    f : str, bytes, or file-like
+    f : str, bytes, os.PathLike, or file-like
         Destination path or open binary file handle.
     pickle_protocol : int, optional
         Pickle protocol version forwarded to the underlying
@@ -155,15 +160,15 @@ def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -
     pickler.dump(container)
     data = buf.getvalue()
 
-    if isinstance(f, (str, bytes)):
-        with open(f, "wb") as fp:
+    if isinstance(f, (str, bytes, os.PathLike)):
+        with open(os.fspath(f), "wb") as fp:
             fp.write(data)
     else:
         f.write(data)
 
 
 def load(
-    f: str | bytes | io.IOBase,
+    f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | io.IOBase,
     *,
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
@@ -178,7 +183,7 @@ def load(
 
     Parameters
     ----------
-    f : str, bytes, or file-like
+    f : str, bytes, os.PathLike, or file-like
         Source path or open binary file handle. Paths ending in
         ``.safetensors`` are delegated to :func:`load_safetensors`.
     map_location : str, dict, callable, or None, optional
@@ -210,11 +215,12 @@ def load(
     >>> sd["w"].tolist()
     [1.0, 1.0, 1.0]
     """
-    if isinstance(f, (str, bytes)):
-        path_str = f.decode() if isinstance(f, bytes) else str(f)
+    if isinstance(f, (str, bytes, os.PathLike)):
+        raw_path = os.fspath(f)
+        path_str = raw_path.decode() if isinstance(raw_path, bytes) else str(raw_path)
         if path_str.endswith(".safetensors"):
             return load_safetensors(path_str)
-        with open(f, "rb") as fp:
+        with open(raw_path, "rb") as fp:
             data = fp.read()
     else:
         data = f.read()

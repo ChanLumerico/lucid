@@ -56,7 +56,7 @@ def test_a_half_precision_operand_keeps_its_precision() -> None:
 
 def test_in_place_true_division_of_an_integer_tensor_is_refused() -> None:
     a = _ints(7, 8)
-    with pytest.raises(RuntimeError, match="in place"):
+    with pytest.raises(RuntimeError, match="can't be cast"):
         a /= 2
     assert a.tolist() == [7, 8]
 
@@ -65,11 +65,11 @@ def test_div_in_place_on_an_integer_tensor_is_refused() -> None:
     # ``div_`` floor-divided in silence, leaving [3, 4], where ``/=`` above
     # already refused.
     a = _ints(7, 8)
-    with pytest.raises(RuntimeError, match="in place"):
+    with pytest.raises(RuntimeError, match="can't be cast"):
         a.div_(2)
-    with pytest.raises(RuntimeError, match="in place"):
+    with pytest.raises(RuntimeError, match="can't be cast"):
         a.div_(lucid.tensor([2.0, 4.0]))
-    with pytest.raises(RuntimeError, match="in place"):
+    with pytest.raises(RuntimeError, match="can't be cast"):
         lucid.tensor([True, False]).div_(2)
     assert a.dtype == lucid.int64
     assert a.tolist() == [7, 8]

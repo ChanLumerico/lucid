@@ -27,6 +27,19 @@ class TestSaveLoadTensor:
             loaded = lucid.load(str(path))
             assert loaded.dtype == lucid.int64
 
+    def test_pathlike_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ckpt.pt"
+            t = lucid.tensor([1.0, 2.0, 3.0])
+            lucid.save({"x": t}, path)
+            loaded = lucid.load(path)
+            np.testing.assert_array_equal(loaded["x"].numpy(), t.numpy())
+
+            st_path = Path(tmp) / "ckpt.safetensors"
+            lucid.serialization.save_safetensors({"x": t}, str(st_path))
+            loaded_st = lucid.load(st_path)
+            np.testing.assert_array_equal(loaded_st["x"].numpy(), t.numpy())
+
 
 class TestSaveLoadStateDict:
     def test_module_round_trip(self) -> None:

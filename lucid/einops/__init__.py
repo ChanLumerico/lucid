@@ -26,10 +26,19 @@ Wraps the C++ engine's einops module. Supports patterns like
 'b h w -> b (h w)' for rearrange, 'b h w -> b w' for reduce, etc.
 """
 
+from lucid._C import engine as _C_engine
 from lucid._C.engine import einops as _C_einops
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dispatch import _promote_impls
 from lucid.einops import _einsum
+
+
+def _wrap_own(out: _C_engine.TensorImpl, *inputs: _C_engine.TensorImpl) -> Tensor:
+    for inp in inputs:
+        if out is inp:
+            out = _C_engine.reshape(inp, list(inp.shape))
+            break
+    return _wrap(out)
 
 
 def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -70,7 +79,8 @@ def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
     >>> lucid.einops.rearrange(x, "b h w -> b (h w)").shape
     (2, 12)
     """
-    return _wrap(_C_einops.rearrange(_unwrap(tensor), pattern, axes_lengths))
+    inp = _unwrap(tensor)
+    return _wrap_own(_C_einops.rearrange(inp, pattern, axes_lengths), inp)
 
 
 def reduce(
@@ -120,7 +130,8 @@ def reduce(
     >>> lucid.einops.reduce(x, "b h w -> b w", "mean").shape
     (2, 4)
     """
-    return _wrap(_C_einops.reduce(_unwrap(tensor), pattern, reduction, axes_lengths))
+    inp = _unwrap(tensor)
+    return _wrap_own(_C_einops.reduce(inp, pattern, reduction, axes_lengths), inp)
 
 
 def repeat(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -164,7 +175,8 @@ def repeat(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
     >>> lucid.einops.repeat(x, "b h w -> b h w c", c=5).shape
     (2, 3, 4, 5)
     """
-    return _wrap(_C_einops.repeat(_unwrap(tensor), pattern, axes_lengths))
+    inp = _unwrap(tensor)
+    return _wrap_own(_C_einops.repeat(inp, pattern, axes_lengths), inp)
 
 
 def einsum(equation: str, *operands: Tensor) -> Tensor:
@@ -238,9 +250,10 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
     # beside a float one raised ``DtypeMismatch``.  They meet at their common
     # dtype first, as in ``a * b``; all-integer operands are left as they
     # are and keep the exact integer path.
-    impl_list = _promote_impls([_unwrap(t) for t in operands])
+    raw_impls = [_unwrap(t) for t in operands]
+    impl_list = _promote_impls(raw_impls)
     explicit, impl_list = _einsum.normalise(equation, impl_list)
-    return _wrap(_C_einops.einsum(explicit, impl_list))
+    return _wrap_own(_C_einops.einsum(explicit, impl_list), *raw_impls)
 
 
 __all__ = ["rearrange", "reduce", "repeat", "einsum"]

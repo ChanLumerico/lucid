@@ -244,3 +244,56 @@ class TestZero:
         x = lucid.tensor([float("inf"), float("-inf"), float("nan"), 2.0])
         x.zero_()
         assert x.tolist() == [0.0, 0.0, 0.0, 0.0]
+
+
+class TestCopyInplace:
+    def test_broadcast_copy(self, device: str) -> None:
+        dst = lucid.zeros(2, 3, device=device)
+        src = lucid.tensor([[1.0, 2.0, 3.0]], device=device)
+        out = dst.copy_(src)
+        assert out is dst
+        assert dst.tolist() == [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+
+    def test_scalar_broadcast_copy(self, device: str) -> None:
+        dst = lucid.zeros(2, 2, device=device)
+        dst.copy_(lucid.tensor(7.0, device=device))
+        assert dst.tolist() == [[7.0, 7.0], [7.0, 7.0]]
+
+    def test_dtype_cast_copy(self, device: str) -> None:
+        dst_f = lucid.zeros(3, dtype=lucid.float32, device=device)
+        src_i = lucid.tensor([1, 2, 3], dtype=lucid.int32, device=device)
+        dst_f.copy_(src_i)
+        assert dst_f.dtype == lucid.float32
+        assert dst_f.tolist() == [1.0, 2.0, 3.0]
+
+        dst_i = lucid.zeros(3, dtype=lucid.int32, device=device)
+        src_f = lucid.tensor([1.9, -2.8, 3.0], dtype=lucid.float32, device=device)
+        dst_i.copy_(src_f)
+        assert dst_i.dtype == lucid.int32
+        assert dst_i.tolist() == [1, -2, 3]
+
+    def test_cross_device_and_broadcast_copy(self) -> None:
+        from lucid.test._fixtures.devices import metal_available
+
+        if not metal_available():
+            pytest.skip("Metal not available")
+        dst_gpu = lucid.zeros(2, 3, dtype=lucid.float32, device="metal")
+        src_cpu = lucid.tensor([[1.0, 2.0, 3.0]], dtype=lucid.float64, device="cpu")
+        dst_gpu.copy_(src_cpu)
+        assert dst_gpu.is_metal
+        assert dst_gpu.dtype == lucid.float32
+        assert dst_gpu.tolist() == [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+
+        dst_cpu = lucid.zeros(2, 3, dtype=lucid.float64, device="cpu")
+        dst_cpu.copy_(dst_gpu)
+        assert dst_cpu.device == lucid.device("cpu")
+        assert dst_cpu.dtype == lucid.float64
+        assert dst_cpu.tolist() == [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+
+    def test_broadcast_copy_backward(self, device: str) -> None:
+        src = lucid.tensor([[1.0, 2.0, 3.0]], device=device, requires_grad=True)
+        dst = lucid.zeros(2, 3, device=device)
+        dst.copy_(src)
+        (dst * 2.0).sum().backward()
+        assert src.grad is not None
+        assert src.grad.tolist() == [[4.0, 4.0, 4.0]]

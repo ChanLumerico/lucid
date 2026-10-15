@@ -168,7 +168,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([11., 12., 13.])
         """
-        a, b = _binary_operands(self, other)
+        a, b = _binary_operands(self, other, inplace=True)
         return _adopt_inplace(self, _C_engine.add_(a, b), "+=")
 
     def __sub__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -282,7 +282,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([5., 15., 25.])
         """
-        a, b = _binary_operands(self, other)
+        a, b = _binary_operands(self, other, inplace=True)
         _refuse_bool_subtraction(a, b)
         return _adopt_inplace(self, _C_engine.sub_(a, b), "-=")
 
@@ -396,7 +396,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([10., 20., 30.])
         """
-        a, b = _binary_operands(self, other, opmath=True)
+        a, b = _binary_operands(self, other, opmath=True, inplace=True)
         return _adopt_inplace(self, _C_engine.mul_(a, b), "*=")
 
     def __truediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -513,14 +513,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([1., 2., 3.])
         """
-        # The quotient is floating, and an integer tensor cannot hold it in
-        # place — the reference refuses the same, rather than truncate.
-        if _promotion.is_integral(self._impl.dtype):
-            raise RuntimeError(
-                f"/=: true division gives a floating result, which cannot be "
-                f"written in place into a {self.dtype} tensor — use / instead"
-            )
-        a, b = _binary_operands(self, other, true_div=True, opmath=True)
+        a, b = _binary_operands(self, other, true_div=True, opmath=True, inplace=True)
         return _adopt_inplace(self, _C_engine.div_(a, b), "/=")
 
     def __floordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -715,7 +708,7 @@ def _inject_dunders(cls: type) -> None:
         tensor([1., 4., 9.])
         """
         _promotion.check_pow_scalar(self._impl.dtype, other)
-        a, b = _binary_operands(self, other)
+        a, b = _binary_operands(self, other, inplace=True)
         return _adopt_inplace(self, _C_engine.pow_(a, b), "**=")
 
     def __matmul__(self: Tensor, other: Tensor) -> Tensor:

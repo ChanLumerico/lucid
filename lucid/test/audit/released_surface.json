@@ -2771,7 +2771,7 @@
   "lucid.signal.windows.gaussian": {"params": ["a:M", "a:std=", "k:sym=", "k:dtype=", "k:device="]},
   "lucid.signal.windows.general_cosine": {"params": ["a:M", "a:a", "k:sym=", "k:dtype=", "k:device="]},
   "lucid.signal.windows.general_gaussian": {"params": ["a:M", "a:p=", "a:sig=", "k:sym=", "k:dtype=", "k:device="]},
-  "lucid.signal.windows.general_hamming": {"params": ["a:M", "a:alpha", "k:sym=", "k:dtype=", "k:device="]},
+  "lucid.signal.windows.general_hamming": {"params": ["a:M", "a:alpha=", "k:sym=", "k:dtype=", "k:device="]},
   "lucid.signal.windows.hamming": {"params": ["a:M", "k:sym=", "k:dtype=", "k:device="]},
   "lucid.signal.windows.hann": {"params": ["a:M", "k:sym=", "k:dtype=", "k:device="]},
   "lucid.signal.windows.kaiser": {"params": ["a:M", "a:beta=", "k:sym=", "k:dtype=", "k:device="]},

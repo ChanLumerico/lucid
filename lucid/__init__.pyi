@@ -7,6 +7,7 @@
 from contextlib import AbstractContextManager
 from typing import IO, Callable, Sequence, overload
 import builtins
+import os
 
 _float = builtins.float
 _int = builtins.int
@@ -83,9 +84,14 @@ def is_grad_enabled() -> _bool: ...
 def set_grad_enabled(mode: _bool) -> None: ...
 
 # ── Serialization ─────────────────────────────────────────────────────────────
-def save(obj: object, f: str | bytes | IO[bytes], *, pickle_protocol: _int = 4) -> None: ...
+def save(
+    obj: object,
+    f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | IO[bytes],
+    *,
+    pickle_protocol: _int = 4,
+) -> None: ...
 def load(
-    f: str | bytes | IO[bytes],
+    f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | IO[bytes],
     *,
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: _bool = True,

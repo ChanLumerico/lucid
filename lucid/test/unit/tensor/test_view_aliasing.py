@@ -139,10 +139,16 @@ def test_a_numpy_array_over_the_buffer_stops_the_write(x: lucid.Tensor) -> None:
 def test_a_write_that_would_change_the_dtype_is_refused() -> None:
     xi = lucid.tensor([0, 1, 2, 3, 4, 5], dtype=lucid.int64)
     v = _view(xi, 2, 3)
-    with pytest.raises(RuntimeError, match="shares storage with a live view"):
+    with pytest.raises(RuntimeError, match="can't be cast"):
         xi += 0.5
     assert xi.dtype == lucid.int64
     assert _flat(v) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+    xf = lucid.tensor([0.0, 1.0, 2.0, 3.0, 4.0, 5.0], dtype=lucid.float16)
+    vf = _view(xf, 2, 3)
+    xf += lucid.ones(6, dtype=lucid.float32)
+    assert xf.dtype == lucid.float16
+    assert _flat(vf) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
 
 def _strided(

@@ -153,16 +153,9 @@ def _make_arith_adapter(
             scalar = _scalar_power(input, other)
             if scalar is not None:
                 return scalar
-        if inplace and floating:
-            target = _unwrap_or_scalar(input)
-            if _promotion.is_integral(target.dtype):
-                dtype = _ENGINE_TO_DTYPE.get(target.dtype, target.dtype)
-                raise RuntimeError(
-                    f"{name}: true division gives a floating result, which cannot "
-                    f"be written in place into a {dtype} tensor — use "
-                    f"{name.removesuffix('_')} instead"
-                )
-        a, b = _binary_operands(input, other, true_div=floating, opmath=opmath)
+        a, b = _binary_operands(
+            input, other, true_div=floating, opmath=opmath, inplace=inplace
+        )
         if subtracts:
             _refuse_bool_subtraction(a, b)
         return engine_fn(a, b)

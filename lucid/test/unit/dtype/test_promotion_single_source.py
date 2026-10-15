@@ -234,14 +234,6 @@ def test_every_spelling_answers_at_the_promoted_dtype(symbol: str, device: str) 
         out_dtype = lucid.bool_ if op.compare else expected
         outcomes = {k: _outcome(c) for k, c in _spellings(op, a, b).items()}
         inplace = {k: _outcome(c) for k, c in _inplace_spellings(op, a, b).items()}
-        if supported and op.true_div and isinstance(a, lucid.Tensor):
-            if a.dtype in _INTEGRAL:
-                # The quotient is floating and cannot land in an integer tensor.
-                for k, o in inplace.items():
-                    if o[:2] != ("refused", "RuntimeError"):
-                        problems.append(f"{label}: {k} gave {o[:2]}, not a refusal")
-                inplace = {}
-        outcomes.update(inplace)
         kinds = {o[0] for o in outcomes.values()}
         if supported is None:
             if len(kinds) != 1:
@@ -249,8 +241,9 @@ def test_every_spelling_answers_at_the_promoted_dtype(symbol: str, device: str) 
                 continue
             supported = kinds == {"ok"}
         if not supported:
-            if kinds != {"refused"}:
-                problems.append(f"{label}: expected a refusal, got {outcomes}")
+            all_outcomes = {**outcomes, **inplace}
+            if {o[0] for o in all_outcomes.values()} != {"refused"}:
+                problems.append(f"{label}: expected a refusal, got {all_outcomes}")
             continue
         if kinds != {"ok"}:
             problems.append(f"{label}: some spellings refused: {outcomes}")
@@ -262,6 +255,19 @@ def test_every_spelling_answers_at_the_promoted_dtype(symbol: str, device: str) 
         values = {repr(o[2]) for o in outcomes.values()}
         if len(values) != 1:
             problems.append(f"{label}: spellings disagree on values: {outcomes}")
+            continue
+        if inplace and isinstance(a, lucid.Tensor):
+            if not lucid.can_cast(out_dtype, a.dtype):
+                for k, o in inplace.items():
+                    if o[:2] != ("refused", "RuntimeError"):
+                        problems.append(f"{label}: {k} gave {o[:2]}, not a refusal")
+            else:
+                want_inplace_val = repr(op.dunder(a, b).to(a.dtype).tolist())
+                for k, o in inplace.items():
+                    if o[0] != "ok" or o[1] != a.dtype or repr(o[2]) != want_inplace_val:
+                        problems.append(
+                            f"{label}: {k} expected ('ok', {a.dtype}, {want_inplace_val}), got {o}"
+                        )
     assert not problems, f"{len(problems)} cell(s):\n  " + "\n  ".join(problems[:30])
 
 
@@ -317,6 +323,35 @@ def test_operator_dtype_is_the_references(symbol: str, ref: ModuleType) -> None:
         want = _ref_dtype_name(ref, want_dt)
         if _lucid_dtype_name(got) != want:
             problems.append(f"{label}: lucid {got}, reference {want}")
+    assert not problems, f"{len(problems)} cell(s):\n  " + "\n  ".join(problems[:30])
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("symbol", [s for s, o in _OPS.items() if o.inplace])
+def test_inplace_promotion_matches_reference(symbol: str, ref: ModuleType) -> None:
+    op = _OPS[symbol]
+    problems: list[str] = []
+    for label, a, b in _cells("cpu"):
+        if not isinstance(a, lucid.Tensor):
+            continue
+        ra = _ref_operand(ref, a)
+        rb = _ref_operand(ref, b)
+        try:
+            op.dunder(ra, rb)
+        except _REFUSALS:
+            continue
+        try:
+            getattr(ra.clone(), op.inplace)(rb)
+            ref_ok = True
+        except RuntimeError:
+            ref_ok = False
+        for k, call in _inplace_spellings(op, a, b).items():
+            o = _outcome(call)
+            if not ref_ok:
+                if o[:2] != ("refused", "RuntimeError"):
+                    problems.append(f"{label} ({k}): expected RuntimeError, got {o[:2]}")
+            elif o[0] == "ok" and o[1] != a.dtype:
+                problems.append(f"{label} ({k}): mutated dtype from {a.dtype} to {o[1]}")
     assert not problems, f"{len(problems)} cell(s):\n  " + "\n  ".join(problems[:30])
 
 

@@ -141,3 +141,45 @@ class TestEinsum:
         np.testing.assert_allclose(
             lb.grad.numpy(), np.einsum("bik,bij->bjk", go, a), atol=1e-4
         )
+
+
+class TestIdentityPatternsReturnDistinctTensor:
+    """Identity patterns must return a distinct Tensor / TensorImpl view so
+    mutating metadata like ``requires_grad_`` on the output does not mutate
+    the input tensor."""
+
+    def test_rearrange_identity_isolates_requires_grad(self, device: str) -> None:
+        x = lucid.randn(2, 3, device=device)
+        y = lucid.einops.rearrange(x, "a b -> a b")
+        assert y is not x
+        assert y._impl is not x._impl
+        y.requires_grad_(True)
+        assert not x.requires_grad
+        assert y.requires_grad
+
+    def test_reduce_identity_isolates_requires_grad(self, device: str) -> None:
+        x = lucid.randn(2, 3, device=device)
+        y = lucid.einops.reduce(x, "a b -> a b", "sum")
+        assert y is not x
+        assert y._impl is not x._impl
+        y.requires_grad_(True)
+        assert not x.requires_grad
+        assert y.requires_grad
+
+    def test_repeat_identity_isolates_requires_grad(self, device: str) -> None:
+        x = lucid.randn(2, 3, device=device)
+        y = lucid.einops.repeat(x, "a b -> a b")
+        assert y is not x
+        assert y._impl is not x._impl
+        y.requires_grad_(True)
+        assert not x.requires_grad
+        assert y.requires_grad
+
+    def test_einsum_identity_isolates_requires_grad(self, device: str) -> None:
+        x = lucid.randn(2, 3, device=device)
+        y = lucid.einops.einsum("ij->ij", x)
+        assert y is not x
+        assert y._impl is not x._impl
+        y.requires_grad_(True)
+        assert not x.requires_grad
+        assert y.requires_grad

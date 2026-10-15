@@ -3157,7 +3157,7 @@ class Tensor:
         # raw buffer copy, the graph position stayed put and the gradient
         # flowed back through it as if the fill had not happened.  A tensor
         # that shares its buffer with a view goes the in-place ops' way,
-        # which re-derives the views' graphs along with its own.
+        # Re-derives views' graphs along with its own.
         if self._impl.is_aliased():
             _C_engine.assign_inplace(self._impl, filled, "fill_")
         else:
@@ -3192,15 +3192,13 @@ class Tensor:
         only ``self``'s storage is written. The autograd graph *is*
         extended: after the copy ``self`` depends on ``other``, not on
         whatever produced ``self``, so a backward pass through ``self``
-        deposits its gradient on ``other``. That is the point of copying
-        a differentiable tensor in. Element-wise:
+        deposits its gradient on ``other``. Element-wise:
 
         .. math::
 
             \text{self}_i \leftarrow \text{cast}_{\text{self.dtype}}(\text{other}_i),
 
-        with standard right-aligned broadcasting from ``other.shape`` to
-        ``self.shape``.
+        with right-aligned broadcasting from ``other.shape`` to ``self.shape``.
 
         Examples
         --------
@@ -3212,20 +3210,21 @@ class Tensor:
         [1.0, 2.0, 3.0]
         """
         del non_blocking  # a copy is synchronous; the reference's flag is read
-        src = _C_engine.contiguous(other._impl)
-        # The gradient belongs to ``other`` after this, not to whatever
-        # produced ``self`` — which is the whole point of copying a
-        # differentiable tensor in.  With a view sharing the buffer, the
-        # in-place ops' route re-derives the view's graph too.
-        if self._impl.is_aliased():
-            _C_engine.assign_inplace(self._impl, src, "copy_")
+        dst, src = self._impl, other._impl
+        if src.device != dst.device and dst.device == _C_engine.Device.CPU:
+            src = _C_engine.to_device(src, dst.device)
+        if src.dtype != dst.dtype:
+            src = _C_engine.astype(src, dst.dtype)
+        if src.device != dst.device:
+            src = _C_engine.to_device(src, dst.device)
+        if list(src.shape) != list(dst.shape):
+            src = _C_engine.broadcast_to(src, list(dst.shape))
+        src = _C_engine.contiguous(src)
+        if dst.is_aliased():
+            _C_engine.assign_inplace(dst, src, "copy_")
         else:
-            self._impl.assign_from(src, "copy_")
+            dst.assign_from(src, "copy_")
         return self
-
-    # ``flip`` / ``fliplr`` / ``flipud`` are auto-injected from the registry
-    # (see ``_ops/_registry.py``); the previous explicit definitions
-    # duplicated that path.
 
     def index_select(self, dim: int, index: Self) -> Self:
         r"""Gather values along ``dim`` using an integer index tensor.

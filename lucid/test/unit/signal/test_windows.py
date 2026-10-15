@@ -104,11 +104,21 @@ def test_exponential_decays_from_the_centre(M, sym, tau):
     assert np.allclose(_v(W.exponential(M, tau=tau, sym=sym)), want, atol=1e-6)
 
 
+def test_gaussian_default_std_is_one():
+    assert np.allclose(_v(W.gaussian(8)), _v(W.gaussian(8, std=1.0)), atol=1e-6)
+
+
 def test_exponential_accepts_an_explicit_centre():
-    got = _v(W.exponential(9, center=2.0, tau=2.0))
+    got = _v(W.exponential(9, center=2.0, tau=2.0, sym=False))
     want = np.exp(-np.abs(np.arange(9.0) - 2.0) / 2.0)
     assert np.allclose(got, want, atol=1e-6)
     assert np.argmax(got) == 2
+
+
+@pytest.mark.parametrize("M", [0, 1, 9])
+def test_exponential_refuses_explicit_centre_when_symmetric(M):
+    with pytest.raises(ValueError, match="center must be None for symmetric windows"):
+        W.exponential(M, center=2.0, sym=True)
 
 
 @pytest.mark.parametrize("M", LENGTHS)
@@ -132,6 +142,7 @@ def test_a_zero_beta_kaiser_is_rectangular():
 def test_general_hamming_reproduces_hamming_and_hann():
     """The two named windows are the same family at two alphas; if the
     generalisation disagrees with them, one of the three is wrong."""
+    assert np.allclose(_v(W.general_hamming(32)), _v(W.hamming(32)), atol=1e-6)
     assert np.allclose(
         _v(W.general_hamming(32, alpha=0.54)), _v(W.hamming(32)), atol=1e-6
     )

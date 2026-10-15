@@ -192,16 +192,14 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("outer",    A._outer_adapter, 2, method_name="outer", free_fn_name="outer"),
 
     # ── in-place binary ────────────────────────────────────────────────────
-    OpEntry("add_",     A._make_arith_adapter(_R.add_),     2, inplace=True, method_name="add_"),
-    OpEntry("sub_",     A._make_arith_adapter(_R.sub_),     2, inplace=True, method_name="sub_"),
-    OpEntry("mul_",     A._make_arith_adapter(_R.mul_),     2, inplace=True, method_name="mul_"),
-    # True division cannot land in an integer tensor in place, so div_ refuses
-    # one, as /= does, rather than floor-dividing it.
+    OpEntry("add_",     A._make_arith_adapter(_R.add_, inplace=True),     2, inplace=True, method_name="add_"),
+    OpEntry("sub_",     A._make_arith_adapter(_R.sub_, inplace=True),     2, inplace=True, method_name="sub_"),
+    OpEntry("mul_",     A._make_arith_adapter(_R.mul_, inplace=True),     2, inplace=True, method_name="mul_"),
     OpEntry("div_",     A._make_arith_adapter(_R.div_, floating=True, inplace=True), 2,
             inplace=True, method_name="div_"),
-    OpEntry("pow_",     A._make_arith_adapter(_R.pow_),     2, inplace=True, method_name="pow_"),
-    OpEntry("maximum_", A._make_arith_adapter(_R.maximum_), 2, inplace=True, method_name="maximum_"),
-    OpEntry("minimum_", A._make_arith_adapter(_R.minimum_), 2, inplace=True, method_name="minimum_"),
+    OpEntry("pow_",     A._make_arith_adapter(_R.pow_, inplace=True),     2, inplace=True, method_name="pow_"),
+    OpEntry("maximum_", A._make_arith_adapter(_R.maximum_, inplace=True), 2, inplace=True, method_name="maximum_"),
+    OpEntry("minimum_", A._make_arith_adapter(_R.minimum_, inplace=True), 2, inplace=True, method_name="minimum_"),
 
     # ── reduction (with API-compat adapters) ───────────────────────────────
     OpEntry("sum",    A._sum_adapter,    1, method_name="sum",    free_fn_name="sum",

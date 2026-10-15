@@ -1018,22 +1018,23 @@ def _read_for_write(t: Tensor, value: _C_engine.TensorImpl) -> _C_engine.TensorI
 
 
 def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
-    """Make ``impl``, an in-place op's result, ``t``'s impl; return ``t``.
+    """Write ``impl``, an in-place op's result, into ``t`` at ``t``'s dtype; return ``t``.
 
     An engine in-place op hands back ``t``'s own impl, written in place.  A
-    different one means a dtype promotion ran the op on a cast copy, and
-    rebinding to it would leave any view of ``t`` reading the old values —
-    so a tensor with live views refuses, as the reference refuses every
-    in-place op that would change a tensor's dtype.
+    different one means same-kind dtype promotion ran the op on a wider cast
+    copy (e.g. ``float16 += float32``); the result is cast back to ``t``'s
+    dtype and written into ``t`` in place so ``t`` and its views keep their
+    dtype and storage.
     """
-    if impl is not t._impl and t._impl.is_aliased():
-        raise RuntimeError(
-            f"{name}: the result is {impl.dtype}, which cannot be written into a "
-            f"{t._impl.dtype} tensor that shares storage with a live view — cast "
-            "it first, or use the out-of-place form"
-        )
     if impl is not t._impl:
-        _take(t, impl)
+        if impl.dtype != t._impl.dtype:
+            impl = _C_engine.astype(impl, t._impl.dtype)
+        if t._impl.is_aliased():
+            _C_engine.assign_inplace(t._impl, impl, name)
+        else:
+            t._impl.assign_from(impl, name)
+            if impl.requires_grad and _C_engine.grad_enabled():
+                _take(t, impl)
     return t
 
 

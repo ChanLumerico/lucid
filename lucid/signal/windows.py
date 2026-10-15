@@ -311,7 +311,7 @@ def hamming(
 
 def general_hamming(
     M: int,
-    alpha: float,
+    alpha: float = 0.54,
     *,
     sym: bool = True,
     dtype: DTypeLike = None,
@@ -329,9 +329,9 @@ def general_hamming(
     ----------
     M : int
         Number of samples in the output window; must be ``>= 0``.
-    alpha : float
+    alpha : float, optional
         Mixing coefficient; :math:`\alpha = 0.5` gives Hann,
-        :math:`\alpha = 0.54` gives Hamming.
+        :math:`\alpha = 0.54` (default) gives Hamming.
     sym : bool, optional
         Symmetric (``True``, default) or periodic (``False``) variant.
     dtype : DTypeLike, optional
@@ -569,7 +569,7 @@ def nuttall(
 
 def gaussian(
     M: int,
-    std: float = 7.0,
+    std: float = 1.0,
     *,
     sym: bool = True,
     dtype: DTypeLike = None,
@@ -588,7 +588,7 @@ def gaussian(
     M : int
         Number of samples in the output window; must be ``>= 0``.
     std : float, optional
-        Standard deviation in samples; defaults to ``7.0``.  Larger
+        Standard deviation in samples; defaults to ``1.0``.  Larger
         ``std`` → broader (closer to rectangular) window; smaller →
         more concentrated taper.
     sym : bool, optional
@@ -728,13 +728,13 @@ def exponential(
         Number of samples in the output window; must be ``>= 0``.
     center : float or None, optional
         Centre of the decay.  If ``None`` (default), uses
-        :math:`(N - 1) / 2` — only allowed when ``sym=True``.
+        :math:`(N - 1) / 2`.  Must be ``None`` when ``sym=True``.
     tau : float, optional
         Decay time constant in samples; defaults to ``1.0``.  Larger
         ``tau`` → slower decay, broader window.
     sym : bool, optional
         Symmetric (``True``, default) or periodic (``False``) variant.
-        ``sym=False`` requires an explicit ``center``.
+        When ``sym=True``, ``center`` must be ``None``.
     dtype : DTypeLike, optional
         Desired dtype of the output tensor.
     device : DeviceLike, optional
@@ -764,17 +764,13 @@ def exponential(
     >>> exponential(5, tau=2.0)
     tensor([0.3679, 0.6065, 1., 0.6065, 0.3679])
     """
+    if sym and center is not None:
+        raise ValueError("center must be None for symmetric windows")
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
         return degenerate
     N = _length_for_sym(M, sym)
     if center is None:
-        # The periodic form does have a canonical centre: the same
-        # ``(N - 1) / 2`` on the working length ``N = M + 1`` that the
-        # symmetric form uses on ``N = M``.  Refusing it made
-        # ``exponential`` the one window in this module with no periodic
-        # form at all, while both the reference framework and the usual
-        # convention compute it.
         center = 0.5 * float(N - 1)
     n = _ramp(N, dtype=dtype, device=device)
     w = lucid.exp(-lucid.abs(n - float(center)) / float(tau))

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid import _promotion
-from lucid._dtype import dtype, to_engine_dtype, _ENGINE_TO_DTYPE  # noqa: F401
+from lucid._dtype import dtype, to_engine_dtype, _ENGINE_TO_DTYPE
 from lucid._device import device, _device_from_engine  # noqa: F401
 from lucid._globals import get_default_dtype, get_default_device
 
@@ -284,11 +284,21 @@ def _cast(
     return _C_engine.astype(impl, dt)
 
 
+def _cannot_cast_inplace(
+    dt: _C_engine.Dtype, target: _C_engine.Dtype
+) -> RuntimeError:
+    return RuntimeError(
+        f"result type {_ENGINE_TO_DTYPE[dt]} can't be cast to the desired "
+        f"output type {_ENGINE_TO_DTYPE[target]}"
+    )
+
+
 def _beside_number(
     t: _C_engine.TensorImpl,
     x: bool | int | float | complex,
     true_div: bool,
     opmath: bool,
+    inplace: bool = False,
 ) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
     """A tensor and a Python number, as ``(tensor operand, number operand)``.
 
@@ -301,6 +311,8 @@ def _beside_number(
     device = t.device
     if true_div and _promotion.is_integral(dt):
         dt = _promotion.default_float(device)
+    if inplace and not _promotion.can_cast(dt, d):
+        raise _cannot_cast_inplace(dt, d)
     if opmath and _promotion.is_half(dt) and not isinstance(x, (bool, complex)):
         number = _scalar_impl(x, _C_engine.Dtype.F32, device)
     else:
@@ -315,11 +327,14 @@ def _tensor_pair(
     db: _C_engine.Dtype,
     true_div: bool,
     opmath: bool,
+    inplace: bool = False,
 ) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
     """Two tensors of different dtypes, each brought to the pair's dtype."""
     dt = _promotion.tensor_pair_type(ai, da, bi, db)
     if true_div and _promotion.is_integral(dt):
         dt = _promotion.default_float(ai.device)
+    if inplace and not _promotion.can_cast(dt, da):
+        raise _cannot_cast_inplace(dt, da)
     wide = opmath and _promotion.is_half(dt)
     return _cast(ai, da, dt, wide), _cast(bi, db, dt, wide)
 
@@ -344,6 +359,7 @@ def _binary_operands(
     *,
     true_div: bool = False,
     opmath: bool = False,
+    inplace: bool = False,
 ) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
     """``a`` and ``b`` as engine operands at the dtype their op computes in.
 
@@ -365,6 +381,9 @@ def _binary_operands(
         the result is half, a real Python number is handed over as a 0-d
         float32 and a qualifying 0-d tensor uncast, rather than rounded to
         the half dtype first.
+    inplace : bool, default=False
+        Whether ``a`` is written in place: the promoted result dtype must be
+        castable to ``a``'s dtype (:func:`lucid._promotion.can_cast`).
 
     Returns
     -------
@@ -375,6 +394,8 @@ def _binary_operands(
     ------
     TypeError
         If an operand is neither a tensor nor a Python number.
+    RuntimeError
+        If ``inplace`` is True and the promoted dtype cannot be cast to ``a``'s.
     """
     # A Tensor's impl is one attribute away and a bare impl is itself; a
     # number, or a phantom under shadow allocation, takes the general route.
@@ -390,9 +411,9 @@ def _binary_operands(
         # Two tensors of one dtype, before any tier logic.
         if da == db and not (true_div and _promotion.is_integral(da)):
             return ai, bi
-        return _tensor_pair(ai, da, bi, db, true_div, opmath)
+        return _tensor_pair(ai, da, bi, db, true_div, opmath, inplace)
     if ai is not None and isinstance(b, _promotion.NUMBER):
-        return _beside_number(ai, b, true_div, opmath)
+        return _beside_number(ai, b, true_div, opmath, inplace)
     if bi is not None and isinstance(a, _promotion.NUMBER):
         t, number = _beside_number(bi, a, true_div, opmath)
         return number, t
