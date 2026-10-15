@@ -1,6 +1,12 @@
 <div align="center">
 
-# Lucid³
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/svg/lucid-lockup-horizontal-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/svg/lucid-lockup-horizontal-on-light.svg">
+  <img alt="Lucid" src="https://raw.githubusercontent.com/ChanLumerico/lucid/main/assets/svg/lucid-lockup-horizontal-on-light.svg" width="210">
+</picture>
+
+<br>
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&pause=1200&color=FFFFFF&center=true&vCenter=true&width=620&height=30&lines=Deep+Learning+Framework+Built+From+Scratch+For+Apple+Silicon" alt="Typing SVG"/>
 
@@ -11,7 +17,7 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-360255-purple)
+![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-367060-purple)
 
 **[Documentation](https://chanlumerico.github.io/lucid/)** ·
 **[Model Zoo](https://chanlumerico.github.io/lucid/)** ·

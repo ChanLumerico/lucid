@@ -1,0 +1,31 @@
+{
+  "definition": "E±(φ) = c + R(±θ)[A cosφ, B sinφ]ᵀ",
+  "theta_deg": 45.0,
+  "B_over_A": 0.44,
+  "stroke_over_A": 0.185,
+  "clearance_over_A": 0.135,
+  "over_under": "E+ over at top crossing, E- over at bottom crossing (Hopf link, lk = 1)",
+  "tile": {
+    "A_over_size": 0.3364,
+    "corner_radius_over_size": 0.132
+  },
+  "favicon": {
+    "A_over_size": 0.372,
+    "stroke_over_A": 0.235,
+    "clearance_over_A": 0.17
+  },
+  "colors": {
+    "violet": "#9576E4",
+    "violet_tint": "#C4B3F4",
+    "violet_shade": "#6E4FD0",
+    "ink": "#282337",
+    "night": "#121214",
+    "lavender": "#F1EDFC",
+    "text_on_dark": "#F5F4F8",
+    "text_on_light": "#16141F"
+  },
+  "wordmark": {
+    "font": "Wanted Sans Bold (outlined)",
+    "tracking_em": -0.012
+  }
+}
