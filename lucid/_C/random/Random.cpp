@@ -8,6 +8,7 @@
 
 #include "Random.h"
 
+#include <cmath>
 #include <utility>
 
 #include "../autograd/Helpers.h"
@@ -33,6 +34,33 @@ inline Generator& resolve_gen(Generator* gen) {
 // requires_grad is always false for random tensors.
 inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt, Device device) {
     return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device, false);
+}
+
+Storage uniform_storage(
+    const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
+    if (dt == Dtype::C128 && device == Device::CPU) {
+        const auto n = static_cast<std::int64_t>(shape_numel(shape));
+        Storage s = random_uniform_storage(Shape{2 * n}, lo, hi, Dtype::F64, device, gen);
+        std::get<CpuStorage>(s).dtype = Dtype::C128;
+        return s;
+    }
+    return random_uniform_storage(shape, lo, hi, dt, device, gen);
+}
+
+Storage normal_storage(
+    const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
+    if (dt == Dtype::C128 && device == Device::CPU) {
+        const std::size_t n = shape_numel(shape);
+        Storage s = random_normal_storage(Shape{static_cast<std::int64_t>(2 * n)}, 0.0,
+                                          std / std::sqrt(2.0), Dtype::F64, device, gen);
+        auto& cpu = std::get<CpuStorage>(s);
+        auto* parts = reinterpret_cast<double*>(cpu.ptr.get());
+        for (std::size_t i = 0; i < n; ++i)
+            parts[2 * i] += mean;
+        cpu.dtype = Dtype::C128;
+        return s;
+    }
+    return random_normal_storage(shape, mean, std, dt, device, gen);
 }
 
 }  // namespace
@@ -83,7 +111,7 @@ compile::RngRecipe recipe_of(compile::RngRecipe::Kind kind, double a, double b) 
 TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device, Generator* gen) {
     OpScopeFull scope{"rand", device, dt, shape};
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
-    auto s = random_uniform_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
+    auto s = uniform_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
     register_rng_output("rand", out, gen, recipe_of(compile::RngRecipe::Kind::Uniform, 0.0, 1.0));
     return out;
@@ -98,7 +126,7 @@ uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device,
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("low", low);
     scope.set_attr("high", high);
-    auto s = random_uniform_storage(shape, low, high, dt, device, resolve_gen(gen));
+    auto s = uniform_storage(shape, low, high, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
     register_rng_output("uniform", out, gen,
                         recipe_of(compile::RngRecipe::Kind::Uniform, low, high));
@@ -109,7 +137,7 @@ uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device,
 TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device, Generator* gen) {
     OpScopeFull scope{"randn", device, dt, shape};
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
-    auto s = random_normal_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
+    auto s = normal_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
     register_rng_output("randn", out, gen, recipe_of(compile::RngRecipe::Kind::Normal, 0.0, 1.0));
     return out;
@@ -124,7 +152,7 @@ normal_op(const Shape& shape, double mean, double std, Dtype dt, Device device, 
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("mean", mean);
     scope.set_attr("std", std);
-    auto s = random_normal_storage(shape, mean, std, dt, device, resolve_gen(gen));
+    auto s = normal_storage(shape, mean, std, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
     register_rng_output("normal", out, gen, recipe_of(compile::RngRecipe::Kind::Normal, mean, std));
     return out;

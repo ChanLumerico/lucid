@@ -82,6 +82,18 @@ void register_autograd(py::module_& m) {
         "retain_grad keeps what reaches it). An entry is None when that "
         "input lies outside the graph.");
 
+    m.def(
+        "_accumulate_grad",
+        [](const std::shared_ptr<TensorImpl>& leaf, const std::shared_ptr<TensorImpl>& grad) {
+            if (!leaf)
+                ErrorBuilder("_accumulate_grad").fail("leaf is null");
+            if (!grad)
+                ErrorBuilder("_accumulate_grad").fail("grad is null");
+            leaf->accumulate_grad_impl(grad);
+        },
+        py::arg("leaf"), py::arg("grad"),
+        "Accumulate a gradient TensorImpl into `leaf`'s graph-mode .grad slot.");
+
     // The engine half of ``Tensor.register_hook``.  A tensor's hooks run where
     // its gradient is complete — its producer's output slot, or a leaf's
     // accumulation — through one Python runner per slot, which Python

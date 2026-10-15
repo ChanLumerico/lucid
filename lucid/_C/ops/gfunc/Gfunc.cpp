@@ -200,6 +200,7 @@ Dtype sequence_fill_dtype(Dtype dt, const char* op, bool complex_ok) {
     case Dtype::I16:
         return Dtype::I64;
     case Dtype::C64:
+    case Dtype::C128:
         if (complex_ok)
             return Dtype::F64;
         break;
@@ -419,8 +420,9 @@ TensorImplPtr logspace_op(double start,
             p[num - 1] = static_cast<T>(std::pow(base, stop));
     };
 
-    auto cpu = allocate_cpu(shape, dt);
-    switch (dt) {
+    const Dtype fill = sequence_fill_dtype(dt, "logspace", /*complex_ok=*/true);
+    auto cpu = allocate_cpu(shape, fill);
+    switch (fill) {
     case Dtype::F32:
         compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
         break;
@@ -430,15 +432,12 @@ TensorImplPtr logspace_op(double start,
     case Dtype::I32:
         compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
         break;
-    case Dtype::I64:
+    default:
         compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
         break;
-    default:
-        ErrorBuilder("logspace").not_implemented("dtype not supported");
     }
-    return made_from_nothing(
-        finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape, dt,
-                 device, requires_grad));
+    return made_from_nothing(finalize(sequence_to_device(std::move(cpu), shape, fill, dt, device),
+                                      shape, dt, device, requires_grad));
 }
 
 // ── axis-scatter operands ─────────────────────────────────────────────────────

@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <cmath>
 #include <complex>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -40,10 +42,22 @@ inline void scatter_combine(ScatterReduce r, T& d, const T& s) {
     } else {
         switch (r) {
         case ScatterReduce::Amax:
+            if constexpr (std::is_floating_point_v<T>) {
+                if (std::isnan(s) || std::isnan(d)) {
+                    d = std::numeric_limits<T>::quiet_NaN();
+                    return;
+                }
+            }
             if (s > d)
                 d = s;
             break;
         case ScatterReduce::Amin:
+            if constexpr (std::is_floating_point_v<T>) {
+                if (std::isnan(s) || std::isnan(d)) {
+                    d = std::numeric_limits<T>::quiet_NaN();
+                    return;
+                }
+            }
             if (s < d)
                 d = s;
             break;

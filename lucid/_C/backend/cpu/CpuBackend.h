@@ -12851,17 +12851,14 @@ private:
         // operands travel through untouched.  See detail::widen_half.
         if (detail::is_half_like(dt))
             return detail::back_to_f16(eye(N, M, k, Dtype::F32), dt);
-        Shape shape{N, M};
         std::size_t nb = static_cast<std::size_t>(N * M) * dtype_size(dt);
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         std::memset(ptr.get(), 0, nb);
         auto set_one = [&](auto* p) {
             using T = std::remove_pointer_t<decltype(p)>;
             for (std::int64_t i = 0; i < N; ++i) {
-                const std::int64_t j = i + k;
-                if (j < 0 || j >= M)
-                    continue;
-                p[i * M + j] = static_cast<T>(1);
+                if (const std::int64_t j = i + k; j >= 0 && j < M)
+                    p[i * M + j] = static_cast<T>(1);
             }
         };
         switch (dt) {
@@ -12888,6 +12885,9 @@ private:
             break;
         case Dtype::C64:
             set_one(reinterpret_cast<std::complex<float>*>(ptr.get()));
+            break;
+        case Dtype::C128:
+            set_one(reinterpret_cast<std::complex<double>*>(ptr.get()));
             break;
         default:
             ErrorBuilder("cpu_backend::eye").not_implemented("dtype not supported");

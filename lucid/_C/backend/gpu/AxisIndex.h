@@ -490,32 +490,66 @@ inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    return scatter_places_nothing(base, upd) ? base
-                                             : ::mlx::core::scatter_add(base, idx, upd, axes);
+    namespace mx = ::mlx::core;
+    if (scatter_places_nothing(base, upd))
+        return base;
+    if (base.dtype() == mx::complex64) {
+        auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axes);
+        auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axes);
+        return mx::add(mx::astype(re, mx::complex64),
+                       mx::multiply(mx::astype(im, mx::complex64),
+                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+    }
+    return mx::scatter_add(base, idx, upd, axes);
 }
 
 inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
                                           const ::mlx::core::array& idx,
                                           const ::mlx::core::array& upd,
                                           int axis) {
-    return scatter_places_nothing(base, upd) ? base
-                                             : ::mlx::core::scatter_add(base, idx, upd, axis);
+    namespace mx = ::mlx::core;
+    if (scatter_places_nothing(base, upd))
+        return base;
+    if (base.dtype() == mx::complex64) {
+        auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axis);
+        auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axis);
+        return mx::add(mx::astype(re, mx::complex64),
+                       mx::multiply(mx::astype(im, mx::complex64),
+                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+    }
+    return mx::scatter_add(base, idx, upd, axis);
+}
+
+inline ::mlx::core::array gpu_scatter_nan_propagate(const ::mlx::core::array& out,
+                                                    const ::mlx::core::array& base,
+                                                    const ScatterIndices& idx,
+                                                    const ::mlx::core::array& upd,
+                                                    const std::vector<int>& axes) {
+    namespace mx = ::mlx::core;
+    if (!mx::issubdtype(base.dtype(), mx::floating))
+        return out;
+    auto any_nan = mx::scatter_max(mx::isnan(base), idx, mx::isnan(upd), axes);
+    return mx::where(any_nan, mx::array(std::numeric_limits<float>::quiet_NaN(), out.dtype()), out);
 }
 
 inline ::mlx::core::array gpu_scatter_max(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    return scatter_places_nothing(base, upd) ? base
-                                             : ::mlx::core::scatter_max(base, idx, upd, axes);
+    if (scatter_places_nothing(base, upd))
+        return base;
+    return gpu_scatter_nan_propagate(::mlx::core::scatter_max(base, idx, upd, axes), base, idx, upd,
+                                     axes);
 }
 
 inline ::mlx::core::array gpu_scatter_min(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    return scatter_places_nothing(base, upd) ? base
-                                             : ::mlx::core::scatter_min(base, idx, upd, axes);
+    if (scatter_places_nothing(base, upd))
+        return base;
+    return gpu_scatter_nan_propagate(::mlx::core::scatter_min(base, idx, upd, axes), base, idx, upd,
+                                     axes);
 }
 
 inline ::mlx::core::array gpu_scatter_prod(const ::mlx::core::array& base,

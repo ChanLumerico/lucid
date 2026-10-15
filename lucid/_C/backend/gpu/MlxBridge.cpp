@@ -322,8 +322,18 @@ std::size_t evaluate_pending() {
         g_pending.clear();
         g_prune_at = kPruneFloor;
     }
-    if (!arrays.empty())
-        ::mlx::core::eval(arrays);
+    if (!arrays.empty()) {
+        try {
+            ::mlx::core::eval(arrays);
+        } catch (...) {
+            for (auto& arr : arrays) {
+                try {
+                    arr.eval();
+                } catch (...) {
+                }
+            }
+        }
+    }
     return arrays.size();
 }
 

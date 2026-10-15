@@ -159,19 +159,17 @@ def test_an_input_that_does_not_require_grad_is_refused(
         assert "does not require grad" in str(info.value)
 
 
-def test_create_graph_with_inputs_is_refused_for_now(device: str) -> None:
-    a = lucid.ones(2, requires_grad=True, device=device)
-    with pytest.raises(NotImplementedError, match="create_graph"):
-        (a * a).sum().backward(inputs=[a], create_graph=True)
-    assert a.grad is None
+def test_create_graph_with_inputs_accumulates_across_passes(device: str) -> None:
+    a = lucid.tensor([1.0, 2.0], requires_grad=True, device=device)
+    b = lucid.tensor([1.0, 1.0], requires_grad=True, device=device)
+    (a * a * b).sum().backward(inputs=[a], create_graph=True)
+    (a * a * a).sum().backward(inputs=[a], create_graph=True)
+    assert a.grad is not None and a.grad.tolist() == [5.0, 16.0]
+    assert b.grad is None
+    (g,) = lucid.autograd.grad(a.grad.sum(), a)
+    assert g.tolist() == [8.0, 14.0]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=NotImplementedError,
-    reason="LCD-308 follow-up: the engine has no binding to store a "
-    "graph-mode gradient into .grad from outside a backward pass",
-)
 def test_create_graph_with_inputs_gives_a_differentiable_grad() -> None:
     # The reference's answer: d/da sum(a^3) = 3a^2, and its derivative 6a.
     a = lucid.tensor([1.0, 2.0], requires_grad=True)

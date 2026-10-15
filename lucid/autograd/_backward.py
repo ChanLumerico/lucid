@@ -140,7 +140,10 @@ def _seeded_root(
     if seed is None:
         return _unwrap(out)
     with enable_grad():
-        return _unwrap((out * (seed if keep_seed_graph else seed.detach())).sum())
+        s = seed if keep_seed_graph else seed.detach()
+        if out.is_complex():
+            s = _wrap(_C_engine.conj(_unwrap(s)))
+        return _unwrap((out * s).sum())
 
 
 def backward(
@@ -191,8 +194,7 @@ def backward(
         input that is not a leaf has its ``.grad`` filled too (it is
         marked :meth:`~Tensor.retain_grad`, as the reference does).  An
         input the roots do not reach is left alone.  ``None`` (default)
-        accumulates into every leaf.  Not yet supported together with
-        ``create_graph=True``.
+        accumulates into every leaf.
 
     Returns
     -------
@@ -212,10 +214,6 @@ def backward(
     TypeError
         A gradient is neither a tensor nor ``None``, or an entry of
         ``inputs`` is not a tensor.
-    NotImplementedError
-        ``inputs`` together with ``create_graph=True``: the engine has
-        no way yet to store a differentiable gradient into ``.grad``
-        from outside a backward pass.
     ShapeMismatch, DtypeMismatch, DeviceMismatch
         A gradient's shape or device differs from its root's, or only
         one of the two is complex.
@@ -282,7 +280,11 @@ def backward(
     _retain = retain_graph if retain_graph is not None else create_graph
     if inputs is not None:
         _backward_into(
-            roots, seeds, _backward_inputs(inputs, create_graph), _retain
+            roots,
+            seeds,
+            _backward_inputs(inputs),
+            _retain,
+            create_graph=create_graph,
         )
         return
     for index, (root, seed) in enumerate(zip(roots, seeds, strict=True)):
@@ -297,9 +299,7 @@ def backward(
         )
 
 
-def _backward_inputs(
-    inputs: Tensor | Sequence[Tensor], create_graph: bool
-) -> list[Tensor]:
+def _backward_inputs(inputs: Tensor | Sequence[Tensor]) -> list[Tensor]:
     """Check the ``inputs`` of :func:`backward`: tensors that require grad.
 
     Raises
@@ -308,8 +308,6 @@ def _backward_inputs(
         ``inputs`` is empty, or one of them does not require grad.
     TypeError
         An entry is not a tensor.
-    NotImplementedError
-        ``create_graph`` is set (see :func:`backward`).
     """
     from lucid._tensor.tensor import Tensor
 
@@ -328,15 +326,6 @@ def _backward_inputs(
                 f"backward(): inputs[{i}] does not require grad, so no "
                 "gradient can be accumulated into it"
             )
-    if create_graph:
-        # A gradient made under create_graph has to land in the graph-mode
-        # slot of ``.grad``, which only the engine's own accumulation can
-        # write; ``Tensor.grad = g`` keeps the values and drops the graph.
-        raise NotImplementedError(
-            "backward(): inputs= together with create_graph=True is not "
-            "supported yet; use autograd.grad(..., create_graph=True) for "
-            "differentiable gradients of chosen tensors"
-        )
     return targets
 
 
@@ -345,6 +334,8 @@ def _backward_into(
     seeds: list[Tensor | None],
     targets: list[Tensor],
     retain_graph: bool,
+    *,
+    create_graph: bool = False,
 ) -> None:
     """``backward`` restricted to ``targets``: the engine's ``grad`` walks
     only the paths to them, then each gradient is accumulated.
@@ -361,6 +352,7 @@ def _backward_into(
         targets,
         grad_outputs=seeds,
         retain_graph=retain_graph,
+        create_graph=create_graph,
         allow_unused=True,
     )
     done: set[int] = set()
@@ -371,7 +363,9 @@ def _backward_into(
             continue
         done.add(id(t))
         current = t.grad
-        if current is None:
+        if create_graph or (current is not None and current.requires_grad):
+            _C_engine._accumulate_grad(_unwrap(t), _unwrap(g))
+        elif current is None:
             t.grad = g
         else:
             # In place, as the engine accumulates: a ``.grad`` the caller

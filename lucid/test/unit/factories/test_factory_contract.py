@@ -119,24 +119,7 @@ def _reference_refuses(name: str, dtype: lucid.dtype) -> bool:
 
 # Engine gaps the reference does not have.  Strict: a fix turns the
 # xfail into a failure, and the entry must come out.
-_ENGINE_GAPS: set[tuple[str, lucid.dtype, str]] = {
-    *{
-        ("logspace", d, dev)
-        for d in (
-            lucid.float16,
-            lucid.bfloat16,
-            lucid.complex64,
-            lucid.int8,
-            lucid.int16,
-        )
-        for dev in DEVICES
-    },
-    ("logspace", lucid.complex128, "cpu"),
-    *{
-        (n, lucid.complex128, "cpu")
-        for n in ("eye", "linspace", "rand", "randn", "rand_like", "randn_like")
-    },
-}
+_ENGINE_GAPS: set[tuple[str, lucid.dtype, str]] = set()
 
 
 def _cases() -> list[object]:

@@ -786,6 +786,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resolve complex vdot, func.jvp, gammainc, ExpFamily.entropy
 
+- resolve scatter, factory dtypes, and _accumulate_grad
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

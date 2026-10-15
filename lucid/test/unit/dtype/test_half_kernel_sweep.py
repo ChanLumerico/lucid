@@ -226,10 +226,6 @@ def test_complex_sort_and_topk_keep_a_grad_fn(device_gpu_only: str) -> None:
     assert lucid.topk(x, 2)[0].grad_fn is not None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="CHA-238: GpuBackend::scatter_add_axis has no complex64",
-)
 @pytest.mark.parametrize("op", ["sort", "topk"])
 def test_complex_sort_and_topk_backward(device_gpu_only: str, op: str) -> None:
     x = _complex_input(device_gpu_only)

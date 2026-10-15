@@ -104,3 +104,31 @@ def test_cpu_scatter_amax_half_gradient(dtype: lucid.dtype) -> None:
     assert src.grad is not None and base.grad is not None
     assert src.grad.float().tolist() == [0.0, 0.0, 1.0, 1.0]
     assert base.grad.float().tolist() == [0.0, 0.0]
+
+
+@pytest.mark.parametrize("include_self", [True, False])
+@pytest.mark.parametrize("reduce", ["amax", "amin"])
+@pytest.mark.parametrize(
+    "dtype", [lucid.float16, lucid.bfloat16, lucid.float32, lucid.float64], ids=str
+)
+def test_scatter_reduce_amax_amin_nan_propagates(
+    device: str, dtype: lucid.dtype, reduce: str, include_self: bool
+) -> None:
+    if device == "metal" and dtype == lucid.float64:
+        pytest.skip("float64 is CPU-only")
+    nan = float("nan")
+    base = lucid.tensor([1.0, 1.0], dtype=dtype, device=device)
+    index = lucid.tensor([0, 0, 1, 1], device=device)
+    src = lucid.tensor([2.0, nan, nan, 2.0], dtype=dtype, device=device)
+    out = lucid.scatter_reduce(base, 0, index, src, reduce, include_self=include_self)
+    assert lucid.isnan(out).tolist() == [True, True]
+
+    # When include_self=True, NaN already in base also stays NaN when updated.
+    base_nan = lucid.tensor([nan, 1.0], dtype=dtype, device=device)
+    src_finite = lucid.tensor([2.0, 3.0], dtype=dtype, device=device)
+    idx_2 = lucid.tensor([0, 1], device=device)
+    out_base = lucid.scatter_reduce(
+        base_nan, 0, idx_2, src_finite, reduce, include_self=include_self
+    )
+    assert lucid.isnan(out_base).tolist() == [include_self, False]
+

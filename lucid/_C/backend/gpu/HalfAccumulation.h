@@ -237,8 +237,16 @@ inline ::mlx::core::array scatter_add_axis_widened(const ::mlx::core::array& bas
                                                    const ::mlx::core::array& idx,
                                                    const ::mlx::core::array& updates,
                                                    int axis) {
+    namespace mx = ::mlx::core;
+    if (base.dtype() == mx::complex64) {
+        auto re = mx::scatter_add_axis(mx::real(base), idx, mx::real(updates), axis);
+        auto im = mx::scatter_add_axis(mx::imag(base), idx, mx::imag(updates), axis);
+        return mx::add(mx::astype(re, mx::complex64),
+                       mx::multiply(mx::astype(im, mx::complex64),
+                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+    }
     return narrow_half(
-        ::mlx::core::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
+        mx::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
         base.dtype());
 }
 
