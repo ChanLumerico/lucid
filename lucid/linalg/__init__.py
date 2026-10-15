@@ -11,6 +11,7 @@ from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, finfo as _finfo, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
+from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
@@ -2281,21 +2282,6 @@ def solve_triangular(
         )
         return _wrap(XT).mT
     return _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
-
-
-def _broadcast_batch(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
-    """The batch shape two batched operands broadcast to."""
-    width = max(len(a), len(b))
-    a = (1,) * (width - len(a)) + a
-    b = (1,) * (width - len(b)) + b
-    out = []
-    for x, y in zip(a, b):
-        if x != y and 1 not in (x, y):
-            raise ValueError(
-                f"solve_triangular: batch shapes {a} and {b} do not broadcast"
-            )
-        out.append(max(x, y))
-    return tuple(out)
 
 
 def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:

@@ -34,6 +34,7 @@ import lucid as _lucid
 from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
+from lucid._tensor._indexing import broadcast_shapes
 from lucid.nn.functional._index_checks import _host_read
 
 if TYPE_CHECKING:
@@ -70,14 +71,10 @@ def _shape(t: Tensor) -> tuple[int, ...]:
 
 def _broadcast_shape(*shapes: tuple[int, ...]) -> tuple[int, ...] | None:
     """The shape ``shapes`` broadcast to, or ``None`` if they do not."""
-    rank = max((len(s) for s in shapes), default=0)
-    out: list[int] = []
-    for axis in range(-rank, 0):
-        sizes = {s[axis] for s in shapes if len(s) >= -axis} - {1}
-        if len(sizes) > 1:
-            return None
-        out.append(sizes.pop() if sizes else 1)
-    return tuple(out)
+    try:
+        return broadcast_shapes(*shapes)
+    except _C_engine.ShapeMismatch:
+        return None
 
 
 def _check_broadcasts_to(

@@ -207,6 +207,7 @@ __all__ = [
     "addmm", "addbmm", "baddbmm", "addmv", "addr", "addcmul", "addcdiv",
     "mv", "ger", "vdot", "block_diag",
     # ── extras: shape ─────────────────────────────────────────────────────
+    "broadcast_shapes", "broadcast_tensors",
     "column_stack", "row_stack", "dstack",
     "atleast_1d", "atleast_2d", "atleast_3d",
     "vsplit", "hsplit", "dsplit", "tensor_split",

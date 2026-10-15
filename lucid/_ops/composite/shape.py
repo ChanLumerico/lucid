@@ -10,7 +10,11 @@ from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
 from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops.composite._shared import _swap_dims
-from lucid._tensor._indexing import _broadcast_shape
+from lucid._tensor._indexing import (
+    _broadcast_shape,
+    broadcast_shapes,
+    broadcast_tensors,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -1197,6 +1201,8 @@ def diag_embed(
 
 
 __all__ = [
+    "broadcast_shapes",
+    "broadcast_tensors",
     "diag_embed",
     "swapaxes",
     "swapdims",

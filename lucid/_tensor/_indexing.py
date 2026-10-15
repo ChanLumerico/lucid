@@ -743,6 +743,108 @@ def _advanced_getitem(
     return result
 
 
+def broadcast_shapes(*shapes: Sequence[int]) -> tuple[int, ...]:
+    r"""Return the common shape to which ``shapes`` broadcast.
+
+    Applies the standard right-aligned broadcasting rules across zero or
+    more shape sequences: two dimensions are compatible when they are
+    equal or one of them is ``1``, in which case the output dimension is
+    their non-unit size (or ``0`` when an axis has length ``0`` paired
+    with ``0`` or ``1``).
+
+    Parameters
+    ----------
+    *shapes : Sequence[int]
+        Zero or more shape tuples or lists of non-negative dimension sizes.
+
+    Returns
+    -------
+    tuple[int, ...]
+        The broadcasted shape tuple (``()`` when called with no arguments).
+
+    Raises
+    ------
+    ValueError
+        If any dimension size is negative.
+    lucid._C.engine.ShapeMismatch
+        If any two shapes have incompatible non-unit dimensions along the
+        same right-aligned axis.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.broadcast_shapes((2, 1, 3), (4, 1))
+    (2, 4, 3)
+    >>> lucid.broadcast_shapes()
+    ()
+    """
+    norm: list[tuple[int, ...]] = [
+        (operator.index(s),)
+        if isinstance(s, SupportsIndex)
+        else tuple(operator.index(d) for d in s)
+        for s in shapes
+    ]
+    for s in norm:
+        if any(d < 0 for d in s):
+            raise ValueError(
+                f"Attempting to broadcast a dimension with negative length in {s}!"
+            )
+    rank = max((len(s) for s in norm), default=0)
+    out: list[int] = []
+    for axis in range(-rank, 0):
+        sizes = {s[axis] for s in norm if len(s) >= -axis} - {1}
+        if len(sizes) > 1:
+            raise _C_engine.ShapeMismatch(
+                "shape mismatch: shapes could not be broadcast together "
+                f"with shapes {', '.join(str(list(s)) for s in norm)}"
+            )
+        out.append(sizes.pop() if sizes else 1)
+    return tuple(out)
+
+
+def broadcast_tensors(*tensors: Tensor) -> tuple[Tensor, ...]:
+    r"""Broadcast one or more tensors against each other to a common shape.
+
+    Computes the joint shape via :func:`lucid.broadcast_shapes` and returns
+    a tuple of views produced by :meth:`Tensor.broadcast_to`, preserving
+    autograd tracking on every input tensor.
+
+    Parameters
+    ----------
+    *tensors : Tensor
+        Zero or more tensors whose shapes are broadcast-compatible.
+
+    Returns
+    -------
+    tuple[Tensor, ...]
+        Tuple of broadcasted tensor views sharing the common shape.
+
+    Raises
+    ------
+    TypeError
+        If any argument is not a :class:`Tensor`.
+    lucid._C.engine.ShapeMismatch
+        If the input tensor shapes cannot be broadcast together.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.arange(3).reshape(3, 1)
+    >>> y = lucid.arange(2).reshape(1, 2)
+    >>> bx, by = lucid.broadcast_tensors(x, y)
+    >>> bx.shape, by.shape
+    ((3, 2), (3, 2))
+    """
+    for i, t in enumerate(tensors):
+        if not hasattr(t, "_impl") or not hasattr(t, "broadcast_to"):
+            raise TypeError(
+                f"broadcast_tensors(): expected Tensor at position {i}, "
+                f"got {type(t).__name__}"
+            )
+    target_shape = broadcast_shapes(*(t.shape for t in tensors))
+    return tuple(t.broadcast_to(target_shape) for t in tensors)
+
+
 def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
     """The shape index tensors of ``shapes`` broadcast to together.
 
@@ -751,18 +853,13 @@ def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
     IndexError
         If two of them cannot be broadcast together.
     """
-    max_ndim = max(len(s) for s in shapes)
-    result: list[int] = []
-    for d in range(max_ndim):
-        sizes = {s[d - (max_ndim - len(s))] for s in shapes if d >= max_ndim - len(s)}
-        sizes.discard(1)
-        if len(sizes) > 1:
-            raise IndexError(
-                "shape mismatch: indexing tensors could not be broadcast together "
-                f"with shapes {', '.join(str(list(s)) for s in shapes)}"
-            )
-        result.append(sizes.pop() if sizes else 1)
-    return result
+    try:
+        return list(broadcast_shapes(*shapes))
+    except _C_engine.ShapeMismatch:
+        raise IndexError(
+            "shape mismatch: indexing tensors could not be broadcast together "
+            f"with shapes {', '.join(str(list(s)) for s in shapes)}"
+        ) from None
 
 
 # ── value normalisation ───────────────────────────────────────────────────────

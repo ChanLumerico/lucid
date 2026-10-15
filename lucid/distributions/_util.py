@@ -4,6 +4,7 @@ from typing import Any, Callable, Protocol, Self, overload, override
 
 import lucid
 from lucid._dtype import finfo
+from lucid._tensor._indexing import broadcast_shapes
 from lucid._tensor.tensor import Tensor
 
 
@@ -20,38 +21,8 @@ def _as_tensor(x: Tensor | float | int) -> Tensor:
 
 
 def _broadcast_shapes(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
-    """The right-aligned broadcast of two shapes, as a shape.
-
-    Wanted where the two things being aligned are not both tensors — a
-    ``log_prob`` has to reconcile a *value's* shape with the
-    distribution's ``batch_shape``, and ``broadcast_to`` alone only ever
-    grows one side, so whichever side happened to be shorter decided
-    which calls worked.
-
-    Parameters
-    ----------
-    a, b : tuple of int
-        Shapes to align.
-
-    Returns
-    -------
-    tuple of int
-        The joint shape.
-
-    Raises
-    ------
-    ValueError
-        If a dimension pair is neither equal nor has a ``1`` in it.
-    """
-    out: list[int] = []
-    for i in range(max(len(a), len(b))):
-        da = a[len(a) - 1 - i] if i < len(a) else 1
-        db = b[len(b) - 1 - i] if i < len(b) else 1
-        if da != db and da != 1 and db != 1:
-            raise ValueError(f"shapes {a} and {b} are not broadcast-compatible")
-        out.append(da if db == 1 else db)
-    out.reverse()
-    return tuple(out)
+    """The right-aligned broadcast of two shapes, as a shape."""
+    return broadcast_shapes(a, b)
 
 
 def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:

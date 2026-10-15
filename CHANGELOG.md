@@ -84,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - enforce C++ layer DAG via check_cpp_layers (LCD-240)
 
+- add public broadcast_shapes and broadcast_tensors (LCD-339)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

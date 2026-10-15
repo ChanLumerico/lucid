@@ -196,7 +196,7 @@
     "lucid/coreml/_emit.py": 1176,
     "lucid/distributions/transforms.py": 281,
     "lucid/fft/__init__.py": 379,
-    "lucid/linalg/__init__.py": 2355,
+    "lucid/linalg/__init__.py": 2341,
     "lucid/models/_utils/_detection.py": 1329,
     "lucid/models/generative/diamond/_model.py": 728,
     "lucid/models/generative/rectified_flow/_model.py": 289,
@@ -1194,7 +1194,6 @@
    },
    "B905": {
     "lucid/func/__init__.py": 4,
-    "lucid/linalg/__init__.py": 1,
     "lucid/models/vision/mask_rcnn/_model.py": 1
    },
    "B912": {
@@ -1715,7 +1714,6 @@
     "lucid/models/vision/efficientnet/_model.py": 1,
     "lucid/models/vision/mobilenet_v3/_model.py": 1,
     "lucid/models/vision/yolo/_v3.py": 1,
-    "lucid/nn/_shadow.py": 2,
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
     "lucid/profiler/__init__.py": 1,
