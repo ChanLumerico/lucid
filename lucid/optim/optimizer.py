@@ -4,7 +4,8 @@ Optimizer base class.
 
 import operator
 import warnings
-from typing import Any, ClassVar, Iterable, Protocol, cast, override
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, ClassVar, Protocol, SupportsFloat, SupportsIndex, override
 
 import lucid as _lucid
 from lucid._tensor.tensor import Tensor
@@ -31,10 +32,22 @@ class _EngineRules(Protocol):
     def check_hyperparams(values: dict[str, float]) -> None: ...
 
 
-class _TunableEngine(Protocol):
-    """An engine optimizer, as the base class hands it edited hyper-parameters."""
+class _EngineOptimizer(Protocol):
+    """An engine optimizer bound to one parameter group."""
 
-    def set_hyperparams(self, values: dict[str, float]) -> None: ...
+    step_count: int
+
+    def step(self) -> None: ...
+
+    def set_hyperparams(self, values: dict[str, Any]) -> None: ...
+
+    def state_buffers(
+        self,
+    ) -> Sequence[tuple[str, Sequence[_C_engine.TensorImpl | None]]]: ...
+
+    def load_state_buffers(
+        self, bufs: Sequence[tuple[str, Sequence[Any]]]
+    ) -> None: ...
 
 
 class _GroupReader(Protocol):
@@ -135,6 +148,26 @@ def _from_host(value: object, device: _C_engine.Device) -> _C_engine.TensorImpl:
     if isinstance(value, Tensor):
         return value._impl.transfer_to_device(device, False)
     return _C_engine.TensorImpl(value, device, False)
+
+
+def _group_params(group: dict[str, object]) -> list[Parameter]:
+    """The parameters of one param group (``add_param_group`` stores a list)."""
+    params = group["params"]
+    if not isinstance(params, list):
+        raise TypeError(
+            f"a param group's 'params' must be a list, got {type(params).__name__}"
+        )
+    return params
+
+
+def _group_float(group: dict[str, object], key: str = "lr") -> float:
+    """Read a numeric entry ``key`` from ``group`` as a ``float``."""
+    value = group[key]
+    if not isinstance(value, (SupportsFloat, SupportsIndex)):
+        raise TypeError(
+            f"a param group's {key!r} must be a number, got {type(value).__name__}"
+        )
+    return float(value)
 
 
 class Optimizer:
@@ -284,7 +317,9 @@ class Optimizer:
             # Default path: no wrapper, user's step() runs raw.
             return
         if "step" in cls.__dict__:
-            _orig = cls.__dict__["step"]
+            _orig: Callable[[Optimizer, _OptimizerClosure], Tensor | None] = (
+                cls.__dict__["step"]
+            )
 
             def _step_with_eval(
                 self: Optimizer, closure: _OptimizerClosure = None
@@ -292,7 +327,7 @@ class Optimizer:
                 result = _orig(self, closure)
                 if type(self).AUTO_EVAL_AFTER_STEP:
                     self._metal_eval_params()
-                return cast(Tensor | None, result)
+                return result
 
             _step_with_eval.__name__ = "step"
             _step_with_eval.__doc__ = _orig.__doc__
@@ -308,14 +343,13 @@ class Optimizer:
         ``loss.item()`` / ``.cpu()`` / numpy bridge call.
         """
 
-        impls: list[object] = [
+        impls: list[_C_engine.TensorImpl] = [
             p._impl
             for group in self.param_groups
-            for p in group["params"]  # type: ignore[attr-defined]
-            if isinstance(p, Parameter)
+            for p in _group_params(group)
         ]
         if impls:
-            _C_engine.eval_tensors(impls)  # type: ignore[arg-type]
+            _C_engine.eval_tensors(impls)
 
     def __init__(
         self,
@@ -347,10 +381,10 @@ class Optimizer:
             )
 
         self.param_groups: list[dict[str, object]] = []
-        self._engines: list[object] = []
+        self._engines: list[_EngineOptimizer] = []
         # Parallel to ``_engines``: the parameters each engine optimizer was
         # built over, and the impls they held at that moment.
-        self._engine_binds: list[tuple[list[Parameter], list[object]]] = []
+        self._engine_binds: list[tuple[list[Parameter], list[_C_engine.TensorImpl]]] = []
         self._engine_state_reset_warned: bool = False
         self._engines_built: bool = False
         # Parallel to ``param_groups``: each group's hyper-parameters as they
@@ -363,7 +397,7 @@ class Optimizer:
             self.add_param_group(group)
 
     @property
-    def _engine_optims(self) -> list[object]:
+    def _engine_optims(self) -> list[_EngineOptimizer]:
         """The engine optimizers, built on first use rather than in ``__init__``.
 
         Each engine optimizer captures ``TensorImpl`` pointers when it is
@@ -416,7 +450,13 @@ class Optimizer:
         ``InvalidArgument`` and is not added.
         """
         merged: dict[str, object] = {**self.defaults, **group}
-        merged["params"] = list(merged["params"])  # type: ignore[call-overload]
+        raw_params = merged["params"]
+        if not isinstance(raw_params, Iterable):
+            raise TypeError(
+                f"a param group's 'params' must be an iterable, "
+                f"got {type(raw_params).__name__}"
+            )
+        merged["params"] = list(raw_params)
         values: tuple[object, ...] = self._hyperparams_of(merged)
         self._check_hyperparams(self._hyperparam_dict(values))
         self.param_groups.append(merged)
@@ -492,14 +532,14 @@ class Optimizer:
         if engine is None:
             self._check_hyperparams(values)
         else:
-            cast(_TunableEngine, engine).set_hyperparams(values)
+            engine.set_hyperparams(values)
 
     @staticmethod
     def _group_binding(
         group: dict[str, object],
-    ) -> tuple[list[Parameter], list[object]]:
+    ) -> tuple[list[Parameter], list[_C_engine.TensorImpl]]:
         """Snapshot a group's parameters and the impls they hold right now."""
-        params: list[Parameter] = list(group["params"])  # type: ignore[call-overload]
+        params: list[Parameter] = list(_group_params(group))
         return params, [p._impl for p in params]
 
     def _bind_engine_optim(self, group: dict[str, object]) -> None:
@@ -509,18 +549,20 @@ class Optimizer:
         if len(self._engines) > built:
             self._engine_binds.append(self._group_binding(group))
 
-    def _build_engine_optim(self, group: dict[str, object]) -> object | None:
+    def _build_engine_optim(
+        self, group: dict[str, object]
+    ) -> _EngineOptimizer | None:
         """Build one engine optimizer for ``group`` without appending it.
 
         ``_append_engine_optim`` is the per-optimizer hook and appends to
         ``_engines``; it runs against a scratch list here so the result can
         replace a group's existing engine in place.
         """
-        live: list[object] = self._engines
+        live: list[_EngineOptimizer] = self._engines
         self._engines = []
         try:
             self._append_engine_optim(group)
-            built: list[object] = self._engines
+            built: list[_EngineOptimizer] = self._engines
         finally:
             self._engines = live
         return built[-1] if built else None
@@ -537,8 +579,8 @@ class Optimizer:
             return
         impl_of = operator.attrgetter("_impl")
         for idx, group in enumerate(self.param_groups):
-            params: list[Parameter] = group["params"]  # type: ignore[assignment]
-            impls: list[object] = binds[idx][1]
+            params: list[Parameter] = _group_params(group)
+            impls: list[_C_engine.TensorImpl] = binds[idx][1]
             if len(params) == len(impls) and all(
                 map(operator.is_, map(impl_of, params), impls)
             ):
@@ -563,18 +605,17 @@ class Optimizer:
         following the parameter is its own ``load_state_dict`` policy too.
         A buffer whose shape no longer matches its parameter is dropped.
         """
-        old: object = self._engines[idx]
+        old: _EngineOptimizer = self._engines[idx]
         old_params: list[Parameter] = self._engine_binds[idx][0]
-        fresh: object | None = self._build_engine_optim(group)
-        self._engines[idx] = fresh
+        fresh: _EngineOptimizer | None = self._build_engine_optim(group)
         self._engine_binds[idx] = self._group_binding(group)
         # Built from the group as it is now, edits included.
         self._group_hparams[idx] = self._hyperparams_of(group)
-        if old is None or fresh is None:
+        if fresh is None:
             return
+        self._engines[idx] = fresh
 
-        buffers: list[tuple[str, list[_C_engine.TensorImpl | None]]]
-        buffers = old.state_buffers()  # type: ignore[attr-defined]
+        buffers = old.state_buffers()
         if not buffers:
             # Nothing exported: no state yet, or an engine that keeps state
             # it cannot hand over — which only this optimizer can tell.
@@ -583,17 +624,17 @@ class Optimizer:
             return
 
         slot_of: dict[int, int] = {id(p): j for j, p in enumerate(old_params)}
-        params: list[Parameter] = group["params"]  # type: ignore[assignment]
-        carried: list[tuple[str, list[object | None]]] = []
+        params: list[Parameter] = _group_params(group)
+        carried: list[tuple[str, list[_C_engine.TensorImpl | None]]] = []
         for name, tensors in buffers:
-            moved: list[object | None] = []
+            moved: list[_C_engine.TensorImpl | None] = []
             for p in params:
                 j: int | None = slot_of.get(id(p))
                 state = tensors[j] if j is not None and j < len(tensors) else None
                 moved.append(None if state is None else _state_like(state, p._impl))
             carried.append((name, moved))
         if any(t is not None for _, moved in carried for t in moved):
-            fresh.load_state_buffers(carried)  # type: ignore[attr-defined]
+            fresh.load_state_buffers(carried)
 
     def _engine_holds_state(self, group: dict[str, object]) -> bool:
         """Whether ``group``'s engine may hold state while exporting none.
@@ -621,6 +662,15 @@ class Optimizer:
             RuntimeWarning,
             # warn ← rebuild ← rebind ← _engine_optims ← step() ← caller
             stacklevel=6,
+        )
+
+    def _build_engine(
+        self, cls: Callable[..., _EngineOptimizer], group: dict[str, object]
+    ) -> _EngineOptimizer:
+        """Construct one engine optimizer ``cls`` for ``group``."""
+        return cls(
+            [p._impl for p in _group_params(group)],
+            **self._hyperparam_dict(self._hyperparams_of(group)),
         )
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -652,7 +702,7 @@ class Optimizer:
     def zero_grad(self, set_to_none: bool = True) -> None:
         """Zero gradients of all parameters."""
         for group in self.param_groups:
-            for p in group["params"]:  # type: ignore[attr-defined]
+            for p in _group_params(group):
                 if p.grad is not None:
                     if set_to_none:
                         p.grad = None
@@ -723,12 +773,8 @@ class Optimizer:
         out: dict[int, dict[str, object]] = {}
         flat_idx: int = 0
         for group, eng in zip(self.param_groups, self._engine_optims, strict=True):
-            params: list[Parameter] = group["params"]  # type: ignore[assignment]
-            if eng is None:
-                flat_idx += len(params)
-                continue
-            buffers: list[tuple[str, list[_C_engine.TensorImpl | None]]]
-            buffers = eng.state_buffers()  # type: ignore[attr-defined]
+            params: list[Parameter] = _group_params(group)
+            buffers = eng.state_buffers()
             step_count: int = int(getattr(eng, "step_count", 0) or 0)
             for slot, _ in enumerate(params):
                 snapshot: dict[str, object] = {}
@@ -756,12 +802,9 @@ class Optimizer:
             return
         flat_idx: int = 0
         for group, eng in zip(self.param_groups, self._engine_optims, strict=True):
-            params: list[Parameter] = group["params"]  # type: ignore[assignment]
-            if eng is None:
-                flat_idx += len(params)
-                continue
+            params: list[Parameter] = _group_params(group)
             # Collect per-buffer-name lists running parallel to params.
-            by_name: dict[str, list[object | None]] = {}
+            by_name: dict[str, list[_C_engine.TensorImpl | None]] = {}
             step_count: int = 0
             for slot, p in enumerate(params):
                 snapshot: dict[str, object] = state.get(flat_idx + slot, {})
@@ -774,7 +817,7 @@ class Optimizer:
                     by_name.setdefault(k, [None] * len(params))
                     by_name[k][slot] = _from_host(v, p._impl.device)
             if by_name:
-                eng.load_state_buffers([(k, v) for k, v in by_name.items()])  # type: ignore[attr-defined]
+                eng.load_state_buffers(list(by_name.items()))
             if step_count and hasattr(eng, "step_count"):
                 eng.step_count = step_count
             flat_idx += len(params)
@@ -784,7 +827,7 @@ class Optimizer:
         out: dict[int, int] = {}
         idx: int = 0
         for group in self.param_groups:
-            for p in group["params"]:  # type: ignore[attr-defined]
+            for p in _group_params(group):
                 out[id(p)] = idx
                 idx += 1
         return out
@@ -806,7 +849,7 @@ class Optimizer:
         groups_out: list[dict[str, object]] = []
         for group in self.param_groups:
             g: dict[str, object] = {k: v for k, v in group.items() if k != "params"}
-            g["params"] = [id_map[id(p)] for p in group["params"]]  # type: ignore[attr-defined]
+            g["params"] = [id_map[id(p)] for p in _group_params(group)]
             groups_out.append(g)
         state = self._save_state()
         if not self._LIVE_STATE:
@@ -821,7 +864,10 @@ class Optimizer:
         via :meth:`_load_state` — for the engine optimizers, every buffer
         and per-parameter ``step`` goes back into the engine.
         """
-        loaded_groups: list[dict[str, object]] = state_dict["param_groups"]  # type: ignore[assignment]
+        raw_groups = state_dict["param_groups"]
+        if not isinstance(raw_groups, list):
+            raise TypeError("load_state_dict: 'param_groups' must be a list")
+        loaded_groups: list[dict[str, object]] = raw_groups
         if len(loaded_groups) != len(self.param_groups):
             raise ValueError(
                 f"loaded state_dict has {len(loaded_groups)} param_groups but "
@@ -832,7 +878,10 @@ class Optimizer:
                 if k == "params":
                     continue
                 g_new[k] = v
-        loaded_state: dict[int, dict[str, object]] = state_dict.get("state", {})  # type: ignore[assignment]
+        raw_state = state_dict.get("state", {})
+        if not isinstance(raw_state, dict):
+            raise TypeError("load_state_dict: 'state' must be a dict")
+        loaded_state: dict[int, dict[str, object]] = raw_state
         self._load_state(loaded_state)
         if not self._LIVE_STATE:
             self.state = loaded_state

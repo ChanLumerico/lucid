@@ -2,9 +2,10 @@
 Learning rate schedulers.
 """
 
+from collections.abc import Callable
 import math
-from typing import Callable, override
-from lucid.optim.optimizer import Optimizer
+from typing import override
+from lucid.optim.optimizer import Optimizer, _group_float
 
 
 def _holds_a_callable(value: object) -> bool:
@@ -84,9 +85,7 @@ class _LRScheduler:
         self, optimizer: Optimizer, last_epoch: int = -1, verbose: bool = False
     ) -> None:
         self.optimizer = optimizer
-        self.last_epoch = (
-            last_epoch + 1
-        )  # starts at 0; after N step() calls, last_epoch == N
+        self.last_epoch = last_epoch + 1  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.verbose = verbose
         # The rate before any scheduler touched it, kept on the group: the
@@ -97,7 +96,7 @@ class _LRScheduler:
             for group in optimizer.param_groups:
                 group.setdefault("initial_lr", group["lr"])
         self.base_lrs: list[float] = [
-            float(g.get("initial_lr", g["lr"]))  # type: ignore[arg-type]
+            _group_float(g, "initial_lr" if "initial_lr" in g else "lr")
             for g in optimizer.param_groups
         ]
         # Step 0's rate takes effect now, before the first optimizer step.
@@ -211,7 +210,7 @@ class _LRScheduler:
         Examples
         --------
         """
-        return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
+        return [_group_float(g) for g in self.optimizer.param_groups]
 
     def print_lr(self, is_verbose: bool, epoch: int, lrs: list[float]) -> None:
         """Print the current learning rates to stdout when verbose mode is on.
@@ -314,7 +313,7 @@ class StepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch == 0 or self.last_epoch % self.step_size != 0:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
+            return [_group_float(g) for g in self.optimizer.param_groups]
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -466,7 +465,7 @@ class MultiStepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch not in self.milestones:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
+            return [_group_float(g) for g in self.optimizer.param_groups]
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -1065,7 +1064,7 @@ class MultiplicativeLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch == 0:
-            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]
+            return [_group_float(g) for g in self.optimizer.param_groups]
         factor = self.lr_lambda(self.last_epoch)
         return [g["lr"] * factor for g in self.optimizer.param_groups]
 
@@ -1858,7 +1857,7 @@ class ChainedScheduler:
         optimizer = self.schedulers[0].optimizer
         values: list[float] = []
         for i, group in enumerate(optimizer.param_groups):
-            lr = float(group.get("initial_lr", group["lr"]))  # type: ignore[arg-type]
+            lr = _group_float(group, "initial_lr" if "initial_lr" in group else "lr")
             for sch in self.schedulers:
                 base = sch.base_lrs[i]
                 lr *= sch._last_lr[i] / base if base else 1.0

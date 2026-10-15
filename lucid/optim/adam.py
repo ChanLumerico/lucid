@@ -2,11 +2,11 @@
 Adam and AdamW optimizers.
 """
 
-from typing import Iterable, cast, override
+from collections.abc import Iterable
+from typing import override
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap
 from lucid.nn.parameter import Parameter
 from lucid.optim.optimizer import Optimizer
 
@@ -100,20 +100,7 @@ class Adam(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        from lucid.nn.parameter import Parameter as _P
-
-        params_list: list[_P] = group["params"]  # type: ignore[assignment]
-        self._engines.append(
-            _C_engine.Adam(
-                [_unwrap(p) for p in params_list],
-                cast(float, group["lr"]),
-                cast(float, group.get("beta1", 0.9)),
-                cast(float, group.get("beta2", 0.999)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 0.0)),
-                bool(group.get("amsgrad", False)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.Adam, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -149,7 +136,7 @@ class Adam(Optimizer):
         """
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() correct at runtime
+            optim.step()
         return loss
 
 
@@ -249,20 +236,7 @@ class AdamW(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        from lucid.nn.parameter import Parameter as _P
-
-        params_list: list[_P] = group["params"]  # type: ignore[assignment]
-        self._engines.append(
-            _C_engine.AdamW(
-                [_unwrap(p) for p in params_list],
-                cast(float, group["lr"]),
-                cast(float, group.get("beta1", 0.9)),
-                cast(float, group.get("beta2", 0.999)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 1e-2)),
-                bool(group.get("amsgrad", False)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.AdamW, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -299,5 +273,5 @@ class AdamW(Optimizer):
         """
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() correct at runtime
+            optim.step()
         return loss

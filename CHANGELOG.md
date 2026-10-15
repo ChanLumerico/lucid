@@ -805,6 +805,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop the reference-parity deprecation shims
 - the rest of lucid.* takes the reference's names
 - declarative state_slots and atomic load_state_buffers (LCD-239)
+- type param_groups and engines in Optimizer (LCD-354)
 
 ---
 

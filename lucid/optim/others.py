@@ -4,15 +4,22 @@ Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, R
 
 import math
 import operator
-from typing import Any, Iterable, SupportsIndex, cast, override
+from collections.abc import Iterable
+from typing import Any, SupportsIndex, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
+from lucid._dispatch import _wrap
 from lucid.nn.parameter import Parameter
-from lucid.optim.optimizer import Optimizer, _follow, _from_host, _host_copy
+from lucid.optim.optimizer import (
+    Optimizer,
+    _follow,
+    _from_host,
+    _group_params,
+    _host_copy,
+)
 
 
 class RMSprop(Optimizer):
@@ -118,24 +125,14 @@ class RMSprop(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.RMSprop(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                lr=cast(float, group["lr"]),
-                alpha=cast(float, group.get("alpha", 0.99)),
-                eps=cast(float, group.get("eps", 1e-8)),
-                weight_decay=cast(float, group.get("weight_decay", 0.0)),
-                momentum=cast(float, group.get("momentum", 0.0)),
-                centered=bool(group.get("centered", False)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.RMSprop, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RMSprop step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -242,27 +239,14 @@ class Adagrad(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        # By keyword: the engine takes the reference framework's order,
-        # which this wrapper's released signature does not.
-        self._engines.append(
-            _C_engine.Adagrad(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                lr=cast(float, group["lr"]),
-                lr_decay=cast(float, group.get("lr_decay", 0.0)),
-                weight_decay=cast(float, group.get("weight_decay", 0.0)),
-                initial_accumulator_value=cast(
-                    float, group.get("initial_accumulator_value", 0.0)
-                ),
-                eps=cast(float, group.get("eps", 1e-10)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.Adagrad, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adagrad step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -349,22 +333,14 @@ class Adadelta(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.Adadelta(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("rho", 0.9)),
-                cast(float, group.get("eps", 1e-6)),
-                cast(float, group.get("weight_decay", 0.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.Adadelta, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adadelta step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -449,23 +425,14 @@ class Adamax(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.Adamax(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("beta1", 0.9)),
-                cast(float, group.get("beta2", 0.999)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 0.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.Adamax, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adamax step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -566,23 +533,14 @@ class RAdam(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.RAdam(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("beta1", 0.9)),
-                cast(float, group.get("beta2", 0.999)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 0.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.RAdam, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RAdam step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -666,23 +624,14 @@ class NAdam(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.NAdam(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("beta1", 0.9)),
-                cast(float, group.get("beta2", 0.999)),
-                cast(float, group.get("eps", 1e-8)),
-                cast(float, group.get("weight_decay", 0.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.NAdam, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single NAdam step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -789,24 +738,14 @@ class ASGD(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        # Keyword arguments, so the order cannot drift from the engine's.
-        self._engines.append(
-            _C_engine.ASGD(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                lr=cast(float, group["lr"]),
-                lambd=cast(float, group.get("lambd", 1e-4)),
-                alpha=cast(float, group.get("alpha", 0.75)),
-                t0=cast(float, group.get("t0", 1e6)),
-                weight_decay=cast(float, group.get("weight_decay", 0.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.ASGD, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single ASGD step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -900,23 +839,14 @@ class Rprop(Optimizer):
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(
-            _C_engine.Rprop(
-                [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("eta_minus", 0.5)),
-                cast(float, group.get("eta_plus", 1.2)),
-                cast(float, group.get("step_min", 1e-6)),
-                cast(float, group.get("step_max", 50.0)),
-            )
-        )
+        self._engines.append(self._build_engine(_C_engine.Rprop, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Rprop step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()  # type: ignore[attr-defined]
+            optim.step()
         return loss
 
 
@@ -955,17 +885,6 @@ def _step_count(value: object) -> int:
             f"SparseAdam: 'step' must be an integer, got {type(value).__name__}"
         )
     return operator.index(value)
-
-
-def _group_params(group: dict[str, object]) -> list[Parameter]:
-    """The parameters of one param group (``add_param_group`` stores a list)."""
-    params = group["params"]
-    if not isinstance(params, list):
-        raise TypeError(
-            f"SparseAdam: a param group's 'params' must be a list, "
-            f"got {type(params).__name__}"
-        )
-    return params
 
 
 def _sparse_adam_rows(
