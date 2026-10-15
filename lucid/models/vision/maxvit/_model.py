@@ -544,9 +544,7 @@ class _MaxViTBlock(nn.Module):
         self.ws = window_size
         # One block-level rate shared by the MBConv and both attention
         # branches, as the reference does.
-        self.conv = _MBConv(
-            in_dim, out_dim, stride=stride, drop_path_rate=drop_path_rate
-        )
+        self.conv = _MBConv(in_dim, out_dim, stride=stride, drop_path_rate=drop_path_rate)
         self.attn_block = _PartitionAttn(
             out_dim, num_heads, mlp_ratio, window_size, drop_path_rate=drop_path_rate
         )
@@ -716,18 +714,14 @@ def _build_maxvit(
 
     stages_list: list[nn.Module] = []
     fi: list[FeatureInfo] = []
-    reduction = (
-        4  # stem stride=2, then each stage block0 stride=2 → 4 total after stage 0
-    )
+    reduction = 4  # stem stride=2, then each stage block0 stride=2 → 4 total after stage 0
 
     prev_dim = stem_out
     # Stochastic depth ramps linearly with the *global* block index and is then
     # split per stage, so deeper blocks are dropped more often; a flat rate is
     # a different regulariser.
     total_blocks = sum(cfg.depths)
-    dpr_all = [
-        cfg.drop_path_rate * k / max(total_blocks - 1, 1) for k in range(total_blocks)
-    ]
+    dpr_all = [cfg.drop_path_rate * k / max(total_blocks - 1, 1) for k in range(total_blocks)]
     cursor = 0
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims, strict=True)):
         num_heads = dim // cfg.head_dim
@@ -959,6 +953,7 @@ class MaxViTForImageClassification(ImageClassificationModel, ClassificationHeadM
         self.stem = stem
         self.stages = stages
         self.head = _HeadNorm(out_dim, out_dim, config.num_classes)
+        init_transformer_trunc_normal(self)
 
     @override
     def reset_classifier(self, num_classes: int) -> None:

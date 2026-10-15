@@ -782,6 +782,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - preserve Parameter/storage in save/load and Tensor(x) grad
 
+- resolve LCD-193, LCD-198, LCD-199, LCD-200, LCD-212, LCD-215
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

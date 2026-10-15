@@ -73,6 +73,7 @@ SANCTIONED: frozenset[str] = frozenset(
         "serialization/__init__.py",
         "optim/optimizer.py",
         "optim/lbfgs.py",
+        "compile/_optim/compiler.py",
         "utils/data/dataloader.py",
     }
 )
@@ -90,9 +91,7 @@ def _is_numpy_module(name: str) -> bool:
     return name == "numpy" or name.startswith("numpy.")
 
 
-def _under_type_checking(
-    node: ast.AST, type_checking_blocks: list[tuple[int, int]]
-) -> bool:
+def _under_type_checking(node: ast.AST, type_checking_blocks: list[tuple[int, int]]) -> bool:
     """True when ``node`` is textually inside an ``if TYPE_CHECKING:`` block.
 
     PEP 649 (Python 3.14) makes these blocks zero-cost at runtime — they
@@ -132,7 +131,7 @@ def _collect_type_checking_blocks(tree: ast.AST) -> list[tuple[int, int]]:
 
 
 def _scan_file(path: pathlib.Path) -> list[Violation]:
-    """Return every unsanctioned numpy import in ``path``."""
+    """Return every unsanctioned numpy import or .numpy() call in ``path``."""
     source = path.read_text(encoding="utf-8")
     try:
         tree = ast.parse(source, filename=str(path))
@@ -159,9 +158,7 @@ def _scan_file(path: pathlib.Path) -> list[Violation]:
                     )
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if _is_numpy_module(module) and not _under_type_checking(
-                node, type_checking_blocks
-            ):
+            if _is_numpy_module(module) and not _under_type_checking(node, type_checking_blocks):
                 names = ", ".join(a.name for a in node.names)
                 violations.append(
                     Violation(
@@ -171,14 +168,28 @@ def _scan_file(path: pathlib.Path) -> list[Violation]:
                         f"from {module} import {names}",
                     )
                 )
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "numpy"
+            and not _under_type_checking(node, type_checking_blocks)
+        ):
+            violations.append(
+                Violation(
+                    path,
+                    node.lineno,
+                    node.col_offset,
+                    ".numpy() call",
+                )
+            )
 
     return violations
 
 
 def _is_skipped(rel_path: pathlib.Path) -> bool:
-    """``lucid/test/**`` is excluded — test tier opts into numpy by design."""
+    """``lucid/test/**`` and ``lucid/benchmarks/**`` are excluded."""
     parts = rel_path.parts
-    return parts and parts[0] == "test"
+    return bool(parts and parts[0] in ("test", "benchmarks"))
 
 
 def _is_sanctioned(rel_path: pathlib.Path) -> bool:

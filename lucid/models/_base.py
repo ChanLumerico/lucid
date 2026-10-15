@@ -12,6 +12,13 @@ import lucid as _lucid
 import lucid.nn as nn
 
 
+def _list_to_tuple(val: object) -> object:
+    """Recursively convert JSON-deserialised lists back into tuples."""
+    if isinstance(val, list):
+        return tuple(_list_to_tuple(item) for item in val)
+    return val
+
+
 class ModelConfig(ABC):
     r"""Base class for every model's configuration dataclass.
 
@@ -171,8 +178,8 @@ class ModelConfig(ABC):
         copy.pop("model_type", None)
         if not is_dataclass(cls):
             raise TypeError(f"{cls.__name__} must be a @dataclass")
-        known = {f.name for f in fields(cls)}
-        unknown = set(copy) - known
+        cls_fields = {f.name: f for f in fields(cls)}
+        unknown = set(copy) - set(cls_fields)
         if unknown:
             # Warn and skip unknown fields so checkpoints from a newer version
             # of the config (with added fields) still load into older code.
@@ -186,6 +193,11 @@ class ModelConfig(ABC):
             )
             for k in unknown:
                 del copy[k]
+        for name, val in list(copy.items()):
+            if isinstance(val, list):
+                f = cls_fields[name]
+                if "tuple" in str(f.type) or isinstance(f.default, tuple):
+                    copy[name] = _list_to_tuple(val)
         return cls(**copy)
 
     def save(self, path: str) -> None:
@@ -324,8 +336,7 @@ class PretrainedModel(nn.Module):
             )
         if not isinstance(config, cls.config_class):
             raise TypeError(
-                f"{cls.__name__} expects {cls.config_class.__name__}, "
-                f"got {type(config).__name__}"
+                f"{cls.__name__} expects {cls.config_class.__name__}, got {type(config).__name__}"
             )
         self.config = config
 
@@ -398,8 +409,7 @@ class PretrainedModel(nn.Module):
         path = Path(name_or_path)
         if not path.is_dir():
             raise ValueError(
-                f"{name_or_path!r} is neither a registered model name nor "
-                f"an existing directory"
+                f"{name_or_path!r} is neither a registered model name nor an existing directory"
             )
         config_file = path / "config.json"
         weights_st = path / "model.safetensors"
@@ -413,22 +423,16 @@ class PretrainedModel(nn.Module):
             weights_file = weights_lucid
         else:
             raise FileNotFoundError(
-                f"No weights file found in {path}. "
-                f"Expected 'model.safetensors' or 'weights.lucid'."
+                f"No weights file found in {path}. Expected 'model.safetensors' or 'weights.lucid'."
             )
 
         if cls.config_class is None:
-            raise TypeError(
-                f"{cls.__name__} must set config_class before calling from_pretrained"
-            )
+            raise TypeError(f"{cls.__name__} must set config_class before calling from_pretrained")
         config = cls.config_class.load(str(config_file))
         model = cls(config)
         sd = _lucid.load(str(weights_file), weights_only=True)
         if not isinstance(sd, dict):
-            raise TypeError(
-                f"Weights file did not contain a state_dict, "
-                f"got {type(sd).__name__}"
-            )
+            raise TypeError(f"Weights file did not contain a state_dict, got {type(sd).__name__}")
         model.load_state_dict(sd, strict=strict)
         return model
 

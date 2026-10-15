@@ -76,6 +76,7 @@ class Adam(Optimizer):
     """
 
     _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay", "amsgrad")
+    _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.Adam
 
     def __init__(
@@ -88,10 +89,12 @@ class Adam(Optimizer):
         amsgrad: bool = False,
     ) -> None:
         """Initialise the Adam.  See the class docstring for parameter semantics."""
+        b1, b2 = betas
         defaults: dict[str, object] = dict(
             lr=lr,
-            beta1=betas[0],
-            beta2=betas[1],
+            betas=(b1, b2),
+            beta1=b1,
+            beta2=b2,
             eps=eps,
             weight_decay=weight_decay,
             amsgrad=amsgrad,
@@ -184,8 +187,8 @@ class AdamW(Optimizer):
     ----------
     param_groups : list of dict
         Parameter groups, each containing ``"params"``, ``"lr"``,
-        ``"beta1"``, ``"beta2"``, ``"eps"``, ``"weight_decay"``, and
-        ``"amsgrad"``.
+        ``"betas"``, ``"beta1"``, ``"beta2"``, ``"eps"``, ``"weight_decay"``,
+        and ``"amsgrad"``.
     defaults : dict
         Default hyperparameter values.
 
@@ -212,6 +215,7 @@ class AdamW(Optimizer):
     """
 
     _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay", "amsgrad")
+    _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.AdamW
 
     def __init__(
@@ -224,10 +228,12 @@ class AdamW(Optimizer):
         amsgrad: bool = False,
     ) -> None:
         """Initialise the AdamW.  See the class docstring for parameter semantics."""
+        b1, b2 = betas
         defaults: dict[str, object] = dict(
             lr=lr,
-            beta1=betas[0],
-            beta2=betas[1],
+            betas=(b1, b2),
+            beta1=b1,
+            beta2=b2,
             eps=eps,
             weight_decay=weight_decay,
             amsgrad=amsgrad,

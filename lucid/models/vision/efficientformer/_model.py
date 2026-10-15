@@ -427,7 +427,9 @@ class _Stage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
+def _build_efficientformer(
+    cfg: EfficientFormerConfig,
+) -> tuple[
     _Stem,
     nn.ModuleList,
     nn.LayerNorm,
@@ -651,9 +653,7 @@ class EfficientFormerOutput(ImageClassificationOutput):
     head_dist_logits: Tensor | None = None
 
 
-class EfficientFormerForImageClassification(
-    ImageClassificationModel, ClassificationHeadMixin
-):
+class EfficientFormerForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""EfficientFormer with a distilled dual classification head (Li et al., 2022).
 
     Wraps the same trunk as :class:`EfficientFormer` and adds a final
@@ -731,6 +731,7 @@ class EfficientFormerForImageClassification(
         self.norm = hn
         self.head = nn.Linear(out_dim, config.num_classes)
         self.head_dist = nn.Linear(out_dim, config.num_classes)
+        init_transformer_trunc_normal(self)
 
     @override
     def reset_classifier(self, num_classes: int) -> None:
@@ -757,8 +758,7 @@ class EfficientFormerForImageClassification(
             # distillation reads ``head_dist_logits`` and applies its own
             # objective.
             loss = (
-                F.cross_entropy(head_logits, labels)
-                + F.cross_entropy(head_dist_logits, labels)
+                F.cross_entropy(head_logits, labels) + F.cross_entropy(head_dist_logits, labels)
             ) / 2.0
 
         return EfficientFormerOutput(

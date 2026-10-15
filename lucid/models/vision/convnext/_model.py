@@ -67,9 +67,7 @@ class _ConvNeXtBlock(nn.Module):
         # branch multiplied by exactly zero — a permanently dead block, not a
         # disabled layer scale.
         self.gamma: nn.Parameter | None = (
-            nn.Parameter(lucid.full((dim,), layer_scale_init))
-            if layer_scale_init > 0.0
-            else None
+            nn.Parameter(lucid.full((dim,), layer_scale_init)) if layer_scale_init > 0.0 else None
         )
         self.drop_path = DropPath(drop_path_rate)
 
@@ -112,7 +110,9 @@ class _Downsample(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
+def _build_convnext(
+    cfg: ConvNeXtConfig,
+) -> tuple[
     _StemWithNorm,  # stem
     nn.ModuleList,  # stages
     nn.ModuleList,  # downsamplers (len = num_stages - 1)
@@ -158,9 +158,7 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
 
         if i < len(cfg.depths) - 1:
             next_dim = cfg.dims[i + 1]
-            downsamplers.append(
-                _Downsample(dim, next_dim, layer_norm_eps=cfg.layer_norm_eps)
-            )
+            downsamplers.append(_Downsample(dim, next_dim, layer_norm_eps=cfg.layer_norm_eps))
             reduction *= 2
 
     head_norm = nn.LayerNorm(cfg.dims[-1], eps=cfg.layer_norm_eps)
@@ -426,6 +424,7 @@ class ConvNeXtForImageClassification(ImageClassificationModel, ClassificationHea
         self.head_norm = hn
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._build_classifier(out_dim, config.num_classes)
+        init_transformer_trunc_normal(self)
 
     @override
     def forward(

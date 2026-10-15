@@ -5,7 +5,7 @@ Additional optimizers: RMSprop, Adagrad, Adadelta, Adamax, RAdam, NAdam, ASGD, R
 import math
 import operator
 from collections.abc import Iterable
-from typing import Any, SupportsIndex, override
+from typing import Any, SupportsFloat, SupportsIndex, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -17,6 +17,7 @@ from lucid.optim.optimizer import (
     Optimizer,
     _follow,
     _from_host,
+    _group_float,
     _group_params,
     _host_copy,
 )
@@ -317,9 +318,7 @@ class Adadelta(Optimizer):
         weight_decay: float = 0,
     ) -> None:
         """Initialise the Adadelta.  See the class docstring for parameter semantics."""
-        defaults: dict[str, object] = dict(
-            lr=lr, rho=rho, eps=eps, weight_decay=weight_decay
-        )
+        defaults: dict[str, object] = dict(lr=lr, rho=rho, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
     @override
@@ -398,6 +397,7 @@ class Adamax(Optimizer):
     """
 
     _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.Adamax
 
     def __init__(
@@ -409,8 +409,14 @@ class Adamax(Optimizer):
         weight_decay: float = 0,
     ) -> None:
         """Initialise the Adamax.  See the class docstring for parameter semantics."""
+        b1, b2 = betas
         defaults: dict[str, object] = dict(
-            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+            lr=lr,
+            betas=(b1, b2),
+            beta1=b1,
+            beta2=b2,
+            eps=eps,
+            weight_decay=weight_decay,
         )
         super().__init__(params, defaults)
 
@@ -479,8 +485,8 @@ class RAdam(Optimizer):
     Attributes
     ----------
     param_groups : list of dict
-        Parameter groups with keys ``"params"``, ``"lr"``, ``"beta1"``,
-        ``"beta2"``, ``"eps"``, and ``"weight_decay"``.
+        Parameter groups with keys ``"params"``, ``"lr"``, ``"betas"``,
+        ``"beta1"``, ``"beta2"``, ``"eps"``, and ``"weight_decay"``.
     defaults : dict
         Default hyperparameter values.
 
@@ -506,6 +512,7 @@ class RAdam(Optimizer):
     """
 
     _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.RAdam
 
     def __init__(
@@ -517,8 +524,14 @@ class RAdam(Optimizer):
         weight_decay: float = 0,
     ) -> None:
         """Initialise the RAdam.  See the class docstring for parameter semantics."""
+        b1, b2 = betas
         defaults: dict[str, object] = dict(
-            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+            lr=lr,
+            betas=(b1, b2),
+            beta1=b1,
+            beta2=b2,
+            eps=eps,
+            weight_decay=weight_decay,
         )
         super().__init__(params, defaults)
 
@@ -566,12 +579,17 @@ class NAdam(Optimizer):
         Term :math:`\epsilon` for numerical stability (default: ``1e-8``).
     weight_decay : float, optional
         L2 regularisation coefficient (default: ``0``).
+    momentum_decay : float, optional
+        Momentum schedule decay factor :math:`\psi` (default: ``4e-3``).
+    decoupled_weight_decay : bool, optional
+        Whether to decouple the weight decay as in AdamW (default: ``False``).
 
     Attributes
     ----------
     param_groups : list of dict
-        Parameter groups with keys ``"params"``, ``"lr"``, ``"beta1"``,
-        ``"beta2"``, ``"eps"``, and ``"weight_decay"``.
+        Parameter groups with keys ``"params"``, ``"lr"``, ``"betas"``,
+        ``"beta1"``, ``"beta2"``, ``"eps"``, ``"weight_decay"``,
+        ``"momentum_decay"``, and ``"decoupled_weight_decay"``.
     defaults : dict
         Default hyperparameter values.
 
@@ -596,7 +614,16 @@ class NAdam(Optimizer):
     >>> optimizer.step()
     """
 
-    _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
+    _HYPERPARAMS = (
+        "lr",
+        "beta1",
+        "beta2",
+        "eps",
+        "weight_decay",
+        "momentum_decay",
+        "decoupled_weight_decay",
+    )
+    _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.NAdam
 
     def __init__(
@@ -606,22 +633,96 @@ class NAdam(Optimizer):
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
         weight_decay: float = 0,
+        momentum_decay: float = 4e-3,
+        decoupled_weight_decay: bool = False,
     ) -> None:
         """Initialise the NAdam.  See the class docstring for parameter semantics."""
+        b1, b2 = betas
         defaults: dict[str, object] = dict(
-            lr=lr, beta1=betas[0], beta2=betas[1], eps=eps, weight_decay=weight_decay
+            lr=lr,
+            betas=(b1, b2),
+            beta1=b1,
+            beta2=b2,
+            eps=eps,
+            weight_decay=weight_decay,
+            momentum_decay=momentum_decay,
+            decoupled_weight_decay=decoupled_weight_decay,
         )
         super().__init__(params, defaults)
 
     @override
+    @classmethod
+    def _check_hyperparams(cls, values: dict[str, Any]) -> None:
+        _C_engine.NAdam.check_hyperparams(
+            {k: values[k] for k in ("lr", "beta1", "beta2", "eps", "weight_decay")}
+        )
+        mom_decay = values["momentum_decay"]
+        if isinstance(mom_decay, bool) or not isinstance(mom_decay, (SupportsFloat, SupportsIndex)):
+            raise TypeError(
+                f"NAdam: momentum_decay must be a number, got {type(mom_decay).__name__}"
+            )
+        if not float(mom_decay) >= 0.0:
+            raise _C_engine.InvalidArgument("NAdam: momentum_decay must be >= 0")
+        dwd = values["decoupled_weight_decay"]
+        if not isinstance(dwd, bool):
+            raise TypeError(
+                f"NAdam: decoupled_weight_decay must be a bool, got {type(dwd).__name__}"
+            )
+
+    @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(self._build_engine(_C_engine.NAdam, group))
+        hp = self._hyperparam_dict(self._hyperparams_of(group))
+        wd = 0.0 if hp["decoupled_weight_decay"] else float(hp["weight_decay"])
+        self._engines.append(
+            _C_engine.NAdam(
+                [p._impl for p in _group_params(group)],
+                lr=float(hp["lr"]),
+                beta1=float(hp["beta1"]),
+                beta2=float(hp["beta2"]),
+                eps=float(hp["eps"]),
+                weight_decay=wd,
+                momentum_decay=float(hp["momentum_decay"]),
+            )
+        )
+
+    @override
+    def _apply_hyperparams(self, idx: int, values: dict[str, Any]) -> None:
+        self._check_hyperparams(values)
+        engines = self._engines
+        engine = engines[idx] if idx < len(engines) else None
+        if engine is None:
+            return
+        old_mom_decay = self._group_hparams[idx][5]
+        if values["momentum_decay"] != old_mom_decay:
+            self.param_groups[idx]["momentum_decay"] = values["momentum_decay"]
+            self._rebuild_engine_optim(idx, self.param_groups[idx])
+            return
+        wd = 0.0 if values["decoupled_weight_decay"] else float(values["weight_decay"])
+        engine.set_hyperparams(
+            {
+                "lr": values["lr"],
+                "beta1": values["beta1"],
+                "beta2": values["beta2"],
+                "eps": values["eps"],
+                "weight_decay": wd,
+            }
+        )
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single NAdam step."""
         loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
+        optims = self._engine_optims
+        for group, optim in zip(self.param_groups, optims, strict=True):
+            if group.get("decoupled_weight_decay", False):
+                wd = _group_float(group, "weight_decay")
+                if wd != 0.0:
+                    lr = _group_float(group, "lr")
+                    factor = 1.0 - lr * wd
+                    with lucid.no_grad():
+                        for p in _group_params(group):
+                            if p.grad is not None and p.grad.numel() > 0:
+                                p._impl.copy_from((p * factor)._impl)
             optim.step()
         return loss
 
@@ -809,6 +910,10 @@ class Rprop(Optimizer):
     """
 
     _HYPERPARAMS = ("lr", "eta_minus", "eta_plus", "step_min", "step_max")
+    _PAIR_KEYS = {
+        "etas": ("eta_minus", "eta_plus"),
+        "step_sizes": ("step_min", "step_max"),
+    }
     _ENGINE_RULES = _C_engine.Rprop
 
     def __init__(
@@ -819,12 +924,16 @@ class Rprop(Optimizer):
         step_sizes: tuple[float, float] = (1e-6, 50),
     ) -> None:
         """Initialise the Rprop.  See the class docstring for parameter semantics."""
+        eta_minus, eta_plus = float(etas[0]), float(etas[1])
+        step_min, step_max = float(step_sizes[0]), float(step_sizes[1])
         defaults: dict[str, object] = dict(
             lr=lr,
-            eta_minus=etas[0],
-            eta_plus=etas[1],
-            step_min=step_sizes[0],
-            step_max=step_sizes[1],
+            etas=(eta_minus, eta_plus),
+            eta_minus=eta_minus,
+            eta_plus=eta_plus,
+            step_sizes=(step_min, step_max),
+            step_min=step_min,
+            step_max=step_max,
         )
         super().__init__(params, defaults)
 
@@ -857,8 +966,7 @@ def _moment(entry: dict[str, object], key: str) -> Tensor:
     value = entry[key]
     if not isinstance(value, Tensor):
         raise TypeError(
-            f"SparseAdam: state entry {key!r} must be a Tensor, "
-            f"got {type(value).__name__}"
+            f"SparseAdam: state entry {key!r} must be a Tensor, got {type(value).__name__}"
         )
     return value
 
@@ -872,9 +980,7 @@ def _step_count(value: object) -> int:
         ``value`` is not an integer (a Python or a 0-d host-array integer).
     """
     if not isinstance(value, SupportsIndex):
-        raise TypeError(
-            f"SparseAdam: 'step' must be an integer, got {type(value).__name__}"
-        )
+        raise TypeError(f"SparseAdam: 'step' must be an integer, got {type(value).__name__}")
     return operator.index(value)
 
 
@@ -1017,9 +1123,7 @@ class SparseAdam(Optimizer):
         maximize: bool = False,
     ) -> None:
         """Initialise the SparseAdam.  See the class docstring for parameter semantics."""
-        defaults: dict[str, object] = dict(
-            lr=lr, betas=betas, eps=eps, maximize=maximize
-        )
+        defaults: dict[str, object] = dict(lr=lr, betas=betas, eps=eps, maximize=maximize)
         super().__init__(params, defaults)
 
     @override

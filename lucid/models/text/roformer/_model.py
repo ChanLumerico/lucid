@@ -18,7 +18,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._base import ModelConfig, PretrainedModel
 from lucid.models._tasks import (
     LanguageModelingModel,
     SequenceClassificationModel,
@@ -40,6 +40,36 @@ from lucid.models._utils._text import (
 from lucid.nn.functional import apply_rotary_emb
 from lucid.nn.module import Module
 from lucid.models.text.roformer._config import RoFormerConfig
+
+
+def _init_roformer_weights(module: nn.Module, std: float) -> None:
+    """Initialise Linear, Embedding, and LayerNorm modules using ``N(0, std^2)``."""
+    if isinstance(module, nn.Linear):
+        nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Embedding):
+        nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.padding_idx is not None:
+            with lucid.no_grad():
+                module.weight[module.padding_idx] = lucid.zeros(
+                    (int(module.weight.shape[1]),),
+                    device=module.weight.device.type,
+                )
+    elif isinstance(module, nn.LayerNorm):
+        if module.weight is not None:
+            nn.init.ones_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
+
+class _RoFormerInitMixin:
+    config: ModelConfig
+
+    def _init_weights(self, module: nn.Module) -> None:
+        std = self.config.initializer_range if isinstance(self.config, RoFormerConfig) else 0.02
+        _init_roformer_weights(module, std)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Rotary tables — *interleaved* (original RoPE) layout, matching the RoFormer
@@ -75,9 +105,7 @@ class _RoFormerRotaryEmbedding(Module):
     ) -> None:
         super().__init__()
         if head_dim % 2 != 0:
-            raise ValueError(
-                f"_RoFormerRotaryEmbedding requires an even head_dim, got {head_dim}"
-            )
+            raise ValueError(f"_RoFormerRotaryEmbedding requires an even head_dim, got {head_dim}")
         self.head_dim = head_dim
         self.max_position_embeddings = max_position_embeddings
         self.base = base
@@ -300,9 +328,7 @@ class _RoFormerEncoder(nn.Module):
         attention_mask: Tensor | None = None,
     ) -> Tensor:
         for layer in self.layer:
-            hidden = cast(
-                Tensor, layer(hidden, cos, sin, attention_mask=attention_mask)
-            )
+            hidden = cast(Tensor, layer(hidden, cos, sin, attention_mask=attention_mask))
         return hidden
 
 
@@ -323,7 +349,7 @@ class _RoFormerPooler(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class RoFormerModel(PretrainedModel):
+class RoFormerModel(_RoFormerInitMixin, PretrainedModel):
     r"""Bare RoFormer encoder trunk with rotary position embeddings.
 
     Architecturally a BERT-base encoder (12 layers, 768 hidden, 12 heads,
@@ -407,9 +433,7 @@ class RoFormerModel(PretrainedModel):
         # reference's ``if config.embedding_size != config.hidden_size``.
         emb_dim = config.embedding_size or config.hidden_size
         self.embeddings_project: nn.Module | None = (
-            nn.Linear(emb_dim, config.hidden_size)
-            if emb_dim != config.hidden_size
-            else None
+            nn.Linear(emb_dim, config.hidden_size) if emb_dim != config.hidden_size else None
         )
         self.rotary = _RoFormerRotaryEmbedding(
             head_dim=head_dim,
@@ -418,6 +442,7 @@ class RoFormerModel(PretrainedModel):
         )
         self.encoder = _RoFormerEncoder(config)
         self.pooler = _RoFormerPooler(config)
+        self.apply(self._init_weights)
 
     @override
     def get_input_embeddings(self) -> nn.Module:
@@ -427,8 +452,7 @@ class RoFormerModel(PretrainedModel):
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
-                "RoFormerModel input embeddings must be nn.Embedding, got "
-                f"{type(value).__name__}"
+                f"RoFormerModel input embeddings must be nn.Embedding, got {type(value).__name__}"
             )
         self.embeddings.word_embeddings = value
 
@@ -441,9 +465,7 @@ class RoFormerModel(PretrainedModel):
     ) -> BaseModelOutputWithPooling:
         B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
         if T > self._max_pos:
-            raise ValueError(
-                f"Sequence length {T} exceeds max_position_embeddings {self._max_pos}"
-            )
+            raise ValueError(f"Sequence length {T} exceeds max_position_embeddings {self._max_pos}")
 
         cos, sin = self.rotary()
         # Slice the precomputed tables to the current sequence length so we
@@ -507,9 +529,7 @@ class _RoFormerLMPredictionHead(nn.Module):
         if have != vocab:
             kept = self.bias.detach()[: min(have, vocab)]
             if vocab > have:
-                pad = lucid.zeros(
-                    vocab - have, dtype=kept.dtype, device=kept.device.type
-                )
+                pad = lucid.zeros(vocab - have, dtype=kept.dtype, device=kept.device.type)
                 kept = lucid.cat([kept, pad])
             self.bias = nn.Parameter(kept)
 
@@ -531,7 +551,7 @@ class _RoFormerOnlyMLMHead(nn.Module):
         return self.predictions(x)
 
 
-class RoFormerForMaskedLM(LanguageModelingModel, MaskedLMMixin):
+class RoFormerForMaskedLM(_RoFormerInitMixin, LanguageModelingModel, MaskedLMMixin):
     r"""RoFormer with a tied masked-language-modeling head.
 
     Wraps :class:`RoFormerModel` with the BERT-style two-layer projection
@@ -593,6 +613,7 @@ class RoFormerForMaskedLM(LanguageModelingModel, MaskedLMMixin):
         super().__init__(config)
         self.roformer = RoFormerModel(config)
         self.cls = _RoFormerOnlyMLMHead(config)
+        self.apply(self._init_weights)
         if config.tie_word_embeddings:
             self._tie_word_embeddings()
 
@@ -623,7 +644,7 @@ class RoFormerForMaskedLM(LanguageModelingModel, MaskedLMMixin):
         return MaskedLMOutput(logits=prediction_scores, loss=loss)
 
 
-class RoFormerForSequenceClassification(SequenceClassificationModel):
+class RoFormerForSequenceClassification(_RoFormerInitMixin, SequenceClassificationModel):
     r"""RoFormer with a pooled-CLS sequence-classification head.
 
     Wraps :class:`RoFormerModel` with the reference's own classification
@@ -700,6 +721,7 @@ class RoFormerForSequenceClassification(SequenceClassificationModel):
         self._act_name = config.hidden_act
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.apply(self._init_weights)
 
     @override
     def forward(
@@ -727,7 +749,7 @@ class RoFormerForSequenceClassification(SequenceClassificationModel):
         return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
-class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
+class RoFormerForTokenClassification(_RoFormerInitMixin, TokenClassificationModel, MaskedLMMixin):
     r"""RoFormer with a per-token classification head.
 
     Wraps :class:`RoFormerModel` with a dropout-regularised linear
@@ -797,6 +819,7 @@ class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
         )
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        self.apply(self._init_weights)
 
     @override
     def forward(
@@ -826,7 +849,7 @@ class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class RoFormerForMultipleChoice(SequenceClassificationModel):
+class RoFormerForMultipleChoice(_RoFormerInitMixin, SequenceClassificationModel):
     r"""RoFormer with a per-choice multiple-choice classification head.
 
     Wraps :class:`RoFormerModel` with a per-choice CLS classifier.  Input
@@ -893,6 +916,7 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         )
         self.dropout = nn.Dropout(p=drop)
         self.classifier = nn.Linear(config.hidden_size, 1)
+        self.apply(self._init_weights)
 
     @override
     def forward(
@@ -912,12 +936,8 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         L = int(input_ids.shape[2])
 
         flat_ids = input_ids.reshape(N * C, L)
-        flat_mask = (
-            attention_mask.reshape(N * C, L) if attention_mask is not None else None
-        )
-        flat_tt = (
-            token_type_ids.reshape(N * C, L) if token_type_ids is not None else None
-        )
+        flat_mask = attention_mask.reshape(N * C, L) if attention_mask is not None else None
+        flat_tt = token_type_ids.reshape(N * C, L) if token_type_ids is not None else None
         outputs = self.roformer(
             flat_ids,
             attention_mask=flat_mask,
@@ -939,7 +959,7 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
-class RoFormerForQuestionAnswering(SequenceClassificationModel):
+class RoFormerForQuestionAnswering(_RoFormerInitMixin, SequenceClassificationModel):
     r"""RoFormer with a 2-way span head for extractive question answering.
 
     Wraps :class:`RoFormerModel` with a single linear of output width 2,
@@ -1007,6 +1027,7 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
         super().__init__(config)
         self.roformer = RoFormerModel(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
+        self.apply(self._init_weights)
 
     @override
     def forward(
@@ -1047,6 +1068,4 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
                     + F.cross_entropy(end_logits, end_t, ignore_index=ignored)
                 ) / 2.0
 
-        return QuestionAnsweringOutput(
-            start_logits=start_logits, end_logits=end_logits, loss=loss
-        )
+        return QuestionAnsweringOutput(start_logits=start_logits, end_logits=end_logits, loss=loss)

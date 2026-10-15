@@ -45,9 +45,7 @@ class _EngineOptimizer(Protocol):
         self,
     ) -> Sequence[tuple[str, Sequence[_C_engine.TensorImpl | None]]]: ...
 
-    def load_state_buffers(
-        self, bufs: Sequence[tuple[str, Sequence[Any]]]
-    ) -> None: ...
+    def load_state_buffers(self, bufs: Sequence[tuple[str, Sequence[Any]]]) -> None: ...
 
 
 class _GroupReader(Protocol):
@@ -93,9 +91,7 @@ def _hyperparam_reader(
     return operator.itemgetter(*keys)
 
 
-def _follow(
-    src: _C_engine.TensorImpl, like: _C_engine.TensorImpl
-) -> _C_engine.TensorImpl:
+def _follow(src: _C_engine.TensorImpl, like: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     """``src`` in ``like``'s dtype and on its device; ``src`` itself when it already is.
 
     The one rule by which optimizer state follows its parameter through a
@@ -154,9 +150,7 @@ def _group_params(group: dict[str, object]) -> list[Parameter]:
     """The parameters of one param group (``add_param_group`` stores a list)."""
     params = group["params"]
     if not isinstance(params, list):
-        raise TypeError(
-            f"a param group's 'params' must be a list, got {type(params).__name__}"
-        )
+        raise TypeError(f"a param group's 'params' must be a list, got {type(params).__name__}")
     return params
 
 
@@ -164,9 +158,7 @@ def _group_float(group: dict[str, object], key: str = "lr") -> float:
     """Read a numeric entry ``key`` from ``group`` as a ``float``."""
     value = group[key]
     if not isinstance(value, (SupportsFloat, SupportsIndex)):
-        raise TypeError(
-            f"a param group's {key!r} must be a number, got {type(value).__name__}"
-        )
+        raise TypeError(f"a param group's {key!r} must be a number, got {type(value).__name__}")
     return float(value)
 
 
@@ -286,6 +278,11 @@ class Optimizer:
     # replacing it with the host-array snapshot, which ``step`` cannot read.
     _LIVE_STATE: ClassVar[bool] = False
 
+    # Pair hyper-parameters exposed in ``param_groups`` as a 2-tuple (e.g.
+    # ``"betas": ("beta1", "beta2")``, ``"etas": ("eta_minus", "eta_plus")``)
+    # alongside the split keys the C++ engine bindings take.
+    _PAIR_KEYS: ClassVar[dict[str, tuple[str, str]]] = {}
+
     # The reader of ``_HYPERPARAMS`` out of a group, derived once per class
     # by :meth:`__init_subclass__`.  On the class rather than the instance,
     # so an optimizer pickles without it.
@@ -317,9 +314,7 @@ class Optimizer:
             # Default path: no wrapper, user's step() runs raw.
             return
         if "step" in cls.__dict__:
-            _orig: Callable[[Optimizer, _OptimizerClosure], Tensor | None] = (
-                cls.__dict__["step"]
-            )
+            _orig: Callable[[Optimizer, _OptimizerClosure], Tensor | None] = cls.__dict__["step"]
 
             def _step_with_eval(
                 self: Optimizer, closure: _OptimizerClosure = None
@@ -344,9 +339,7 @@ class Optimizer:
         """
 
         impls: list[_C_engine.TensorImpl] = [
-            p._impl
-            for group in self.param_groups
-            for p in _group_params(group)
+            p._impl for group in self.param_groups for p in _group_params(group)
         ]
         if impls:
             _C_engine.eval_tensors(impls)
@@ -357,11 +350,7 @@ class Optimizer:
         defaults: dict[str, object],
     ) -> None:
         """Initialise the Optimizer.  See the class docstring for parameter semantics."""
-        if (
-            isinstance(params, (list, tuple))
-            and len(params) > 0
-            and isinstance(params[0], dict)
-        ):
+        if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):
             param_groups: list[dict[str, object]] = list(params)
         else:
             param_groups = [{"params": list(params)}]
@@ -426,9 +415,16 @@ class Optimizer:
             # Every group is checked before anything is built, so a group
             # edited to a rejected value fails the step with no engine half
             # made.  The engines are then built from these same values.
-            hparams = [self._hyperparams_of(group) for group in self.param_groups]
-            for values in hparams:
+            resolved = [
+                self._resolve_group_hparams(idx, group)
+                for idx, group in enumerate(self.param_groups)
+            ]
+            for values, _ in resolved:
                 self._check_hyperparams(self._hyperparam_dict(values))
+            for group, (_, upd) in zip(self.param_groups, resolved, strict=True):
+                if upd:
+                    group.update(upd)
+            hparams = [values for values, _ in resolved]
             # Set first: ``_append_engine_optim`` appends through this
             # same property, and a re-entrant build would recurse.
             self._engines_built = True
@@ -453,10 +449,27 @@ class Optimizer:
         raw_params = merged["params"]
         if not isinstance(raw_params, Iterable):
             raise TypeError(
-                f"a param group's 'params' must be an iterable, "
-                f"got {type(raw_params).__name__}"
+                f"a param group's 'params' must be an iterable, got {type(raw_params).__name__}"
             )
         merged["params"] = list(raw_params)
+        for pair_key, (k0, k1) in self._PAIR_KEYS.items():
+            if pair_key in group and k0 not in group and k1 not in group:
+                raw_pair = merged[pair_key]
+                if not isinstance(raw_pair, (tuple, list)) or len(raw_pair) != 2:
+                    raise _C_engine.InvalidArgument(
+                        f"{type(self).__name__}: {pair_key} must be a 2-tuple"
+                    )
+                merged[pair_key] = (raw_pair[0], raw_pair[1])
+                merged[k0] = raw_pair[0]
+                merged[k1] = raw_pair[1]
+            elif k0 in group or k1 in group:
+                merged[pair_key] = (merged[k0], merged[k1])
+            elif pair_key in merged:
+                raw_pair = merged[pair_key]
+                if isinstance(raw_pair, (tuple, list)) and len(raw_pair) == 2:
+                    merged[pair_key] = (raw_pair[0], raw_pair[1])
+                    merged[k0] = raw_pair[0]
+                    merged[k1] = raw_pair[1]
         values: tuple[object, ...] = self._hyperparams_of(merged)
         self._check_hyperparams(self._hyperparam_dict(values))
         self.param_groups.append(merged)
@@ -478,6 +491,43 @@ class Optimizer:
         """Return ``group``'s hyper-parameters in ``_HYPERPARAMS`` order."""
         read = self._read_hparams
         return () if read is None else tuple(read(group))
+
+    def _resolve_group_hparams(
+        self, idx: int, group: dict[str, object]
+    ) -> tuple[tuple[object, ...], dict[str, object]]:
+        """Resolve ``group``'s hyper-parameters, reconciling any edited pair keys."""
+        raw = list(self._hyperparams_of(group))
+        if not self._PAIR_KEYS or idx >= len(self._group_hparams):
+            return tuple(raw), {}
+        last = self._group_hparams[idx]
+        slot_of = {k: i for i, k in enumerate(self._HYPERPARAMS)}
+        updates: dict[str, object] = {}
+        for pair_key, (k0, k1) in self._PAIR_KEYS.items():
+            i0, i1 = slot_of[k0], slot_of[k1]
+            old_pair = (last[i0], last[i1])
+            cur_split = (group[k0], group[k1])
+            raw_pair = group.get(pair_key, cur_split)
+            if not isinstance(raw_pair, (tuple, list)) or len(raw_pair) != 2:
+                raise _C_engine.InvalidArgument(
+                    f"{type(self).__name__}: {pair_key} must be a 2-tuple"
+                )
+            cur_pair = (raw_pair[0], raw_pair[1])
+            if cur_pair != old_pair and cur_split == old_pair:
+                raw[i0], raw[i1] = cur_pair[0], cur_pair[1]
+                updates[pair_key] = cur_pair
+                updates[k0] = cur_pair[0]
+                updates[k1] = cur_pair[1]
+            elif cur_split != old_pair and cur_pair == old_pair:
+                raw[i0], raw[i1] = cur_split[0], cur_split[1]
+                updates[pair_key] = cur_split
+            elif cur_pair != cur_split:
+                raw[i0], raw[i1] = cur_pair[0], cur_pair[1]
+                updates[pair_key] = cur_pair
+                updates[k0] = cur_pair[0]
+                updates[k1] = cur_pair[1]
+            elif not isinstance(raw_pair, tuple):
+                updates[pair_key] = cur_pair
+        return tuple(raw), updates
 
     def _hyperparam_dict(self, values: tuple[object, ...]) -> dict[str, Any]:
         """Name ``values`` by ``_HYPERPARAMS``, as the engine bindings take them."""
@@ -515,11 +565,14 @@ class Optimizer:
             return
         seen = self._group_hparams
         for idx, (group, last) in enumerate(zip(self.param_groups, seen, strict=True)):
-            values = read(group)
-            if values == last:
+            values, upd = self._resolve_group_hparams(idx, group)
+            if values == last and not upd:
                 continue
-            self._apply_hyperparams(idx, self._hyperparam_dict(tuple(values)))
-            seen[idx] = tuple(values)
+            if values != last:
+                self._apply_hyperparams(idx, self._hyperparam_dict(values))
+            if upd:
+                group.update(upd)
+            seen[idx] = values
 
     def _apply_hyperparams(self, idx: int, values: dict[str, Any]) -> None:
         """Hand group ``idx``'s edited hyper-parameters to its engine.
@@ -549,9 +602,7 @@ class Optimizer:
         if len(self._engines) > built:
             self._engine_binds.append(self._group_binding(group))
 
-    def _build_engine_optim(
-        self, group: dict[str, object]
-    ) -> _EngineOptimizer | None:
+    def _build_engine_optim(self, group: dict[str, object]) -> _EngineOptimizer | None:
         """Build one engine optimizer for ``group`` without appending it.
 
         ``_append_engine_optim`` is the per-optimizer hook and appends to
@@ -581,9 +632,7 @@ class Optimizer:
         for idx, group in enumerate(self.param_groups):
             params: list[Parameter] = _group_params(group)
             impls: list[_C_engine.TensorImpl] = binds[idx][1]
-            if len(params) == len(impls) and all(
-                map(operator.is_, map(impl_of, params), impls)
-            ):
+            if len(params) == len(impls) and all(map(operator.is_, map(impl_of, params), impls)):
                 continue
             self._rebuild_engine_optim(idx, group)
 
@@ -605,12 +654,16 @@ class Optimizer:
         following the parameter is its own ``load_state_dict`` policy too.
         A buffer whose shape no longer matches its parameter is dropped.
         """
+        values, upd = self._resolve_group_hparams(idx, group)
+        self._check_hyperparams(self._hyperparam_dict(values))
+        if upd:
+            group.update(upd)
         old: _EngineOptimizer = self._engines[idx]
         old_params: list[Parameter] = self._engine_binds[idx][0]
         fresh: _EngineOptimizer | None = self._build_engine_optim(group)
         self._engine_binds[idx] = self._group_binding(group)
         # Built from the group as it is now, edits included.
-        self._group_hparams[idx] = self._hyperparams_of(group)
+        self._group_hparams[idx] = values
         if fresh is None:
             return
         self._engines[idx] = fresh
@@ -821,9 +874,7 @@ class Optimizer:
                         and loaded_impl.dtype == _C_engine.Dtype.F32
                         and k not in ("step", "eta", "mu", "mu_product")
                     ):
-                        loaded_impl = _C_engine.astype(
-                            loaded_impl, _C_engine.Dtype.BF16
-                        )
+                        loaded_impl = _C_engine.astype(loaded_impl, _C_engine.Dtype.BF16)
                     by_name[k][slot] = loaded_impl
             if by_name:
                 eng.load_state_buffers(list(by_name.items()))
@@ -919,4 +970,3 @@ class Optimizer:
     def __setstate__(self, state: dict[str, object]) -> None:
         """Restore pickled or deep-copied optimizer state; engines rebuild lazily."""
         self.__dict__.update(state)
-

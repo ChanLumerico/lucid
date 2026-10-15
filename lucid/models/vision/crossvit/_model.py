@@ -206,11 +206,7 @@ class _CrossAttention(nn.Module):
         # timm's CrossAttention takes only the first token as query,
         # the entire sequence as KV.
         B, N, C = x.shape
-        q = (
-            self.wq(x[:, 0:1, :])
-            .reshape(B, 1, self.num_heads, self.head_dim)
-            .permute(0, 2, 1, 3)
-        )
+        q = self.wq(x[:, 0:1, :]).reshape(B, 1, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         k = self.wk(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         v = self.wv(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
         # Cross-attention: 1 query token, N keys.
@@ -313,10 +309,7 @@ class _MultiScaleBlock(nn.Module):
 
         # Project CLS from branch d to dim of branch d_ = (d+1) % 2.
         self.projs = nn.ModuleList(
-            [
-                _make_proj(dim[d], dim[(d + 1) % 2], layer_norm_eps)
-                for d in range(self.num_branches)
-            ]
+            [_make_proj(dim[d], dim[(d + 1) % 2], layer_norm_eps) for d in range(self.num_branches)]
         )
 
         # Cross-attention fusion: query CLS (already projected) + KV from the
@@ -344,10 +337,7 @@ class _MultiScaleBlock(nn.Module):
 
         # Revert projection: CLS back to original branch's dim.
         self.revert_projs = nn.ModuleList(
-            [
-                _make_proj(dim[(d + 1) % 2], dim[d], layer_norm_eps)
-                for d in range(self.num_branches)
-            ]
+            [_make_proj(dim[(d + 1) % 2], dim[d], layer_norm_eps) for d in range(self.num_branches)]
         )
 
     @override
@@ -356,10 +346,7 @@ class _MultiScaleBlock(nn.Module):
         xs = [cast(Tensor, self.blocks[d](xs[d])) for d in range(self.num_branches)]
 
         # Project CLS of each branch into the other branch's dim space.
-        proj_cls = [
-            cast(Tensor, self.projs[d](xs[d][:, 0:1, :]))
-            for d in range(self.num_branches)
-        ]
+        proj_cls = [cast(Tensor, self.projs[d](xs[d][:, 0:1, :])) for d in range(self.num_branches)]
 
         # Cross-attend + revert.
         out_xs: list[Tensor] = []
@@ -539,9 +526,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         P = cfg.patch_sizes
 
         # Patch embeddings for each branch.
-        self.patch_embed = nn.ModuleList(
-            [_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)]
-        )
+        self.patch_embed = nn.ModuleList([_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)])
 
         # CLS + positional embedding per branch.  Number of patch tokens
         # depends on per-branch input size.
@@ -625,9 +610,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         # Rescale per branch to the same absolute targets used to size the
         # positional embeddings in ``__init__`` (round(image_size·img_scale)).
         targets = [int(round(cfg.image_size * cfg.img_scale[d])) for d in range(2)]
-        xs: list[Tensor] = [
-            _scale_image(x, targets[d], cfg.crop_scale) for d in range(2)
-        ]
+        xs: list[Tensor] = [_scale_image(x, targets[d], cfg.crop_scale) for d in range(2)]
         # Patch-embed + CLS + positional.
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         # K cross-attention stages — _MultiScaleBlock takes/returns ``list[Tensor]``.
@@ -683,9 +666,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
 
         # Trunk (mirrors :class:`CrossViT` exactly so the state-dict
         # layout is shared and a converter can target either head).
-        self.patch_embed = nn.ModuleList(
-            [_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)]
-        )
+        self.patch_embed = nn.ModuleList([_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)])
         img_h = cfg.image_size
         sizes = [int(round(img_h * cfg.img_scale[d])) for d in range(2)]
         num_patches = [(sizes[d] // P[d]) ** 2 for d in range(2)]
@@ -732,6 +713,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
 
         # Per-branch classifier heads (averaged at the logit level).
         self.head = nn.ModuleList([nn.Linear(D[d], cfg.num_classes) for d in range(2)])
+        init_transformer_trunc_normal(self)
 
     def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
         x = cast(Tensor, self.patch_embed[branch](x))
@@ -753,10 +735,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         looks for a single ``self.classifier`` and raised ``AttributeError``.
         """
         self.head = nn.ModuleList(
-            [
-                nn.Linear(cast(nn.Linear, lin).in_features, num_classes)
-                for lin in self.head
-            ]
+            [nn.Linear(cast(nn.Linear, lin).in_features, num_classes) for lin in self.head]
         )
 
     @override
@@ -767,9 +746,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
     ) -> ImageClassificationOutput:
         cfg = cast(CrossViTConfig, self.config)
         targets = [int(round(cfg.image_size * cfg.img_scale[d])) for d in range(2)]
-        xs: list[Tensor] = [
-            _scale_image(x, targets[d], cfg.crop_scale) for d in range(2)
-        ]
+        xs: list[Tensor] = [_scale_image(x, targets[d], cfg.crop_scale) for d in range(2)]
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:
             xs = stage(xs)

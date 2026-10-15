@@ -70,9 +70,7 @@ class _OverlapPatchEmbed(nn.Module):
     ) -> None:
         super().__init__()
         padding = patch_size // 2
-        self.proj = nn.Conv2d(
-            in_ch, embed_dim, patch_size, stride=stride, padding=padding
-        )
+        self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=stride, padding=padding)
         self.norm = nn.LayerNorm(embed_dim)
 
     @override
@@ -312,7 +310,9 @@ class _PVTStage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_pvt(cfg: PVTConfig) -> tuple[
+def _build_pvt(
+    cfg: PVTConfig,
+) -> tuple[
     _OverlapPatchEmbed,  # top-level patch_embed (stage 0)
     nn.ModuleList,  # stages (0-indexed)
     list[FeatureInfo],
@@ -553,6 +553,7 @@ class PVTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         super().__init__(config)
         self.patch_embed, self.stages, _, out_dim = _build_pvt(config)
         self._build_classifier(out_dim, config.num_classes)
+        init_transformer_trunc_normal(self)
 
     @override
     def forward(
