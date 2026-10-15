@@ -590,6 +590,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.compile._entry.fused_step"
+    },
+    {
+      "kind": "module",
       "module": "lucid.func"
     }
   ],

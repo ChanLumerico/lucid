@@ -3,15 +3,15 @@
   "name": "init",
   "path": "lucid.nn.init",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L1",
   "members": [
     {
       "name": "uniform_",
       "path": "lucid.nn.init.uniform_",
       "kind": "function",
       "labels": [],
-      "signature": "uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L83",
+      "signature": "uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L92",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with samples from a uniform distribution.",
       "extended": "Each entry is drawn independently from $\\mathcal{U}(a, b)$.  The\nfunction mutates `tensor` in place and returns the same object so\ncalls can be chained or used as a one-liner inside a model\nconstructor.",
@@ -33,11 +33,17 @@
           "annotation": "float",
           "description": "Upper bound of the uniform interval.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG for uniform draws.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` after uniform fill."
       },
       "raises": [],
       "examples": [
@@ -55,8 +61,8 @@
       "path": "lucid.nn.init.normal_",
       "kind": "function",
       "labels": [],
-      "signature": "normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L136",
+      "signature": "normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L156",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with samples from a Gaussian distribution.",
       "extended": "Each entry is drawn independently from\n$\\mathcal{N}(\\text{mean}, \\text{std}^2)$.  This is the simplest\ninitialisation scheme and serves as the building block for\n`xavier_normal_` / `kaiming_normal_`, which choose `std`\nso that the activation variance is preserved layer-by-layer.",
@@ -78,11 +84,17 @@
           "annotation": "float",
           "description": "Standard deviation of the Gaussian distribution.  Must be\nnon-negative.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG for Gaussian draws.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` after Gaussian fill."
       },
       "raises": [],
       "examples": [
@@ -101,7 +113,7 @@
       "kind": "function",
       "labels": [],
       "signature": "constant_(tensor: Tensor, val: float)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L192",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L224",
       "subcategory": "init",
       "summary": "Fill `tensor` in-place with a single scalar value.",
       "extended": "Every entry of `tensor` is overwritten with `val`.  Most often\nused to initialise bias terms to zero or to a small positive value\n(e.g. `0.01` to keep ReLU units active at the start of training).",
@@ -140,7 +152,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ones_(tensor: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L267",
       "subcategory": "init",
       "summary": "Fill `tensor` in-place with ones.",
       "extended": "Convenience wrapper around `constant_` with `val=1.0`.  The\ncanonical use case is the gain (gamma) parameter of normalisation\nlayers (BatchNorm, LayerNorm, GroupNorm) so the layer initially acts\nas the identity scaling.",
@@ -173,7 +185,7 @@
       "kind": "function",
       "labels": [],
       "signature": "zeros_(tensor: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L273",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L305",
       "subcategory": "init",
       "summary": "Fill `tensor` in-place with zeros.",
       "extended": "Convenience wrapper around `constant_` with `val=0.0`.  The\ncanonical use case is bias initialisation in linear and convolution\nlayers, and the shift (beta) parameter of normalisation layers.",
@@ -206,7 +218,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eye_(tensor: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L312",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L344",
       "subcategory": "init",
       "summary": "Fill a 2-D `tensor` in-place with the identity matrix.",
       "extended": "Writes ones on the main diagonal and zeros elsewhere.  Identity\ninitialisation is useful for square linear layers in residual blocks\nor for testing — at initialisation the layer is the identity map and\ngradients propagate untransformed.",
@@ -243,8 +255,8 @@
       "path": "lucid.nn.init.xavier_uniform_",
       "kind": "function",
       "labels": [],
-      "signature": "xavier_uniform_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L362",
+      "signature": "xavier_uniform_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L394",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Xavier (Glorot) uniform initialisation.",
       "extended": "Fills the tensor with values drawn uniformly from $[-a, a]$\nwhere the limit `a` is chosen so that the variance of activations\nis preserved across a stack of linear / mildly-nonlinear layers.\nIntroduced in Glorot & Bengio (2010), this scheme is well-suited to\n`tanh` and `sigmoid` networks; for ReLU networks prefer\n`kaiming_uniform_`, which corrects for the half-truncation of\nnegative pre-activations.",
@@ -260,11 +272,17 @@
           "annotation": "float",
           "description": "Multiplicative gain factor — typically the value returned by\n`calculate_gain` for the downstream nonlinearity.\nDefault `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Xavier uniform draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Xavier-uniform-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -282,8 +300,8 @@
       "path": "lucid.nn.init.xavier_normal_",
       "kind": "function",
       "labels": [],
-      "signature": "xavier_normal_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L424",
+      "signature": "xavier_normal_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L465",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Xavier (Glorot) normal initialisation.",
       "extended": "Gaussian counterpart of `xavier_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation variance through a stack of linear /\nmildly-nonlinear layers, as proposed in Glorot & Bengio (2010).\nPrefer this for `tanh` / `sigmoid` networks; use\n`kaiming_normal_` for ReLU networks.",
@@ -299,11 +317,17 @@
           "annotation": "float",
           "description": "Multiplicative gain factor — see `calculate_gain`.\nDefault `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Xavier Gaussian draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Xavier-normal-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -321,8 +345,8 @@
       "path": "lucid.nn.init.kaiming_uniform_",
       "kind": "function",
       "labels": [],
-      "signature": "kaiming_uniform_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L478",
+      "signature": "kaiming_uniform_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu', generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L528",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) uniform initialisation.",
       "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in [He et al. (2015)](https://arxiv.org/abs/1502.01852), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
@@ -350,11 +374,17 @@
           "annotation": "str",
           "description": "Nonlinearity name forwarded to `calculate_gain`.\nDefault `'leaky_relu'`.",
           "default": "'leaky_relu'"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Kaiming uniform draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Kaiming-uniform-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -372,8 +402,8 @@
       "path": "lucid.nn.init.kaiming_normal_",
       "kind": "function",
       "labels": [],
-      "signature": "kaiming_normal_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L547",
+      "signature": "kaiming_normal_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu', generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L603",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) normal initialisation.",
       "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in [He et al. (2015)](https://arxiv.org/abs/1502.01852).",
@@ -401,11 +431,17 @@
           "annotation": "str",
           "description": "Activation name forwarded to `calculate_gain`.  Default\n`'leaky_relu'`.",
           "default": "'leaky_relu'"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Kaiming Gaussian draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Kaiming-normal-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -423,11 +459,11 @@
       "path": "lucid.nn.init.trunc_normal_",
       "kind": "function",
       "labels": [],
-      "signature": "trunc_normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0, a: float = -2.0, b: float = 2.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L607",
+      "signature": "trunc_normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0, a: float = -2.0, b: float = 2.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L673",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with truncated normal samples.",
-      "extended": "Each entry is drawn from $\\mathcal{N}(\\text{mean}, \\text{std}^2)$ and rejected if it falls outside `[a, b]`;\nrejection sampling is repeated until `tensor` is fully populated.\nThis is the preferred initialiser for transformer weights (e.g.\nViT, BERT) where unbounded Gaussian tails would otherwise produce\nrare but disruptive activations.",
+      "extended": "Each entry is drawn from $\\mathcal{N}(\\text{mean}, \\text{std}^2)$ truncated to `[a, b]` via the inverse-CDF transform\n(`lucid.special.erfinv` applied to uniform draws in\n`[2*Phi((a-mean)/std)-1, 2*Phi((b-mean)/std)-1]`).\nThis is the preferred initialiser for transformer weights (e.g.\nViT, BERT) where unbounded Gaussian tails would otherwise produce\nrare but disruptive activations.",
       "parameters": [
         {
           "name": "tensor",
@@ -458,11 +494,17 @@
           "annotation": "float",
           "description": "Upper truncation bound.  Default `2.0`.",
           "default": "2.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the inverse-CDF uniform quantile draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` populated with truncated normal draws."
       },
       "raises": [],
       "examples": [
@@ -480,8 +522,8 @@
       "path": "lucid.nn.init.orthogonal_",
       "kind": "function",
       "labels": [],
-      "signature": "orthogonal_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L697",
+      "signature": "orthogonal_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L774",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with a (semi-)orthogonal matrix.",
       "extended": "A random Gaussian matrix is drawn and orthonormalised via QR\ndecomposition; the resulting matrix `Q` is multiplied by `gain`\nand written into `tensor`.  For tensors with rank > 2 the leading\naxis is flattened against the remaining axes, the 2-D matrix is\northogonalised, and the original shape is restored.\n\nOrthogonal initialisation, proposed by Saxe et al. (2013), preserves\nvector norms exactly through deep *linear* networks\n($\\|Wx\\|_2 = \\|x\\|_2$ because `W` has orthonormal columns),\nkeeping the spectrum of the forward Jacobian on the unit sphere.\nThis is particularly valuable for RNNs and pre-norm transformer\nblocks where activation magnitudes can otherwise drift exponentially\nwith depth.",
@@ -497,11 +539,17 @@
           "annotation": "float",
           "description": "Multiplicative scaling applied to `Q`.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used to draw the pre-QR Gaussian matrix.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` populated with a Haar-distributed orthogonal matrix."
       },
       "raises": [
         {
@@ -524,11 +572,11 @@
       "path": "lucid.nn.init.sparse_",
       "kind": "function",
       "labels": [],
-      "signature": "sparse_(tensor: Tensor, sparsity: float, std: float = 0.01)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L768",
+      "signature": "sparse_(tensor: Tensor, sparsity: float, std: float = 0.01, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L857",
       "subcategory": "init",
       "summary": "Initialise a 2-D `tensor` in-place with a sparse random matrix.",
-      "extended": "For each column, a random subset of `floor(sparsity * rows)` rows\nis set to zero; the remaining entries are drawn from\n$\\mathcal{N}(0, \\text{std}^2)$.  Sparse initialisation, due to\nMartens (2010), encourages each output unit to depend on only a\nsmall number of inputs at the start of training and helps in\nill-conditioned regimes — particularly for very wide layers where a\ndense Gaussian would have an unfavourable condition number.",
+      "extended": "For each column, a random subset of `ceil(sparsity * rows)` rows\nis set to zero; the remaining entries are drawn from\n$\\mathcal{N}(0, \\text{std}^2)$.  Sparse initialisation, due to\nMartens (2010), encourages each output unit to depend on only a\nsmall number of inputs at the start of training and helps in\nill-conditioned regimes — particularly for very wide layers where a\ndense Gaussian would have an unfavourable condition number.",
       "parameters": [
         {
           "name": "tensor",
@@ -547,11 +595,17 @@
           "annotation": "float",
           "description": "Standard deviation of the Gaussian used for the non-zero\nentries.  Default `0.01`.",
           "default": "0.01"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for both the Gaussian fill and the column zero-mask.\nDefault `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` populated with a column-sparse Gaussian matrix."
       },
       "raises": [
         {
@@ -560,7 +614,7 @@
         }
       ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.init import sparse_\n>>> w = lucid.empty(256, 256)\n>>> _ = sparse_(w, sparsity=0.9, std=0.01)\n>>> int((w == 0).sum().item())   # floor(0.9 * 256) = 230 zeros in each column\n58880"
+        ">>> import lucid\n>>> from lucid.nn.init import sparse_\n>>> w = lucid.empty(256, 256)\n>>> _ = sparse_(w, sparsity=0.9, std=0.01)\n>>> int((w == 0).sum().item())   # ceil(0.9 * 256) = 231 zeros in each column\n59136"
       ],
       "notes": [
         "The expected per-entry variance is\n\n\n\n$$\n\\mathrm{Var}(W_{ij}) = (1 - \\text{sparsity}) \\cdot \\text{std}^2.\n$$"
@@ -575,7 +629,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dirac_(tensor: Tensor, groups: int = 1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L844",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L945",
       "subcategory": "init",
       "summary": "Initialise a 3/4/5-D convolution weight in-place as a Dirac delta.",
       "extended": "The kernel is filled with zeros except for a single `1` at the\nspatial centre of each `(out_channel, in_channel)` matched pair,\nso that — at initialisation — the convolution acts as the identity\nfunction on its input channels (subject to channel-count matching\nper group).  Useful for residual networks where one wants gradients\nto flow unchanged through deep stacks at step 0.",
@@ -619,7 +673,7 @@
       "kind": "function",
       "labels": [],
       "signature": "calculate_gain(nonlinearity: str, param: float | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L936",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L1039",
       "subcategory": "init",
       "summary": "Return the recommended variance-preserving gain for an activation.",
       "extended": "The gain is a multiplicative correction applied to the standard\ndeviation of Xavier / Kaiming initialisation so the per-layer\nactivation variance is preserved after the nonlinearity.  Values\nfollow the original recommendations in Glorot & Bengio (2010) and\n[He et al. (2015)](https://arxiv.org/abs/1502.01852).",
@@ -627,7 +681,7 @@
         {
           "name": "nonlinearity",
           "annotation": "str",
-          "description": "Name of the activation function.  One of `'linear'`,\n`'conv1d'`, `'conv2d'`, `'conv3d'`, `'sigmoid'`,\n`'tanh'`, `'relu'`, `'leaky_relu'`, `'selu'`.",
+          "description": "Name of the activation function.  One of `'linear'`,\n`'conv1d'`, `'conv2d'`, `'conv3d'`,\n`'conv_transpose1d'`, `'conv_transpose2d'`,\n`'conv_transpose3d'`, `'sigmoid'`, `'tanh'`, `'relu'`,\n`'leaky_relu'`, `'selu'`.",
           "default": null
         },
         {
@@ -644,7 +698,7 @@
       "raises": [
         {
           "annotation": "ValueError",
-          "description": "If `nonlinearity` is not in the supported set."
+          "description": "If `nonlinearity` is not in the supported set, or if `param`\nis not a valid number when `nonlinearity='leaky_relu'`."
         }
       ],
       "examples": [
@@ -663,7 +717,7 @@
       "kind": "function",
       "labels": [],
       "signature": "constant_(tensor: Tensor, val: float)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L192",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L224",
       "subcategory": "init",
       "summary": "Fill `tensor` in-place with a single scalar value.",
       "extended": "Every entry of `tensor` is overwritten with `val`.  Most often\nused to initialise bias terms to zero or to a small positive value\n(e.g. `0.01` to keep ReLU units active at the start of training).",
@@ -702,7 +756,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dirac_(tensor: Tensor, groups: int = 1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L844",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L945",
       "subcategory": "init",
       "summary": "Initialise a 3/4/5-D convolution weight in-place as a Dirac delta.",
       "extended": "The kernel is filled with zeros except for a single `1` at the\nspatial centre of each `(out_channel, in_channel)` matched pair,\nso that — at initialisation — the convolution acts as the identity\nfunction on its input channels (subject to channel-count matching\nper group).  Useful for residual networks where one wants gradients\nto flow unchanged through deep stacks at step 0.",
@@ -746,7 +800,7 @@
       "kind": "function",
       "labels": [],
       "signature": "eye_(tensor: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L312",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L344",
       "subcategory": "init",
       "summary": "Fill a 2-D `tensor` in-place with the identity matrix.",
       "extended": "Writes ones on the main diagonal and zeros elsewhere.  Identity\ninitialisation is useful for square linear layers in residual blocks\nor for testing — at initialisation the layer is the identity map and\ngradients propagate untransformed.",
@@ -783,8 +837,8 @@
       "path": "lucid.nn.init.kaiming_normal",
       "kind": "function",
       "labels": [],
-      "signature": "kaiming_normal_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L547",
+      "signature": "kaiming_normal_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu', generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L603",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) normal initialisation.",
       "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in [He et al. (2015)](https://arxiv.org/abs/1502.01852).",
@@ -812,11 +866,17 @@
           "annotation": "str",
           "description": "Activation name forwarded to `calculate_gain`.  Default\n`'leaky_relu'`.",
           "default": "'leaky_relu'"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Kaiming Gaussian draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Kaiming-normal-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -834,8 +894,8 @@
       "path": "lucid.nn.init.kaiming_uniform",
       "kind": "function",
       "labels": [],
-      "signature": "kaiming_uniform_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L478",
+      "signature": "kaiming_uniform_(tensor: Tensor, a: float = 0, mode: str = 'fan_in', nonlinearity: str = 'leaky_relu', generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L528",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) uniform initialisation.",
       "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in [He et al. (2015)](https://arxiv.org/abs/1502.01852), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
@@ -863,11 +923,17 @@
           "annotation": "str",
           "description": "Nonlinearity name forwarded to `calculate_gain`.\nDefault `'leaky_relu'`.",
           "default": "'leaky_relu'"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Kaiming uniform draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Kaiming-uniform-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -885,8 +951,8 @@
       "path": "lucid.nn.init.normal",
       "kind": "function",
       "labels": [],
-      "signature": "normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L136",
+      "signature": "normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L156",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with samples from a Gaussian distribution.",
       "extended": "Each entry is drawn independently from\n$\\mathcal{N}(\\text{mean}, \\text{std}^2)$.  This is the simplest\ninitialisation scheme and serves as the building block for\n`xavier_normal_` / `kaiming_normal_`, which choose `std`\nso that the activation variance is preserved layer-by-layer.",
@@ -908,11 +974,17 @@
           "annotation": "float",
           "description": "Standard deviation of the Gaussian distribution.  Must be\nnon-negative.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG for Gaussian draws.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` after Gaussian fill."
       },
       "raises": [],
       "examples": [
@@ -930,8 +1002,8 @@
       "path": "lucid.nn.init.orthogonal",
       "kind": "function",
       "labels": [],
-      "signature": "orthogonal_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L697",
+      "signature": "orthogonal_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L774",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with a (semi-)orthogonal matrix.",
       "extended": "A random Gaussian matrix is drawn and orthonormalised via QR\ndecomposition; the resulting matrix `Q` is multiplied by `gain`\nand written into `tensor`.  For tensors with rank > 2 the leading\naxis is flattened against the remaining axes, the 2-D matrix is\northogonalised, and the original shape is restored.\n\nOrthogonal initialisation, proposed by Saxe et al. (2013), preserves\nvector norms exactly through deep *linear* networks\n($\\|Wx\\|_2 = \\|x\\|_2$ because `W` has orthonormal columns),\nkeeping the spectrum of the forward Jacobian on the unit sphere.\nThis is particularly valuable for RNNs and pre-norm transformer\nblocks where activation magnitudes can otherwise drift exponentially\nwith depth.",
@@ -947,11 +1019,17 @@
           "annotation": "float",
           "description": "Multiplicative scaling applied to `Q`.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used to draw the pre-QR Gaussian matrix.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` populated with a Haar-distributed orthogonal matrix."
       },
       "raises": [
         {
@@ -974,11 +1052,11 @@
       "path": "lucid.nn.init.sparse",
       "kind": "function",
       "labels": [],
-      "signature": "sparse_(tensor: Tensor, sparsity: float, std: float = 0.01)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L768",
+      "signature": "sparse_(tensor: Tensor, sparsity: float, std: float = 0.01, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L857",
       "subcategory": "init",
       "summary": "Initialise a 2-D `tensor` in-place with a sparse random matrix.",
-      "extended": "For each column, a random subset of `floor(sparsity * rows)` rows\nis set to zero; the remaining entries are drawn from\n$\\mathcal{N}(0, \\text{std}^2)$.  Sparse initialisation, due to\nMartens (2010), encourages each output unit to depend on only a\nsmall number of inputs at the start of training and helps in\nill-conditioned regimes — particularly for very wide layers where a\ndense Gaussian would have an unfavourable condition number.",
+      "extended": "For each column, a random subset of `ceil(sparsity * rows)` rows\nis set to zero; the remaining entries are drawn from\n$\\mathcal{N}(0, \\text{std}^2)$.  Sparse initialisation, due to\nMartens (2010), encourages each output unit to depend on only a\nsmall number of inputs at the start of training and helps in\nill-conditioned regimes — particularly for very wide layers where a\ndense Gaussian would have an unfavourable condition number.",
       "parameters": [
         {
           "name": "tensor",
@@ -997,11 +1075,17 @@
           "annotation": "float",
           "description": "Standard deviation of the Gaussian used for the non-zero\nentries.  Default `0.01`.",
           "default": "0.01"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for both the Gaussian fill and the column zero-mask.\nDefault `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` populated with a column-sparse Gaussian matrix."
       },
       "raises": [
         {
@@ -1010,7 +1094,7 @@
         }
       ],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.init import sparse_\n>>> w = lucid.empty(256, 256)\n>>> _ = sparse_(w, sparsity=0.9, std=0.01)\n>>> int((w == 0).sum().item())   # floor(0.9 * 256) = 230 zeros in each column\n58880"
+        ">>> import lucid\n>>> from lucid.nn.init import sparse_\n>>> w = lucid.empty(256, 256)\n>>> _ = sparse_(w, sparsity=0.9, std=0.01)\n>>> int((w == 0).sum().item())   # ceil(0.9 * 256) = 231 zeros in each column\n59136"
       ],
       "notes": [
         "The expected per-entry variance is\n\n\n\n$$\n\\mathrm{Var}(W_{ij}) = (1 - \\text{sparsity}) \\cdot \\text{std}^2.\n$$"
@@ -1024,8 +1108,8 @@
       "path": "lucid.nn.init.uniform",
       "kind": "function",
       "labels": [],
-      "signature": "uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L83",
+      "signature": "uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L92",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with samples from a uniform distribution.",
       "extended": "Each entry is drawn independently from $\\mathcal{U}(a, b)$.  The\nfunction mutates `tensor` in place and returns the same object so\ncalls can be chained or used as a one-liner inside a model\nconstructor.",
@@ -1047,11 +1131,17 @@
           "annotation": "float",
           "description": "Upper bound of the uniform interval.  Default `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG for uniform draws.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "`tensor` after uniform fill."
       },
       "raises": [],
       "examples": [
@@ -1069,8 +1159,8 @@
       "path": "lucid.nn.init.xavier_normal",
       "kind": "function",
       "labels": [],
-      "signature": "xavier_normal_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L424",
+      "signature": "xavier_normal_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L465",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Xavier (Glorot) normal initialisation.",
       "extended": "Gaussian counterpart of `xavier_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation variance through a stack of linear /\nmildly-nonlinear layers, as proposed in Glorot & Bengio (2010).\nPrefer this for `tanh` / `sigmoid` networks; use\n`kaiming_normal_` for ReLU networks.",
@@ -1086,11 +1176,17 @@
           "annotation": "float",
           "description": "Multiplicative gain factor — see `calculate_gain`.\nDefault `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Xavier Gaussian draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Xavier-normal-initialised `tensor`."
       },
       "raises": [],
       "examples": [
@@ -1108,8 +1204,8 @@
       "path": "lucid.nn.init.xavier_uniform",
       "kind": "function",
       "labels": [],
-      "signature": "xavier_uniform_(tensor: Tensor, gain: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7e9632b44/lucid/nn/init.py#L362",
+      "signature": "xavier_uniform_(tensor: Tensor, gain: float = 1.0, generator: _C_engine.Generator | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/nn/init.py#L394",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Xavier (Glorot) uniform initialisation.",
       "extended": "Fills the tensor with values drawn uniformly from $[-a, a]$\nwhere the limit `a` is chosen so that the variance of activations\nis preserved across a stack of linear / mildly-nonlinear layers.\nIntroduced in Glorot & Bengio (2010), this scheme is well-suited to\n`tanh` and `sigmoid` networks; for ReLU networks prefer\n`kaiming_uniform_`, which corrects for the half-truncation of\nnegative pre-activations.",
@@ -1125,11 +1221,17 @@
           "annotation": "float",
           "description": "Multiplicative gain factor — typically the value returned by\n`calculate_gain` for the downstream nonlinearity.\nDefault `1.0`.",
           "default": "1.0"
+        },
+        {
+          "name": "generator",
+          "annotation": "Generator",
+          "description": "PRNG used for the Xavier uniform draw.  Default `None`.",
+          "default": "None"
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "`tensor` (mutated) for chaining."
+        "description": "The Xavier-uniform-initialised `tensor`."
       },
       "raises": [],
       "examples": [
