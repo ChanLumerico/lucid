@@ -748,6 +748,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - remap session-cache executable ids to caller trace (LCD-454)
 
+- enforce _wrap_dim and edge checks in diff, cross, quantile
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

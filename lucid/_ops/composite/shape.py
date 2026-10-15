@@ -861,7 +861,9 @@ def take_along_dim(input: Tensor, indices: Tensor, dim: int | None = None) -> Te
         )
     dim = _wrap_dim(dim, input.ndim, "take_along_dim")
     if input.ndim == 0:
-        return lucid.gather(input.reshape(1), 0, indices.reshape(1)).reshape(())
+        raise IndexError(
+            "take_along_dim: dimension specified as 0 but tensor has no dimensions"
+        )
     x_shape = list(input.shape)
     i_shape = list(indices.shape)
     x_shape[dim] = i_shape[dim] = 1

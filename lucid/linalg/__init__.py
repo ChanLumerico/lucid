@@ -10,6 +10,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, finfo as _finfo, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
+from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
 from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
@@ -2550,19 +2551,22 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     >>> cross(lucid.tensor([1.0, 0.0, 0.0]), lucid.tensor([0.0, 1.0, 0.0]))
     tensor([0., 0., 1.])
     """
-    xi = _unwrap(x)
-    yi = _unwrap(y)
-    ndim = len(xi.shape)
-    d = dim if dim >= 0 else ndim + dim
+    xi, yi = _unwrap(x), _unwrap(y)
+    if len(xi.shape) != len(yi.shape):
+        raise _C_engine.ShapeMismatch("linalg.cross: inputs must have the same number of dimensions")
+    d = _wrap_dim(dim, len(xi.shape), "linalg.cross")
+    if not xi.shape:
+        raise IndexError(f"linalg.cross: axis out of range: got {dim} for a 0-D tensor")
+    if xi.shape[d] != 3 or yi.shape[d] != 3:
+        raise _C_engine.ShapeMismatch(
+            f"linalg.cross: inputs dimension {d} must have length 3, got {xi.shape[d]} and {yi.shape[d]}"
+        )
 
     def _idx(t: _C_engine.TensorImpl, i: int) -> _C_engine.TensorImpl:
-        # Build an index tensor with the same rank as t, size 1 along d,
-        # filled with i.  gather requires equal-rank index.
         idx_shape = list(t.shape)
         idx_shape[d] = 1
         idx = _C_engine.full(idx_shape, float(i), _C_engine.I32, t.device)
-        sliced = _C_engine.gather(t, idx, d)
-        return _C_engine.squeeze(sliced, d)
+        return _C_engine.squeeze(_C_engine.gather(t, idx, d), d)
 
     x0, x1, x2 = _idx(xi, 0), _idx(xi, 1), _idx(xi, 2)
     y0, y1, y2 = _idx(yi, 0), _idx(yi, 1), _idx(yi, 2)
@@ -2570,11 +2574,7 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     c0 = _C_engine.sub(_C_engine.mul(x1, y2), _C_engine.mul(x2, y1))
     c1 = _C_engine.sub(_C_engine.mul(x2, y0), _C_engine.mul(x0, y2))
     c2 = _C_engine.sub(_C_engine.mul(x0, y1), _C_engine.mul(x1, y0))
-
-    c0u = _C_engine.unsqueeze(c0, d)
-    c1u = _C_engine.unsqueeze(c1, d)
-    c2u = _C_engine.unsqueeze(c2, d)
-    return _wrap(_C_engine.concatenate([c0u, c1u, c2u], d))
+    return _wrap(_C_engine.concatenate([_C_engine.unsqueeze(c, d) for c in (c0, c1, c2)], d))
 
 
 def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:

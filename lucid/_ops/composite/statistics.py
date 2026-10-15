@@ -183,6 +183,10 @@ def quantile(
     --------
     nanquantile : NaN-aware sibling.
     """
+    if dim is not None:
+        dim = _wrap_dim(dim, input.ndim, "quantile")
+    if input.numel() == 0:
+        raise _C_engine.InvalidArgument("quantile() input tensor must be non-empty")
     q_list, scalar_q = _parse_q(q)
 
     # A NaN anywhere in the slice poisons its quantile — that is the whole
@@ -199,7 +203,6 @@ def quantile(
         results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
         nans = lucid.isnan(flat).sum()
     else:
-        dim = _wrap_dim(dim, input.ndim, "quantile")
         if input.ndim == 0:
             # A 0-d tensor's notional axis is the whole of it, with or
             # without ``keepdim``: the quantile of its one-element view.
@@ -262,6 +265,10 @@ def nanquantile(
     --------
     quantile : NaN-unaware version (a single ``NaN`` poisons the slice).
     """
+    if dim is not None:
+        dim = _wrap_dim(dim, input.ndim, "nanquantile")
+    if input.numel() == 0:
+        raise _C_engine.InvalidArgument("quantile() input tensor must be non-empty")
     if not lucid.is_floating_point(input):
         # No NaN to skip: the plain quantile is the answer.
         return quantile(input, q, dim, keepdim, interpolation=interpolation)
@@ -269,7 +276,9 @@ def nanquantile(
     # The whole tensor is the one slice of its flattening, so it takes the
     # per-slice path: the count stays a tensor on the device, and an all-NaN
     # input reads its first NaN with the gradient attached.
-    x, along = (input.reshape(-1), 0) if dim is None else (input, dim)
+    x, along = (
+        (input.reshape(-1), 0) if dim is None or input.ndim == 0 else (input, dim)
+    )
     # The engine's sort already puts every NaN after the numbers.
     sorted_x = lucid.sort(x, along)
     non_nan_count = (~lucid.isnan(x)).sum(dim=along, keepdim=True).to(x.dtype)
@@ -278,7 +287,7 @@ def nanquantile(
         non_nan_count,
         q_list,
         along,
-        keepdim and dim is not None,
+        keepdim and dim is not None and input.ndim > 0,
         interpolation,
     )
 

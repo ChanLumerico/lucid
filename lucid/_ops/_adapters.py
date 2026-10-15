@@ -368,9 +368,10 @@ def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
 
 def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
     """sort(a, dim=-1, descending=False) — the sorted values along ``dim``."""
-    out = _C_engine.sort(a_impl, int(dim))
-    if descending:
-        out = _C_engine.flip(out, [int(dim)])
+    d = _wrap_dim(int(dim), len(a_impl.shape), "sort")
+    out = _C_engine.sort(a_impl, d)
+    if descending and a_impl.shape:
+        out = _C_engine.flip(out, [d])
     return out
 
 
@@ -383,7 +384,7 @@ def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> 
     instead would put ties last-first.
     """
     d = _wrap_dim(int(dim), len(a_impl.shape), "argsort")
-    if not descending:
+    if not descending or not a_impl.shape:
         return _C_engine.argsort(a_impl, d)
     reversed_order = _C_engine.argsort(_C_engine.flip(a_impl, [d]), d)
     n = _dim_size(a_impl.shape, d)

@@ -53,29 +53,34 @@ _PAST_THE_LAST_AXIS = {
     "split": lambda lib, t, d: lib.split(t, 1, dim=d),
     "chunk": lambda lib, t, d: lib.chunk(t, 1, dim=d),
     "quantile": lambda lib, t, d: lib.quantile(t, 0.5, dim=d),
+    "nanquantile": lambda lib, t, d: lib.nanquantile(t, 0.5, dim=d),
+    "sort": lambda lib, t, d: lib.sort(t, dim=d),
+    "sort_descending": lambda lib, t, d: lib.sort(t, dim=d, descending=True),
+    "argsort": lambda lib, t, d: lib.argsort(t, dim=d),
     "argsort_descending": lambda lib, t, d: lib.argsort(t, dim=d, descending=True),
     "topk_smallest": lambda lib, t, d: lib.topk(t, 1, dim=d, largest=False),
     "swapaxes": lambda lib, t, d: lib.swapaxes(t, d, 0),
     "glu": lambda lib, t, d: lib.nn.functional.glu(t, d),
+    "diff": lambda lib, t, d: lib.diff(t, dim=d),
+    "Tensor.diff": lambda lib, t, d: t.diff(dim=d),
+    "linalg.cross": lambda lib, t, d: lib.linalg.cross(t, t, dim=d),
 }
 
 
 @pytest.mark.parametrize("shape", [(), (3,), (2, 1, 3)], ids=str)
 @pytest.mark.parametrize("op", list(_PAST_THE_LAST_AXIS))
 def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
-    if op in ("split", "chunk", "glu") and not shape:
-        pytest.skip("a 0-d tensor has nothing to split, whatever the dim")
     call = _PAST_THE_LAST_AXIS[op]
     bad = max(len(shape), 1)
     for dim in (bad, -bad - 1):
-        with pytest.raises(IndexError):
-            call(ref, ref.zeros(shape), dim)
         with pytest.raises(IndexError, match=f"axis out of range: got {dim}"):
             call(lucid, lucid.zeros(shape, device=device), dim)
+        if op in ("split", "chunk", "glu", "diff", "Tensor.diff") and not shape:
+            continue
+        with pytest.raises(IndexError):
+            call(ref, ref.zeros(shape), dim)
 
 
-# Copies of the rule outside lucid._ops._dims that answer a bad dim with a
-# silently wrong result rather than a refusal; each XPASSes once moved over.
 _STRAGGLERS = {
     "Tensor.diff": lambda lib, d: lib.tensor([1.0, 2.0, 4.0]).diff(dim=d),
     "linalg.cross": lambda lib, d: lib.linalg.cross(lib.ones(3, 3), lib.ones(3, 3), dim=d),
@@ -85,27 +90,17 @@ _STRAGGLERS = {
 @pytest.mark.parametrize(
     ("op", "dim"),
     [
-        pytest.param(
-            "Tensor.diff",
-            1,
-            marks=pytest.mark.xfail(
-                strict=True, reason="LCD-424: Tensor.diff wraps dim with dim % ndim"
-            ),
-        ),
-        pytest.param(
-            "linalg.cross",
-            -3,
-            marks=pytest.mark.xfail(
-                strict=True, reason="LCD-424: linalg.cross wraps dim by ndim + dim"
-            ),
-        ),
+        ("Tensor.diff", 1),
+        ("Tensor.diff", -2),
+        ("linalg.cross", 2),
+        ("linalg.cross", -3),
     ],
 )
 def test_a_straggler_refuses_an_axis_past_the_last(ref, op, dim):
     call = _STRAGGLERS[op]
     with pytest.raises(IndexError):
         call(ref, dim)
-    with pytest.raises(IndexError):
+    with pytest.raises(IndexError, match=f"axis out of range: got {dim}"):
         call(lucid, dim)
 
 
@@ -221,3 +216,128 @@ def test_roll_takes_any_index_type(ref, device):
     shift, axis = np.int64(1), np.int64(-1)
     _compare(ref, device, (2, 3), lambda lib, F, t: lib.roll(t, shift, axis))
     _compare(ref, device, (2, 3), lambda lib, F, t: lib.roll(t, (shift,), (axis,)))
+
+
+# ── LCD-424: diff, linalg.cross, take_along_dim, quantile, sort ─────────────
+
+
+@pytest.mark.parametrize("dim", [0, -1])
+def test_diff_refuses_a_0d_tensor_and_negative_order(ref, device, dim):
+    with pytest.raises(RuntimeError):
+        ref.diff(ref.tensor(1.0), dim=dim)
+    with pytest.raises(RuntimeError, match="at least one-dimensional"):
+        lucid.diff(lucid.tensor(1.0, device=device), dim=dim)
+    with pytest.raises(RuntimeError, match="non-negative"):
+        lucid.tensor([1.0, 2.0], device=device).diff(n=-1, dim=dim)
+
+
+@pytest.mark.parametrize("dim", [0, 1, -1, -2])
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_matches_reference(ref, device, n, dim):
+    _compare(ref, device, (3, 4), lambda lib, F, t: t.diff(n=n, dim=dim))
+
+
+@pytest.mark.parametrize("dim", [0, -1, 1, -2])
+def test_cross_refuses_0d_and_non_3_axes(ref, device, dim):
+    with pytest.raises(IndexError):
+        ref.linalg.cross(ref.tensor(1.0), ref.tensor(1.0), dim=dim)
+    with pytest.raises(IndexError):
+        lucid.linalg.cross(
+            lucid.tensor(1.0, device=device), lucid.tensor(1.0, device=device), dim=dim
+        )
+    if dim in (0, -1, 1, -2):
+        with pytest.raises(RuntimeError):
+            ref.linalg.cross(ref.ones(2, 2), ref.ones(2, 2), dim=dim)
+        with pytest.raises(RuntimeError, match="must have length 3"):
+            lucid.linalg.cross(
+                lucid.ones(2, 2, device=device), lucid.ones(2, 2, device=device), dim=dim
+            )
+
+
+def test_take_along_dim_on_a_0d_tensor(ref, device):
+    x = lucid.tensor(5.0, device=device, requires_grad=True)
+    xr = ref.tensor(5.0, requires_grad=True)
+    got = lucid.take_along_dim(x, lucid.tensor(0, dtype=lucid.int64, device=device), dim=None)
+    want = ref.take_along_dim(xr, ref.tensor(0, dtype=ref.int64), dim=None)
+    assert tuple(got.shape) == tuple(want.shape) == (1,)
+    np.testing.assert_allclose(got.numpy(), want.detach().numpy())
+    got.sum().backward()
+    want.sum().backward()
+    np.testing.assert_allclose(x.grad.numpy(), xr.grad.numpy())
+    for dim in (0, -1, 1, -2):
+        with pytest.raises(IndexError):
+            ref.take_along_dim(ref.tensor(5.0), ref.tensor(0), dim=dim)
+        with pytest.raises(IndexError):
+            lucid.take_along_dim(
+                lucid.tensor(5.0, device=device),
+                lucid.tensor(0, dtype=lucid.int64, device=device),
+                dim=dim,
+            )
+
+
+@pytest.mark.parametrize(
+    ("shape", "dim"),
+    [
+        ((0,), None),
+        ((0,), 0),
+        ((0,), -1),
+        ((0, 1), None),
+        ((0, 1), 0),
+        ((0, 1), 1),
+        ((2, 0), 0),
+        ((2, 0), 1),
+    ],
+    ids=str,
+)
+@pytest.mark.parametrize("op", ["quantile", "nanquantile"])
+def test_quantile_refuses_an_empty_tensor(ref, device, op, shape, dim):
+    with pytest.raises(RuntimeError, match="non-empty"):
+        getattr(ref, op)(ref.zeros(shape), 0.5, dim=dim)
+    with pytest.raises((RuntimeError, ValueError), match="non-empty"):
+        getattr(lucid, op)(lucid.zeros(shape, device=device), 0.5, dim=dim)
+
+
+@pytest.mark.parametrize("keepdim", [False, True])
+@pytest.mark.parametrize("dim", [None, 0, -1], ids=str)
+@pytest.mark.parametrize("op", ["quantile", "nanquantile"])
+def test_quantile_on_a_0d_tensor(ref, device, op, dim, keepdim):
+    _compare(
+        ref,
+        device,
+        (),
+        lambda lib, F, t: getattr(lib, op)(t, 0.5, dim=dim, keepdim=keepdim),
+    )
+    nan_got = getattr(lucid, op)(
+        lucid.tensor(float("nan"), device=device), 0.5, dim=dim, keepdim=keepdim
+    )
+    assert nan_got.shape == () and np.isnan(nan_got.numpy())
+
+
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("dim", [0, -1])
+def test_sort_and_argsort_on_a_0d_tensor(ref, device, dim, descending):
+    _compare(
+        ref,
+        device,
+        (),
+        lambda lib, F, t: (
+            lib.sort(t, dim=dim, descending=descending)
+            if lib is lucid
+            else lib.sort(t, dim=dim, descending=descending)[0]
+        ),
+    )
+    _compare(
+        ref,
+        device,
+        (),
+        lambda lib, F, t: (
+            t.sort(dim=dim, descending=descending)
+            if lib is lucid
+            else t.sort(dim=dim, descending=descending)[0]
+        ),
+    )
+    got_idx = lucid.argsort(lucid.tensor(1.5, device=device), dim=dim, descending=descending)
+    want_idx = ref.argsort(ref.tensor(1.5), dim=dim, descending=descending)
+    assert got_idx.shape == () and got_idx.dtype == lucid.int64
+    assert got_idx.item() == want_idx.item() == 0
+

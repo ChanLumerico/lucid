@@ -9,8 +9,7 @@ used the raw rank indexed past a 0-d shape (``list index out of range``) or
 let an axis past the last one through.  This module owns the rule on the
 Python side: :func:`_to_axes` reads a dim spelling, :func:`_wrap_dim` and
 :func:`_wrap_dims` resolve it, :func:`_dim_size` reads the axis's extent.
-A new Python axis path takes its dims here.  The copies not yet moved over
-(``Tensor.diff``, ``linalg.cross`` among them) are tracked in LCD-424.
+A new Python axis path takes its dims here.
 """
 
 import operator

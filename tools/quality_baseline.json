@@ -190,7 +190,7 @@
     "lucid/_C/backend/gpu/GpuBackend.h": 4550,
     "lucid/_ops/composite/elementwise.py": 122,
     "lucid/_tensor/_dunders.py": 251,
-    "lucid/_tensor/tensor.py": 2796,
+    "lucid/_tensor/tensor.py": 2795,
     "lucid/compile/_optim/compiler.py": 752,
     "lucid/coreml/_build.py": 1726,
     "lucid/coreml/_emit.py": 1176,
@@ -310,7 +310,7 @@
    },
    "type-ignore[assignment]": {
     "lucid/_tensor/_metal_views.py": 1,
-    "lucid/_tensor/tensor.py": 3,
+    "lucid/_tensor/tensor.py": 2,
     "lucid/func/__init__.py": 4,
     "lucid/models/vision/pvt/_model.py": 2,
     "lucid/nn/module.py": 1,
