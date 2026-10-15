@@ -6,10 +6,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid._C"
-    },
-    {
-      "kind": "module",
       "module": "lucid._device"
     },
     {
@@ -19,6 +15,10 @@
     {
       "kind": "module",
       "module": "lucid._dtype"
+    },
+    {
+      "kind": "module",
+      "module": "lucid._engine_scope"
     },
     {
       "kind": "module",
@@ -107,6 +107,10 @@
     {
       "kind": "module",
       "module": "lucid.amp.grad_scaler"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.autograd._anomaly"
     },
     {
       "kind": "module",
@@ -458,10 +462,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.func"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models._utils._generative"
     },
     {
@@ -543,12 +543,20 @@
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.func"
     }
   ],
   "lucid.autograd._functional.jvp": [
     {
       "kind": "module",
       "module": "lucid.autograd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.func"
     }
   ],
   "lucid.autograd._functional.vhp": [
@@ -1248,6 +1256,14 @@
   "lucid.distributions": [
     {
       "kind": "module",
+      "module": "lucid.distributions.transformed_distribution"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    },
+    {
+      "kind": "module",
       "module": "lucid.utils.data._mix"
     }
   ],
@@ -1255,6 +1271,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1268,7 +1288,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.distributions.kl"
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.categorical.Categorical": [
@@ -1293,6 +1313,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.continuous_extra.FisherSnedecor": [
@@ -1305,6 +1329,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.continuous_extra.HalfNormal": [
@@ -1321,18 +1349,30 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.continuous_extra.Weibull": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.discrete.Binomial": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1352,6 +1392,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.kl"
     }
   ],
@@ -1359,6 +1403,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1418,6 +1466,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions.transformed_distribution"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.transforms"
     },
     {
@@ -1429,6 +1481,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1472,6 +1528,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.continuous_extra"
     },
     {
@@ -1486,6 +1546,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.kl"
     }
   ],
@@ -1493,12 +1557,20 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.extra.Gumbel": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1509,12 +1581,20 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.extra.Kumaraswamy": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.extra.Multinomial": [
@@ -1527,6 +1607,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1564,6 +1648,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.extra"
     },
     {
@@ -1578,19 +1666,31 @@
     },
     {
       "kind": "module",
-      "module": "lucid.distributions.kl"
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transformed_distribution"
     }
   ],
   "lucid.distributions.kl.kl_divergence": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.kl.register_kl": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.matrix.LKJCholesky": [
@@ -1603,6 +1703,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.mixture.MixtureSameFamily": [
@@ -1628,6 +1732,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.kl"
     }
   ],
@@ -1635,6 +1743,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1661,10 +1773,36 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    }
+  ],
+  "lucid.distributions.transformed_distribution.ComposeTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.transformed_distribution.Transform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
-      "module": "lucid.distributions.kl"
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.transformed_distribution.TransformedDistribution": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
     }
   ],
   "lucid.distributions.transforms.AbsTransform": [
@@ -1680,12 +1818,6 @@
     }
   ],
   "lucid.distributions.transforms.CatTransform": [
-    {
-      "kind": "module",
-      "module": "lucid.distributions"
-    }
-  ],
-  "lucid.distributions.transforms.ComposeTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
@@ -1707,6 +1839,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.distributions.transforms.IndependentTransform": [
@@ -1763,18 +1899,6 @@
       "module": "lucid.distributions"
     }
   ],
-  "lucid.distributions.transforms.Transform": [
-    {
-      "kind": "module",
-      "module": "lucid.distributions"
-    }
-  ],
-  "lucid.distributions.transforms.TransformedDistribution": [
-    {
-      "kind": "module",
-      "module": "lucid.distributions"
-    }
-  ],
   "lucid.distributions.uniform.Uniform": [
     {
       "kind": "module",
@@ -1782,7 +1906,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.distributions.kl"
+      "module": "lucid.distributions._kl_cross"
     }
   ],
   "lucid.func": [
@@ -1977,6 +2101,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text._common._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._model"
     },
     {
       "kind": "module",
@@ -3461,12 +3589,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo"
-    }
-  ],
-  "lucid.models.generative": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
     }
   ],
   "lucid.models.generative.ddpm": [
@@ -5473,12 +5595,6 @@
     {
       "kind": "module",
       "module": "lucid.models.multimodal.clip._pretrained"
-    }
-  ],
-  "lucid.models.text": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
     }
   ],
   "lucid.models.text.bert": [
@@ -12516,10 +12632,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.intrinsic.qat.modules"
     },
     {
@@ -13932,10 +14044,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.modules._conv_common"
     },
     {
@@ -14077,10 +14185,6 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.conv"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.nn.modules.conv_transpose"
     },
     {
       "kind": "module",
@@ -14456,37 +14560,37 @@
   "lucid.nn.modules.conv_transpose.ConvTranspose1d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.conv_transpose.ConvTranspose2d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.conv_transpose.ConvTranspose3d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.conv_transpose.LazyConvTranspose1d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.conv_transpose.LazyConvTranspose2d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.conv_transpose.LazyConvTranspose3d": [
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv"
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.dropout.AlphaDropout": [
@@ -15248,10 +15352,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn.modules.conv_transpose"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.modules.linear"
     },
     {
@@ -15321,6 +15421,10 @@
     {
       "kind": "module",
       "module": "lucid.optim.sgd"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.serialization"
     }
   ],
   "lucid.nn.parameter.UninitializedParameter": [
@@ -15599,12 +15703,6 @@
     {
       "kind": "module",
       "module": "lucid.nn.quantized"
-    }
-  ],
-  "lucid.nn.utils": [
-    {
-      "kind": "module",
-      "module": "lucid.nn"
     }
   ],
   "lucid.nn.utils._copy.copy_parameters_and_buffers": [
@@ -16550,20 +16648,14 @@
   "lucid.serialization": [
     {
       "kind": "module",
-      "module": "lucid"
-    },
-    {
-      "kind": "module",
       "module": "lucid.weights._loading"
     }
   ],
-  "lucid.signal.windows": [
+  "lucid.special": [
     {
       "kind": "module",
-      "module": "lucid.signal"
-    }
-  ],
-  "lucid.special": [
+      "module": "lucid.distributions._kl_cross"
+    },
     {
       "kind": "module",
       "module": "lucid.distributions.bernoulli"
@@ -16575,17 +16667,23 @@
     {
       "kind": "module",
       "module": "lucid.distributions.gamma"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.distributions.kl"
     },
     {
       "kind": "module",
       "module": "lucid.distributions.matrix"
     }
   ],
+  "lucid.special.multigammaln": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    }
+  ],
   "lucid.special.xlog1py": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    },
     {
       "kind": "module",
       "module": "lucid.distributions.bernoulli"
@@ -16597,10 +16695,6 @@
     {
       "kind": "module",
       "module": "lucid.distributions.gamma"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.distributions.kl"
     }
   ],
   "lucid.stack": [
@@ -16649,10 +16743,6 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.transformer"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils"
     }
   ],
   "lucid.utils.cache._base.Cache": [
@@ -16700,12 +16790,6 @@
     }
   ],
   "lucid.utils.checkpoint.checkpoint": [
-    {
-      "kind": "module",
-      "module": "lucid.utils"
-    }
-  ],
-  "lucid.utils.data": [
     {
       "kind": "module",
       "module": "lucid.utils"
@@ -16905,12 +16989,6 @@
       "module": "lucid.utils.data"
     }
   ],
-  "lucid.utils.rollout": [
-    {
-      "kind": "module",
-      "module": "lucid.utils"
-    }
-  ],
   "lucid.utils.rollout._driver.LatentPolicy": [
     {
       "kind": "module",
@@ -16987,12 +17065,6 @@
     {
       "kind": "module",
       "module": "lucid.utils.rollout"
-    }
-  ],
-  "lucid.utils.tokenizer": [
-    {
-      "kind": "module",
-      "module": "lucid.utils"
     }
   ],
   "lucid.utils.tokenizer._base.SpecialTokens": [
@@ -17431,10 +17503,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo._weights"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils"
     },
     {
       "kind": "module",

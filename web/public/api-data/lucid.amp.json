@@ -3,7 +3,7 @@
   "name": "amp",
   "path": "lucid.amp",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/__init__.py#L1",
   "members": [
     {
       "name": "autocast",
@@ -12,8 +12,8 @@
       "class_kind": "regular",
       "bases": [],
       "labels": [],
-      "signature": "autocast(device_type: str = 'metal', dtype: dtype = float16, enabled: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L16",
+      "signature": "autocast(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L25",
       "subcategory": "autocast",
       "methods": [
         {
@@ -21,8 +21,8 @@
           "path": "lucid.amp.autocast.autocast.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(device_type: str = 'metal', dtype: dtype = float16, enabled: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L96",
+          "signature": "__init__(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L105",
           "subcategory": "autocast",
           "summary": "Configure the autocast context.",
           "extended": null,
@@ -35,14 +35,14 @@
             },
             {
               "name": "dtype",
-              "annotation": "lucid.dtype",
-              "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope.",
-              "default": "float16"
+              "annotation": "lucid.dtype or None",
+              "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope (defaults to `lucid.float16` when `None`).",
+              "default": "None"
             },
             {
               "name": "enabled",
               "annotation": "bool",
-              "description": "When `False` the context is a no-op (useful for ablation).",
+              "description": "When `False` autocast is disabled on `device_type` inside\nthe scope (useful for ablation or nested full-precision blocks).",
               "default": "True"
             }
           ],
@@ -68,10 +68,10 @@
           "kind": "function",
           "labels": [],
           "signature": "__enter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L143",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L150",
           "subcategory": "autocast",
-          "summary": "Activate the autocast scope and return `self`.",
-          "extended": "Constructing the engine `AutocastGuard` switches AMP on with the\nconfigured dtype and records the state it replaced; the guard is\nkept until `__exit__`.",
+          "summary": "Activate (or disable) the autocast scope and return `self`.",
+          "extended": "Constructing the engine `AutocastGuard` sets the AMP state for\n`self._device_type` to `(enabled, dtype)` and records the state\nit replaced; the guard is kept until `__exit__`.",
           "parameters": [],
           "returns": {
             "annotation": "autocast",
@@ -90,7 +90,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__exit__(args: object = ())",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L155",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L166",
           "subcategory": "autocast",
           "summary": "Restore the AMP state that was active when the scope was entered.",
           "extended": "Releases the guard `__enter__` made.  Its destructor runs at\nonce and puts back the state it recorded, so the scope ends here\nrather than whenever the `autocast` object is collected.\nExceptions propagate.",
@@ -112,7 +112,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(fn: F)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L168",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L177",
           "subcategory": "autocast",
           "summary": "Use as a function decorator.",
           "extended": "Every call of the decorated function runs inside this scope — the\nsame `device_type`, `dtype` and `enabled` — and leaves it on\nreturn or on an exception.",
@@ -142,10 +142,10 @@
           "labels": [
             "staticmethod"
           ],
-          "signature": "is_autocast_enabled()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L194",
+          "signature": "is_autocast_enabled(device_type: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L203",
           "subcategory": "autocast",
-          "summary": "Return True if autocast is currently active.",
+          "summary": "Return True if autocast is currently active (for `device_type` if given).",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -166,10 +166,10 @@
           "labels": [
             "staticmethod"
           ],
-          "signature": "get_autocast_dtype()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/autocast.py#L199",
+          "signature": "get_autocast_dtype(device_type: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/autocast.py#L210",
           "subcategory": "autocast",
-          "summary": "Return the currently active autocast dtype, or None.",
+          "summary": "Return the currently active autocast dtype (for `device_type` if given), or None.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -185,7 +185,7 @@
         }
       ],
       "summary": "Enable automatic mixed-precision computation inside a context.",
-      "extended": "Operations that opt into AMP (matmul, conv, attention, …) cast their\ninputs to the target lower-precision dtype on entry, reducing memory\npressure and — on Metal — improving throughput by activating the\nM-series GPU's half-precision tensor pipelines.  Cast points are\ninserted *only* at op boundaries; activations themselves are stored\nin the lower-precision dtype but accumulator and reduction state stay\nin float32 to preserve numerical fidelity (the standard \"mixed\" recipe).\n\nLeaving the scope restores exactly the state it was entered from —\nautocast off, or the enclosing scope's dtype — whether it is left\nnormally or by an exception, and however long the `autocast` object\nitself lives on afterwards.  One object can be entered again after it\nexits, entered while it is already active (each entry is undone by its\nown exit), and used as a decorator.  `enabled=False` leaves the\ncurrent state untouched: it does not switch an enclosing scope off.\n\nThe engine keeps one autocast state per thread rather than one per\ndevice, so a scope currently applies to eligible ops on *both*\ndevices whichever `device_type` it names (CHA-70).",
+      "extended": "Operations that opt into AMP (matmul, conv, attention, …) cast their\ninputs to the target lower-precision dtype on entry, reducing memory\npressure and — on Metal — improving throughput by activating the\nM-series GPU's half-precision tensor pipelines.  Cast points are\ninserted *only* at op boundaries; activations themselves are stored\nin the lower-precision dtype but accumulator and reduction state stay\nin float32 to preserve numerical fidelity (the standard \"mixed\" recipe).\n\nLeaving the scope restores exactly the state it was entered from —\nautocast off, or the enclosing scope's dtype — whether it is left\nnormally or by an exception, and however long the `autocast` object\nitself lives on afterwards.  One object can be entered again after it\nexits, entered while it is already active (each entry is undone by its\nown exit), and used as a decorator.  `enabled=False` disables\nautocast on `device_type` for the duration of the scope while leaving\nthe other device's autocast state untouched.\n\nAutocast state is tracked independently per device (`\"metal\"` vs\n`\"cpu\"`) on each thread.",
       "parameters": [
         {
           "name": "device_type",
@@ -197,12 +197,12 @@
           "name": "dtype",
           "annotation": "lucid.dtype",
           "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope.  Default `lucid.float16`.  On the CPU, float16\nruns in float32 — Accelerate has no half-precision kernels — so a\nCPU scope with the default dtype changes nothing; pass\n`dtype=lucid.bfloat16` for reduced precision there, as the\nreference framework's CPU autocast does by default.  Not every CPU\nop has a bfloat16 kernel yet.",
-          "default": "float16"
+          "default": "None"
         },
         {
           "name": "enabled",
           "annotation": "bool",
-          "description": "When `False` the context is a no-op — useful for ablation /\nA/B comparing AMP on vs off without changing call sites.\nDefault `True`.",
+          "description": "When `False` autocast is disabled on `device_type` inside the\nscope — useful for ablation or forcing full precision in a nested\nsubregion.  Default `True`.",
           "default": "True"
         }
       ],
@@ -229,7 +229,7 @@
       "bases": [],
       "labels": [],
       "signature": "GradScaler(init_scale: float = 2.0 ** 16, growth_factor: float = 2.0, backoff_factor: float = 0.5, growth_interval: int = 2000, enabled: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L45",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L45",
       "subcategory": "grad_scaler",
       "methods": [
         {
@@ -238,7 +238,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(init_scale: float = 2.0 ** 16, growth_factor: float = 2.0, backoff_factor: float = 0.5, growth_interval: int = 2000, enabled: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L164",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L164",
           "subcategory": "grad_scaler",
           "summary": "Initialize the scaler state.",
           "extended": null,
@@ -291,7 +291,7 @@
           "kind": "function",
           "labels": [],
           "signature": "scale(outputs: Tensor | list[Tensor])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L202",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L202",
           "subcategory": "grad_scaler",
           "summary": "Multiply outputs by the current scale factor.",
           "extended": null,
@@ -320,7 +320,7 @@
           "kind": "function",
           "labels": [],
           "signature": "unscale_(optimizer: Optimizer)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L229",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L229",
           "subcategory": "grad_scaler",
           "summary": "Divide the optimizer's gradients by the current scale, in place.",
           "extended": "Call it between `backward()` and `step` when the real\ngradients are needed — to clip them, or to inspect their norm.  The\nscaler records that this optimizer's gradients are unscaled, so the\n`step` that follows does not divide them again.",
@@ -364,7 +364,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(optimizer: Optimizer, args: object = (), kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L363",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L367",
           "subcategory": "grad_scaler",
           "summary": "Unscale the gradients if needed, then step unless they overflowed.",
           "extended": "If `unscale_` already ran for `optimizer` in this iteration\nits gradients are used as they are; otherwise they are unscaled\nhere.  The optimizer's `step()` is skipped when its gradients held\nan `inf` or `NaN`.",
@@ -418,7 +418,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update(new_scale: float | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L424",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L428",
           "subcategory": "grad_scaler",
           "summary": "Update the scale factor and start the next iteration.",
           "extended": "If a scale is provided, it is set directly. Otherwise, the scale\nis reduced by `backoff_factor` if any optimizer's gradients\noverflowed since the last update, or grown by `growth_factor`\nafter `growth_interval` overflow-free updates.  Either way every\noptimizer returns to the state where `unscale_` and\n`step` may be called again.",
@@ -447,7 +447,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_scale()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L456",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L460",
           "subcategory": "grad_scaler",
           "summary": "Return the current scale factor.",
           "extended": null,
@@ -469,7 +469,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L460",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L464",
           "subcategory": "grad_scaler",
           "summary": "Return serializable state dict.",
           "extended": null,
@@ -491,7 +491,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, float])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d93efa0/lucid/amp/grad_scaler.py#L470",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2b0b0c/lucid/amp/grad_scaler.py#L474",
           "subcategory": "grad_scaler",
           "summary": "Load state from a dict.",
           "extended": null,
