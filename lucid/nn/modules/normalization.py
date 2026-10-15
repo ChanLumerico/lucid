@@ -592,7 +592,7 @@ class _BatchNormBase(Module):
 
     @override
     def _load_from_state_dict(
-        self,
+        self: _BatchNormBase | _InstanceNormBase,
         state_dict: dict[str, Tensor],
         prefix: str,
         local_metadata: dict[str, object],
@@ -601,9 +601,7 @@ class _BatchNormBase(Module):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
-        # Version-1 checkpoints predate `num_batches_tracked`.  Drop the
-        # missing-key entry for it so users loading old weights aren't
-        # spuriously warned.
+        # Version-1 checkpoints predate `num_batches_tracked`.
         """Internal helper for the _BatchNormBase module."""
         version: int | None = (
             local_metadata.get("version") if local_metadata else None  # type: ignore[assignment]
@@ -611,7 +609,6 @@ class _BatchNormBase(Module):
         if (version is None or version < 2) and self.track_running_stats:
             key: str = f"{prefix}num_batches_tracked"
             if key not in state_dict:
-                # Pre-populate with zero so the default loader can copy it.
                 state_dict[key] = _lucid.zeros((), dtype=_lucid.int64)
         from lucid.nn._state_dict import _default_load_from_state_dict
 
@@ -1206,6 +1203,8 @@ class _InstanceNormBase(Module):
     """
 
     _expected_dim: int = 0  # subclass overrides: 3 / 4 / 5
+    _version = _BatchNormBase._version
+    _load_from_state_dict = _BatchNormBase._load_from_state_dict
 
     def __init__(
         self,
@@ -1246,6 +1245,12 @@ class _InstanceNormBase(Module):
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
+        self.register_buffer(
+            "num_batches_tracked",
+            _lucid.zeros((), dtype=_lucid.int64, device=device)
+            if track_running_stats
+            else None,
+        )
 
     def _check_input_dim(self, x: Tensor) -> None:
         """Refuse an input that is neither batched nor unbatched."""
@@ -1274,17 +1279,15 @@ class _InstanceNormBase(Module):
         x, unbatched = _add_batch_axis(x, self._expected_dim - 2)
         # eval mode + track_running_stats=True ⇒ use running stats path.
         use_input_stats: bool = self.training or not self.track_running_stats
+        use_running: bool = self.track_running_stats and not use_input_stats
         rm: Tensor | None = (
-            self._buffers.get("running_mean") if self.track_running_stats else None
+            self._buffers.get("running_mean") if use_running else None
         )
         rv: Tensor | None = (
-            self._buffers.get("running_var") if self.track_running_stats else None
+            self._buffers.get("running_var") if use_running else None
         )
-        # Update running stats during training (tracks per-channel stats
+        # Update running stats during training (tracks per-instance stats
         # averaged across the batch — matches the reference framework).
-        # Skip when a tracer is installed — see _BatchNormBase.forward for
-        # the full rationale (Python-side stateful update leaks ops into
-        # the trace whose MPSGraph lowering breaks).
         _tracing_active = _C_engine.compile.current_tracer() is not None
         if self.training and self.track_running_stats and not _tracing_active:
             self._update_running_stats(x)
@@ -1301,9 +1304,9 @@ class _InstanceNormBase(Module):
         return _drop_batch_axis(out, unbatched)
 
     def _update_running_stats(self, x: Tensor) -> None:
-        """Update running stats from per-channel batch statistics."""
-        # Reduce over batch + spatial → (C,).  Matches BatchNorm's reduction.
-        reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
+        """Update running stats from per-instance spatial statistics averaged over N."""
+        spatial_dims: list[int] = list(range(2, x.ndim))
+        reduce_dims: list[int] = [0, *spatial_dims]
         # Keep the running stats in F32 under autocast — the 3.3 AMP fix in
         # ``_BatchNormBase._update_running_stats`` gives the rationale.
         _amp_off = (
@@ -1318,14 +1321,10 @@ class _InstanceNormBase(Module):
                 # Cast x to buffer dtype before reduction — ``var`` is
                 # KeepInput, so F16 input would produce noisy F16
                 # variance from catastrophic cancellation even under
-                # the F32 autocast guard.  See BatchNorm's identical
-                # comment for the full rationale.
+                # the F32 autocast guard.
                 x_stats: Tensor = x if x.dtype == rm_dt else x.to(dtype=rm_dt)
-                # 3.4 perf: dropped redundant ``.detach()`` calls (same as
-                # BatchNorm — see comment there).  We are inside ``no_grad()``,
-                # so the computed tensors are already free of grad_fn.
                 batch_mean: Tensor = x_stats.mean(reduce_dims)
-                batch_var: Tensor = x_stats.var(reduce_dims, correction=0)
+                batch_var: Tensor = x_stats.var(spatial_dims, correction=1).mean(0)
                 if batch_mean.dtype != rm_dt:
                     batch_mean = batch_mean.to(dtype=rm_dt)
                 if batch_var.dtype != rv_dt:
@@ -2143,17 +2142,13 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         self._device: DeviceLike = device
         self._dtype: DTypeLike = dtype
         if affine:
-            # Placeholders, not ``None``: an optimizer built before the
-            # first forward must be handed objects that survive being
-            # filled in.  Reached only when ``affine`` is on — a
-            # parameter that will never exist stays ``None``.
             self.register_parameter("weight", UninitializedParameter())
             self.register_parameter("bias", UninitializedParameter())
         else:
             self.weight = None
             self.bias = None
-        self.register_buffer("running_mean", None)
-        self.register_buffer("running_var", None)
+        for bname in ("running_mean", "running_var", "num_batches_tracked"):
+            self.register_buffer(bname, None)
 
     def _initialize(self, num_features: int) -> None:
         """Internal helper for the _LazyInstanceNormMixin module."""
@@ -2178,6 +2173,9 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
             self._buffers["running_var"] = ones(
                 num_features, dtype=self._dtype, device=self._device
             )
+            self._buffers["num_batches_tracked"] = _lucid.zeros(
+                (), dtype=_lucid.int64, device=self._device
+            )
 
     @override
     def _load_from_state_dict(
@@ -2201,10 +2199,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
                         self._device = t.device
                     self._initialize(int(t.shape[0]))
                     break
-        from lucid.nn._state_dict import _default_load_from_state_dict
-
-        _default_load_from_state_dict(
-            self,
+        super()._load_from_state_dict(
             state_dict,
             prefix,
             local_metadata,

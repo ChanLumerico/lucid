@@ -862,19 +862,20 @@ class Module:
         for key, param in self._parameters.items():
             if param is None:
                 continue
+            param_grad = param.grad
             converted = fn(param)
-            # A real dtype cast is a differentiable op, so its output is a
-            # NON-LEAF.  Storing that impl left the parameter hanging off a cast
-            # node: backward ran without error, flowed *through* the parameter
-            # to the discarded pre-cast tensor, and accumulated nothing —
-            # ``.grad`` stayed None and training a ``.double()`` model was a
-            # silent no-op.  Detach back to a leaf and restore requires_grad.
-            # (A same-dtype/device ``fn`` is a no-op and already returns a leaf,
-            # so this costs nothing in the common case.)
+            # A real dtype/device cast is a differentiable op (non-leaf); detach
+            # back to a leaf and restore requires_grad so backward accumulates on
+            # the parameter rather than flowing through the cast node.
             if not converted._impl.is_leaf:
                 converted = converted.detach()
                 converted.requires_grad = param.requires_grad
             param._impl = converted._impl  # mutate in-place — keeps object identity
+            if param_grad is not None:
+                grad_conv = fn(param_grad)
+                if not grad_conv._impl.is_leaf:
+                    grad_conv = grad_conv.detach()
+                param.grad = grad_conv
         for key, buf in self._buffers.items():
             if buf is None:
                 continue

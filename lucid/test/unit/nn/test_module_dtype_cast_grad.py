@@ -141,3 +141,60 @@ def test_optimizer_actually_updates_a_float64_model():
     assert (
         np.abs(after - before).max() > 1e-6
     ), "float64 training did not move the weights"
+
+
+@pytest.mark.parametrize(
+    "cast_fn,expected_dtype",
+    [
+        (lambda m, _lib: m.double(), lucid.float64),
+        (lambda m, _lib: m.half(), lucid.float16),
+        (lambda m, _lib: m.bfloat16(), lucid.bfloat16),
+        (lambda m, lib: m.to(dtype=lib.float64), lucid.float64),
+    ],
+)
+def test_dtype_cast_preserves_and_converts_existing_grad(
+    ref, cast_fn, expected_dtype
+) -> None:
+    """LCD-74 (#146): Module.to() / .double() / .half() / .bfloat16() keep param.grad."""
+    m = nn.Linear(2, 1)
+    rm = ref.nn.Linear(2, 1)
+    with ref.no_grad():
+        rm.weight.copy_(ref.tensor(m.weight.numpy()))
+        rm.bias.copy_(ref.tensor(m.bias.numpy()))
+
+    m(lucid.ones(1, 2)).sum().backward()
+    rm(ref.ones(1, 2)).sum().backward()
+
+    cast_fn(m, lucid)
+    cast_fn(rm, ref)
+
+    for p, rp in zip(m.parameters(), rm.parameters(), strict=True):
+        assert p.grad is not None
+        assert p.grad.dtype == expected_dtype
+        assert p.grad.is_leaf
+        np.testing.assert_allclose(
+            p.grad.to(lucid.float32).numpy(),
+            rp.grad.to(ref.float32).numpy(),
+            atol=1e-3,
+        )
+
+
+def test_device_move_preserves_existing_grad() -> None:
+    """LCD-74 (#146): Moving a module across CPU and Metal keeps param.grad."""
+    m = nn.Linear(3, 2)
+    m(lucid.ones(2, 3)).sum().backward()
+    w_grad_cpu = m.weight.grad.numpy().copy()
+    b_grad_cpu = m.bias.grad.numpy().copy()
+
+    m.to("metal")
+    assert m.weight.grad is not None and m.bias.grad is not None
+    assert str(m.weight.grad.device) == "device('metal')"
+    assert str(m.bias.grad.device) == "device('metal')"
+    np.testing.assert_allclose(m.weight.grad.cpu().numpy(), w_grad_cpu, atol=1e-6)
+    np.testing.assert_allclose(m.bias.grad.cpu().numpy(), b_grad_cpu, atol=1e-6)
+
+    m.to("cpu")
+    assert m.weight.grad is not None and m.bias.grad is not None
+    assert str(m.weight.grad.device) == "device('cpu')"
+    np.testing.assert_allclose(m.weight.grad.numpy(), w_grad_cpu, atol=1e-6)
+

@@ -225,3 +225,122 @@ def test_gradients_reach_the_affine_parameters(build, shape):
 def test_repr_names_the_shape():
     assert "8" in repr(nn.LayerNorm(8))
     assert "6" in repr(nn.BatchNorm1d(6))
+
+
+# ── InstanceNorm track_running_stats parity (LCD-92 / #164) ───────────────────
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_instance_norm_running_var_excludes_between_instance_variance(
+    ref, device: str
+) -> None:
+    """LCD-92 (#164): running_var averages each instance's unbiased spatial variance."""
+    m = nn.InstanceNorm1d(1, track_running_stats=True, device=device)
+    rm = ref.nn.InstanceNorm1d(1, track_running_stats=True)
+
+    x_np = np.array([[[0.0, 1.0, 2.0]], [[10.0, 11.0, 12.0]]], dtype=np.float32)
+    out = m(lucid.tensor(x_np, device=device))
+    ref_out = rm(ref.tensor(x_np))
+
+    np.testing.assert_allclose(out.cpu().numpy(), ref_out.numpy(), atol=1e-5)
+    np.testing.assert_allclose(
+        m.running_mean.cpu().numpy(), rm.running_mean.numpy(), atol=1e-6
+    )
+    np.testing.assert_allclose(
+        m.running_var.cpu().numpy(), rm.running_var.numpy(), atol=1e-6
+    )
+    assert m.num_batches_tracked is not None
+    assert m.num_batches_tracked.dtype == lucid.int64
+    assert m.num_batches_tracked.shape == ()
+
+    m.eval()
+    rm.eval()
+    x_eval_np = np.array([[[5.0, 6.0, 7.0]]], dtype=np.float32)
+    eval_out = m(lucid.tensor(x_eval_np, device=device))
+    ref_eval_out = rm(ref.tensor(x_eval_np))
+    np.testing.assert_allclose(eval_out.cpu().numpy(), ref_eval_out.numpy(), atol=1e-5)
+
+
+@pytest.mark.parametrize(
+    "cls_name,shape",
+    [
+        ("InstanceNorm1d", (3, 4, 7)),
+        ("InstanceNorm2d", (3, 4, 5, 6)),
+        ("InstanceNorm3d", (2, 3, 3, 4, 5)),
+    ],
+)
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_instance_norm_track_running_stats_train_eval_and_state_dict_parity(
+    ref, cls_name: str, shape: tuple[int, ...], device: str
+) -> None:
+    """LCD-92: InstanceNorm{1,2,3}d running stats, eval output, and checkpoint keys match ref."""
+    rng = np.random.default_rng(len(shape))
+    C = shape[1]
+    m = getattr(nn, cls_name)(
+        C, affine=True, track_running_stats=True, momentum=0.2, device=device
+    )
+    rm = getattr(ref.nn, cls_name)(
+        C, affine=True, track_running_stats=True, momentum=0.2
+    )
+
+    for step in range(2):
+        x_np = (rng.standard_normal(shape) * (step + 2.0) + step * 5.0).astype(
+            np.float32
+        )
+        out = m(lucid.tensor(x_np, device=device))
+        ref_out = rm(ref.tensor(x_np))
+        np.testing.assert_allclose(
+            out.cpu().detach().numpy(), ref_out.detach().numpy(), rtol=1e-4, atol=1e-4
+        )
+
+    np.testing.assert_allclose(
+        m.running_mean.cpu().numpy(), rm.running_mean.numpy(), rtol=1e-5, atol=1e-5
+    )
+    np.testing.assert_allclose(
+        m.running_var.cpu().numpy(), rm.running_var.numpy(), rtol=1e-5, atol=1e-5
+    )
+    assert set(m.state_dict().keys()) == set(rm.state_dict().keys())
+
+    # Strict load from reference checkpoint into both eager and lazy Lucid modules:
+    ref_sd = {
+        k: lucid.tensor(v.detach().numpy(), dtype=m.state_dict()[k].dtype, device=device)
+        for k, v in rm.state_dict().items()
+    }
+    target_eager = getattr(nn, cls_name)(
+        C, affine=True, track_running_stats=True, device=device
+    )
+    target_eager.load_state_dict(ref_sd, strict=True)
+    target_lazy = getattr(nn, f"Lazy{cls_name}")(
+        affine=True, track_running_stats=True, device=device
+    )
+    target_lazy.load_state_dict(ref_sd, strict=True)
+
+    m.eval()
+    rm.eval()
+    target_eager.eval()
+    target_lazy.eval()
+    x_test = rng.standard_normal(shape).astype(np.float32)
+    want = rm(ref.tensor(x_test)).detach().numpy()
+    for candidate in (m, target_eager, target_lazy):
+        got = candidate(lucid.tensor(x_test, device=device)).cpu().detach().numpy()
+        np.testing.assert_allclose(got, want, rtol=1e-4, atol=1e-4)
+
+
+def test_functional_instance_norm_updates_running_stats_in_place(ref) -> None:
+    """LCD-92: F.instance_norm updates running_mean and running_var when use_input_stats=True."""
+    x_np = np.array([[[0.0, 1.0, 2.0]], [[10.0, 11.0, 12.0]]], dtype=np.float32)
+    rm = lucid.zeros(1)
+    rv = lucid.ones(1)
+    r_rm = ref.zeros(1)
+    r_rv = ref.ones(1)
+
+    out = lucid.nn.functional.instance_norm(
+        lucid.tensor(x_np), running_mean=rm, running_var=rv, use_input_stats=True
+    )
+    ref_out = ref.nn.functional.instance_norm(
+        ref.tensor(x_np), running_mean=r_rm, running_var=r_rv, use_input_stats=True
+    )
+    np.testing.assert_allclose(out.numpy(), ref_out.numpy(), atol=1e-5)
+    np.testing.assert_allclose(rm.numpy(), r_rm.numpy(), atol=1e-6)
+    np.testing.assert_allclose(rv.numpy(), r_rv.numpy(), atol=1e-6)
+

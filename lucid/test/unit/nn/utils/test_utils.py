@@ -126,3 +126,69 @@ def test_get_total_norm_measures_the_tensors_it_is_given() -> None:
     assert x.grad is not None
     assert get_total_norm([x.grad]).item() == 10.0
     assert clip_grad_norm_([x], max_norm=100.0).item() == 10.0
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize("amp_dtype", [lucid.float16, lucid.bfloat16])
+@pytest.mark.parametrize("norm_type", [1.0, 2.0, float("inf")])
+def test_clip_grad_norm_inside_autocast_scope_matches_reference(
+    ref, device: str, amp_dtype: lucid.dtype, norm_type: float
+) -> None:
+    """LCD-79 (#151): clip_grad_norm_ inside autocast must not raise or cast grads."""
+    rng = np.random.default_rng(42)
+    w_np = rng.standard_normal((4, 4)).astype(np.float32)
+    b_np = rng.standard_normal((4,)).astype(np.float32)
+    x_np = rng.standard_normal((2, 4)).astype(np.float32)
+
+    m = nn.Linear(4, 4).to(device)
+    m.weight._impl.copy_from(lucid.tensor(w_np, device=device)._impl)
+    m.bias._impl.copy_from(lucid.tensor(b_np, device=device)._impl)
+
+    with lucid.amp.autocast(device_type=device, dtype=amp_dtype):
+        y = m(lucid.tensor(x_np, device=device)).sum()
+    y.backward()
+
+    rm = ref.nn.Linear(4, 4)
+    with ref.no_grad():
+        rm.weight.copy_(ref.tensor(w_np))
+        rm.bias.copy_(ref.tensor(b_np))
+    rm.weight.grad = ref.tensor(m.weight.grad.cpu().numpy().copy())
+    rm.bias.grad = ref.tensor(m.bias.grad.cpu().numpy().copy())
+
+    with lucid.amp.autocast(device_type=device, dtype=amp_dtype):
+        total_norm = nn.utils.clip_grad_norm_(
+            m.parameters(), max_norm=0.1, norm_type=norm_type
+        )
+    ref_norm = ref.nn.utils.clip_grad_norm_(
+        rm.parameters(), max_norm=0.1, norm_type=norm_type
+    )
+
+    assert total_norm.dtype == lucid.float32
+    assert m.weight.grad.dtype == lucid.float32
+    assert m.bias.grad.dtype == lucid.float32
+    np.testing.assert_allclose(
+        float(total_norm.cpu().item()), float(ref_norm.item()), rtol=1e-4, atol=1e-4
+    )
+    np.testing.assert_allclose(
+        m.weight.grad.cpu().numpy(), rm.weight.grad.numpy(), rtol=1e-4, atol=1e-4
+    )
+    np.testing.assert_allclose(
+        m.bias.grad.cpu().numpy(), rm.bias.grad.numpy(), rtol=1e-4, atol=1e-4
+    )
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_clip_grad_norm_mixed_parameter_dtypes_under_autocast(device: str) -> None:
+    """LCD-79: mixed-dtype parameter gradients (f32 + bf16/f16) clip in their own dtypes."""
+    p_f32 = nn.Parameter(lucid.ones(4, dtype=lucid.float32, device=device))
+    p_bf16 = nn.Parameter(lucid.ones(4, dtype=lucid.bfloat16, device=device))
+    p_f32.grad = lucid.full((4,), 3.0, dtype=lucid.float32, device=device)
+    p_bf16.grad = lucid.full((4,), 4.0, dtype=lucid.bfloat16, device=device)
+
+    with lucid.amp.autocast(device_type=device, dtype=lucid.bfloat16):
+        norm = nn.utils.clip_grad_norm_([p_f32, p_bf16], max_norm=1.0)
+
+    assert abs(float(norm.cpu().item()) - 10.0) < 1e-2
+    assert p_f32.grad.dtype == lucid.float32
+    assert p_bf16.grad.dtype == lucid.bfloat16
+

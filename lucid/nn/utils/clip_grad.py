@@ -18,30 +18,48 @@ _D = _C_engine.Dtype
 _NORMABLE = frozenset({_D.F16, _D.BF16, _D.F32, _D.F64, _D.C64})
 
 
+def _norm_work_dtype(
+    impls: list[_C_engine.TensorImpl], amp_active: bool
+) -> _C_engine.Dtype:
+    dt0 = impls[0].dtype
+    if any(i.dtype == _D.F64 for i in impls):
+        return _D.F64
+    if amp_active or any(i.dtype != dt0 for i in impls):
+        return _D.F32
+    return dt0
+
+
 def _total_norm(
     impls: list[_C_engine.TensorImpl], norm_type: float, error_if_nonfinite: bool
 ) -> float:
     """The :math:`\\ell_p` norm of ``impls`` taken jointly, as a Python float."""
-    dt = impls[0].dtype
+    amp_active = _C_engine.amp_is_active()
+    dt = _norm_work_dtype(impls, amp_active)
     dev = impls[0].device
-    if norm_type == math.inf:
-        max_val = _C_engine.full([1], float("-inf"), dt, dev)
-        for impl in impls:
-            # An empty gradient adds nothing to the largest magnitude, and
-            # ``max`` of nothing is refused — it has no identity.
-            if math.prod(impl.shape) == 0:
-                continue
-            m = _C_engine.reshape(_C_engine.max(_C_engine.abs(impl), [], False), [1])
-            mv = _C_engine.reshape(max_val, [1])
-            max_val = _C_engine.max(_C_engine.stack([mv, m], 0), [0], False)
-        total_norm = float(_wrap(max_val).item())
-    else:
-        acc = _C_engine.zeros([1], dt, dev)
-        for impl in impls:
-            pow_g = _C_engine.pow_scalar(_C_engine.abs(impl), norm_type)
-            s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])
-            acc = _C_engine.add(acc, s)
-        total_norm = float(_wrap(acc).item()) ** (1.0 / norm_type)
+    guard = _C_engine.AutocastGuard(dt) if amp_active else None
+    try:
+        if norm_type == math.inf:
+            max_val = _C_engine.full([1], float("-inf"), dt, dev)
+            for impl in impls:
+                # An empty gradient adds nothing to the largest magnitude, and
+                # ``max`` of nothing is refused — it has no identity.
+                if math.prod(impl.shape) == 0:
+                    continue
+                g = impl if impl.dtype == dt else _C_engine.astype(impl, dt)
+                m = _C_engine.reshape(_C_engine.max(_C_engine.abs(g), [], False), [1])
+                mv = _C_engine.reshape(max_val, [1])
+                max_val = _C_engine.max(_C_engine.stack([mv, m], 0), [0], False)
+            total_norm = float(_wrap(max_val).item())
+        else:
+            acc = _C_engine.zeros([1], dt, dev)
+            for impl in impls:
+                g = impl if impl.dtype == dt else _C_engine.astype(impl, dt)
+                pow_g = _C_engine.pow_scalar(_C_engine.abs(g), norm_type)
+                s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])
+                acc = _C_engine.add(acc, s)
+            total_norm = float(_wrap(acc).item()) ** (1.0 / norm_type)
+    finally:
+        del guard
 
     if error_if_nonfinite and (math.isnan(total_norm) or math.isinf(total_norm)):
         raise RuntimeError(
@@ -143,11 +161,20 @@ def clip_grad_norm_(
 
     clip_coef = max_norm / (total_norm + 1e-6)
     if clip_coef < 1.0:
+        amp_active = _C_engine.amp_is_active()
         for p, g_impl in zip(params_with_grad, grads, strict=True):
-            coef = _C_engine.full(
-                list(g_impl.shape), clip_coef, g_impl.dtype, g_impl.device
+            g_dt = g_impl.dtype
+            w_dt = _D.F32 if (amp_active and g_dt in (_D.F16, _D.BF16)) else g_dt
+            guard = _C_engine.AutocastGuard(w_dt) if amp_active else None
+            try:
+                g_w = g_impl if g_dt == w_dt else _C_engine.astype(g_impl, w_dt)
+                coef = _C_engine.full(list(g_w.shape), clip_coef, w_dt, g_w.device)
+                scaled = _C_engine.mul(g_w, coef)
+            finally:
+                del guard
+            p._impl.set_grad(
+                scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt)
             )
-            p._impl.set_grad(_C_engine.mul(g_impl, coef))
 
     # 0-d, as documented and as the reference framework returns it: a
     # ``(1,)`` norm puts a stray axis into whatever it is stacked or
