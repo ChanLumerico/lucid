@@ -221,16 +221,14 @@ class TestNewKLPairs:
     def test_kl_studentt_studentt(self) -> None:
         p = D.StudentT(df=3.0, loc=0.0, scale=1.0)
         q = D.StudentT(df=3.0, loc=0.0, scale=1.0)
-        # Same distribution → KL ≈ 0 on average (MC estimate — not exact).
-        kl = D.kl_divergence(p, q)
-        # Accept a wider tolerance since it's 1-sample MC.
-        assert abs(float(kl.item())) < 5.0
+        with pytest.raises(NotImplementedError):
+            D.kl_divergence(p, q)
 
     def test_kl_cauchy_cauchy(self) -> None:
         p = D.Cauchy(loc=0.0, scale=1.0)
         q = D.Cauchy(loc=0.0, scale=1.0)
         kl = D.kl_divergence(p, q)
-        assert abs(float(kl.item())) < 5.0
+        assert abs(float(kl.item())) < 1e-6
 
     def test_kl_normal_laplace_finite(self) -> None:
         p = D.Normal(0.0, 1.0)
@@ -239,14 +237,8 @@ class TestNewKLPairs:
         val = float(kl.item())
         assert math.isfinite(val) and val >= 0.0
 
-    def test_mc_fallback_finite(self) -> None:
-        # A pair with no registration but p has rsample.
-        D.Normal(0.0, 1.0)
-        D.Laplace(0.5, 0.8)  # same pair hits analytical; use unregistered
-        # For a pair with no registration, MC fallback fires.
-        # Weibull || Normal: not registered, Weibull has rsample.
+    def test_unregistered_raises_not_implemented(self) -> None:
         pw = D.Weibull(scale=1.0, concentration=2.0)
         qn = D.Normal(1.0, 1.0)
-        kl = D.kl_divergence(pw, qn)
-        val = float(kl.item())
-        assert math.isfinite(val)
+        with pytest.raises(NotImplementedError):
+            D.kl_divergence(pw, qn)

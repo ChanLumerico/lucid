@@ -3,21 +3,76 @@ type, mirroring the reference framework's ``register_kl`` mechanism.
 """
 
 from collections.abc import Callable
-from typing import cast
+import importlib
+from typing import override
+import warnings
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.bernoulli import Bernoulli
 from lucid.distributions.categorical import Categorical
+from lucid.distributions.continuous_extra import HalfNormal
+from lucid.distributions.discrete import Poisson
 from lucid.distributions.distribution import Distribution
 from lucid.distributions.exponential import Cauchy, Exponential, Laplace
-from lucid.distributions.gamma import Beta, Gamma
-from lucid.distributions.normal import Normal
-from lucid.distributions.student import StudentT
-from lucid.special import xlog1py
+from lucid.distributions.extra import Gumbel
+from lucid.distributions.gamma import Beta, Dirichlet, Gamma
+from lucid.distributions.multivariate import MultivariateNormal
+from lucid.distributions.normal import LogNormal, Normal
 
-_KLFn = Callable[[Distribution, Distribution], Tensor]
+_KLFn = Callable[..., Tensor]
 _KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
+_KL_MEMOIZE: dict[tuple[type, type], _KLFn | None] = {}
+_EULER_GAMMA: float = 0.5772156649015329
+
+
+class _Match:
+    """Partial ordering over ``(type_p, type_q)`` pairs by subclass specificity."""
+
+    __slots__ = ("types",)
+
+    def __init__(self, *types: type) -> None:
+        self.types = types
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _Match):
+            return NotImplemented
+        return self.types == other.types
+
+    def __le__(self, other: _Match) -> bool:
+        for x, y in zip(self.types, other.types, strict=False):
+            if not issubclass(x, y):
+                return False
+            if x is not y:
+                break
+        return True
+
+    def __lt__(self, other: _Match) -> bool:
+        return self <= other and self.types != other.types
+
+
+def _dispatch_kl(type_p: type, type_q: type) -> _KLFn | None:
+    """Find the most specific registered ``(super_p, super_q)`` match."""
+    matches = [
+        (super_p, super_q)
+        for super_p, super_q in _KL_REGISTRY
+        if issubclass(type_p, super_p) and issubclass(type_q, super_q)
+    ]
+    if not matches:
+        return None
+    left_p, left_q = min(_Match(*m) for m in matches).types
+    right_q, right_p = min(_Match(*reversed(m)) for m in matches).types
+    left_fun = _KL_REGISTRY[left_p, left_q]
+    right_fun = _KL_REGISTRY[right_p, right_q]
+    if left_fun is not right_fun:
+        warnings.warn(
+            f"Ambiguous kl_divergence({type_p.__name__}, {type_q.__name__}). "
+            f"Please register_kl({left_p.__name__}, {right_q.__name__})",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return left_fun
 
 
 def register_kl[F: Callable[..., Tensor]](p_cls: type, q_cls: type) -> Callable[[F], F]:
@@ -46,19 +101,20 @@ def register_kl[F: Callable[..., Tensor]](p_cls: type, q_cls: type) -> Callable[
         registry, returning ``fn`` unchanged so the decorated function
         remains directly callable.
 
+    Raises
+    ------
+    TypeError
+        If ``p_cls`` or ``q_cls`` is not a :class:`Distribution` subclass.
+
     Notes
     -----
     Dispatch precedence inside :func:`kl_divergence`:
 
     1. Exact class match ``(type(p), type(q))``.
-    2. Most-derived ancestor pair found by walking the Cartesian product
-       of ``type(p).__mro__`` and ``type(q).__mro__`` in order.
-    3. Monte Carlo fall-back (single :meth:`rsample` draw) when
-       :math:`p` supports reparameterised sampling.
-    4. ``NotImplementedError`` otherwise.
-
-    Closed-form formulas are *strongly preferred* over Monte Carlo: they
-    are deterministic, zero-variance, and propagate gradients exactly.
+    2. Most-derived ancestor pair ordered by subclass specificity; emits
+       a :class:`RuntimeWarning` if left- and right-lexicographic minima
+       disagree.
+    3. ``NotImplementedError`` when no closed-form pair is registered.
 
     Examples
     --------
@@ -73,10 +129,15 @@ def register_kl[F: Callable[..., Tensor]](p_cls: type, q_cls: type) -> Callable[
     >>> kl_divergence(p, q)  # log(2) + 1/8 - 1/2
     tensor(0.3181)
     """
+    for cls, name in ((p_cls, "p_cls"), (q_cls, "q_cls")):
+        chk: object = cls
+        if not (isinstance(chk, type) and issubclass(chk, Distribution)):
+            raise TypeError(f"Expected {name} to be a Distribution subclass but got {cls}")
 
     def _decorator(fn: F) -> F:
         """Insert ``fn`` into the KL registry under ``(p_cls, q_cls)``."""
         _KL_REGISTRY[(p_cls, q_cls)] = fn
+        _KL_MEMOIZE.clear()
         return fn
 
     return _decorator
@@ -101,11 +162,9 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
     does not satisfy the triangle inequality — so it is a *divergence*,
     not a metric.
 
-    Dispatch walks the registry built by :func:`register_kl`: first an
-    exact class match, then the MRO of ``type(p)`` × ``type(q)`` for the
-    most-derived registered ancestor pair.  Falls back to a single-sample
-    Monte Carlo estimate when :math:`p.\mathrm{has\_rsample}` is ``True``
-    and no analytical formula is registered.
+    Dispatch looks up the most-specific registered ancestor pair in the
+    registry built by :func:`register_kl` and raises
+    :class:`NotImplementedError` when no analytical formula is registered.
 
     Parameters
     ----------
@@ -124,8 +183,8 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
     Raises
     ------
     NotImplementedError
-        When no closed-form pair is registered and :math:`p` does not
-        support reparameterised sampling, so MC fall-back is unavailable.
+        If the distribution types have not been registered via
+        :func:`register_kl`.
 
     Notes
     -----
@@ -157,20 +216,17 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
     tensor(0.4431)
     """
     key = (type(p), type(q))
-    if key in _KL_REGISTRY:
-        return _KL_REGISTRY[key](p, q)
-    for p_base in type(p).__mro__:
-        for q_base in type(q).__mro__:
-            if (p_base, q_base) in _KL_REGISTRY:
-                return _KL_REGISTRY[(p_base, q_base)](p, q)
-    # MC fallback for distributions with rsample.
-    if p.has_rsample:
-        s = p.rsample()
-        return p.log_prob(s) - q.log_prob(s)
-    raise NotImplementedError(
-        f"kl_divergence({type(p).__name__}, {type(q).__name__}) "
-        f"is not registered and p does not support rsample for MC estimation."
-    )
+    try:
+        fun = _KL_MEMOIZE[key]
+    except KeyError:
+        fun = _dispatch_kl(type(p), type(q))
+        _KL_MEMOIZE[key] = fun
+    if fun is None:
+        raise NotImplementedError(
+            f"No KL(p || q) is implemented for p type {type(p).__name__} "
+            f"and q type {type(q).__name__}"
+        )
+    return fun(p, q)
 
 
 # ── concrete pairs ────────────────────────────────────────────────────────
@@ -187,11 +243,7 @@ def _kl_normal_normal(p: Normal, q: Normal) -> Tensor:
     """
     var_p = p.variance
     var_q = q.variance
-    return (
-        (q.scale.log() - p.scale.log())
-        + (var_p + (p.loc - q.loc) ** 2) / (2.0 * var_q)
-        - 0.5
-    )
+    return (q.scale.log() - p.scale.log()) + (var_p + (p.loc - q.loc) ** 2) / (2.0 * var_q) - 0.5
 
 
 def _bernoulli_outcomes(d: Bernoulli) -> tuple[Tensor, Tensor]:
@@ -231,9 +283,7 @@ def _kl_bernoulli_bernoulli(p: Bernoulli, q: Bernoulli) -> Tensor:
     """
     p1, p0 = _bernoulli_outcomes(p)
     q1, q0 = _bernoulli_outcomes(q)
-    return (lucid.xlogy(p1, p1) - lucid.xlogy(p1, q1)) + (
-        lucid.xlogy(p0, p0) - lucid.xlogy(p0, q0)
-    )
+    return (lucid.xlogy(p1, p1) - lucid.xlogy(p1, q1)) + (lucid.xlogy(p0, p0) - lucid.xlogy(p0, q0))
 
 
 @register_kl(Categorical, Categorical)
@@ -320,12 +370,6 @@ def _kl_beta_beta(p: Beta, q: Beta) -> Tensor:
     return t1 + t2 + t3 + t4
 
 
-# ── P8-C: extended pairwise registrations ────────────────────────────────
-
-
-from lucid.distributions.discrete import Poisson
-
-
 @register_kl(Poisson, Poisson)
 def _kl_poisson_poisson(p: Poisson, q: Poisson) -> Tensor:
     r"""Closed-form KL divergence between two Poisson distributions.
@@ -349,9 +393,6 @@ def _kl_poisson_poisson(p: Poisson, q: Poisson) -> Tensor:
     return lucid.xlogy(p.rate, p.rate) - lucid.xlogy(p.rate, q.rate) - p.rate + q.rate
 
 
-from lucid.distributions.gamma import Dirichlet
-
-
 @register_kl(Dirichlet, Dirichlet)
 def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
     r"""Closed-form KL divergence between two Dirichlet distributions.
@@ -359,7 +400,6 @@ def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
     Uses the standard digamma + log-gamma form, summed over the K simplex
     components along the last axis.
     """
-    # KL(Dir(α) || Dir(β)) closed form using digamma + lgamma.
     a = p.concentration
     b = q.concentration
     sum_a = a.sum(dim=-1, keepdim=True)
@@ -372,17 +412,6 @@ def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
     )
     t2 = ((a - b) * (lucid.digamma(a) - lucid.digamma(sum_a))).sum(dim=-1)
     return t1 + t2
-
-
-from lucid.distributions.multivariate import MultivariateNormal
-from lucid.distributions.continuous_extra import HalfNormal
-from lucid.distributions.normal import LogNormal
-from lucid.distributions.uniform import Uniform
-from lucid.distributions.bernoulli import Geometric
-from lucid.distributions.independent import Independent
-from lucid.distributions.extra import Gumbel
-
-_EULER_GAMMA: float = 0.5772156649015329
 
 
 @register_kl(MultivariateNormal, MultivariateNormal)
@@ -398,29 +427,21 @@ def _kl_mvn_mvn(p: MultivariateNormal, q: MultivariateNormal) -> Tensor:
     All operations work on the lower-triangular Cholesky factors to avoid
     forming explicit inverses.
     """
-    # KL(N(μ_p, Σ_p) || N(μ_q, Σ_q))
-    #   = 0.5·[tr(Σ_q⁻¹ Σ_p) + (μ_q − μ_p)ᵀ Σ_q⁻¹ (μ_q − μ_p)
-    #          − D + log(|Σ_q| / |Σ_p|)]
-    # All work on the lower-triangular factors to avoid forming Σ⁻¹.
+    if p.event_shape != q.event_shape:
+        raise ValueError(
+            "KL-divergence between two Multivariate Normals with "
+            "different event shapes cannot be computed"
+        )
     Lp, Lq = p.scale_tril, q.scale_tril
     D = int(p._D)
-
-    diag_p = Lp.diagonal(dim1=-2, dim2=-1)
-    diag_q = Lq.diagonal(dim1=-2, dim2=-1)
-    log_det_p = 2.0 * diag_p.log().sum(dim=-1)
-    log_det_q = 2.0 * diag_q.log().sum(dim=-1)
-
+    log_det_p = 2.0 * Lp.diagonal(dim1=-2, dim2=-1).log().sum(dim=-1)
+    log_det_q = 2.0 * Lq.diagonal(dim1=-2, dim2=-1).log().sum(dim=-1)
     M = lucid.linalg.solve_triangular(Lq, Lp, upper=False)
     trace_term = (M * M).sum(dim=(-2, -1))
-
     diff = (q.loc - p.loc).unsqueeze(-1)
     z = lucid.linalg.solve_triangular(Lq, diff, upper=False)
     maha = (z * z).sum(dim=(-2, -1))
-
     return 0.5 * (trace_term + maha - float(D) + log_det_q - log_det_p)
-
-
-# ── Additional closed-form KL pairs ──────────────────────────────────────────
 
 
 @register_kl(Laplace, Laplace)
@@ -434,15 +455,10 @@ def _kl_laplace_laplace(p: Laplace, q: Laplace) -> Tensor:
         \mathrm{KL} = -\log\frac{b_p}{b_q} + \frac{|\mu_p - \mu_q|}{b_q}
             + \frac{b_p}{b_q}\,\exp\!\left(-\frac{|\mu_p - \mu_q|}{b_p}\right) - 1
     """
-    # From Gil et al. 2011 §3.2
-    # KL = -log(b1/b2) + |μ1-μ2|/b2 + (b1/b2)·exp(-|μ1-μ2|/b1) - 1
     scale_ratio: Tensor = p.scale / q.scale
     loc_diff: Tensor = (p.loc - q.loc).abs()
     return (
-        -scale_ratio.log()
-        + loc_diff / q.scale
-        + scale_ratio * (-(loc_diff / p.scale)).exp()
-        - 1.0
+        -scale_ratio.log() + loc_diff / q.scale + scale_ratio * (-(loc_diff / p.scale)).exp() - 1.0
     )
 
 
@@ -453,177 +469,27 @@ def _kl_halfnormal_halfnormal(p: HalfNormal, q: HalfNormal) -> Tensor:
     Reduces to the KL of the underlying zero-centred Normal distributions
     since :math:`\\text{HalfNormal}(\\sigma) = |\\text{Normal}(0, \\sigma)|`.
     """
-    # HalfNormal(σ) = |Normal(0, σ)|; KL reduces to the underlying Normals.
     return _kl_normal_normal(p._base, q._base)
 
 
 @register_kl(LogNormal, LogNormal)
 def _kl_lognormal_lognormal(p: LogNormal, q: LogNormal) -> Tensor:
-    """KL divergence between two LogNormal distributions.
-
-    Equal to the KL of the underlying Normals because the log-transform is
-    measure-preserving.
-    """
-    # LogNormal(μ, σ²) = exp(Normal(μ, σ²)); KL equals KL of the underlying.
-    return _kl_normal_normal(p._base, q._base)
+    return _kl_normal_normal(Normal(p.loc, p.scale), Normal(q.loc, q.scale))
 
 
 @register_kl(Gumbel, Gumbel)
 def _kl_gumbel_gumbel(p: Gumbel, q: Gumbel) -> Tensor:
-    r"""Closed-form KL divergence between two Gumbel distributions.
-
-    With location :math:`\mu` and scale :math:`\beta`, lets
-    :math:`c_1 = \beta_p / \beta_q`, :math:`c_2 = \mu_q / \beta_q`,
-    :math:`c_3 = \mu_p / \beta_q`, and uses the Euler–Mascheroni constant
-    :math:`\gamma`.
-    """
-    # KL(Gumbel(μ1,β1) || Gumbel(μ2,β2))
-    # ct1 = β1/β2,  ct2 = μ2/β2,  ct3 = μ1/β2
-    # KL = -log(ct1) - ct2 + ct3
-    #     + ct1 · euler_gamma
-    #     + exp(ct2 + lgamma(1 + ct1) - ct3)
-    #     - (1 + euler_gamma)
     ct1: Tensor = p.scale / q.scale
-    ct2: Tensor = q.loc / q.scale
-    ct3: Tensor = p.loc / q.scale
-    t1 = -ct1.log() - ct2 + ct3
-    t2 = ct1 * _EULER_GAMMA
-    t3 = ((ct2 + lucid.lgamma(1.0 + ct1) - ct3)).exp()
-    return t1 + t2 + t3 - (1.0 + _EULER_GAMMA)
-
-
-@register_kl(Uniform, Uniform)
-def _kl_uniform_uniform(p: Uniform, q: Uniform) -> Tensor:
-    r"""Closed-form KL divergence between two Uniform distributions.
-
-    .. math::
-
-        \mathrm{KL}(p \,\|\, q) = \begin{cases}
-            \log\dfrac{b_q - a_q}{b_p - a_p} & \text{if } [a_p, b_p]
-                \subseteq [a_q, b_q] \\
-            +\infty & \text{otherwise}
-        \end{cases}
-    """
-    # KL = log((b2-a2)/(b1-a1)) if [a1,b1] ⊆ [a2,b2], else +∞
-    result: Tensor = ((q.high - q.low) / (p.high - p.low)).log()
-    # Mask entries where p is not supported inside q
-    p_outside_q = (q.low > p.low) | (q.high < p.high)
-    inf_val = lucid.full_like(result, float("inf"))
-    return lucid.where(p_outside_q, inf_val, result)
-
-
-@register_kl(Geometric, Geometric)
-def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
-    r"""Closed-form KL divergence between two Geometric distributions.
-
-    .. math::
-
-        \mathrm{KL}(p \,\|\, q) = \log\frac{p}{q}
-            + m \log\frac{1 - p}{1 - q}, \qquad m = \mathbb{E}_p[X] = \frac{1 - p}{p}
-
-    with each :math:`m \log(1 - \cdot)` taken by
-    :func:`lucid.special.xlog1py`.  At :math:`p = 1` all mass is at 0, so
-    :math:`m = 0` and the divergence is :math:`-\log q` — ``0`` against
-    another :math:`q = 1`; a :math:`q = 1` against :math:`p < 1` is
-    ``+inf``.
-
-    Notes
-    -----
-    The reference framework evaluates :math:`-H(p) - \log(1-q)/p -
-    \mathrm{logit}(q)` and answers ``inf`` for
-    :math:`\mathrm{KL}(\mathrm{Geometric}(1) \,\|\, \mathrm{Geometric}(1))`,
-    which is 0.
-    """
-    pp, qp = p.probs, q.probs
-    mean_failures = (1.0 - pp) / pp
-    return (
-        pp.log() - qp.log() + xlog1py(mean_failures, -pp) - xlog1py(mean_failures, -qp)
-    )
-
-
-@register_kl(Independent, Independent)
-def _kl_independent_independent(p: Independent, q: Independent) -> Tensor:
-    """KL divergence between two ``Independent`` wrappers.
-
-    Delegates to ``kl_divergence`` on the base distributions and sums the
-    result over the ``reinterpreted_batch_ndims`` trailing dimensions. The
-    two operands must reinterpret the same number of batch dims.
-
-    Raises
-    ------
-    NotImplementedError
-        If ``p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims``.
-    """
-    # KL sums over the reinterpreted batch dims.
-    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
-        raise NotImplementedError(
-            "kl_divergence(Independent, Independent) requires equal "
-            "reinterpreted_batch_ndims."
-        )
-    kl: Tensor = kl_divergence(p.base_dist, q.base_dist)
-    # Sum over the last `reinterpreted_batch_ndims` dims.
-    n = p.reinterpreted_batch_ndims
-    for _ in range(n):
-        kl = kl.sum(dim=-1)
-    return kl
-
-
-# ── MC-based KL pairs (no closed form) ───────────────────────────────────────
-
-
-def _kl_monte_carlo(p: Distribution, q: Distribution, n_samples: int = 1) -> Tensor:
-    """Monte Carlo estimate of KL(p||q) using a single ``rsample``.
-
-    Requires ``p`` to support ``rsample``.
-    """
-    if not p.has_rsample:
-        raise NotImplementedError(
-            f"kl_divergence({type(p).__name__}, {type(q).__name__}): "
-            "no closed-form KL and p does not support rsample for MC estimation."
-        )
-    samples = p.rsample((n_samples,))
-    return (p.log_prob(samples) - q.log_prob(samples)).mean(0)
-
-
-@register_kl(StudentT, StudentT)
-def _kl_studentt_studentt(p: StudentT, q: StudentT) -> Tensor:
-    """Monte-Carlo KL for StudentT — no closed form exists."""
-    return _kl_monte_carlo(p, q)
+    ct23: Tensor = (q.loc - p.loc) / q.scale
+    t12: Tensor = -ct1.log() - ct23 + ct1 * _EULER_GAMMA
+    return t12 + (ct23 + lucid.lgamma(1.0 + ct1)).exp() - (1.0 + _EULER_GAMMA)
 
 
 @register_kl(Cauchy, Cauchy)
 def _kl_cauchy_cauchy(p: Cauchy, q: Cauchy) -> Tensor:
-    """Monte-Carlo KL for Cauchy (df=1 StudentT) — no closed form exists."""
-    return _kl_monte_carlo(p, q)
+    t1: Tensor = ((p.scale + q.scale) ** 2 + (p.loc - q.loc) ** 2).log()
+    t2: Tensor = (4.0 * p.scale * q.scale).log()
+    return t1 - t2
 
 
-@register_kl(Normal, Laplace)
-def _kl_normal_laplace(p: Normal, q: Laplace) -> Tensor:
-    """KL(Normal(μ,σ²) || Laplace(m,b)).
-
-    Computed analytically via the moment-generating function of a folded Normal.
-    """
-    # E_p[log p(X)] = -0.5*(1 + log(2π) + log(σ²))  (normal entropy, negated)
-    # E_p[log q(X)] = -log(2b) - E_p[|X - m|] / b
-    # E_p[|X - m|] = σ * sqrt(2/π) * exp(-z²/2) + (μ - m) * erf(z/sqrt(2))
-    #   where z = (μ - m) / σ
-    import math
-
-    mu, sigma = p.loc, p.scale
-    m, b = q.loc, q.scale
-    z = (mu - m) / sigma
-    # E[|X - m|] where X ~ N(mu, sigma^2)
-    # = sigma * sqrt(2/pi) * exp(-z^2/2) + (mu - m) * erf(z / sqrt(2))
-    _sqrt2 = math.sqrt(2.0)
-    _sqrt2pi = math.sqrt(2.0 * math.pi)
-    exp_term = sigma * (2.0 / math.pi) ** 0.5 * (-0.5 * z * z).exp()
-    erf_term = (mu - m) * lucid.erf(z / _sqrt2)
-    e_abs = exp_term + erf_term
-
-    p.entropy().neg() - 0.5 * (2.0 * math.pi * math.e)  # -H(p)
-    # Actually compute directly:
-    # KL = H_cross(p, q) - H(p)  where H(p) = 0.5*(1 + log(2πσ²))
-    # H_cross = log(2b) + e_abs / b
-    h_cross = (2.0 * b).log() + e_abs / b
-    h_p = 0.5 * (1.0 + math.log(2.0 * math.pi) + (sigma * sigma).log())
-    return cast(Tensor, h_cross - h_p)
+importlib.import_module("lucid.distributions._kl_cross")

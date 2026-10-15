@@ -66,7 +66,6 @@
     "lucid/diffeq/_event.py": 3,
     "lucid/diffeq/_fixed.py": 4,
     "lucid/diffeq/_solvers.py": 5,
-    "lucid/distributions/kl.py": 1,
     "lucid/linalg/__init__.py": 13,
     "lucid/models/_mixins.py": 5,
     "lucid/models/_utils/_common.py": 2,
@@ -1269,7 +1268,6 @@
     "lucid/_ops/_registry.py": 2,
     "lucid/benchmarks/bench_ops.py": 1,
     "lucid/distributions/__init__.py": 2,
-    "lucid/distributions/kl.py": 3,
     "lucid/distributions/matrix.py": 3,
     "lucid/distributions/transforms.py": 1,
     "lucid/linalg/__init__.py": 4,
@@ -1577,7 +1575,6 @@
     "lucid/diffeq/_multistep.py": 1
    },
    "UP034": {
-    "lucid/distributions/kl.py": 1,
     "lucid/distributions/transforms.py": 2
    },
    "UP035": {
