@@ -170,10 +170,19 @@ _KINDS = {
 }
 
 #: Arguments the whole surface leaves out: output buffers, layouts, memory
-#: formats — and the reference's own deprecated loss arguments, which are
-#: not added (LCD-410 decision).
+#: formats — and the reference's own deprecated loss, autograd, and scheduler
+#: arguments, which are not added (LCD-410 decision).
 _OMITTED = frozenset(
-    {"out", "layout", "memory_format", "pin_memory", "size_average", "reduce"}
+    {
+        "out",
+        "layout",
+        "memory_format",
+        "pin_memory",
+        "size_average",
+        "reduce",
+        "grad_variables",
+        "epoch",
+    }
 )
 #: Factory keywords compared only where Lucid offers them.
 _FACTORY = frozenset({"dtype", "device", "requires_grad", "generator"})
@@ -404,6 +413,20 @@ def _tensor_methods() -> list[str]:
     return out
 
 
+def _class_method_targets(
+    module: ModuleType, classes: list[str], methods: tuple[str, ...]
+) -> list[str]:
+    out = []
+    for cls_name in classes:
+        cls = getattr(module, cls_name, None)
+        if not isinstance(cls, type):
+            continue
+        for method in methods:
+            if hasattr(cls, method):
+                out.append(f"{cls_name}.{method}")
+    return out
+
+
 #: ``(namespace, Lucid names, the reference's module path, aten prefix)``.
 _NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
     ("lucid", _public(lucid, Path(lucid.__file__).with_name("__init__.pyi")), "", ""),
@@ -418,6 +441,65 @@ _NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
     ("linalg", _public(lucid.linalg), "linalg", "linalg_"),
     ("fft", _public(lucid.fft), "fft", "fft_"),
     ("special", _public(lucid.special), "special", "special_"),
+    (
+        "optim",
+        _class_method_targets(
+            lucid.optim,
+            # Skip LBFGS while lucid/optim/lbfgs.py is dirty on main.
+            [
+                n
+                for n in lucid.optim.__all__
+                if n != "LBFGS"
+                and isinstance(getattr(lucid.optim, n, None), type)
+                and issubclass(getattr(lucid.optim, n), lucid.optim.Optimizer)
+            ],
+            ("__init__", "step", "zero_grad", "state_dict", "load_state_dict"),
+        ),
+        "optim",
+        None,
+    ),
+    (
+        "optim.lr_scheduler",
+        _class_method_targets(
+            lucid.optim.lr_scheduler,
+            [
+                n
+                for n, obj in sorted(vars(lucid.optim.lr_scheduler).items())
+                if not n.startswith("_")
+                and isinstance(obj, type)
+                and obj.__module__ == "lucid.optim.lr_scheduler"
+            ],
+            ("__init__", "step", "state_dict", "load_state_dict", "get_last_lr"),
+        ),
+        "optim.lr_scheduler",
+        None,
+    ),
+    ("autograd", ["backward", "grad"], "autograd", None),
+    (
+        "autograd.functional",
+        ["jacobian", "hessian", "vjp", "jvp", "vhp", "hvp"],
+        "autograd.functional",
+        None,
+    ),
+    (
+        "amp",
+        _class_method_targets(
+            lucid.amp,
+            ["autocast", "GradScaler"],
+            (
+                "__init__",
+                "scale",
+                "unscale_",
+                "step",
+                "update",
+                "get_scale",
+                "state_dict",
+                "load_state_dict",
+            ),
+        ),
+        "amp",
+        None,
+    ),
 ]
 
 _LCD_412 = "LCD-412: the reference's argument is not implemented"
@@ -437,6 +519,10 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "Tensor.sub": _LCD_412,
     "Tensor.sub_": _LCD_412,
     "Tensor.topk": _LCD_412,
+    "amp.autocast.__init__": _LCD_412,
+    "autograd.functional.hessian": _LCD_412,
+    "autograd.functional.jacobian": _LCD_412,
+    "autograd.grad": _LCD_412,
     "linalg.cholesky": _LCD_431,
     "linalg.cholesky_ex": _LCD_431,
     "linalg.cond": _LCD_431,
@@ -589,6 +675,19 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.threshold_": _LCD_430,
     "nn.functional.triplet_margin_with_distance_loss": _LCD_430,
     "nn.functional.unfold": _LCD_430,
+    "optim.ASGD.__init__": _LCD_412,
+    "optim.Adadelta.__init__": _LCD_412,
+    "optim.Adagrad.__init__": _LCD_412,
+    "optim.Adam.__init__": _LCD_412,
+    "optim.AdamW.__init__": _LCD_412,
+    "optim.Adamax.__init__": _LCD_412,
+    "optim.NAdam.__init__": _LCD_412,
+    "optim.RAdam.__init__": _LCD_412,
+    "optim.RMSprop.__init__": _LCD_412,
+    "optim.Rprop.__init__": _LCD_412,
+    "optim.SGD.__init__": _LCD_412,
+    "optim.lr_scheduler.CyclicLR.__init__": _LCD_412,
+    "optim.lr_scheduler.OneCycleLR.__init__": _LCD_412,
     "special.bessel_j0": _LCD_431,
     "special.bessel_j1": _LCD_431,
     "special.bessel_y0": _LCD_431,
@@ -637,23 +736,40 @@ def test_signatures_bind_as_the_reference_binds(
     owner: object = ref
     for part in filter(None, ref_path.split(".")):
         owner = getattr(owner, part)
-    theirs = getattr(owner, name, None)
-    if theirs is None or (namespace != "nn" and isinstance(theirs, type)):
-        pytest.skip("the reference has no function of this name")
-    method = namespace in ("Tensor", "nn")
-    if namespace == "Tensor":
-        ours = _lucid_method(name)
-    elif namespace == "nn":
-        if not isinstance(theirs, type):
-            pytest.skip("the reference's name is not a class")
-        ours = _params(_signature(getattr(lucid.nn, name).__init__), True)
-        theirs = theirs.__init__
-    else:
+    if "." in name:
+        cls_name, attr_name = name.split(".", 1)
+        theirs_cls = getattr(owner, cls_name, None)
+        if not isinstance(theirs_cls, type) or not hasattr(theirs_cls, attr_name):
+            pytest.skip("the reference has no matching class method")
         module = lucid
         for part in filter(None, ref_path.split(".")):
             module = getattr(module, part)
-        stub = Path(lucid.__file__).with_name("__init__.pyi") if not ref_path else None
-        ours = _lucid_function(name, getattr(module, name), stub)
+        ours = _params(_signature(getattr(getattr(module, cls_name), attr_name)), True)
+        theirs = getattr(theirs_cls, attr_name)
+        method = True
+    else:
+        theirs = getattr(owner, name, None)
+        if theirs is None or (namespace != "nn" and isinstance(theirs, type)):
+            pytest.skip("the reference has no function of this name")
+        method = namespace in ("Tensor", "nn")
+        if namespace == "Tensor":
+            ours = _lucid_method(name)
+        elif namespace == "nn":
+            if not isinstance(theirs, type):
+                pytest.skip("the reference's name is not a class")
+            ours = _params(_signature(getattr(lucid.nn, name).__init__), True)
+            theirs = theirs.__init__
+        else:
+            lucid_path = "autograd" if namespace == "autograd.functional" else ref_path
+            module = lucid
+            for part in filter(None, lucid_path.split(".")):
+                module = getattr(module, part)
+            stub = (
+                Path(lucid.__file__).with_name("__init__.pyi")
+                if not lucid_path
+                else None
+            )
+            ours = _lucid_function(name, getattr(module, name), stub)
     if ours is None:
         pytest.skip("Lucid's signature is a catch-all with no stub")
     aten = None if aten_prefix is None else aten_prefix + name

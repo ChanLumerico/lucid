@@ -91,6 +91,7 @@ _CASES: list[Case] = [
     ("ASGD", {"lr": 0.05}, [{"alpha": 0.5, "t0": 0.0}, {"weight_decay": 0.1}]),
     ("SparseAdam", {"lr": 0.05}, [{"lr": 0.01}, {"betas": (0.5, 0.9)}]),
     ("SparseAdam", {"lr": 0.05}, [{"eps": 1e-3}]),
+    ("SparseAdam", {"lr": 0.05}, [{"maximize": True}, {"maximize": False}]),
 ]
 
 # Switched on mid-run, which the reference refuses with a ``KeyError``: the

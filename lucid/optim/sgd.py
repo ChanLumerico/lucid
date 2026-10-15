@@ -48,8 +48,8 @@ class SGD(Optimizer):
     ----------
     params : iterable of Parameter or iterable of dict
         Parameters to optimise, or a list of parameter-group dicts.
-    lr : float
-        Learning rate :math:`\alpha`.
+    lr : float, optional
+        Learning rate :math:`\alpha` (default: ``1e-3``).
     momentum : float, optional
         Momentum factor :math:`\mu` (default: ``0``).  Set to a value
         such as ``0.9`` to enable momentum.
@@ -99,7 +99,7 @@ class SGD(Optimizer):
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],
-        lr: float,
+        lr: float = 1e-3,
         momentum: float = 0,
         dampening: float = 0,
         weight_decay: float = 0,

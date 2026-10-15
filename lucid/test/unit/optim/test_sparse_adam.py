@@ -45,12 +45,12 @@ def _loss(emb: Any, ids: Any) -> Any:
 
 
 def _lucid_run(
-    device: str, batches: list[list[int]]
+    device: str, batches: list[list[int]], *, maximize: bool = False
 ) -> tuple[list[dict[str, np.ndarray]], optim.SparseAdam]:
     emb = nn.Embedding(_ROWS, _DIM)
     emb.weight = nn.Parameter(lucid.tensor(_W0.copy()))
     emb.to(device)
-    opt = optim.SparseAdam(emb.parameters(), lr=_LR)
+    opt = optim.SparseAdam(emb.parameters(), lr=_LR, maximize=maximize)
     out = []
     for ids in batches:
         opt.zero_grad()
@@ -74,14 +74,17 @@ def _as_array(v: object) -> np.ndarray:
 
 
 @pytest.mark.parity
+@pytest.mark.parametrize("maximize", [False, True])
 @pytest.mark.parametrize("case", sorted(_BATCHES))
-def test_rows_follow_the_reference(case: str, device: str, ref: Any) -> None:
+def test_rows_follow_the_reference(
+    case: str, maximize: bool, device: str, ref: Any
+) -> None:
     batches = _BATCHES[case]
-    ours, _ = _lucid_run(device, batches)
+    ours, _ = _lucid_run(device, batches, maximize=maximize)
 
     emb = ref.nn.Embedding(_ROWS, _DIM, sparse=True)
     emb.weight = ref.nn.Parameter(ref.from_numpy(_W0.copy()))
-    opt = ref.optim.SparseAdam(emb.parameters(), lr=_LR)
+    opt = ref.optim.SparseAdam(emb.parameters(), lr=_LR, maximize=maximize)
     for k, ids in enumerate(batches):
         opt.zero_grad()
         _loss(emb, ref.tensor(ids)).backward()
@@ -99,7 +102,7 @@ def test_rows_follow_the_reference(case: str, device: str, ref: Any) -> None:
                 want,
                 rtol=1e-5,
                 atol=1e-6,
-                err_msg=f"{case}: {key} after step {k + 1}",
+                err_msg=f"{case} (maximize={maximize}): {key} after step {k + 1}",
             )
 
 

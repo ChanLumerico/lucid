@@ -168,17 +168,17 @@ class Adagrad(Optimizer):
         :math:`\lambda` (default: ``0``).
     weight_decay : float, optional
         L2 regularisation coefficient (default: ``0``).
+    initial_accumulator_value : float, optional
+        Value every entry of :math:`G` starts from (default: ``0``).
     eps : float, optional
         Term :math:`\epsilon` added to the denominator for numerical
         stability (default: ``1e-10``).
-    initial_accumulator_value : float, optional
-        Value every entry of :math:`G` starts from (default: ``0``).
 
     Attributes
     ----------
     param_groups : list of dict
         Parameter groups with keys ``"params"``, ``"lr"``, ``"lr_decay"``,
-        ``"weight_decay"``, ``"eps"``, and ``"initial_accumulator_value"``.
+        ``"weight_decay"``, ``"initial_accumulator_value"``, and ``"eps"``.
     defaults : dict
         Default hyperparameter values.
 
@@ -189,20 +189,11 @@ class Adagrad(Optimizer):
     larger effective learning rate.  The main drawback is that the
     accumulated squared-gradient sum :math:`G_t` only grows, so the
     effective learning rate can become vanishingly small over long training
-    runs.
-
-    The fifth and sixth positional slots are ``eps`` then
-    ``initial_accumulator_value`` — the reverse of the reference
-    framework's order — so pass both by keyword.
+    runs.  ``initial_accumulator_value`` precedes ``eps`` in the constructor
+    signature, matching the reference framework.
 
     Examples
     --------
-    >>> import lucid
-    >>> import lucid.nn as nn
-    >>> import lucid.optim as optim
-    >>> model = nn.Linear(4, 2)
-    >>> loss = model(lucid.randn(1, 4)).sum()
-    >>> import lucid.optim as optim
     >>> optimizer = optim.Adagrad(model.parameters(), lr=1e-2)
     >>> optimizer.zero_grad()
     >>> loss.backward()
@@ -224,16 +215,16 @@ class Adagrad(Optimizer):
         lr: float = 1e-2,
         lr_decay: float = 0,
         weight_decay: float = 0,
-        eps: float = 1e-10,
         initial_accumulator_value: float = 0,
+        eps: float = 1e-10,
     ) -> None:
         """Initialise the Adagrad.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
             lr=lr,
             lr_decay=lr_decay,
             weight_decay=weight_decay,
-            eps=eps,
             initial_accumulator_value=initial_accumulator_value,
+            eps=eps,
         )
         super().__init__(params, defaults)
 
@@ -894,6 +885,8 @@ def _sparse_adam_rows(
     exp_avg_sq: Tensor,
     step: int,
     hparams: tuple[float, float, float, float],
+    *,
+    maximize: bool = False,
 ) -> tuple[Tensor, Tensor]:
     """One SparseAdam update of the rows of ``param`` its gradient touches.
 
@@ -910,6 +903,8 @@ def _sparse_adam_rows(
     if rows.shape[0] == 0:
         return exp_avg, exp_avg_sq
     g = g.index_select(0, rows)
+    if maximize:
+        g = -g
     m_all = exp_avg.reshape(n, -1)
     v_all = exp_avg_sq.reshape(n, -1)
     m = m_all.index_select(0, rows)
@@ -958,12 +953,16 @@ class SparseAdam(Optimizer):
         second-moment estimates (default: ``(0.9, 0.999)``).
     eps : float, optional
         Term :math:`\epsilon` for numerical stability (default: ``1e-8``).
+    maximize : bool, optional
+        If ``True``, maximise the objective with respect to ``params`` by
+        negating the gradient on the touched rows before updating the
+        moments and parameter values (default: ``False``).
 
     Attributes
     ----------
     param_groups : list of dict
         Parameter groups with keys ``"params"``, ``"lr"``, ``"betas"``,
-        and ``"eps"``.
+        ``"eps"``, and ``"maximize"``.
     defaults : dict
         Default hyperparameter values.
     state : dict
@@ -1006,7 +1005,7 @@ class SparseAdam(Optimizer):
     1
     """
 
-    _HYPERPARAMS = ("lr", "betas", "eps")
+    _HYPERPARAMS = ("lr", "betas", "eps", "maximize")
     _LIVE_STATE = True
 
     def __init__(
@@ -1015,9 +1014,12 @@ class SparseAdam(Optimizer):
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
+        maximize: bool = False,
     ) -> None:
         """Initialise the SparseAdam.  See the class docstring for parameter semantics."""
-        defaults: dict[str, object] = dict(lr=lr, betas=betas, eps=eps)
+        defaults: dict[str, object] = dict(
+            lr=lr, betas=betas, eps=eps, maximize=maximize
+        )
         super().__init__(params, defaults)
 
     @override
@@ -1037,6 +1039,10 @@ class SparseAdam(Optimizer):
             raise _C_engine.InvalidArgument("SparseAdam: betas[0] must be in [0, 1)")
         if not 0.0 <= beta2 < 1.0:
             raise _C_engine.InvalidArgument("SparseAdam: betas[1] must be in [0, 1)")
+        if not isinstance(values["maximize"], bool):
+            raise TypeError(
+                f"SparseAdam: maximize must be a bool, got {type(values['maximize']).__name__}"
+            )
 
     def _flat_params(self) -> list[Parameter]:
         """Every parameter, in the flat order ``state`` is indexed by."""
@@ -1106,10 +1112,11 @@ class SparseAdam(Optimizer):
                 hp = self._hyperparam_dict(self._hyperparams_of(group))
                 beta1, beta2 = hp["betas"]
                 hparams = (hp["lr"], beta1, beta2, hp["eps"])
+                maximize = bool(hp["maximize"])
                 for p in _group_params(group):
                     grad = p.grad
                     if grad is not None:
-                        self._step_param(idx, p, grad, hparams)
+                        self._step_param(idx, p, grad, hparams, maximize=maximize)
                     idx += 1
         return loss
 
@@ -1119,6 +1126,8 @@ class SparseAdam(Optimizer):
         param: Parameter,
         grad: Tensor,
         hparams: tuple[float, float, float, float],
+        *,
+        maximize: bool = False,
     ) -> None:
         """Advance parameter ``idx``'s step count and update its touched rows."""
         entry = self._state_for(idx, param)
@@ -1133,6 +1142,7 @@ class SparseAdam(Optimizer):
             _moment(entry, "exp_avg_sq"),
             step,
             hparams,
+            maximize=maximize,
         )
 
     # ── state_dict round-trip ────────────────────────────────────────────────

@@ -96,7 +96,7 @@ class autocast:
     def __init__(
         self,
         device_type: str = "metal",
-        dtype: dtype = float16,
+        dtype: dtype | None = None,
         enabled: bool = True,
     ) -> None:
         """Configure the autocast context.
@@ -106,9 +106,9 @@ class autocast:
         device_type : str, default='metal'
             Device the autocast scope applies to. Apple Silicon supports
             ``'metal'`` (GPU stream) and ``'cpu'`` (Accelerate stream).
-        dtype : lucid.dtype, default=float16
+        dtype : lucid.dtype or None, default=None
             Lower-precision dtype that supported ops cast inputs to inside
-            the scope.
+            the scope (defaults to :data:`lucid.float16` when ``None``).
         enabled : bool, default=True
             When ``False`` the context is a no-op (useful for ablation).
 
@@ -122,7 +122,7 @@ class autocast:
                 f"autocast: unknown device_type {device_type!r}. Use 'metal' or 'cpu'."
             )
         self._device_type = device_type
-        self._dtype = dtype
+        self._dtype = float16 if dtype is None else dtype
         self._enabled = enabled
         # One stack of live engine guards per thread: the AMP state the
         # guards change is thread-local, so a guard must be released on the

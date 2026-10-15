@@ -843,27 +843,30 @@ class ReduceLROnPlateau:
         mode: str = "min",
         factor: float = 0.1,
         patience: int = 10,
-        verbose: bool = False,
         threshold: float = 1e-4,
+        threshold_mode: str = "rel",
+        cooldown: int = 0,
         min_lr: float = 0,
+        eps: float = 1e-8,
+        verbose: bool = False,
     ) -> None:
         """Initialise the ReduceLROnPlateau.  See the class docstring for parameter semantics."""
         self.optimizer = optimizer
         self.mode = mode
         self.factor = factor
         self.patience = patience
-        self.verbose = verbose
         self.threshold = threshold
+        self.threshold_mode = threshold_mode
+        self.cooldown = cooldown
         self.min_lr = min_lr
+        self.eps = eps
+        self.verbose = verbose
         self._best: float = float("inf") if mode == "min" else float("-inf")
         self._num_bad_epochs = 0
+        self._cooldown_counter = 0
 
     def state_dict(self) -> dict[str, object]:
-        """Serialisable state — see :meth:`_LRScheduler.state_dict`.
-
-        ``ReduceLROnPlateau`` does not share the ``_LRScheduler`` base, so the
-        contract is spelled out again here rather than inherited.
-        """
+        """Serialisable state — see :meth:`_LRScheduler.state_dict`."""
         return {
             k: v
             for k, v in self.__dict__.items()
@@ -875,38 +878,40 @@ class ReduceLROnPlateau:
         self.__dict__.update(state_dict)
 
     def step(self, metrics: float) -> None:
-        """Update the scheduler with the latest monitored metric value.
-
-        Checks whether the metric has improved relative to the stored best.
-        If it has not improved for more than ``patience`` epochs, the
-        learning rate is reduced by ``factor``.
-
-        Parameters
-        ----------
-        metrics : float
-            The current value of the monitored metric (e.g. validation loss
-            or validation accuracy, depending on ``mode``).
-
-        Examples
-        --------
-        >>> val_loss = 0.5
-        """
+        """Update the scheduler with the latest monitored metric value."""
+        rel = self.threshold_mode == "rel"
         if self.mode == "min":
-            improved = metrics < self._best - self.threshold
+            bound = (
+                self._best * (1.0 - self.threshold)
+                if rel
+                else self._best - self.threshold
+            )
+            improved = metrics < bound
         else:
-            improved = metrics > self._best + self.threshold
+            bound = (
+                self._best * (1.0 + self.threshold)
+                if rel
+                else self._best + self.threshold
+            )
+            improved = metrics > bound
 
         if improved:
             self._best = metrics
             self._num_bad_epochs = 0
         else:
             self._num_bad_epochs += 1
-            if self._num_bad_epochs > self.patience:
-                for group in self.optimizer.param_groups:
-                    new_lr = max(group["lr"] * self.factor, self.min_lr)
+        if self._cooldown_counter > 0:
+            self._cooldown_counter -= 1
+            self._num_bad_epochs = 0
+        if self._num_bad_epochs > self.patience:
+            for group in self.optimizer.param_groups:
+                old_lr = _group_float(group)
+                new_lr = max(old_lr * self.factor, self.min_lr)
+                if old_lr - new_lr > self.eps:
                     group["lr"] = new_lr
-                self.optimizer._sync_hyperparams()
-                self._num_bad_epochs = 0
+            self.optimizer._sync_hyperparams()
+            self._cooldown_counter = self.cooldown
+            self._num_bad_epochs = 0
 
 
 class NoamScheduler(_LRScheduler):
@@ -1279,12 +1284,12 @@ class PolynomialLR(_LRScheduler):
     power : float, optional
         Exponent of the polynomial.  ``power=1`` gives linear decay;
         ``power=2`` gives quadratic decay (default: ``1.0``).
-    eta_min : float, optional
-        Minimum learning rate reached at ``total_iters`` (default: ``0.0``).
     last_epoch : int, optional
         The index of the last epoch (default: ``-1``).
     verbose : bool, optional
         Print the updated LR after each step if ``True`` (default: ``False``).
+    eta_min : float, optional
+        Minimum learning rate reached at ``total_iters`` (default: ``0.0``).
 
     Attributes
     ----------
@@ -1320,9 +1325,9 @@ class PolynomialLR(_LRScheduler):
         optimizer: Optimizer,
         total_iters: int = 5,
         power: float = 1.0,
-        eta_min: float = 0.0,
         last_epoch: int = -1,
         verbose: bool = False,
+        eta_min: float = 0.0,
     ) -> None:
         """Initialise the PolynomialLR.  See the class docstring for parameter semantics."""
         self.total_iters = total_iters
@@ -1833,9 +1838,22 @@ class ChainedScheduler:
     ...     scheduler.step()
     """
 
-    def __init__(self, schedulers: list[_LRScheduler]) -> None:
+    def __init__(
+        self,
+        schedulers: list[_LRScheduler],
+        optimizer: Optimizer | None = None,
+    ) -> None:
         """Initialise the ChainedScheduler.  See the class docstring for parameter semantics."""
+        if not schedulers:
+            raise ValueError("ChainedScheduler expects at least one scheduler")
+        optimizer = optimizer or schedulers[0].optimizer
+        for sched in schedulers:
+            if sched.optimizer != optimizer:
+                raise ValueError(
+                    "ChainedScheduler expects all schedulers to belong to the same optimizer"
+                )
         self.schedulers = schedulers
+        self.optimizer = optimizer
         self._last_lr: list[float] = []
         # Each child was built after the one before it had written its own
         # step-0 rate, and some read that rate back (StepLR).  Start every
@@ -1867,12 +1885,7 @@ class ChainedScheduler:
         optimizer._sync_hyperparams()
 
     def state_dict(self) -> dict[str, object]:
-        """Serialisable state, including each wrapped scheduler's own state.
-
-        The children are live scheduler objects, so they are replaced by their
-        ``state_dict()`` under ``"schedulers"``; :meth:`load_state_dict` feeds
-        them back into the corresponding children.
-        """
+        """Serialisable state, including each wrapped scheduler's own state."""
         own = {
             k: v
             for k, v in self.__dict__.items()
@@ -1882,11 +1895,7 @@ class ChainedScheduler:
         return own
 
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`.
-
-        ``schedulers`` must have the same length and order as when it was
-        saved — the children themselves are not reconstructed here.
-        """
+        """Restore state produced by :meth:`state_dict`."""
         incoming = dict(state_dict)
         raw_children = incoming.pop("schedulers", None)
         self.__dict__.update(incoming)
@@ -1907,8 +1916,7 @@ class ChainedScheduler:
 
         Calls :meth:`~_LRScheduler.step` on every scheduler in order.
         Each scheduler writes its updated learning rates into the shared
-        optimizer, so the final LR reflects the composition of all
-        schedules.
+        optimizer.
 
         Examples
         --------
@@ -1916,8 +1924,6 @@ class ChainedScheduler:
         >>> import lucid.optim as optim
         >>> model = nn.Linear(4, 2)
         >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
-        >>> for epoch in range(50):
-        ...     optimizer.step()
         """
         for sched in self.schedulers:
             # Each child steps on its own track.  Several compute from the
@@ -1931,11 +1937,5 @@ class ChainedScheduler:
 
     def get_last_lr(self) -> list[float]:
         """Return the composed learning rates the chain last wrote.
-
-        Returns
-        -------
-        list of float
-            Current learning rate of each optimizer param group — the
-            product of every chained scheduler's factor.
         """
         return list(self._last_lr)

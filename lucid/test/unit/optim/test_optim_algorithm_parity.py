@@ -336,19 +336,17 @@ def test_adamax_adds_eps_inside_exp_inf(device: str, ref: Any) -> None:
     np.testing.assert_allclose(w.numpy(), rw.detach().numpy(), rtol=1e-6, atol=1e-6)
 
 
-def test_adagrad_takes_eps_before_initial_accumulator_value(ref: Any) -> None:
-    # The released signature keeps ``eps`` fifth; the accumulator seed was
-    # added after it, the reverse of the reference's order.
+def test_adagrad_takes_initial_accumulator_value_before_eps(ref: Any) -> None:
+    # Positional slot 4 is ``initial_accumulator_value`` and slot 5 is ``eps``,
+    # matching the reference framework's constructor signature.
     init = _arrays(0, lucid.float32)
     params = _params(init, "cpu")
-    opt = optim.Adagrad(params, 0.1, 0.0, 0.0, 1e-3, 0.5)
+    opt = optim.Adagrad(params, 0.1, 0.0, 0.0, 0.5, 1e-3)
     group = opt.param_groups[0]
-    assert group["eps"] == 1e-3
     assert group["initial_accumulator_value"] == 0.5
+    assert group["eps"] == 1e-3
     ref_params = [ref.nn.Parameter(ref.from_numpy(a.copy())) for a in init]
-    ref_opt = ref.optim.Adagrad(
-        ref_params, lr=0.1, eps=1e-3, initial_accumulator_value=0.5
-    )
+    ref_opt = ref.optim.Adagrad(ref_params, 0.1, 0.0, 0.0, 0.5, 1e-3)
     grads = _arrays(100, lucid.float32)
     _feed(params, grads, "cpu")
     opt.step()

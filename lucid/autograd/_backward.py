@@ -146,7 +146,7 @@ def _seeded_root(
 def backward(
     tensors: Tensor | Sequence[Tensor],
     grad_tensors: Tensor | Sequence[Tensor | None] | None = None,
-    retain_graph: bool = False,
+    retain_graph: bool | None = None,
     create_graph: bool = False,
     inputs: Tensor | Sequence[Tensor] | None = None,
 ) -> None:
@@ -179,8 +179,7 @@ def backward(
     retain_graph : bool, optional
         If ``True`` the intermediate saved tensors are not freed after
         the backward pass, so the same graph can be traversed again.
-        Necessary when calling :func:`backward` multiple times on
-        overlapping graphs or when ``create_graph`` is also ``True``.
+        Defaults to ``create_graph``.
     create_graph : bool, optional
         If ``True`` the operations performed during backward are
         themselves recorded in the graph, enabling higher-order
@@ -280,9 +279,10 @@ def backward(
                 "gradients (requires_grad is True on its inputs)."
             )
     seeds = _make_seeds("backward", roots, grad_tensors)
+    _retain = retain_graph if retain_graph is not None else create_graph
     if inputs is not None:
         _backward_into(
-            roots, seeds, _backward_inputs(inputs, create_graph), retain_graph
+            roots, seeds, _backward_inputs(inputs, create_graph), _retain
         )
         return
     for index, (root, seed) in enumerate(zip(roots, seeds, strict=True)):
@@ -292,7 +292,7 @@ def backward(
         # two roots sharing a node freed it under the second.
         _C_engine.engine_backward(
             impl,
-            retain_graph=retain_graph or index < len(roots) - 1,
+            retain_graph=_retain or index < len(roots) - 1,
             create_graph=create_graph,
         )
 
@@ -387,7 +387,7 @@ def grad(
     retain_graph: bool | None = None,
     create_graph: bool = False,
     only_inputs: bool = True,
-    allow_unused: bool = False,
+    allow_unused: bool | None = None,
 ) -> tuple[Tensor | None, ...]:
     r"""Compute gradients of outputs w.r.t. inputs, returning them as a tuple.
 
