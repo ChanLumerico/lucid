@@ -599,7 +599,8 @@ protected:
                                               const Shape& grad_shape,
                                               const Shape& target_shape);
 
-    // Return the saved input ``k`` broadcast to ``out_shape_``.
+    // Return the saved input ``k`` ready for element-wise arithmetic at
+    // ``out_shape_``.
     //
     // Parameters
     // ----------
@@ -609,26 +610,14 @@ protected:
     // Returns
     // -------
     // Storage
-    //     The saved storage when ``input_shapes_[k] == out_shape_``,
-    //     otherwise a freshly materialised broadcast copy.  On GPU
-    //     this calls :func:`mlx::core::broadcast_to`; on CPU it calls
-    //     :func:`detail::broadcast_cpu`.
-    //
-    // Notes
-    // -----
-    // Lazy: the broadcast copy is only materialised when needed.
-    // Used by ``grad_formula`` implementations that need the
-    // full-rank operand rather than the possibly-smaller original.
+    //     The saved storage when ``input_shapes_[k] == out_shape_`` or on
+    //     GPU (where MLX binary primitives broadcast natively without
+    //     materialising an expanded buffer), otherwise a freshly
+    //     materialised CPU broadcast copy via :func:`detail::broadcast_cpu`.
     Storage saved_input_broadcasted(std::size_t k) const {
         const Shape& src = this->input_shapes_[k];
-        if (src == this->out_shape_)
+        if (src == this->out_shape_ || this->device_ == Device::GPU)
             return this->saved_inputs_[k];
-        if (this->device_ == Device::GPU) {
-            const auto& g = std::get<GpuStorage>(this->saved_inputs_[k]);
-            auto bcast = ::mlx::core::contiguous(
-                ::mlx::core::broadcast_to(*g.arr, gpu::to_mlx_shape(this->out_shape_)));
-            return Storage{gpu::wrap_mlx_array(std::move(bcast), this->dtype_)};
-        }
         const auto& c = std::get<CpuStorage>(this->saved_inputs_[k]);
         return Storage{detail::broadcast_cpu(c, src, this->out_shape_, this->dtype_)};
     }
@@ -689,38 +678,18 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
             out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::CPU),
                                             Storage{*a_use}, Storage{*b_use}, out_shape, eff_dt);
         } else {
-            const auto& ga = std::get<GpuStorage>(a_ptr->storage());
-            const auto& gb = std::get<GpuStorage>(b_ptr->storage());
-            ::mlx::core::array a_arr = (a_ptr->shape() == out_shape)
-                                           ? *ga.arr
-                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
-                                                 *ga.arr, gpu::to_mlx_shape(out_shape)));
-            ::mlx::core::array b_arr = (b_ptr->shape() == out_shape)
-                                           ? *gb.arr
-                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
-                                                 *gb.arr, gpu::to_mlx_shape(out_shape)));
-            GpuStorage a_g, b_g;
-            a_g.arr = std::make_shared<::mlx::core::array>(std::move(a_arr));
-            b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
+            // MLX binary primitives broadcast their operands natively and
+            // write a freshly allocated row-contiguous output of ``out_shape``,
+            // so passing the unbroadcast GpuStorages avoids materialising an
+            // extra ``contiguous(broadcast_to(...))`` pass over the output.
             out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::GPU),
-                                            Storage{a_g}, Storage{b_g}, out_shape, eff_dt);
+                                            a_ptr->storage(), b_ptr->storage(), out_shape, eff_dt);
         }
     } else if (a_ptr->device() == Device::GPU) {
         if constexpr (detail::HasGpuKernel<Derived>) {
             const auto& ga = std::get<GpuStorage>(a_ptr->storage());
             const auto& gb = std::get<GpuStorage>(b_ptr->storage());
-            ::mlx::core::array a_arr = (a_ptr->shape() == out_shape)
-                                           ? *ga.arr
-                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
-                                                 *ga.arr, gpu::to_mlx_shape(out_shape)));
-            ::mlx::core::array b_arr = (b_ptr->shape() == out_shape)
-                                           ? *gb.arr
-                                           : ::mlx::core::contiguous(::mlx::core::broadcast_to(
-                                                 *gb.arr, gpu::to_mlx_shape(out_shape)));
-            GpuStorage a_g, b_g;
-            a_g.arr = std::make_shared<::mlx::core::array>(std::move(a_arr));
-            b_g.arr = std::make_shared<::mlx::core::array>(std::move(b_arr));
-            out_storage = Storage{Derived::gpu_kernel(a_g, b_g, out_shape, eff_dt)};
+            out_storage = Storage{Derived::gpu_kernel(ga, gb, out_shape, eff_dt)};
         } else {
             ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
         }

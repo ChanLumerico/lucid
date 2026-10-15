@@ -116,6 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fuse Metal bounds-checked gather in AxisIndex.h (LCD-277)
 
+- skip contiguous(broadcast_to) in Metal BinaryKernel (#372)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
