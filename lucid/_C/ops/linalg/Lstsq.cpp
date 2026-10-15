@@ -17,11 +17,14 @@ std::vector<TensorImplPtr> lstsq_op(const TensorImplPtr& a, const TensorImplPtr&
 
     const auto& as = a->shape();
     const auto& bs = b->shape();
+    if (as.size() < 2)
+        ErrorBuilder("lstsq").invalid_argument("A must be at least 2-D");
     const int n = static_cast<int>(as[as.size() - 1]);
     const int nrhs = (bs.size() > 1) ? static_cast<int>(bs[bs.size() - 1]) : 1;
 
-    // Solution shape: (n, nrhs) or (n,) if nrhs==1
-    Shape sol_shape = {static_cast<std::int64_t>(n)};
+    // Solution shape: (..., n, nrhs) or (..., n) if nrhs==1
+    Shape sol_shape(as.begin(), as.end() - 2);
+    sol_shape.push_back(static_cast<std::int64_t>(n));
     if (nrhs > 1)
         sol_shape.push_back(static_cast<std::int64_t>(nrhs));
 

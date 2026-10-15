@@ -15,11 +15,15 @@ TensorImplPtr householder_product_op(const TensorImplPtr& H, const TensorImplPtr
     Validator::input(tau, "householder_product.tau").float_only().non_null();
 
     const auto& hs = H->shape();
+    if (hs.size() < 2)
+        ErrorBuilder("householder_product").invalid_argument("H must be at least 2-D");
     const int m = static_cast<int>(hs[hs.size() - 2]);
     const int n = static_cast<int>(hs[hs.size() - 1]);
     const int k = std::min(m, n);
 
-    Shape q_shape = {static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
+    Shape q_shape(hs.begin(), hs.end() - 2);
+    q_shape.push_back(static_cast<std::int64_t>(m));
+    q_shape.push_back(static_cast<std::int64_t>(k));
     // A degenerate matrix has an answer; LAPACK just will not be the one
     // to compute it — see ``empty_matrix``.
     if (empty_matrix(hs))

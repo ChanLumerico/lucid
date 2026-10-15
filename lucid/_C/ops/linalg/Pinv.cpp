@@ -22,6 +22,8 @@
 
 #include "Pinv.h"
 
+#include <algorithm>
+#include <cmath>
 #include <variant>
 
 #include "../../backend/Dispatcher.h"
@@ -34,6 +36,29 @@
 #include "_Detail.h"
 
 namespace lucid {
+namespace {
+
+template <typename T>
+void zero_inf_only_pinv_slices(const CpuStorage& in_s,
+                               CpuStorage& out_s,
+                               std::int64_t batch,
+                               std::size_t mn) {
+    const auto* in_p = reinterpret_cast<const T*>(in_s.ptr.get());
+    auto* out_p = reinterpret_cast<T*>(out_s.ptr.get());
+    for (std::int64_t b = 0; b < batch; ++b) {
+        const T* slice = in_p + static_cast<std::size_t>(b) * mn;
+        bool has_inf = false;
+        bool has_nan = false;
+        for (std::size_t i = 0; i < mn; ++i) {
+            has_inf |= std::isinf(slice[i]);
+            has_nan |= std::isnan(slice[i]);
+        }
+        if (has_inf && !has_nan)
+            std::fill_n(out_p + static_cast<std::size_t>(b) * mn, mn, T{0});
+    }
+}
+
+}  // namespace
 
 // Compute A⁺ (the Moore-Penrose pseudoinverse) of a.
 //
@@ -62,6 +87,16 @@ TensorImplPtr pinv_op(const TensorImplPtr& a) {
 
     Storage out =
         backend::Dispatcher::for_device(a->device()).linalg_pinv(a->storage(), sh, a->dtype());
+    if (a->device() == Device::CPU) {
+        const std::int64_t batch = leading_batch_count(sh, 2);
+        const std::size_t mn = static_cast<std::size_t>(m) * n;
+        const auto& in_cpu = std::get<CpuStorage>(a->storage());
+        auto& out_cpu = std::get<CpuStorage>(out);
+        if (a->dtype() == Dtype::F32)
+            zero_inf_only_pinv_slices<float>(in_cpu, out_cpu, batch, mn);
+        else if (a->dtype() == Dtype::F64)
+            zero_inf_only_pinv_slices<double>(in_cpu, out_cpu, batch, mn);
+    }
     return fresh(std::move(out), std::move(out_shape), a->dtype(), a->device());
 }
 

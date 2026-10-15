@@ -187,7 +187,7 @@
    },
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 10542,
-    "lucid/_C/backend/gpu/GpuBackend.h": 4592,
+    "lucid/_C/backend/gpu/GpuBackend.h": 4550,
     "lucid/_ops/composite/elementwise.py": 122,
     "lucid/_tensor/_dunders.py": 251,
     "lucid/_tensor/tensor.py": 2796,
@@ -196,7 +196,7 @@
     "lucid/coreml/_emit.py": 1176,
     "lucid/distributions/transforms.py": 281,
     "lucid/fft/__init__.py": 379,
-    "lucid/linalg/__init__.py": 2356,
+    "lucid/linalg/__init__.py": 2355,
     "lucid/models/_utils/_detection.py": 1329,
     "lucid/models/generative/diamond/_model.py": 728,
     "lucid/models/generative/rectified_flow/_model.py": 289,

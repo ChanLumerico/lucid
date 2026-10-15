@@ -2717,9 +2717,10 @@ public:
 
     // Moore-Penrose pseudo-inverse through MLX's SVD.
     //
-    // A matrix with a NaN or an infinity gets an all-NaN pseudo-inverse —
-    // the reference answer — and never reaches the SVD, which aborts the
-    // process on one (see ``gpu_nonfinite_matrices``).
+    // A non-finite matrix never reaches the SVD, which aborts the process on
+    // one (see ``gpu_nonfinite_matrices``): NaN produces an all-NaN inverse,
+    // while an infinity without NaN stays zero (1/inf = 0), matching the
+    // reference.
     Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         if (ga.arr->size() == 0) {
@@ -2733,7 +2734,10 @@ public:
         }
         auto bad = gpu_nonfinite_matrices(*ga.arr);
         auto clean = gpu_zero_where(bad, *ga.arr);
-        auto out = gpu_nan_where(bad, ::mlx::core::linalg::pinv(clean, k_linalg_stream));
+        auto has_nan =
+            ::mlx::core::any(::mlx::core::isnan(*ga.arr, k_linalg_stream), std::vector<int>{-2, -1},
+                             /*keepdims=*/true, k_linalg_stream);
+        auto out = gpu_nan_where(has_nan, ::mlx::core::linalg::pinv(clean, k_linalg_stream));
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
@@ -2894,29 +2898,14 @@ public:
                                       const Shape& a_shape,
                                       const Shape& b_shape,
                                       Dtype dt) override {
-        const auto& ga = std::get<GpuStorage>(a);
-        const auto& gb = std::get<GpuStorage>(b);
-        auto ca_mlx = ::mlx::core::contiguous(*ga.arr);
-        ca_mlx.eval();
-        auto cb_mlx = ::mlx::core::contiguous(*gb.arr);
-        cb_mlx.eval();
-        const std::size_t a_nb = ca_mlx.nbytes(), b_nb = cb_mlx.nbytes();
-        auto a_cpu = allocate_aligned_bytes(a_nb, Device::CPU);
-        auto b_cpu = allocate_aligned_bytes(b_nb, Device::CPU);
-        MemoryTracker::track_host_sync(ca_mlx.nbytes());
-        MemoryTracker::track_host_sync(cb_mlx.nbytes());
-        std::memcpy(a_cpu.get(), ca_mlx.data<void>(), a_nb);
-        std::memcpy(b_cpu.get(), cb_mlx.data<void>(), b_nb);
-        CpuStorage a_cs{a_cpu, a_nb, dt}, b_cs{b_cpu, b_nb, dt};
-        auto res = Dispatcher::for_device(Device::CPU)
-                       .linalg_lstsq(Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
-        // Must upload: the op wrapper tags the solution with the *input* device
-        // (Metal), so returning CPU storage desyncs the device tag from the
-        // storage variant and every later engine op hits bad_variant_access.
-        // Solution shape mirrors lstsq_op: (n,) or (n, nrhs).
-        Shape sol_shape = {a_shape[a_shape.size() - 1]};
-        if (b_shape.size() > 1)
-            sol_shape.push_back(b_shape[b_shape.size() - 1]);
+        Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), a_shape)};
+        Storage b_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(b), b_shape)};
+        auto res =
+            Dispatcher::for_device(Device::CPU).linalg_lstsq(a_cpu, b_cpu, a_shape, b_shape, dt);
+        Shape sol_shape(a_shape.begin(), a_shape.end() - 2);
+        sol_shape.push_back(a_shape[a_shape.size() - 1]);
+        if (b_shape.size() > 1 && b_shape.back() > 1)
+            sol_shape.push_back(b_shape.back());
         std::vector<Storage> out;
         out.reserve(res.size());
         for (const auto& r : res)
@@ -2931,33 +2920,13 @@ public:
                             const Shape& lu_shape,
                             const Shape& b_shape,
                             Dtype dt) override {
-        // Download LU and B from GPU
-        const auto& glu = std::get<GpuStorage>(LU);
-        const auto& gpiv = std::get<GpuStorage>(pivots);
-        const auto& gb = std::get<GpuStorage>(b);
-        auto clu = ::mlx::core::contiguous(*glu.arr);
-        clu.eval();
-        auto cpiv = ::mlx::core::contiguous(*gpiv.arr);
-        cpiv.eval();
-        auto cb = ::mlx::core::contiguous(*gb.arr);
-        cb.eval();
-        auto lu_cpu = allocate_aligned_bytes(clu.nbytes(), Device::CPU);
-        auto piv_cpu = allocate_aligned_bytes(cpiv.nbytes(), Device::CPU);
-        auto b_cpu = allocate_aligned_bytes(cb.nbytes(), Device::CPU);
-        MemoryTracker::track_host_sync(clu.nbytes());
-        MemoryTracker::track_host_sync(cpiv.nbytes());
-        MemoryTracker::track_host_sync(cb.nbytes());
-        std::memcpy(lu_cpu.get(), clu.data<void>(), clu.nbytes());
-        std::memcpy(piv_cpu.get(), cpiv.data<void>(), cpiv.nbytes());
-        std::memcpy(b_cpu.get(), cb.data<void>(), cb.nbytes());
-        CpuStorage lu_cs{lu_cpu, clu.nbytes(), dt};
-        CpuStorage piv_cs{piv_cpu, cpiv.nbytes(), Dtype::I32};
-        CpuStorage b_cs{b_cpu, cb.nbytes(), dt};
-        auto result = Dispatcher::for_device(Device::CPU)
-                          .linalg_lu_solve(Storage{lu_cs}, Storage{piv_cs}, Storage{b_cs}, lu_shape,
-                                           b_shape, dt);
-        const auto& res_cpu = std::get<CpuStorage>(result);
-        return Storage{gpu::upload_cpu_to_gpu(res_cpu, b_shape)};
+        Shape piv_shape(lu_shape.begin(), lu_shape.end() - 1);
+        Storage lu_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(LU), lu_shape)};
+        Storage piv_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(pivots), piv_shape)};
+        Storage b_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(b), b_shape)};
+        Storage result = Dispatcher::for_device(Device::CPU)
+                             .linalg_lu_solve(lu_cpu, piv_cpu, b_cpu, lu_shape, b_shape, dt);
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(result), b_shape)};
     }
 
     // householder_product: fall back to CPU LAPACK
@@ -2965,28 +2934,17 @@ public:
                                        const Storage& tau,
                                        const Shape& h_shape,
                                        Dtype dt) override {
-        const auto& gh = std::get<GpuStorage>(H);
         const auto& gt = std::get<GpuStorage>(tau);
-        auto ch = ::mlx::core::contiguous(*gh.arr);
-        ch.eval();
-        auto ct = ::mlx::core::contiguous(*gt.arr);
-        ct.eval();
-        auto h_cpu = allocate_aligned_bytes(ch.nbytes(), Device::CPU);
-        auto t_cpu = allocate_aligned_bytes(ct.nbytes(), Device::CPU);
-        MemoryTracker::track_host_sync(ch.nbytes());
-        MemoryTracker::track_host_sync(ct.nbytes());
-        std::memcpy(h_cpu.get(), ch.data<void>(), ch.nbytes());
-        std::memcpy(t_cpu.get(), ct.data<void>(), ct.nbytes());
-        const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
-        const int n = static_cast<int>(h_shape[h_shape.size() - 1]);
-        const int k = std::min(m, n);
-        Shape tau_shape{static_cast<std::int64_t>(k)};
-        CpuStorage h_cs{h_cpu, ch.nbytes(), dt}, t_cs{t_cpu, ct.nbytes(), dt};
-        auto result = Dispatcher::for_device(Device::CPU)
-                          .linalg_householder_product(Storage{h_cs}, Storage{t_cs}, h_shape, dt);
-        Shape q_shape{static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
-        const auto& res_cpu = std::get<CpuStorage>(result);
-        return Storage{gpu::upload_cpu_to_gpu(res_cpu, q_shape)};
+        Storage h_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(H), h_shape)};
+        Storage t_cpu{gpu::download_gpu_to_cpu(gt, gpu::mlx_shape_to_lucid(gt.arr->shape()))};
+        Storage result = Dispatcher::for_device(Device::CPU)
+                             .linalg_householder_product(h_cpu, t_cpu, h_shape, dt);
+        const std::int64_t m = h_shape[h_shape.size() - 2];
+        const std::int64_t n = h_shape[h_shape.size() - 1];
+        Shape q_shape(h_shape.begin(), h_shape.end() - 2);
+        q_shape.push_back(m);
+        q_shape.push_back(std::min(m, n));
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(result), q_shape)};
     }
 
     // ldl_factor: the CPU backend's ``sytrf``, uploaded (MLX has no LDLᵀ).

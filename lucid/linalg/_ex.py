@@ -59,8 +59,7 @@ def _getrf_info(A: Tensor) -> Tensor:
     ``getri`` / ``getrs`` would divide by.  Factorising finishes on a
     singular matrix, so this answers for every matrix of the batch at once;
     the ``inv`` / ``solve`` kernels stop at the first failure."""
-    with lucid.no_grad():
-        return _lu_factor_ex(A.detach(), check_errors=False, op="getrf")[2]
+    return _wrap(_la.lu_factor(_unwrap(A))[2])
 
 
 def _cholesky_succeeds(M: Tensor, upper: bool) -> bool:

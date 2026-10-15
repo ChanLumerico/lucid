@@ -117,8 +117,8 @@ _UNORDERED = {"eigvals"}
 #: is a known gap outside the solve_triangular / lu_factor policy that
 #: CHA-227 settled.
 _REFERENCE_GAPS: dict[tuple[str, str], str] = {
-    ("lstsq", "inf"): "lstsq of an infinite matrix: all-NaN, the reference "
-    "keeps the finite component (driver difference)",
+    ("lstsq", "inf"): "lstsq uses the SVD minimum-norm solution (gelss: zeros), "
+    "the reference defaults to QR with pivoting (gelsy: [nan, 0])",
     ("lstsq", "mixed_batch"): "lstsq refuses a batch",
     ("lstsq", "indefinite_batch"): "lstsq refuses a batch",
     ("lstsq", "empty_batch"): "lstsq refuses a batch",
@@ -126,9 +126,6 @@ _REFERENCE_GAPS: dict[tuple[str, str], str] = {
     "returns NaN",
     ("eigvals", "inf"): "eigvals raises on a non-finite input, the reference "
     "returns NaN",
-    ("pinv", "inf"): "pinv of an infinite matrix: NaN, the reference zeros",
-    ("lu", "nan"): "lu's L differs from the reference's past a NaN pivot",
-    ("lu", "inf"): "lu's L differs from the reference's past an inf pivot",
 }
 
 _Kind = tuple[str, Any]

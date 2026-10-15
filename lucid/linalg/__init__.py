@@ -3246,10 +3246,9 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     # A singular matrix has an LU factorization; only lu_factor refuses it.
     LU, pivots, _ = _lu_factor_packed(A)
 
-    # Split the packed LU into L (unit-lower) and U (upper).
-    eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)
-    L_strict = lucid.tril(LU) - lucid.tril(LU) * eye_n  # zero out diagonal
-    L = L_strict + eye_n  # add unit diagonal
+    # Split the packed LU into L (unit-lower, by index mask so a non-finite
+    # diagonal entry does not poison L via inf * 0) and U (upper).
+    L = lucid.tril(LU, -1) + lucid.eye(n, dtype=A.dtype, device=A.device)
     U = lucid.triu(LU)
 
     # Reconstruct the permutation matrix from the LAPACK pivot vector.
