@@ -511,13 +511,14 @@ def bincount(
             )
         length = max(int(highest) + 1, minlength)
     device = input.device
+    idx = input if input.dtype in (lucid.int32, lucid.int64) else input.to(lucid.int64)
     if weights is None:
         counts = lucid.zeros(length, dtype=lucid.int64, device=device)
         ones = lucid.ones(n, dtype=lucid.int64, device=device)
-        return _scatter_add(counts, 0, input, ones)
+        return _scatter_add(counts, 0, idx, ones)
     dtype = _bincount_dtype(weights)
     totals = lucid.zeros(length, dtype=dtype, device=device)
-    return _scatter_add(totals, 0, input, weights.to(dtype))
+    return _scatter_add(totals, 0, idx, weights.to(dtype))
 
 
 def _extremes(values: Tensor) -> tuple[float, float]:

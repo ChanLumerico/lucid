@@ -9,6 +9,18 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+def _scaled_add(input: Tensor, beta: float, prod: Tensor, alpha: float) -> Tensor:
+    """``beta * input + alpha * prod``, skipping ``input``'s values when ``beta == 0``."""
+    if beta == 0:
+        acc = (
+            lucid.where(lucid.zeros_like(input, dtype=lucid.bool_), input, 0)
+            if input.requires_grad
+            else lucid.zeros_like(input)
+        )
+        return acc + prod * alpha
+    return input * beta + prod * alpha
+
+
 def addmm(
     input: Tensor,
     mat1: Tensor,
@@ -63,7 +75,7 @@ def addmm(
     >>> lucid.addmm(M, a, b, beta=0.0, alpha=1.0)
     tensor([[19., 22.], [43., 50.]])
     """
-    return input * beta + lucid.matmul(mat1, mat2) * alpha
+    return _scaled_add(input, beta, lucid.matmul(mat1, mat2), alpha)
 
 
 def addbmm(
@@ -121,7 +133,7 @@ def addbmm(
     >>> lucid.addbmm(M, b1, b2)
     tensor([[12., 12.], [12., 12.]])
     """
-    return input * beta + lucid.sum(lucid.bmm(batch1, batch2), 0) * alpha
+    return _scaled_add(input, beta, lucid.sum(lucid.bmm(batch1, batch2), 0), alpha)
 
 
 def baddbmm(
@@ -178,7 +190,7 @@ def baddbmm(
     >>> lucid.baddbmm(M, b1, b2).shape
     (3, 2, 2)
     """
-    return input * beta + lucid.bmm(batch1, batch2) * alpha
+    return _scaled_add(input, beta, lucid.bmm(batch1, batch2), alpha)
 
 
 def addmv(
@@ -235,7 +247,7 @@ def addmv(
     tensor([17., 39.])
     """
     mv_out = lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
-    return input * beta + mv_out * alpha
+    return _scaled_add(input, beta, mv_out, alpha)
 
 
 def addr(
@@ -293,7 +305,7 @@ def addr(
     tensor([[3., 4., 5.], [6., 8., 10.]])
     """
     out = lucid.matmul(vec1.unsqueeze(-1), vec2.unsqueeze(0))
-    return input * beta + out * alpha
+    return _scaled_add(input, beta, out, alpha)
 
 
 def addcmul(

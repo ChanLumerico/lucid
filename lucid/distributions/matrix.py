@@ -14,7 +14,7 @@ import lucid
 import lucid.linalg as _la
 import lucid.special as _sp
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import _as_tensor, _lazy_param
+from lucid.distributions._util import _align_device, _as_tensor, _lazy_param
 from lucid.distributions.constraints import (
     Constraint,
     corr_cholesky,
@@ -533,7 +533,7 @@ class LKJCholesky(Distribution):
         The normaliser follows Eq. (15) of Lewandowski et al. (2009).
         """
         d: int = self.dim
-        eta: Tensor = self.concentration
+        eta: Tensor = _align_device(self.concentration, value)
 
         # Extract diagonal elements (exclude L_{11} = 1).
         diag = value.diagonal(dim1=-2, dim2=-1)[..., 1:]  # (..., d-1)

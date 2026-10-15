@@ -312,32 +312,10 @@ class _CholeskyAutograd(_AutogradFunction):
         # Step 2: Z = Y L^{-1}.  Take transposes: Z^T = L^{-T} Y^T, so solve
         # L^T Z^T = Y^T then transpose back.
         Z = solve_triangular(L.mT, Y.mT, upper=True).mT
-        # Murray's formula gives the Riemannian gradient for a symmetric
-        # input matrix A (it implicitly assumes ∂A[i,j] = ∂A[j,i]).
-        # gradcheck treats A as a general matrix and perturbs each element
-        # independently.  Cholesky uses only tril(A), so:
-        #   · upper triangle of A  → gradient = 0
-        #   · diagonal of A        → gradient = (Z+Z^T)[i,i]/2  (unchanged)
-        #   · lower off-diagonal   → gradient = (Z+Z^T)[i,j]  (×2 vs Murray)
-        # When upper=False, cholesky reads only tril(A):
-        #   · upper off-diagonal → gradient 0
-        #   · diagonal           → sym[i,i]  (unchanged)
-        #   · lower off-diagonal → 2·sym[i,j]
-        #   ⟹ grad_A = 2·tril(sym) − diag(sym)
-        # When upper=True, cholesky reads only triu(A) (we normalised to L above,
-        # so Z is still in lower-triangular space, but the active elements of A
-        # are in the upper triangle):
-        #   · lower off-diagonal → gradient 0
-        #   · diagonal           → sym[i,i]
-        #   · upper off-diagonal → 2·sym[i,j]
-        #   ⟹ grad_A = 2·triu(sym) − diag(sym)
-        sym = 0.5 * (Z + Z.mT)
-        diag_vals = sym.diagonal(dim1=-2, dim2=-1)  # (..., n)
-        if upper:
-            grad_A = 2.0 * lucid.triu(sym) - lucid.diag_embed(diag_vals)
-        else:
-            grad_A = 2.0 * lucid.tril(sym) - lucid.diag_embed(diag_vals)
-        return grad_A
+        # Murray's formula gives the symmetric Riemannian gradient for A = A^T:
+        # grad_A = 1/2 (L^{-T} Phi(L^T gL) L^{-1} + sym), matching PyTorch's
+        # cholesky backward convention across both upper=False and upper=True.
+        return 0.5 * (Z + Z.mT)
 
 
 def norm(
