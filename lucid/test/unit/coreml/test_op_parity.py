@@ -769,7 +769,7 @@ class TestTheGapAgainstCompileIsAccountedFor:
     }
 
     #: Expressible and not written (tracked by LCD-444).
-    NOT_YET: set[str] = {"floordiv"}  # LCD-444
+    NOT_YET: set[str] = set()
 
     def test_no_unaccounted_gap(self) -> None:
         from lucid.coreml._emit import EMITTERS

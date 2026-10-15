@@ -7,12 +7,26 @@ export (:func:`foldable`) and writes the answer down as constants.
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-__all__ = ["TRUE_FACTORIES", "foldable"]
+__all__ = ["TRUE_FACTORIES", "f32_opmath_scalars", "foldable"]
 
 
 class _Value(Protocol):
     @property
     def id(self) -> int: ...
+
+    @property
+    def dtype(self) -> object: ...
+
+    @property
+    def shape(self) -> Sequence[int]: ...
+
+
+class _Feed(Protocol):
+    @property
+    def dtype(self) -> object: ...
+
+    @property
+    def shape(self) -> Sequence[int]: ...
 
 
 class _Op(Protocol):
@@ -131,3 +145,40 @@ def _constant_op(
     # ``zeros(x.shape[0], ...)``: made out of nothing, and still the
     # input's size. The traced value is one size of many.
     return not any(int(o.id) in varying for o in op.outputs)
+
+
+def _opmath_scalar_input(
+    op: _Op, meta: Mapping[int, tuple[str, tuple[int, ...]]]
+) -> int | None:
+    if op.name not in ("mul", "div", "floordiv") or len(op.inputs) != 2 or not op.outputs:
+        return None
+    if str(op.outputs[0].dtype).split(".")[-1] != "F16":
+        return None
+    a_id, b_id = int(op.inputs[0]), int(op.inputs[1])
+    a_m = meta.get(a_id, ("", ()))
+    b_m = meta.get(b_id, ("", ()))
+    if a_m[0] == "F16" and b_m == ("F32", ()):
+        return b_id
+    if b_m[0] == "F16" and a_m == ("F32", ()):
+        return a_id
+    return None
+
+
+def f32_opmath_scalars(graph: _Graph, feeds: Mapping[int, _Feed]) -> set[int]:
+    """0-d float32 values that pair with an F16 tensor in ``mul``/``div``/``floordiv``."""
+    meta: dict[int, tuple[str, tuple[int, ...]]] = {
+        tid: (str(impl.dtype).split(".")[-1], tuple(int(d) for d in impl.shape))
+        for tid, impl in feeds.items()
+    }
+    for op in graph.ops:
+        for o in op.outputs:
+            meta[int(o.id)] = (
+                str(o.dtype).split(".")[-1],
+                tuple(int(d) for d in o.shape),
+            )
+    scalars: set[int] = set()
+    for op in graph.ops:
+        sid = _opmath_scalar_input(op, meta)
+        if sid is not None:
+            scalars.add(sid)
+    return scalars

@@ -25,7 +25,13 @@ import math
 from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
 from lucid.coreml import _flex, _sized, _spec
-from lucid.coreml._convert import emit_cast, moved, scalar_like, widened
+from lucid.coreml._convert import (
+    emit_cast,
+    emit_opmath_binary,
+    moved,
+    scalar_like,
+    widened,
+)
 from lucid.coreml._linear import fused_linear_gelu, fused_linear_relu, linear
 
 if TYPE_CHECKING:
@@ -414,19 +420,10 @@ def _batch_norm_eval(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 # ── elementwise binary: same table, same reason as the unary one ─────────────
 _BINARY_MIL = {
-    "add": "add",
-    "div": "real_div",
-    "equal": "equal",
-    "greater": "greater",
-    "greater_equal": "greater_equal",
-    "less": "less",
-    "less_equal": "less_equal",
-    "maximum": "maximum",
-    "minimum": "minimum",
-    "mul": "mul",
-    "not_equal": "not_equal",
-    "pow": "pow",
-    "sub": "sub",
+    "add": "add", "div": "real_div", "equal": "equal", "floordiv": "floor_div",
+    "greater": "greater", "greater_equal": "greater_equal", "less": "less",
+    "less_equal": "less_equal", "maximum": "maximum", "minimum": "minimum",
+    "mul": "mul", "not_equal": "not_equal", "pow": "pow", "sub": "sub",
 }
 
 
@@ -464,6 +461,9 @@ def _register_binary(lucid_name: str, mil_name: str) -> None:
         if target is None and _MIL_BOOL in (b.dtype_of(ins[0]), b.dtype_of(ins[1])):
             # MIL compares numbers only; ``mask != False`` compares 0 and 1.
             target = _MIL_INT32
+        opmath = emit_opmath_binary(b, op, lucid_name, mil_name, ins[0], ins[1], target)
+        if opmath is not None:
+            return opmath
         x, y = b.agree_on_dtype([ins[0], ins[1]], target)
         if lucid_name == "pow" and b.is_const(x) and not b.is_const(y):
             x = _runtime_base(b, op, x, y)

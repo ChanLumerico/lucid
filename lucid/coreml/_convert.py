@@ -15,7 +15,14 @@ if TYPE_CHECKING:
     from lucid.coreml._build import Builder
     from lucid.coreml._emit import Bindings, EmitResult, TracedOp
 
-__all__ = ["MIL_CAST_NAMES", "emit_cast", "moved", "scalar_like", "widened"]
+__all__ = [
+    "MIL_CAST_NAMES",
+    "emit_cast",
+    "emit_opmath_binary",
+    "moved",
+    "scalar_like",
+    "widened",
+]
 
 _MIL_BOOL = _spec.BOOL
 _MIL_INT32 = _spec.INT32
@@ -157,3 +164,56 @@ def moved(
     ]
     result = b.emit(mil_type, operands, b.result_dims(op), dtype=_MIL_INT32)
     return emit_cast(b, result, "bool")
+
+
+def emit_opmath_binary(
+    b: Builder,
+    op: TracedOp,
+    lucid_name: str,
+    mil_name: str,
+    lhs: str,
+    rhs: str,
+    target: int | None,
+) -> EmitResult | None:
+    """Upcast a float16 + 0-d float32 ``mul``/``div``/``floordiv`` pair to fp32.
+
+    Matches eager op-math promotion by casting the half input to float32,
+    emitting the binary op in float32, and casting the result back to fp16.
+
+    Parameters
+    ----------
+    b : Builder
+        Active MIL builder.
+    op : TracedOp
+        Traced binary operation.
+    lucid_name : str
+        Lucid operation name.
+    mil_name : str
+        MIL binary operation name.
+    lhs : str
+        Left-hand MIL value name.
+    rhs : str
+        Right-hand MIL value name.
+    target : int or None
+        Target MIL output data type.
+
+    Returns
+    -------
+    EmitResult or None
+        Cast-back MIL result name if op-math promotion applies, else ``None``.
+    """
+    if target != _spec.FLOAT16 or lucid_name not in ("mul", "div", "floordiv"):
+        return None
+    is_pair = (b.dtype_of(lhs) == _spec.FLOAT16 and b.is_0d_float32(rhs)) or (
+        b.dtype_of(rhs) == _spec.FLOAT16 and b.is_0d_float32(lhs)
+    )
+    if not is_pair:
+        return None
+    x_f32, y_f32 = b.agree_on_dtype([lhs, rhs], _spec.FLOAT32)
+    res_f32 = b.emit(
+        mil_name,
+        [("x", x_f32), ("y", y_f32)],
+        b.result_dims(op),
+        dtype=_spec.FLOAT32,
+    )
+    return emit_cast(b, res_f32, "fp16")

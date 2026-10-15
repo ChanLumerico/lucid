@@ -758,6 +758,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - save embedding_bag weight only for mode=max (LCD-349)
 
+- run half op-math mixed pairs in f32 (LCD-344)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

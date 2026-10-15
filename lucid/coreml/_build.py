@@ -1797,7 +1797,7 @@ class Builder:
             Name of the constant.
         """
         name = self._const_name("f32")
-        self.dtypes[name] = _C_engine.coreml.DTYPE_FLOAT32
+        self.dtypes[name], self._shapes[name] = _spec.FLOAT32, []
         self._program.add_float_const(name, [float(value)], True)
         return name
 
@@ -1805,6 +1805,10 @@ class Builder:
         name = self._const_name("str")
         self._program.add_string_const(name, value)
         return name
+
+    def is_0d_float32(self, name: str) -> bool:
+        """Whether ``name`` is a 0-d float32 scalar or tensor."""
+        return self.dtypes.get(name) == _spec.FLOAT32 and not self._shapes.get(name)
 
     def const_from_tensor(self, tensor: Tensor) -> str:
         """A constant of arbitrary shape, carried in the weight blob.
@@ -1827,12 +1831,15 @@ class Builder:
         """
         _refuse_if_empty(tensor)
         payload = tensor.half() if self._half else tensor
+        is_f16 = payload.dtype == lucid.float16
+        mil_dt = _spec.FLOAT16 if is_f16 else self._body_mil
+        blob_dt = _spec.BLOB_FLOAT16 if is_f16 else self._body_blob
         name = self._const_name("blobconst")
-        offset = self._blob.append_tensor(_unwrap(payload), self._body_blob)
+        offset = self._blob.append_tensor(_unwrap(payload), blob_dt)
         shape = [int(d) for d in tensor.shape]
-        self._program.add_blob_const(name, (self._body_mil, shape), offset)
+        self._program.add_blob_const(name, (mil_dt, shape), offset)
         self._shapes[name] = shape
-        self.dtypes[name] = self._body_mil
+        self.dtypes[name] = mil_dt
         return name
 
     def emit(
@@ -1879,12 +1886,12 @@ class Builder:
         return name
 
     def _result_dtype(self, operands: list[tuple[str, list[str]]]) -> int:
-        """An unnamed result type: MIL does not promote, so an int32 or bool
-        ``x`` (a reshaped index) keeps its type; a float one follows the body."""
+        """An unnamed result type: MIL does not promote, so an int32, bool, or
+        explicit float16 ``x`` keeps its type; other floats follow the body."""
         for param, values in operands:
             if param == "x" and len(values) == 1:
                 kind = self.dtypes.get(values[0])
-                if kind in (_C_engine.coreml.DTYPE_INT32, _C_engine.coreml.DTYPE_BOOL):
+                if kind in (_spec.INT32, _spec.BOOL, _spec.FLOAT16):
                     return kind
         return self._body_mil
 
@@ -1938,17 +1945,8 @@ class Builder:
 #: axis moved and knows to ask.
 _UNIT_AXIS_SAFE = frozenset(
     {
-        "add",
-        "div",
-        "mul",
-        "sub",
-        "maximum",
-        "minimum",
-        "pow",
-        "reshape",
-        "squeeze",
-        "unsqueeze",
-        "split_at",
+        "add", "div", "floordiv", "mul", "sub", "maximum", "minimum",
+        "pow", "reshape", "squeeze", "unsqueeze", "split_at",
     }
 )
 
@@ -2298,6 +2296,7 @@ def _record(model: Module, probe: Tensor, output_field: str | None) -> _flex.Rec
         [out.id for op in ops for out in op.outputs],
         given,
         _flex.signature(graph),
+        # Non-input feed shapes (parameters, buffers, constants).
         {
             int(tid): tuple(int(d) for d in impl.shape)
             for tid, impl in feeds.items()
@@ -2797,28 +2796,35 @@ def build_package(
         else:
             # Keyed by the parameter's identity, so a weight two
             # functions share is written once and pointed at twice.
+            is_f16 = tensor.dtype == lucid.float16
+            mil_dt = _spec.FLOAT16 if is_f16 else _spec.FLOAT32
+            blob_dt = _spec.BLOB_FLOAT16 if is_f16 else _spec.BLOB_FLOAT32
             offset = into.offsets.get(dedup) if into is not None and dedup else None
             if offset is None:
-                offset = blob.append_tensor(_unwrap(tensor), body_blob)
+                offset = blob.append_tensor(_unwrap(tensor), blob_dt)
                 if into is not None and dedup:
                     into.offsets[dedup] = offset
-            program.add_blob_const(name, (body_mil, shape), offset)
+            program.add_blob_const(name, (mil_dt, shape), offset)
 
+    f32_opmath_scalars = _fold.f32_opmath_scalars(graph, feeds)
     for tid, impl in feeds.items():
         if tid in input_ids:
             continue
         tensor = _wrap(impl)
         _refuse_if_empty(tensor)
         is_float = tensor.dtype in (lucid.float32, lucid.float16)
-        if half and is_float:
+        keep_f32 = tid in f32_opmath_scalars
+        if half and is_float and not keep_f32:
             tensor = tensor.half()
         # Float payloads go straight from the tensor's host storage — no
         # numpy anywhere in this package (H4).
         shape = [int(d) for d in tensor.shape]
         name = f"_w{tid}"
         if is_float:
-            _write_float_const(name, tensor, id(impl))
-            weight_dtypes[name] = body_mil
+            _write_float_const(name, tensor, None if keep_f32 else id(impl))
+            weight_dtypes[name] = (
+                _spec.FLOAT16 if tensor.dtype == lucid.float16 else _spec.FLOAT32
+            )
         elif tensor.dtype == lucid.bool_:
             # A boolean buffer is a mask, not a count that happens to be 0
             # or 1, and MIL types the two apart — an int32 constant would
@@ -2919,15 +2925,16 @@ def build_package(
             )
             builder.declare(source, shape)
             names[tid] = source
-        # Only a float interface needs bracketing.  An integer input —
+        # Only a float32 interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
         # half would turn indices into approximations of themselves.  A
         # float16 interface is already what the body reads.
-        if half and not half_in and tensor.dtype in (lucid.float32, lucid.float16):
+        if half and not half_in and tensor.dtype == lucid.float32 and tid not in f32_opmath_scalars:
             cast_name = f"_cast_in_{name}"
             mil_type, raw = emit_cast(builder, source, "fp16")
             program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
             builder.declare(cast_name, shape)
+            builder.dtypes[cast_name] = body_mil
             names[tid] = cast_name
     # An output's value is named after the model's own field, so a caller
     # reading the package knows which head it is looking at.  Done when the
@@ -2941,11 +2948,10 @@ def build_package(
     # value name it would have had.
     carried_out = {spec.output for spec in (state or [])}
     cast_out = half and not (half_io and classifier is None)
-    wanted_name: dict[int, str] = (
-        {}
-        if cast_out
-        else {tid: field for field, tid, _t in outputs if field not in carried_out}
-    )
+    wanted_name: dict[int, str] = {
+        tid: field for field, tid, t in outputs
+        if field not in carried_out and not (cast_out and t.dtype == lucid.float32)
+    }
     # A value the graph recomputes on every prediction although nothing
     # about it depends on the input is written down instead. See
     # ``_fold.foldable``: this is a third of a windowed transformer, and all
@@ -2958,7 +2964,9 @@ def build_package(
             folded_value = folded_value.reshape(
                 *[int(d) for d in folded_value.shape][1:]
             )
-        if folded_value.dtype in (lucid.float32, lucid.float16):
+        if tid in f32_opmath_scalars:
+            names[tid] = builder.const_float32(float(folded_value.item()))
+        elif folded_value.dtype in (lucid.float32, lucid.float16):
             written = folded_value.half() if half else folded_value
             if _worth_storing_compressed(written, weights):
                 # Large enough to pay for a table, so it goes through the
@@ -2967,7 +2975,8 @@ def build_package(
                 name = f"_f{tid}"
                 _write_float_const(name, written, None)
                 builder.mark_const(name)
-                builder.dtypes[name] = body_mil
+                is_f16 = written.dtype == lucid.float16
+                builder.dtypes[name] = _spec.FLOAT16 if is_f16 else body_mil
                 builder.declare(name, [int(d) for d in written.shape])
                 names[tid] = name
             else:
@@ -2979,8 +2988,7 @@ def build_package(
             )
         else:
             # Nothing to write it as; leave the operations in place.
-            folded = set()
-            precomputed = set()
+            folded, precomputed = set(), set()
             break
 
     for op in _reachable_ops(graph, [tid for _n, tid, _t in outputs]):
@@ -2988,11 +2996,8 @@ def build_package(
             # Its result is a constant now, and so is everything it fed.
             continue
         head = int(op.outputs[0].id) if op.outputs else -1
-        if head in lifted_heads:
-            # The caller supplies it; there is nothing to compute.
-            continue
-        if head in absorbed:
-            # Emitted already, as part of the window rewrite below.
+        if head in lifted_heads or head in absorbed:
+            # Lifted: caller supplies it. Absorbed: emitted in window rewrite.
             continue
         builder.current = op.name
         plan = rewrites.get(head)
@@ -3030,20 +3035,18 @@ def build_package(
             builder, _flex.GuardedOp(op, varying) if varying else op, operands
         )
         if isinstance(result, Constant):
-            # The value is the constant; there is nothing to append.
             names[op.outputs[0].id] = result.name
             continue
         if isinstance(result, Bound):
-            # The emitter already appended whatever it needed; these are
-            # the values its results are.
             for out, bound in zip(op.outputs, result.names, strict=True):
                 names[out.id] = bound
             continue
         multi = isinstance(result, MultiOutput)
-        if isinstance(result, MultiOutput):
-            mil_type, raw_bindings = result.mil_type, result.bindings
-        else:
-            mil_type, raw_bindings = result
+        mil_type, raw_bindings = (
+            (result.mil_type, result.bindings)
+            if isinstance(result, MultiOutput)
+            else result
+        )
         # Emitters may bind a parameter to one name or several (``concat``);
         # the engine wants a list either way.
         bindings = _operands(raw_bindings)
@@ -3053,11 +3056,7 @@ def build_package(
                 (
                     _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
                     _flex.flex(
-                        (
-                            [int(d) for d in o.shape][1:]
-                            if o.id in thinned
-                            else [int(d) for d in o.shape]
-                        ),
+                        [int(d) for d in o.shape][1 if o.id in thinned else 0 :],
                         varying.get(o.id),
                     ),
                 ),
@@ -3116,12 +3115,13 @@ def build_package(
             ),
             _flex.flex([int(d) for d in tensor.shape], varying.get(tid)),
         )
-        # Only a float output needs bracketing back to fp32, and the
+        # Only a float32 output needs bracketing back to fp32, and the
         # guard has to be here as well as on the input side: casting an
-        # integer output — VQ-VAE returns its codebook indices — asks
-        # Core ML for a cast whose named type is not the output's, and
-        # the package will not parse.
-        if cast_out and is_float:
+        # integer output — VQ-VAE returns its codebook indices — or a
+        # float16 output asks Core ML for a cast whose named type is not
+        # the output's, and the package will not parse.
+        # (Half op-math outputs already end in an fp16 cast.)
+        if cast_out and tensor.dtype == lucid.float32:
             mil_type, raw = emit_cast(builder, value, "fp32")
             program.add_op(mil_type, _operands(raw), field, flexible_type)
             value = field

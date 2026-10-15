@@ -34,6 +34,21 @@ namespace lucid::compile {
 
 namespace {
 
+inline bool is_0d_f32_tensor(MPSGraphTensor* t) {
+    return t.dataType == MPSDataTypeFloat32 && t.shape != nil && t.shape.count == 0;
+}
+
+inline bool is_half_f32_0d_pair(const OpNode& node, MPSDataType target_dt, MPSGraphTensor* a_t,
+                                MPSGraphTensor* b_t) {
+    const Dtype out_dt = node.outputs[0].dtype;
+    if (out_dt != Dtype::F16 && out_dt != Dtype::BF16)
+        return false;
+    if (node.name != "mul" && node.name != "div" && node.name != "floordiv")
+        return false;
+    return (a_t.dataType == target_dt && is_0d_f32_tensor(b_t)) ||
+           (b_t.dataType == target_dt && is_0d_f32_tensor(a_t));
+}
+
 template <class BuilderBlock>
 inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 2 || node.outputs.empty())
@@ -56,22 +71,30 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     // precision).  Reconcile by casting any operand whose dtype
     // doesn't match the recorded output dtype before the binary op.
     //
-    // When all dtypes match the output's, both casts are no-ops and
-    // this branch is free.
+    // **Half op-math (F16/BF16 + 0-d F32 scalar/tensor).**  Eager keeps a
+    // half tensor paired with a 0-d float32 operand at the half output dtype
+    // while computing ``mul`` / ``div`` / ``floordiv`` in float32 before
+    // rounding back to half (``_Opmath.h``).
     const auto held = mps_dtype_of(node.outputs[0].dtype);
     if (!held)
         return false;
     const MPSDataType target_dt = *held;
-    if (a_t.dataType != target_dt) {
-        a_t = [graph castTensor:a_t toType:target_dt name:@"binop_cast_a"];
+    const MPSDataType op_dt =
+        is_half_f32_0d_pair(node, target_dt, a_t, b_t) ? MPSDataTypeFloat32 : target_dt;
+
+    if (a_t.dataType != op_dt) {
+        a_t = [graph castTensor:a_t toType:op_dt name:@"binop_cast_a"];
     }
-    if (b_t.dataType != target_dt) {
-        b_t = [graph castTensor:b_t toType:target_dt name:@"binop_cast_b"];
+    if (b_t.dataType != op_dt) {
+        b_t = [graph castTensor:b_t toType:op_dt name:@"binop_cast_b"];
     }
 
     MPSGraphTensor* y = builder(graph, a_t, b_t);
     if (y == nil)
         return false;
+    if (y.dataType != target_dt) {
+        y = [graph castTensor:y toType:target_dt name:@"binop_cast_out"];
+    }
     ctx.bind(node.outputs[0].id, (__bridge void*)y);
     return true;
 }
@@ -189,25 +212,82 @@ public:
     }
 };
 
+inline MPSGraphTensor* emit_float_floordiv(MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
+    // Match eager ``DivMod.h`` / ``gpu/DivMod.h``: floating-point floor
+    // division runs in float32 via exact ``fmod`` so an upward-rounded
+    // quotient (e.g. ``1.5 / 0.1 == 15.0`` when ``0.1f > 0.1``) or
+    // reciprocal multiplication (``1.7 / 1.7 < 1.0``) does not land one
+    // integer off.
+    const MPSDataType orig_dt = a.dataType;
+    MPSGraphTensor* af = (orig_dt == MPSDataTypeFloat32)
+                             ? a
+                             : [g castTensor:a toType:MPSDataTypeFloat32 name:nil];
+    MPSGraphTensor* bf = (orig_dt == MPSDataTypeFloat32)
+                             ? b
+                             : [g castTensor:b toType:MPSDataTypeFloat32 name:nil];
+    MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:MPSDataTypeFloat32];
+    MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:MPSDataTypeFloat32];
+
+    MPSGraphTensor* raw_div = [g divisionWithPrimaryTensor:af secondaryTensor:bf name:nil];
+    MPSGraphTensor* mod = [g moduloWithPrimaryTensor:af secondaryTensor:bf name:nil];
+    MPSGraphTensor* mod_nonzero = [g notEqualWithPrimaryTensor:mod secondaryTensor:zero name:nil];
+    MPSGraphTensor* mod_neg = [g lessThanWithPrimaryTensor:mod secondaryTensor:zero name:nil];
+    MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:bf secondaryTensor:zero name:nil];
+    MPSGraphTensor* signs_differ = [g logicalXORWithPrimaryTensor:mod_neg
+                                                  secondaryTensor:div_neg
+                                                             name:nil];
+    MPSGraphTensor* needs_adjust = [g logicalANDWithPrimaryTensor:mod_nonzero
+                                                  secondaryTensor:signs_differ
+                                                             name:nil];
+    MPSGraphTensor* adjust = [g selectWithPredicateTensor:needs_adjust
+                                      truePredicateTensor:one
+                                     falsePredicateTensor:zero
+                                                     name:nil];
+    MPSGraphTensor* num = [g subtractionWithPrimaryTensor:af secondaryTensor:mod name:nil];
+    MPSGraphTensor* q_exact = [g divisionWithPrimaryTensor:num secondaryTensor:bf name:nil];
+    MPSGraphTensor* div = [g subtractionWithPrimaryTensor:q_exact secondaryTensor:adjust name:nil];
+    MPSGraphTensor* whole = [g floorWithTensor:div name:nil];
+    MPSGraphTensor* frac = [g subtractionWithPrimaryTensor:div secondaryTensor:whole name:nil];
+    MPSGraphTensor* round_up = [g greaterThanWithPrimaryTensor:frac secondaryTensor:half name:nil];
+    MPSGraphTensor* whole_plus_one = [g additionWithPrimaryTensor:whole
+                                                  secondaryTensor:one
+                                                             name:nil];
+    whole = [g selectWithPredicateTensor:round_up
+                     truePredicateTensor:whole_plus_one
+                    falsePredicateTensor:whole
+                                    name:nil];
+    MPSGraphTensor* signed_zero = [g multiplicationWithPrimaryTensor:raw_div
+                                                     secondaryTensor:zero
+                                                                name:nil];
+    MPSGraphTensor* div_is_zero = [g equalWithPrimaryTensor:div secondaryTensor:zero name:nil];
+    MPSGraphTensor* res = [g selectWithPredicateTensor:div_is_zero
+                                   truePredicateTensor:signed_zero
+                                  falsePredicateTensor:whole
+                                                  name:nil];
+    MPSGraphTensor* b_is_zero = [g equalWithPrimaryTensor:bf secondaryTensor:zero name:nil];
+    res = [g selectWithPredicateTensor:b_is_zero
+                   truePredicateTensor:raw_div
+                  falsePredicateTensor:res
+                                  name:@"floordiv"];
+    return (orig_dt == MPSDataTypeFloat32)
+               ? res
+               : [g castTensor:res toType:orig_dt name:@"floordiv_cast"];
+}
+
 class FloordivEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "floordiv"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            // ``floor(a/b)`` alone is right for floats and wrong for
-            // integers: MPSGraph's integer division truncates toward zero
-            // and flooring an integer is a no-op, so ``-7 // 2`` came back
-            // as -3 where eager and Python both give -4.  This emitter was
-            // unreachable until floordiv started recording its trace I/O,
-            // so nothing had ever measured it.
-            //
-            // Correct it the way C's truncating division is corrected:
-            // subtract one when the remainder is non-zero and disagrees in
-            // sign with the divisor.  The correction is written to be a
-            // no-op on the cases that are already right — on floats the
-            // remainder after flooring already carries the divisor's sign,
-            // and so does an integer division that floors on its own — so
-            // this stays correct whichever semantics the backend has.
+            const MPSDataType dt = a.dataType;
+            if (dt == MPSDataTypeFloat16 || dt == MPSDataTypeBFloat16 || dt == MPSDataTypeFloat32) {
+                return emit_float_floordiv(g, a, b);
+            }
+
+            // Integer floor division: MPSGraph's integer division truncates
+            // toward zero, so subtract one when the remainder is non-zero and
+            // disagrees in sign with the divisor.
             MPSGraphTensor* q = [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
             q = [g floorWithTensor:q name:nil];
 
@@ -223,10 +303,6 @@ public:
                                                    secondaryTensor:zero
                                                               name:nil];
             MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:b secondaryTensor:zero name:nil];
-            // XOR, not ``notEqual``: comparing two booleans with the
-            // latter is the same answer, but MPSGraph's
-            // ConvertBinaryCompareToZero pass then warns on every run
-            // that the second operand is not zero.
             MPSGraphTensor* signs_differ = [g logicalXORWithPrimaryTensor:rem_neg
                                                           secondaryTensor:div_neg
                                                                      name:nil];

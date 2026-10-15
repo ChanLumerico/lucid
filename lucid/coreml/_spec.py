@@ -866,7 +866,9 @@ def trace_dtype(name: str, body_mil: int) -> int:
     TypeError
         Core ML has no equivalent — ``float64`` is the reachable case.
     """
-    if name in ("F32", "F16"):
+    if name == "F16":
+        return FLOAT16
+    if name == "F32":
         return body_mil
     if name in ("I64", "I32", "I16", "I8"):
         # Core ML's program dialect works in int32; a vocabulary index
