@@ -932,8 +932,10 @@ public:
         // on 524k floats, twenty times ``x + y``.
         if (op < 0 || op > 5)
             ErrorBuilder("cpu_backend::compare_binary").fail("unknown op");
-        auto run = [&](const auto* lhs_in, const auto* rhs_in) {
-            using T = std::remove_cv_t<std::remove_pointer_t<decltype(lhs_in)>>;
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            const auto* lhs_in = reinterpret_cast<const T*>(ca.ptr.get());
+            const auto* rhs_in = reinterpret_cast<const T*>(cb.ptr.get());
             auto each = [&](auto cmp) {
                 cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
                     // Local restrict pointers: a byte store may alias
@@ -946,52 +948,45 @@ public:
                         out[i] = static_cast<std::uint8_t>(cmp(lhs[i], rhs[i]));
                 });
             };
-            switch (op) {
-            case 0:
+            if (op == 0) {
                 each([](T l, T r) { return l == r; });
-                break;
-            case 1:
+            } else if (op == 1) {
                 each([](T l, T r) { return l != r; });
-                break;
-            case 2:
-                each([](T l, T r) { return l > r; });
-                break;
-            case 3:
-                each([](T l, T r) { return l >= r; });
-                break;
-            case 4:
-                each([](T l, T r) { return l < r; });
-                break;
-            default:
-                each([](T l, T r) { return l <= r; });
-                break;
+            } else if constexpr (requires(T l, T r) { l < r; }) {
+                if (op == 2)
+                    each([](T l, T r) { return l > r; });
+                else if (op == 3)
+                    each([](T l, T r) { return l >= r; });
+                else if (op == 4)
+                    each([](T l, T r) { return l < r; });
+                else
+                    each([](T l, T r) { return l <= r; });
+            } else {
+                ErrorBuilder("cpu_backend::compare_binary")
+                    .not_implemented("ordering comparison is not supported for complex dtypes");
             }
         };
 
-        if (dt == Dtype::F32) {
-            run(reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-        } else if (dt == Dtype::F64) {
-            run(reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-        } else if (dt == Dtype::I32) {
-            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I64) {
-            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I16) {
-            run(reinterpret_cast<const std::int16_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int16_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I8) {
-            run(reinterpret_cast<const std::int8_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int8_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::Bool) {
-            run(reinterpret_cast<const std::uint8_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(cb.ptr.get()));
-        } else {
+        if (dt == Dtype::F32)
+            run(float{});
+        else if (dt == Dtype::F64)
+            run(double{});
+        else if (dt == Dtype::I32)
+            run(std::int32_t{});
+        else if (dt == Dtype::I64)
+            run(std::int64_t{});
+        else if (dt == Dtype::I16)
+            run(std::int16_t{});
+        else if (dt == Dtype::I8)
+            run(std::int8_t{});
+        else if (dt == Dtype::Bool)
+            run(std::uint8_t{});
+        else if (dt == Dtype::C64)
+            run(std::complex<float>{});
+        else if (dt == Dtype::C128)
+            run(std::complex<double>{});
+        else
             ErrorBuilder("cpu_backend::compare_binary").not_implemented("dtype not supported");
-        }
         return Storage{CpuStorage{ptr, n, Dtype::Bool}};
     }
 

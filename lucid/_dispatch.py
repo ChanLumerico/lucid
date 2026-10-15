@@ -97,6 +97,7 @@ def _scalar_power(
     already; the CPU kernel read the double, so ``f16 ** 1.1`` differed
     between the two streams and from the reference.
     """
+    _promotion.check_pow_scalar(base.dtype, exponent)
     if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
         return None
     if base.dtype not in _REAL_FLOATS:

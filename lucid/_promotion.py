@@ -33,6 +33,8 @@ can all import it without a cycle.  It decides dtypes only; casting the
 operands and building scalar operands is :mod:`lucid._dispatch`'s job.
 """
 
+import math
+
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_dtype
 
@@ -70,14 +72,17 @@ Operand = _C_engine.TensorImpl | bool | int | float | complex
 # once.
 _BY_CODE: dict[int, tuple[int, int]] = {d.value: kw for d, kw in _KIND_WIDTH.items()}
 _DTYPE: dict[int, _C_engine.Dtype] = {d.value: d for d in _KIND_WIDTH}
-_BOOL_C, _I64_C, _F32_C, _F64_C = (
+_BOOL_C, _I64_C, _F16_C, _F32_C, _F64_C = (
     _D.Bool.value,
     _D.I64.value,
+    _D.F16.value,
     _D.F32.value,
     _D.F64.value,
 )
 _C64_C, _C128_C = _D.C64.value, _D.C128.value
 _HALF_C = frozenset(d.value for d in HALF)
+_F16_MAX = 65504.0
+_BF16_MAX = float.fromhex("0x1.fep+127")
 _NUMBER_KIND: dict[type, int] = {
     bool: BOOL,
     int: INTEGER,
@@ -111,6 +116,57 @@ def is_half(d: _C_engine.Dtype) -> bool:
     """Whether ``d`` is float16 or bfloat16 — the dtypes the engine's
     mul/div/floordiv op-math computes in float32 for."""
     return d.value in _HALF_C
+
+
+def can_cast(da: _C_engine.Dtype, db: _C_engine.Dtype) -> bool:
+    """Whether ``da`` can be cast to ``db`` under the reference's rule.
+
+    Parameters
+    ----------
+    da : _C_engine.Dtype
+        Source engine dtype.
+    db : _C_engine.Dtype
+        Destination engine dtype.
+    """
+    return _BY_CODE[da.value][0] <= _BY_CODE[db.value][0]
+
+
+def is_comparable(other: object) -> bool:
+    """Whether ``other`` is a Tensor or Python number that ``==`` / ``!=`` compares element-wise."""
+    return (
+        isinstance(other, (*NUMBER, _C_engine.TensorImpl))
+        or getattr(other, "_impl", None) is not None
+    )
+
+
+def check_pow_scalar(d: _C_engine.Dtype, exponent: object) -> None:
+    """Refuse a finite Python scalar exponent that overflows ``d``.
+
+    Parameters
+    ----------
+    d : _C_engine.Dtype
+        Base tensor engine dtype.
+    exponent : object
+        Candidate scalar exponent.
+    """
+    if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
+        return
+    c = d.value
+    if is_integer(d):
+        if isinstance(exponent, int):
+            bits = _BY_CODE[c][1]
+            if not -(1 << (bits - 1)) <= exponent < (1 << (bits - 1)):
+                raise RuntimeError(
+                    f"value cannot be converted to type {d.name} without overflow"
+                )
+        return
+    if c in _HALF_C:
+        val = float(exponent)
+        limit = _F16_MAX if c == _F16_C else _BF16_MAX
+        if math.isfinite(val) and abs(val) > limit:
+            raise RuntimeError(
+                f"value cannot be converted to type {d.name} without overflow"
+            )
 
 
 def _complex_code(c: int) -> int:

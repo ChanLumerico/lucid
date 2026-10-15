@@ -714,6 +714,7 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([1., 4., 9.])
         """
+        _promotion.check_pow_scalar(self._impl.dtype, other)
         a, b = _binary_operands(self, other)
         return _adopt_inplace(self, _C_engine.pow_(a, b), "**=")
 
@@ -1428,6 +1429,8 @@ def _inject_dunders(cls: type) -> None:
         >>> a == b
         tensor([True, False, True], dtype=lucid.bool)
         """
+        if not _promotion.is_comparable(other):
+            return NotImplemented
         return _compare(_C_engine.equal, self, other)
 
     def __ne__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -1463,6 +1466,8 @@ def _inject_dunders(cls: type) -> None:
         >>> a != b
         tensor([False, True, False], dtype=lucid.bool)
         """
+        if not _promotion.is_comparable(other):
+            return NotImplemented
         return _compare(_C_engine.not_equal, self, other)
 
     def __lt__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -1698,54 +1703,16 @@ def _inject_dunders(cls: type) -> None:
         _setitem(self, idx, value)
 
     # attach all methods
-    for _name, _fn in [
-        ("__add__", __add__),
-        ("__radd__", __radd__),
-        ("__iadd__", __iadd__),
-        ("__sub__", __sub__),
-        ("__rsub__", __rsub__),
-        ("__isub__", __isub__),
-        ("__mul__", __mul__),
-        ("__rmul__", __rmul__),
-        ("__imul__", __imul__),
-        ("__truediv__", __truediv__),
-        ("__rtruediv__", __rtruediv__),
-        ("__itruediv__", __itruediv__),
-        ("__floordiv__", __floordiv__),
-        ("__rfloordiv__", __rfloordiv__),
-        ("__pow__", __pow__),
-        ("__rpow__", __rpow__),
-        ("__ipow__", __ipow__),
-        ("__matmul__", __matmul__),
-        ("__rmatmul__", __rmatmul__),
-        ("__neg__", __neg__),
-        ("__abs__", __abs__),
-        ("__invert__", __invert__),
-        ("__and__", __and__),
-        ("__rand__", __rand__),
-        ("__or__", __or__),
-        ("__ror__", __ror__),
-        ("__xor__", __xor__),
-        ("__rxor__", __rxor__),
-        ("__int__", __int__),
-        ("__index__", __index__),
-        ("__float__", __float__),
-        ("__complex__", __complex__),
-        ("__mod__", __mod__),
-        ("__rmod__", __rmod__),
-        ("__divmod__", __divmod__),
-        ("__rdivmod__", __rdivmod__),
-        ("__lshift__", __lshift__),
-        ("__rlshift__", __rlshift__),
-        ("__rshift__", __rshift__),
-        ("__rrshift__", __rrshift__),
-        ("__eq__", __eq__),
-        ("__ne__", __ne__),
-        ("__lt__", __lt__),
-        ("__le__", __le__),
-        ("__gt__", __gt__),
-        ("__ge__", __ge__),
-        ("__getitem__", __getitem__),
-        ("__setitem__", __setitem__),
-    ]:
-        setattr(cls, _name, _fn)
+    for _fn in (
+        __add__, __radd__, __iadd__, __sub__, __rsub__, __isub__,
+        __mul__, __rmul__, __imul__, __truediv__, __rtruediv__, __itruediv__,
+        __floordiv__, __rfloordiv__, __pow__, __rpow__, __ipow__,
+        __matmul__, __rmatmul__, __neg__, __abs__, __invert__,
+        __and__, __rand__, __or__, __ror__, __xor__, __rxor__,
+        __int__, __index__, __float__, __complex__,
+        __mod__, __rmod__, __divmod__, __rdivmod__,
+        __lshift__, __rlshift__, __rshift__, __rrshift__,
+        __eq__, __ne__, __lt__, __le__, __gt__, __ge__,
+        __getitem__, __setitem__,
+    ):
+        setattr(cls, _fn.__name__, _fn)

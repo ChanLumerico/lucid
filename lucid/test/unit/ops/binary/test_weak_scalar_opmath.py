@@ -59,7 +59,9 @@ def _same(got: list[float], want: list[float]) -> bool:
     )
 
 
-def _expected(ref: ModuleType, half: str, op: str, s: float | int) -> list[float]:
+def _expected(
+    ref: ModuleType, half: str, op: str, s: float | int
+) -> list[float] | None:
     rt = ref.tensor(_VALUES, dtype=_ref_half(ref, half))
     if op == "rdiv":
         out = (ref.tensor(float(s), dtype=ref.float32) / rt.float()).to(rt.dtype)
@@ -70,6 +72,8 @@ def _expected(ref: ModuleType, half: str, op: str, s: float | int) -> list[float
         try:
             out = _OPS[op][0](rt, s)
         except RuntimeError:
+            if op == "**":
+                return None
             # The reference refuses a number its half dtype cannot hold
             # (float16 + 100000); Lucid rounds it to inf.  Not a promotion
             # question, so there is nothing to pin here.
@@ -100,9 +104,13 @@ def test_python_number_matches_the_reference(
     expected = _expected(ref, half, op, s)
     t = lucid.tensor(_VALUES, dtype=lucid.float32, device=device).to(_HALF[half])
     for spelling, call in _spellings(op, t, s).items():
-        out = call()
-        assert out.dtype == _HALF[half], spelling
-        assert _same(out.to(lucid.float32).tolist(), expected), spelling
+        if expected is None:
+            with pytest.raises(RuntimeError):
+                call()
+        else:
+            out = call()
+            assert out.dtype == _HALF[half], spelling
+            assert _same(out.to(lucid.float32).tolist(), expected), spelling
 
 
 @pytest.mark.parametrize("half", list(_HALF))

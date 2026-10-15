@@ -125,13 +125,14 @@ def promote_types(type1: _DType, type2: _DType) -> _DType:
 
 
 def can_cast(from_: _DType, to: _DType) -> bool:
-    r"""Predicate: can ``from_`` be safely cast to ``to``?
+    r"""Predicate: can ``from_`` be cast to ``to`` under the promotion rules?
 
-    Returns ``True`` iff every value representable in ``from_`` is
-    also representable in ``to`` without loss of range or
-    precision.  This is the "safe" casting policy of NumPy: it admits
-    widening conversions (e.g. ``int8 → int32``, ``float32 → float64``)
-    and rejects narrowing or sign-changing conversions.
+    Returns ``True`` iff ``to``'s category is at least ``from_``'s
+    (bool :math:`<` int :math:`<` float :math:`<` complex).  Casts within
+    a category (both widening and narrowing, e.g. ``int8 → int32``,
+    ``int64 → int8``, ``float64 → float32``) and casts to a higher
+    category are permitted; casts to a lower category (e.g.
+    ``float32 → int32``, ``complex64 → float32``) are rejected.
 
     Parameters
     ----------
@@ -143,34 +144,33 @@ def can_cast(from_: _DType, to: _DType) -> bool:
     Returns
     -------
     bool
-        ``True`` if the cast is safe, ``False`` otherwise.
+        ``True`` if the cast is permitted, ``False`` otherwise.
 
     Notes
     -----
-    Implemented in terms of :func:`promote_types`: the cast is safe when
+    With ``kind(d)`` denoting the category ordering
+    ``bool < int < float < complex``:
 
     .. math::
 
-        \operatorname{promote\_types}(\text{from},\;\text{to})
-        \;=\; \text{to},
+        \operatorname{can\_cast}(\text{from},\;\text{to})
+        \;\iff\; \operatorname{kind}(\text{from}) \le \operatorname{kind}(\text{to}).
 
-    i.e. ``to`` already dominates ``from_`` in the
-    promotion lattice.  Contrast with :func:`result_type`, which
-    returns the *target* dtype for a mixed-type expression rather than
-    a boolean — use ``can_cast`` for pre-flight checks, ``result_type``
-    for selecting an output dtype.
+    Contrast with :func:`result_type`, which returns the *target* dtype for
+    a mixed-type expression rather than a boolean — use ``can_cast`` for
+    pre-flight checks, ``result_type`` for selecting an output dtype.
 
     Examples
     --------
     >>> import lucid
     >>> lucid.can_cast(lucid.int8, lucid.int32)
     True
+    >>> lucid.can_cast(lucid.float64, lucid.float32)
+    True
     >>> lucid.can_cast(lucid.float32, lucid.int32)
     False
-    >>> lucid.can_cast(lucid.float32, lucid.float64)
-    True
     """
-    return promote_types(from_, to) == to
+    return _promotion.can_cast(to_engine_dtype(from_), to_engine_dtype(to))
 
 
 __all__ = ["result_type", "promote_types", "can_cast"]

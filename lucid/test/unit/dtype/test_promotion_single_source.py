@@ -51,14 +51,12 @@ _COMPLEX = {lucid.complex64, lucid.complex128}
 
 
 def _make(dt: lucid.dtype, zero_dim: bool, device: str) -> lucid.Tensor:
-    # Built as int64 and cast: ``tensor(2, dtype=bfloat16)`` (and complex128)
-    # comes back 1-d, which would put the cell in the wrong tier.
     if dt is lucid.bool_:
         value: Any = True if zero_dim else [True, True]
         out = lucid.tensor(value, device=device)
     else:
         value = 2 if zero_dim else [3, 2]
-        out = lucid.tensor(value, dtype=lucid.int64, device=device).to(dt)
+        out = lucid.tensor(value, dtype=dt, device=device)
     assert out.ndim == (0 if zero_dim else 1)
     return out
 
@@ -122,10 +120,8 @@ def _integer(d: lucid.dtype) -> bool:
     return d in _INTEGRAL and d is not lucid.bool_
 
 
-def _real(d: lucid.dtype) -> bool | None:
-    # Complex comparison is an engine gap that differs by stream (the CPU
-    # refuses ``==``, Metal answers ``<``); only agreement is pinned there.
-    return None if d in _COMPLEX else True
+def _real(d: lucid.dtype) -> bool:
+    return d not in _COMPLEX
 
 
 _OPS: dict[str, _Op] = {
@@ -169,8 +165,8 @@ _OPS: dict[str, _Op] = {
     ">>": _Op(
         operator.rshift, lucid.bitwise_right_shift, "bitwise_right_shift", _integer
     ),
-    "==": _Op(operator.eq, lucid.eq, "eq", _real, compare=True),
-    "!=": _Op(operator.ne, lucid.ne, "ne", _real, compare=True),
+    "==": _Op(operator.eq, lucid.eq, "eq", _any, compare=True),
+    "!=": _Op(operator.ne, lucid.ne, "ne", _any, compare=True),
     "<": _Op(operator.lt, lucid.lt, "lt", _real, compare=True),
     "<=": _Op(operator.le, lucid.le, "le", _real, compare=True),
     ">": _Op(operator.gt, lucid.gt, "gt", _real, compare=True),
@@ -324,7 +320,7 @@ def test_operator_dtype_is_the_references(symbol: str, ref: ModuleType) -> None:
     assert not problems, f"{len(problems)} cell(s):\n  " + "\n  ".join(problems[:30])
 
 
-def test_promote_types_and_can_cast_read_the_same_lattice() -> None:
+def test_promote_types_and_can_cast_read_the_same_lattice(ref: ModuleType) -> None:
     for da in _DTYPES:
         for db in _DTYPES:
             p = lucid.promote_types(da, db)
@@ -332,7 +328,10 @@ def test_promote_types_and_can_cast_read_the_same_lattice() -> None:
             assert p == lucid.result_type(
                 _make(da, False, "cpu"), _make(db, False, "cpu")
             )
-            assert lucid.can_cast(da, db) == (p == db)
+            assert lucid.can_cast(da, db) == ref.can_cast(
+                getattr(ref, _lucid_dtype_name(da)),
+                getattr(ref, _lucid_dtype_name(db)),
+            )
 
 
 # ── one table ────────────────────────────────────────────────────────────────

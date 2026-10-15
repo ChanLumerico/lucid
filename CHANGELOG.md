@@ -750,6 +750,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - enforce _wrap_dim and edge checks in diff, cross, quantile
 
+- resolve dtype edge parity and 0-D backward (LCD-343)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

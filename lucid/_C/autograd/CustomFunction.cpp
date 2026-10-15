@@ -57,16 +57,10 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     Dtype grad_dt = storage_dtype(grad_out);
     Device grad_dev = storage_is_gpu(grad_out) ? Device::GPU : Device::CPU;
 
-    // Reconstruct shape for the gradient TensorImpl.  A non-empty out_shape
-    // is used directly; otherwise a flat 1-D shape is derived from byte count.
-    Shape grad_shape = out_shape;
-    if (grad_shape.empty()) {
-        const std::size_t n = storage_nbytes(grad_out) / dtype_size(grad_dt);
-        grad_shape = {static_cast<std::int64_t>(n)};
-    }
-
+    // out_shape is always recorded by _register_python_backward_node,
+    // including {} for a 0-D scalar output.
     auto grad_impl =
-        std::make_shared<TensorImpl>(std::move(grad_out), grad_shape, grad_dt, grad_dev, false);
+        std::make_shared<TensorImpl>(std::move(grad_out), out_shape, grad_dt, grad_dev, false);
 
     py::tuple grads(1);
     grads[0] = py::cast(grad_impl);

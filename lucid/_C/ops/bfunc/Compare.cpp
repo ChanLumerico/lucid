@@ -45,6 +45,10 @@ cmp_dispatch(const TensorImplPtr& a_in, const TensorImplPtr& b_in, const char* n
     // 0-dim scalar ride through (and is what the symbolic-batch compile path
     // needs, since a full-shape scalar pins the batch).
     const auto [a, b] = align_pair(a_in, b_in, name);
+    if (op >= 2 && is_complex(a->dtype())) {
+        ErrorBuilder(name).not_implemented("ordering comparison is not supported for " +
+                                           std::string(dtype_name(a->dtype())));
+    }
     auto bc = broadcast_pair(a, b);
     OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
