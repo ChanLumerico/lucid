@@ -205,7 +205,12 @@ def test_a_deep_copied_state_dict_restores(
 
 @pytest.mark.parametrize(
     "case",
-    [pytest.param(("NAdam", {}), id="NAdam"), pytest.param(("Rprop", {}), id="Rprop")],
+    [
+        pytest.param(("SGD", {"momentum": 0.9}), id="SGD"),
+        pytest.param(("Adam", {}), id="Adam"),
+        pytest.param(("NAdam", {}), id="NAdam"),
+        pytest.param(("Rprop", {}), id="Rprop"),
+    ],
 )
 def test_a_state_dict_saved_to_disk_restores(
     case: tuple[str, dict[str, object]], device: str, tmp_path: Any
@@ -214,9 +219,7 @@ def test_a_state_dict_saved_to_disk_restores(
 
     def through_disk(sd: dict[str, Any]) -> Any:
         lucid.save(sd, path)
-        # The state entries are arrays, which the restricted loader refuses.
-        with pytest.warns(UserWarning, match="weights_only=False"):
-            return lucid.load(path, weights_only=False)
+        return lucid.load(path, weights_only=True)
 
     _resume(case, device, through_disk)
 

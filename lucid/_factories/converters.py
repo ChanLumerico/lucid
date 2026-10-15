@@ -255,15 +255,17 @@ def _source_impl(
         source = _C_engine.astype(source, dtype_eng)
     if device_eng is not None and source.device != device_eng:
         source = _C_engine.to_device(source, device_eng)
-    if source.requires_grad != requires_grad:
-        return source.clone_with_grad(requires_grad)
     if source is own:
         # ``Tensor(x)`` used to hand back ``x``'s own TensorImpl here, so
         # the new tensor was ``x`` under another name: a flag flipped or a
         # gradient accumulated on either showed up on both.  A view shares
         # the storage without sharing the tensor, and keeps a source that
         # requires grad in the graph, as the reference's ``Tensor(x)`` does.
+        if requires_grad and not source.requires_grad:
+            return source.clone_with_grad(True)
         return _C_engine.view(source, list(source.shape))
+    if source.requires_grad != requires_grad:
+        return source.clone_with_grad(requires_grad)
     return source
 
 

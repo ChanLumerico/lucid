@@ -65,3 +65,23 @@ def test_requires_grad_false_detaches_a_conversion(device: str) -> None:
     w = lucid.tensor([1.0, 2.0], requires_grad=True, device=device)
     v = lucid.Tensor(w, dtype=lucid.float16)
     assert v.is_leaf and not v.requires_grad
+
+
+def test_unconverted_tensor_preserves_requires_grad_and_graph(device: str) -> None:
+    w = lucid.tensor([1.0, 2.0], requires_grad=True, device=device)
+    alias_w = lucid.Tensor(w)
+    assert alias_w.requires_grad is True
+    assert not alias_w.is_leaf
+
+    with pytest.raises(RuntimeError, match="view of a leaf"):
+        alias_w.add_(1.0)
+
+    y = w * 2.0
+    alias_y = lucid.Tensor(y)
+    assert alias_y.requires_grad is True
+    alias_y.add_(1.0)
+    assert y.tolist() == [3.0, 5.0]
+    assert y.requires_grad is True
+    y.sum().backward()
+    assert w.grad is not None and w.grad.tolist() == [2.0, 2.0]
+

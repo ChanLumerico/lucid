@@ -834,6 +834,45 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
         ),
         lambda x, y: (lucid.histc(input=x, bins=4), lucid.histc(x, 4)),
         lambda x, y: (lucid.complex(real=x, imag=y), lucid.complex(x, y)),
+        lambda x, y: (
+            lucid.squeeze(input=x.unsqueeze(0), dim=0),
+            lucid.squeeze(x.unsqueeze(0), 0),
+        ),
+        lambda x, y: (lucid.sum(input=x, dim=0), lucid.sum(x, 0)),
+        lambda x, y: (lucid.reshape(input=x, shape=(3,)), lucid.reshape(x, (3,))),
+        lambda x, y: (
+            lucid.split(tensor=x, split_size_or_sections=2)[0],
+            lucid.split(x, 2)[0],
+        ),
+        lambda x, y: (
+            lucid.tensordot(a=x, b=y, dims=1),
+            lucid.tensordot(x, y, 1),
+        ),
+        lambda x, y: (
+            lucid.clamp(input=x, min=0.0, max=1.0),
+            lucid.clamp(x, 0.0, 1.0),
+        ),
+        lambda x, y: (
+            lucid.gather(
+                input=x, dim=0, index=lucid.tensor([2, 0], device=x.device)
+            ),
+            lucid.gather(x, 0, lucid.tensor([2, 0], device=x.device)),
+        ),
+        lambda x, y: (
+            lucid.masked_fill(
+                input=x,
+                mask=lucid.tensor([True, False, True], device=x.device),
+                value=0.0,
+            ),
+            lucid.masked_fill(
+                x, lucid.tensor([True, False, True], device=x.device), 0.0
+            ),
+        ),
+        lambda x, y: (
+            lucid.pad(input=x, padding=(1, 1), value=0.0),
+            lucid.pad(x, (1, 1), "constant", 0.0),
+        ),
+        lambda x, y: (lucid.unique(input=x), lucid.unique(x)),
         lambda x, y: (x.matmul(other=y), x.matmul(y)),
         lambda x, y: (x.isclose(other=y), x.isclose(y)),
         lambda x, y: (x.add(other=2), x.add(2)),
@@ -845,6 +884,16 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
         "take",
         "histc",
         "complex",
+        "squeeze",
+        "sum",
+        "reshape",
+        "split",
+        "tensordot",
+        "clamp",
+        "gather",
+        "masked_fill",
+        "pad",
+        "unique",
         "Tensor.matmul",
         "Tensor.isclose",
         "Tensor.add",
@@ -856,6 +905,23 @@ def test_advertised_tensor_keywords_bind(
     x, y = _pair(device)
     got, want = call(x, y)
     assert got.tolist() == want.tolist()
+
+
+def test_every_registry_free_fn_advertises_leading_tensor_names() -> None:
+    for entry in _REGISTRY:
+        fn_name = entry.free_fn_name
+        if not fn_name or entry.n_tensor_args <= 0:
+            continue
+        fn = getattr(ops, fn_name)
+        sig = _signature(fn)
+        leading = ops._leading_tensor_names(entry)
+        sig_leading = tuple(list(sig.parameters)[: len(leading)])
+        assert leading == sig_leading, (
+            f"{fn_name}: _leading_tensor_names={leading} != signature={sig_leading}"
+        )
+        assert not ({"x_impl", "a_impl", "b_impl", "y_impl"} & set(leading)), (
+            f"{fn_name} advertises internal parameter name: {leading}"
+        )
 
 
 def test_a_tensor_operand_given_twice_or_skipped_is_refused() -> None:
@@ -875,3 +941,4 @@ def test_atan2_reads_input_over_other(ref: ModuleType, device: str) -> None:
     want = ref.atan2(ref.tensor(x.tolist()), ref.tensor(y.tolist())).tolist()
     for got in (lucid.atan2(x, y), lucid.atan2(input=x, other=y), x.atan2(other=y)):
         assert got.tolist() == pytest.approx(want, rel=1e-6)
+
