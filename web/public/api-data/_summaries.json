@@ -79288,7 +79288,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 73728,
                 "own_params": 0,
                 "children": [
@@ -79360,7 +79360,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 69632,
                 "own_params": 0,
                 "children": [
@@ -79419,7 +79419,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 376832,
                 "own_params": 0,
                 "children": [
@@ -79491,7 +79491,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 278528,
                 "own_params": 0,
                 "children": [
@@ -79550,7 +79550,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 1507328,
                 "own_params": 0,
                 "children": [
@@ -79622,7 +79622,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 1114112,
                 "own_params": 0,
                 "children": [
@@ -79681,7 +79681,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 6029312,
                 "own_params": 0,
                 "children": [
@@ -79753,7 +79753,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 4456448,
                 "own_params": 0,
                 "children": [
@@ -80068,7 +80068,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 73728,
                 "own_params": 0,
                 "children": [
@@ -80140,7 +80140,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 69632,
                 "own_params": 0,
                 "children": [
@@ -80199,7 +80199,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 376832,
                 "own_params": 0,
                 "children": [
@@ -80271,7 +80271,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 278528,
                 "own_params": 0,
                 "children": [
@@ -80330,7 +80330,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 1507328,
                 "own_params": 0,
                 "children": [
@@ -80402,7 +80402,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 1114112,
                 "own_params": 0,
                 "children": [
@@ -80461,7 +80461,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 6029312,
                 "own_params": 0,
                 "children": [
@@ -80533,7 +80533,7 @@
               },
               {
                 "name": "1",
-                "type": "_Bottleneck",
+                "type": "_ResNetBottleneck",
                 "params": 4456448,
                 "own_params": 0,
                 "children": [
@@ -350212,13 +350212,13 @@
   "transformer_base_cls": {
     "name": "TransformerForSequenceClassification",
     "type": "TransformerForSequenceClassification",
-    "params": 37861378,
+    "params": 37860354,
     "own_params": 0,
     "children": [
       {
         "name": "transformer",
         "type": "TransformerModel",
-        "params": 37860352,
+        "params": 37859328,
         "own_params": 0,
         "children": [
           {
@@ -350245,8 +350245,8 @@
           },
           {
             "name": "transformer",
-            "type": "Transformer",
-            "params": 18916352,
+            "type": "_EncoderStack",
+            "params": 18915328,
             "own_params": 0,
             "children": [
               {
@@ -350308,28 +350308,6 @@
                         "repeat": 6
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "decoder",
-                "type": "TransformerDecoder",
-                "params": 1024,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "layers",
-                    "type": "_LayerContainer",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   },
                   {
                     "name": "norm",
@@ -350555,13 +350533,13 @@
   "transformer_base_token_cls": {
     "name": "TransformerForTokenClassification",
     "type": "TransformerForTokenClassification",
-    "params": 37861378,
+    "params": 37860354,
     "own_params": 0,
     "children": [
       {
         "name": "transformer",
         "type": "TransformerModel",
-        "params": 37860352,
+        "params": 37859328,
         "own_params": 0,
         "children": [
           {
@@ -350588,8 +350566,8 @@
           },
           {
             "name": "transformer",
-            "type": "Transformer",
-            "params": 18916352,
+            "type": "_EncoderStack",
+            "params": 18915328,
             "own_params": 0,
             "children": [
               {
@@ -350651,28 +350629,6 @@
                         "repeat": 6
                       }
                     ]
-                  },
-                  {
-                    "name": "norm",
-                    "type": "LayerNorm",
-                    "params": 1024,
-                    "own_params": 1024,
-                    "children": []
-                  }
-                ]
-              },
-              {
-                "name": "decoder",
-                "type": "TransformerDecoder",
-                "params": 1024,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "layers",
-                    "type": "_LayerContainer",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   },
                   {
                     "name": "norm",
