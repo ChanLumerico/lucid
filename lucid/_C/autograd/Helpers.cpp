@@ -437,22 +437,21 @@ std::string backward_node_name(const Node& node) {
 }
 
 bool storage_has_nan(const Storage& s) {
-    return std::visit(overloaded{
-                          [](const CpuStorage& c) { return cpu_storage_has_nan(c); },
-                          [](const GpuStorage& g) {
-                              if (!g.arr || g.nbytes == 0)
-                                  return false;
-                              if (!is_floating_point(g.dtype) && !is_complex(g.dtype))
-                                  return false;
-                              auto has_nan = ::mlx::core::any(::mlx::core::isnan(*g.arr));
-                              has_nan.eval();
-                              return has_nan.item<bool>();
-                          },
-                          [](const SharedStorage& sh) {
-                              return cpu_storage_has_nan(sh.cpu_view());
-                          },
-                      },
-                      s);
+    return std::visit(
+        overloaded{
+            [](const CpuStorage& c) { return cpu_storage_has_nan(c); },
+            [](const GpuStorage& g) {
+                if (!g.arr || g.nbytes == 0)
+                    return false;
+                if (!is_floating_point(g.dtype) && !is_complex(g.dtype))
+                    return false;
+                auto has_nan = ::mlx::core::any(::mlx::core::isnan(*g.arr));
+                has_nan.eval();
+                return has_nan.item<bool>();
+            },
+            [](const SharedStorage& sh) { return cpu_storage_has_nan(sh.cpu_view()); },
+        },
+        s);
 }
 
 void check_anomaly_grads(const Node& node, const std::vector<Storage>& grads) {

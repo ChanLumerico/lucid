@@ -186,6 +186,7 @@ void LstmBackward::release_saved() {
     cells_all = Storage{CpuStorage{}};
     saved_sources.clear();
     grad_slots_ = {};
+    passes_ = {};
 }
 
 void LstmBackward::validate_versions() {

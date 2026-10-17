@@ -10,14 +10,11 @@
 
 #include "../core/ErrorBuilder.h"
 #include "AccumulateGrad.h"
+#include "GraphOps.h"
 #include "Helpers.h"
 #include "TensorHooks.h"
 
 namespace lucid {
-
-// Declared where it is defined (ops/bfunc/Add.cpp), as Engine.cpp does: the
-// ops layer sits above this one, and a create_graph sum has to be a graph op.
-TensorImplPtr add_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 namespace {
 
@@ -293,6 +290,7 @@ void ModuleBackwardHookState::reset() {
 
 void ModuleBackwardHookState::clear() noexcept {
     reset();
+    passes = {};
     release_py_object(pre_runner);
     release_py_object(full_runner);
 }

@@ -147,22 +147,6 @@ _ALLOWLIST: dict[tuple[str, str, str], tuple[str, str]] = {
         "AE-7 (#314): dtype cast in AccumulateGrad; move to autograd/GraphOps.h",
     ),
     (
-        "autograd/Engine.cpp",
-        "extern-op",
-        "add_op",
-    ): (
-        "2026-10-14",
-        "AE-7 (#314): create_graph gradient accumulation in Engine.cpp; move to autograd/GraphOps.h",
-    ),
-    (
-        "autograd/ModuleHookNode.cpp",
-        "extern-op",
-        "add_op",
-    ): (
-        "2026-10-14",
-        "AE-7 (#314): create_graph gradient accumulation in ModuleHookNode.cpp; move to autograd/GraphOps.h",
-    ),
-    (
         "core/TensorImpl.cpp",
         "extern-op",
         "add_op",

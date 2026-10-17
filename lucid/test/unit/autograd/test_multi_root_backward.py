@@ -192,7 +192,51 @@ def _grad_orphan_root(m: ModuleType, device: str) -> object:
     return [_values(g) for g in gs]
 
 
+# A leaf given as a root keeps the AccumulateGrad every graph that uses it
+# reaches it through: a later grad() asked for the leaf still finds it.
+def _seeded_leaf_root_then_grad(m: ModuleType, device: str) -> object:
+    x = m.ones(2, requires_grad=True, device=device)
+    w = (x * 5).sum()
+    x.backward(m.ones(2, device=device))
+    return [_values(x.grad)] + [_values(g) for g in m.autograd.grad(w, x)]
+
+
+def _leaf_root_in_grad_then_grad(m: ModuleType, device: str) -> object:
+    x = m.ones(2, requires_grad=True, device=device)
+    w = (x * 5).sum()
+    first = m.autograd.grad(
+        [x, (x * 4).sum()], x, grad_outputs=[m.ones(2, device=device), None]
+    )
+    return [_values(g) for g in first] + [_values(g) for g in m.autograd.grad(w, x)]
+
+
+def _scalar_leaf_backward_then_grad(m: ModuleType, device: str) -> object:
+    x = m.tensor(3.0, requires_grad=True, device=device)
+    w = x * 5
+    x.backward()
+    return [_values(x.grad)] + [_values(g) for g in m.autograd.grad(w, x)]
+
+
+# Whether a root is cut from its graph is decided for that root: a graph
+# that saved nothing runs again though the other root's graph freed values.
+def _one_root_saves_the_other_does_not(m: ModuleType, device: str) -> object:
+    x = m.ones(2, requires_grad=True, device=device)
+    w = m.ones(2, requires_grad=True, device=device)
+    a, b = (x * x).sum(), (w + 1).sum()
+    m.autograd.backward([a, b])
+    b.backward()
+    return [
+        _values(x.grad),
+        _values(w.grad),
+        _outcome(m, device, lambda mm, d: a.backward()),
+    ]
+
+
 _SCENARIOS: dict[str, Scenario] = {
+    "seeded-leaf-root-then-grad": _seeded_leaf_root_then_grad,
+    "leaf-root-in-grad-then-grad": _leaf_root_in_grad_then_grad,
+    "scalar-leaf-backward-then-grad": _scalar_leaf_backward_then_grad,
+    "one-root-saves-the-other-does-not": _one_root_saves_the_other_does_not,
     "shared-graph": _shared_graph,
     "shared-tensor-hook": _shared_tensor_hook,
     "leaf-hook": _leaf_hook,
@@ -235,3 +279,40 @@ def test_the_root_and_seed_counts_must_match() -> None:
     x = lucid.ones(2, requires_grad=True)
     with pytest.raises(RuntimeError, match="2 roots and 1 seeds"):
         _C_engine.engine_backward([x.impl, x.impl], [None])
+
+
+def _engine_pass(kind: str, root: lucid.Tensor, seed: lucid.Tensor) -> None:
+    from lucid._C import engine as _C_engine
+
+    if kind == "backward":
+        _C_engine.engine_backward([root.impl], [seed.impl])
+    else:
+        _C_engine.engine_grad([root.impl], [root.impl], [seed.impl])
+
+
+@pytest.mark.parametrize("kind", ["backward", "grad"])
+@pytest.mark.parametrize(
+    ("seed_of", "error"),
+    [
+        (lambda y: lucid.ones(1, device=y.device), "ShapeMismatch"),
+        (lambda y: lucid.ones(4, dtype=lucid.float64), "DtypeMismatch"),
+        (lambda y: lucid.ones(4, device="metal"), "DeviceMismatch"),
+    ],
+    ids=["shape", "dtype", "device"],
+)
+def test_a_seed_that_is_not_a_gradient_of_its_root_is_refused(
+    kind: str, seed_of: Callable[[lucid.Tensor], lucid.Tensor], error: str
+) -> None:
+    # The engine reads a seed as its root's dtype, device and shape: a short
+    # one was read past its end and a float64 one had its bits taken for
+    # float32.  lucid.autograd checks seeds first; the engine checks them too.
+    from lucid._C import engine as _C_engine
+    from lucid.test._fixtures.devices import metal_available
+
+    if error == "DeviceMismatch" and not metal_available():
+        pytest.skip("needs Metal")
+    x = lucid.ones(4, requires_grad=True)
+    y = x * 2
+    with pytest.raises(getattr(_C_engine, error)):
+        _engine_pass(kind, y, seed_of(y))
+    assert x.grad is None

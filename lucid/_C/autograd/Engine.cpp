@@ -30,15 +30,12 @@
 #include "AccumulateGrad.h"
 #include "FusionPass.h"
 #include "GraphBarrier.h"
+#include "GraphOps.h"
 #include "Helpers.h"
 #include "Node.h"
 #include "TensorHooks.h"
 
 namespace lucid {
-
-// Declared where it is defined (ops/bfunc/Add.cpp); graph-mode accumulation
-// has to go through it so the sum joins the new graph.
-TensorImplPtr add_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 namespace {
 
@@ -110,15 +107,11 @@ const SpentGraphNode* as_spent(const Node& node) {
     return dynamic_cast<const SpentGraphNode*>(&node);
 }
 
-// Sever the root from the graph it just ran so the nodes can be freed.
-// ``order`` is that whole graph; a spent root inside it hands on what its
-// own graph held.
+// Sever a non-leaf root from the graph it just ran so the nodes can be
+// freed.  ``order`` is that whole graph; a spent root inside it hands on what
+// its own graph held.
 void release_root(const std::shared_ptr<TensorImpl>& root,
                   const std::vector<std::shared_ptr<Node>>& order) {
-    if (root->is_leaf()) {
-        root->clear_grad_fn();
-        return;
-    }
     std::vector<std::uint64_t> held;
     held.reserve(order.size());
     for (const auto& node : order) {
@@ -441,27 +434,31 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::vector<std::shared_ptr<
     return order;
 }
 
-// After a pass that did not retain its graph: a leaf root lets go of its
-// AccumulateGrad, and the other roots are severed from the graph when the
-// pass freed values an eager backward reads (``freed``).  A graph that saved
-// none of them stays attached and runs again.  Each root's spent node holds
-// the nodes of its own graph only, so it does not refuse a gradient towards
-// an input only another root reached.
+// After a pass that did not retain its graph, cut each root from its graph
+// when the pass freed, somewhere in that graph, values an eager backward
+// reads (``freed``).  Decided per root: a root whose own graph saved none of
+// them stays attached and runs again, whatever another root's graph freed.
+// Each root's spent node holds the nodes of its own graph only, so it does
+// not refuse a gradient towards an input only another root reached.  A leaf
+// root keeps its AccumulateGrad: every graph that uses the leaf reaches it
+// through that node (AccumulateGrad.h), and a later grad() asked for the
+// leaf finds it there.
 void sever_roots(const std::vector<BackwardRoot>& roots,
                  const std::vector<std::shared_ptr<Node>>& order,
-                 bool freed) {
+                 const std::unordered_set<const Node*>& freed) {
+    if (freed.empty())
+        return;
     std::unordered_set<const TensorImpl*> seen;
     for (const auto& r : roots) {
-        if (!seen.insert(r.tensor.get()).second)
+        if (r.tensor->is_leaf() || !r.tensor->grad_fn() || !seen.insert(r.tensor.get()).second)
             continue;
-        if (r.tensor->is_leaf())
-            r.tensor->clear_grad_fn();
-        else if (!freed || !r.tensor->grad_fn())
-            continue;
-        else if (roots.size() == 1)
-            release_root(r.tensor, order);
-        else
-            release_root(r.tensor, topo_order({r.tensor->grad_fn()}));
+        std::vector<std::shared_ptr<Node>> own;
+        if (roots.size() > 1)
+            own = topo_order({r.tensor->grad_fn()});
+        const auto& graph = roots.size() > 1 ? own : order;
+        if (std::any_of(graph.begin(), graph.end(),
+                        [&](const auto& node) { return freed.count(node.get()) != 0; }))
+            release_root(r.tensor, graph);
     }
 }
 
@@ -475,11 +472,38 @@ std::vector<std::shared_ptr<Node>> root_nodes(const std::vector<BackwardRoot>& r
     return nodes;
 }
 
+// Refuse a null root, and a seed that is not a gradient of its root: the
+// pass reads a seed as its root's dtype, device and shape, so a short one was
+// read past its end and a float64 one had its bits taken for float32.
+//
+// Raises
+// ------
+// LucidError
+//     A root is null.
+// DtypeMismatch, DeviceMismatch, ShapeMismatch
+//     A seed is of another kind than its root.
 void check_roots(const std::vector<BackwardRoot>& roots, const char* op) {
-    for (const auto& r : roots) {
+    const ErrorBuilder err(op);
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        const auto& r = roots[i];
         if (!r.tensor)
-            ErrorBuilder(op).fail("root is null");
+            err.fail("roots[" + std::to_string(i) + "] is null");
+        if (r.seed)
+            check_grad_kind(err, "the gradient of roots[" + std::to_string(i) + "]",
+                            r.tensor->dtype(), r.tensor->device(), r.tensor->shape(), *r.seed);
     }
+}
+
+// ``root`` with a seed given as a bare buffer (the single-root C++ entry
+// points), read as the root's shape and as the buffer's own dtype and device,
+// so check_roots holds it to the root.  An empty buffer stands for ones.
+BackwardRoot root_with_seed(const std::shared_ptr<TensorImpl>& root, Storage seed) {
+    if (storage_is_empty(seed))
+        return {root, nullptr};
+    const Dtype dtype = storage_dtype(seed);
+    const Device device = storage_is_gpu(seed) ? Device::GPU : Device::CPU;
+    return {root,
+            std::make_shared<TensorImpl>(std::move(seed), root->shape(), dtype, device, false)};
 }
 
 // A root's seed as an eager pass carries it: ones by default, else a buffer
@@ -706,11 +730,8 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
         accumulate_leaf(*leaf, std::move(seed));
 
     const auto fns = root_nodes(roots);
-    if (fns.empty()) {
-        if (!retain_graph)
-            sever_roots(roots, {}, /*freed=*/false);
+    if (fns.empty())
         return;
-    }
     fuse(fns);
     const auto order = topo_order(fns);
 
@@ -721,7 +742,7 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
     };
     seed_roots(roots, seeds, send);
 
-    bool freed = false;
+    std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
         auto it = pending.find(node.get());
         if (it == pending.end())
@@ -743,7 +764,8 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
         // Free saved forward tensors immediately unless the caller needs the
         // graph intact for a second backward call.
         if (!retain_graph)
-            freed = release(*node) || freed;
+            if (release(*node))
+                freed.insert(node.get());
 
         check_anomaly_grads(*node, input_grads);
         check_result_count(*node, input_grads.size());
@@ -760,11 +782,7 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
                       bool create_graph) {
     if (!root)
         ErrorBuilder("Engine::backward").fail("root is null");
-    TensorImplPtr seed;
-    if (!storage_is_empty(grad_seed))
-        seed = std::make_shared<TensorImpl>(std::move(grad_seed), root->shape(), root->dtype(),
-                                            root->device(), false);
-    backward({BackwardRoot{root, std::move(seed)}}, retain_graph, create_graph);
+    backward({root_with_seed(root, std::move(grad_seed))}, retain_graph, create_graph);
 }
 
 void Engine::backward(const std::vector<BackwardRoot>& roots,
@@ -1109,7 +1127,7 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
     };
     seed_roots(roots, seeds, send);
 
-    bool freed = false;
+    std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
         auto it = pending.find(node.get());
         if (it == pending.end())
@@ -1135,7 +1153,8 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
 
         std::vector<Storage> input_grads = run_node(*node, std::move(grad_in), std::move(slots));
         if (!retain_graph)
-            freed = release(*node) || freed;
+            if (release(*node))
+                freed.insert(node.get());
         check_anomaly_grads(*node, input_grads);
         route_results(*node, input_grads, send);
     }
@@ -1153,11 +1172,7 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
                                         bool create_graph) {
     if (!root)
         ErrorBuilder("Engine::grad").fail("root is null");
-    TensorImplPtr seed;
-    if (!storage_is_empty(grad_seed))
-        seed = std::make_shared<TensorImpl>(std::move(grad_seed), root->shape(), root->dtype(),
-                                            root->device(), false);
-    return grad({BackwardRoot{root, std::move(seed)}}, inputs, retain_graph, create_graph);
+    return grad({root_with_seed(root, std::move(grad_seed))}, inputs, retain_graph, create_graph);
 }
 
 std::vector<TensorImplPtr> Engine::grad(const std::vector<BackwardRoot>& roots,

@@ -56,6 +56,9 @@ PythonBackwardNode::~PythonBackwardNode() {
 void PythonBackwardNode::release_saved() {
     Node::release_saved();
     slots_ = {};
+    // What an outer pass set aside here goes too: that pass finds the node
+    // released and never asks for it back.
+    passes_ = {};
     release_py_object(py_ctx);
     release_py_object(py_backward_fn);
 }

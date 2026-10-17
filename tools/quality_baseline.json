@@ -974,7 +974,6 @@
    },
    "function-ccn-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
-    "lucid/_C/autograd/Engine.cpp": 49,
     "lucid/_C/autograd/FusionPass.cpp": 4,
     "lucid/_C/backend/cpu/CpuBackend.h": 270,
     "lucid/_C/backend/cpu/Pool.cpp": 4,
@@ -1234,7 +1233,6 @@
    },
    "function-length-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 27,
-    "lucid/_C/autograd/Engine.cpp": 147,
     "lucid/_C/backend/cpu/CpuBackend.h": 516,
     "lucid/_C/backend/gpu/GpuBackend.h": 370,
     "lucid/_C/bindings/bind.cpp": 57,
