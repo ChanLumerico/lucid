@@ -35,7 +35,7 @@ import subprocess
 import sys
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, override
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LUCID = "lucid"
@@ -54,6 +54,7 @@ class Violation(NamedTuple):
     rule: str
     text: str
 
+    @override
     def __str__(self) -> str:
         return f"{self.path}:{self.line}: [{self.rule}] {self.text}"
 
@@ -105,7 +106,11 @@ class _Rules:
                     yield Violation(
                         path, node.lineno, "future-annotations", ast.unparse(node)
                     )
-            if path != REF_FILE and self._imports_ref(node):
+            if (
+                path != REF_FILE
+                and isinstance(node, (ast.Import, ast.ImportFrom, ast.Call))
+                and self._imports_ref(node)
+            ):
                 yield Violation(path, node.lineno, "ref-import", ast.unparse(node))
         for annotation in _annotations(tree):
             for found in _string_types(annotation):
@@ -113,7 +118,7 @@ class _Rules:
                     path, found.lineno, "string-annotation", repr(found.value)
                 )
 
-    def _imports_ref(self, node: ast.AST) -> bool:
+    def _imports_ref(self, node: ast.Import | ast.ImportFrom | ast.Call) -> bool:
         if isinstance(node, ast.Import):
             return any(self._is_ref_module(alias.name) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
