@@ -1693,7 +1693,6 @@
     "lucid/models/vision/densenet/_model.py": 2,
     "lucid/models/vision/efficientnet/_model.py": 1,
     "lucid/models/vision/mobilenet_v3/_model.py": 1,
-    "lucid/models/vision/yolo/_v3.py": 1,
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
     "lucid/profiler/__init__.py": 1
