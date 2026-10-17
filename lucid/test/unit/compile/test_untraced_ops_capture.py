@@ -102,13 +102,17 @@ def test_nextafter_steps_one_ulp() -> None:
         np.array([p[1] for p in pairs], dtype=np.float32),
     )
 
-    fn = lambda x, y: lucid.nextafter(x, y) * 1  # noqa: E731
+    # No ``* 1`` after the op: compiled ``x * 1`` flushes a subnormal to zero
+    # as eager Metal does (LCD-452), and the steps off zero are subnormal.
+    fn = lambda x, y: lucid.nextafter(x, y)  # noqa: E731
     compiled = lucid.compile(fn)
     got = compiled(a, b).numpy()
     _captured(compiled)
     assert np.array_equal(
         got.view(np.int32), want.view(np.int32)
     ), f"compiled nextafter is not one ULP: got {got.tolist()}, want {want.tolist()}"
+    eager = fn(a, b).numpy()
+    assert np.array_equal(got.view(np.int32), eager.view(np.int32))
 
 
 @pytest.mark.parametrize(
