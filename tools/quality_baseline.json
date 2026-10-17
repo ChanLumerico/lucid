@@ -12,7 +12,7 @@
   "vulture": "2.16"
  },
  "thresholds": {
-  "engine_test_only_bindings": "_has_tensor_hooks,host_sync_count,metal_active_memory,metal_peak_memory,metal_reset_peak_memory,mlx_runtime_version,op_registry_all",
+  "engine_test_only_bindings": "_has_tensor_hooks,amp_policy_for,amp_policy_table,host_sync_count,metal_active_memory,metal_peak_memory,metal_reset_peak_memory,mlx_runtime_version,op_registry_all",
   "function_ccn_max": 15,
   "function_length_max": 100,
   "internal_args_max": 7,
@@ -66,6 +66,11 @@
   {
    "date": "2026-10-18",
    "reason": "LCD-497: batch_norm_update_running_stats lost its last Python caller when the dead rebind path was deleted; the binding's removal is tracked in LCD-480 (dead engine entry points)",
+   "by": "chanlee"
+  },
+  {
+   "date": "2026-10-18",
+   "reason": "LCD-500-E1: amp_policy_for / amp_policy_table recorded as test-only engine bindings (consumers: amp tests until LCD-500-A1; tools/gen_pyi.py)",
    "by": "chanlee"
   }
  ],
