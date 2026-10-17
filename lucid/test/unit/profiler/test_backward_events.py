@@ -20,7 +20,7 @@ def _names(prof: Profiler) -> list[str]:
 
 
 def _backward_flags(prof: Profiler) -> dict[str, bool]:
-    return {ev.name: bool(ev._impl.backward) for ev in prof.events()}
+    return {ev.name: ev.backward for ev in prof.events()}
 
 
 def test_a_backward_pass_and_its_nodes_are_events(device: str) -> None:

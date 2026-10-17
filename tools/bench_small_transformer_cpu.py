@@ -13,9 +13,9 @@ so machine load drifts onto both, and the best repeat of each is reported —
 on a busy machine the minimum is the closest thing to the uncontended cost.
 
 ``--profile`` adds an op-level table from both profilers for one extra block
-of steps.  Lucid's profiler records forward ops only — backward nodes run
-inside the engine without an event — so attribute the backward phase with a
-native sampler instead (``/usr/bin/sample <pid>`` on a long run).
+of steps.  Lucid's profiler records each backward node as an event of its own,
+named after the node (``OpEvent.backward`` marks them), so the backward phase
+is attributed in the same table.
 
 Usage::
 

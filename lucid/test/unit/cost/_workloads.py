@@ -197,7 +197,7 @@ def measure(workload: Workload, device: str) -> dict[str, object]:
     # The backward pass and each node it runs are events too, marked as
     # backward work; the budget counts the ops the step dispatched.
     ops = collections.Counter(
-        event.name for event in prof.events() if not event._impl.backward
+        event.name for event in prof.events() if not event.backward
     )
     cost: dict[str, object] = {
         "allocations": after.alloc_count - before.alloc_count,

@@ -18,12 +18,14 @@ from lucid._C import engine as _C_engine
 
 
 class OpEvent:
-    r"""A single recorded operation event captured by the profiler.
+    r"""A single recorded event captured by the profiler.
 
-    Each ``OpEvent`` corresponds to one C++ engine op invocation: name,
-    wall-clock duration, output tensor shape, an FLOP estimate, and the
-    net memory delta. Profilers expose lists of these events so that
-    per-op cost can be aggregated, exported, and visualised.
+    An ``OpEvent`` is one op the engine dispatched, or backward work: a
+    whole backward pass (``"backward"``) or one node of it, named after the
+    node (``"MulBackward"``, ``"AccumulateGrad"``) — which :attr:`backward`
+    tells apart.  Each carries a name, wall-clock duration, shape, an FLOP
+    estimate and the net memory delta.  Profilers expose lists of these
+    events so that per-op cost can be aggregated, exported, and visualised.
 
     Parameters
     ----------
@@ -86,6 +88,13 @@ class OpEvent:
     def memory_delta_bytes(self) -> int:
         """Net memory allocated by this operation in bytes."""
         return int(self._impl.memory_delta_bytes)
+
+    @property
+    def backward(self) -> bool:
+        """Whether the event is backward work — a backward pass or one node of
+        it — rather than a dispatched op.  A node's shape is its gradient's
+        element count: an eager gradient carries no shape of its own."""
+        return bool(self._impl.backward)
 
     @override
     def __repr__(self) -> str:

@@ -202,7 +202,7 @@ def _pre_hook_drops_all(m: ModuleType, device: str) -> object:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="LCD-152 follow-up: with every output gradient dropped nothing reaches "
+    reason="LCD-494: with every output gradient dropped nothing reaches "
     "the inputs' barrier, so it never runs to hand them zeros as the reference's "
     "Function does",
 )

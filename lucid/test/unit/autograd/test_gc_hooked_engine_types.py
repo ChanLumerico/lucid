@@ -123,9 +123,10 @@ def test_a_python_subclass_instance_survives_traversal_and_collection(
 
 def test_a_hooked_cycle_is_still_freed_while_subclass_nodes_are_alive() -> None:
     # LCD-392's own case — a module holding its hooked output — collected
-    # while an AccumulateGrad and a _PythonBackwardNode are reachable.  After
-    # backward, as before it the cycle is not collectible (LCD-459 follow-up,
-    # see test_module_backward_hook_lifetime).
+    # while an AccumulateGrad and a _PythonBackwardNode are reachable.  Here
+    # after backward; before it the cycle is collected too, now that a node
+    # shows the collector the tensors it keeps (see
+    # test_module_backward_hook_lifetime).
     body = """
     module = nn.Linear(3, 3)
     module.register_full_backward_hook(lambda mod, gi, go: None)
