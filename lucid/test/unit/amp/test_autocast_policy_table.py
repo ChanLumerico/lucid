@@ -299,6 +299,11 @@ _CASES: dict[str, _Case] = {
     "multi_dot": _Case(
         lambda lib, F, m: lib.linalg.multi_dot([m(3, 4), m(4, 2), m(2, 2)])
     ),
+    "scaled_dot_product_attention": _Case(
+        lambda lib, F, m: F.scaled_dot_product_attention(
+            m(1, 2, 4, 8), m(1, 2, 4, 8), m(1, 2, 4, 8), attn_mask=m(4, 4)
+        )
+    ),
     # ── FP32 on both ──
     "bce_with_logits": _Case(
         lambda lib, F, m: F.binary_cross_entropy_with_logits(m(4), m.unit(4))
@@ -572,14 +577,6 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
     "qr": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.qr(m(3, 3))[0])),
     "quantile": (_A1, _cpu(lambda lib, F, m: lib.quantile(m(4), 0.5))),
     "rfftn": (_E2_LINALG, _cpu(lambda lib, F, m: lib.fft.rfft(m(8)).abs())),
-    "scaled_dot_product_attention": (
-        _E2,
-        _Case(
-            lambda lib, F, m: F.scaled_dot_product_attention(
-                m(1, 2, 4, 8), m(1, 2, 4, 8), m(1, 2, 4, 8)
-            )
-        ),
-    ),
     "soft_margin_loss": (
         _A1,
         _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))),
@@ -796,6 +793,23 @@ def test_cosine_similarity_promotes_mixed_inputs(device: str) -> None:
     assert got.dtype == inside.dtype == lucid.float32
     assert float((got - want).abs().max().item()) < 1e-6
     assert float((inside - want).abs().max().item()) < 1e-6
+
+
+@pytest.mark.parametrize("device", [pytest.param("metal", marks=_METAL), "cpu"])
+def test_sdpa_casts_q_k_v_and_an_additive_mask_together(device: str) -> None:
+    """RoFormer hands attention a float32 Q and K (rotated by float32
+    tables) and a half V; the LOWER row casts all of them, and an additive
+    mask, to the autocast dtype rather than refusing the mixed set."""
+    half = getattr(lucid, _AUTOCAST_DT[device])
+    q = lucid.randn(1, 2, 4, 8, device=device)
+    v = lucid.randn(1, 2, 4, 8, device=device).to(half)
+    mask = lucid.randn(4, 4, device=device)
+    keep = lucid.rand(4, 4, device=device) > 0.3
+    F = lucid.nn.functional
+    with autocast(device_type=device, dtype=half):
+        additive = F.scaled_dot_product_attention(q, q, v, attn_mask=mask)
+        selecting = F.scaled_dot_product_attention(q, q, v, attn_mask=keep)
+    assert additive.dtype == selecting.dtype == half
 
 
 @_METAL
