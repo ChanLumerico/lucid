@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test, expect, type Page } from "@playwright/test";
 
 /**
@@ -60,6 +62,27 @@ test("ToC entry click scrolls + updates the hash", async ({ page }) => {
   test.skip(count === 0, "no ToC on this page");
   await tocLinks.first().click();
   await expect(page).toHaveURL(/#.+/);
+});
+
+// The package imports as ``lucid`` but installs as ``lucid-dl``; a copied
+// ``pip install lucid`` fetches an unrelated project.  Read the name straight
+// from pyproject.toml here, independently of src/lib/distribution.ts.
+test("install commands name the PyPI distribution from pyproject.toml", async ({ page }) => {
+  const toml = readFileSync(join(process.cwd(), "..", "pyproject.toml"), "utf8");
+  const dist = toml.split(/^\[project\]\s*$/m)[1]?.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+  expect(dist, "[project].name in ../pyproject.toml").toBeTruthy();
+
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page.locator("[data-install-command]")).toHaveText(`pip install ${dist}`);
+
+  // Every Lucid install line in the guide, extras and flags included.
+  await page.goto("/docs/installation", { waitUntil: "networkidle" });
+  const text = await page.locator("#main-content").innerText();
+  const targets = [...text.matchAll(/pip install(?:\s+--?[\w-]+)*\s+"?(lucid[\w.-]*)/g)].map(
+    (m) => m[1],
+  );
+  expect(targets.length).toBeGreaterThan(0);
+  for (const name of targets) expect(name).toBe(dist);
 });
 
 // Brand kit wiring (scripts/sync-brand.mjs → public/brand/, linked by the root

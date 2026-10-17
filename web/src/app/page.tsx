@@ -24,6 +24,7 @@ import { buildMeta } from "@/lib/build-meta";
 import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
 import { isApiModule } from "@/lib/types";
 import { canonical } from "@/lib/site";
+import { INSTALL_COMMAND } from "@/lib/distribution";
 
 export const metadata: Metadata = {
   alternates: canonical("/"),
@@ -60,8 +61,6 @@ const FEATURES = [
       "linalg, fft, einops, distributions, signal, special math — every standard primitive plus the model zoo.",
   },
 ] as const;
-
-const INSTALL_CMD = "pip install lucid";
 
 const HERO_CODE = `import lucid
 import lucid.nn as nn
@@ -218,7 +217,9 @@ function InstallSnippet() {
     <div className="relative overflow-hidden rounded-xl border border-lucid-border bg-lucid-surface px-5 py-3.5">
       <div className="flex items-center gap-3">
         <span className="select-none text-lucid-text-disabled text-sm">$</span>
-        <code className="font-mono text-sm text-lucid-text-high">{INSTALL_CMD}</code>
+        <code className="font-mono text-sm text-lucid-text-high" data-install-command>
+          {INSTALL_COMMAND}
+        </code>
       </div>
       <div className="absolute right-3 top-1/2 -translate-y-1/2">
         <Badge variant="secondary" className="text-[10px]">Python 3.14+</Badge>
