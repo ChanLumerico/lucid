@@ -92,10 +92,10 @@ std::string tensordot_einsum_pattern(std::size_t na,
 }
 
 // The contraction, for operands the entry below has already cast.
-TensorImplPtr contract(const TensorImplPtr& a,
-                       const TensorImplPtr& b,
-                       std::vector<int> axes_a,
-                       std::vector<int> axes_b) {
+TensorImplPtr contraction(const TensorImplPtr& a,
+                          const TensorImplPtr& b,
+                          std::vector<int> axes_a,
+                          std::vector<int> axes_b) {
     validate_pair(a, b, "tensordot");
     if (axes_a.size() != axes_b.size())
         ErrorBuilder("tensordot").fail("axes_a and axes_b must have equal length");
@@ -118,7 +118,7 @@ TensorImplPtr contract(const TensorImplPtr& a,
     // proposition.
     if (device == Device::CPU && is_half_float(dt))
         return astype_op(
-            contract(astype_op(a, Dtype::F32), astype_op(b, Dtype::F32), axes_a, axes_b), dt);
+            contraction(astype_op(a, Dtype::F32), astype_op(b, Dtype::F32), axes_a, axes_b), dt);
 
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
     {
@@ -268,7 +268,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     // row inside the scope.
     const AmpScope amp{"tensordot", a->device()};
     const auto operands = amp.cast_widest({a, b});
-    return contract(operands[0], operands[1], std::move(axes_a), std::move(axes_b));
+    return contraction(operands[0], operands[1], std::move(axes_a), std::move(axes_b));
 }
 
 }  // namespace lucid

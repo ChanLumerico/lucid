@@ -35,12 +35,18 @@
 //   ctc_loss         FP32 on Metal too — the reference has no MPS kernel
 //                    for it, and the CPU answer is the one it is compared
 //                    against.
-//   pad             No row.  The reference's CPU list runs reflect and
+//   pad              No row.  The reference's CPU list runs reflect and
 //                    replicate padding in float32 and leaves constant and
 //                    circular padding alone; Lucid's one ``pad`` schema takes
 //                    the mode as an argument, so a row cannot tell them
 //                    apart.  Reflect / replicate padding keeps a bfloat16
 //                    input under a CPU autocast (a strict xfail in the test).
+//   vdot             No row, as in the reference, but ``lucid.vdot`` is
+//                    built on ``dot`` and so takes ``dot_1d``'s WIDEST row:
+//                    on Metal it runs a float16 / float32 pair in float32
+//                    where the reference refuses the pair.
+//
+// ``lstm_cell`` is ``nn.LSTMCell``'s step, applied at its entry.
 //
 // Rows are sorted by name, each name once — ``AmpPolicy.cpp`` refuses to
 // compile otherwise.  ``lucid/test/unit/amp/test_autocast_policy_table.py``
@@ -124,6 +130,7 @@ LUCID_AMP_ROW(log1p,                        FP32,   KEEP)
 LUCID_AMP_ROW(log2,                         FP32,   KEEP)
 LUCID_AMP_ROW(log_softmax,                  FP32,   KEEP)
 LUCID_AMP_ROW(logsumexp,                    FP32,   KEEP)
+LUCID_AMP_ROW(lstm_cell,                    LOWER,  KEEP)
 LUCID_AMP_ROW(lstsq,                        KEEP,   FP32)
 LUCID_AMP_ROW(margin_ranking_loss,          FP32,   FP32)
 LUCID_AMP_ROW(matmul,                       LOWER,  LOWER)

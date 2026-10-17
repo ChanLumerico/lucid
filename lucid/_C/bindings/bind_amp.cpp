@@ -13,6 +13,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -57,13 +58,16 @@ void register_amp(py::module_& m) {
     // inputs by the engine's one owner of the cast rule (AmpScope), so the
     // rule is not written out again in Python.  The caller turns autocast
     // off for the composite's body.  Outside autocast the inputs come back
-    // as they went in.
+    // as they went in.  The first present input selects the device, as
+    // promote_for_schema's does; absent ones (None) pass through.
     m.def(
         "amp_cast_inputs",
         [](const std::string& name, std::vector<TensorImplPtr> inputs) {
-            if (inputs.empty() || !inputs.front())
+            const auto first = std::find_if(inputs.begin(), inputs.end(),
+                                            [](const TensorImplPtr& t) { return t != nullptr; });
+            if (first == inputs.end())
                 return inputs;
-            const AmpScope amp{name, inputs.front()->device()};
+            const AmpScope amp{name, (*first)->device()};
             return amp.cast_widest(std::move(inputs));
         },
         py::arg("name"), py::arg("inputs"));
