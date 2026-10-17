@@ -742,7 +742,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     // saved_inputs_ holds the (possibly cast) pre-broadcast input storages
     // so that grad_formula can inspect the original per-element values.
     if constexpr (Derived::kSavesInputs)
-        bwd->saved_inputs_ = {a_ptr->storage(), b_ptr->storage()};
+        bwd->keep_inputs({a_ptr->storage(), b_ptr->storage()});
     // Always save the original TensorImpl pointers (before any dtype cast) so
     // that apply_for_graph() can invoke forward ops on them and trace the
     // gradient computation back through the original computation graph.

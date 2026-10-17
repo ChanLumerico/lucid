@@ -565,7 +565,11 @@ def test_the_check_refuses_each_way_a_node_can_escape_the_guard(tmp_path: Path) 
     )
     text = "\n".join(problems)
     assert "FooBackward::saved_x_ holds tensor data and is not classified" in text
+    assert (
+        "FooBackward keeps a tensor of its own but does not declare kKeepsOwnValues"
+        in text
+    )
     assert "BarNode::held_ is listed as guarded but BarNode declares no" in text
     assert "an empty validate_versions override" in text
     assert "HELD lists Gone::x_" in text
-    assert len(problems) == 4
+    assert len(problems) == 5

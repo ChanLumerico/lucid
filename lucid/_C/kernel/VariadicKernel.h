@@ -133,13 +133,12 @@ public:
         input_tensors_v_.clear();
     }
 
-    // :meth:`apply` reads values from the saved slots only, and no tensor is
-    // kept for graph-mode backward, so ``cat`` and ``stack`` — which keep
-    // none — may run again in either mode.
+    // :meth:`apply` reads values from the saved slots only — filled for every
+    // input when the op saves them, whatever their size — and no tensor is
+    // kept for graph-mode backward, so ``cat`` and ``stack``, which save
+    // none, may run again in either mode.
     SavedKind saved_kind() const noexcept override {
-        bool holds = ::lucid::holds_saved_values(saved_output_);
-        for (const auto& s : saved_inputs_v_)
-            holds = holds || ::lucid::holds_saved_values(s);
+        const bool holds = !saved_inputs_v_.empty() || ::lucid::holds_saved_values(saved_output_);
         return holds ? SavedKind::kEagerValues : SavedKind::kNothing;
     }
 

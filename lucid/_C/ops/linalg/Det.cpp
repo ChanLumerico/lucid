@@ -243,7 +243,7 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
     }
     auto bwd = std::make_shared<DetBackward>();
     // Save det(A) so the backward can use it as the multiplicative factor.
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     // save_inputs=true: DetBackward needs A to recompute inv(A) in the backward.
     kernel::NaryKernel<DetBackward, 1>::wire_autograd(std::move(bwd), {a}, out, true);
     return out;

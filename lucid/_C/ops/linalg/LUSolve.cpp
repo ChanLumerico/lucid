@@ -38,7 +38,7 @@ lu_solve_aligned(const TensorImplPtr& LU, const TensorImplPtr& pivots, const Ten
     auto bwd = std::make_shared<LUSolveBackward>();
     bwd->pivots_ = pivots;
     bwd->pivots_version_ = pivots->version();
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     kernel::NaryKernel<LUSolveBackward, 2>::wire_autograd(std::move(bwd), {LU, b}, out, true);
     return out;
 }

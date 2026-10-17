@@ -172,6 +172,7 @@ TensorImplPtr cumprod_grad(const TensorImplPtr& g,
 //   saved_y_     — copy of the forward output (cumprod) tensor's storage.
 class CumprodBackward : public AutogradNode<CumprodBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Shape input_shape_;
@@ -441,6 +442,7 @@ TensorImplPtr scan_ext_graph_backward(const TensorImplPtr& grad_out,
 // Backward node for cummax.
 class CummaxBackward : public AutogradNode<CummaxBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Shape input_shape_;
@@ -497,6 +499,7 @@ public:
 // Backward node for cummin.
 class CumminBackward : public AutogradNode<CumminBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Shape input_shape_;

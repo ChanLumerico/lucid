@@ -151,7 +151,7 @@ public:
             bwd->input_shapes_[i] = inp ? inp->shape() : Shape{};
             bwd->input_tensors_[i] = inp;
             if (saves[i] && inp)
-                bwd->saved_inputs_[i] = inp->storage();
+                bwd->keep_input(i, inp->storage());
             // Always save strong TensorImpl refs for graph-mode backward.
             bwd->saved_impl_inputs_[i] = inp;
             edges.emplace_back(detail::ensure_grad_fn(inp), inp ? inp->grad_output_nr() : 0);

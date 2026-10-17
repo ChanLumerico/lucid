@@ -71,6 +71,7 @@ class Generator;
 //     Empty when ``p_ == 0``.
 class LUCID_API DropoutBackward : public FuncOp<DropoutBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     double p_ = 0.0;  // Drop probability (0 = pass-through).
     Storage mask_;    // Scaled Bernoulli mask saved for backward.
@@ -141,6 +142,7 @@ public:
 //     input.  Saved so the backward is a single multiply.
 class LUCID_API DropoutNdBackward : public FuncOp<DropoutNdBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     double p_ = 0.0;
     Storage mask_;  // Full-resolution mask after broadcast (same shape as input).
@@ -208,6 +210,7 @@ public:
 //     Raw $\{0, 1\}$ Bernoulli mask before any scaling.
 class LUCID_API AlphaDropoutBackward : public FuncOp<AlphaDropoutBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     double p_ = 0.0;
     double a_coef_ = 1.0;  // Affine scale factor saved for backward.
@@ -274,6 +277,7 @@ public:
 //     saved for the backward multiply.
 class LUCID_API DropBlockBackward : public FuncOp<DropBlockBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     double p_ = 0.0;
     Storage mask_;  // Keep mask after dilation (0/1 float, same shape as input).
@@ -333,6 +337,7 @@ public:
 //     the backward.
 class LUCID_API DropPathBackward : public FuncOp<DropPathBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     Storage mask_;  // Per-sample mask broadcast to full input shape.
 

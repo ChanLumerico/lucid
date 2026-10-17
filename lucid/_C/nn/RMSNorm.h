@@ -81,6 +81,7 @@ namespace lucid {
 // (NeurIPS 2019, arXiv:1910.07467).
 class LUCID_API RMSNormBackward : public FuncOp<RMSNormBackward, 2> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Per-slice reciprocal RMS, shape ``(outer_,)``.

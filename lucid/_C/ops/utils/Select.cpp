@@ -149,6 +149,7 @@ TensorImplPtr sum_to_shape(const TensorImplPtr& grad, const Shape& shape) {
 
 class WhereBackward : public AutogradNode<WhereBackward, 2> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Storage cond_;
@@ -208,6 +209,7 @@ const OpSchema WhereBackward::schema_v1{"where", 1, AmpPolicy::KeepInput, true};
 // mask is true received the fill constant, so their gradient is zero.
 class MaskedFillBackward : public AutogradNode<MaskedFillBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Storage mask_;
@@ -281,6 +283,7 @@ const OpSchema RollBackward::schema_v1{"roll", 1, AmpPolicy::KeepInput, true};
 // by indices_.  This is the adjoint of gather.
 class GatherBackward : public AutogradNode<GatherBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Storage indices_;

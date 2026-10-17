@@ -60,6 +60,7 @@ using ufunc_detail::fresh;
 //                  can subtract it directly without an extra broadcast call.
 class VarBackward : public AutogradNode<VarBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Shape input_shape_;

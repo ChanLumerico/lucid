@@ -94,6 +94,7 @@ namespace lucid {
 // Wu & He, "Group Normalization" (ECCV 2018, arXiv:1803.08494).
 class LUCID_API GroupNormBackward : public FuncOp<GroupNormBackward, 3> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Per-``(batch, group)`` mean $\mu_{b,g}$, shape ``(B*G,)``.

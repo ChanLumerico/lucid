@@ -104,7 +104,7 @@ TensorImplPtr inv_op(const TensorImplPtr& a) {
     }
     auto bwd = std::make_shared<InvBackward>();
     // Save the forward result A⁻¹; the backward uses it in place of recomputing.
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     // save_inputs=false: InvBackward does not need the original A.
     kernel::NaryKernel<InvBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;

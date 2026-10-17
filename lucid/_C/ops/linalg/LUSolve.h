@@ -67,6 +67,7 @@ namespace lucid {
 // differentiates again.
 class LUCID_API LUSolveBackward : public FuncOp<LUSolveBackward, 2> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     // The aligned ``(batch, n)`` pivot vector of the factor, and its version

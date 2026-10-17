@@ -7,8 +7,10 @@ every kernel filled — including ``add``, ``sum`` and the views, which save
 nothing — so ``(a + 1).sum()`` refused a second ``backward()`` the reference
 runs.  Each node now records what its release freed: values its eager
 backward reads (refused by every pass), or only the tensors graph-mode
-backward reads (refused by a ``create_graph`` pass).  The root is cut from
-its graph only when something an eager pass reads was freed.
+backward reads (refused by a ``create_graph`` pass).  Values count as saved
+whatever their size, and whether they sit in the node's slots or in members
+of its own (a mask, an index), which the node declares.  The root is cut from
+its graph only when something an eager pass reads was freed in it.
 
 Each scenario is written once over a module ``m`` and run on Lucid and the
 reference.
@@ -55,12 +57,36 @@ _SAVE_NOTHING: dict[str, Build] = {
     "pad": lambda m, x: m.nn.functional.pad(x, (1, 2)).sum(),
 }
 
-# Graphs with a node whose backward reads a value it saved.
+
+def _index(m: ModuleType, device: object) -> object:
+    return m.tensor([0, 2, 2], device=device)
+
+
+# Graphs with a node whose backward reads a value it saved — in its slots, or
+# in a member of its own (a mask, an index), which only that node can say.
 _SAVE_VALUES: dict[str, Build] = {
     "mul": lambda m, x: (x * x).sum(),
     "exp": lambda m, x: x.exp().sum(),
     "sin-after-add": lambda m, x: (x + 1.0).sin().sum(),
     "matmul": lambda m, x: (x.reshape(2, 3) @ x.reshape(3, 2)).sum(),
+    "where": lambda m, x: m.where(x > 2, x, -x).sum(),
+    "masked-fill": lambda m, x: x.masked_fill(x > 2, 0.0).sum(),
+    "gather": lambda m, x: m.gather(x, 0, _index(m, x.device)).sum(),
+    "index-select": lambda m, x: m.index_select(x, 0, _index(m, x.device)).sum(),
+    "advanced-indexing": lambda m, x: x[_index(m, x.device)].sum(),
+    "max-pool1d": lambda m, x: m.nn.functional.max_pool1d(x.reshape(1, 1, 6), 2).sum(),
+    "embedding": lambda m, x: m.nn.functional.embedding(
+        m.tensor([0, 2], device=x.device), x.reshape(3, 2)
+    ).sum(),
+}
+
+# Graphs whose saving node saved a tensor of no elements: still saved, and
+# freed by the first pass.
+_SAVE_EMPTY: dict[str, Build] = {
+    "mul": lambda m, x: (x * x).sum(),
+    "exp": lambda m, x: x.exp().sum(),
+    "div": lambda m, x: (x / (x + 1.0)).sum(),
+    "matmul": lambda m, x: (x.reshape(0, 2) @ m.ones(2, 3, device=x.device)).sum(),
 }
 
 
@@ -128,6 +154,25 @@ def test_a_graph_that_saves_values_is_still_refused(
     assert _outcome(lucid, device, scenario) == {"second_pass": True}
 
 
+@pytest.mark.parametrize("graph", list(_SAVE_EMPTY))
+def test_a_graph_that_saved_a_tensor_of_no_elements_is_still_refused(
+    graph: str, ref: ModuleType, device: str
+) -> None:
+    # A slot holding a tensor of no elements holds no bytes, but it was
+    # filled: on Metal the second pass read it as the GPU buffer the release
+    # had replaced (bad_variant_access), and on the CPU it ran where the
+    # reference refuses.
+    def scenario(m: ModuleType, dev: str) -> object:
+        x = m.zeros(0, device=dev).requires_grad_(True)
+        y = _SAVE_EMPTY[graph](m, x)
+        y.backward()
+        y.backward()
+        return _values(x.grad)
+
+    assert _outcome(ref, "cpu", scenario) == {"second_pass": True}
+    assert _outcome(lucid, device, scenario) == {"second_pass": True}
+
+
 @pytest.mark.parametrize("graph", list(_SAVE_NOTHING))
 def test_the_same_graph_without_a_second_pass_is_unchanged(
     graph: str, device: str
@@ -184,7 +229,7 @@ def test_a_pass_that_freed_values_cuts_the_root_from_its_graph(device: str) -> N
 
 @pytest.mark.xfail(
     strict=True,
-    reason="LCD-350 follow-up: the spent root of (a*a).sum() hides that nothing "
+    reason="LCD-493: the spent root of (a*a).sum() hides that nothing "
     "between it and the interior tensor h was freed, so grad(y, h) is refused "
     "where the reference answers [1, 1]",
 )

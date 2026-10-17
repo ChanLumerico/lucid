@@ -88,6 +88,7 @@ namespace lucid {
 // Ba, Kiros & Hinton, "Layer Normalization" (arXiv:1607.06450, 2016).
 class LUCID_API LayerNormBackward : public FuncOp<LayerNormBackward, 3> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Per-slice mean $\mu$, shape ``(outer_,)``.

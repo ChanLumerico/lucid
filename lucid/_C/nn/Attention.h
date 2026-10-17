@@ -100,6 +100,7 @@ namespace lucid {
 class LUCID_API ScaledDotProductAttentionBackward
     : public FuncOp<ScaledDotProductAttentionBackward, 4> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     double scale_ = 1.0;  // Dot-product scale factor (usually 1/sqrt(d_k)).
     Shape orig_q_shape_;

@@ -98,7 +98,7 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     scope.set_flops(static_cast<std::int64_t>(out->numel()) * 11);
 
     auto bwd = std::make_shared<RPowScalarBackward>();
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     bwd->base_ = base;
     kernel::NaryKernel<RPowScalarBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;

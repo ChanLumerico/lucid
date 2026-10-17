@@ -41,7 +41,7 @@ TensorImplPtr solve_triangular_aligned(const TensorImplPtr& a,
     auto bwd = std::make_shared<SolveTriangularBackward>();
     bwd->upper_ = upper;
     bwd->unitriangular_ = unitriangular;
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     kernel::NaryKernel<SolveTriangularBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out,
                                                                   true);
     return out;

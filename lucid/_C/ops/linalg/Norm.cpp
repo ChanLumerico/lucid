@@ -209,7 +209,7 @@ TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis,
     bwd->ord_ = ord;
     bwd->axis_ = axis;
     bwd->keepdims_ = keepdims;
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     // save_inputs=true: NormBackward reads A from saved_inputs_[0] for ord=2.
     kernel::NaryKernel<NormBackward, 1>::wire_autograd(std::move(bwd), {a}, out, true);
     return out;

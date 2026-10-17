@@ -336,6 +336,7 @@ public:
 // Goodfellow, Bengio, Courville, "Deep Learning" §6.2.2 (2016).
 class LUCID_API CrossEntropyBackward : public FuncOp<CrossEntropyBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     Reduction reduction_ = Reduction::Mean;
     double eps_ = 1e-7;
@@ -431,6 +432,7 @@ public:
 // ``CrossEntropyBackward`` when starting from logits.
 class LUCID_API NLLLossBackward : public FuncOp<NLLLossBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     Reduction reduction_ = Reduction::Mean;
     int ignore_index_ = -100;
@@ -748,6 +750,7 @@ LUCID_API TensorImplPtr huber_loss_op(const TensorImplPtr& input,
 // ``create_graph=True`` through it raises.
 class LUCID_API CtcLossBackward : public FuncOp<CtcLossBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     Shape lp_shape_;
     int blank_ = 0;

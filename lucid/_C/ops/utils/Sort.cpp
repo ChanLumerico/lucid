@@ -91,6 +91,7 @@ Storage scatter_axis_add_storage(const Storage& grad,
 // which exactly inverts the gather performed during the forward sort.
 class IndexScatterBackward : public FuncOp<IndexScatterBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
 
     Storage indices_;

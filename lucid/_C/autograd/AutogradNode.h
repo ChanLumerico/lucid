@@ -272,10 +272,31 @@ public:
         saved_impl_output_.reset();
     }
 
-    // :meth:`apply` reads values from :attr:`saved_inputs_` and
-    // :attr:`saved_output_` only, so a node that kept none there frees just
-    // the tensors graph-mode backward reads.  A member of the derived
-    // class's own is not released, so it is still there for an eager pass.
+    // Keep ``s`` as input ``i``'s values, or the output's, for :meth:`apply`.
+    // The slot is recorded as kept whatever its size: an eager pass reads it
+    // even for a tensor of no elements — on Metal as the GPU buffer a
+    // release replaces — so a released one must be refused, as the
+    // reference refuses it.
+    void keep_input(std::size_t i, Storage s) {
+        saved_inputs_[i] = std::move(s);
+        keeps_values_ = true;
+    }
+    void keep_output(Storage s) {
+        saved_output_ = std::move(s);
+        keeps_values_ = true;
+    }
+    // Every input's values at once.
+    void keep_inputs(std::array<Storage, N_IN> s) {
+        saved_inputs_ = std::move(s);
+        keeps_values_ = true;
+    }
+
+    // :meth:`apply` reads the values this node kept: those in its slots
+    // (:meth:`keep_input`, :meth:`keep_output`), and those a node keeps in
+    // members of its own, which it declares with ``kKeepsOwnValues``
+    // (``tools/check_saved_versions.py`` requires it of every node class
+    // holding a tensor of its own).  A node that kept none frees just the
+    // tensors graph-mode backward reads, and an eager pass may run it again.
     SavedKind saved_kind() const noexcept override {
         static_assert(
             std::is_same_v<decltype(&Derived::release_saved), void (AutogradNode::*)()> ||
@@ -283,7 +304,11 @@ public:
                                 SavedKind (AutogradNode::*)() const noexcept>,
             "a node that frees members of its own in release_saved must say in saved_kind "
             "whether its eager backward reads them");
-        bool holds = ::lucid::holds_saved_values(saved_output_);
+        if constexpr (requires { Derived::kKeepsOwnValues; }) {
+            if (Derived::kKeepsOwnValues)
+                return SavedKind::kEagerValues;
+        }
+        bool holds = keeps_values_ || ::lucid::holds_saved_values(saved_output_);
         for (const auto& s : saved_inputs_)
             holds = holds || ::lucid::holds_saved_values(s);
         return holds ? SavedKind::kEagerValues : SavedKind::kGraphInputs;
@@ -309,6 +334,9 @@ public:
     std::weak_ptr<TensorImpl> saved_impl_output_;
 
 private:
+    // Whether :meth:`keep_input` or :meth:`keep_output` filled a slot.
+    bool keeps_values_ = false;
+
     // Whether some input that takes a gradient has one reading input ``j``.
     bool read_by_a_needed_gradient(std::size_t j) const {
         const auto& edges = next_edges();

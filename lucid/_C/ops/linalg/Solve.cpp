@@ -63,7 +63,7 @@ TensorImplPtr solve_aligned(const TensorImplPtr& a, const TensorImplPtr& b) {
             .linalg_solve(a->storage(), b->storage(), a->shape(), b->shape(), a->dtype());
     auto out = linalg_detail::fresh(std::move(out_storage), b->shape(), a->dtype(), a->device());
     auto bwd = std::make_shared<SolveBackward>();
-    bwd->saved_output_ = out->storage();
+    bwd->keep_output(out->storage());
     kernel::NaryKernel<SolveBackward, 2>::wire_autograd(std::move(bwd), {a, b}, out, true);
     return out;
 }

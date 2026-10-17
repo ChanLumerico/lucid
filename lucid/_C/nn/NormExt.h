@@ -78,6 +78,7 @@ namespace lucid {
 //     statistics from the current batch.
 class LUCID_API BatchNormEvalBackward : public FuncOp<BatchNormEvalBackward, 5> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Forward eps, retained for the backward derivation.
@@ -224,6 +225,7 @@ LUCID_API TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
 //     Per-slice norm value $\|x\|_p$ retained for backward.
 class LUCID_API LpNormalizeBackward : public FuncOp<LpNormalizeBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Norm order $p$ (e.g. ``2.0`` for L2).
@@ -354,6 +356,7 @@ LUCID_API TensorImplPtr lp_normalize_op(const TensorImplPtr& x, double ord, int 
 // Masked Autoencoders" (CVPR 2023, arXiv:2301.00808).
 class LUCID_API GlobalResponseNormBackward : public FuncOp<GlobalResponseNormBackward, 3> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
     // Numerical-stability constant.

@@ -31,6 +31,13 @@ per-node patch for a node the base over-checked, and it switches off the
 guard for whatever the node may save later.  The base already leaves an input
 it did not save alone.
 
+A node class built on ``AutogradNode`` (directly, through ``FuncOp`` or a
+kernel template) that holds a tensor of its own must also declare
+``static constexpr bool kKeepsOwnValues = true``.  ``AutogradNode::saved_kind``
+sees only the canonical slots; without the declaration a node whose
+backward reads a mask or an index it keeps itself would be run again by a
+second pass the reference refuses (LCD-350).
+
 Usage::
 
     python3 tools/check_saved_versions.py          # exit 1 on a finding
@@ -65,6 +72,14 @@ _MEMBER = re.compile(
     re.S,
 )
 _EMPTY_VALIDATE = re.compile(r"\bvalidate_versions\s*\(\s*\)\s*override\s*\{\s*\}")
+# The bases whose saved_kind reads only the canonical slots.
+_SLOT_BASE = re.compile(
+    r"\b(?:FuncOp|AutogradNode|UnaryKernel|BinaryKernel|NaryKernel|ReduceKernel|"
+    r"UnaryOp|BinaryOp|ReduceOp)\b"
+)
+_KEEPS_OWN = "kKeepsOwnValues"
+# The classes that own the canonical slots themselves.
+_SLOT_OWNERS = ("AutogradNode", "VariadicKernel")
 _CLASS = re.compile(
     r"\b(?:class|struct)\s+(?:LUCID_API\s+)?(?P<name>[A-Za-z_]\w*)\s*(?:final\s*)?"
     r":(?P<bases>[^;{]*)\{"
@@ -239,10 +254,29 @@ def scan(engine: Path = ENGINE) -> Iterator[tuple[str, str, bool, Path]]:
                 yield m.group("name"), member, validates, path
 
 
+def undeclared_own_values(engine: Path = ENGINE) -> Iterator[tuple[str, Path]]:
+    """Yield ``(class, file)`` for each slot-based node holding a tensor of
+    its own without declaring :data:`_KEEPS_OWN`."""
+    for path, text in _sources(engine):
+        for m in _CLASS.finditer(text):
+            name = m.group("name")
+            if name in _SLOT_OWNERS or not _SLOT_BASE.search(m.group("bases")):
+                continue
+            flat = _top_level(_body(text, m.end() - 1))
+            if _KEEPS_OWN not in flat and any(True for _ in _members(flat)):
+                yield name, path
+
+
 def check(engine: Path = ENGINE, held: dict[str, str] | None = None) -> list[str]:
     """Every finding under ``engine`` against ``held`` (default :data:`HELD`)."""
     table = HELD if held is None else held
     problems: list[str] = []
+    for cls, path in undeclared_own_values(engine):
+        problems.append(
+            f"{path.relative_to(engine)}: {cls} keeps a tensor of its own but does not "
+            f"declare {_KEEPS_OWN} — AutogradNode::saved_kind sees only the canonical "
+            f"slots, so a second pass would run it after its values were meant to be gone"
+        )
     seen: set[str] = set()
     for cls, member, validates, path in scan(engine):
         key = f"{cls}::{member}"

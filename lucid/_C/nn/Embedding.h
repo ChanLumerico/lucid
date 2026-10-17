@@ -80,6 +80,7 @@ namespace lucid {
 //     Dtype of the saved index tensor (default ``I64``).
 class LUCID_API EmbeddingBackward : public FuncOp<EmbeddingBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     int padding_idx_ = -1;   // Row that receives no gradient; -1 for none.
     Shape weight_shape_;     // (num_embeddings, embed_dim).
@@ -185,6 +186,7 @@ public:
 //     Sine table produced by the forward kernel.
 class LUCID_API RotaryPosEmbeddingBackward : public FuncOp<RotaryPosEmbeddingBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     bool interleaved_ = true;  // Pair layout; must match how the model was trained.
     Shape orig_shape_;
@@ -385,6 +387,7 @@ LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
 // empty and a write into the weight after forward is not refused.
 class LUCID_API EmbeddingBagBackward : public FuncOp<EmbeddingBagBackward, 1> {
 public:
+    static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
     Storage saved_indices_;  // Flat integer index buffer.
     Storage saved_offsets_;  // Bag boundaries.
