@@ -2745,9 +2745,9 @@ class Tensor:
     ) -> str | Tensor:
         """Return the legacy type name, or cast to a dtype or legacy type.
 
-        * ``t.type()`` — the name, such as ``'lucid.FloatTensor'``.
-        * ``t.type(lucid.float64)`` / ``t.type('lucid.DoubleTensor')`` — the
-          tensor cast, as :meth:`to` casts it; ``self`` if it already is.
+        * ``t.type()`` — the name, ``'lucid.FloatTensor'`` (``lucid.metal.`` on Metal).
+        * ``t.type(lucid.float64)`` / ``t.type('lucid.DoubleTensor')`` — cast as
+          :meth:`to` casts, a name to its device too; ``self`` if it already is.
 
         Parameters
         ----------
@@ -2756,15 +2756,15 @@ class Tensor:
             ``HalfTensor``, ``BFloat16Tensor``, ``CharTensor`` (int8),
             ``ShortTensor``, ``IntTensor``, ``LongTensor``, ``BoolTensor``,
             ``ComplexFloatTensor`` or ``ComplexDoubleTensor``, prefixed with
-            ``lucid.``.  ``None`` returns the name of ``self``'s type.
+            ``lucid.`` (CPU) or ``lucid.metal.``.  ``None`` returns ``self``'s.
         non_blocking : bool, optional
             Read and ignored: a transfer is synchronous.
 
         Returns
         -------
         str or Tensor
-            The name when ``dtype is None``, otherwise the cast tensor on the
-            same device.
+            The name when ``dtype is None``, otherwise the cast tensor: on the
+            name's device for a name, on ``self``'s for a dtype.
 
         Raises
         ------
@@ -2786,8 +2786,8 @@ class Tensor:
         """
         del non_blocking  # the reference's parameter; transfers are synchronous
         if dtype is None:
-            return _LEGACY_TYPE_NAME[self._impl.dtype]
-        return self.to(_type_target(dtype))
+            return _legacy_type_name(self._impl)
+        return self.to(*_type_target(dtype))
 
     def get_device(self) -> int:
         r"""Return the device index.
@@ -4257,7 +4257,7 @@ from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
 from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _inject_methods  # noqa: E402
-from lucid._tensor._to import _inject_to, _LEGACY_TYPE_NAME, _type_target  # noqa: E402
+from lucid._tensor._to import _inject_to, _legacy_type_name, _type_target  # noqa: E402
 
 # ``register_hook`` is annotated ``-> _RemovableHandle``, imported under
 # TYPE_CHECKING to keep the module's import graph acyclic.  PEP 649 then

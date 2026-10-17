@@ -63,6 +63,17 @@ def test_the_dtypes_match_the_reference(ref, target):
     assert _dtypes(ours) == _dtypes(theirs)
 
 
+def test_a_name_moves_the_module_to_its_device(cross_device_pair):
+    # A legacy name carries a device, as the reference's do (LCD-504).
+    cpu, metal = cross_device_pair
+    model = _model(lucid).type("lucid.metal.HalfTensor")
+    assert {t.device for t in model.state_dict().values()} == {lucid.device(metal)}
+    model.type("lucid.FloatTensor")
+    assert {t.device for t in model.state_dict().values()} == {lucid.device(cpu)}
+    model.to(metal).type(lucid.float16)
+    assert {t.device for t in model.state_dict().values()} == {lucid.device(metal)}
+
+
 def test_a_gradient_is_cast_with_its_parameter(device):
     layer = nn.Linear(2, 2).to(device)
     layer(lucid.ones(1, 2, device=device)).sum().backward()

@@ -42,6 +42,44 @@ def test_a_name_casts_back_to_its_dtype(device, dtype):
     assert cast.dtype == dtype and cast.device == t.device
 
 
+# Off the CPU a name says the device as well (LCD-504): the reference names
+# its Apple GPU tensors ``<lib>.mps.FloatTensor``, and a name casts to its
+# device, a plain one to the CPU.  Metal's names are ``lucid.metal.*`` and,
+# as the reference's other accelerators' names are, are taken back.
+@pytest.mark.parametrize("device,dtype", device_dtype_params(_DTYPES))
+def test_the_name_says_the_device(device, dtype):
+    name = lucid.zeros(2, dtype=dtype, device=device).type()
+    prefix = "lucid.metal." if device == "metal" else "lucid."
+    assert name.startswith(prefix) and name.count(".") == prefix.count(".")
+
+
+def test_a_name_casts_to_its_device_and_a_dtype_keeps_it(cross_device_pair):
+    cpu, metal = cross_device_pair
+    on_cpu, on_metal = lucid.ones(2, device=cpu), lucid.ones(2, device=metal)
+    moved = on_cpu.type("lucid.metal.HalfTensor")
+    assert moved.device == lucid.device(metal) and moved.dtype == lucid.float16
+    back = on_metal.type("lucid.HalfTensor")
+    assert back.device == lucid.device(cpu) and back.dtype == lucid.float16
+    assert on_metal.type(lucid.float16).device == lucid.device(metal)
+    assert on_metal.type(on_metal.type()) is on_metal
+    assert on_cpu.type(on_metal.type()).device == lucid.device(metal)
+
+
+@pytest.mark.parity
+def test_the_reference_names_and_casts_its_gpu_tensors_alike(ref):
+    if not ref.backends.mps.is_available():
+        pytest.skip("the reference has no Apple GPU device here")
+    lib = ref.__name__
+    theirs = ref.zeros(2, device="mps")
+    ours = lucid.zeros(2, device="metal")
+    assert theirs.type() == f"{lib}.mps.FloatTensor"
+    assert ours.type() == "lucid.metal.FloatTensor"
+    assert theirs.type(f"{lib}.HalfTensor").device.type == "cpu"
+    assert ours.type("lucid.HalfTensor").device == lucid.device("cpu")
+    assert theirs.type(ref.float16).device.type == "mps"
+    assert ours.type(lucid.float16).device == lucid.device("metal")
+
+
 @pytest.mark.parametrize("device,dtype", device_dtype_params(_DTYPES))
 def test_a_dtype_casts_as_to_does(device, dtype):
     t = lucid.ones(2, device=device)
@@ -69,7 +107,7 @@ def test_non_blocking_is_accepted(device):
     t = lucid.ones(2, device=device)
     assert t.type(lucid.float16, True).dtype == lucid.float16
     assert t.type("lucid.HalfTensor", non_blocking=True).dtype == lucid.float16
-    assert t.type(None, True) == "lucid.FloatTensor"
+    assert t.type(None, True) == t.type()
 
 
 # What each spelling raises, the same class in both libraries.  A string is

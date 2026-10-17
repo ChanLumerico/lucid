@@ -100,6 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - div takes rounding_mode, trunc or floor (LCD-485)
 
+- legacy type names say the Metal device (LCD-504)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

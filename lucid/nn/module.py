@@ -977,7 +977,9 @@ class Module:
         Parameters
         ----------
         dst_type : lucid.dtype or str
-            A dtype, or a legacy type name such as ``"lucid.DoubleTensor"``.
+            A dtype, which keeps each tensor's device, or a legacy type name,
+            which moves it to the name's: ``"lucid.DoubleTensor"`` to the CPU,
+            ``"lucid.metal.HalfTensor"`` to Metal, as the reference's names do.
 
         Returns
         -------
@@ -1002,7 +1004,7 @@ class Module:
         >>> nn.Linear(2, 2).type("lucid.HalfTensor").weight.dtype
         lucid.float16
         """
-        target = _type_target(dst_type)
+        _, target = _type_target(dst_type)
         if _promotion.is_integral(target):
             trainable = [n for n, p in self.named_parameters() if p.requires_grad]
             if trainable:
@@ -1011,7 +1013,7 @@ class Module:
                     "only a floating point or complex tensor can, so it cannot "
                     f"become {_ENGINE_TO_DTYPE[target]}"
                 )
-        return self._apply(lambda t: t.type(target))
+        return self._apply(lambda t: t.type(dst_type))
 
     def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""

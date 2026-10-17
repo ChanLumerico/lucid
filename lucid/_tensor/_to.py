@@ -145,14 +145,37 @@ _LEGACY_TYPE_NAME: dict[_C_engine.Dtype, str] = {
     _C_engine.Dtype.C64: "lucid.ComplexFloatTensor",
     _C_engine.Dtype.C128: "lucid.ComplexDoubleTensor",
 }
-_LEGACY_TYPE: dict[str, _C_engine.Dtype] = {v: k for k, v in _LEGACY_TYPE_NAME.items()}
+# Off the CPU the reference qualifies the name by the device — its Apple GPU
+# tensors are ``<lib>.mps.FloatTensor`` — and a name casts to its device as
+# well as its dtype, a plain one to the CPU.  Metal's names are
+# ``lucid.metal.FloatTensor`` and so on; unlike the reference's mps names
+# they are taken back too, as its other accelerators' names are.
+_METAL_PREFIX = "lucid.metal."
+_LEGACY_TYPE: dict[str, tuple[_C_engine.Device, _C_engine.Dtype]] = {
+    **{v: (_C_engine.Device.CPU, k) for k, v in _LEGACY_TYPE_NAME.items()},
+    **{
+        _METAL_PREFIX + v.removeprefix("lucid."): (_C_engine.Device.GPU, k)
+        for k, v in _LEGACY_TYPE_NAME.items()
+    },
+}
 
 
-def _type_target(dst_type: object) -> _C_engine.Dtype:
-    """The engine dtype ``Tensor.type(dst_type)`` casts to.
+def _legacy_type_name(impl: _C_engine.TensorImpl) -> str:
+    """``Tensor.type()``: the legacy name of ``impl``'s dtype on its device."""
+    name = _LEGACY_TYPE_NAME[impl.dtype]
+    if impl.device == _C_engine.Device.GPU:
+        return _METAL_PREFIX + name.removeprefix("lucid.")
+    return name
 
-    Takes what the reference's ``type`` takes: a dtype, or a legacy type
-    name such as ``"lucid.DoubleTensor"``.  A dtype's own name
+
+def _type_target(
+    dst_type: object,
+) -> tuple[_C_engine.Device | None, _C_engine.Dtype]:
+    """The ``(device, dtype)`` ``Tensor.type(dst_type)`` casts to.
+
+    Takes what the reference's ``type`` takes: a dtype, which keeps the
+    device (``None``), or a legacy type name such as ``"lucid.DoubleTensor"``
+    (the CPU) or ``"lucid.metal.HalfTensor"`` (Metal).  A dtype's own name
     (``"float64"``) or a Python type (``float``) is refused, as there.
 
     Raises
@@ -163,7 +186,7 @@ def _type_target(dst_type: object) -> _C_engine.Dtype:
         If ``dst_type`` is neither a dtype, a string nor a type.
     """
     if isinstance(dst_type, _DTYPE_LIKE):
-        return to_engine_dtype(dst_type)
+        return None, to_engine_dtype(dst_type)
     if isinstance(dst_type, str):
         found = _LEGACY_TYPE.get(dst_type)
         if found is not None:
