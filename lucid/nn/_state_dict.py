@@ -104,7 +104,9 @@ def _checked_source(
 
     The shapes must agree, on an ``assign`` load too — only a parameter not
     yet shaped (a lazy layer's) is replaced whatever the checkpoint's shape,
-    as in the reference.
+    as in the reference.  One exception, the reference's too: a 0-d tensor
+    takes a shape ``(1,)`` one as its scalar, which is how checkpoints from
+    before 0-d tensors stored it.
     """
     from lucid.nn.parameter import UninitializedParameter
 
@@ -115,6 +117,8 @@ def _checked_source(
         )
         return None
     unshaped = assign and isinstance(attr, UninitializedParameter)
+    if not unshaped and attr.ndim == 0 and tuple(src.shape) == (1,):
+        src = src.reshape(())
     if not unshaped and tuple(src.shape) != tuple(attr.shape):
         error_msgs.append(
             f"size mismatch for {key}: copying a param with shape "
