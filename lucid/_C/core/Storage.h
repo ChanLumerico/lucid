@@ -50,6 +50,7 @@
 #include <memory>
 #include <variant>
 
+#include "Device.h"
 #include "Dtype.h"
 
 namespace mlx::core {
@@ -366,6 +367,11 @@ struct SharedStorage {
 //     returns, the :class:`TensorImpl` that adopts the storage does.
 // dtype : Dtype
 //     Element type.  Default :attr:`Dtype::F32`.
+// device : Device
+//     The device the phantom stands in for.  Every other storage says its
+//     device by its kind; a phantom has none, and a bare gradient Storage
+//     handed to a hook, a custom Function or a seed is wrapped on the device
+//     :func:`storage_device` reads off it.
 //
 // Notes
 // -----
@@ -376,6 +382,7 @@ struct SharedStorage {
 struct PhantomStorage {
     std::size_t nbytes = 0;
     Dtype dtype = Dtype::F32;
+    Device device = Device::CPU;
 };
 
 // Discriminated union of the four storage variants, held by
@@ -476,6 +483,29 @@ inline std::size_t storage_nbytes(const Storage& s) noexcept {
         return std::get<3>(s).nbytes;
     default:
         return 0;
+    }
+}
+
+// The device a bare :class:`Storage` belongs to — the one place it is read
+// off one, for a gradient wrapped as a tensor (a hook's argument, a custom
+// Function's ``grad_output``, a backward seed) and anything else that holds
+// a Storage without its tensor.
+//
+// Returns
+// -------
+// Device
+//     :attr:`Device::GPU` for :class:`GpuStorage`; the recorded device for
+//     :class:`PhantomStorage`, which has no kind to tell it by; otherwise
+//     :attr:`Device::CPU` — a :class:`SharedStorage` buffer is read through
+//     its CPU view.
+inline Device storage_device(const Storage& s) noexcept {
+    switch (s.index()) {
+    case 1:
+        return Device::GPU;
+    case 3:
+        return std::get<3>(s).device;
+    default:
+        return Device::CPU;
     }
 }
 

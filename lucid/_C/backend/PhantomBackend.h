@@ -1152,14 +1152,17 @@ public:
     }
 
 private:
-    // An unsized phantom: the tensor that adopts it gives it its size.
-    static Storage phantom(Dtype dt) {
+    // An unsized phantom on this backend's device: the tensor that adopts it
+    // gives it its size, and a gradient handed out as a bare Storage still
+    // says where it lives (storage_device).
+    Storage phantom(Dtype dt) const {
         PhantomStorage p;
         p.dtype = dt;
-        return Storage{std::move(p)};
+        p.device = device_;
+        return Storage{p};
     }
 
-    static std::vector<Storage> phantoms(std::size_t n, Dtype dt) {
+    std::vector<Storage> phantoms(std::size_t n, Dtype dt) const {
         std::vector<Storage> out;
         out.reserve(n);
         for (std::size_t i = 0; i < n; ++i)

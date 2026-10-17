@@ -80,11 +80,12 @@ private:
     bool prev_;
 };
 
-// A phantom storage for ``shape`` elements of ``dt``, sized.
-inline Storage phantom_storage(const Shape& shape, Dtype dt) {
+// A phantom storage for ``shape`` elements of ``dt`` on ``device``, sized.
+inline Storage phantom_storage(const Shape& shape, Dtype dt, Device device) {
     PhantomStorage p;
     p.nbytes = shape_numel(shape) * dtype_size(dt);
     p.dtype = dt;
+    p.device = device;
     return Storage{p};
 }
 

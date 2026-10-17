@@ -32,6 +32,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 import lucid.optim as optim
 from lucid._C import engine as _C_engine
+from lucid.autograd.function import Function, FunctionCtx
 from lucid._tensor.tensor import Tensor
 from lucid.test._fixtures.devices import metal_available
 
@@ -482,6 +483,94 @@ def test_a_real_parameter_is_not_rebound_to_a_phantom(rebind):
         else:
             m.weight.data = lucid.zeros(2, 3)
     assert not m.weight._impl.is_phantom
+
+
+# ── a phantom gradient keeps its device ──────────────────────────────────────
+#
+# Autograd hands a gradient around as a bare Storage and wraps it as a tensor
+# for a hook, a custom Function, a seed or a create_graph rebuild, reading the
+# device off the storage (storage_device).  A phantom records the device it
+# stands in for, so each path keeps the eager device.
+
+
+class _Ident(Function):
+    @staticmethod
+    def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
+        return x * 1
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad: Tensor) -> Tensor:
+        _SEEN["function"] = grad.device
+        return grad
+
+
+_SEEN: dict[str, object] = {}
+
+
+def _hook_sees(device: str) -> Tensor:
+    w = lucid.ones(3, device=device, requires_grad=True)
+    y = w * 2
+    y.register_hook(lambda g: _SEEN.__setitem__("hook", g.device))
+    y.sum().backward()
+    return w
+
+
+def _hook_returns(device: str) -> Tensor:
+    w = lucid.ones(3, device=device, requires_grad=True)
+    y = w * 2
+    y.register_hook(lambda g: lucid.zeros(3, device=device))
+    y.sum().backward()
+    return w
+
+
+def _function(device: str) -> Tensor:
+    w = lucid.ones(3, device=device, requires_grad=True)
+    _Ident.apply(w).sum().backward()
+    return w
+
+
+def _snapshot(device: str) -> Tensor:
+    w = lucid.ones(4, device=device, requires_grad=True)
+    y = w * 1
+    y.index_add_(0, lucid.zeros(1, dtype=lucid.int64, device=device), lucid.ones(1, device=device))
+    y.sum().backward()
+    return w
+
+
+def _create_graph(device: str) -> Tensor:
+    w = lucid.ones(3, device=device, requires_grad=True)
+    (g,) = lucid.autograd.grad((w * w).sum(), w, create_graph=True)
+    g.sum().backward()
+    return w
+
+
+def _seeded(device: str) -> Tensor:
+    w = lucid.ones(3, device=device, requires_grad=True)
+    (w * 2).backward(lucid.ones(3, device=device))
+    return w
+
+
+_GRAD_PATHS: dict[str, Callable[[str], Tensor]] = {
+    "hook sees": _hook_sees,
+    "hook returns": _hook_returns,
+    "function": _function,
+    "snapshot": _snapshot,
+    "create_graph": _create_graph,
+    "seeded": _seeded,
+}
+
+
+@pytest.mark.parametrize("path", list(_GRAD_PATHS))
+def test_a_phantom_gradient_keeps_its_device(path, device):
+    _SEEN.clear()
+    eager = _GRAD_PATHS[path](device)
+    seen_eager = dict(_SEEN)
+    _SEEN.clear()
+    with phantom():
+        ghost = _GRAD_PATHS[path](device)
+    assert ghost.grad is not None and ghost.grad._impl.is_phantom
+    assert ghost.grad.device == eager.grad.device == lucid.device(device)
+    assert _SEEN == seen_eager
 
 
 # ── phantom views follow their device's layout rule ──────────────────────────

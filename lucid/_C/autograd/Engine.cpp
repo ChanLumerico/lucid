@@ -346,7 +346,7 @@ public:
         const Storage& g = slot != nullptr ? *slot : grad;
         const Dtype dtype = storage_dtype(g);
         const auto numel = static_cast<std::int64_t>(storage_nbytes(g) / dtype_size(dtype));
-        open(backward_node_name(node), storage_is_gpu(g) ? Device::GPU : Device::CPU, dtype,
+        open(backward_node_name(node), storage_device(g), dtype,
              numel > 0 ? Shape{numel} : Shape{});
     }
 
@@ -512,7 +512,7 @@ BackwardRoot root_with_seed(const std::shared_ptr<TensorImpl>& root, Storage see
     if (storage_is_empty(seed))
         return {root, nullptr};
     const Dtype dtype = storage_dtype(seed);
-    const Device device = storage_is_gpu(seed) ? Device::GPU : Device::CPU;
+    const Device device = storage_device(seed);
     const auto elements = static_cast<std::int64_t>(storage_nbytes(seed) / dtype_size(dtype));
     if (elements != static_cast<std::int64_t>(shape_numel(root->shape())))
         throw ShapeMismatch(root->shape(), {elements}, "backward: the seed of the root");

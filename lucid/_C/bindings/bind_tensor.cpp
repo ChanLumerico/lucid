@@ -195,8 +195,8 @@ std::uintptr_t data_address(const TensorImpl& t) {
 std::shared_ptr<TensorImpl>
 make_shared_tensor(const std::vector<std::int64_t>& shape, Dtype dtype, bool requires_grad) {
     if (PhantomMode::is_enabled())
-        return std::make_shared<TensorImpl>(phantom_storage(Shape(shape), dtype), Shape(shape),
-                                            dtype, Device::CPU, requires_grad);
+        return std::make_shared<TensorImpl>(phantom_storage(Shape(shape), dtype, Device::CPU),
+                                            Shape(shape), dtype, Device::CPU, requires_grad);
     std::size_t n = 1;
     for (auto d : shape)
         n *= static_cast<std::size_t>(d);

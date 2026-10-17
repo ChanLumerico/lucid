@@ -348,7 +348,7 @@ Storage ReduceKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
                                                const Shape& out_shape,
                                                Dtype eff_dt) {
     if (PhantomMode::is_enabled()) [[unlikely]]
-        return phantom_storage(out_shape, eff_dt);
+        return phantom_storage(out_shape, eff_dt, a_ptr->device());
     if constexpr (detail::HasReduceDispatch<Derived>) {
         return Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()), a_ptr->storage(),
                                  a_ptr->shape(), axes, keepdims, eff_dt);

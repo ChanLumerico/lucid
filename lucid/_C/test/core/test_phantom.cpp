@@ -67,12 +67,16 @@ TEST(PhantomMode, OtherThreadsUnaffected) {
 }
 
 TEST(PhantomStorageTest, VariantIndexAndSize) {
-    const Storage s = phantom_storage({2, 3}, Dtype::F64);
+    const Storage s = phantom_storage({2, 3}, Dtype::F64, Device::GPU);
     EXPECT_TRUE(storage_is_phantom(s));
     EXPECT_FALSE(storage_is_cpu(s));
     EXPECT_EQ(s.index(), 3u);
     EXPECT_EQ(storage_nbytes(s), 6u * 8u);
     EXPECT_EQ(storage_dtype(s), Dtype::F64);
+    // A phantom has no kind to tell its device by: it records one.
+    EXPECT_EQ(storage_device(s), Device::GPU);
+    EXPECT_EQ(storage_device(phantom_storage({1}, Dtype::F32, Device::CPU)), Device::CPU);
+    EXPECT_EQ(storage_device(Storage{CpuStorage{}}), Device::CPU);
 }
 
 TEST(PhantomFactories, ShapeDtypeNoAllocation) {
@@ -130,7 +134,7 @@ TEST(PhantomOps, PhantomInputRefusedOutsideTheMode) {
 }
 
 TEST(PhantomWrites, OneRuleForEveryWrite) {
-    const Storage ghost = phantom_storage({3}, Dtype::F32);
+    const Storage ghost = phantom_storage({3}, Dtype::F32, Device::CPU);
     const Storage real = CpuStorage{};
     EXPECT_TRUE(absorbs_phantom_write(ghost, real, "w"));
     EXPECT_TRUE(absorbs_phantom_write(ghost, ghost, "w"));
@@ -140,7 +144,7 @@ TEST(PhantomWrites, OneRuleForEveryWrite) {
 
 TEST(PhantomWrites, RealLeafRefusesAPhantomFirstGradient) {
     auto w = zeros_op({3}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
-    const Storage ghost = phantom_storage({3}, Dtype::F32);
+    const Storage ghost = phantom_storage({3}, Dtype::F32, Device::CPU);
     EXPECT_THROW(w->absorbs_phantom_gradient(ghost), LucidError);
     EXPECT_FALSE(w->grad_storage().has_value());
 }
@@ -183,6 +187,7 @@ TEST(PhantomDispatch, GpuDeviceGetsAPhantomToo) {
     auto g = zeros_op({2, 2}, Dtype::F32, Device::GPU, false);
     EXPECT_TRUE(g->is_phantom());
     EXPECT_EQ(g->device(), Device::GPU);
+    EXPECT_EQ(storage_device(g->raw_storage()), Device::GPU);
     auto h = add_op(g, g);
     EXPECT_TRUE(h->is_phantom());
     EXPECT_EQ(h->device(), Device::GPU);

@@ -103,7 +103,7 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     }
 
     Dtype grad_dt = storage_dtype(grad_out);
-    Device grad_dev = storage_is_gpu(grad_out) ? Device::GPU : Device::CPU;
+    Device grad_dev = storage_device(grad_out);
 
     // out_shape is always recorded by _register_python_backward_node,
     // including {} for a 0-D scalar output.

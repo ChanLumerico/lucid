@@ -235,6 +235,7 @@ TensorImpl::TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device,
     if (auto* ph = std::get_if<PhantomStorage>(&storage_); ph && ph->nbytes == 0) {
         ph->nbytes = nbytes();
         ph->dtype = dtype;
+        ph->device = device;
     }
 }
 
@@ -850,8 +851,8 @@ TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
     // A factory like any other: under phantom mode the array's values are
     // not copied.
     if (PhantomMode::is_enabled())
-        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype), std::move(shape), dtype,
-                                            device, requires_grad);
+        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype, device), std::move(shape),
+                                            dtype, device, requires_grad);
 
     // Always land in a fresh aligned CPU buffer first, regardless of the
     // target device.  For GPU tensors the buffer is uploaded below via the
@@ -1262,8 +1263,8 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
                   std::to_string(expected) + ")");
     }
     if (PhantomMode::is_enabled())
-        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype), std::move(shape), dtype,
-                                            device, requires_grad);
+        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype, device), std::move(shape),
+                                            dtype, device, requires_grad);
 
     CpuStorage cpu;
     cpu.ptr = allocate_aligned_bytes(expected);
@@ -1304,8 +1305,8 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
     // same shape and dtype on ``target``, the source untouched and no copy
     // run.  Outside it a phantom has no values to move.
     if (PhantomMode::is_enabled())
-        return std::make_shared<TensorImpl>(phantom_storage(meta_.shape, meta_.dtype), meta_.shape,
-                                            meta_.dtype, target, requires_grad);
+        return std::make_shared<TensorImpl>(phantom_storage(meta_.shape, meta_.dtype, target),
+                                            meta_.shape, meta_.dtype, target, requires_grad);
 
     return std::visit(
         overloaded{
@@ -2055,9 +2056,9 @@ std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<Te
     // the base's family, as every phantom view does (make_view): a family
     // shares values and their version, and a phantom has no values.
     if (base->is_phantom())
-        return std::make_shared<TensorImpl>(phantom_storage(shape, base->meta_.dtype),
-                                            std::move(shape), base->meta_.dtype, base->meta_.device,
-                                            false);
+        return std::make_shared<TensorImpl>(
+            phantom_storage(shape, base->meta_.dtype, base->meta_.device), std::move(shape),
+            base->meta_.dtype, base->meta_.device, false);
     const auto& src = std::get<CpuStorage>(base->storage_);
     // The aliasing constructor shares ``src.ptr``'s ownership but points at
     // the run, so the buffer lives as long as any view of it and every
@@ -2079,7 +2080,7 @@ bool TensorImpl::absorbs_phantom_gradient(const Storage& grad) {
         return false;
     auto* ag = ensure_autograd();
     if (!ag->grad.has_value() && !ag->grad_impl)
-        ag->grad = phantom_storage(meta_.shape, meta_.dtype);
+        ag->grad = phantom_storage(meta_.shape, meta_.dtype, meta_.device);
     return true;
 }
 

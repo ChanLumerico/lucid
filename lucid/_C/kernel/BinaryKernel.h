@@ -643,7 +643,7 @@ protected:
         // A phantom saved under phantom mode broadcasts as a phantom: the
         // pass runs there (Engine::backward refuses a phantom root outside).
         if (storage_is_phantom(this->saved_inputs_[k]))
-            return phantom_storage(this->out_shape_, this->dtype_);
+            return phantom_storage(this->out_shape_, this->dtype_, this->device_);
         const auto& c = std::get<CpuStorage>(this->saved_inputs_[k]);
         return Storage{detail::broadcast_cpu(c, src, this->out_shape_, this->dtype_)};
     }
@@ -743,7 +743,7 @@ Storage BinaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
                                                const Shape& out_shape,
                                                Dtype eff_dt) {
     if (PhantomMode::is_enabled()) [[unlikely]]
-        return phantom_storage(out_shape, eff_dt);
+        return phantom_storage(out_shape, eff_dt, a_ptr->device());
     if constexpr (detail::HasBinaryDispatch<Derived>) {
         if (a_ptr->device() == Device::GPU) {
             // MLX binary primitives broadcast their operands natively and

@@ -186,9 +186,7 @@ void accumulate_into(Storage& dst, const Storage& src) {
     Storage src_owned;
     const Storage* src_ptr = &src;
     if (src_dt != dst_dt) {
-        const Device dev = storage_is_cpu(src)   ? Device::CPU
-                           : storage_is_gpu(src) ? Device::GPU
-                                                 : Device::CPU;  // SharedStorage is CPU-viewable
+        const Device dev = storage_device(src);
         const std::size_t n = storage_nbytes(src) / dtype_size(src_dt);
         Shape one_d_shape = {static_cast<std::int64_t>(n)};
         src_owned = backend::Dispatcher::for_device(dev).astype(src, one_d_shape, src_dt, dst_dt);
@@ -545,8 +543,7 @@ std::shared_ptr<TensorImpl> forward_time_input(const std::shared_ptr<TensorImpl>
                "held then cannot be rebuilt for create_graph=True — clone() it before the write";
         ErrorBuilder("backward").fail(msg);
     }
-    auto t = std::make_shared<TensorImpl>(values, shape, dtype,
-                                          storage_is_gpu(values) ? Device::GPU : Device::CPU,
+    auto t = std::make_shared<TensorImpl>(values, shape, dtype, storage_device(values),
                                           edge.node != nullptr);
     if (edge.node) {
         t->set_grad_fn(edge.node);
@@ -707,7 +704,7 @@ Storage bernoulli_mask_storage_shape(
     }
     // No draw under phantom mode, so the generator does not advance either.
     if (PhantomMode::is_enabled())
-        return phantom_storage(shape, dt);
+        return phantom_storage(shape, dt, device);
     // GPU: draw the whole mask on-device via MLX RNG instead of the per-element
     // CPU Philox loop + host->device upload below (which dominated Dropout's
     // cost — ~19 ms for a single (32,128,768) mask).  We advance the framework
@@ -888,7 +885,7 @@ Storage random_uniform_storage(
     const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
     require_random_dtype("random_uniform", dt);
     if (PhantomMode::is_enabled())
-        return phantom_storage(shape, dt);
+        return phantom_storage(shape, dt, device);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_uniform(shape, lo, hi, dt,
                                                                       gpu_random_key_seed(gen));
@@ -920,7 +917,7 @@ Storage random_normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
     require_random_dtype("random_normal", dt);
     if (PhantomMode::is_enabled())
-        return phantom_storage(shape, dt);
+        return phantom_storage(shape, dt, device);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_normal(shape, mean, std, dt,
                                                                      gpu_random_key_seed(gen));
@@ -958,7 +955,7 @@ random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, 
     if (p < 0.0 || p > 1.0)
         ErrorBuilder("random_bernoulli").invalid_argument("p must be in [0, 1]");
     if (PhantomMode::is_enabled())
-        return phantom_storage(shape, dt);
+        return phantom_storage(shape, dt, device);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_bernoulli(shape, p, dt,
                                                                         gpu_random_key_seed(gen));
@@ -1000,7 +997,7 @@ Storage random_randint_storage(const Shape& shape,
     if (high <= low)
         ErrorBuilder("random_randint").invalid_argument("high must be > low");
     if (PhantomMode::is_enabled())
-        return phantom_storage(shape, dt);
+        return phantom_storage(shape, dt, device);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_randint(shape, low, high, dt,
                                                                       gpu_random_key_seed(gen));

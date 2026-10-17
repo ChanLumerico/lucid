@@ -40,10 +40,6 @@ TensorImplPtr call_runner(const TensorHookSlot& slot, const TensorImplPtr& grad,
     return tensor_from_python(result, "a tensor hook's result");
 }
 
-Device storage_device(const Storage& s) {
-    return storage_is_gpu(s) ? Device::GPU : Device::CPU;
-}
-
 // The one place an eager gradient goes through a runner.
 Storage run_hooks(const TensorHookSlot& slot, Storage grad, const Shape& shape) {
     const Dtype dtype = storage_dtype(grad);
@@ -297,7 +293,7 @@ Storage assignable_grad(const TensorImpl& self, const TensorImpl& g) {
     // any gradient and holds a phantom of its own geometry; a real one
     // refuses a phantom, whose buffer it would otherwise hold.
     if (absorbs_phantom_write(self.raw_storage(), g.raw_storage(), "Tensor.grad"))
-        return phantom_storage(self.shape(), self.dtype());
+        return phantom_storage(self.shape(), self.dtype(), self.device());
     return grad_slot_buffer(err, g);
 }
 

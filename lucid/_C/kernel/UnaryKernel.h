@@ -297,7 +297,7 @@ protected:
 template <class Derived>
 Storage UnaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr, Dtype eff_dt) {
     if (PhantomMode::is_enabled()) [[unlikely]]
-        return phantom_storage(a_ptr->shape(), eff_dt);
+        return phantom_storage(a_ptr->shape(), eff_dt, a_ptr->device());
     if constexpr (detail::HasUnaryDispatch<Derived>) {
         // Dispatch path: uses the backend abstraction (Accelerate / MLX).
         return Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()), a_ptr->storage(),

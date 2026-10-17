@@ -227,7 +227,7 @@ sequence_to_device(CpuStorage cpu, const Shape& shape, Dtype fill, Dtype dt, Dev
 // does not reach: under it, the sequence's shape and no buffer at all.
 TensorImplPtr phantom_sequence(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     return made_from_nothing(
-        finalize(phantom_storage(shape, dt), shape, dt, device, requires_grad));
+        finalize(phantom_storage(shape, dt, device), shape, dt, device, requires_grad));
 }
 
 }  // namespace
