@@ -92,6 +92,25 @@ def _align_device(t: Tensor, ref: Tensor) -> Tensor:
     return t
 
 
+def _sum_rightmost(value: Tensor, dim: int) -> Tensor:
+    """``value`` with its ``dim`` rightmost dimensions summed out.
+
+    A ``value`` with fewer than ``dim`` dimensions is summed whole, as in
+    the reference framework.  The Wishart KL depends on this: its
+    degrees-of-freedom term is 0-dim but is reduced by the rank of the
+    matrix event.
+
+    One deliberate departure from the reference: an empty kept dimension.
+    The reference flattens through ``reshape(..., -1)``, which cannot
+    infer the size when a kept dimension is 0, so a ``(0, 3)`` batch with
+    ``dim=1`` raises there.  Summing over the axes returns the empty
+    ``(0,)`` result instead, so an empty batch scores to an empty batch.
+    """
+    if dim <= 0 or value.ndim == 0:
+        return value
+    return value.sum(list(range(-min(dim, value.ndim), 0)))
+
+
 class _ImageScorer(Protocol):
     """The base a pushed-forward family scores through."""
 

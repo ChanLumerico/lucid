@@ -18,7 +18,7 @@ from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 from lucid._types import DTypeLike, DeviceLike
 from lucid.distributions import constraints
-from lucid.distributions._util import _align_device, _as_tensor
+from lucid.distributions._util import _align_device, _as_tensor, _sum_rightmost
 from lucid.distributions.constraints import Constraint
 from lucid.distributions.distribution import Distribution
 from lucid.distributions.transformed_distribution import (
@@ -1022,10 +1022,9 @@ class IndependentTransform(Transform):
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Sum the wrapped Jacobian over the reinterpreted trailing dims."""
         lp = self.transform.log_abs_det_jacobian(x, y)
-        n = self.reinterpreted_batch_ndims - self.transform.event_dim
-        if n > 0:
-            lp = lp.sum(list(range(-n, 0)))
-        return lp
+        return _sum_rightmost(
+            lp, self.reinterpreted_batch_ndims - self.transform.event_dim
+        )
 
 
 class ReshapeTransform(Transform):

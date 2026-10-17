@@ -4,6 +4,7 @@ import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.distributions._util import _sum_rightmost
 from lucid.distributions.bernoulli import Bernoulli, Geometric
 from lucid.distributions.categorical import OneHotCategorical
 from lucid.distributions.continuous_extra import HalfCauchy, Pareto, Weibull
@@ -37,12 +38,6 @@ from lucid.special import multigammaln, xlog1py
 
 def _x_log_x(tensor: Tensor) -> Tensor:
     return lucid.xlogy(tensor, tensor)
-
-
-def _sum_rightmost(value: Tensor, dim: int) -> Tensor:
-    if dim <= 0:
-        return value
-    return value.reshape(value.shape[:-dim] + (-1,)).sum(-1)
 
 
 def _transform_eq(a: Transform, b: Transform) -> bool:

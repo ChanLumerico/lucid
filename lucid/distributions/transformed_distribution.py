@@ -5,16 +5,10 @@ from typing import final, override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions import constraints
+from lucid.distributions._util import _sum_rightmost
 from lucid.distributions.constraints import Constraint
 from lucid.distributions.distribution import Distribution
 from lucid.distributions.independent import Independent
-
-
-def _sum_rightmost(value: Tensor, dim: int) -> Tensor:
-    """Sum out ``dim`` rightmost dimensions of ``value``."""
-    if dim <= 0:
-        return value
-    return value.sum(list(range(-dim, 0)))
 
 
 class Transform:

@@ -11,6 +11,7 @@ multivariate distribution with diagonal covariance, e.g.
 from typing import override
 
 from lucid._tensor.tensor import Tensor
+from lucid.distributions._util import _sum_rightmost
 from lucid.distributions.constraints import Constraint, independent
 from lucid.distributions.distribution import Distribution
 
@@ -262,13 +263,9 @@ class Independent(Distribution):
         Tensor
             Log joint probability values of shape ``batch_shape``.
         """
-        log_p = self.base_dist.log_prob(value)
-        # Sum over the rightmost ``reinterpreted_batch_ndims`` axes.
-        if self.reinterpreted_batch_ndims == 0:
-            return log_p
-        # Lucid's sum accepts a list of dims.
-        dims = list(range(log_p.ndim - self.reinterpreted_batch_ndims, log_p.ndim))
-        return log_p.sum(dim=dims)
+        return _sum_rightmost(
+            self.base_dist.log_prob(value), self.reinterpreted_batch_ndims
+        )
 
     @override
     def entropy(self) -> Tensor:
@@ -285,11 +282,7 @@ class Independent(Distribution):
         Tensor
             Entropy values of shape ``batch_shape`` (nats).
         """
-        h = self.base_dist.entropy()
-        if self.reinterpreted_batch_ndims == 0:
-            return h
-        dims = list(range(h.ndim - self.reinterpreted_batch_ndims, h.ndim))
-        return h.sum(dim=dims)
+        return _sum_rightmost(self.base_dist.entropy(), self.reinterpreted_batch_ndims)
 
     def _has_enumerate_support(self) -> bool:
         """Whether finite support enumeration is supported.

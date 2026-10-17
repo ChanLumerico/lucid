@@ -376,3 +376,10 @@ class TestKL:
             D.MultivariateNormal(lucid.tensor([1.0, 0.0]), scale_tril=lucid.eye(2)),
         ).item()
         assert abs(kl - 0.5) < 1e-4
+
+    def test_kl_independent_empty_batch_is_empty(self) -> None:
+        """The reshape this pair used to sum with raised "cannot infer -1"
+        on a ``(0, 3)`` batch (LCD-471)."""
+        p = D.Independent(D.Normal(lucid.zeros(0, 3), lucid.ones(0, 3)), 1)
+        q = D.Independent(D.Normal(lucid.zeros(0, 3), lucid.ones(0, 3)), 1)
+        assert tuple(D.kl_divergence(p, q).shape) == (0,)

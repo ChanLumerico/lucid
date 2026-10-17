@@ -19,7 +19,10 @@ import pytest
 
 import lucid
 import lucid.distributions as D
+import lucid.distributions._kl_cross as kl_cross
+import lucid.distributions.transformed_distribution as transformed_distribution
 import lucid.distributions.transforms as T
+from lucid.distributions._util import _sum_rightmost
 
 X = np.array([0.3, -1.2, 0.7, 2.1])
 POS = np.array([0.4, 1.3, 2.7, 0.9])
@@ -632,3 +635,116 @@ def test_sigmoid_transform_inverse_clamps_to_finfo_bounds(dtype_name, ref):
     want = ref.distributions.transforms.SigmoidTransform()._inverse(pts_r).numpy()
     assert np.isfinite(got).all()
     assert np.allclose(got, want, rtol=1e-6, atol=1e-6)
+
+
+# ── the rightmost-dims sum behind every per-event reduction (LCD-471) ────────
+#
+# ``TransformedDistribution`` and the KL registrations each kept their own
+# copy, and the two disagreed.  The axis-sum copy raised ``IndexError`` when
+# there were more dims to sum than the tensor had; the reshape copy raised on
+# an empty batch.  There is one owner now, held to the reference wherever the
+# reference returns a value.
+
+_RIGHTMOST_CASES = [
+    # (id, shape, dim, permutation applied before the sum)
+    ("dim-zero", (2, 3, 4), 0, None),
+    ("one-dim", (2, 3, 4), 1, None),
+    ("dim-equals-ndim", (2, 3, 4), 3, None),
+    ("dim-exceeds-ndim", (2, 3, 4), 5, None),
+    ("non-contiguous", (2, 3, 4), 2, (2, 0, 1)),
+    ("zero-dim", (), 1, None),
+    # The Wishart KL's degrees-of-freedom term: 0-dim, reduced by a rank-2 event.
+    ("zero-dim-wishart-df", (), 2, None),
+    ("empty-summed-dim", (3, 0), 1, None),
+]
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize(
+    ("shape", "dim", "perm"),
+    [case[1:] for case in _RIGHTMOST_CASES],
+    ids=[case[0] for case in _RIGHTMOST_CASES],
+)
+def test_sum_rightmost_matches_the_reference(ref, device, shape, dim, perm):
+    data = np.linspace(-1.0, 2.0, num=math.prod(shape)).reshape(shape)
+    data = data.astype(np.float32)
+    ours = lucid.tensor(data).to(device)
+    theirs = ref.tensor(data)
+    if perm is not None:
+        ours, theirs = ours.permute(*perm), theirs.permute(*perm)
+        # A Metal permute may come back materialised; the CPU one is a strided view.
+        assert device == "metal" or not ours.is_contiguous()
+    got = _sum_rightmost(ours, dim)
+    want = ref.distributions.utils._sum_rightmost(theirs, dim)
+    assert got.device.type == device
+    assert tuple(got.shape) == tuple(want.shape)
+    np.testing.assert_allclose(
+        got.to("cpu").numpy(), want.numpy(), rtol=1e-5, atol=1e-6
+    )
+    if dim == 0:
+        assert got is ours
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize(
+    ("shape", "dim", "want"), [((0, 3), 1, (0,)), ((2, 0, 3), 1, (2, 0))]
+)
+def test_sum_rightmost_sums_an_empty_batch_to_an_empty_batch(device, shape, dim, want):
+    """The documented departure from the reference.
+
+    The reference flattens with ``reshape(..., -1)``, which cannot infer the
+    size when a kept dim is 0, so it raises on these inputs.
+    """
+    got = _sum_rightmost(lucid.zeros(*shape, device=device), dim)
+    assert tuple(got.shape) == want
+
+
+def test_both_former_copies_are_the_one_owner():
+    assert transformed_distribution._sum_rightmost is _sum_rightmost
+    assert kl_cross._sum_rightmost is _sum_rightmost
+
+
+def test_a_log_det_of_lower_rank_than_the_event_is_summed_whole(ref):
+    """``TransformedDistribution.log_prob`` raised ``IndexError`` here.
+
+    A transform may report a constant volume change once rather than once per
+    element.  Its 0-dim log-det then has fewer dims than the rank-2 event it
+    is summed over, and the reference sums it whole.
+    """
+    log_scale = math.log(2.0)
+
+    class _ConstantLogDet(T.AffineTransform):
+        def log_abs_det_jacobian(self, x, y):
+            return _t(log_scale)
+
+    class _RefConstantLogDet(ref.distributions.transforms.AffineTransform):
+        def log_abs_det_jacobian(self, x, y):
+            return ref.tensor(log_scale, dtype=ref.float64)
+
+    rd = ref.distributions
+    value = np.linspace(-1.0, 1.0, 12).reshape(4, 3)
+    ours = T.TransformedDistribution(
+        D.Independent(D.Normal(_t(np.zeros((4, 3))), _t(np.ones((4, 3)))), 2),
+        [_ConstantLogDet(0.0, 2.0)],
+    )
+    theirs = rd.TransformedDistribution(
+        rd.Independent(
+            rd.Normal(
+                ref.zeros(4, 3, dtype=ref.float64), ref.ones(4, 3, dtype=ref.float64)
+            ),
+            2,
+        ),
+        [_RefConstantLogDet(0.0, 2.0)],
+    )
+    got = ours.log_prob(_t(value))
+    want = theirs.log_prob(ref.tensor(value))
+    assert tuple(got.shape) == tuple(want.shape) == ()
+    assert np.isclose(float(got.item()), float(want.item()), atol=1e-8)
+
+
+def test_an_empty_batch_has_an_empty_transformed_log_prob():
+    pushed = T.TransformedDistribution(
+        D.Independent(D.Normal(_t(np.zeros(3)), _t(np.ones(3))), 1),
+        [T.ExpTransform()],
+    )
+    assert tuple(pushed.log_prob(_t(np.ones((0, 3)))).shape) == (0,)
