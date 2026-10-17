@@ -23,19 +23,6 @@ namespace lucid {
 
 namespace {
 
-// Grad mode set to ``on`` for a scope, then put back.
-class GradModeScope {
-public:
-    explicit GradModeScope(bool on) : prev_(GradMode::is_enabled()) { GradMode::set_enabled(on); }
-    ~GradModeScope() { GradMode::set_enabled(prev_); }
-
-    GradModeScope(const GradModeScope&) = delete;
-    GradModeScope& operator=(const GradModeScope&) = delete;
-
-private:
-    bool prev_;
-};
-
 constexpr const char* kHookResult = "a hook's returned gradient";
 
 // Call the slot's runner on ``grad`` with grad mode ``graph`` — on for a
@@ -46,7 +33,7 @@ TensorImplPtr call_runner(const TensorHookSlot& slot, const TensorImplPtr& grad,
     const py::object runner = slot.runner;
     py::object result;
     {
-        const GradModeScope mode(graph);
+        const GradModeGuard mode(graph);
         result = runner(grad);
     }
     return tensor_from_python(result, "a tensor hook's result");
@@ -499,6 +486,9 @@ private:
                 if (int r = report(py_node->py_backward_fn))
                     return r;
             }
+            // What the node keeps for backward: a hooked module's saved
+            // output, say, that holds the module through its hooks.
+            n->for_each_owned_tensor([this](const TensorImplPtr& t) { offer(t); });
             for (const auto& edge : n->next_edges())
                 offer(edge.node);
         }
