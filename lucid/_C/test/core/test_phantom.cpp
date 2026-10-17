@@ -1,0 +1,172 @@
+// lucid/_C/test/core/test_phantom.cpp
+// Phantom tensors: under PhantomMode every factory and op returns a real
+// TensorImpl with a PhantomStorage — the op's own shape and dtype, no
+// allocation, no kernel — and a read of its values raises.
+
+#include <thread>
+
+#include <gtest/gtest.h>
+
+#include "../../core/Error.h"
+#include "../../core/MemoryStats.h"
+#include "../../core/PhantomMode.h"
+#include "../../ops/bfunc/Add.h"
+#include "../../ops/bfunc/Matmul.h"
+#include "../../ops/ufunc/Exponential.h"
+#include "../../ops/ufunc/Reductions.h"
+#include "../../ops/utils/View.h"
+#include "../../random/Random.h"
+#include "tensor_factory.h"
+
+using namespace lucid;
+using namespace lucid::test;
+
+namespace {
+
+std::size_t cpu_allocs() {
+    return MemoryTracker::get_stats(Device::CPU).alloc_count;
+}
+
+}  // namespace
+
+TEST(PhantomMode, OffByDefaultAndScoped) {
+    EXPECT_FALSE(PhantomMode::is_enabled());
+    {
+        PhantomModeGuard on(true);
+        EXPECT_TRUE(PhantomMode::is_enabled());
+        {
+            PhantomModeGuard off(false);
+            EXPECT_FALSE(PhantomMode::is_enabled());
+        }
+        EXPECT_TRUE(PhantomMode::is_enabled());
+    }
+    EXPECT_FALSE(PhantomMode::is_enabled());
+}
+
+TEST(PhantomMode, GuardRestoresOnThrow) {
+    try {
+        PhantomModeGuard on(true);
+        throw LucidError("boom");
+    } catch (const LucidError&) {
+    }
+    EXPECT_FALSE(PhantomMode::is_enabled());
+}
+
+TEST(PhantomMode, OtherThreadsUnaffected) {
+    PhantomModeGuard on(true);
+    bool other_phantom = true;
+    bool other_mode = true;
+    std::thread worker([&] {
+        other_mode = PhantomMode::is_enabled();
+        other_phantom = cpu_zeros({3})->is_phantom();
+    });
+    worker.join();
+    EXPECT_FALSE(other_mode);
+    EXPECT_FALSE(other_phantom);
+    EXPECT_TRUE(cpu_zeros({3})->is_phantom());
+}
+
+TEST(PhantomStorageTest, VariantIndexAndSize) {
+    const Storage s = phantom_storage({2, 3}, Dtype::F64);
+    EXPECT_TRUE(storage_is_phantom(s));
+    EXPECT_FALSE(storage_is_cpu(s));
+    EXPECT_EQ(s.index(), 3u);
+    EXPECT_EQ(storage_nbytes(s), 6u * 8u);
+    EXPECT_EQ(storage_dtype(s), Dtype::F64);
+}
+
+TEST(PhantomFactories, ShapeDtypeNoAllocation) {
+    PhantomModeGuard on(true);
+    const auto before = cpu_allocs();
+    auto z = zeros_op({4, 5}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
+    auto f = cpu_full({2}, 3.0, Dtype::F64);
+    auto r = randn_op({3, 3}, Dtype::F32, Device::CPU);
+    auto a = arange_op(0.0, 10.0, 2.0, Dtype::I64, Device::CPU, false);
+    EXPECT_EQ(cpu_allocs(), before);
+    for (const auto& t : {z, f, r, a})
+        EXPECT_TRUE(t->is_phantom());
+    EXPECT_EQ(z->shape(), (Shape{4, 5}));
+    EXPECT_TRUE(z->requires_grad());
+    EXPECT_EQ(f->dtype(), Dtype::F64);
+    EXPECT_EQ(a->shape(), (Shape{5}));
+    EXPECT_EQ(a->dtype(), Dtype::I64);
+    // The adopting tensor sizes the storage the phantom backend handed out.
+    EXPECT_EQ(storage_nbytes(z->storage()), z->nbytes());
+}
+
+TEST(PhantomOps, KernelBasesKeepShapeAndDtype) {
+    PhantomModeGuard on(true);
+    const auto before = cpu_allocs();
+    auto x = cpu_ones({2, 1, 4});
+    auto y = cpu_ones({3, 1});
+    auto s = add_op(x, y);
+    EXPECT_EQ(s->shape(), (Shape{2, 3, 4}));
+    auto e = exp_op(s);
+    EXPECT_EQ(e->shape(), (Shape{2, 3, 4}));
+    auto r = sum_op(e, {1}, /*keepdims=*/false);
+    EXPECT_EQ(r->shape(), (Shape{2, 4}));
+    auto m = matmul_op(cpu_ones({5, 2}), r);
+    EXPECT_EQ(m->shape(), (Shape{5, 4}));
+    auto v = reshape_op(m, {-1});
+    EXPECT_EQ(v->shape(), (Shape{20}));
+    for (const auto& t : {s, e, r, m, v})
+        EXPECT_TRUE(t->is_phantom());
+    EXPECT_EQ(cpu_allocs(), before);
+}
+
+TEST(PhantomOps, PhantomInputStaysPhantomOutsideTheMode) {
+    TensorImplPtr p;
+    {
+        PhantomModeGuard on(true);
+        p = cpu_ones({3});
+    }
+    auto real = cpu_ones({3});
+    EXPECT_FALSE(real->is_phantom());
+    auto out = add_op(p, real);
+    EXPECT_TRUE(out->is_phantom());
+    EXPECT_EQ(out->shape(), (Shape{3}));
+}
+
+TEST(PhantomWrites, PhantomTargetTakesAnyWrite) {
+    TensorImplPtr p;
+    {
+        PhantomModeGuard on(true);
+        p = cpu_zeros({3});
+    }
+    auto real = cpu_ones({3});
+    const auto v = p->version();
+    p->copy_from(*real);
+    EXPECT_TRUE(p->is_phantom());
+    EXPECT_GT(p->version(), v);
+}
+
+TEST(PhantomWrites, RealTargetRefusesPhantomSource) {
+    TensorImplPtr p;
+    {
+        PhantomModeGuard on(true);
+        p = cpu_zeros({3});
+    }
+    auto real = cpu_ones({3});
+    EXPECT_THROW(real->copy_from(*p), LucidError);
+    EXPECT_FALSE(real->is_phantom());
+}
+
+TEST(PhantomViews, ViewIsPhantomOfItsShape) {
+    PhantomModeGuard on(true);
+    auto base = cpu_zeros({4, 6});
+    auto view = TensorImpl::make_view(base, {6, 4}, contiguous_stride({6, 4}, 4));
+    EXPECT_TRUE(view->is_phantom());
+    EXPECT_EQ(view->shape(), (Shape{6, 4}));
+    EXPECT_FALSE(view->is_aliased());
+}
+
+TEST(PhantomDispatch, GpuDeviceGetsAPhantomToo) {
+    PhantomModeGuard on(true);
+    auto g = zeros_op({2, 2}, Dtype::F32, Device::GPU, false);
+    EXPECT_TRUE(g->is_phantom());
+    EXPECT_EQ(g->device(), Device::GPU);
+    auto h = add_op(g, g);
+    EXPECT_TRUE(h->is_phantom());
+    EXPECT_EQ(h->device(), Device::GPU);
+    EXPECT_NO_THROW(h->eval());
+}
