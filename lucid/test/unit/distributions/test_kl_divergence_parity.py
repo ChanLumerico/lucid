@@ -193,8 +193,8 @@ def _ref_at(ref: Any, dtype: Any) -> Callable[[Any], Any]:
 
 
 def test_registry_covers_all_reference_pairs(ref: Any) -> None:
-    """Every (P, Q) pair in torch.distributions.kl._KL_REGISTRY (excluding
-    LowRankMultivariateNormal) must resolve via _dispatch_kl in Lucid."""
+    """Every (P, Q) pair in the reference's ``distributions.kl._KL_REGISTRY``
+    (excluding LowRankMultivariateNormal) must resolve via _dispatch_kl in Lucid."""
     missing = []
     for p_ref, q_ref in ref.distributions.kl._KL_REGISTRY:
         pn, qn = p_ref.__name__, q_ref.__name__

@@ -1,7 +1,5 @@
 """Regression tests for LCD-179, LCD-398, LCD-439, and LCD-452."""
 
-from __future__ import annotations
-
 import struct
 from collections.abc import Callable
 

@@ -313,8 +313,8 @@ class _CholeskyAutograd(_AutogradFunction):
         # L^T Z^T = Y^T then transpose back.
         Z = solve_triangular(L.mT, Y.mT, upper=True).mT
         # Murray's formula gives the symmetric Riemannian gradient for A = A^T:
-        # grad_A = 1/2 (L^{-T} Phi(L^T gL) L^{-1} + sym), matching PyTorch's
-        # cholesky backward convention across both upper=False and upper=True.
+        # grad_A = 1/2 (L^{-T} Phi(L^T gL) L^{-1} + sym), matching the reference
+        # framework's cholesky backward convention for upper=False and upper=True.
         return 0.5 * (Z + Z.mT)
 
 

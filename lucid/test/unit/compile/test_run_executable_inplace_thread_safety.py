@@ -9,8 +9,6 @@ races with another Python thread holding the GIL and reading a sibling's
 ``storage()``.
 """
 
-from __future__ import annotations
-
 from concurrent.futures import ThreadPoolExecutor
 import threading
 

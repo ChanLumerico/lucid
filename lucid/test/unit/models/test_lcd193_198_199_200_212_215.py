@@ -1,7 +1,5 @@
 """Regression tests for LCD-193, LCD-198, LCD-199, LCD-200, LCD-212, and LCD-215."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Optional

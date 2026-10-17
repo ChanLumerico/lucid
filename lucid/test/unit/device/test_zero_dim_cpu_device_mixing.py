@@ -16,11 +16,8 @@ Covers GitHub #317 (AE-13):
     on Metal.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
-import torch
 
 import lucid
 from lucid._C.engine import DeviceMismatch
@@ -28,27 +25,27 @@ from lucid._C.engine import DeviceMismatch
 # ── Differentiable binary ops ───────────────────────────────────────────────
 
 DIFF_BINARY_OPS = [
-    ("add", lambda a, b: a + b, lambda a, b: a + b),
-    ("sub", lambda a, b: a - b, lambda a, b: a - b),
-    ("mul", lambda a, b: a * b, lambda a, b: a * b),
-    ("div", lambda a, b: a / b, lambda a, b: a / b),
-    ("pow", lambda a, b: a**b, lambda a, b: torch.pow(a, b)),
-    ("maximum", lambda a, b: lucid.maximum(a, b), lambda a, b: torch.maximum(a, b)),
-    ("minimum", lambda a, b: lucid.minimum(a, b), lambda a, b: torch.minimum(a, b)),
-    ("fmod", lambda a, b: lucid.fmod(a, b), lambda a, b: torch.fmod(a, b)),
-    ("remainder", lambda a, b: a % b, lambda a, b: torch.remainder(a, b)),
-    ("atan2", lambda a, b: lucid.atan2(a, b), lambda a, b: torch.atan2(a, b)),
-    ("hypot", lambda a, b: lucid.hypot(a, b), lambda a, b: torch.hypot(a, b)),
+    ("add", lambda a, b: a + b, lambda r, a, b: a + b),
+    ("sub", lambda a, b: a - b, lambda r, a, b: a - b),
+    ("mul", lambda a, b: a * b, lambda r, a, b: a * b),
+    ("div", lambda a, b: a / b, lambda r, a, b: a / b),
+    ("pow", lambda a, b: a**b, lambda r, a, b: r.pow(a, b)),
+    ("maximum", lambda a, b: lucid.maximum(a, b), lambda r, a, b: r.maximum(a, b)),
+    ("minimum", lambda a, b: lucid.minimum(a, b), lambda r, a, b: r.minimum(a, b)),
+    ("fmod", lambda a, b: lucid.fmod(a, b), lambda r, a, b: r.fmod(a, b)),
+    ("remainder", lambda a, b: a % b, lambda r, a, b: r.remainder(a, b)),
+    ("atan2", lambda a, b: lucid.atan2(a, b), lambda r, a, b: r.atan2(a, b)),
+    ("hypot", lambda a, b: lucid.hypot(a, b), lambda r, a, b: r.hypot(a, b)),
     (
         "logaddexp",
         lambda a, b: lucid.logaddexp(a, b),
-        lambda a, b: torch.logaddexp(a, b),
+        lambda r, a, b: r.logaddexp(a, b),
     ),
-    ("xlogy", lambda a, b: lucid.xlogy(a, b), lambda a, b: torch.xlogy(a, b)),
+    ("xlogy", lambda a, b: lucid.xlogy(a, b), lambda r, a, b: r.xlogy(a, b)),
     (
         "xlog1py",
         lambda a, b: lucid.special.xlog1py(a, b),
-        lambda a, b: torch.special.xlog1py(a, b),
+        lambda r, a, b: r.special.xlog1py(a, b),
     ),
 ]
 
@@ -58,68 +55,68 @@ NONDIFF_FLOAT_BINARY_OPS = [
     (
         "floordiv",
         lambda a, b: a // b,
-        lambda a, b: torch.div(a, b, rounding_mode="floor"),
+        lambda r, a, b: r.div(a, b, rounding_mode="floor"),
     ),
-    ("equal", lambda a, b: a == b, lambda a, b: a == b),
-    ("not_equal", lambda a, b: a != b, lambda a, b: a != b),
-    ("less", lambda a, b: a < b, lambda a, b: a < b),
-    ("less_equal", lambda a, b: a <= b, lambda a, b: a <= b),
-    ("greater", lambda a, b: a > b, lambda a, b: a > b),
-    ("greater_equal", lambda a, b: a >= b, lambda a, b: a >= b),
+    ("equal", lambda a, b: a == b, lambda r, a, b: a == b),
+    ("not_equal", lambda a, b: a != b, lambda r, a, b: a != b),
+    ("less", lambda a, b: a < b, lambda r, a, b: a < b),
+    ("less_equal", lambda a, b: a <= b, lambda r, a, b: a <= b),
+    ("greater", lambda a, b: a > b, lambda r, a, b: a > b),
+    ("greater_equal", lambda a, b: a >= b, lambda r, a, b: a >= b),
     (
         "nextafter",
         lambda a, b: lucid.nextafter(a, b),
-        lambda a, b: torch.nextafter(a, b),
+        lambda r, a, b: r.nextafter(a, b),
     ),
-    ("isclose", lambda a, b: lucid.isclose(a, b), lambda a, b: torch.isclose(a, b)),
+    ("isclose", lambda a, b: lucid.isclose(a, b), lambda r, a, b: r.isclose(a, b)),
     (
         "logical_and",
         lambda a, b: lucid.logical_and(a, b),
-        lambda a, b: torch.logical_and(a, b),
+        lambda r, a, b: r.logical_and(a, b),
     ),
     (
         "logical_or",
         lambda a, b: lucid.logical_or(a, b),
-        lambda a, b: torch.logical_or(a, b),
+        lambda r, a, b: r.logical_or(a, b),
     ),
     (
         "logical_xor",
         lambda a, b: lucid.logical_xor(a, b),
-        lambda a, b: torch.logical_xor(a, b),
+        lambda r, a, b: r.logical_xor(a, b),
     ),
     (
         "igamma",
         lambda a, b: lucid.special.gammainc(a, b),
-        lambda a, b: torch.special.gammainc(a, b),
+        lambda r, a, b: r.special.gammainc(a, b),
     ),
     (
         "igammac",
         lambda a, b: lucid.special.gammaincc(a, b),
-        lambda a, b: torch.special.gammaincc(a, b),
+        lambda r, a, b: r.special.gammaincc(a, b),
     ),
     (
         "zeta",
         lambda a, b: lucid.special.zeta(a, b),
-        lambda a, b: torch.special.zeta(a, b),
+        lambda r, a, b: r.special.zeta(a, b),
     ),
 ]
 
 BITWISE_INT_OPS = [
-    ("bitwise_and", lambda a, b: a & b, lambda a, b: a & b),
-    ("bitwise_or", lambda a, b: a | b, lambda a, b: a | b),
-    ("bitwise_xor", lambda a, b: a ^ b, lambda a, b: a ^ b),
-    ("left_shift", lambda a, b: a << b, lambda a, b: a << b),
-    ("right_shift", lambda a, b: a >> b, lambda a, b: a >> b),
+    ("bitwise_and", lambda a, b: a & b, lambda r, a, b: a & b),
+    ("bitwise_or", lambda a, b: a | b, lambda r, a, b: a | b),
+    ("bitwise_xor", lambda a, b: a ^ b, lambda r, a, b: a ^ b),
+    ("left_shift", lambda a, b: a << b, lambda r, a, b: a << b),
+    ("right_shift", lambda a, b: a >> b, lambda r, a, b: a >> b),
 ]
 
 INPLACE_OPS = [
-    ("add_", lambda a, b: a.add_(b), lambda a, b: a.add_(b)),
-    ("sub_", lambda a, b: a.sub_(b), lambda a, b: a.sub_(b)),
-    ("mul_", lambda a, b: a.mul_(b), lambda a, b: a.mul_(b)),
-    ("div_", lambda a, b: a.div_(b), lambda a, b: a.div_(b)),
-    ("pow_", lambda a, b: a.pow_(b), lambda a, b: a.pow_(b)),
-    ("maximum_", lambda a, b: a.maximum_(b), lambda a, b: torch.maximum(a, b)),
-    ("minimum_", lambda a, b: a.minimum_(b), lambda a, b: torch.minimum(a, b)),
+    ("add_", lambda a, b: a.add_(b), lambda r, a, b: a.add_(b)),
+    ("sub_", lambda a, b: a.sub_(b), lambda r, a, b: a.sub_(b)),
+    ("mul_", lambda a, b: a.mul_(b), lambda r, a, b: a.mul_(b)),
+    ("div_", lambda a, b: a.div_(b), lambda r, a, b: a.div_(b)),
+    ("pow_", lambda a, b: a.pow_(b), lambda r, a, b: a.pow_(b)),
+    ("maximum_", lambda a, b: a.maximum_(b), lambda r, a, b: r.maximum(a, b)),
+    ("minimum_", lambda a, b: a.minimum_(b), lambda r, a, b: r.minimum(a, b)),
 ]
 
 
@@ -135,7 +132,7 @@ INPLACE_OPS = [
     "grad_cpu,grad_metal", [(False, False), (True, False), (False, True), (True, True)]
 )
 def test_diff_binary_zero_dim_cpu_with_metal(
-    name, l_fn, t_fn, cpu_first, metal_is_0d, grad_cpu, grad_metal
+    ref, name, l_fn, t_fn, cpu_first, metal_is_0d, grad_cpu, grad_metal
 ):
     c_val = np.array(2.25, dtype=np.float32)
     m_val = (
@@ -149,11 +146,11 @@ def test_diff_binary_zero_dim_cpu_with_metal(
         m_val, dtype=lucid.float32, device="metal", requires_grad=grad_metal
     )
 
-    c_t = torch.tensor(c_val, dtype=torch.float32, requires_grad=grad_cpu)
-    m_t = torch.tensor(m_val, dtype=torch.float32, requires_grad=grad_metal)
+    c_t = ref.tensor(c_val, dtype=ref.float32, requires_grad=grad_cpu)
+    m_t = ref.tensor(m_val, dtype=ref.float32, requires_grad=grad_metal)
 
     out_l = l_fn(c_l, m_l) if cpu_first else l_fn(m_l, c_l)
-    out_t = t_fn(c_t, m_t) if cpu_first else t_fn(m_t, c_t)
+    out_t = t_fn(ref, c_t, m_t) if cpu_first else t_fn(ref, m_t, c_t)
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
@@ -193,7 +190,7 @@ def test_diff_binary_zero_dim_cpu_with_metal(
 )
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
 def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(
-    name, l_fn, t_fn, cpu_first
+    ref, name, l_fn, t_fn, cpu_first
 ):
     c_val = np.array(2.5, dtype=np.float32)
     m_val = np.array([1.5, 2.5, 3.5], dtype=np.float32)
@@ -201,11 +198,11 @@ def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(
     c_l = lucid.tensor(c_val, dtype=lucid.float32, device="cpu")
     m_l = lucid.tensor(m_val, dtype=lucid.float32, device="metal")
 
-    c_t = torch.tensor(c_val, dtype=torch.float32)
-    m_t = torch.tensor(m_val, dtype=torch.float32)
+    c_t = ref.tensor(c_val, dtype=ref.float32)
+    m_t = ref.tensor(m_val, dtype=ref.float32)
 
     out_l = l_fn(c_l, m_l) if cpu_first else l_fn(m_l, c_l)
-    out_t = t_fn(c_t, m_t) if cpu_first else t_fn(m_t, c_t)
+    out_t = t_fn(ref, c_t, m_t) if cpu_first else t_fn(ref, m_t, c_t)
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
@@ -216,18 +213,18 @@ def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(
     "name,l_fn,t_fn", BITWISE_INT_OPS, ids=[x[0] for x in BITWISE_INT_OPS]
 )
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
-def test_bitwise_int_zero_dim_cpu_with_metal(name, l_fn, t_fn, cpu_first):
+def test_bitwise_int_zero_dim_cpu_with_metal(ref, name, l_fn, t_fn, cpu_first):
     c_val = np.array(2, dtype=np.int32)
     m_val = np.array([1, 2, 3, 6], dtype=np.int32)
 
     c_l = lucid.tensor(c_val, dtype=lucid.int32, device="cpu")
     m_l = lucid.tensor(m_val, dtype=lucid.int32, device="metal")
 
-    c_t = torch.tensor(c_val, dtype=torch.int32)
-    m_t = torch.tensor(m_val, dtype=torch.int32)
+    c_t = ref.tensor(c_val, dtype=ref.int32)
+    m_t = ref.tensor(m_val, dtype=ref.int32)
 
     out_l = l_fn(c_l, m_l) if cpu_first else l_fn(m_l, c_l)
-    out_t = t_fn(c_t, m_t) if cpu_first else t_fn(m_t, c_t)
+    out_t = t_fn(ref, c_t, m_t) if cpu_first else t_fn(ref, m_t, c_t)
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
@@ -315,7 +312,7 @@ def test_nondiff_binary_rejects_disallowed_cross_device_pairs(
         ("cpu", "cpu", "metal"),
     ],
 )
-def test_where_allows_zero_dim_cpu_operands_with_metal(cond_dev, x_dev, y_dev):
+def test_where_allows_zero_dim_cpu_operands_with_metal(ref, cond_dev, x_dev, y_dev):
     cond_l = lucid.tensor(
         np.array(True) if cond_dev == "cpu" else np.array([True, False, True]),
         dtype=lucid.bool_,
@@ -342,12 +339,12 @@ def test_where_allows_zero_dim_cpu_operands_with_metal(cond_dev, x_dev, y_dev):
         requires_grad=True,
     )
 
-    cond_t = torch.tensor(cond_l.numpy(), dtype=torch.bool)
-    x_t = torch.tensor(x_l.numpy(), dtype=torch.float32, requires_grad=True)
-    y_t = torch.tensor(y_l.numpy(), dtype=torch.float32, requires_grad=True)
+    cond_t = ref.tensor(cond_l.numpy(), dtype=ref.bool)
+    x_t = ref.tensor(x_l.numpy(), dtype=ref.float32, requires_grad=True)
+    y_t = ref.tensor(y_l.numpy(), dtype=ref.float32, requires_grad=True)
 
     out_l = lucid.where(cond_l, x_l, y_l)
-    out_t = torch.where(cond_t, x_t, y_t)
+    out_t = ref.where(cond_t, x_t, y_t)
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
@@ -409,19 +406,19 @@ def test_where_rejects_shaped_cpu_with_metal(cond_spec, x_spec, y_spec):
 
 
 @pytest.mark.parametrize("name,l_fn,t_fn", INPLACE_OPS, ids=[x[0] for x in INPLACE_OPS])
-def test_inplace_metal_target_with_zero_dim_cpu_rhs(name, l_fn, t_fn):
+def test_inplace_metal_target_with_zero_dim_cpu_rhs(ref, name, l_fn, t_fn):
     a_base = lucid.tensor(
         [1.5, 2.5, 3.5], dtype=lucid.float32, device="metal", requires_grad=True
     )
     a_l = a_base * 1.0
     b_l = lucid.tensor(2.0, dtype=lucid.float32, device="cpu", requires_grad=True)
 
-    a_t_base = torch.tensor([1.5, 2.5, 3.5], dtype=torch.float32, requires_grad=True)
+    a_t_base = ref.tensor([1.5, 2.5, 3.5], dtype=ref.float32, requires_grad=True)
     a_t = a_t_base * 1.0
-    b_t = torch.tensor(2.0, dtype=torch.float32, requires_grad=True)
+    b_t = ref.tensor(2.0, dtype=ref.float32, requires_grad=True)
 
     res_l = l_fn(a_l, b_l)
-    res_t = t_fn(a_t, b_t)
+    res_t = t_fn(ref, a_t, b_t)
 
     assert res_l is a_l
     assert a_l.device.type == "metal"

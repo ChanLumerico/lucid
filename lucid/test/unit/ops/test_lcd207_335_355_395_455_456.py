@@ -1,15 +1,13 @@
 """Regression tests for LCD-207, LCD-335, LCD-355, LCD-395, LCD-455, and LCD-456."""
 
-from __future__ import annotations
-
 import inspect
 import math
+from types import ModuleType
 from typing import override
 
 import mpmath
 import numpy as np
 import pytest
-import torch
 
 import lucid
 import lucid.func as func
@@ -41,17 +39,19 @@ _DEVICES = [
 
 @pytest.mark.parity
 @pytest.mark.parametrize("device", _DEVICES)
-def test_vdot_complex64_forward_and_backward_parity(device: str) -> None:
+def test_vdot_complex64_forward_and_backward_parity(
+    ref: ModuleType, device: str
+) -> None:
     a_np = np.array([1.0 + 2.0j, -3.0 + 0.5j, 2.5 - 1.5j], dtype=np.complex64)
     b_np = np.array([-0.5 + 1.0j, 4.0 - 2.0j, 1.5 + 3.0j], dtype=np.complex64)
 
     a_l = lucid.tensor(a_np, device=device, requires_grad=True)
     b_l = lucid.tensor(b_np, device=device, requires_grad=True)
-    a_t = torch.tensor(a_np, requires_grad=True)
-    b_t = torch.tensor(b_np, requires_grad=True)
+    a_t = ref.tensor(a_np, requires_grad=True)
+    b_t = ref.tensor(b_np, requires_grad=True)
 
     out_l = lucid.vdot(a_l, b_l)
-    out_t = torch.vdot(a_t, b_t)
+    out_t = ref.vdot(a_t, b_t)
     np.testing.assert_allclose(out_l.cpu().numpy(), out_t.detach().numpy(), rtol=1e-5)
 
     # Self vdot <a, a> must be real and positive.
@@ -62,7 +62,7 @@ def test_vdot_complex64_forward_and_backward_parity(device: str) -> None:
     # Check Wirtinger gradients under a complex weight w = 2.0 - 1.5j.
     w_np = np.array(2.0 - 1.5j, dtype=np.complex64)
     loss_l = lucid.real(out_l * lucid.tensor(w_np, device=device))
-    loss_t = (out_t * torch.tensor(w_np)).real
+    loss_t = (out_t * ref.tensor(w_np)).real
     loss_l.backward()
     loss_t.backward()
 
@@ -73,17 +73,17 @@ def test_vdot_complex64_forward_and_backward_parity(device: str) -> None:
 
 
 @pytest.mark.parity
-def test_vdot_complex128_cpu_parity() -> None:
+def test_vdot_complex128_cpu_parity(ref: ModuleType) -> None:
     a_np = np.array([1.25 - 3.5j, -2.0 + 4.75j], dtype=np.complex128)
     b_np = np.array([0.75 + 1.25j, -1.5 - 2.25j], dtype=np.complex128)
 
     a_l = lucid.tensor(a_np, dtype=lucid.complex128, requires_grad=True)
     b_l = lucid.tensor(b_np, dtype=lucid.complex128, requires_grad=True)
-    a_t = torch.tensor(a_np, dtype=torch.complex128, requires_grad=True)
-    b_t = torch.tensor(b_np, dtype=torch.complex128, requires_grad=True)
+    a_t = ref.tensor(a_np, dtype=ref.complex128, requires_grad=True)
+    b_t = ref.tensor(b_np, dtype=ref.complex128, requires_grad=True)
 
     out_l = lucid.vdot(a_l, b_l)
-    out_t = torch.vdot(a_t, b_t)
+    out_t = ref.vdot(a_t, b_t)
     np.testing.assert_allclose(out_l.numpy(), out_t.detach().numpy(), rtol=1e-12)
 
     lucid.imag(out_l).backward()
@@ -147,7 +147,9 @@ def test_func_transforms_shared_helpers_and_validation() -> None:
 
 
 @pytest.mark.parity
-def test_ldl_factor_hermitian_is_keyword_only_and_cholesky_ex_partial() -> None:
+def test_ldl_factor_hermitian_is_keyword_only_and_cholesky_ex_partial(
+    ref: ModuleType,
+) -> None:
     for fn in (lucid.linalg.ldl_factor, lucid.linalg.ldl_factor_ex):
         sig = inspect.signature(fn)
         param = sig.parameters["hermitian"]
@@ -160,12 +162,12 @@ def test_ldl_factor_hermitian_is_keyword_only_and_cholesky_ex_partial() -> None:
     with pytest.raises(TypeError):
         lucid.linalg.ldl_factor_ex(a, False)  # type: ignore[misc]
 
-    # Fails at minor k = 3: leading 2x2 Cholesky factor must match torch.
+    # Fails at minor k = 3: leading 2x2 Cholesky factor must match the reference.
     bad_np = np.array(
         [[4.0, 2.0, 0.0], [2.0, 5.0, 0.0], [0.0, 0.0, -1.0]], dtype=np.float32
     )
     l_res, l_info = lucid.linalg.cholesky_ex(lucid.tensor(bad_np))
-    t_res, t_info = torch.linalg.cholesky_ex(torch.tensor(bad_np))
+    t_res, t_info = ref.linalg.cholesky_ex(ref.tensor(bad_np))
     assert int(l_info.item()) == int(t_info.item()) == 3
     np.testing.assert_allclose(l_res[:2, :2].numpy(), t_res[:2, :2].numpy(), rtol=1e-6)
     np.testing.assert_allclose(l_res[2:, :].numpy(), 0.0)
@@ -247,12 +249,12 @@ def test_exponential_family_bregman_entropy_matches_closed_form() -> None:
 
 @pytest.mark.parity
 @pytest.mark.parametrize("device", _DEVICES)
-def test_modified_bessel_i0_float16_no_overflow(device: str) -> None:
+def test_modified_bessel_i0_float16_no_overflow(ref: ModuleType, device: str) -> None:
     vals = [0.3, 1.5, 7.5, 11.5, 12.0]
     x_l = lucid.tensor(vals, dtype=lucid.float16, device=device)
-    x_t = torch.tensor(vals, dtype=torch.float16).float()
+    x_t = ref.tensor(vals, dtype=ref.float16).float()
     out_l = modified_bessel_i0(x_l)
-    out_t = torch.special.modified_bessel_i0(x_t).to(torch.float16)
+    out_t = ref.special.modified_bessel_i0(x_t).to(ref.float16)
     assert out_l.dtype == lucid.float16
     np.testing.assert_allclose(
         out_l.cpu().to(lucid.float32).numpy(),

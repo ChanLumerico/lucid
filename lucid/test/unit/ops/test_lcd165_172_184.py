@@ -6,7 +6,7 @@
   multiplying ``input`` by ``beta`` when ``beta == 0`` so ``NaN`` / ``Inf`` in
   an unused accumulator never poisons the output or gradients.
 * **LCD-172**: ``linalg.cholesky`` backward returns the symmetrised Murray
-  gradient ``0.5 * (Z + Z.mT)`` matching ``torch.linalg.cholesky``, and
+  gradient ``0.5 * (Z + Z.mT)`` matching the reference framework's, and
   scalar-constructed distributions (including ``LKJCholesky``) score Metal
   tensors without ``DeviceMismatch``.
 """

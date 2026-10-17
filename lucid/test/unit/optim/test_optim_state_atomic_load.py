@@ -1,7 +1,5 @@
 """Atomic validation and declarative slot round-trip tests for C++ optimizers (AE-6 / LCD-239)."""
 
-from __future__ import annotations
-
 import copy
 from typing import Callable
 
