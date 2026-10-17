@@ -408,6 +408,43 @@ def rms_norm(
     return out.reshape(*orig_shape)
 
 
+def _fold_instance_stats(
+    x: Tensor, running_mean: Tensor, running_var: Tensor, momentum: float
+) -> None:
+    """Fold ``x``'s per-instance statistics, averaged over the batch, into the buffers.
+
+    Written into the buffers in place, so a view's base and anything else
+    holding them sees the update, and each one's version moves, as the
+    reference's do.  Both or neither: a buffer whose elements overlap
+    refuses the write, and when the variance refuses it after the mean took
+    its own, the mean is put back.
+    """
+    import lucid as _lucid
+    from lucid._engine_scope import autocast_dtype
+
+    spatial_dims = list(range(2, x.ndim))
+    # Under autocast the statistics stay at the buffers' dtype: ``x`` is
+    # cast up before the reductions, since ``var`` keeps its input's dtype
+    # and a half variance loses the small spread to cancellation.
+    with autocast_dtype(), _lucid.no_grad():
+        x_s = x if x.dtype == running_mean.dtype else x.to(dtype=running_mean.dtype)
+        batch_mean = x_s.mean([0, *spatial_dims])
+        batch_var = x_s.var(spatial_dims, correction=1).mean(0)
+        new_mean = (1.0 - momentum) * running_mean + momentum * batch_mean
+        new_var = (1.0 - momentum) * running_var + momentum * batch_var
+        kept = running_mean.clone()
+        running_mean.copy_(new_mean)
+        try:
+            running_var.copy_(new_var)
+        except RuntimeError:
+            running_mean.copy_(kept)
+            raise
+    # Metal: schedule the new values now, or each step's update keeps the
+    # previous one's lazy graph — the activations it was computed from
+    # included — and the chain grows until it runs out of memory.
+    _C_engine.eval_tensors_async([running_mean._impl, running_var._impl])
+
+
 def instance_norm(
     x: Tensor,
     running_mean: Tensor | None = None,
@@ -431,10 +468,13 @@ def instance_norm(
     x : Tensor
         Input of shape ``(N, C, *spatial)`` with ``ndim >= 3``.
     running_mean : Tensor or None, optional
-        Running per-channel mean of shape ``(C,)``.  Only consulted
-        when ``use_input_stats=False``.
+        Running per-channel mean of shape ``(C,)``.  Normalises with it
+        when ``use_input_stats=False``; otherwise, given with
+        ``running_var``, the batch's mean is folded into it in place.
     running_var : Tensor or None, optional
-        Running per-channel variance of shape ``(C,)``.
+        Running per-channel variance of shape ``(C,)``, used and updated
+        as ``running_mean`` is, with each instance's unbiased variance
+        averaged over the batch.
     weight : Tensor, optional
         Per-channel scale :math:`\gamma` of shape ``(C,)``.
     bias : Tensor, optional
@@ -444,8 +484,8 @@ def instance_norm(
         instance.  When ``False`` and running buffers are supplied,
         those are used instead.
     momentum : float, optional
-        EMA coefficient for the running buffers (when externally
-        updated).
+        Weight the batch takes when it is folded into the running
+        buffers: ``running = (1 - momentum) * running + momentum * batch``.
     eps : float, optional
         Numerical safety added inside the square root.
 
@@ -498,19 +538,7 @@ def instance_norm(
             and running_var is not None
             and _C_engine.compile.current_tracer() is None
         ):
-            import lucid as _lucid
-            from lucid._engine_scope import autocast_dtype
-
-            with autocast_dtype(), _lucid.no_grad():
-                x_s = (
-                    x
-                    if x.dtype == running_mean.dtype
-                    else x.to(dtype=running_mean.dtype)
-                )
-                bm = x_s.mean([0, *spatial_dims])
-                bv = x_s.var(spatial_dims, correction=1).mean(0)
-                running_mean.copy_((1.0 - momentum) * running_mean + momentum * bm)
-                running_var.copy_((1.0 - momentum) * running_var + momentum * bv)
+            _fold_instance_stats(x, running_mean, running_var, momentum)
     else:
         mean = running_mean.reshape(bcast_shape)
         var = running_var.reshape(bcast_shape)

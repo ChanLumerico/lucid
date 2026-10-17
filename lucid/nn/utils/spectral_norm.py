@@ -175,17 +175,16 @@ def spectral_norm(
             col: Tensor = vec.reshape([int(vec.shape[0]), 1])
             return lucid.matmul(mat, col).reshape([-1])
 
-        # Power iteration runs in no-grad: u/v are buffers, not graph nodes.
+        # Power iteration runs in no-grad, into the buffers in place as the
+        # reference writes them (LCD-497).  ``sigma`` reads copies, so the
+        # next forward's writes cannot reach what this graph saved.
         with lucid.no_grad():
             iters: int = n_power_iterations if mod.training else 0
             for _ in range(iters):
-                v = _l2_normalize(_mv(w_mat.mT, u), eps=eps)
-                u = _l2_normalize(_mv(w_mat, v), eps=eps)
-            # Persist the refreshed iterates so the next forward picks up
-            # where this one left off.
+                v.copy_(_l2_normalize(_mv(w_mat.mT, u), eps=eps))
+                u.copy_(_l2_normalize(_mv(w_mat, v), eps=eps))
             if iters > 0:
-                setattr(mod, name + "_u", u)
-                setattr(mod, name + "_v", v)
+                u, v = u.clone(), v.clone()
 
         # ``sigma = u^T (W v)`` — keep the autograd graph here so the
         # gradient w.r.t. ``weight_orig`` flows through the normalisation.

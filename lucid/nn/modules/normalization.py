@@ -24,39 +24,6 @@ from lucid.nn.functional.normalization import (
 )
 
 
-def _eval_running_stats_metal(buffers: dict[str, Tensor | None]) -> None:
-    """Schedule GPU evaluation of running stats **without blocking the CPU**.
-
-    3.2.1 introduced this call to break the lazy MLX expression chain that
-    referenced the previous iteration's input activation — without it the
-    running-stats graph grows by one full forward per training step (running
-    stats are not on the loss path, so ``loss.item()`` never evaluates
-    them) and the model OOM's around batch 400 on ResNet-18 / CIFAR-10
-    (M4 Max, bs=16).  The original fix used the **synchronous** ``eval_tensors``
-    which forced a GPU sync per BN; with 16 BN modules in ResNet-18 that
-    cost ~6 ms / forward (over a third of the total forward time).
-
-    3.3.0 switches to ``eval_tensors_async`` (``mlx::core::async_eval``):
-    the parent activation chain is still released at *schedule* time
-    (because the array's input graph is finalised), but the CPU thread
-    does not wait for kernel completion — the actual stats computation
-    overlaps with the rest of the forward.  Memory leak still fixed,
-    sync cost gone.  Skips silently when buffers are absent
-    (``track_running_stats=False``) or live on CPU (no MLX lazy graph
-    to break).
-    """
-    impls: list[_C_engine.TensorImpl] = []
-    for name in ("running_mean", "running_var", "num_batches_tracked"):
-        b = buffers.get(name)
-        if b is None:
-            continue
-        impl = b._impl
-        if impl.device == _C_engine.Device.GPU:
-            impls.append(impl)
-    if impls:
-        _C_engine.eval_tensors_async(impls)
-
-
 class LayerNorm(Module):
     r"""Layer normalization over the trailing dimensions of the input.
 
@@ -625,10 +592,6 @@ class _BatchNormBase(Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        _check_batch_norm_sample_count(x, self.training)
-        # Update running stats before the forward when training with
-        # tracking enabled.  Detach to avoid linking the buffer into the
-        # autograd graph; buffers are never differentiated through.
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -641,207 +604,62 @@ class _BatchNormBase(Module):
         Tensor
             Normalised tensor of the same shape as ``input``.
         """
-        # Running-stats path selection.
+        _check_batch_norm_sample_count(x, self.training)
+        # The running statistics are written by the training forward itself,
+        # in the C++ kernel: it folds the batch mean and variance it
+        # normalises with into the buffers, into their own elements wherever
+        # they sit, both or neither (``core/ElementWrite.h``), and leaves a
+        # dense buffer's version where it was, as the reference does.  Python
+        # used to rebind the buffers to new tensors on the ``momentum=None``
+        # path, so a view's base, a ``state_dict()`` taken earlier, or anything
+        # else holding the buffer never saw the update (LCD-497).
         #
-        # Fast path (``self.momentum is not None``) — the common case,
-        # default 0.1 matches the reference framework.  The EMA update
-        # on ``running_mean`` / ``running_var`` is fused into the C++
-        # BN forward kernel: it reuses the same mean / rstd it already
-        # computes for autograd, avoiding a second reduction over ``x``.
-        # Python hands the buffers to the functional below, then bumps
-        # ``num_batches_tracked`` — after, so a refused write counts nothing.
-        #
-        # Slow path (``self.momentum is None``) — cumulative MA, needs
-        # ``num_batches_tracked.item()`` which forces a GPU sync.  Keep
-        # the Python composition in :meth:`_update_running_stats` for
-        # correctness, and do not pass the buffers to the functional
-        # so the C++ kernel skips its EMA branch.
-        fuse_running_update: bool = (
-            self.training and self.track_running_stats and self.momentum is not None
+        # Under a Tracer (``lucid.compile()`` / ``make_step``) the forward has
+        # to stay pure: the compiled executable writes the running statistics
+        # back and the training entry points advance the counters after each
+        # run.  A cumulative average cannot ride the trace at all — its factor
+        # is read from the count on the host — so such a layer traces without
+        # its buffers, and the compile entries fall back to eager or refuse it
+        # (``model_has_cumulative_bn``).
+        tracing = _C_engine.compile.current_tracer() is not None
+        update = (
+            self.training
+            and self.track_running_stats
+            and not (tracing and self.momentum is None)
         )
-        # Skip Python-level stateful updates when a :class:`Tracer` is installed
-        # (``lucid.compile()`` / ``make_step`` paths): the ``num_batches_tracked + 1``
-        # 0-D add and the cumulative-MA composition both leak side-effectful ops into
-        # the trace whose MPSGraph lowering hits an 8-byte buffer-size mismatch.  The
-        # compile path needs pure forward graphs; training entry points advance the
-        # observed layers' counters after each executable run.
-        _tracing_active = _C_engine.compile.current_tracer() is not None
-        idle = fuse_running_update or _tracing_active
-        if self.training and self.track_running_stats and not idle:
-            self._update_running_stats(x)
-
-        # Pick which stats path the functional uses:
-        #   - eval + tracking          → precomputed running stats (eval kernel)
-        #   - training + fused update  → buffers for in-place EMA inside BN fwd
-        #   - everything else          → batch stats only
-        use_running: bool = (not self.training) and self.track_running_stats
-        running_mean: Tensor | None = (
-            self._buffers.get("running_mean")
-            if use_running or fuse_running_update
-            else None
-        )
-        running_var: Tensor | None = (
-            self._buffers.get("running_var")
-            if use_running or fuse_running_update
-            else None
-        )
-
+        use_running = not self.training and self.track_running_stats
+        wants_buffers = use_running or update
         out = batch_norm(
             x,
-            running_mean,
-            running_var,
+            self._buffers.get("running_mean") if wants_buffers else None,
+            self._buffers.get("running_var") if wants_buffers else None,
             self.weight,
             self.bias,
             training=not use_running,
-            momentum=self.momentum if self.momentum is not None else 0.0,
+            momentum=self._running_factor() if update else 0.0,
             eps=self.eps,
         )
-        if fuse_running_update and not _tracing_active:
-            nbt = self._buffers["num_batches_tracked"]
-            assert nbt is not None, "num_batches_tracked buffer missing"
-            self._buffers["num_batches_tracked"] = nbt + 1
+        # After the update, so a refused write counts nothing.  In place,
+        # as the reference counts.
+        counter = self._buffers.get("num_batches_tracked")
+        if update and not tracing and counter is not None:
+            counter.add_(1)
         return out
 
-    def _update_running_stats(self, x: Tensor) -> None:
-        """Update ``running_mean`` / ``running_var`` from this batch.
+    def _running_factor(self) -> float:
+        """The weight this batch takes in the running statistics.
 
-        Matches the reference framework:
-          running ← (1 − m) · running + m · batch
-        Variance for the running buffer uses the unbiased (Bessel-corrected)
-        estimator while the *normalisation* itself uses the biased one;
-        both follow the reference framework's behaviour.
-
-        Fast path: when ``self.momentum`` is a finite float (the common
-        case — default 0.1 matches the reference framework) the whole
-        update is a single ``_C_engine.nn.batch_norm_update_running_stats``
-        call.  Profile (Mac Studio M4 Max, ResNet-18 BS=32) shows the prior
-        Python composition cost ~8.8 ms / forward via ~160 pybind11
-        crossings; the fused entry collapses it to one.  The cumulative
-        path (``momentum is None``) requires reading ``num_batches_tracked``
-        as a host scalar which forces a GPU sync — keeps the slow Python
-        composition for correctness.
+        ``momentum``, or with ``momentum=None`` the cumulative average's
+        ``1 / count``, the count including this batch.  Reading the count is
+        a host read, so a GPU sync, as in the reference.  Without a counter
+        the batch weighs nothing, as there.
         """
-        # Reduce over batch + spatial dims, keeping the channel dim.
-        reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
-
         if self.momentum is not None:
-            # Fast C++ path — single pybind11 cross handles AutocastGuard(F32),
-            # mean/var reduction, EMA update, async_eval.  num_batches_tracked
-            # is incremented in Python (one cheap op; its I64 dtype isn't
-            # universally supported via backend add_scalar).
-            nbt = self._buffers["num_batches_tracked"]
-            rm = self._buffers["running_mean"]
-            rv = self._buffers["running_var"]
-            assert (
-                nbt is not None and rm is not None and rv is not None
-            ), "BatchNorm running-stats buffers missing under track_running_stats=True"
-            _C_engine.nn.batch_norm_update_running_stats(
-                rm._impl,
-                rv._impl,
-                x._impl,
-                reduce_dims,
-                float(self.momentum),
-                True,  # unbiased_var = n/(n-1) Bessel correction for the running buffer
-            )
-            self._buffers["num_batches_tracked"] = nbt + 1
-            return
-
-        # Slow path: cumulative MA needs num_batches_tracked.item() (GPU sync).
-        n: int = 1
-        for d in reduce_dims:
-            n *= x.shape[d]
-        # 3.3 AMP fix: the running-stats update lives outside the loss's
-        # backward graph, so the right correctness target is the
-        # reference framework's behaviour — running_mean / running_var
-        # stay at their original F32 dtype regardless of the autocast
-        # scope.  The math below mixes ``self._buffers["running_mean"]``
-        # (F32) with ``batch_mean`` (F16 under autocast), and every op
-        # that touches an F16 operand goes through AmpPolicy::Promote
-        # ops (``mul`` / ``add``) which would re-demote F32 → F16
-        # *inside the same expression* — the F32 buffer would be
-        # permanently overwritten with an F16 tensor and gradually lose
-        # precision until ``model.eval()`` produces NaN.  Push an
-        # AutocastGuard(F32) for the duration of this update so the
-        # Promote ops resolve to F32 (no-op) and the running buffers
-        # keep their F32 dtype.  The C++ ``AutocastGuard`` is RAII —
-        # dropping the Python reference triggers the C++ destructor,
-        # which restores the outer AMP state.
-        from lucid._engine_scope import autocast_dtype
-
-        try:
-            with autocast_dtype(), _lucid.no_grad():
-                rm_dt = self._buffers["running_mean"].dtype  # type: ignore[union-attr]
-                rv_dt = self._buffers["running_var"].dtype  # type: ignore[union-attr]
-                # Cast ``x`` up to the buffer dtype *before* computing
-                # the reductions so the F16 precision loss never leaks
-                # into the running buffers.  ``var`` is registered with
-                # ``AmpPolicy::KeepInput``, so even under the F32
-                # autocast guard above it would otherwise stay F16 and
-                # produce a noisy variance estimate from catastrophic
-                # cancellation; the running buffers then carry that
-                # noise forward into eval mode.  ``mean`` is Promote
-                # and would handle this on its own, but casting once
-                # at the top is simpler than reasoning per-op.
-                x_stats: Tensor = x if x.dtype == rm_dt else x.to(dtype=rm_dt)
-                # 3.4 perf: dropped ``.detach()`` calls — we are inside a
-                # ``no_grad()`` context, so each computed tensor already
-                # carries ``requires_grad=False`` and no ``grad_fn``.
-                # detach was a Python+pybind round-trip per call; with 16
-                # BN layers in ResNet-18 the 4 detach calls × 16 BNs cost
-                # ~2 ms per forward.  Skipping them is safe because the
-                # buffer assignment + ``eval_tensors_async`` below already
-                # break the MLX lazy graph parent reference.
-                batch_mean: Tensor = x_stats.mean(reduce_dims)
-                batch_var: Tensor = x_stats.var(reduce_dims, correction=0)
-
-                # After the cast both reductions land at the buffer
-                # dtype already; the explicit ``.to`` calls become
-                # no-ops in the common case but are kept defensively
-                # in case a future op changes its AmpPolicy.
-                if batch_mean.dtype != rm_dt:
-                    batch_mean = batch_mean.to(dtype=rm_dt)
-                if batch_var.dtype != rv_dt:
-                    batch_var = batch_var.to(dtype=rv_dt)
-
-                # Increment the count first (matches reference framework order).
-                nbt = self._buffers["num_batches_tracked"]
-                assert nbt is not None, "num_batches_tracked buffer missing"
-                self._buffers["num_batches_tracked"] = nbt + 1
-
-                eff: float
-                if self.momentum is None:
-                    # Cumulative moving average: equal weight on every batch.
-                    eff = 1.0 / float(self._buffers["num_batches_tracked"].item())  # type: ignore[union-attr]
-                else:
-                    eff = float(self.momentum)
-
-                # Unbiased correction n/(n-1) for the running variance, like the
-                # reference framework — only meaningful when n > 1.
-                unbiased_factor: float = n / (n - 1) if n > 1 else 1.0
-                new_rm: Tensor = (1.0 - eff) * self._buffers[
-                    "running_mean"
-                ] + eff * batch_mean
-                new_rv: Tensor = (1.0 - eff) * self._buffers["running_var"] + (
-                    eff * unbiased_factor
-                ) * batch_var
-                self._buffers["running_mean"] = new_rm
-                self._buffers["running_var"] = new_rv
-        finally:
-
-            # 3.2.1 leak fix: force evaluation of the running stats so that
-            # the lazy MLX expression's parent chain (which references the
-            # previous batch's running_mean, batch_mean → input activation,
-            # and through them the conv weights of that step) is released
-            # immediately.  Without this, the running-stats lazy chain
-            # grows by one full forward graph per training step and is
-            # never collected because running stats are *not* part of the
-            # loss's compute graph — ``loss.item()`` only evaluates ops
-            # connected to the loss, leaving the running-stats chain
-            # accumulating indefinitely.  Measured leak before fix:
-            # ~37 MB/iter on ResNet-18 / CIFAR-10 bs=16 (M4 Max), causing
-            # OOM at ~batch 400.  After fix: memory stable across epochs.
-            if x._impl.device.name == "GPU":
-                _eval_running_stats_metal(self._buffers)
+            return float(self.momentum)
+        counter = self._buffers.get("num_batches_tracked")
+        if counter is None:
+            return 0.0
+        return 1.0 / float(int(counter.item()) + 1)
 
     @override
     def extra_repr(self) -> str:
@@ -1273,66 +1091,22 @@ class _InstanceNormBase(Module):
         """
         self._check_input_dim(x)
         x, unbatched = _add_batch_axis(x, self._expected_dim - 2)
-        # eval mode + track_running_stats=True ⇒ use running stats path.
-        use_input_stats: bool = self.training or not self.track_running_stats
-        use_running: bool = self.track_running_stats and not use_input_stats
-        rm: Tensor | None = self._buffers.get("running_mean") if use_running else None
-        rv: Tensor | None = self._buffers.get("running_var") if use_running else None
-        # Update running stats during training (tracks per-instance stats
-        # averaged across the batch — matches the reference framework).
-        _tracing_active = _C_engine.compile.current_tracer() is not None
-        if self.training and self.track_running_stats and not _tracing_active:
-            self._update_running_stats(x)
+        # The buffers go to the functional, as the reference hands them: in
+        # training it folds the batch into them in place, in eval with
+        # tracking it normalises with them.  The module used to compute the
+        # update itself and rebind the buffers to the result, so a view's
+        # base never saw it (LCD-497).
         out = instance_norm(
             x,
-            running_mean=rm,
-            running_var=rv,
+            running_mean=self._buffers.get("running_mean"),
+            running_var=self._buffers.get("running_var"),
             weight=self.weight,
             bias=self.bias,
-            use_input_stats=use_input_stats,
+            use_input_stats=self.training or not self.track_running_stats,
             momentum=self.momentum,
             eps=self.eps,
         )
         return _drop_batch_axis(out, unbatched)
-
-    def _update_running_stats(self, x: Tensor) -> None:
-        """Update running stats from per-instance spatial statistics averaged over N."""
-        spatial_dims: list[int] = list(range(2, x.ndim))
-        reduce_dims: list[int] = [0, *spatial_dims]
-        # Keep the running stats in F32 under autocast — the 3.3 AMP fix in
-        # ``_BatchNormBase._update_running_stats`` gives the rationale.
-        from lucid._engine_scope import autocast_dtype
-
-        try:
-            with autocast_dtype(), _lucid.no_grad():
-                rm_dt = self._buffers["running_mean"].dtype  # type: ignore[union-attr]
-                rv_dt = self._buffers["running_var"].dtype  # type: ignore[union-attr]
-                # Cast x to buffer dtype before reduction — ``var`` is
-                # KeepInput, so F16 input would produce noisy F16
-                # variance from catastrophic cancellation even under
-                # the F32 autocast guard.
-                x_stats: Tensor = x if x.dtype == rm_dt else x.to(dtype=rm_dt)
-                batch_mean: Tensor = x_stats.mean(reduce_dims)
-                batch_var: Tensor = x_stats.var(spatial_dims, correction=1).mean(0)
-                if batch_mean.dtype != rm_dt:
-                    batch_mean = batch_mean.to(dtype=rm_dt)
-                if batch_var.dtype != rv_dt:
-                    batch_var = batch_var.to(dtype=rv_dt)
-                m: float = float(self.momentum)
-                new_rm: Tensor = (1.0 - m) * self._buffers[
-                    "running_mean"
-                ] + m * batch_mean
-                new_rv: Tensor = (1.0 - m) * self._buffers[
-                    "running_var"
-                ] + m * batch_var
-                self._buffers["running_mean"] = new_rm
-                self._buffers["running_var"] = new_rv
-        finally:
-
-            # The same lazy-chain leak as BatchNorm's (its 3.2.1 fix): force
-            # the running stats so the chain does not grow every step.
-            if x._impl.device.name == "GPU":
-                _eval_running_stats_metal(self._buffers)
 
     @override
     def extra_repr(self) -> str:

@@ -10,6 +10,12 @@ view of part of a tensor was refused (LCD-491).  The optimizer step had the
 same defect (LCD-476).  Both writers now go through one helper,
 ``lucid/_C/core/ElementWrite.h``.
 
+BatchNorm's cumulative average (``momentum=None``) and InstanceNorm computed
+the update in Python and rebound the buffer to the result, so a view's base
+never moved at all (LCD-497).  The cumulative average now hands the kernel
+its factor, as the reference does, and InstanceNorm's functional copies into
+the buffers.  The tests from ``_PATHS`` on cover every module path.
+
 The inputs differ per channel and per element, so a statistic written to the
 wrong channel or element ends up with the wrong value.  Metal views of part
 of a tensor are built with the engine's ``_make_view`` hook: on Metal, Python
@@ -27,7 +33,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
-from lucid.test._fixtures.devices import device_dtype_params
+from lucid.test._fixtures.devices import device_dtype_params, devices_supporting
 
 _C = 3
 _BASE_SHAPE = (4, 6)
@@ -246,8 +252,8 @@ def test_the_functional_updates_running_stat_views_in_their_base(
 
 @pytest.mark.parametrize("layout", list(_LAYOUTS))
 def test_the_engine_update_entry_writes_a_view_as_a_dense_buffer(layout: str, device: str) -> None:
-    # ``batch_norm_update_running_stats``: the update ``_update_running_stats``
-    # makes when it is called with a finite momentum.
+    # ``batch_norm_update_running_stats``, the engine's update entry outside
+    # the training forward.
     geometry = _LAYOUTS[layout]
     inits = [_base_init(0), _base_init(1)]
     bases = [lucid.tensor(i.copy()).to(device) for i in inits]
@@ -267,52 +273,154 @@ def test_the_engine_update_entry_writes_a_view_as_a_dense_buffer(layout: str, de
         np.testing.assert_array_equal(_flat(base).reshape(-1), want)
 
 
+# Every module path that updates running statistics, by its class name in
+# either framework, with its keyword arguments and an input shape it takes.
+# BatchNorm's moving and cumulative averages are written by the engine kernel;
+# InstanceNorm's by the functional, in Python.  The cumulative average and
+# InstanceNorm rebound the buffers to new tensors (LCD-497).
+_PATHS: dict[str, tuple[str, dict[str, Any], tuple[int, ...]]] = {
+    "batch_norm": ("BatchNorm1d", {"momentum": _MOMENTUM}, (5, _C, 4)),
+    "batch_norm_cumulative": ("BatchNorm1d", {"momentum": None}, (5, _C, 4)),
+    "instance_norm": (
+        "InstanceNorm1d",
+        {"momentum": _MOMENTUM, "track_running_stats": True},
+        (5, _C, 4),
+    ),
+    "instance_norm_2d": (
+        "InstanceNorm2d",
+        {"momentum": _MOMENTUM, "track_running_stats": True},
+        (4, _C, 2, 3),
+    ),
+}
+
+# On Metal, a view made in Python (indexing, ``expand``) is a copy that writes
+# itself back into its base only when a Python in-place method writes it.  The
+# engine kernel that writes BatchNorm's statistics does not go through one.
+_LCD_501 = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-501: an engine writer bypasses the Python link of a Metal "
+    "view made in Python, so BatchNorm's update never reaches the base",
+)
+
+
+def _make(framework_nn: Any, path: str) -> Any:
+    name, kwargs, _ = _PATHS[path]
+    return getattr(framework_nn, name)(_C, **kwargs)
+
+
+def _cases(*made_by: str) -> list[Any]:
+    """Each path on each device for each way of making the view.
+
+    Every way but ``"engine_view"`` makes it in Python, which BatchNorm on
+    Metal does not honour yet (LCD-501).
+    """
+    return [
+        pytest.param(
+            path,
+            dev,
+            kind,
+            marks=(
+                [_LCD_501]
+                if dev == "metal" and path.startswith("batch_norm") and kind != "engine_view"
+                else []
+            ),
+            id=f"{path}-{dev}-{kind}",
+        )
+        for path in _PATHS
+        for dev in devices_supporting(lucid.float32)
+        for kind in made_by
+    ]
+
+
+@pytest.mark.parametrize("path, dev, made_by", _cases("engine_view", "expand"))
 @pytest.mark.parametrize("expanded", ["running_mean", "running_var"])
 def test_a_running_stat_whose_elements_overlap_is_refused_and_neither_moves(
-    expanded: str, device: str
+    path: str, dev: str, made_by: str, expanded: str
 ) -> None:
     # Every element of an expanded view is the base's one element: there is
     # no single value to write.  The other statistic is a view too, so the
     # refusal comes after one write-back and has to put it back.
-    bn = nn.BatchNorm1d(_C).to(device)
+    m = _make(nn, path).to(dev)
     init = _base_init(0)
-    base = lucid.tensor(init.copy()).to(device)
-    one = lucid.ones(1, device=device)
+    base = lucid.tensor(init.copy()).to(dev)
+    one = lucid.ones(1, device=dev)
     other = "running_var" if expanded == "running_mean" else "running_mean"
-    setattr(bn, other, _view(base, *_LAYOUTS["column"]))
-    setattr(bn, expanded, _view(one, (_C,), (0,), 0))
+    setattr(m, other, _view(base, *_LAYOUTS["column"]))
+    setattr(m, expanded, _view(one, (_C,), (0,), 0) if made_by == "engine_view" else one.expand(_C))
     with pytest.raises(RuntimeError, match="overlap"):
-        bn(lucid.tensor(_input(0, _NORMS["1d"][1])).to(device))
+        m(lucid.tensor(_input(0, _PATHS[path][2])).to(dev))
     np.testing.assert_array_equal(_flat(base), init)
     assert _flat(one).tolist() == [1.0]
-    assert int(bn.num_batches_tracked.item()) == 0
+    assert int(m.num_batches_tracked.item()) == 0
 
 
-# The module paths that update the statistics in Python rebind the buffer to
-# a new tensor rather than writing into it, so a view's base is never
-# updated.  The engine writer is not involved; these are pinned until the
-# Python side is fixed.
-_PYTHON_REBINDS: dict[str, Callable[[Any], Any]] = {
-    "instance_norm": lambda nn_: nn_.InstanceNorm1d(_C, track_running_stats=True),
-    "batch_norm_cumulative": lambda nn_: nn_.BatchNorm1d(_C, momentum=None),
-}
+@pytest.mark.parametrize("path", list(_PATHS))
+def test_every_running_stat_path_updates_a_view_base(path: str, device: str, ref: Any) -> None:
+    mean_at, var_at = _LAYOUTS["column"], _LAYOUTS["diagonal"]
+    inits = [_base_init(0), _base_init(1)]
+    bases = [lucid.tensor(i.copy()).to(device) for i in inits]
+    ref_bases = [ref.from_numpy(i.copy()) for i in inits]
+    m = _make(nn, path).to(device)
+    ref_m = _make(ref.nn, path)
+    m.running_mean, m.running_var = _view(bases[0], *mean_at), _view(bases[1], *var_at)
+    ref_m.running_mean = ref_bases[0].as_strided(*mean_at)
+    ref_m.running_var = ref_bases[1].as_strided(*var_at)
+    for step in range(_STEPS):
+        x = _input(step, _PATHS[path][2])
+        m(lucid.tensor(x.copy()).to(device))
+        ref_m(ref.from_numpy(x.copy()))
+    stats = zip(bases, ref_bases, inits, (mean_at, var_at), strict=True)
+    for base, ref_base, init, at in stats:
+        after = _flat(base)
+        np.testing.assert_allclose(after, ref_base.numpy(), rtol=_TOL, atol=_TOL)
+        untouched = ~_covered(at)
+        np.testing.assert_array_equal(after[untouched], init[untouched])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-491 FOUND: the Python running-stat updates rebind the buffer "
-    "(InstanceNorm, BatchNorm momentum=None)",
-)
-@pytest.mark.parametrize("module", list(_PYTHON_REBINDS))
-def test_a_python_side_running_stat_update_reaches_a_view_base(module: str, ref: Any) -> None:
+@pytest.mark.parametrize("path, dev, made_by", _cases(*_NATURAL))
+def test_every_running_stat_path_updates_the_base_of_an_indexing_view(
+    path: str, dev: str, made_by: str, ref: Any
+) -> None:
+    make, geometry = _NATURAL[made_by]
     init = _base_init(0)
-    base = lucid.tensor(init.copy())
+    base = lucid.tensor(init.copy()).to(dev)
     ref_base = ref.from_numpy(init.copy())
-    m = _PYTHON_REBINDS[module](nn)
-    ref_m = _PYTHON_REBINDS[module](ref.nn)
-    m.running_mean = _view(base, *_LAYOUTS["column"])
-    ref_m.running_mean = ref_base.as_strided(*_LAYOUTS["column"])
-    x = _input(0, _NORMS["1d"][1])
-    m(lucid.tensor(x.copy()))
-    ref_m(ref.from_numpy(x.copy()))
-    np.testing.assert_allclose(_flat(base), ref_base.numpy(), rtol=_TOL, atol=_TOL)
+    m = _make(nn, path).to(dev)
+    ref_m = _make(ref.nn, path)
+    m.running_mean = make(base)
+    ref_m.running_mean = make(ref_base)
+    for step in range(_STEPS):
+        x = _input(step, _PATHS[path][2])
+        m(lucid.tensor(x.copy()).to(dev))
+        ref_m(ref.from_numpy(x.copy()))
+    after = _flat(base)
+    np.testing.assert_allclose(after, ref_base.numpy(), rtol=_TOL, atol=_TOL)
+    untouched = ~_covered(geometry)
+    np.testing.assert_array_equal(after[untouched], init[untouched])
+
+
+@pytest.mark.parametrize("path", list(_PATHS))
+def test_a_training_forward_moves_each_buffer_version_as_the_reference_does(
+    path: str, device: str, ref: Any
+) -> None:
+    # The reference's BatchNorm kernel writes its statistics without a bump
+    # and counts the batch with ``add_``; its InstanceNorm copies into the
+    # statistics and counts nothing.  Every buffer stays the same tensor.
+    m = _make(nn, path).to(device)
+    ref_m = _make(ref.nn, path)
+    ours = dict(m.named_buffers())
+    theirs = dict(ref_m.named_buffers())
+    assert ours.keys() == theirs.keys()
+    ours_before = {k: b._impl.version for k, b in ours.items()}
+    theirs_before = {k: b._version for k, b in theirs.items()}
+    for step in range(_STEPS):
+        x = _input(step, _PATHS[path][2])
+        m(lucid.tensor(x.copy()).to(device))
+        ref_m(ref.from_numpy(x.copy()))
+    after = dict(m.named_buffers())
+    assert all(after[k] is b for k, b in ours.items())
+    moved = {k: b._impl.version - ours_before[k] for k, b in ours.items()}
+    ref_moved = {k: b._version - theirs_before[k] for k, b in theirs.items()}
+    assert moved == ref_moved
+    for k, b in ours.items():
+        np.testing.assert_allclose(_flat(b), theirs[k].double().numpy(), rtol=_TOL, atol=_TOL)
