@@ -24,6 +24,11 @@ pytestmark = pytest.mark.parity
 B = [1.0, 2.0, 3.0]
 V = [2.0, 3.0, 4.0]
 
+# A derivative that cancels to zero keeps the rounding of the O(1) terms that
+# cancel: the reference's second derivative of ``div_ then mul_`` is -2^-23
+# where Lucid's is exactly 0.  The defect guarded here is off by O(1).
+ATOL = 4 * float(np.finfo(np.float32).eps)
+
 
 def _derivatives(
     autograd: ModuleType,
@@ -69,8 +74,8 @@ def test_a_destination_without_grad(write: str, device: str, ref: ModuleType) ->
         ref.tensor(V, requires_grad=True),
         WRITES[write],
     )
-    for g, w in zip(got, want):
-        np.testing.assert_allclose(g, w, rtol=1e-5, atol=1e-7)
+    for g, w in zip(got, want, strict=True):
+        np.testing.assert_allclose(g, w, rtol=1e-5, atol=ATOL)
 
 
 @pytest.mark.parametrize("op", ["mul_", "add_", "sub_", "div_"])
