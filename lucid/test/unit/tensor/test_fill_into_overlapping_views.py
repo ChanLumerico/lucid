@@ -16,14 +16,6 @@ import pytest
 import lucid
 from lucid.test._fixtures.devices import metal_available
 
-# The Metal half of the rule lives in the Python view write-back
-# (lucid/_tensor/_metal_views.py), which refuses before the engine sees the
-# fill.  It flips with that file's change.
-_METAL_FILL = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-28: lucid/_tensor/_metal_views.py still refuses a fill into an "
-    "overlapping Metal view",
-)
 _NO_METAL = pytest.mark.skipif(not metal_available(), reason="needs Metal")
 
 #: name -> (base values, the overlapping view of the base, base indices it reads)
@@ -56,15 +48,11 @@ _REFUSED: dict[str, Callable[[lucid.Tensor], object]] = {
 }
 
 
-def _fill_devices() -> list[object]:
-    return ["cpu", pytest.param("metal", marks=[_NO_METAL, _METAL_FILL])]
-
-
 def _devices() -> list[object]:
     return ["cpu", pytest.param("metal", marks=[_NO_METAL])]
 
 
-@pytest.mark.parametrize("device", _fill_devices())
+@pytest.mark.parametrize("device", _devices())
 @pytest.mark.parametrize("fill", list(_FILLS))
 @pytest.mark.parametrize("view", list(_VIEWS))
 def test_a_fill_reaches_every_element_the_view_reads(
@@ -80,7 +68,7 @@ def test_a_fill_reaches_every_element_the_view_reads(
     assert all(x == value for x in v.contiguous().reshape(-1).to("cpu").tolist())
 
 
-@pytest.mark.parametrize("device", _fill_devices())
+@pytest.mark.parametrize("device", _devices())
 @pytest.mark.parametrize("dtype", ["float16", "int64", "bool"])
 def test_a_fill_into_an_expanded_view_keeps_the_dtype(dtype: str, device: str) -> None:
     dt = getattr(lucid, dtype)
@@ -90,7 +78,7 @@ def test_a_fill_into_an_expanded_view_keeps_the_dtype(dtype: str, device: str) -
     assert base.to("cpu").tolist() == [[1, 1, 1]]
 
 
-@pytest.mark.parametrize("device", _fill_devices())
+@pytest.mark.parametrize("device", _devices())
 def test_a_fill_into_an_expanded_view_whose_base_is_gone(device: str) -> None:
     v = lucid.zeros(1, 3, device=device).expand(2, 3)
     v.fill_(5.0)
@@ -112,7 +100,7 @@ def test_a_value_dependent_write_is_refused_and_writes_nothing(
     assert base.to("cpu").tolist() == values
 
 
-@pytest.mark.parametrize("device", _fill_devices())
+@pytest.mark.parametrize("device", _devices())
 def test_a_fill_into_a_view_of_a_leaf_that_requires_grad_is_still_refused(
     device: str,
 ) -> None:

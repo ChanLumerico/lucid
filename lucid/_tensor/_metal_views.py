@@ -25,9 +25,9 @@ writes it back once the op is done:
 
 The write-back is itself an in-place write to the base, so a view of a view
 writes all the way up.  Some writes are refused, as the CPU and the reference
-refuse them: a view whose elements overlap (``expand``, ``unfold`` with
-overlapping windows), and a view of a leaf that requires grad while autograd
-records.
+refuse them: one into a view whose elements overlap (``expand``, ``unfold``
+with overlapping windows) unless it is a fill, and one into a view of a leaf
+that requires grad while autograd records.
 
 A view op has up to three spellings — the method ``x.squeeze(0)``, the free
 function ``lucid.squeeze(x, 0)`` and, for a whole view, the constructor
@@ -385,12 +385,18 @@ def _overlaps(link: _Link) -> bool:
     return bool((ordered[1:] == ordered[:-1]).any().item())
 
 
-def _check(view: Tensor) -> None:
+#: The writes that leave one value in every element, so elements that share a
+#: position agree on it: they may write an overlapping view, as in the engine
+#: (``refuse_ambiguous_write``, core/TensorImpl.cpp) and the reference.
+_FILLS = frozenset({"fill_", "zero_"})
+
+
+def _check(view: Tensor, *, allow_overlap: bool = False) -> None:
     """Refuse, before anything is written, what the write-back could not honour."""
     link: _Link | None = view.__dict__.get(_ATTR)
     detached = False
     while link is not None:
-        if link.overlap and _overlaps(link):
+        if not allow_overlap and link.overlap and _overlaps(link):
             raise RuntimeError(
                 "an in-place write into a tensor whose elements overlap (an expanded "
                 "view, or unfold windows that overlap) is ambiguous — clone() first"
@@ -447,11 +453,13 @@ def write_back(view: Tensor) -> None:
 
 
 def _writer(original: Callable[..., object]) -> Callable[..., object]:
+    allow_overlap = getattr(original, "__name__", "") in _FILLS
+
     @functools.wraps(original)
     def method(self: Tensor, *args: object, **kwargs: object) -> object:
         if _ATTR not in self.__dict__:
             return original(self, *args, **kwargs)
-        _check(self)
+        _check(self, allow_overlap=allow_overlap)
         out = original(self, *args, **kwargs)
         write_back(self)
         return out
