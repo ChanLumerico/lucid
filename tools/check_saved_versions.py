@@ -31,12 +31,16 @@ per-node patch for a node the base over-checked, and it switches off the
 guard for whatever the node may save later.  The base already leaves an input
 it did not save alone.
 
-A node class built on ``AutogradNode`` (directly, through ``FuncOp`` or a
-kernel template) that holds a tensor of its own must also declare
-``static constexpr bool kKeepsOwnValues = true``.  ``AutogradNode::saved_kind``
-sees only the canonical slots; without the declaration a node whose
-backward reads a mask or an index it keeps itself would be run again by a
-second pass the reference refuses (LCD-350).
+A node class built on ``AutogradNode`` or ``VariadicKernel`` (directly,
+through ``FuncOp`` or a kernel template) that holds a tensor of its own must
+also declare ``static constexpr bool kKeepsOwnValues = true``.  Their
+``saved_kind`` sees only the canonical slots; without the declaration a node
+whose backward reads a mask or an index it keeps itself would be run again
+by a second pass the reference refuses (LCD-350).  And the canonical slots
+are written only by those two headers — every other site keeps values with
+``keep_input`` / ``keep_inputs`` / ``keep_output``, which record that the node
+kept them whatever their size: a direct write of a tensor of no elements read
+as "saved nothing".
 
 Usage::
 
@@ -75,11 +79,18 @@ _EMPTY_VALIDATE = re.compile(r"\bvalidate_versions\s*\(\s*\)\s*override\s*\{\s*\
 # The bases whose saved_kind reads only the canonical slots.
 _SLOT_BASE = re.compile(
     r"\b(?:FuncOp|AutogradNode|UnaryKernel|BinaryKernel|NaryKernel|ReduceKernel|"
-    r"UnaryOp|BinaryOp|ReduceOp)\b"
+    r"VariadicKernel|UnaryOp|BinaryOp|ReduceOp)\b"
 )
 _KEEPS_OWN = "kKeepsOwnValues"
 # The classes that own the canonical slots themselves.
 _SLOT_OWNERS = ("AutogradNode", "VariadicKernel")
+# The headers that define them, the only places their slots may be written.
+_SLOT_HEADERS = ("autograd/AutogradNode.h", "kernel/VariadicKernel.h")
+# A write into a canonical slot: an assignment, or a vector slot grown.
+_SLOT_WRITE = re.compile(
+    r"\bsaved_(?:inputs|output|inputs_v)_\s*(?:\[[^\]]*\]\s*)?=(?!=)"
+    r"|\bsaved_inputs_v_\s*\.\s*(?:push_back|emplace_back|assign|resize|insert)\s*\("
+)
 _CLASS = re.compile(
     r"\b(?:class|struct)\s+(?:LUCID_API\s+)?(?P<name>[A-Za-z_]\w*)\s*(?:final\s*)?"
     r":(?P<bases>[^;{]*)\{"
@@ -267,10 +278,27 @@ def undeclared_own_values(engine: Path = ENGINE) -> Iterator[tuple[str, Path]]:
                 yield name, path
 
 
+def direct_slot_writes(engine: Path = ENGINE) -> Iterator[tuple[Path, int]]:
+    """Yield ``(file, line)`` for each write into a canonical slot outside
+    :data:`_SLOT_HEADERS`."""
+    for path, text in _sources(engine):
+        if path.relative_to(engine).as_posix() in _SLOT_HEADERS:
+            continue
+        for m in _SLOT_WRITE.finditer(text):
+            yield path, text.count("\n", 0, m.start()) + 1
+
+
 def check(engine: Path = ENGINE, held: dict[str, str] | None = None) -> list[str]:
     """Every finding under ``engine`` against ``held`` (default :data:`HELD`)."""
     table = HELD if held is None else held
     problems: list[str] = []
+    for path, line in direct_slot_writes(engine):
+        problems.append(
+            f"{path.relative_to(engine)}:{line}: writes a saved slot directly — keep "
+            f"values with keep_input / keep_inputs / keep_output, which record that the "
+            f"node kept them (a slot of no elements holds no bytes, but a release still "
+            f"frees what the backward reads)"
+        )
     for cls, path in undeclared_own_values(engine):
         problems.append(
             f"{path.relative_to(engine)}: {cls} keeps a tensor of its own but does not "

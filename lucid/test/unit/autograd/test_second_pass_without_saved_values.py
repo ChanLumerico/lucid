@@ -87,6 +87,10 @@ _SAVE_EMPTY: dict[str, Build] = {
     "exp": lambda m, x: x.exp().sum(),
     "div": lambda m, x: (x / (x + 1.0)).sum(),
     "matmul": lambda m, x: (x.reshape(0, 2) @ m.ones(2, 3, device=x.device)).sum(),
+    "softmax": lambda m, x: m.nn.functional.softmax(x.reshape(0, 3), dim=1).sum(),
+    "log-softmax": lambda m, x: m.nn.functional.log_softmax(
+        x.reshape(0, 3), dim=1
+    ).sum(),
 }
 
 

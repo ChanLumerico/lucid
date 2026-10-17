@@ -67,7 +67,7 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     // UnaryKernel / BinaryKernel).  GradMode-disabled and no-requires-grad
     // paths are short-circuited *inside* wire_autograd after the hook.
     auto bwd = std::make_shared<SoftmaxBackward>();
-    bwd->saved_output_ = result->storage();  // p = softmax(x)
+    bwd->keep_output(result->storage());  // p = softmax(x)
     bwd->axis_ = wrapped;
     kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {x}, result, false);
     return result;
@@ -126,7 +126,7 @@ TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
     // Unconditional wire_autograd — see SoftmaxBackward::forward for the
     // rationale (trace-hook visibility under no-grad / no-requires-grad).
     auto bwd = std::make_shared<LogSoftmaxBackward>();
-    bwd->saved_output_ = result->storage();  // y = log_softmax(x)
+    bwd->keep_output(result->storage());  // y = log_softmax(x)
     bwd->axis_ = wrapped;
     kernel::NaryKernel<LogSoftmaxBackward, 1>::wire_autograd(std::move(bwd), {x}, result, false);
     return result;

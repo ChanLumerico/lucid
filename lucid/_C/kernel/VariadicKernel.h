@@ -133,11 +133,16 @@ public:
         input_tensors_v_.clear();
     }
 
-    // :meth:`apply` reads values from the saved slots only — filled for every
-    // input when the op saves them, whatever their size — and no tensor is
-    // kept for graph-mode backward, so ``cat`` and ``stack``, which save
-    // none, may run again in either mode.
+    // :meth:`apply` reads values from the saved slots — filled for every
+    // input when the op saves them, whatever their size — and from members of
+    // the derived class's own where it declares ``kKeepsOwnValues``, as
+    // AutogradNode reads them.  No tensor is kept for graph-mode backward, so
+    // ``cat`` and ``stack``, which save none, may run again in either mode.
     SavedKind saved_kind() const noexcept override {
+        if constexpr (requires { Derived::kKeepsOwnValues; }) {
+            if (Derived::kKeepsOwnValues)
+                return SavedKind::kEagerValues;
+        }
         const bool holds = !saved_inputs_v_.empty() || ::lucid::holds_saved_values(saved_output_);
         return holds ? SavedKind::kEagerValues : SavedKind::kNothing;
     }

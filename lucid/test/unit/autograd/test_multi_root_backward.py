@@ -17,6 +17,8 @@ from types import ModuleType
 import pytest
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid.test._fixtures.devices import metal_available
 
 Scenario = Callable[[ModuleType, str], object]
 
@@ -274,16 +276,12 @@ def test_a_shared_tensor_hook_runs_once_on_the_whole_gradient(device: str) -> No
 
 
 def test_the_root_and_seed_counts_must_match() -> None:
-    from lucid._C import engine as _C_engine
-
     x = lucid.ones(2, requires_grad=True)
     with pytest.raises(RuntimeError, match="2 roots and 1 seeds"):
         _C_engine.engine_backward([x.impl, x.impl], [None])
 
 
 def _engine_pass(kind: str, root: lucid.Tensor, seed: lucid.Tensor) -> None:
-    from lucid._C import engine as _C_engine
-
     if kind == "backward":
         _C_engine.engine_backward([root.impl], [seed.impl])
     else:
@@ -306,9 +304,6 @@ def test_a_seed_that_is_not_a_gradient_of_its_root_is_refused(
     # The engine reads a seed as its root's dtype, device and shape: a short
     # one was read past its end and a float64 one had its bits taken for
     # float32.  lucid.autograd checks seeds first; the engine checks them too.
-    from lucid._C import engine as _C_engine
-    from lucid.test._fixtures.devices import metal_available
-
     if error == "DeviceMismatch" and not metal_available():
         pytest.skip("needs Metal")
     x = lucid.ones(4, requires_grad=True)

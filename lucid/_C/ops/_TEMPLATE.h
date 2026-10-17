@@ -45,9 +45,11 @@
 //   backward pass from themselves creating new backward nodes (wrong
 //   for first-order, wasteful for second-order).
 // - If the backward only needs the forward output (not the inputs),
-//   set ``save_inputs=false`` and populate ``bwd->saved_output_``
-//   manually after the forward dispatch.  See ``Inv.cpp`` for the
-//   canonical example.
+//   set ``save_inputs=false`` and keep it with
+//   ``bwd->keep_output(out->storage())`` after the forward dispatch —
+//   never by writing ``saved_output_`` directly, which would hide from the
+//   engine that the node kept values (``tools/check_saved_versions.py``
+//   refuses it).  See ``Inv.cpp`` for the canonical example.
 // - If the backward needs the original inputs, set ``save_inputs=true``;
 //   ``NaryKernel`` will populate ``saved_inputs_[0..N-1]`` automatically.
 //   See ``Det.cpp`` for the canonical example.

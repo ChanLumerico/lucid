@@ -495,13 +495,22 @@ void check_roots(const std::vector<BackwardRoot>& roots, const char* op) {
 }
 
 // ``root`` with a seed given as a bare buffer (the single-root C++ entry
-// points), read as the root's shape and as the buffer's own dtype and device,
-// so check_roots holds it to the root.  An empty buffer stands for ones.
+// points), read as the buffer's own dtype and device, so check_roots holds it
+// to the root.  A buffer carries no shape, so its size is held to the root's
+// here: a short one was read past its end.  An empty buffer stands for ones.
+//
+// Raises
+// ------
+// ShapeMismatch
+//     The buffer holds a number of elements other than the root's.
 BackwardRoot root_with_seed(const std::shared_ptr<TensorImpl>& root, Storage seed) {
     if (storage_is_empty(seed))
         return {root, nullptr};
     const Dtype dtype = storage_dtype(seed);
     const Device device = storage_is_gpu(seed) ? Device::GPU : Device::CPU;
+    const auto elements = static_cast<std::int64_t>(storage_nbytes(seed) / dtype_size(dtype));
+    if (elements != static_cast<std::int64_t>(shape_numel(root->shape())))
+        throw ShapeMismatch(root->shape(), {elements}, "backward: the seed of the root");
     return {root,
             std::make_shared<TensorImpl>(std::move(seed), root->shape(), dtype, device, false)};
 }
