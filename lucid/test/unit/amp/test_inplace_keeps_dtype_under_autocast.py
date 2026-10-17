@@ -231,8 +231,8 @@ def test_inplace_op_under_autocast_differentiates_in_target_dtype(
     rdev = _ref_device(ref, device)
     leaf = lucid.tensor(_X, device=device, requires_grad=True)
     rleaf = ref.tensor(_X, device=rdev, requires_grad=True)
-    # The non-leaf target is made outside the scope: an out-of-place op in it
-    # is LCD-500's, not this test's.
+    # The non-leaf target is made outside the scope, so the scope holds the
+    # in-place op alone.
     z = leaf * 1.0
     rz = rleaf * 1.0
     with autocast(device_type=device, dtype=amp):
@@ -311,23 +311,15 @@ def test_optimizer_step_inside_autocast_keeps_float32_parameters(
         np.testing.assert_array_equal(p.detach().numpy(), q.detach().numpy())
 
 
-_LCD_500 = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-500: the step composes out-of-place elementwise ops, which autocast "
-    "promotes to the half dtype, so mixed-dtype operands are refused",
-)
-
-
 @pytest.mark.parametrize(("device", "amp"), _SCOPES)
 @pytest.mark.parametrize(
     ("name", "kwargs"),
     [
-        pytest.param("LBFGS", {"lr": 0.1}, id="LBFGS", marks=_LCD_500),
+        pytest.param("LBFGS", {"lr": 0.1}, id="LBFGS"),
         pytest.param(
             "NAdam",
             {"lr": 0.1, "weight_decay": 0.1, "decoupled_weight_decay": True},
             id="NAdam-decoupled",
-            marks=_LCD_500,
         ),
     ],
 )

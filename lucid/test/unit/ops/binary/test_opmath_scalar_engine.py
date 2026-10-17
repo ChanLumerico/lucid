@@ -313,15 +313,16 @@ class TestTrace:
 
 
 class TestAutocast:
-    def test_cpu_float16_autocast_runs_in_float32(self) -> None:
-        # The Promote policy moves a CPU float16 op to float32, so both
-        # operands are cast and the ordinary same-dtype op runs.
+    def test_cpu_float16_autocast_keeps_op_math(self) -> None:
+        # ``mul`` has no row in the policy table (LCD-500), so a CPU float16
+        # autocast leaves the float16 operand alone and the op computes as
+        # it does outside the scope.
         t = _half([3.09375, 1e-3], lucid.float16, "cpu")
         sc = _scalar(0.1, "cpu")
         with lucid.amp.autocast(device_type="cpu", dtype=lucid.float16):
             out = _call("mul", t, sc)
-        assert out.dtype == lucid.float32
-        assert out.tolist() == (t.to(lucid.float32) * sc).tolist()
+        assert out.dtype == lucid.float16
+        assert out.tolist() == _call("mul", t, sc).tolist()
 
     def test_metal_autocast_in_the_half_dtype_keeps_op_math(self) -> None:
         from lucid.test._fixtures.devices import metal_available

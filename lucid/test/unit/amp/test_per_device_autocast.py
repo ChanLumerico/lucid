@@ -7,6 +7,9 @@ Verifies that:
   input dtype,
 - nested CPU and Metal autocast scopes maintain independent target dtypes and
   ``enabled=False`` overrides on each device without disturbing the other device,
+- each device reads its own column of the policy table (LCD-500): ``batch_norm``
+  is float32 on Metal and keeps a bfloat16 input on the CPU, and ``add`` has no
+  row, so it keeps its input dtype on both,
 - ``var``, ``std``, and ``logsumexp`` of ``float32`` inputs stay ``float32`` under
   autocast on both CPU and Metal (LCD-120).
 """
@@ -41,6 +44,7 @@ def _amp_off_around_each_test() -> object:
 
 
 def _run_promote_ops(device: str) -> dict[str, lucid.dtype]:
+    """The LOWER ops — cast to the autocast dtype on both devices."""
     x = lucid.randn(2, 4, device=device, dtype=lucid.float32)
     w = lucid.randn(4, 4, device=device, dtype=lucid.float32)
     b = lucid.randn(4, device=device, dtype=lucid.float32)
@@ -53,16 +57,22 @@ def _run_promote_ops(device: str) -> dict[str, lucid.dtype]:
         "matmul": (x @ w).dtype,
         "linear": F.linear(x, w, b).dtype,
         "conv2d": F.conv2d(img, ker, cb).dtype,
-        "add": (x + w[:2]).dtype,
     }
+
+
+def _add_dtype(device: str) -> lucid.dtype:
+    """``add`` has no row: it keeps float32 under any autocast scope."""
+    x = lucid.randn(2, 4, device=device, dtype=lucid.float32)
+    return (x + x).dtype
 
 
 def _run_batch_norm_bf16(device: str) -> tuple[lucid.dtype, lucid.dtype, lucid.dtype]:
     """Run training ``batch_norm`` with bfloat16 activations and float32 running stats.
 
-    Under autocast on ``device``, ``AmpPolicy::ForceFP32`` promotes the output
-    to ``float32`` while keeping ``running_mean`` / ``running_var`` in ``float32``.
-    When autocast is inactive on ``device``, the output stays ``bfloat16``.
+    Under autocast on Metal the row is FP32: the output is ``float32``.  Its
+    CPU column keeps the input, as the reference's CPU autocast does, so the
+    output stays ``bfloat16`` — as it does when autocast is inactive on
+    ``device``.  ``running_mean`` / ``running_var`` stay ``float32`` throughout.
     """
     img = lucid.randn(2, 3, 6, 6, device=device, dtype=lucid.bfloat16)
     bn_mean = lucid.zeros(3, device=device, dtype=lucid.float32)
@@ -82,6 +92,7 @@ def test_cpu_autocast_does_not_cast_metal_ops() -> None:
         cpu_dtypes = _run_promote_ops("cpu")
         metal_bn, metal_rm, metal_rv = _run_batch_norm_bf16("metal")
         cpu_bn, cpu_rm, cpu_rv = _run_batch_norm_bf16("cpu")
+        adds = (_add_dtype("metal"), _add_dtype("cpu"))
 
     for op_name, dt in metal_dtypes.items():
         assert dt == lucid.float32, f"Metal {op_name} was cast under CPU autocast: {dt}"
@@ -89,10 +100,11 @@ def test_cpu_autocast_does_not_cast_metal_ops() -> None:
         assert (
             dt == lucid.bfloat16
         ), f"CPU {op_name} was not cast under CPU autocast: {dt}"
-    # Metal batch_norm was not affected by CPU autocast (stays bfloat16);
-    # CPU batch_norm was ForceFP32-promoted to float32.
+    assert adds == (lucid.float32, lucid.float32)
+    # Neither device casts batch_norm here: Metal is not under autocast, and
+    # the CPU column keeps the input.
     assert metal_bn == lucid.bfloat16
-    assert cpu_bn == lucid.float32
+    assert cpu_bn == lucid.bfloat16
     assert (metal_rm, metal_rv, cpu_rm, cpu_rv) == (
         lucid.float32,
         lucid.float32,
@@ -107,15 +119,18 @@ def test_metal_autocast_does_not_cast_cpu_ops() -> None:
         assert _state("cpu") == OFF
         cpu_dtypes = _run_promote_ops("cpu")
         cpu_bn, cpu_rm, cpu_rv = _run_batch_norm_bf16("cpu")
+        cpu_add = _add_dtype("cpu")
         if metal_available():
             metal_dtypes = _run_promote_ops("metal")
             metal_bn, metal_rm, metal_rv = _run_batch_norm_bf16("metal")
+            metal_add = _add_dtype("metal")
         else:
             metal_dtypes = {}
-            metal_bn = metal_rm = metal_rv = lucid.float32
+            metal_bn = metal_rm = metal_rv = metal_add = lucid.float32
 
     for op_name, dt in cpu_dtypes.items():
         assert dt == lucid.float32, f"CPU {op_name} was cast under Metal autocast: {dt}"
+    assert (cpu_add, metal_add) == (lucid.float32, lucid.float32)
     assert cpu_bn == lucid.bfloat16
     assert (cpu_rm, cpu_rv) == (lucid.float32, lucid.float32)
     for op_name, dt in metal_dtypes.items():
@@ -144,7 +159,8 @@ def test_nested_cpu_and_metal_autocast_independent_dtypes() -> None:
         assert dt == lucid.bfloat16, f"CPU {op_name} expected bfloat16, got {dt}"
     for op_name, dt in metal_dtypes.items():
         assert dt == lucid.float16, f"Metal {op_name} expected float16, got {dt}"
-    assert cpu_bn == lucid.float32 and metal_bn == lucid.float32
+    # The two columns of batch_norm's row: CPU keeps, Metal is float32.
+    assert cpu_bn == lucid.bfloat16 and metal_bn == lucid.float32
     assert (cpu_rm, cpu_rv, metal_rm, metal_rv) == (
         lucid.float32,
         lucid.float32,

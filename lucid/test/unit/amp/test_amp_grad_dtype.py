@@ -71,7 +71,11 @@ _PATHS: dict[str, tuple[Callable[[_Shape], _Shape], Callable[[Any, _Shape], Any]
 # ── ops: one per kernel family that runs under an AMP policy ──
 #
 # Each op is ``(operand_shape, fn(functional, operand, consts))`` where
-# ``consts`` are fixed float32 tensors of the same library.
+# ``consts`` are fixed float32 tensors of the same library.  Since the
+# policy table (LCD-500) the element-wise and reduction families have no
+# row and keep a float32 operand as it is; they check that the path
+# without a cast hands the gradient back intact too.  matmul and conv are
+# LOWER and cast it.
 
 
 def _consts(lib: ModuleType, device: str, rng: np.random.Generator) -> dict[str, Any]:
@@ -87,11 +91,11 @@ def _consts(lib: ModuleType, device: str, rng: np.random.Generator) -> dict[str,
 
 
 _OPS: dict[str, tuple[_Shape, Callable[[ModuleType, Any, dict[str, Any]], Any]]] = {
-    # BinaryKernel, Promote: the operand is cast to the autocast dtype.
+    # BinaryKernel, no row.
     "binary": ((3, 4), lambda fn, a, c: a * c["w34"]),
-    # UnaryKernel, Promote.
+    # UnaryKernel, no row.
     "unary": ((3, 4), lambda fn, a, c: a.cos()),
-    # ReduceKernel (KeepInput) over a Promote binary.
+    # ReduceKernel over a binary.
     "reduce": ((3, 4), lambda fn, a, c: (a * c["w34"]).sum(dim=1)),
     # Matmul / conv / embedding cast through ``astype`` (or not at all).
     "matmul": ((3, 4), lambda fn, a, c: a @ c["w45"]),
@@ -167,13 +171,13 @@ def test_leaf_gradient_matches_reference(
 
 @pytest.mark.parametrize("dtype", list(_DTYPES))
 @pytest.mark.parametrize("path", ["leaf", "transpose", "narrow"])
-@pytest.mark.parametrize("op", ["exp", "mul"])
+@pytest.mark.parametrize("op", ["exp", "mul", "prod"])
 def test_half_operand_gradient_keeps_half_dtype(
     op: str, path: str, dtype: str, device: str
 ) -> None:
-    """``exp`` is ForceFP32 everywhere, and ``mul`` is computed in float32 by
-    the CPU float16 autocast: both cast a half operand *up*, and its
-    gradient must come back down."""
+    """``exp`` is FP32 on Metal and ``prod`` FP32 on both devices: they cast
+    a half operand *up*, and its gradient must come back down.  ``mul`` has
+    no row and computes in the half dtype; its gradient is half as well."""
     half = _DTYPES[dtype]
     leaf_shape_of, operand_of = _PATHS[path]
     rng = np.random.default_rng(2)
@@ -185,15 +189,20 @@ def test_half_operand_gradient_keeps_half_dtype(
     if operand is not x:
         operand.register_hook(lambda g: seen.append(g))
     with lucid.amp.autocast(device, dtype=half):
-        out = operand.exp() if op == "exp" else operand * operand
+        if op == "exp":
+            out = operand.exp()
+        elif op == "prod":
+            out = operand.prod()
+        else:
+            out = operand * operand
     out.float().sum().backward()
 
     assert x.grad is not None and x.grad.dtype == half
     assert all(g.dtype == half for g in seen), [g.dtype for g in seen]
-    x_f = x.detach().float().numpy()
-    want = np.exp(x_f) if op == "exp" else 2 * x_f
+    used = x.detach().float().numpy()[_used(path)].astype(np.float64)
+    want = {"exp": np.exp(used), "prod": np.prod(used) / used, "mul": 2 * used}[op]
     np.testing.assert_allclose(
-        x.grad.float().numpy()[_used(path)], want[_used(path)], rtol=2e-2, atol=2e-2
+        x.grad.float().numpy()[_used(path)], want, rtol=2e-2, atol=2e-2
     )
 
 

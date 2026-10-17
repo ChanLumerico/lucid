@@ -70,16 +70,16 @@ def test_float64_stays_float64_across_policies_and_backward(
     rb = ref.tensor([0.1, 0.2, 0.3, 0.4], dtype=ref.float64, requires_grad=True)
 
     with autocast(device_type="cpu", dtype=amp_dt):
-        # Promote ops
-        y_mul = x * w
+        # Rows LOWER on the CPU
         y_mm = x @ w
         y_lin = F.linear(x, w, b)
+        # No row
+        y_mul = x * w
         y_pow = x**2
-        # ForceFP32 ops
+        # Rows that are FP32 on Metal and KEEP on the CPU
         y_exp = lucid.exp(x)
         y_ln = F.layer_norm(y_lin, (4,), b, b)
         y_sm = F.softmax(y_ln, dim=-1)
-        # KeepInput ops
         y_sum = y_sm.sum()
 
     with ref.autocast(device_type="cpu", dtype=r_amp_dt):

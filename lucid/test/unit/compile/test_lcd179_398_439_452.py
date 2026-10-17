@@ -37,9 +37,17 @@ def _f32_bits(t: lucid.Tensor) -> list[int]:
 
 
 class TestFusedStepAutocastScalerAndBatchChange:
-    """LCD-179: fused_step under autocast(float16) + GradScaler(65536) and batch change."""
+    """LCD-179: fused_step under autocast(float16) + an overflowing GradScaler and batch change.
 
-    def test_grad_scaler_init_scale_65536_autocast_f16_and_batch_change(self) -> None:
+    The scaled gradients must overflow float16 on the first step so both
+    paths skip it and halve the scale, and a later step must go through.
+    65536 used to overflow because the scale multiply itself ran in float16
+    — ``mul`` was LOWER.  It has no row in the policy table now (LCD-500),
+    so the scaled loss is float32 and the overflow happens where the
+    reference's does, when the float32 gradient reaches the float16 linear
+    layers.  From 2**19 this seed's steps skip, skip and go through."""
+
+    def test_grad_scaler_overflowing_init_scale_autocast_f16_and_batch_change(self) -> None:
         lucid.manual_seed(42)
         eager_model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).to(
             COMPILE_DEVICE
@@ -55,8 +63,9 @@ class TestFusedStepAutocastScalerAndBatchChange:
 
         opt_eager = optim.AdamW(list(eager_model.parameters()), lr=1e-2)
         opt_comp = optim.AdamW(list(comp_model.parameters()), lr=1e-2)
-        scaler_eager = GradScaler(init_scale=65536.0)
-        scaler_comp = GradScaler(init_scale=65536.0)
+        scaler_eager = GradScaler(init_scale=2.0**19)
+        scaler_comp = GradScaler(init_scale=2.0**19)
+        scales = (2.0**18, 2.0**17, 2.0**17)
         step = fused_step(comp_model, F.mse_loss, opt_comp, grad_scaler=scaler_comp)
 
         params_before = [p.detach().clone() for p in comp_model.parameters()]
@@ -78,7 +87,7 @@ class TestFusedStepAutocastScalerAndBatchChange:
             assert loss_c.dtype == loss_e.dtype == lucid.float32
             assert np.isfinite(float(loss_c.item()))
             assert abs(float(loss_c.item()) - float(loss_e.item())) < 1e-3
-            assert scaler_comp.get_scale() == scaler_eager.get_scale() == 32768.0
+            assert scaler_comp.get_scale() == scaler_eager.get_scale() == scales[step_idx]
             if step_idx == 0:
                 for p_old, p_now in zip(
                     params_before, comp_model.parameters(), strict=True
