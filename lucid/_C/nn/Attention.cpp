@@ -38,6 +38,7 @@
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/Softmax.h"
 #include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/Promote.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/Tri.h"
 #include "../ops/utils/View.h"
@@ -183,12 +184,19 @@ ForwardCore run_forward(const TensorImplPtr& q,
 
 }  // namespace
 
-TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
-                                                         const TensorImplPtr& k,
-                                                         const TensorImplPtr& v,
-                                                         const TensorImplPtr& attn_mask,
+TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q_in,
+                                                         const TensorImplPtr& k_in,
+                                                         const TensorImplPtr& v_in,
+                                                         const TensorImplPtr& mask_in,
                                                          double scale,
                                                          bool is_causal) {
+    // The row (LOWER on both devices) casts Q, K, V and an additive mask
+    // together; a Bool mask is not a float and stays.  Before it, a float32
+    // Q from RoPE met a float16 V under Metal autocast and was refused.
+    const AmpScope amp{schema_v1.name, q_in ? q_in->device() : Device::CPU};
+    const auto operands = amp.cast_widest({q_in, k_in, v_in, mask_in});
+    const TensorImplPtr &q = operands[0], &k = operands[1], &v = operands[2];
+    const TensorImplPtr& attn_mask = operands[3];
     // Output-only op: use the memory-efficient fused path (no dense weights).
     auto core = run_forward(q, k, v, attn_mask, scale, is_causal, /*need_weights=*/false);
 
@@ -336,12 +344,18 @@ TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,
 }
 
 std::vector<TensorImplPtr>
-scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q,
-                                             const TensorImplPtr& k,
-                                             const TensorImplPtr& v,
-                                             const TensorImplPtr& attn_mask_or_null,
+scaled_dot_product_attention_with_weights_op(const TensorImplPtr& q_in,
+                                             const TensorImplPtr& k_in,
+                                             const TensorImplPtr& v_in,
+                                             const TensorImplPtr& mask_in,
                                              double scale,
                                              bool is_causal) {
+    // The row, as in ScaledDotProductAttentionBackward::forward.
+    const AmpScope amp{ScaledDotProductAttentionBackward::schema_v1.name,
+                       q_in ? q_in->device() : Device::CPU};
+    const auto operands = amp.cast_widest({q_in, k_in, v_in, mask_in});
+    const TensorImplPtr &q = operands[0], &k = operands[1], &v = operands[2];
+    const TensorImplPtr& attn_mask_or_null = operands[3];
     // Weights variant: materialize the dense softmax weight matrix for the caller.
     auto core = run_forward(q, k, v, attn_mask_or_null, scale, is_causal, /*need_weights=*/true);
 
