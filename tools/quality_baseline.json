@@ -72,6 +72,11 @@
    "date": "2026-10-18",
    "reason": "LCD-500-E1: amp_policy_for / amp_policy_table recorded as test-only engine bindings (consumers: amp tests until LCD-500-A1; tools/gen_pyi.py)",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-18",
+   "reason": "LCD-466 c2 (2a432415c) added phantom_mode/set_phantom_mode; landed with --allow-slop because LCD-466 card 3 (nn/_shadow.py switch) consumes them; engine unbound 37->39 until card 3 lands",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -438,7 +443,7 @@
   },
   "engine": {
    "unbound": {
-    "lucid/_C/engine.pyi": 37
+    "lucid/_C/engine.pyi": 39
    }
   },
   "jscpd": {
