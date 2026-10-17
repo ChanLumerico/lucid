@@ -1,7 +1,7 @@
 """Parity guard for dtype edge cases across CPU and Metal (LCD-343).
 
 Covers:
-1. ``lucid.can_cast(from_, to)`` matches ``torch.can_cast`` across all 11x11 pairs.
+1. ``lucid.can_cast(from_, to)`` matches the reference across all 11x11 pairs.
 2. ``t == None`` and ``t != None`` (plus arbitrary non-Tensor, non-Scalar objects)
    return ``False`` / ``True`` as plain Python ``bool``.
 3. Half and narrow-integer scalar exponent overflow in ``pow`` raises ``RuntimeError``

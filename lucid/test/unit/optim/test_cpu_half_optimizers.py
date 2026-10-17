@@ -1,7 +1,5 @@
 """CPU optimizer support and parity for float16 and bfloat16 parameters (LCD-71)."""
 
-from __future__ import annotations
-
 from typing import Any
 
 import numpy as np
