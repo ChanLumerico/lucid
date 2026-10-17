@@ -366,7 +366,7 @@ bool pieces_are_views(const TensorImplPtr& a, int ax) {
 // view correctly and a write through one follows its strides, so these are
 // views as the reference's are.  Metal keeps copying.
 bool pieces_are_strided_views(const TensorImplPtr& a) {
-    return a->device() == Device::CPU && storage_is_cpu(a->raw_storage()) && !a->shape().empty();
+    return a->views_by_stride() && !a->shape().empty();
 }
 
 // The piece of ``a`` that starts ``from`` steps along ``ax``, as a strided

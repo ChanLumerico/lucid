@@ -9,7 +9,9 @@
 // while the mode is on, the kernel bases skip their kernels, and the factories
 // that fill a host buffer before they dispatch skip the fill.  Each output
 // keeps the shape and dtype its op computes before it dispatches, so no shape
-// rule is written twice.
+// rule is written twice.  Outside the mode a phantom is inert
+// (refuse_phantom_outside_mode), and one rule governs every write that
+// involves one (absorbs_phantom_write).
 //
 // The flag is per thread, as :class:`GradMode`'s is — and so is its contract:
 // a thread starts with the mode off, and an asyncio task shares its thread's.
@@ -24,6 +26,7 @@
 #include <string_view>
 
 #include "Error.h"
+#include "ErrorBuilder.h"
 #include "Shape.h"
 #include "Storage.h"
 
@@ -82,21 +85,57 @@ inline Storage phantom_storage(const Shape& shape, Dtype dt) {
     PhantomStorage p;
     p.nbytes = shape_numel(shape) * dtype_size(dt);
     p.dtype = dt;
-    return Storage{std::move(p)};
-}
-
-// Whether an op given ``inputs`` makes a phantom result: the mode is on, or an
-// input is a phantom (a phantom tensor used after its block is still one).
-template <class... Impl>
-bool phantom_dispatch(const Impl&... inputs) noexcept {
-    return PhantomMode::is_enabled() || (inputs.is_phantom() || ...);
+    return Storage{p};
 }
 
 // The one refusal for a phantom tensor's values — a host read (``item``,
-// ``tolist``, NumPy, bytes, printing), a data-dependent shape, and a write of
-// a phantom into a real tensor alike: there are no values to give.
+// ``tolist``, NumPy, bytes, printing), a data-dependent shape, a write of a
+// phantom into a real tensor, and an op on a phantom outside the mode alike:
+// there are no values to give.  The op stack the error context holds (every
+// op's OpScopeFull pushes its name) says which op asked.
 [[noreturn]] inline void refuse_phantom_read(std::string_view op) {
-    throw LucidError("phantom tensor has no values: " + std::string(op));
+    std::string msg = "phantom tensor has no values: " + std::string(op);
+    if (const std::string trace = ErrorContext::trace(); !trace.empty())
+        msg += " [trace=" + trace + "]";
+    throw LucidError(msg);
+}
+
+// The contract for a phantom outside phantom mode: it is inert.  Its shape,
+// dtype, device and autograd flags read as any tensor's, and a write into it
+// is absorbed (absorbs_phantom_write), but an op that would read its values
+// or make a new phantom of it — every op does one or the other — refuses
+// here.  A phantom is made only under the mode, so a block's result can never
+// reach real code dressed as a real tensor.  Called where those two things
+// happen, TensorImpl::storage() and TensorImpl::make_view.
+inline void refuse_phantom_outside_mode(const Storage& s, std::string_view what) {
+    if (storage_is_phantom(s) && !PhantomMode::is_enabled()) [[unlikely]]
+        refuse_phantom_read(std::string(what) + " outside phantom mode");
+}
+
+// The one write rule for phantom storage, at every place a write lands —
+// TensorImpl's copy_from / write_through / take_storage_from, write_elements
+// (an optimizer's or BatchNorm's in-place update), accumulate_into and a leaf's
+// first gradient, an assigned ``.grad``.
+//
+// Returns
+// -------
+// bool
+//     ``true`` when ``dst`` is a phantom: it takes any write and keeps no
+//     values, so the caller writes nothing (and moves the version where a
+//     write would).  ``false`` for an ordinary write between real storages.
+//
+// Raises
+// ------
+// LucidError
+//     ``dst`` is real and ``src`` a phantom.  The phantom has no values to
+//     give, and taking it in place of the real values would turn a tensor
+//     made outside the block into a phantom in silence.
+inline bool absorbs_phantom_write(const Storage& dst, const Storage& src, std::string_view op) {
+    if (storage_is_phantom(dst))
+        return true;
+    if (storage_is_phantom(src))
+        refuse_phantom_read(op);
+    return false;
 }
 
 }  // namespace lucid

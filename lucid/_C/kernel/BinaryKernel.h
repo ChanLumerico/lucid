@@ -335,14 +335,12 @@ inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t
 // Used by kernel ``forward()`` trampolines to normalise inputs to the
 // effective dtype returned by :class:`SchemaGuard` before compute.
 // The cast routes through ``IBackend::cast`` so CPU and GPU paths
-// share a single typed cast implementation.  A phantom input casts to a
-// phantom of ``dt`` even outside phantom mode, as the kernel it feeds does.
+// share a single typed cast implementation.
 inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
     if (!t || t->dtype() == dt)
         return t;
     auto& be = backend::Dispatcher::for_device(t->device());
-    Storage cast_storage = t->is_phantom() ? phantom_storage(t->shape(), dt)
-                                           : be.cast(t->storage(), t->shape(), t->dtype(), dt);
+    Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), dt);
     return std::make_shared<TensorImpl>(std::move(cast_storage), t->shape(), dt, t->device(),
                                         false);
 }
@@ -574,8 +572,9 @@ public:
 protected:
     // The result's storage at ``out_shape`` and ``eff_dt`` for operands
     // already cast to ``eff_dt``: the backend's dispatch, or the Derived
-    // CPU / GPU kernel.  A phantom when phantom mode is on or an operand is a
-    // phantom — no kernel runs then, and no operand's storage is read.
+    // CPU / GPU kernel.  A phantom under phantom mode — no kernel runs then,
+    // and no operand's storage is read.  Outside the mode a phantom operand
+    // refuses where its storage is read (TensorImpl::storage).
     static Storage compute_storage(const TensorImplPtr& a_ptr,
                                    const TensorImplPtr& b_ptr,
                                    const Shape& out_shape,
@@ -641,6 +640,10 @@ protected:
         const Shape& src = this->input_shapes_[k];
         if (src == this->out_shape_ || this->device_ == Device::GPU)
             return this->saved_inputs_[k];
+        // A phantom saved under phantom mode broadcasts as a phantom: the
+        // pass runs there (Engine::backward refuses a phantom root outside).
+        if (storage_is_phantom(this->saved_inputs_[k]))
+            return phantom_storage(this->out_shape_, this->dtype_);
         const auto& c = std::get<CpuStorage>(this->saved_inputs_[k]);
         return Storage{detail::broadcast_cpu(c, src, this->out_shape_, this->dtype_)};
     }
@@ -739,7 +742,7 @@ Storage BinaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
                                                const TensorImplPtr& b_ptr,
                                                const Shape& out_shape,
                                                Dtype eff_dt) {
-    if (phantom_dispatch(*a_ptr, *b_ptr)) [[unlikely]]
+    if (PhantomMode::is_enabled()) [[unlikely]]
         return phantom_storage(out_shape, eff_dt);
     if constexpr (detail::HasBinaryDispatch<Derived>) {
         if (a_ptr->device() == Device::GPU) {

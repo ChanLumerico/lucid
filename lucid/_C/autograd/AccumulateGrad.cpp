@@ -48,6 +48,10 @@ void accumulate_leaf(TensorImpl& leaf, Storage grad_out) {
     if (!leaf.requires_grad()) {
         return;
     }
+    // The phantom write rule, held before a hook or a cast runs: a real
+    // leaf refuses a phantom gradient, its first included.
+    if (leaf.absorbs_phantom_gradient(grad_out))
+        return;
 
     // 3.3 AMP fix: under autocast, the same leaf parameter can be reached
     // via two different effective dtypes — e.g. a Conv with eff_dt=F16
@@ -106,6 +110,8 @@ void accumulate_leaf_for_graph(const TensorImplPtr& leaf, const TensorImplPtr& g
     if (!leaf || !leaf->requires_grad()) {
         return;
     }
+    if (grad && leaf->absorbs_phantom_gradient(grad->raw_storage()))
+        return;
     leaf->accumulate_grad_impl(run_leaf_hooks_for_graph(*leaf, gradient_in_dtype_of(grad, leaf)));
 }
 

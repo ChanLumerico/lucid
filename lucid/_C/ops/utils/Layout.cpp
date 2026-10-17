@@ -189,7 +189,7 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
 // Metal, and ``broadcast_to`` everywhere, keep copying.
 TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
     Validator::input(a, "expand.a").non_null();
-    if (!storage_is_cpu(a->raw_storage()))
+    if (!a->views_by_stride())
         return broadcast_to_op(a, shape);
     const std::size_t nin = a->shape().size();
     const std::size_t nout = shape.size();

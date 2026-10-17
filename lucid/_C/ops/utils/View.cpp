@@ -192,7 +192,8 @@ bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride, U
         stride = contiguous_stride(out_shape, dtype_size(a.dtype()));
         return true;
     }
-    if (!storage_is_cpu(a.raw_storage()) && a.family_key() == nullptr)
+    // A phantom on Metal views as a family member would: by its strides.
+    if (!a.views_by_stride() && a.family_key() == nullptr && !a.is_phantom())
         return false;
     return unit == UnitAxes::kSqueeze ? squeezes_only(a, out_shape, stride)
                                       : chunk_strides(a, out_shape, stride);
@@ -368,7 +369,7 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     // buffer with its views, so the storage is that buffer and the tensor
     // may start partway in; a metal tensor owns a packed buffer of its own.
     const auto elem = static_cast<std::int64_t>(dtype_size(dt));
-    const bool view = device == Device::CPU && storage_is_cpu(a->raw_storage());
+    const bool view = a->views_by_stride();
     const std::int64_t own = view ? static_cast<std::int64_t>(a->storage_offset()) / elem : 0;
     const std::int64_t capacity =
         view ? static_cast<std::int64_t>(storage_nbytes(a->raw_storage())) / elem

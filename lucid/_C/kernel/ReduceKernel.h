@@ -333,7 +333,7 @@ public:
 protected:
     // The reduced storage of ``a_ptr`` over ``axes`` at ``eff_dt``: the
     // backend's dispatch, or the Derived CPU / GPU kernel.  A phantom of
-    // ``out_shape`` when phantom mode is on or ``a_ptr`` is a phantom.
+    // ``out_shape`` under phantom mode, where no kernel runs.
     static Storage compute_storage(const TensorImplPtr& a_ptr,
                                    const std::vector<int>& axes,
                                    bool keepdims,
@@ -347,7 +347,7 @@ Storage ReduceKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
                                                bool keepdims,
                                                const Shape& out_shape,
                                                Dtype eff_dt) {
-    if (phantom_dispatch(*a_ptr)) [[unlikely]]
+    if (PhantomMode::is_enabled()) [[unlikely]]
         return phantom_storage(out_shape, eff_dt);
     if constexpr (detail::HasReduceDispatch<Derived>) {
         return Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()), a_ptr->storage(),

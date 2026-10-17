@@ -44,7 +44,9 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     // The CPU backend walks the buffer through the geometry; the Metal one
     // ignores the geometry and copies what it is handed, so it is handed the
     // tensor's own elements — a family member's root holds more than them.
-    const Storage& src = storage_is_gpu(a->raw_storage()) ? a->storage() : a->raw_storage();
+    // A phantom is read through storage() as any op input is, which refuses
+    // it outside phantom mode.
+    const Storage& src = storage_is_cpu(a->raw_storage()) ? a->raw_storage() : a->storage();
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .contiguous(src, a->shape(), a->stride(), a->storage_offset(),
                                           a->is_contiguous(), a->dtype());

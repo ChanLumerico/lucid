@@ -24,6 +24,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/PhantomMode.h"
 #include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
 #include "../ops/gfunc/Gfunc.h"
@@ -488,6 +489,10 @@ void check_roots(const std::vector<BackwardRoot>& roots, const char* op) {
         const auto& r = roots[i];
         if (!r.tensor)
             err.fail("roots[" + std::to_string(i) + "] is null");
+        // A phantom's graph is phantom: outside the mode its nodes would hand
+        // their saved phantoms to a real backend.  Inside it the pass runs
+        // phantom, and a real leaf refuses what reaches it.
+        refuse_phantom_outside_mode(r.tensor->raw_storage(), std::string(op) + " of a phantom");
         if (r.seed)
             check_grad_kind(err, "the gradient of roots[" + std::to_string(i) + "]",
                             r.tensor->dtype(), r.tensor->device(), r.tensor->shape(), *r.seed);

@@ -114,17 +114,35 @@ TEST(PhantomOps, KernelBasesKeepShapeAndDtype) {
     EXPECT_EQ(cpu_allocs(), before);
 }
 
-TEST(PhantomOps, PhantomInputStaysPhantomOutsideTheMode) {
+TEST(PhantomOps, PhantomInputRefusedOutsideTheMode) {
     TensorImplPtr p;
     {
         PhantomModeGuard on(true);
-        p = cpu_ones({3});
+        p = cpu_ones({3, 2});
     }
-    auto real = cpu_ones({3});
+    auto real = cpu_ones({3, 2});
     EXPECT_FALSE(real->is_phantom());
-    auto out = add_op(p, real);
-    EXPECT_TRUE(out->is_phantom());
-    EXPECT_EQ(out->shape(), (Shape{3}));
+    EXPECT_THROW(add_op(p, real), LucidError);
+    EXPECT_THROW(exp_op(p), LucidError);
+    EXPECT_THROW(sum_op(p, {0}, false), LucidError);
+    EXPECT_THROW(TensorImpl::make_view(p, {2, 3}, contiguous_stride({2, 3}, 4)), LucidError);
+    EXPECT_THROW(p->storage(), LucidError);
+}
+
+TEST(PhantomWrites, OneRuleForEveryWrite) {
+    const Storage ghost = phantom_storage({3}, Dtype::F32);
+    const Storage real = CpuStorage{};
+    EXPECT_TRUE(absorbs_phantom_write(ghost, real, "w"));
+    EXPECT_TRUE(absorbs_phantom_write(ghost, ghost, "w"));
+    EXPECT_FALSE(absorbs_phantom_write(real, real, "w"));
+    EXPECT_THROW(absorbs_phantom_write(real, ghost, "w"), LucidError);
+}
+
+TEST(PhantomWrites, RealLeafRefusesAPhantomFirstGradient) {
+    auto w = zeros_op({3}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
+    const Storage ghost = phantom_storage({3}, Dtype::F32);
+    EXPECT_THROW(w->absorbs_phantom_gradient(ghost), LucidError);
+    EXPECT_FALSE(w->grad_storage().has_value());
 }
 
 TEST(PhantomWrites, PhantomTargetTakesAnyWrite) {

@@ -289,14 +289,14 @@ public:
 
 protected:
     // The result's storage at ``a_ptr``'s shape and ``eff_dt``: the
-    // backend's dispatch, or the Derived CPU / GPU kernel.  A phantom when
-    // phantom mode is on or ``a_ptr`` is a phantom — no kernel runs then.
+    // backend's dispatch, or the Derived CPU / GPU kernel.  A phantom under
+    // phantom mode, where no kernel runs.
     static Storage compute_storage(const TensorImplPtr& a_ptr, Dtype eff_dt);
 };
 
 template <class Derived>
 Storage UnaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr, Dtype eff_dt) {
-    if (phantom_dispatch(*a_ptr)) [[unlikely]]
+    if (PhantomMode::is_enabled()) [[unlikely]]
         return phantom_storage(a_ptr->shape(), eff_dt);
     if constexpr (detail::HasUnaryDispatch<Derived>) {
         // Dispatch path: uses the backend abstraction (Accelerate / MLX).

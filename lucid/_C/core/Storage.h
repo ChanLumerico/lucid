@@ -5,7 +5,7 @@
 // Metal shared-mode unified-memory buffers (host + device aliased) — and a
 // fourth that owns no memory at all, the storage of a phantom tensor.
 //
-// All four variants carry a shared :type:`VersionCounter`.  Autograd reads
+// The three that own memory carry a shared :type:`VersionCounter`.  Autograd reads
 // only :class:`SharedStorage`'s — the one buffer whose aliases are separate
 // tensors.  What it compares for everything else is
 // :func:`TensorImpl::version`: the tensor's own count
@@ -366,18 +366,16 @@ struct SharedStorage {
 //     returns, the :class:`TensorImpl` that adopts the storage does.
 // dtype : Dtype
 //     Element type.  Default :attr:`Dtype::F32`.
-// version : std::shared_ptr<VersionCounter>
-//     Shared mutation counter — same semantics as the other variants.
+//
+// Notes
+// -----
+// No :type:`VersionCounter`: the siblings' storage counters are read by
+// nothing autograd compares (see the file header), and a phantom's writes
+// move only :func:`TensorImpl::version`.  Without one, a phantom costs no
+// heap allocation at all.
 struct PhantomStorage {
     std::size_t nbytes = 0;
     Dtype dtype = Dtype::F32;
-    std::shared_ptr<VersionCounter> version = std::make_shared<VersionCounter>(0);
-
-    // Atomically increments the shared version counter.
-    void bump_version() const noexcept { version->fetch_add(1, std::memory_order_relaxed); }
-
-    // Reads the current version counter value.
-    std::uint64_t get_version() const noexcept { return version->load(std::memory_order_relaxed); }
 };
 
 // Discriminated union of the four storage variants, held by

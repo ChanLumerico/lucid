@@ -226,6 +226,25 @@ if [[ -n "${PY}" && -f "${STUBS_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1d+. The phantom backend matches IBackend.h ─────────────────────────────
+# Hard-fail, under a second.  ``lucid/_C/backend/PhantomBackend.h`` is
+# generated from IBackend.h and overrides every virtual, the defaulted ones
+# included; one added there without a rerun of
+# ``tools/gen_phantom_backend.py`` would be inherited and run real code on
+# phantom storage (LCD-466).  CI runs the same ``--check`` in the phase
+# gate's checks part.  Only when IBackend.h, the generated header or the
+# generator is staged.
+PHANTOM_SCRIPT="${REPO_ROOT}/tools/gen_phantom_backend.py"
+if [[ -n "${PY}" && -f "${PHANTOM_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMRD \
+        | grep -qE '^lucid/_C/backend/(IBackend|PhantomBackend)\.h$|^tools/gen_phantom_backend\.py$'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" "${PHANTOM_SCRIPT}" --check >&2); then
+            echo "  ❌  Pre-commit blocked: PhantomBackend.h is out of date with IBackend.h (see above)." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 1e. Engine dtype dispatch refuses what it does not handle ───────────────
 # Hard-fail, ~2 s.  ``tools/check_dtype_dispatch.py`` finds a dtype ``if``
 # chain ending in a bare ``else`` and a hand-written ``F32 || F64`` float test

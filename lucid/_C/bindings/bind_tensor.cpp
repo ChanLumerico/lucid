@@ -61,7 +61,7 @@ using lucid::compile::traced_factory;
 // ``pending_array`` is that handle: null for a CPU tensor, a Metal tensor
 // without an array, and a phantom, which has no graph to run.
 std::shared_ptr<mlx::core::array> pending_array(const lucid::TensorImpl& t) {
-    if (t.device() != lucid::Device::GPU)
+    if (t.device() != lucid::Device::GPU || t.is_phantom())
         return nullptr;
     const auto* gpu_st = std::get_if<lucid::GpuStorage>(&t.storage());
     return gpu_st != nullptr ? gpu_st->arr : nullptr;
@@ -222,6 +222,22 @@ make_shared_tensor(const std::vector<std::int64_t>& shape, Dtype dtype, bool req
     ss.owner = std::move(owned.owner);
     return std::make_shared<TensorImpl>(Storage{std::move(ss)}, Shape(shape), dtype, Device::CPU,
                                         requires_grad);
+}
+
+// Puts g's buffer in self's gradient slot, replacing any gradient there;
+// refused, with the slot as it was, unless g has self's dtype, device and
+// shape (assignable_grad).  Backs ``Tensor.grad = g``; clip_grad and
+// GradScaler write their results back through it too.  A phantom's slot is
+// the phantom assignable_grad gives, never g's graph.
+void set_gradient(TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
+    if (!g)
+        ErrorBuilder("Tensor.grad")
+            .invalid_argument("expected a tensor; zero_grad() clears a gradient");
+    Storage slot = lucid::assignable_grad(self, *g);
+    if (!storage_is_phantom(slot) && (g->requires_grad() || g->grad_fn()))
+        self.set_grad_impl(g);
+    else
+        self.set_grad_storage(std::move(slot));
 }
 
 }  // namespace
@@ -489,29 +505,11 @@ void register_tensor_impl(py::module_& m) {
             "state, and writes through it untracked.")
         .def("is_aliased", &TensorImpl::is_aliased,
              "Whether another live tensor reads this one's buffer as a view of it.")
-        .def(
-            "set_grad",
-            [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
-                // Puts g's buffer in self's gradient slot, replacing any
-                // gradient there; refused, with the slot as it was, unless
-                // g has self's dtype, device and shape (assignable_grad).
-                // Backs ``Tensor.grad = g``; clip_grad and GradScaler write
-                // their results back through it too.
-                if (!g)
-                    ErrorBuilder("Tensor.grad")
-                        .invalid_argument("expected a tensor; zero_grad() clears a gradient");
-                Storage slot = lucid::assignable_grad(self, *g);
-                if (g->requires_grad() || g->grad_fn()) {
-                    self.set_grad_impl(g);
-                } else {
-                    self.set_grad_storage(std::move(slot));
-                }
-            },
-            py::arg("grad"),
-            "Replace this tensor's gradient with grad's values.  grad must have "
-            "this tensor's dtype, device and shape, and may not be this tensor "
-            "itself; anything else raises and leaves the gradient as it was.  "
-            "Backs ``Tensor.grad = grad``.");
+        .def("set_grad", &set_gradient, py::arg("grad"),
+             "Replace this tensor's gradient with grad's values.  grad must have "
+             "this tensor's dtype, device and shape, and may not be this tensor "
+             "itself; anything else raises and leaves the gradient as it was.  "
+             "Backs ``Tensor.grad = grad``.");
 
     // to_shared_storage re-wraps the tensor's backing buffer as a Metal
     // MTLResourceStorageModeShared allocation.  The resulting tensor occupies

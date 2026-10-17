@@ -23,6 +23,7 @@
 
 #include "Allocator.h"
 #include "Device.h"
+#include "PhantomMode.h"
 #include "Storage.h"
 #include "TensorImpl.h"
 
@@ -72,13 +73,20 @@ inline std::shared_ptr<TensorImpl> dense_elements(const TensorImpl& t) {
 // the buffer read their cached elements by.  A tensor whose elements overlap
 // (an expanded view) is refused at that write-back, after ``write`` has run,
 // so anything else ``write`` changed has already changed.
+//
+// ``src`` is what the writer writes from (the gradient, the fresh running
+// statistic) and ``op`` names it for an error.  The phantom write rule
+// (core/PhantomMode.h) is held here, before ``write`` runs: a phantom ``t``
+// takes the write without running the writer, which reads and writes values,
+// and its version moves as for any write; a real ``t`` refuses a phantom
+// ``src``, which BatchNorm's slot replacement would otherwise have taken in
+// silence.
 template <class Write>
-void write_elements(std::shared_ptr<TensorImpl>& t, Write&& write) {
-    // A phantom takes any write and keeps no values, the rule every write
-    // into a tensor follows (TensorImpl's copy_from and write_through): the
-    // writer, which reads and writes values, does not run, and the version
-    // moves as for any write.
-    if (t->is_phantom()) {
+void write_elements(std::shared_ptr<TensorImpl>& t,
+                    const Storage& src,
+                    const char* op,
+                    Write&& write) {
+    if (absorbs_phantom_write(t->raw_storage(), src, op)) {
         t->bump_version();
         return;
     }
@@ -89,6 +97,14 @@ void write_elements(std::shared_ptr<TensorImpl>& t, Write&& write) {
     auto dense = dense_elements(*t);
     write(dense);
     t->copy_from(*dense);
+}
+
+// For a writer whose source is never a phantom — a compiled step writing its
+// executable's own output.  A phantom ``t`` still takes the write unrun.
+template <class Write>
+void write_elements(std::shared_ptr<TensorImpl>& t, Write&& write) {
+    static const Storage kRealSource{};
+    write_elements(t, kRealSource, "write_elements", std::forward<Write>(write));
 }
 
 }  // namespace lucid

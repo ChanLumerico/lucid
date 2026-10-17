@@ -20,6 +20,7 @@
 #include "../core/Allocator.h"
 #include "../core/ElementWrite.h"
 #include "../core/ErrorBuilder.h"
+#include "../core/PhantomMode.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
@@ -147,6 +148,25 @@ double read_state_scalar(const TensorImpl& t) {
     }
 }
 
+// An optimizer's state is values — moments, step counts — that every later
+// step reads and writes in place, and the fused kernels step a parameter
+// without the Dispatcher.  Under phantom mode a first step would make the
+// state phantom for good (and count the step), and a step with state would
+// update real parameters for real; a phantom parameter or gradient has no
+// values to step from.  So none of it runs: refused before any slot, counter
+// or buffer moves.
+void Optimizer::refuse_phantom_step() const {
+    if (PhantomMode::is_enabled())
+        refuse_phantom_read("optimizer step under phantom mode");
+    for (const auto& p : params_) {
+        if (!p)
+            continue;
+        const auto& grad = p->grad_storage();
+        if (p->is_phantom() || (grad.has_value() && storage_is_phantom(*grad)))
+            refuse_phantom_read("optimizer step of a phantom parameter");
+    }
+}
+
 void Optimizer::sync_slot_vectors() {
     if (state_initialized_.size() != params_.size())
         state_initialized_.assign(params_.size(), false);
@@ -163,6 +183,9 @@ void Optimizer::ensure_state_slot(std::size_t i) {
     sync_slot_vectors();
     if (i >= params_.size() || !params_[i] || state_initialized_[i])
         return;
+    // State made under phantom mode would be phantom for good (refuse_phantom_step).
+    if (PhantomMode::is_enabled())
+        refuse_phantom_read("optimizer state under phantom mode");
     init_state_slot(i, params_[i]);
     state_initialized_[i] = true;
 }
@@ -173,6 +196,8 @@ void Optimizer::ensure_buffers(std::vector<Storage>& bufs) {
     for (std::size_t i = 0; i < params_.size(); ++i) {
         if (!slot_has_state(i) || optim_detail::holds_buffer(bufs[i]))
             continue;
+        if (PhantomMode::is_enabled())
+            refuse_phantom_read("optimizer state under phantom mode");
         const auto& p = params_[i];
         bufs[i] = make_zero_storage(p->shape(), p->dtype(), p->device());
     }
@@ -402,6 +427,7 @@ void Optimizer::set_step_count(std::int64_t count) {
 // elements when its buffer is not them.  The gradient and the state buffers
 // are dense in the parameter's shape already.
 void Optimizer::step() {
+    refuse_phantom_step();
     sync_slot_vectors();
     // GPU param arrays updated this step, flushed in one batched eval below.
     std::vector<::mlx::core::array> to_flush;
@@ -420,7 +446,7 @@ void Optimizer::step() {
         // A parameter whose elements overlap (an expanded view) is refused
         // after this slot's state has moved and the parameters ahead of it
         // were stepped: the refusal is not atomic.
-        write_elements(p, [&](std::shared_ptr<TensorImpl>& elems) {
+        write_elements(p, *grad, "optimizer step", [&](std::shared_ptr<TensorImpl>& elems) {
             update_one(i, elems, *grad);
             // So an autograd node that saved the parameter before the update
             // notices.

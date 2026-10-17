@@ -1041,7 +1041,7 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     scope.set_attr("step", static_cast<std::int64_t>(step));
 
     TensorImplPtr result;
-    if (a->device() == Device::CPU && storage_is_cpu(a->raw_storage())) {
+    if (a->views_by_stride()) {
         // On the CPU the windows are a view of the input: the window-count
         // axis steps ``step`` elements along ``d`` and the window axis one,
         // so a write through a window reaches the input — refused when the

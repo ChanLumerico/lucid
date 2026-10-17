@@ -731,7 +731,7 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     }
     out_shape.push_back(L);
     TensorImplPtr result;
-    if (device == Device::CPU && storage_is_cpu(a->raw_storage())) {
+    if (a->views_by_stride()) {
         // On the CPU the diagonal is a view: one step along it moves one
         // element down both axes, starting (r0, c0) in.  The other axes keep
         // their strides, in order, ahead of it.

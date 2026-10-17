@@ -7,11 +7,16 @@ size of which the :class:`TensorImpl` that adopts it fills in, since the op
 computed the shape before it dispatched.
 
 Every :class:`IBackend` method needs an answer, and the interface has some
-240 of them, so the class is generated rather than written: a method added to
-``IBackend.h`` without a rerun is a pure virtual the phantom backend lacks,
-which is a compile error, and a method whose answer cannot be derived from its
-return type (a multi-output method whose output count this file does not
-know) fails here, naming the method.
+250 of them, so the class is generated rather than written.  It overrides
+*every* virtual, the ones with a default body included: a default runs real
+code (``to_shared_storage`` hands back its input, the LSTM defaults raise
+"not supported"), and a phantom inheriting one would run it on phantom
+storage.  So a new virtual of either kind needs a rerun — a pure one fails
+to compile without it, and a defaulted one is caught by ``--check``, which
+pre-commit and CI run.  A ``virtual`` declaration this parser cannot read
+(one defined out of line, say) fails the run rather than being skipped, and
+so does a method whose answer cannot be derived from its return type (a
+multi-output method whose output count this file does not know).
 
 Answers, by return type:
 
@@ -116,6 +121,7 @@ class Method:
     name: str
     params: tuple[Param, ...]
     qualifiers: str
+    defaulted: bool  # IBackend gives it a body; overridden all the same
 
 
 class GenerationError(Exception):
@@ -158,9 +164,11 @@ def _parse_param(text: str) -> Param:
 def parse(src: str) -> list[Method]:
     body = _strip_comments(src)
     methods: list[Method] = []
+    destructors = 0
     for m in re.finditer(r"\bvirtual\s+([^;{]*?\))\s*([^;{()]*?)\s*(=\s*0\s*;|\{)", body, re.S):
         decl = " ".join(m.group(1).split())
         if decl.startswith("~"):
+            destructors += 1
             continue
         dm = re.match(r"^(.*?)\b(\w+)\s*\((.*)\)$", decl)
         if dm is None:
@@ -173,7 +181,18 @@ def parse(src: str) -> list[Method]:
                 name=name,
                 params=tuple(_parse_param(p) for p in _split_top_level(params)),
                 qualifiers=qualifiers,
+                defaulted=m.group(3) == "{",
             )
+        )
+    # Every ``virtual`` is a method above or the destructor: one this parser
+    # did not read (declared here, defined out of line) would be inherited
+    # by the phantom backend and run real code on phantom storage.
+    destructors += len(re.findall(r"\bvirtual\s+~\w+\s*\(\s*\)\s*=\s*default\s*;", body))
+    seen = len(re.findall(r"\bvirtual\b", body))
+    if seen != len(methods) + destructors:
+        raise GenerationError(
+            f"IBackend.h declares {seen} virtuals and this parser read "
+            f"{len(methods) + destructors} — teach tools/gen_phantom_backend.py the new form"
         )
     return methods
 
@@ -373,7 +392,11 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"gen_phantom_backend: PhantomBackend.h matches IBackend.h ({len(methods)} methods)")
+        defaulted = sum(m.defaulted for m in methods)
+        print(
+            f"gen_phantom_backend: PhantomBackend.h matches IBackend.h ({len(methods)} methods "
+            f"overridden, {defaulted} of them defaulted in IBackend)"
+        )
         return 0
 
     HEADER_PATH.write_text(rendered)

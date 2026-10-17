@@ -7,11 +7,15 @@ autograd state, and no values.  Nothing is allocated and no kernel runs.
 
 The contract, as these tests hold it:
 
-* each op's phantom result has the shape, dtype and device of its eager one,
-  and the phantom section allocates nothing;
+* each of 56 ops' phantom result has the shape, dtype and device of its eager
+  one, views their strides, and the phantom section allocates nothing;
 * a read of a phantom's values (``item``, ``tolist``, NumPy, bytes, ``bool``,
   printing) raises ``LucidError``;
-* a phantom target takes any write; a real target refuses a phantom's values;
+* a phantom target takes any write; a real tensor never becomes or takes a
+  phantom — an in-place result, a copy, a gradient (its first included), an
+  assigned ``.grad``, a running statistic — and an optimizer step under the
+  mode refuses before any state moves;
+* outside the mode a phantom is inert: every op given one refuses;
 * the mode belongs to the thread that set it.
 
 The tests drive the engine switch directly, not ``nn.shadow_alloc``.
@@ -26,8 +30,10 @@ import pytest
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+import lucid.optim as optim
 from lucid._C import engine as _C_engine
 from lucid._tensor.tensor import Tensor
+from lucid.test._fixtures.devices import metal_available
 
 
 @contextlib.contextmanager
@@ -136,6 +142,7 @@ def test_a_phantom_has_the_shape_dtype_and_device_of_the_eager_result(case, devi
         assert ghost._impl.is_phantom
         assert not real._impl.is_phantom
         assert tuple(ghost.shape) == tuple(real.shape)
+        assert ghost.stride() == real.stride()
         assert ghost.dtype == real.dtype
         assert ghost.device == real.device
 
@@ -161,23 +168,36 @@ def test_a_module_built_under_the_mode_holds_phantom_parameters(device):
     assert tuple(out.shape) == (5, 4) and out._impl.is_phantom
 
 
-_READS: dict[str, Callable[[Tensor], object]] = {
-    "item": lambda t: t.item(),
-    "tolist": lambda t: t.tolist(),
-    "bool": lambda t: bool(t),
-    "float": lambda t: float(t),
-    "to_string": lambda t: t._impl.to_string(),
-    "to_bytes": lambda t: t._impl.to_bytes(),
-    "data_ptr": lambda t: t.data_ptr(),
+# Each read, and the name its refusal gives: the read itself, on either
+# device, not the generic refusal of an op outside the mode.
+_READS: dict[str, tuple[Callable[[Tensor], object], str]] = {
+    "item": (lambda t: t.item(), "item"),
+    "tolist": (lambda t: t.tolist(), "to_bytes"),
+    "bool": (lambda t: bool(t), "item"),
+    "float": (lambda t: float(t), "item"),
+    "to_string": (lambda t: t._impl.to_string(), "to_string"),
+    "to_bytes": (lambda t: t._impl.to_bytes(), "to_bytes"),
+    "data_ptr": (lambda t: t.data_ptr(), "data_ptr"),
 }
 
 
 @pytest.mark.parametrize("read", list(_READS))
 def test_reading_a_phantom_s_values_raises(read, device):
+    fn, name = _READS[read]
     with phantom():
         t = lucid.ones(1, device=device)
-    with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
-        _READS[read](t)
+    with pytest.raises(_C_engine.LucidError, match=f"phantom tensor has no values: {name}"):
+        fn(t)
+
+
+def test_evaluating_a_phantom_is_a_no_op(device):
+    with phantom():
+        t = lucid.ones(2, device=device)
+    _C_engine.eval_gpu(t._impl)
+    _C_engine.eval_tensors([t._impl])
+    _C_engine.eval_tensors_async([t._impl])
+    t._impl.eval()
+    assert t._impl.is_phantom
 
 
 def test_reading_a_phantom_as_numpy_raises(device):
@@ -283,39 +303,49 @@ def test_a_phantom_target_takes_any_write(device):
     assert ghost._impl.version > version
 
 
-def test_after_the_mode_the_kernel_bases_take_a_phantom(device):
-    # The unary, binary and reduction kernel bases give a phantom back for a
-    # phantom input, mode or no mode, and so do the casts that feed them.
+# Outside the mode a phantom is inert: every op given one refuses where it
+# reads the values or would make a new phantom, kernel bases and views alike,
+# with the one typed message.
+_OUTSIDE: dict[str, Callable[[Tensor, Tensor], object]] = {
+    "binary": lambda g, r: g + r,
+    "unary": lambda g, r: lucid.exp(g),
+    "reduce": lambda g, r: g.sum(dim=0),
+    "cast": lambda g, r: g.to(lucid.float16),
+    "contiguous": lambda g, r: g.contiguous(),
+    "copy": lambda g, r: g.clone(),
+    "move": lambda g, r: g.to("cpu", copy=True),
+    "transpose": lambda g, r: g.transpose(0, 1),
+    "reshape": lambda g, r: g.reshape(-1),
+    "slice": lambda g, r: g[0],
+    "iterate": lambda g, r: list(g),
+    "detach": lambda g, r: g.detach(),
+    "matmul": lambda g, r: g @ r.reshape(3, 1),
+    "backward": lambda g, r: g.backward(),
+}
+
+
+@pytest.mark.parametrize("op", list(_OUTSIDE))
+def test_outside_the_mode_an_op_given_a_phantom_refuses(op, device):
     with phantom():
         ghost = lucid.ones(2, 3, device=device)
+        if op == "backward":
+            # The root of a graph built under the mode: Engine::backward refuses it.
+            ghost = (lucid.ones(2, 3, device=device, requires_grad=True) * 2).sum()
     real = lucid.ones(3, device=device)
-    outs = (ghost + real, lucid.exp(ghost), ghost.sum(dim=0), ghost + real.to(lucid.float16))
-    assert all(out._impl.is_phantom for out in outs)
-    assert [tuple(out.shape) for out in outs] == [(2, 3), (2, 3), (3,), (2, 3)]
+    with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+        _OUTSIDE[op](ghost, real)
+    assert not _C_engine.phantom_mode()
 
 
-@pytest.mark.parametrize(
-    "op",
-    [
-        lambda t: t.to(lucid.float16),
-        lambda t: t.contiguous(),
-        lambda t: t.to("cpu", copy=True),
-    ],
-)
-def test_after_the_mode_any_other_op_refuses_a_phantom(op):
-    with phantom():
-        ghost = lucid.ones(2, 3).transpose(0, 1)
-    with pytest.raises(_C_engine.LucidError):
-        op(ghost)
-
-
-def test_moving_a_phantom_relabels_it(device):
+def test_moving_a_phantom_relabels_it_under_the_mode(device):
     with phantom():
         ghost = lucid.ones(2, 2)
-    target = _C_engine.GPU if device == "metal" else _C_engine.CPU
-    moved = ghost._impl.transfer_to_device(target, True)
+        target = _C_engine.GPU if device == "metal" else _C_engine.CPU
+        moved = ghost._impl.transfer_to_device(target, True)
     assert moved.is_phantom and moved.shape == [2, 2]
     assert moved.device == target and moved.requires_grad
+    with pytest.raises(_C_engine.LucidError, match="outside phantom mode"):
+        ghost._impl.transfer_to_device(target, False)
 
 
 def test_moving_a_real_tensor_under_the_mode_copies_nothing(device):
@@ -325,6 +355,7 @@ def test_moving_a_real_tensor_under_the_mode_copies_nothing(device):
         moved = real.to(device, copy=True)
     assert _allocations() == before
     assert moved._impl.is_phantom and moved.device == lucid.device(device)
+    assert not real._impl.is_phantom and real.tolist() == [1.0] * 4
 
 
 def test_a_real_tensor_is_not_a_phantom():
@@ -332,15 +363,154 @@ def test_a_real_tensor_is_not_a_phantom():
     assert not _C_engine.phantom_mode()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-466 FOUND: nn/BatchNorm.cpp put_running_stat replaces a real running "
-    "statistic's storage slot with the phantom update instead of refusing it",
-)
-def test_a_real_running_statistic_refuses_a_phantom_update():
-    bn = nn.BatchNorm1d(3)
+# ── a real tensor never becomes a phantom ────────────────────────────────────
+
+
+@pytest.mark.parametrize("loss", ["scalar", "tensor", "unary"])
+def test_a_real_leaf_refuses_a_phantom_gradient(loss, device):
+    w = lucid.ones(3, device=device, requires_grad=True)
     with phantom():
-        x = lucid.ones(4, 3)
-        with pytest.raises(_C_engine.LucidError):
+        with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+            if loss == "scalar":
+                (w * 2).sum().backward()
+            elif loss == "tensor":
+                (w * lucid.ones(3, device=device)).sum().backward()
+            else:
+                w.exp().sum().backward()
+    assert w.grad is None
+
+
+def test_a_real_gradient_refuses_a_phantom_one_added(device):
+    w = lucid.ones(3, device=device, requires_grad=True)
+    (w * 2).sum().backward()
+    with phantom():
+        with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+            (w * 2).sum().backward()
+    assert not w.grad._impl.is_phantom
+    assert w.grad.tolist() == [2.0, 2.0, 2.0]
+
+
+def test_a_phantom_leaf_gets_a_phantom_gradient(device):
+    with phantom():
+        w = lucid.ones(3, device=device, requires_grad=True)
+        (w * 2).sum().backward()
+    assert w.grad is not None and w.grad._impl.is_phantom
+    assert tuple(w.grad.shape) == (3,)
+
+
+def test_assigning_a_phantom_gradient_to_a_real_tensor_refuses(device):
+    w = lucid.ones(3, device=device, requires_grad=True)
+    with phantom():
+        ghost = lucid.ones(3, device=device)
+        with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+            w.grad = ghost
+    with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+        w.grad = ghost
+    assert w.grad is None
+
+
+def test_a_real_running_statistic_refuses_a_phantom_update(device):
+    bn = nn.BatchNorm1d(3).to(device)
+    with phantom():
+        x = lucid.ones(4, 3, device=device)
+        with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
             bn(x)
     assert not bn.running_mean._impl.is_phantom
+    assert not bn.running_var._impl.is_phantom
+    assert bn.running_mean.tolist() == [0.0, 0.0, 0.0]
+
+
+def test_a_phantom_running_statistic_takes_the_update(device):
+    with phantom():
+        bn = nn.BatchNorm1d(3).to(device)
+        out = bn(lucid.ones(4, 3, device=device))
+    assert bn.running_mean._impl.is_phantom and out._impl.is_phantom
+
+
+@pytest.mark.parametrize("optimizer", ["SGD", "Adam"])
+def test_an_optimizer_step_under_the_mode_refuses_before_any_state_moves(optimizer, device):
+    def make() -> tuple[nn.Parameter, optim.Optimizer]:
+        w = nn.Parameter(lucid.ones(3, device=device))
+        w.grad = lucid.ones(3, device=device)
+        return w, getattr(optim, optimizer)([w], lr=0.1)
+
+    w_ref, opt_ref = make()
+    opt_ref.step()
+    opt_ref.step()
+    w, opt = make()
+    with phantom():
+        with pytest.raises(_C_engine.LucidError, match="optimizer step under phantom mode"):
+            opt.step()
+    opt.step()
+    with phantom():
+        with pytest.raises(_C_engine.LucidError, match="optimizer step under phantom mode"):
+            opt.step()
+    opt.step()
+    assert not w._impl.is_phantom
+    assert w.tolist() == pytest.approx(w_ref.tolist())
+
+
+def test_an_optimizer_step_of_a_phantom_parameter_refuses(device):
+    with phantom():
+        w = nn.Parameter(lucid.ones(3, device=device))
+        w.grad = lucid.ones(3, device=device)
+    opt = optim.SGD([w], lr=0.1)
+    with pytest.raises(_C_engine.LucidError, match="optimizer step of a phantom parameter"):
+        opt.step()
+
+
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        "half",
+        pytest.param("to", marks=pytest.mark.skipif(not metal_available(), reason="needs Metal")),
+        "data",
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason="LCD-466 card 3: _dispatch._swap_data rebinds a real Parameter's _impl to the "
+    "phantom .data / Module._apply hand it — pure Python, the engine never sees it",
+)
+def test_a_real_parameter_is_not_rebound_to_a_phantom(rebind):
+    m = nn.Linear(3, 2)
+    with phantom():
+        if rebind == "half":
+            m.half()
+        elif rebind == "to":
+            m.to("metal")
+        else:
+            m.weight.data = lucid.zeros(2, 3)
+    assert not m.weight._impl.is_phantom
+
+
+# ── phantom views follow their device's layout rule ──────────────────────────
+
+_VIEWS: dict[str, Callable[[str], Tensor]] = {
+    "slice": lambda d: lucid.ones(4, 6, device=d)[1:3, 2:5],
+    "transpose": lambda d: lucid.ones(4, 6, device=d).T,
+    "permute": lambda d: lucid.ones(4, 6, device=d).reshape(2, 2, 6).permute(2, 0, 1),
+    "narrow": lambda d: lucid.ones(4, 6, device=d).narrow(1, 1, 3),
+    "expand": lambda d: lucid.ones(3, 1, device=d).expand(3, 4),
+    "diagonal": lambda d: lucid.diagonal(lucid.ones(4, 4, device=d)),
+    "unfold": lambda d: lucid.ones(8, device=d).unfold(0, 3, 2),
+    "split": lambda d: lucid.ones(4, 6, device=d).split(2, dim=1)[1],
+}
+
+
+@pytest.mark.parametrize("view", list(_VIEWS))
+def test_a_phantom_view_has_the_eager_strides(view, device):
+    eager = _VIEWS[view](device)
+    with phantom():
+        ghost = _VIEWS[view](device)
+    assert ghost._impl.is_phantom
+    assert (ghost.stride(), ghost.is_contiguous()) == (eager.stride(), eager.is_contiguous())
+
+
+def test_a_view_refused_eagerly_is_refused_as_a_phantom(device):
+    with pytest.raises(_C_engine.LucidError) as eager:
+        lucid.ones(4, 6, device=device).T.view(-1)
+    with phantom():
+        with pytest.raises(_C_engine.LucidError) as ghost:
+            lucid.ones(4, 6, device=device).T.view(-1)
+    assert type(ghost.value) is type(eager.value)

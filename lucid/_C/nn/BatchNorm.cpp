@@ -80,9 +80,11 @@ void put_running_stat(TensorImpl& stat, Storage fresh) {
 // Takes a running statistic's new values into its own elements, wherever
 // they sit in its buffer: a column of a larger tensor, a transpose, a Metal
 // view of part of one.  The update took them as the first C of the buffer
-// and wrote there (LCD-491).
+// and wrote there (LCD-491).  A real statistic refuses a phantom update
+// there too, before its slot could take it (write_elements).
 void take_running_stat(TensorImplPtr stat, Storage fresh) {
-    write_elements(stat, [&](TensorImplPtr& elems) { put_running_stat(*elems, std::move(fresh)); });
+    write_elements(stat, fresh, "batch_norm running statistics",
+                   [&](TensorImplPtr& elems) { put_running_stat(*elems, std::move(fresh)); });
 }
 
 // Takes both running statistics' new values, or neither.  Only a write-back

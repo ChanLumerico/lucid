@@ -50,8 +50,10 @@ py::object make_subclass(py::module_& m,
 PyObject* g_lucid_error_type = nullptr;
 
 // A safety net, not a contract: an op that reads a storage kind the tensor
-// does not have — most often a phantom tensor reaching a kernel outside the
-// kernel bases — raises a LucidError rather than a bare RuntimeError.
+// does not have raises a LucidError rather than a bare RuntimeError.  The
+// phantom contract is held before this, where an op reads or views a phantom
+// (refuse_phantom_outside_mode); what lands here is an op that std::gets a
+// saved phantom Storage under the mode without going through the dispatcher.
 void translate_storage_mismatch(std::exception_ptr p) {
     try {
         if (p)

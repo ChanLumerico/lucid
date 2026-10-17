@@ -108,7 +108,7 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     // packs it), and an in-place write follows its strides.  Metal keeps
     // copy semantics — its arrays cannot see one another's writes.
     TensorImplPtr out;
-    if (storage_is_cpu(a->raw_storage())) {
+    if (a->views_by_stride()) {
         out = TensorImpl::make_view(a, out_shape, out_stride, 0);
     } else {
         Storage out_storage = backend::Dispatcher::for_device(a->device())

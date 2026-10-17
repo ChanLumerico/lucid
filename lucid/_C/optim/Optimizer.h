@@ -593,6 +593,10 @@ private:
     // Size ``state_initialized_`` and ``steps_`` to ``params_``.
     void sync_slot_vectors();
 
+    // Refuse a step under phantom mode, or of a phantom parameter or
+    // gradient, before any state moves (see Optimizer.cpp).
+    void refuse_phantom_step() const;
+
     // Validate all non-null entries in ``saved`` against ``params_`` without
     // mutating any state slot.
     void validate_state_slots(const std::vector<std::shared_ptr<TensorImpl>>& saved) const;

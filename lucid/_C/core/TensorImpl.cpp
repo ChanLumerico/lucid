@@ -346,20 +346,6 @@ void refuse_ambiguous_write(const TensorImpl& t, const char* name) {
         "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
 }
 
-// The one write rule for phantom tensors, at every place a write lands
-// (write_through, take_storage_from, copy_from — and through it assign_from
-// and write_elements).  A phantom target takes any write and keeps no values:
-// true, and the caller moves the version as for any write.  A real target
-// cannot take a phantom's values, which do not exist: refused, rather than
-// leaving the target's old values standing in silence.
-bool absorbs_phantom_write(const TensorImpl& dst, const TensorImpl& src, const char* name) {
-    if (dst.is_phantom())
-        return true;
-    if (src.is_phantom())
-        refuse_phantom_read(name);
-    return false;
-}
-
 // The tensor ``.grad`` reads, and why its pointers are not the slot's.
 //
 // A gradient lives in its tensor's AutogradMeta as a bare Storage — a slot,
@@ -540,9 +526,10 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // views, so it came down to the swap below and took a dense buffer in
     // silence — ``ones(1, 3).expand(2, 3).add_(1)`` raised nothing.
     refuse_ambiguous_write(*this, name);
-    // A phantom keeps its own storage; the caller (inplace::write_result)
-    // moves the version.
-    if (absorbs_phantom_write(*this, out, name))
+    // The phantom write rule (core/PhantomMode.h): a phantom keeps its own
+    // storage and the caller (inplace::write_result) moves the version; a
+    // real tensor refuses a phantom result here, before any change.
+    if (absorbs_phantom_write(storage_, out.raw_storage(), name))
         return;
     // The last Metal member left has no one to share the write with: it
     // takes the result as its own storage below, as any Metal tensor does
@@ -630,7 +617,13 @@ const Storage& TensorImpl::storage() const {
         }
         return *packed_;
     }
-    if (!storage_is_cpu(storage_) || is_dense())
+    if (!storage_is_cpu(storage_)) {
+        // Every op reads its inputs' values through here: outside phantom
+        // mode a phantom has none to give (refuse_phantom_outside_mode).
+        refuse_phantom_outside_mode(storage_, "an op read a phantom");
+        return storage_;
+    }
+    if (is_dense())
         return storage_;
     // Packed once per version, not once per call: an op asks several times,
     // and a reference handed out earlier in the same op must still hold the
@@ -672,15 +665,16 @@ std::vector<std::shared_ptr<TensorImpl>> TensorImpl::live_views() const {
 }
 
 void TensorImpl::write_through(const TensorImpl& src, const char* name) {
-    note_inplace_write(*this, src);
     if (src.shape() != shape())
         throw ShapeMismatch(shape(), src.shape(), std::string(name) + " (in-place: shape changed)");
     if (src.dtype() != dtype())
         ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
                                 "shares storage with a live view — cast first, or use the "
                                 "out-of-place form");
-    if (absorbs_phantom_write(*this, src, name))
+    // Before the trace learns of the write: a refused one never happened.
+    if (absorbs_phantom_write(storage_, src.raw_storage(), name))
         return bump_version();
+    note_inplace_write(*this, src);
     if (gpu_member()) {
         write_gpu_member(src, name, /*raw=*/false);
         return;
@@ -1306,15 +1300,12 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
         }
         return out;
     };
-    // A phantom moves as a label: a phantom of the same shape and dtype on
-    // ``target``.  So does any tensor while phantom mode is on, where no
-    // copy runs.
-    auto relabel = [&]() {
+    // Under phantom mode any tensor moves as a label: a new phantom of the
+    // same shape and dtype on ``target``, the source untouched and no copy
+    // run.  Outside it a phantom has no values to move.
+    if (PhantomMode::is_enabled())
         return std::make_shared<TensorImpl>(phantom_storage(meta_.shape, meta_.dtype), meta_.shape,
                                             meta_.dtype, target, requires_grad);
-    };
-    if (PhantomMode::is_enabled())
-        return relabel();
 
     return std::visit(
         overloaded{
@@ -1353,7 +1344,9 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
                 return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, meta_.shape,
                                                     meta_.dtype, target, requires_grad);
             },
-            [&](const PhantomStorage&) -> std::shared_ptr<TensorImpl> { return relabel(); },
+            [&](const PhantomStorage&) -> std::shared_ptr<TensorImpl> {
+                refuse_phantom_read("to (a device copy) outside phantom mode");
+            },
         },
         readable());
 }
@@ -1845,7 +1838,6 @@ void TensorImpl::copy_from(const TensorImpl& other) {
 }
 
 void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
-    note_inplace_write(*this, other);
     if (other.device() != device())
         throw DeviceMismatch(std::string(device_name(meta_.device)),
                              std::string(device_name(other.device())), name);
@@ -1854,8 +1846,10 @@ void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
                             std::string(dtype_name(other.dtype())), name);
     if (other.shape() != shape())
         throw ShapeMismatch(meta_.shape, other.shape(), name);
-    if (absorbs_phantom_write(*this, other, name))
+    // Before the trace learns of the write: a refused one never happened.
+    if (absorbs_phantom_write(storage_, other.raw_storage(), name))
         return bump_version();
+    note_inplace_write(*this, other);
     // A Metal family member writes into the root that every member reads.
     if (gpu_member())
         return write_gpu_member(other, name, /*raw=*/true);
@@ -1977,6 +1971,7 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
                                                   Stride stride,
                                                   std::size_t offset_bytes,
                                                   bool join_family) {
+    refuse_phantom_outside_mode(base->storage_, "a view of a phantom");
     const Dtype dtype = base->meta_.dtype;
     // offset_ accumulates: a view of a view has the combined byte offset from
     // the original allocation's start.
@@ -2052,6 +2047,7 @@ bool TensorImpl::views_grad_leaf() const {
 std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<TensorImpl>& base,
                                                         Shape shape,
                                                         std::size_t byte_offset) {
+    refuse_phantom_outside_mode(base->storage_, "a view of a phantom");
     const std::size_t nbytes = shape_numel(shape) * dtype_size(base->meta_.dtype);
     if (byte_offset + nbytes > storage_nbytes(base->storage_))
         ErrorBuilder("make_block_view").fail("the run reaches past the end of the buffer");
@@ -2078,7 +2074,18 @@ std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<Te
 // Accumulate a graph-mode gradient into this leaf's grad_impl slot.
 // First arrival: stores the incoming TensorImpl directly.
 // Subsequent arrivals: add via add_op so the result remains differentiable.
+bool TensorImpl::absorbs_phantom_gradient(const Storage& grad) {
+    if (!absorbs_phantom_write(storage_, grad, "a gradient"))
+        return false;
+    auto* ag = ensure_autograd();
+    if (!ag->grad.has_value() && !ag->grad_impl)
+        ag->grad = phantom_storage(meta_.shape, meta_.dtype);
+    return true;
+}
+
 void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
+    if (g && absorbs_phantom_gradient(g->raw_storage()))
+        return;
     ensure_autograd();
     if (!autograd_->grad_impl && autograd_->grad.has_value()) {
         Storage prev = std::move(*autograd_->grad);

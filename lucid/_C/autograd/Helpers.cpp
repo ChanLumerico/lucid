@@ -168,13 +168,10 @@ Storage reduce_grad_to_shape(const Storage& grad,
 //   CpuStorage+SharedStorage   — view the shared source as CPU, then add.
 // Any other combination (CPU+GPU, GPU+CPU, etc.) throws DeviceMismatch.
 void accumulate_into(Storage& dst, const Storage& src) {
-    // The phantom write rule (TensorImpl's absorbs_phantom_write), for a
-    // gradient slot: a phantom slot takes any gradient and stays a phantom,
-    // and a real one has no values to add from a phantom.
-    if (storage_is_phantom(dst))
+    // The phantom write rule (core/PhantomMode.h): a phantom slot takes any
+    // gradient and stays a phantom; a real one refuses a phantom.
+    if (absorbs_phantom_write(dst, src, "accumulate_into"))
         return;
-    if (storage_is_phantom(src))
-        refuse_phantom_read("accumulate_into");
     // 3.3 AMP fix: when a non-leaf intermediate gradient is accumulated from
     // two paths whose effective dtypes differ (e.g. Promote + ForceFP32
     // siblings under autocast(F16)), coerce src to dst's dtype before

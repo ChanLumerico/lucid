@@ -968,6 +968,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - attention applies its LOWER row to Q, K, V and the mask (LCD-500)
 
+- a real tensor never takes a phantom; phantoms inert outside
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

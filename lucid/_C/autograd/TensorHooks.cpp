@@ -14,6 +14,7 @@
 
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/PhantomMode.h"
 #include "AccumulateGrad.h"
 #include "CustomFunction.h"
 #include "Helpers.h"
@@ -123,7 +124,8 @@ Storage run_slot_hooks(Node& producer, std::uint32_t output_nr, Storage grad) {
         return grad;
     if (slot->runner)
         grad = run_hooks(*slot, std::move(grad), slot->shape);
-    if (const TensorImplPtr t = retaining_tensor(*slot, producer, output_nr)) {
+    if (const TensorImplPtr t = retaining_tensor(*slot, producer, output_nr);
+        t && !t->absorbs_phantom_gradient(grad)) {
         if (t->grad_as_impl()) {
             auto g_impl = std::make_shared<TensorImpl>(own_grad_copy(grad), t->shape(), t->dtype(),
                                                        t->device(), false);
@@ -291,6 +293,11 @@ Storage assignable_grad(const TensorImpl& self, const TensorImpl& g) {
     if (&g == &self)
         err.fail("a tensor cannot be assigned as its own gradient");
     check_grad_kind(err, "an assigned gradient", self.dtype(), self.device(), self.shape(), g);
+    // The phantom write rule (core/PhantomMode.h): a phantom's slot takes
+    // any gradient and holds a phantom of its own geometry; a real one
+    // refuses a phantom, whose buffer it would otherwise hold.
+    if (absorbs_phantom_write(self.raw_storage(), g.raw_storage(), "Tensor.grad"))
+        return phantom_storage(self.shape(), self.dtype());
     return grad_slot_buffer(err, g);
 }
 

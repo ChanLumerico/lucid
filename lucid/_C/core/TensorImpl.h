@@ -277,6 +277,15 @@ public:
     // never a Metal family member, so its own storage is its storage.
     bool is_phantom() const noexcept { return storage_is_phantom(storage_); }
 
+    // Predicate: does a view of this tensor keep its strides over the same
+    // buffer — the CPU's rule?  A Metal tensor views through its family's
+    // root, or copies.  A phantom follows its device, so its views have the
+    // strides, and a ``view`` the refusals, of the tensor it stands in for.
+    bool views_by_stride() const noexcept {
+        return meta_.device == Device::CPU &&
+               (storage_is_cpu(storage_) || storage_is_phantom(storage_));
+    }
+
     // Predicate: does another live tensor read this one's buffer as a view
     // of it — a member of the same :class:`ViewFamily`?
     //
@@ -722,6 +731,25 @@ public:
     // g : std::shared_ptr<TensorImpl>
     //     Gradient contribution to accumulate.
     void accumulate_grad_impl(std::shared_ptr<TensorImpl> g);
+
+    // The phantom write rule (:func:`absorbs_phantom_write`) for this
+    // tensor's gradient slot, held by every sink a gradient lands in — a
+    // leaf's AccumulateGrad, a retained gradient, :func:`accumulate_grad_impl`
+    // — before it stores or adds anything.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` for a phantom tensor: it takes any gradient and keeps no
+    //     values, so an empty slot gets a phantom of this tensor's geometry
+    //     (``.grad`` then reads as one) and the caller stores nothing.
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     This tensor is real and ``grad`` a phantom — the first gradient
+    //     included, which an empty slot would otherwise take as its own.
+    bool absorbs_phantom_gradient(const Storage& grad);
 
     // Returns whether this tensor will retain its gradient even when it is
     // a non-leaf.
